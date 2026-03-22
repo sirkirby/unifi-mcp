@@ -35,6 +35,7 @@ class ToolMetadata:
         input_schema: JSON Schema describing the tool's input parameters
         output_schema: Optional JSON Schema describing the tool's output structure
         auth_method: Auth strategy hint -- "local_only" (default), "api_key_only", or "either"
+        annotations: MCP ToolAnnotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
     """
 
     name: str
@@ -42,6 +43,7 @@ class ToolMetadata:
     input_schema: Dict[str, Any] = field(default_factory=dict)
     output_schema: Dict[str, Any] | None = None
     auth_method: str = "local_only"
+    annotations: Dict[str, Any] | None = None  # MCP ToolAnnotations (readOnlyHint, destructiveHint, etc.)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, excluding None values."""
@@ -63,6 +65,7 @@ def register_tool(
     input_schema: Dict[str, Any] | None = None,
     output_schema: Dict[str, Any] | None = None,
     auth_method: str = "local_only",
+    annotations: Dict[str, Any] | None = None,
 ) -> None:
     """Register a tool in the global registry.
 
@@ -72,6 +75,7 @@ def register_tool(
         input_schema: JSON Schema for input parameters (defaults to empty object)
         output_schema: Optional JSON Schema for output structure
         auth_method: Auth strategy hint -- "local_only", "api_key_only", or "either"
+        annotations: MCP ToolAnnotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
     """
     if input_schema is None:
         input_schema = {"type": "object", "properties": {}}
@@ -82,6 +86,7 @@ def register_tool(
         input_schema=input_schema,
         output_schema=output_schema,
         auth_method=auth_method,
+        annotations=annotations,
     )
 
     TOOL_REGISTRY[name] = metadata
@@ -129,6 +134,7 @@ def get_tool_index(
                 "input": meta.input_schema,
                 **({"output": meta.output_schema} if meta.output_schema else {}),
             },
+            "annotations": meta.annotations,
         }
         for meta in TOOL_REGISTRY.values()
     ]

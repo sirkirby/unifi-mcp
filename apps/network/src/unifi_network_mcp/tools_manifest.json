@@ -119,6 +119,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Archive (resolve/dismiss) a specific alarm by its ID",
       "name": "unifi_archive_alarm",
       "schema": {
@@ -141,6 +147,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Archive (resolve/dismiss) all active alarms",
       "name": "unifi_archive_all_alarms",
       "schema": {
@@ -216,6 +228,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create a new MAC ACL rule for Layer 2 access control within a VLAN. Requires confirmation. IMPORTANT: traffic_source and traffic_destination type MUST be 'CLIENT_MAC' (not 'ANY'). Use an empty specific_mac_addresses list to match any device.",
       "name": "unifi_create_acl_rule",
       "schema": {
@@ -261,6 +279,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create a new firewall policy with schema validation.",
       "name": "unifi_create_firewall_policy",
       "schema": {
@@ -305,6 +329,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create a new port forwarding rule on your Unifi Network controller using schema validation.",
       "name": "unifi_create_port_forward",
       "schema": {
@@ -323,6 +353,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create a new QoS rule on the Unifi Network controller. Requires confirmation.",
       "name": "unifi_create_qos_rule",
       "schema": {
@@ -385,6 +421,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create a firewall policy using a simplified high-level schema. Accepts friendly src/dst selectors and returns a preview unless confirm=true.",
       "name": "unifi_create_simple_firewall_policy",
       "schema": {
@@ -407,6 +449,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create a port forward using a simplified schema. Returns a preview unless confirm=true.",
       "name": "unifi_create_simple_port_forward",
       "schema": {
@@ -429,6 +477,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create a QoS rule using a simplified high-level schema. Returns a preview unless confirm=true.",
       "name": "unifi_create_simple_qos_rule",
       "schema": {
@@ -451,6 +505,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create a new user group (bandwidth profile) with optional speed limits.\n\nBandwidth limits are specified in Kbps. Use -1 for unlimited.\nUser groups can be assigned to clients to enforce bandwidth policies.",
       "name": "unifi_create_usergroup",
       "schema": {
@@ -481,6 +541,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Create hotspot voucher(s) for guest network access.\n\nVouchers can have:\n- Time limits: How long the voucher is valid after activation\n- Usage quota: Single-use (1), multi-use (0), or n-times usable\n- Bandwidth limits: Upload/download speed caps in Kbps\n- Data caps: Total data transfer limit in MB",
       "name": "unifi_create_voucher",
       "schema": {
@@ -590,6 +656,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get detailed configuration for a specific MAC ACL rule by ID.",
       "name": "unifi_get_acl_rule_details",
       "schema": {
@@ -608,6 +678,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get recent alerts from the Unifi Network controller",
       "name": "unifi_get_alerts",
       "schema": {
@@ -627,6 +701,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns the full raw client object for one client by MAC address \u2014 includes all controller-reported fields: IP, hostname, connection stats, DHCP info, network/WLAN associations, traffic counters, and fixed-IP settings. For a summary of all clients, use unifi_list_clients.",
       "name": "unifi_get_client_details",
       "schema": {
@@ -645,6 +723,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get statistics for a specific client/device",
       "name": "unifi_get_client_stats",
       "schema": {
@@ -667,6 +749,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns the full raw device object for one device by MAC address \u2014 includes radio tables, port tables, system stats, WAN info, firmware details, and all controller-reported fields. Use when you need deep inspection of a specific device. For a filtered overview of all devices, use unifi_list_devices.",
       "name": "unifi_get_device_details",
       "schema": {
@@ -685,6 +771,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get radio configuration and live statistics for an access point. Returns per-band config (channel, tx_power, channel width, min_rssi) and live stats (actual tx_power, channel utilization, client count, retries).",
       "name": "unifi_get_device_radio",
       "schema": {
@@ -703,6 +793,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns historical traffic time-series (rx/tx bytes, client counts) for one device by MAC or _id. Duration: hourly/daily/weekly/monthly. For APs, includes avg/max client counts. For current device status instead of stats, use unifi_get_device_details.",
       "name": "unifi_get_device_stats",
       "schema": {
@@ -725,6 +819,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get Deep Packet Inspection (DPI) statistics (applications and categories)",
       "name": "unifi_get_dpi_stats",
       "schema": {
@@ -735,6 +833,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get a list of known event type prefixes for filtering events.\n\nUse these prefixes with unifi_list_events event_type parameter to filter specific event categories.",
       "name": "unifi_get_event_types",
       "schema": {
@@ -745,6 +847,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get detailed configuration for a specific firewall policy by ID.",
       "name": "unifi_get_firewall_policy_details",
       "schema": {
@@ -763,6 +869,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get details for a specific network by ID.",
       "name": "unifi_get_network_details",
       "schema": {
@@ -781,6 +891,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns per-subsystem health status for WAN, LAN, WLAN, and VPN \u2014 each with status, number of gateways/switches/APs, and active user counts. Use to check WAN connectivity, see how many devices are online per subsystem, or detect degraded network segments. For controller-level info (version, uptime), use unifi_get_system_info.",
       "name": "unifi_get_network_health",
       "schema": {
@@ -791,6 +905,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get network statistics from the Unifi Network controller",
       "name": "unifi_get_network_stats",
       "schema": {
@@ -806,6 +924,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get a specific port forwarding rule by ID from your Unifi Network controller.",
       "name": "unifi_get_port_forward",
       "schema": {
@@ -824,6 +946,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get details for a specific QoS rule by ID.",
       "name": "unifi_get_qos_rule_details",
       "schema": {
@@ -842,6 +968,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get detailed information about a specific static route by its ID",
       "name": "unifi_get_route_details",
       "schema": {
@@ -860,6 +990,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get current site settings (e.g., country code, timezone, connectivity monitoring).",
       "name": "unifi_get_site_settings",
       "schema": {
@@ -870,6 +1004,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get current SNMP settings for the site (enabled state, community string).",
       "name": "unifi_get_snmp_settings",
       "schema": {
@@ -880,6 +1018,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns controller version, uptime, hostname, memory/CPU usage, and update availability. Use for basic 'is the controller healthy?' checks. For network subsystem status (WAN/LAN/WLAN), use unifi_get_network_health instead. For network subsystem details, use unifi_get_network_health.",
       "name": "unifi_get_system_info",
       "schema": {
@@ -890,6 +1032,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get a list of top clients by usage (sorted by total bytes)",
       "name": "unifi_get_top_clients",
       "schema": {
@@ -909,6 +1055,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get detailed information for a specific traffic route by ID.",
       "name": "unifi_get_traffic_route_details",
       "schema": {
@@ -927,6 +1077,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get detailed information about a specific user group by its ID",
       "name": "unifi_get_usergroup_details",
       "schema": {
@@ -945,6 +1099,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get detailed information about a specific voucher by its ID",
       "name": "unifi_get_voucher_details",
       "schema": {
@@ -963,6 +1121,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get details for a specific VPN client by ID.",
       "name": "unifi_get_vpn_client_details",
       "schema": {
@@ -981,6 +1143,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get details for a specific VPN server by ID.",
       "name": "unifi_get_vpn_server_details",
       "schema": {
@@ -999,6 +1165,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get details for a specific WLAN by ID.",
       "name": "unifi_get_wlan_details",
       "schema": {
@@ -1017,6 +1187,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List MAC ACL rules (Policy Engine) for Layer 2 access control. These rules control which devices can communicate at Layer 2 within a VLAN.",
       "name": "unifi_list_acl_rules",
       "schema": {
@@ -1032,6 +1206,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all active routes from the device routing table.\n\nIncludes both user-defined and system routes currently in effect.\nThis shows the actual routing table state on the gateway device.\n\nNote: This endpoint may not be available on all controller versions.\nReturns empty list if unavailable.",
       "name": "unifi_list_active_routes",
       "schema": {
@@ -1042,6 +1220,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns active alarms (security alerts, connectivity issues, firmware warnings). Each alarm includes type, message, timestamp, and related device/client MAC. By default shows only unresolved alarms; set include_archived=true for history. For general event logs (non-critical), use unifi_list_events.",
       "name": "unifi_list_alarms",
       "schema": {
@@ -1061,6 +1243,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List clients/devices that are currently blocked from the network",
       "name": "unifi_list_blocked_clients",
       "schema": {
@@ -1071,6 +1257,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns connected clients with MAC, name, hostname, IP, connection type (wired/wireless), and for wireless clients: SSID, signal dBm, channel, radio. Filter by filter_type (all/wired/wireless), set include_offline=true for historical clients. For a single client's full raw object, use unifi_get_client_details. For IP-to-hostname lookup, use unifi_lookup_by_ip.",
       "name": "unifi_list_clients",
       "schema": {
@@ -1094,6 +1284,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). Note: device_type=ap correctly excludes USP Smart Power strips. Set include_details=true for radio tables, port tables, and client counts. For a single device's full raw object, use unifi_get_device_details.",
       "name": "unifi_list_devices",
       "schema": {
@@ -1117,6 +1311,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns timestamped event log entries (client connects/disconnects, device state changes, firmware updates, config changes) sorted newest-first. Filter by within_hours (default 24), event_type prefix (use unifi_get_event_types for valid prefixes), and paginate with start/limit. For critical alerts specifically, use unifi_list_alarms instead.",
       "name": "unifi_list_events",
       "schema": {
@@ -1144,6 +1342,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List firewall policies configured on the Unifi Network controller.",
       "name": "unifi_list_firewall_policies",
       "schema": {
@@ -1159,6 +1361,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List controller firewall zones (V2 API).",
       "name": "unifi_list_firewall_zones",
       "schema": {
@@ -1169,6 +1375,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List IP groups configured on the controller (V2 API).",
       "name": "unifi_list_ip_groups",
       "schema": {
@@ -1179,6 +1389,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns all configured networks (LAN, WAN, VLAN-only) with name, purpose, IP subnet, VLAN ID, DHCP settings, and enabled state. Use to understand network topology and VLAN layout. For a single network's full config, use unifi_get_network_details. For wireless SSIDs, use unifi_list_wlans.",
       "name": "unifi_list_networks",
       "schema": {
@@ -1189,6 +1403,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all port forwarding rules on your Unifi Network controller.",
       "name": "unifi_list_port_forwards",
       "schema": {
@@ -1199,6 +1417,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all QoS rules on the Unifi Network controller for the current site.",
       "name": "unifi_list_qos_rules",
       "schema": {
@@ -1209,6 +1431,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all user-defined static routes for the current site.\n\nReturns route names, destination networks, next-hop addresses, and status.\nThese are manually configured routes, not dynamic or system routes.",
       "name": "unifi_list_routes",
       "schema": {
@@ -1219,6 +1445,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all traffic routes (policy-based routing rules) for the current site.\n\nTraffic routes define how specific traffic is routed based on domains,\nIP addresses, regions, or target devices. Often used for VPN routing.",
       "name": "unifi_list_traffic_routes",
       "schema": {
@@ -1229,6 +1459,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all user groups (bandwidth profiles) for the current site.\n\nUser groups define bandwidth limits that can be applied to clients.\nEach group specifies upload/download speed caps in Kbps.",
       "name": "unifi_list_usergroups",
       "schema": {
@@ -1239,6 +1473,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all hotspot vouchers for the current site.\n\nReturns voucher codes, expiration times, usage quotas, and bandwidth limits.\nVouchers are used for guest network access in captive portal setups.",
       "name": "unifi_list_vouchers",
       "schema": {
@@ -1249,6 +1487,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all configured VPN clients (Wireguard, OpenVPN, etc).",
       "name": "unifi_list_vpn_clients",
       "schema": {
@@ -1259,6 +1501,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc).",
       "name": "unifi_list_vpn_servers",
       "schema": {
@@ -1269,6 +1515,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List all configured Wireless LANs (WLANs) on the Unifi Network controller.",
       "name": "unifi_list_wlans",
       "schema": {
@@ -1279,6 +1529,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Quick IP-to-hostname lookup. Returns only essential fields (hostname, name, MAC) to minimize token usage.",
       "name": "unifi_lookup_by_ip",
       "schema": {
@@ -1319,6 +1573,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Rename a client/device in the Unifi Network controller by MAC address",
       "name": "unifi_rename_client",
       "schema": {
@@ -1433,6 +1693,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Enable or disable a specific firewall policy by ID.",
       "name": "unifi_toggle_firewall_policy",
       "schema": {
@@ -1455,6 +1721,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Toggle a port forwarding rule on or off on your Unifi Network controller.",
       "name": "unifi_toggle_port_forward",
       "schema": {
@@ -1477,6 +1749,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Enable or disable a specific QoS rule by ID. Requires confirmation.",
       "name": "unifi_toggle_qos_rule_enabled",
       "schema": {
@@ -1499,6 +1777,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Toggle a traffic route on/off by ID.",
       "name": "unifi_toggle_traffic_route",
       "schema": {
@@ -1565,6 +1849,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Update an existing MAC ACL rule. Requires the full rule object (PUT replaces entire resource). Requires confirmation. IMPORTANT: traffic source/destination type MUST be 'CLIENT_MAC' (not 'ANY').",
       "name": "unifi_update_acl_rule",
       "schema": {
@@ -1643,6 +1933,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Update specific fields of an existing firewall policy by ID.",
       "name": "unifi_update_firewall_policy",
       "schema": {
@@ -1697,6 +1993,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Update specific fields of an existing port forwarding rule using schema validation. Requires confirmation.",
       "name": "unifi_update_port_forward",
       "schema": {
@@ -1724,6 +2026,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Update specific fields of an existing QoS rule. Requires confirmation.",
       "name": "unifi_update_qos_rule",
       "schema": {
@@ -1793,6 +2101,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Update SNMP settings for the site (enable/disable, set community string). Requires confirm=true to apply changes.",
       "name": "unifi_update_snmp_settings",
       "schema": {
@@ -1819,6 +2133,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Update a traffic route's settings.\n\nCan update:\n- enabled: Enable or disable the traffic route\n- kill_switch_enabled: Enable/disable the kill switch (blocks traffic if VPN is down)\n\nAt least one parameter must be provided.",
       "name": "unifi_update_traffic_route",
       "schema": {
@@ -1849,6 +2169,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Update an existing user group's name or bandwidth limits.\n\nUse -1 for unlimited bandwidth. Changes affect all clients assigned to this group.",
       "name": "unifi_update_usergroup",
       "schema": {
@@ -1883,6 +2209,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Enable or disable a specific VPN client by ID.",
       "name": "unifi_update_vpn_client_state",
       "schema": {
@@ -1906,6 +2238,12 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Enable or disable a specific VPN server by ID.",
       "name": "unifi_update_vpn_server_state",
       "schema": {

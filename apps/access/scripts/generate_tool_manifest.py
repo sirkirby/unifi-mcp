@@ -22,6 +22,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from unifi_mcp_shared.manifest_helpers import get_tool_annotations
+
 # Add src to path so we can import modules
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
@@ -137,6 +139,15 @@ def generate_manifest() -> dict[str, Any]:
             "error": str(e),
         }
 
+    # Extract annotations from FastMCP's internal tool registry
+    from unifi_access_mcp.runtime import server
+
+    annotations_map = get_tool_annotations(server)
+    if annotations_map:
+        logger.info(f"   Extracted annotations for {len(annotations_map)} tools")
+    else:
+        logger.warning("   No tool annotations found in FastMCP registry")
+
     # Build manifest from registry with full schemas
     tools = []
     for tool_name in sorted(TOOL_REGISTRY.keys()):
@@ -153,6 +164,10 @@ def generate_manifest() -> dict[str, Any]:
         # Include output schema if available
         if meta.output_schema:
             tool_data["schema"]["output"] = meta.output_schema
+
+        # Include annotations if available from FastMCP registry
+        if tool_name in annotations_map:
+            tool_data["annotations"] = annotations_map[tool_name]
 
         tools.append(tool_data)
 

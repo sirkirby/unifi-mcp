@@ -143,6 +143,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Exports a video clip from a camera for a specified time range. Returns metadata about the export (size, duration) but not the video data itself (too large for MCP responses). Maximum duration is 2 hours. For timelapse exports, pass fps (4=60x, 8=120x, 20=300x, 40=600x). Times must be ISO-8601 format (e.g., '2026-03-16T12:00:00Z').",
       "name": "protect_export_clip",
       "schema": {
@@ -179,6 +183,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns detailed information for a single camera including firmware, IP address, MAC, mic/speaker settings, IR/HDR mode, stream channels, smart detection types, and PTZ capability. Use to inspect one camera.",
       "name": "protect_get_camera",
       "schema": {
@@ -197,6 +205,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns motion and smart detection analytics for a camera including current detection state, last-detected timestamps for each type (person, vehicle, animal, etc.), and zone counts. For historical events, use the events API tools.",
       "name": "protect_get_camera_analytics",
       "schema": {
@@ -215,6 +227,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns RTSP/RTSPS stream URLs for a camera organized by channel (High, Medium, Low). Includes resolution, FPS, and bitrate for each stream. Use to connect a video player or integration to camera feeds.",
       "name": "protect_get_camera_streams",
       "schema": {
@@ -233,6 +249,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get detailed information for a single event by ID. Returns event type, camera, timestamps, score, smart detection types, and thumbnail info.",
       "name": "protect_get_event",
       "schema": {
@@ -251,6 +271,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get the thumbnail image for an event. Returns a base64-encoded JPEG. Thumbnails are generated after an event ends; in-progress events may not have thumbnails yet. Optionally specify width/height to resize.",
       "name": "protect_get_event_thumbnail",
       "schema": {
@@ -277,6 +301,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns firmware update availability for the NVR and all adopted devices (cameras, lights, sensors, viewers, chimes, bridges, doorlocks). Use to check whether any device needs a firmware update.",
       "name": "protect_get_firmware_status",
       "schema": {
@@ -287,6 +315,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns NVR health summary including CPU load and temperature, memory usage, and storage utilization. Use to diagnose performance issues or storage pressure.",
       "name": "protect_get_health",
       "schema": {
@@ -297,6 +329,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns the current recording state for one or all cameras. Shows recording mode (always, never, detections), whether actively recording, and available recording time range from NVR stats. Pass a camera_id to check a single camera, or omit for all cameras.",
       "name": "protect_get_recording_status",
       "schema": {
@@ -312,6 +348,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Fetches a JPEG snapshot from a camera. When include_image is True, returns the image as a base64-encoded string. When False (default), returns a reference URL. Optionally specify width and height to resize.",
       "name": "protect_get_snapshot",
       "schema": {
@@ -342,6 +382,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns NVR model, firmware version, uptime, storage usage, and connected device counts. Use for basic 'is the NVR healthy?' checks and capacity overview.",
       "name": "protect_get_system_info",
       "schema": {
@@ -352,6 +396,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all cameras adopted by the Protect NVR with their name, model, connection state, recording mode, and whether they are currently recording. Use to get an overview of all cameras in the system.",
       "name": "protect_list_cameras",
       "schema": {
@@ -362,6 +410,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all UniFi Protect chime devices with their name, connection state, volume, ring settings per camera, and available ringtones/tracks. Use to see chime configuration and which cameras trigger which chimes.",
       "name": "protect_list_chimes",
       "schema": {
@@ -372,6 +424,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Query events from the NVR with optional filters. Returns events from the Protect controller's database via REST API. Supports filtering by time range, event type (motion, smartDetectZone, ring, etc.), camera ID, and result limit. For real-time buffer events use protect_recent_events.",
       "name": "protect_list_events",
       "schema": {
@@ -407,6 +463,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all UniFi Protect floodlight devices with their name, connection state, brightness level, PIR motion sensitivity, and paired camera. Use to get an overview of all lights in the system.",
       "name": "protect_list_lights",
       "schema": {
@@ -417,6 +477,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all liveview configurations from the Protect NVR. Each liveview defines a multi-camera layout with slots, camera assignments, and cycle settings. Shows name, layout grid size, slot count, camera count, and whether it is the default or global view.",
       "name": "protect_list_liveviews",
       "schema": {
@@ -427,6 +491,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns recording availability information for a camera within a time range. Shows the recording window and whether footage exists. UniFi Protect stores recordings as continuous streams, not discrete segments. Defaults to the last 24 hours if no time range is specified. Times should be ISO-8601 format (e.g., '2026-03-16T00:00:00Z').",
       "name": "protect_list_recordings",
       "schema": {
@@ -453,6 +521,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all UniFi Protect sensor devices (motion, door/window, temperature, humidity, light level, leak detection). Shows connection state, battery status, current readings, and recent detection timestamps. Use to monitor environmental conditions and sensor health.",
       "name": "protect_list_sensors",
       "schema": {
@@ -463,6 +535,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "List smart detection events (person, vehicle, animal, package, etc.) with optional filters. Filters by detection type, camera, confidence score, and time range. Only returns events above the minimum confidence threshold (default 50, configurable via PROTECT_SMART_DETECTION_MIN_CONFIDENCE).",
       "name": "protect_list_smart_detections",
       "schema": {
@@ -502,6 +578,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all connected Protect viewers (e.g., UP-Viewer, Viewport) with their connection state, firmware version, and assigned liveview.",
       "name": "protect_list_viewers",
       "schema": {
@@ -512,6 +592,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Adjusts PTZ camera position. Currently only zoom level is supported via the API. For pan/tilt, use protect_ptz_preset to move to a saved preset position. Only works on PTZ-capable cameras.",
       "name": "protect_ptz_move",
       "schema": {
@@ -542,6 +626,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Moves a PTZ camera to a saved preset position by slot number. Returns available presets for the camera. Only works on PTZ-capable cameras.",
       "name": "protect_ptz_preset",
       "schema": {
@@ -565,6 +653,11 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Reboots a camera. The camera will be temporarily unavailable during reboot. Requires confirm=True to execute. Use with caution \u2014 active recordings will be interrupted.",
       "name": "protect_reboot_camera",
       "schema": {
@@ -587,6 +680,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by event_type, camera_id, min_confidence, and limit. Use this for real-time monitoring; use protect_list_events for historical queries.",
       "name": "protect_recent_events",
       "schema": {
@@ -614,6 +711,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns instructions for subscribing to real-time Protect events. Provides the MCP resource URI for the event stream and guidance on polling intervals. Use this to set up continuous event monitoring.",
       "name": "protect_subscribe_events",
       "schema": {
@@ -624,6 +725,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Enables or disables recording on a camera. When enabled, sets recording mode to 'always'. When disabled, sets to 'never'. Requires confirm=True to apply.",
       "name": "protect_toggle_recording",
       "schema": {
@@ -677,6 +782,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Updates camera settings such as IR LED mode, HDR mode, mic/speaker volume, status light, and motion detection. Requires confirm=True to apply. Supported keys: ir_led_mode, hdr_mode, mic_enabled, mic_volume, status_light_on, speaker_volume, name, motion_detection.",
       "name": "protect_update_camera_settings",
       "schema": {

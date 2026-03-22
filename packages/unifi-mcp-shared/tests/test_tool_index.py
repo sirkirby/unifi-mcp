@@ -110,3 +110,55 @@ class TestGetToolIndex:
         tool = index["tools"][0]
         assert "input" in tool["schema"]
         assert "output" in tool["schema"]
+
+    def test_tool_index_includes_annotations_from_runtime(self):
+        """get_tool_index should include annotations from registered ToolMetadata."""
+        register_tool(
+            name="my_tool",
+            description="test",
+            annotations={"readOnlyHint": True, "openWorldHint": False},
+        )
+        index = get_tool_index(registration_mode="eager")
+        tool = index["tools"][0]
+        assert tool["annotations"] == {"readOnlyHint": True, "openWorldHint": False}
+
+    def test_tool_index_annotations_none_when_not_set(self):
+        """get_tool_index annotations should be None when not provided."""
+        register_tool(name="my_tool", description="test")
+        index = get_tool_index(registration_mode="eager")
+        tool = index["tools"][0]
+        assert tool["annotations"] is None
+
+    def test_tool_index_annotations_from_manifest(self, tmp_path):
+        """get_tool_index should pass through annotations from the manifest."""
+        manifest = {
+            "tools": [{"name": "from_manifest", "annotations": {"readOnlyHint": True}}],
+            "count": 1,
+        }
+        manifest_path = tmp_path / "tools_manifest.json"
+        manifest_path.write_text(json.dumps(manifest))
+        index = get_tool_index(registration_mode="lazy", manifest_path=manifest_path)
+        assert index["tools"][0]["annotations"] == {"readOnlyHint": True}
+
+
+class TestToolMetadataAnnotations:
+    """Tests for annotations field in ToolMetadata."""
+
+    def test_tool_metadata_includes_annotations(self):
+        """ToolMetadata should accept and store annotations dict."""
+        meta = ToolMetadata(
+            name="test_tool",
+            description="A test tool",
+            input_schema={"type": "object"},
+            annotations={"readOnlyHint": True, "openWorldHint": False},
+        )
+        assert meta.annotations == {"readOnlyHint": True, "openWorldHint": False}
+
+    def test_tool_metadata_annotations_default_none(self):
+        """ToolMetadata annotations should default to None for backwards compatibility."""
+        meta = ToolMetadata(
+            name="test_tool",
+            description="A test tool",
+            input_schema={"type": "object"},
+        )
+        assert meta.annotations is None

@@ -11,6 +11,7 @@ from unifi_mcp_shared.confirmation import (
 )
 from unifi_mcp_shared.formatting import error_response, success_response
 from unifi_mcp_shared.jobs import JOBS, JobStore, get_job_status, start_async_tool
+from unifi_mcp_shared.manifest_helpers import get_tool_annotations
 from unifi_mcp_shared.lazy_tools import (
     LazyToolLoader,
     build_tool_module_map,
@@ -32,6 +33,7 @@ __all__ = [
     "create_preview",
     "create_response",
     "error_response",
+    "get_tool_annotations",
     "get_job_status",
     "load_yaml_config",
     "parse_config_bool",

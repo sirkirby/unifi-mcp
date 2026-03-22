@@ -124,6 +124,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get an aggregated activity summary for Access events over a time period. Shows event counts, breakdowns by type, and trends. Optionally scope to a single door. Only available via local proxy session.",
       "name": "access_get_activity_summary",
       "schema": {
@@ -143,6 +147,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns detailed information for a single access credential including type, status, assigned user, and creation date.",
       "name": "access_get_credential",
       "schema": {
@@ -161,6 +169,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns detailed information for a single Access device including name, type, connection state, firmware version, MAC, and IP address.",
       "name": "access_get_device",
       "schema": {
@@ -179,6 +191,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns detailed information for a single door including lock state, configuration, and connected devices.",
       "name": "access_get_door",
       "schema": {
@@ -197,6 +213,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns the current lock and position status for a single door. Lightweight alternative to access_get_door when you only need state info.",
       "name": "access_get_door_status",
       "schema": {
@@ -215,6 +235,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns detailed information for a single access event including event type, door, user, timestamp, and result.",
       "name": "access_get_event",
       "schema": {
@@ -233,6 +257,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns Access system health summary including API client and proxy session status. Use to verify connectivity and diagnose auth path issues.",
       "name": "access_get_health",
       "schema": {
@@ -243,6 +271,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns detailed information for a single access policy including assigned doors, schedule, user groups, and configuration.",
       "name": "access_get_policy",
       "schema": {
@@ -261,6 +293,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns Access controller model, firmware version, uptime, and connected device counts. Use for basic health checks and capacity overview.",
       "name": "access_get_system_info",
       "schema": {
@@ -271,6 +307,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns detailed information for a single visitor pass including name, access time range, assigned doors, and status.",
       "name": "access_get_visitor",
       "schema": {
@@ -289,6 +329,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all access credentials (NFC cards, PINs, mobile credentials) with their type, status, and assigned user.",
       "name": "access_list_credentials",
       "schema": {
@@ -299,6 +343,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all Access hardware devices (hubs, readers, relays, intercoms) with their name, type, connection state, and firmware version.",
       "name": "access_list_devices",
       "schema": {
@@ -314,6 +362,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all door groups configured on the Access controller. Door groups organize doors for policy assignment. Only available via local proxy session.",
       "name": "access_list_door_groups",
       "schema": {
@@ -324,6 +376,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all doors managed by the Access controller with their name, lock state, and connection status. Use to get an overview of all doors.",
       "name": "access_list_doors",
       "schema": {
@@ -339,6 +395,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Query access events from the controller with optional filters. Returns events such as door unlocks, access denials, and system events. Supports filtering by time range, door, user, and result limit. For real-time buffer events use access_recent_events.",
       "name": "access_list_events",
       "schema": {
@@ -374,6 +434,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all access policies configured on the Access controller. Shows policy name, assigned doors, schedules, and user groups.",
       "name": "access_list_policies",
       "schema": {
@@ -384,6 +448,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all access schedules configured on the Access controller.",
       "name": "access_list_schedules",
       "schema": {
@@ -394,6 +462,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all users registered in the Access controller with their access credentials and groups. Use to audit who has physical access or to look up a specific user.",
       "name": "access_list_users",
       "schema": {
@@ -413,6 +485,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Lists all visitor passes with their name, status, valid time range, and assigned doors.",
       "name": "access_list_visitors",
       "schema": {
@@ -423,6 +499,11 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Lock a door immediately. This is a physical real-world action. Requires confirm=true to execute. Only available via local proxy session.",
       "name": "access_lock_door",
       "schema": {
@@ -467,6 +548,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Get recent events from the in-memory websocket buffer. Fast (no API call). Supports filtering by event type and door. Use for real-time monitoring; use access_list_events for historical queries.",
       "name": "access_recent_events",
       "schema": {
@@ -512,6 +597,10 @@
       }
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Returns instructions for subscribing to real-time Access events. Provides the MCP resource URI for the event stream and guidance on polling intervals. Use this to set up continuous event monitoring.",
       "name": "access_subscribe_events",
       "schema": {
@@ -522,6 +611,11 @@
       }
     },
     {
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Unlock a door for a specified duration. This is a physical real-world action. Requires confirm=true to execute. Default duration is 2 seconds.",
       "name": "access_unlock_door",
       "schema": {

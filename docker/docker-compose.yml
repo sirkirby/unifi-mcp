@@ -49,3 +49,22 @@ services:
       - "3002:3002"
     restart: unless-stopped
     container_name: unifi-access-mcp
+
+  unifi-mcp-relay:
+    build:
+      context: ..
+      dockerfile: packages/unifi-mcp-relay/Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      - UNIFI_RELAY_URL=${UNIFI_RELAY_URL:-}
+      - UNIFI_RELAY_TOKEN=${UNIFI_RELAY_TOKEN:-}
+      - UNIFI_RELAY_LOCATION_NAME=${UNIFI_RELAY_LOCATION_NAME:-Home Lab}
+      - UNIFI_RELAY_SERVERS=http://unifi-network-mcp:3000,http://unifi-protect-mcp:3001,http://unifi-access-mcp:3002
+    depends_on:
+      - unifi-network-mcp
+      - unifi-protect-mcp
+      - unifi-access-mcp
+    restart: unless-stopped
+    profiles:
+      - relay
