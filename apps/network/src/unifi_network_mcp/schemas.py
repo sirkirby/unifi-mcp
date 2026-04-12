@@ -1323,7 +1323,7 @@ FIREWALL_POLICY_V2_CREATE_SCHEMA = {
         },
         "create_allow_respond": {
             "type": "boolean",
-            "default": True,
+            "default": False,
             "description": "Auto-create return traffic rule for ALLOW policies.",
         },
         "match_ip_sec": {
@@ -1348,6 +1348,7 @@ FIREWALL_POLICY_V2_CREATE_SCHEMA = {
         },
         "schedule": {
             "type": "object",
+            "default": {"mode": "ALWAYS"},
             "description": 'Schedule object (e.g. {"mode": "ALWAYS"}).',
         },
         "source": {

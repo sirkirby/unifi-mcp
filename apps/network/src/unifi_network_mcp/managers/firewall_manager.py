@@ -619,8 +619,7 @@ class FirewallManager:
         try:
             policy_name = policy_data.get("name", "Unnamed Policy")
             logger.info("Attempting to create firewall policy '%s' via V2 endpoint.", policy_name)
-            # Log the payload for debugging, ensuring sensitive data isn't exposed if necessary
-            # logger.debug("Firewall policy create payload: %s", json.dumps(policy_data, indent=2))
+            logger.info("Firewall policy create payload: %s", json.dumps(policy_data, indent=2))
 
             api_request = ApiRequestV2(method="post", path="/firewall-policies", data=policy_data)
 
@@ -644,31 +643,18 @@ class FirewallManager:
                 logger.error(
                     "Failed to create firewall policy '%s'. Unexpected V2 response format: %s", policy_name, response
                 )
-                return None
+                raise RuntimeError(
+                    "Unexpected response from controller (no _id in response). Raw: %s" % json.dumps(response, default=str)
+                )
 
         except Exception as e:
-            # Attempt to extract a more specific error message if possible
-            api_error_message = str(e)
-            if hasattr(e, "args") and e.args:
-                try:
-                    error_details = e.args[0]
-                    if isinstance(error_details, dict) and "message" in error_details:
-                        api_error_message = error_details["message"]
-                    elif isinstance(error_details, str):
-                        api_error_message = error_details
-                except Exception as parse_exc:
-                    logger.warning(
-                        "Could not parse specific API error from exception args: %s. Parse error: %s", e.args, parse_exc
-                    )
-
             logger.error(
                 "Error creating firewall policy '%s' via V2: %s",
                 policy_data.get("name", "Unnamed Policy"),
-                api_error_message,
+                e,
                 exc_info=True,
             )
-            # Optionally re-raise or return a custom error object instead of None
-            return None
+            raise
 
     async def delete_firewall_policy(self, policy_id: str) -> bool:
         """Delete a firewall policy by ID.
