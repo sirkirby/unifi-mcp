@@ -33,7 +33,12 @@ class ResourceValidator:
         """
         try:
             validate(instance=params, schema=self.schema)
-            return True, None, params
+            # Apply schema-defined defaults for top-level properties absent from params
+            result = dict(params)
+            for key, prop_schema in self.schema.get("properties", {}).items():
+                if key not in result and "default" in prop_schema:
+                    result[key] = prop_schema["default"]
+            return True, None, result
         except ValidationError as e:
             logger.error("%s validation error: %s", self.resource_name, e.message)
             return False, f"{self.resource_name} validation error: {e.message}", None
