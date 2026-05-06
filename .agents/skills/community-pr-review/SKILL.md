@@ -5,9 +5,10 @@ description: |
   just says "take a look at this PR" or "can we merge this." Covers the complete quality gate
   checklist (f-string logger ban, validator registry registration, doc site update ordering),
   the fork-edit model for trusted contributors, org-fork push limitations, the dual-subagent
-  review pattern, PR body standards, and the close-and-redirect pattern for unsalvageable PRs.
-  Apply this skill before approving any externally-authored PR, before running the merge command,
-  and when auditing recently merged PRs for compliance.
+  review pattern, PR body standards, technical API validation (live smoke tests, mutating
+  cycles), and the close-and-redirect pattern for unsalvageable PRs. Apply this skill before
+  approving any externally-authored PR, before running the merge command, and when auditing
+  recently merged PRs for compliance.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -18,13 +19,35 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 Community PRs go through a fixed quality checklist before merge. For trusted contributors
 (level99 has 7+ merged PRs), the maintainer commits fixes directly to the contributor's fork
 branch rather than requesting round-trip revisions — this preserves attribution while eliminating
-latency. This skill documents the full workflow from first look to merge commit.
+latency. This skill documents the full workflow from first look to merge commit, including
+technical validation for PRs that touch UniFi API tool implementations.
 
 ## Prerequisites
 
-- PR is open and CI is green (or failures are understood)
+- PR is open and CI workflow state is understood (see Step 0b for first-time contributor gotcha)
 - You have push access to the contributor's fork (needed for the fork-edit model)
 - `AGENTS.md` is current — it is the canonical source for hard bans
+- For PRs touching tool implementations or API handlers: a **live UniFi controller** must be reachable to run smoke tests
+
+---
+
+## Step 0b — First-Time Contributor CI Auth Gate (Critical Gotcha)
+
+When a first-time contributor opens a PR from a fork, GitHub queues all CI workflows with status
+`action_required` silently. The workflows do NOT run automatically. No error is shown to the
+contributor — they see a blank CI box in the PR.
+
+**You must manually authorize the workflow run** in the GitHub UI:
+
+1. Go to the PR Actions tab
+2. Scroll to the pending workflow(s)
+3. Click "Approve and run" on each queued workflow
+
+Do this before asking the contributor to make changes or before running your own review tests.
+Without this step, you will review against stale code or outdated test results, and the
+contributor will believe their PR is broken when it's just the CI gate.
+
+This gotcha affects every first-time contributor, including level99 on their first PR.
 
 ---
 
@@ -33,7 +56,7 @@ latency. This skill documents the full workflow from first look to merge commit.
 For PRs with significant code changes or security implications, split the review across two
 subagents rather than doing a single-pass review:
 
-1. **Code review subagent** — correctness, security, quality gates (this skill's Gates 1–3)
+1. **Code review subagent** — correctness, security, quality gates (Gates 1–4 below)
 2. **Test coverage subagent** — test completeness, coverage gaps, test pattern compliance
 
 Before dispatching either, check out the branch locally and run `git log origin/main..HEAD`
@@ -97,7 +120,7 @@ false confidence on governance PRs.
 Scan for f-string logger calls:
 
 ```bash
-grep -rn 'logger\.\(debug\|info\|warning\|error\|critical\)(f"' \
+grep -rn 'logger\\.\\(debug\\|info\\|warning\\|error\\|critical\\)(f"' \\
   $(git diff --name-only origin/main...HEAD)
 ```
 
@@ -204,6 +227,65 @@ create and update tools inherit from or call into.
 
 ---
 
+## Step 1.5 — API-Touching PRs: Live Validation Requirements
+
+For any PR that modifies UniFi MCP tool implementations, fixes API integration bugs, or adds new
+handlers, apply additional technical validation before merge. The UniFi controller is stateful
+and mock-based tests do not catch real-world edge cases.
+
+### Smoke Test Coverage (All API-Touching PRs)
+
+Run `scripts/live_smoke.py` against a live controller — not a mock — before opening or approving
+the PR.
+
+**Coverage requirement:** All touched tools must pass, and you must also run the full cross-category
+sweep to confirm no lateral regressions across the ~37 tools / 15 categories.
+
+```bash
+# Run read-only + preview smoke tests against the network server
+python scripts/live_smoke.py --server network --phase safe
+
+# Run all servers (network + protect + access)
+python scripts/live_smoke.py --server all --phase safe
+```
+
+**What "passing" means:**
+- Each tool returns a structurally valid response (correct keys, expected types).
+- No unexpected errors or stack traces in the output.
+- Tools that list resources return at least the expected schema shape even when the controller has no objects of that type.
+
+**Gotcha:** A tool that was already broken before the PR is still your responsibility to flag. Don't
+silently skip known-broken tools — note them explicitly in the PR description so the reviewer knows
+the scope of the damage.
+
+**Gotcha:** Mock tests give false confidence. The UniFi controller is quirky — response shapes
+differ between controller versions, and some fields only appear when specific configuration exists.
+A test that passes against a mock may fail silently against a real controller.
+
+### Mutating Cycle Tests (Create/Update/Delete PRs)
+
+For any PR that touches create, update, or delete handlers, run a full mutating cycle using
+`--phase approved` — not just the happy path.
+
+**Full cycle:**
+1. **Create** — create the resource via the tool; capture the returned ID.
+2. **Partial update** — update only a subset of fields using the tool.
+3. **Verify field preservation** — read back the resource and confirm fields you did NOT update are unchanged.
+4. **Delete** — remove the resource and confirm it is gone (expect 204 or equivalent).
+
+**Why field preservation matters:** The UniFi API silently drops fields that aren't included in a
+PUT/PATCH body. An update tool that reconstructs the full object from only the changed fields can
+accidentally zero out existing configuration. The verify step is the only reliable way to catch this.
+
+**Example output to embed verbatim in the PR:**
+```
+[CREATE] unifi_create_firewall_policy "test-smoke-policy" → id: abc123 ✓
+[UPDATE] set description="updated", name unchanged → read back: name="test-smoke-policy" ✓
+[DELETE] abc123 → 204 No Content ✓
+```
+
+---
+
 ## Step 1b — Post Feedback With the Right Review Type
 
 When you find merge blockers in Step 1, submit your GitHub review as **`request-changes`**, not
@@ -288,10 +370,49 @@ Before merging, confirm the PR body includes:
 
 - **What changed** — which tools or managers were added/modified
 - **Why** — the use case or problem being solved
-- **Testing notes** — how to verify the change works
+- **Testing notes** — how to verify the change works (including live smoke test output for API-touching PRs)
 
 If the PR body is sparse, edit it before merging. The PR body becomes part of the git log
 context and is referenced in future sessions when diagnosing regressions.
+
+### API-Touching PR Body: Minimum Requirements
+
+For PRs that modify tools or API handlers, the PR description must include:
+
+**1. Tool summary** — List every tool fixed or added, grouped by category:
+
+```markdown
+### Tools Changed
+- **unifi_get_client_details** — fixed null-check on optional connection field (#138)
+- **unifi_create_firewall_policy** — new tool (#142)
+- **unifi_update_firewall_policy** — new tool (#142)
+```
+
+**2. Embedded live test output** — Paste the raw terminal output (not a prose summary). Reviewers
+need actual values and shapes, not "tests passed."
+
+```markdown
+<details>
+<summary>Live test output (controller 8.x, 2024-04-01)</summary>
+
+```
+[paste raw output here — do not summarize]
+```
+
+</details>
+```
+
+Reviewers have been burned by "all tests passed" summaries that omit the one tool that returned a
+malformed response. Embed the raw output and let the reviewer decide what matters.
+
+**3. Issue references** — Tag every issue using `#N` format. GitHub autolinks and auto-closes on merge:
+
+```
+Closes #142, #155
+```
+
+**Gotcha:** If you reference an issue in the commit message but not in the PR body, GitHub's
+auto-close only triggers reliably when the PR body contains the `#N` reference. Put it in both.
 
 ### When a PR surfaces broader scope (Principle #5)
 
@@ -370,8 +491,11 @@ using this exact approach and a fix PR was opened the same session.
 
 | Gate | Blocker level | Where to look | Common miss |
 |------|--------------|---------------|-------------|
+| First-time CI auth (Step 0b) | Blocking | GitHub Actions tab | Manual workflow approval not triggered |
 | PR type (Gate 0) | Routing gate | PR description + linked issue | Applying feature-addition checklist to a governance/refactor PR |
 | F-string loggers (Gate 1) | Hard block | `*_manager.py` | Manager layer even when tool layer is clean; full-payload calls promoted to INFO |
 | Validator registry (Gate 2) | Critical (silent) | Registry file + `validated_data` usage | Tool registered but reads raw params |
 | Doc site count (Gate 3) | Ordering gate | Doc site entry count | Updated after merge instead of before |
 | Shared validator defaults (Gate 4) | Hard block | `ResourceValidator.validate()` and any shared validator class | Defaults injected into shared path silently overwrite update-tool fields |
+| Live smoke tests (Step 1.5) | Validation requirement | `scripts/live_smoke.py` output | Approval without actual live controller tests; mock-only validation |
+| Mutation cycles (Step 1.5) | Field preservation blocker | Create → update → verify → delete cycle | Update tools that reconstruct objects silently zero fields |
