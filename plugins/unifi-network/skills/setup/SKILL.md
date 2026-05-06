@@ -8,6 +8,19 @@ allowed-tools: Read, Bash, AskUserQuestion
 
 Walk the user through configuring their UniFi Network controller connection. **Ask each question one at a time using AskUserQuestion. Wait for the answer before proceeding.**
 
+## Step 0: Check Prerequisites
+
+Before asking the user for any credentials, run the prereq check so the most common silent failures (missing `uvx`, malformed existing settings) are caught up front:
+
+**macOS / Linux:**
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/check-prereqs.sh "unifi-network"
+```
+
+**Windows:** PowerShell setups can skip this step — `uvx` availability is checked when the MCP server first launches. Just remind the user to install `uv` if it's missing.
+
+If the script exits non-zero, **stop and report the error to the user**. Do not proceed to credentials. The script's output already explains what to fix (install `uv`, repair `.claude/settings.local.json`, etc.).
+
 ## Step 1: Controller Host
 
 Ask: "What is your UniFi controller's IP address or hostname?" (e.g., 192.168.1.1)
@@ -92,6 +105,17 @@ Common permission variables for "enable all write":
 
 Tell the user:
 
-"Configuration saved to `.claude/settings.local.json`. Restart Claude Code to connect the MCP server. After restart, run `/mcp` to verify the connection, or just ask me about your network."
+"Configuration saved to `.claude/settings.local.json`. Restart Claude Code (or run `/reload-plugins`) to connect the MCP server.
+
+**After restart, run `/mcp` to verify.** You should see `unifi-network` listed as connected, with a tool count next to it.
+
+If it's missing or shows 0 tools, the server failed to start. Diagnose in this order:
+
+1. `/plugin` — confirm the plugin shows **enabled** (not just installed). If only installed, enable it and re-run `/reload-plugins`.
+2. `which uvx` — if it returns nothing, install `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`), restart your shell, then restart Claude Code.
+3. `claude --debug` (in a fresh shell) — surfaces MCP server startup errors. Look for `unifi-network` in the output and report any error to the maintainer.
+4. Verify the credentials by running the same `uvx unifi-network-mcp` command manually with the same env vars to see if it can reach your controller.
+
+Once `/mcp` shows the server connected, the UniFi tools (`unifi_execute`, `unifi_tool_index`, etc.) will be available."
 
 Show a summary table of what was configured.
