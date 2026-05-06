@@ -80,15 +80,21 @@ async def run_transports(
     logger: logging.Logger,
     protocol_version: str = "v1",
 ) -> None:
-    """Run stdio (always) and optionally HTTP, with coupled lifecycles.
+    """Run stdio (always) and optionally HTTP, with stdio as the primary.
 
-    When both transports are active, uses ``asyncio.wait(FIRST_COMPLETED)``
-    so that when either transport exits the other is cancelled.  This ensures
-    the process terminates cleanly when the stdio client disconnects instead
-    of being kept alive by the HTTP server.
+    Stdio is the primary transport — Claude Code (and any other stdio MCP
+    client) talks to the server over it.  HTTP, when enabled, is a side
+    channel that runs as a background task: if HTTP fails (port conflict,
+    bind error, etc.) stdio keeps serving.  When stdio exits, HTTP is
+    cancelled so the process terminates cleanly.
+
+    The previous implementation used ``asyncio.wait(FIRST_COMPLETED)``, which
+    caused HTTP-died-fast to look like "transport finished" and cancelled
+    stdio — taking down the only transport Claude Code actually uses.  See
+    issue #200.
 
     ``SystemExit`` raised by uvicorn on port-bind failures is caught inside
-    ``run_http`` so it does not propagate and kill the stdio transport.
+    ``run_http`` so it does not propagate.
     """
     # Future: when MCP SDK v2 changes the transport API, branch here:
     # if protocol_version == "v2":
@@ -151,30 +157,29 @@ async def run_transports(
             raise
         return
 
-    # Use asyncio tasks so we can cancel HTTP when stdio exits (or vice versa).
-    # Without this, the HTTP server keeps the process alive as an orphan after
-    # the stdio client disconnects.
-    stdio_task = asyncio.create_task(run_stdio(), name="stdio")
+    # Run HTTP as a background task and await stdio in the main flow.  If
+    # HTTP fails (port conflict, etc.) the failure is contained inside
+    # run_http (which logs and returns), the http_task completes, and stdio
+    # keeps serving.  When stdio exits — for any reason — we cancel HTTP so
+    # we don't leave an orphan listener behind.
     http_task = asyncio.create_task(run_http(), name="http")
-
+    # Yield once so http_task gets to start before stdio races to completion
+    # in the (rare) case where stdio exits without ever awaiting.
+    await asyncio.sleep(0)
     try:
-        done, pending = await asyncio.wait(
-            [stdio_task, http_task],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        # Whichever finished first — cancel the other and let it clean up
-        for task in pending:
-            logger.info("Cancelling %s transport (other transport exited).", task.get_name())
-            task.cancel()
+        await run_stdio()
+        logger.info("FastMCP stdio server exited.")
+    finally:
+        if not http_task.done():
+            logger.info("Stdio transport exited; cancelling HTTP transport.")
+            http_task.cancel()
             try:
-                await task
+                await http_task
             except asyncio.CancelledError:
                 pass
-        # Re-raise if the completed task had an exception
-        for task in done:
-            if not task.cancelled() and task.exception():
-                raise task.exception()
-        logger.info("FastMCP servers exited.")
-    except Exception as e:
-        logger.error("Error running FastMCP servers: %s", e, exc_info=True)
-        raise
+            except Exception as http_e:
+                logger.warning("HTTP task error during shutdown: %s", http_e)
+        elif (http_exc := http_task.exception()) is not None:
+            # run_http normally swallows uvicorn errors and returns; this branch
+            # only fires for unexpected exceptions that escaped its try/except.
+            logger.warning("HTTP task exited with unhandled error: %s", http_exc)

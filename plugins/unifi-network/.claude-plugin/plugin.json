@@ -35,7 +35,7 @@
         "UNIFI_NETWORK_VERIFY_SSL": "${UNIFI_NETWORK_VERIFY_SSL:-false}",
         "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}",
         "UNIFI_MCP_HTTP_ENABLED": "true",
-        "UNIFI_MCP_HTTP_FORCE": "true",
+        "UNIFI_MCP_HTTP_FORCE": "false",
         "UNIFI_MCP_PORT": "${UNIFI_NETWORK_MCP_PORT:-3000}"
       }
     }

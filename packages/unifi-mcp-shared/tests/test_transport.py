@@ -127,3 +127,79 @@ class TestRunTransports:
                 logger=logging.getLogger("test"),
             )
         assert "bind failed" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_http_systemexit_does_not_cancel_stdio(self, mock_server):
+        """Regression for issue #200: HTTP bind failure must not cascade to stdio.
+
+        Previously ``asyncio.wait(FIRST_COMPLETED)`` treated HTTP-died-fast as
+        'transport finished' and cancelled stdio — taking down the only
+        transport Claude Code talks over.  After the refactor stdio is the
+        primary control flow and HTTP failures are contained.
+        """
+        mock_server.run_streamable_http_async.side_effect = SystemExit(1)
+
+        stdio_completed = False
+
+        async def stdio_runs_for_a_moment():
+            nonlocal stdio_completed
+            await asyncio.sleep(0.05)
+            stdio_completed = True
+
+        mock_server.run_stdio_async.side_effect = stdio_runs_for_a_moment
+
+        with patch("unifi_mcp_shared.transport.os.getpid", return_value=12345):
+            await run_transports(
+                server=mock_server,
+                http_enabled=True,
+                host="0.0.0.0",
+                port=3000,
+                http_transport="streamable-http",
+                logger=logging.getLogger("test"),
+            )
+
+        assert stdio_completed, (
+            "stdio was cancelled when HTTP failed — the bug from #200 has regressed"
+        )
+        mock_server.run_streamable_http_async.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_stdio_exit_cancels_http(self, mock_server):
+        """When stdio exits (client disconnect), HTTP must be cancelled.
+
+        Without this, the HTTP server would keep the process alive as an
+        orphan after the stdio client disconnected.
+        """
+        # stdio returns immediately (simulates client disconnect at startup).
+        mock_server.run_stdio_async.return_value = None
+
+        http_started = asyncio.Event()
+        http_was_cancelled = False
+
+        async def long_running_http():
+            nonlocal http_was_cancelled
+            http_started.set()
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                http_was_cancelled = True
+                raise
+
+        mock_server.run_streamable_http_async.side_effect = long_running_http
+
+        with patch("unifi_mcp_shared.transport.os.getpid", return_value=12345):
+            # Should complete promptly: stdio exits, then http_task is cancelled.
+            await asyncio.wait_for(
+                run_transports(
+                    server=mock_server,
+                    http_enabled=True,
+                    host="0.0.0.0",
+                    port=3000,
+                    http_transport="streamable-http",
+                    logger=logging.getLogger("test"),
+                ),
+                timeout=2.0,
+            )
+
+        assert http_started.is_set(), "HTTP transport never started"
+        assert http_was_cancelled, "HTTP transport was not cancelled when stdio exited"
