@@ -184,6 +184,7 @@ TRAFFIC_ROUTE_SCHEMA = {
             "description": "Next hop IP address (advanced routing)",
         },
     },
+    "additionalProperties": False,
 }
 
 # Traffic route update schema (derived from above, removes name/interface, makes fields optional)
@@ -228,6 +229,7 @@ TRAFFIC_ROUTE_SIMPLE_SCHEMA = {
         },
         "enabled": {"type": "boolean"},
     },
+    "additionalProperties": False,
 }
 
 # WLAN (Wireless Network) schema

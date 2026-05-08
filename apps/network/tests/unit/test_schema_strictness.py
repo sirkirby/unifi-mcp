@@ -28,9 +28,6 @@ from unifi_network_mcp import schemas
 # Schemas allowed to remain permissive at sweep-start. Each task in the
 # #205 sweep removes one entry. After merge this set MUST be empty.
 ALLOWED_PERMISSIVE_DURING_SWEEP: set[str] = {
-    "TRAFFIC_ROUTE_SCHEMA",
-    "TRAFFIC_ROUTE_UPDATE_SCHEMA",
-    "TRAFFIC_ROUTE_SIMPLE_SCHEMA",
     "WLAN_SCHEMA",
     "WLAN_UPDATE_SCHEMA",
     "NETWORK_SCHEMA",
