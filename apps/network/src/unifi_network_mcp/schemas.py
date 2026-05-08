@@ -366,6 +366,7 @@ WLAN_SCHEMA = {
             "then": {"required": ["x_passphrase"]},
         },
     ],
+    "additionalProperties": False,
 }
 
 # WLAN update schema
