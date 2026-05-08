@@ -226,6 +226,12 @@ make pre-commit   # format + lint + sync-skills + test
 
 ## Patterns
 
+### Silent-drop mitigation (#138)
+
+All three app servers run on `StrictKwargFastMCP` (a `FastMCP` subclass in `packages/unifi-mcp-shared/src/unifi_mcp_shared/strict_dispatch.py`) that intercepts incoming `tools/call` requests and rejects unknown top-level kwargs against `tools_manifest.json` BEFORE pydantic's `extra="ignore"` can silently drop them. Schema-dict drops (free-form `*_data` dicts) are independently caught by `additionalProperties: false` from #206. Do not bypass this wrapper; do not patch FastMCP internals to achieve the same effect. The wrapper retires when upstream lands `extra="forbid"` on FastMCP's tool arg models — at that point `StrictKwargFastMCP` becomes a no-op guard and can be removed cleanly.
+
+- **Anchor:** `packages/unifi-mcp-shared/src/unifi_mcp_shared/strict_dispatch.py`
+
 ### Extension Over Patching
 
 - Prefer adding new tool modules and managers over modifying existing ones
