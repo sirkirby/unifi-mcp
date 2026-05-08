@@ -31,6 +31,7 @@ PORT_FORWARD_SCHEMA = {
             "description": "Whether rule is initially enabled",
         },
     },
+    "additionalProperties": False,
 }
 
 # Port forwarding rule update schema (all fields optional)
@@ -1235,6 +1236,7 @@ PORT_FORWARD_SIMPLE_SCHEMA = {
         },
         "enabled": {"type": "boolean", "description": "Enable rule (default true)"},
     },
+    "additionalProperties": False,
 }
 
 
