@@ -22,7 +22,9 @@ from .schemas import (
     PORT_FORWARD_SIMPLE_SCHEMA,
     PORT_FORWARD_UPDATE_SCHEMA,
     PORT_PROFILE_UPDATE_SCHEMA,
+    QOS_RULE_SCHEMA,
     QOS_RULE_SIMPLE_SCHEMA,
+    QOS_RULE_UPDATE_SCHEMA,
     SNMP_SETTINGS_UPDATE_SCHEMA,
     TRAFFIC_ROUTE_SCHEMA,
     TRAFFIC_ROUTE_SIMPLE_SCHEMA,
@@ -52,6 +54,8 @@ class UniFiValidatorRegistry:
         "firewall_policy_update": ResourceValidator(FIREWALL_POLICY_UPDATE_SCHEMA, "Firewall Policy Update"),
         "firewall_policy_simple": ResourceValidator(FIREWALL_POLICY_SIMPLE_SCHEMA, "Simple Firewall Policy"),
         "traffic_route_simple": ResourceValidator(TRAFFIC_ROUTE_SIMPLE_SCHEMA, "Simple Traffic Route"),
+        "qos_rule": ResourceValidator(QOS_RULE_SCHEMA, "QoS Rule"),
+        "qos_rule_update": ResourceValidator(QOS_RULE_UPDATE_SCHEMA, "QoS Rule Update"),
         "qos_rule_simple": ResourceValidator(QOS_RULE_SIMPLE_SCHEMA, "Simple QoS Rule"),
         "port_forward_simple": ResourceValidator(PORT_FORWARD_SIMPLE_SCHEMA, "Simple Port Forward Rule"),
         "firewall_policy_v2_create": ResourceValidator(
