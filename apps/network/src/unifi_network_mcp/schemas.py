@@ -1104,6 +1104,7 @@ OON_POLICY_UPDATE_SCHEMA = {
         "qos": {"type": "object", "description": "Bandwidth limiting configuration"},
         "route": {"type": "object", "description": "VPN routing configuration"},
     },
+    "additionalProperties": False,
 }
 
 # AP Group create schema
