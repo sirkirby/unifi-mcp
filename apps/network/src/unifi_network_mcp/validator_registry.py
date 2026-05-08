@@ -14,6 +14,7 @@ from .schemas import (
     FIREWALL_POLICY_SIMPLE_SCHEMA,
     FIREWALL_POLICY_UPDATE_SCHEMA,
     FIREWALL_POLICY_V2_CREATE_SCHEMA,
+    FIREWALL_POLICY_V2_UPDATE_SCHEMA,
     NETWORK_SCHEMA,
     NETWORK_UPDATE_SCHEMA,
     OON_POLICY_UPDATE_SCHEMA,
@@ -55,6 +56,9 @@ class UniFiValidatorRegistry:
         "port_forward_simple": ResourceValidator(PORT_FORWARD_SIMPLE_SCHEMA, "Simple Port Forward Rule"),
         "firewall_policy_v2_create": ResourceValidator(
             FIREWALL_POLICY_V2_CREATE_SCHEMA, "V2 Zone-Based Firewall Policy Create"
+        ),
+        "firewall_policy_v2_update": ResourceValidator(
+            FIREWALL_POLICY_V2_UPDATE_SCHEMA, "V2 Zone-Based Firewall Policy Update"
         ),
         # ACL rule validation migrated to pydantic model (models/acl.py) — see #139
         "port_profile_update": ResourceValidator(PORT_PROFILE_UPDATE_SCHEMA, "Port Profile Update"),

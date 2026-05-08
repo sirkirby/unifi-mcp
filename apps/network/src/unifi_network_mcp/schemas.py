@@ -1243,105 +1243,141 @@ PORT_FORWARD_SIMPLE_SCHEMA = {
 # The v2 API uses zone_id + matching_target + matching_target_type instead of rulesets.
 # Actions are uppercase: ALLOW, BLOCK, REJECT.
 # See: /proxy/network/v2/api/site/{site}/firewall-policies
+# Property definitions shared between V2 create and update schemas.
+# Defining them once eliminates the drift hazard that produced issue #203
+# (and the connection_state_type/connection_states siblings discovered in its
+# audit). Update schema strips defaults — partial-update merge with defaults
+# baked in would clobber existing controller values.
+_FIREWALL_POLICY_V2_PROPERTIES = {
+    "name": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Name of the firewall policy.",
+    },
+    "action": {
+        "type": "string",
+        "enum": ["ALLOW", "BLOCK", "REJECT"],
+        "description": "Policy action (uppercase v2 format).",
+    },
+    "enabled": {
+        "type": "boolean",
+        "default": True,
+        "description": "Whether the policy is active.",
+    },
+    "index": {
+        "type": "integer",
+        "description": "Rule priority/order (lower = evaluated first). API assigns based on creation order.",
+    },
+    "protocol": {
+        "type": "string",
+        "default": "all",
+        "description": "Protocol to match (e.g. 'all', 'tcp', 'udp', 'icmp').",
+    },
+    "ip_version": {
+        "type": "string",
+        "enum": ["BOTH", "IPV4", "IPV6"],
+        "default": "BOTH",
+        "description": "IP version to match. Controller requires all-uppercase; mixed-case input is normalized.",
+    },
+    "logging": {
+        "type": "boolean",
+        "default": False,
+        "description": "Enable logging for matched traffic.",
+    },
+    "connection_state_type": {
+        "type": "string",
+        "enum": ["ALL", "RESPOND_ONLY", "CUSTOM"],
+        "default": "ALL",
+        "description": (
+            "Connection state matching mode. ALL = match every state. "
+            "RESPOND_ONLY = match only return traffic. CUSTOM = match the "
+            "states listed in connection_states. Mixed-case input is normalized."
+        ),
+    },
+    "connection_states": {
+        "type": "array",
+        "items": {
+            "type": "string",
+            "enum": ["NEW", "RELATED", "INVALID", "ESTABLISHED"],
+        },
+        "description": (
+            "Connection states to match when connection_state_type='CUSTOM'. "
+            "Mixed-case input is normalized."
+        ),
+    },
+    "create_allow_respond": {
+        "type": "boolean",
+        "default": False,
+        "description": "Auto-create return traffic rule for ALLOW policies.",
+    },
+    "match_ip_sec": {
+        "type": "boolean",
+        "default": False,
+        "description": "Match IPSec traffic.",
+    },
+    "match_opposite_protocol": {
+        "type": "boolean",
+        "default": False,
+        "description": "Match opposite protocol.",
+    },
+    "icmp_typename": {
+        "type": "string",
+        "default": "ANY",
+        "description": "ICMP type name.",
+    },
+    "icmp_v6_typename": {
+        "type": "string",
+        "default": "ANY",
+        "description": "ICMPv6 type name.",
+    },
+    "schedule": {
+        "type": "object",
+        "default": {"mode": "ALWAYS"},
+        "description": 'Schedule object (e.g. {"mode": "ALWAYS"}).',
+    },
+    "source": {
+        "type": "object",
+        "description": (
+            "Source targeting. Must include zone_id and matching_target. "
+            "For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. "
+            "For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. "
+            "For any: matching_target='ANY'."
+        ),
+    },
+    "destination": {
+        "type": "object",
+        "description": (
+            "Destination targeting. Same structure as source. "
+            "For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. "
+            "For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. "
+            "For any: matching_target='ANY'."
+        ),
+    },
+}
+
+
+def _strip_defaults(properties: dict) -> dict:
+    """Return a copy of ``properties`` with the ``default`` key removed.
+
+    Update schemas must not carry defaults: partial-update merge would clobber
+    existing controller values with a default the caller never explicitly set
+    (see field-symmetry skill, Gotcha 1: shared validator defaults are forbidden).
+    """
+    return {name: {k: v for k, v in spec.items() if k != "default"} for name, spec in properties.items()}
+
+
 FIREWALL_POLICY_V2_CREATE_SCHEMA = {
     "type": "object",
     "required": ["name", "action", "source", "destination"],
-    "properties": {
-        "name": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Name of the firewall policy.",
-        },
-        "action": {
-            "type": "string",
-            "enum": ["ALLOW", "BLOCK", "REJECT"],
-            "description": "Policy action (uppercase v2 format).",
-        },
-        "enabled": {
-            "type": "boolean",
-            "default": True,
-            "description": "Whether the policy is active.",
-        },
-        "index": {
-            "type": "integer",
-            "description": "Rule priority/order (lower = evaluated first). API assigns based on creation order.",
-        },
-        "protocol": {
-            "type": "string",
-            "default": "all",
-            "description": "Protocol to match (e.g. 'all', 'tcp', 'udp', 'icmp').",
-        },
-        "ip_version": {
-            "type": "string",
-            "enum": ["BOTH", "IPv4", "IPv6"],
-            "default": "BOTH",
-            "description": "IP version to match.",
-        },
-        "logging": {
-            "type": "boolean",
-            "default": False,
-            "description": "Enable logging for matched traffic.",
-        },
-        "connection_state_type": {
-            "type": "string",
-            "enum": ["ALL", "inclusive"],
-            "default": "ALL",
-            "description": "Connection state matching mode.",
-        },
-        "connection_states": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Connection states to match when connection_state_type is 'inclusive'.",
-        },
-        "create_allow_respond": {
-            "type": "boolean",
-            "default": False,
-            "description": "Auto-create return traffic rule for ALLOW policies.",
-        },
-        "match_ip_sec": {
-            "type": "boolean",
-            "default": False,
-            "description": "Match IPSec traffic.",
-        },
-        "match_opposite_protocol": {
-            "type": "boolean",
-            "default": False,
-            "description": "Match opposite protocol.",
-        },
-        "icmp_typename": {
-            "type": "string",
-            "default": "ANY",
-            "description": "ICMP type name.",
-        },
-        "icmp_v6_typename": {
-            "type": "string",
-            "default": "ANY",
-            "description": "ICMPv6 type name.",
-        },
-        "schedule": {
-            "type": "object",
-            "default": {"mode": "ALWAYS"},
-            "description": 'Schedule object (e.g. {"mode": "ALWAYS"}).',
-        },
-        "source": {
-            "type": "object",
-            "description": (
-                "Source targeting. Must include zone_id and matching_target. "
-                "For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. "
-                "For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. "
-                "For any: matching_target='ANY'."
-            ),
-        },
-        "destination": {
-            "type": "object",
-            "description": (
-                "Destination targeting. Same structure as source. "
-                "For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. "
-                "For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. "
-                "For any: matching_target='ANY'."
-            ),
-        },
-    },
+    "properties": _FIREWALL_POLICY_V2_PROPERTIES,
+    "additionalProperties": False,
+}
+
+
+FIREWALL_POLICY_V2_UPDATE_SCHEMA = {
+    "type": "object",
+    "properties": _strip_defaults(_FIREWALL_POLICY_V2_PROPERTIES),
+    "additionalProperties": False,
 }
 
 

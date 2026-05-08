@@ -204,6 +204,40 @@ class TestCreateFirewallPolicyAutoDetect:
 
         assert result["success"] is True
 
+    @pytest.mark.asyncio
+    async def test_create_normalizes_mixed_case_ip_version(self):
+        """Mixed-case ip_version ('IPv4') must be normalized before reaching the controller.
+
+        Regression test for issue #203: the V2 enum is strict upper-case (BOTH/IPV4/IPV6).
+        The wrapper must accept the natural form ('IPv4') and uppercase it before send.
+        """
+        zone_data = {
+            "name": "Allow IoT v4",
+            "action": "ALLOW",
+            "ip_version": "IPv4",
+            "source": {"zone_id": "internal", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+        captured = {}
+
+        async def capture_create(data):
+            captured.update(data)
+            mock = MagicMock()
+            mock.raw = {**data, "_id": "new_v4"}
+            return mock
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.create_firewall_policy = AsyncMock(side_effect=capture_create)
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is True
+        assert captured["ip_version"] == "IPV4", (
+            "ip_version must be normalized to upper-case before being sent to the controller"
+        )
+
 
 # ---------------------------------------------------------------------------
 # create_firewall_policy — zone targeting validation
@@ -340,8 +374,13 @@ class TestUpdateFirewallPolicyV2Fields:
         assert "source" in result["updated_fields"]
 
     @pytest.mark.asyncio
-    async def test_action_normalization_uppercase(self):
-        """Uppercase actions should be accepted and normalized."""
+    async def test_action_and_ip_version_normalization(self):
+        """Mixed-case action and ip_version should be normalized to controller-accepted form.
+
+        Regression test for issue #203: the controller's V2 firewall enum is strict
+        upper-case (BOTH/IPV4/IPV6); accepting "IPv4" wrapper-side then sending it raw
+        produced a cryptic deserialization error.
+        """
         mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
@@ -349,7 +388,7 @@ class TestUpdateFirewallPolicyV2Fields:
 
             from unifi_network_mcp.tools.firewall import update_firewall_policy
 
-            # Preview mode to test normalization without calling manager
+            # Preview mode lets us inspect the normalized payload without hitting the manager
             result = await update_firewall_policy(
                 policy_id="pol_zone_001",
                 update_data={"action": "REJECT", "ip_version": "IPv4"},
@@ -358,6 +397,154 @@ class TestUpdateFirewallPolicyV2Fields:
 
         assert result["success"] is True
         assert result.get("requires_confirmation") is True
+        proposed = result["preview"]["proposed"]
+        assert proposed["ip_version"] == "IPV4"
+        assert proposed["action"] == "REJECT"
+
+    @pytest.mark.asyncio
+    async def test_ip_version_lowercase_normalized(self):
+        """Lowercase ip_version ('ipv6') should also be accepted and normalized."""
+        mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={"ip_version": "ipv6"},
+                confirm=False,
+            )
+
+        assert result["success"] is True
+        assert result["preview"]["proposed"]["ip_version"] == "IPV6"
+
+    @pytest.mark.asyncio
+    async def test_invalid_ip_version_rejected(self):
+        """Bogus ip_version values should be rejected by the schema with a clear error."""
+        from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+        result = await update_firewall_policy(
+            policy_id="pol_zone_001",
+            update_data={"ip_version": "v4"},
+            confirm=True,
+        )
+
+        assert result["success"] is False
+        # Schema produces the error: includes both the bad value and the accepted set
+        assert "'V4'" in result["error"]
+        assert "'BOTH'" in result["error"]
+        assert "'IPV4'" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_connection_state_normalized(self):
+        """Mixed-case connection_state_type and connection_states get normalized.
+
+        Live controller (issue #203 follow-up) accepts only:
+          connection_state_type: [ALL, RESPOND_ONLY, CUSTOM]
+          connection_states[]:    [NEW, RELATED, INVALID, ESTABLISHED]
+        """
+        mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={
+                    "connection_state_type": "custom",
+                    "connection_states": ["new", "ESTABLISHED"],
+                },
+                confirm=False,
+            )
+
+        assert result["success"] is True
+        proposed = result["preview"]["proposed"]
+        assert proposed["connection_state_type"] == "CUSTOM"
+        assert proposed["connection_states"] == ["NEW", "ESTABLISHED"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_connection_state_type_rejected(self):
+        """The legacy 'inclusive' value is no longer valid (was always wrong).
+
+        The schema's error names the offending value and the accepted set so
+        callers can self-correct without trial-and-error.
+        """
+        from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+        result = await update_firewall_policy(
+            policy_id="pol_zone_001",
+            update_data={"connection_state_type": "inclusive"},
+            confirm=True,
+        )
+
+        assert result["success"] is False
+        assert "'INCLUSIVE'" in result["error"]
+        assert "'ALL'" in result["error"]
+        assert "'CUSTOM'" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_connection_state_rejected(self):
+        """Bogus connection_states items should be rejected with the accepted set."""
+        from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+        result = await update_firewall_policy(
+            policy_id="pol_zone_001",
+            update_data={
+                "connection_state_type": "CUSTOM",
+                "connection_states": ["NEW", "BOGUS"],
+            },
+            confirm=True,
+        )
+
+        assert result["success"] is False
+        assert "'BOGUS'" in result["error"]
+        assert "'NEW'" in result["error"]
+        assert "'ESTABLISHED'" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_v2_update_rejects_unknown_key(self):
+        """Closes the silent-drop class of bug (#136 layer 2, e.g. dst_port_group_id).
+
+        Previously: the V2 update path skipped schema validation entirely, so any
+        unknown key in update_data was silently forwarded to the controller (which
+        then ignored it, leading to security-grade misconfigs — see comment on #136).
+        Now: schema validation rejects unknown keys at the wrapper boundary.
+        """
+        from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+        result = await update_firewall_policy(
+            policy_id="pol_zone_001",
+            update_data={
+                "ip_version": "BOTH",  # ensures v2 path
+                "dst_port_group_id": "abc123",  # this is the silent-drop case
+            },
+            confirm=True,
+        )
+
+        assert result["success"] is False
+        assert "dst_port_group_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_v2_create_rejects_unknown_key(self):
+        """V2 create now rejects unknown top-level keys instead of forwarding them."""
+        zone_data = {
+            "name": "Reject unknown",
+            "action": "ALLOW",
+            "dst_port_group_id": "abc123",  # silent-drop case from comment on #136
+            "source": {"zone_id": "internal", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is False
+        assert "dst_port_group_id" in result["error"]
 
     @pytest.mark.asyncio
     async def test_invalid_action_rejected(self):

@@ -351,6 +351,10 @@ async def create_firewall_policy(
     zone_based = _is_zone_based_policy(policy_data)
 
     if zone_based:
+        # Controller's V2 enums are strictly upper-case. Normalize common
+        # mixed-case input before validation so users can pass natural forms
+        # like "IPv4" or lowercase state names.
+        policy_data = _normalize_v2_policy_casing(policy_data)
         schema_key = "firewall_policy_v2_create"
         is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate_and_apply_defaults(
             schema_key, policy_data
@@ -417,6 +421,29 @@ async def create_firewall_policy(
     except Exception as e:
         logger.error("Error creating firewall policy '%s': %s", policy_name, e, exc_info=True)
         return {"success": False, "error": "Failed to create firewall policy '%s': %s" % (policy_name, e)}
+
+
+# Controller-side V2 firewall enums are Java-style and strictly upper-case.
+# Live-controller probe (issue #203 follow-up) confirmed the accepted values:
+#   ip_version            → BOTH | IPV4 | IPV6
+#   connection_state_type → ALL | RESPOND_ONLY | CUSTOM
+#   connection_states[]   → NEW | RELATED | INVALID | ESTABLISHED
+# Normalize to upper-case so users can pass natural forms ("IPv4", "new").
+def _normalize_v2_policy_casing(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a shallow copy of ``data`` with V2 firewall enum fields upper-cased.
+
+    Only normalizes string values; non-string input is left for schema validation
+    to flag with its own error.
+    """
+    out = dict(data)
+    if isinstance(out.get("ip_version"), str):
+        out["ip_version"] = out["ip_version"].upper()
+    if isinstance(out.get("connection_state_type"), str):
+        out["connection_state_type"] = out["connection_state_type"].upper()
+    states = out.get("connection_states")
+    if isinstance(states, list):
+        out["connection_states"] = [s.upper() if isinstance(s, str) else s for s in states]
+    return out
 
 
 # Fields that indicate zone-based update data (not in the legacy update schema)
@@ -495,9 +522,17 @@ async def update_firewall_policy(
     has_v2_fields = bool(set(update_data.keys()) & _V2_UPDATE_FIELDS)
 
     if has_v2_fields:
-        # Skip legacy schema validation for zone-based updates; the manager
-        # merges fields into the existing policy and sends the full payload.
-        validated_data = update_data
+        # Normalize V2 enum casing before validation so common mixed-case input
+        # ("IPv4", "custom", ["new"]) survives the strict-uppercase enum check.
+        update_data = _normalize_v2_policy_casing(update_data)
+        is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate(
+            "firewall_policy_v2_update", update_data
+        )
+        if not is_valid:
+            logger.warning("Invalid V2 firewall policy update data for ID %s: %s", policy_id, error_msg)
+            return {"success": False, "error": "Invalid update data: %s" % error_msg}
+        if not validated_data:
+            return {"success": False, "error": "Update data is effectively empty or invalid."}
     else:
         is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("firewall_policy_update", update_data)
         if not is_valid:
