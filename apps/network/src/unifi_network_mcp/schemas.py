@@ -567,6 +567,7 @@ VPN_PROFILE_SCHEMA = {
         "server_id": {"type": "string", "description": "ID of the VPN server"},
         "exp": {"type": "integer", "default": 365, "description": "Expiration in days"},
     },
+    "additionalProperties": False,
 }
 
 # FirewallPolicy schema
