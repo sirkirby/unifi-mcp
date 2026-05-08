@@ -1034,6 +1034,7 @@ PORT_PROFILE_UPDATE_SCHEMA = {
             "description": "802.1X control mode",
         },
     },
+    "additionalProperties": False,
 }
 
 # Client Group update schema
