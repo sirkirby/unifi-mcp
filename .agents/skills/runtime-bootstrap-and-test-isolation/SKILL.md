@@ -1,6 +1,6 @@
 ---
 name: myco:runtime-bootstrap-and-test-isolation
-description: |
+description: |-
   Activate this skill when adding a new manager, adding a new tool category,
   writing or debugging tool unit tests, diagnosing tool-visibility failures,
   or investigating startup performance — even if the user doesn't explicitly
@@ -101,7 +101,7 @@ Adding a new tool file inside an existing category requires **zero** `runtime.py
 
 ## Procedure C: Three-Stage Decorator Replacement and Test Isolation
 
-Tool functions go through three decorator replacements during bootstrap. This is what makes the entire test suite work without a live UniFi controller.
+Tool functions go through three decorator replacements during bootstrap and permission wiring. This is what makes the entire test suite work without a live UniFi controller and enables the full permission/confirmation flow.
 
 **The three stages:**
 
@@ -109,7 +109,7 @@ Tool functions go through three decorator replacements during bootstrap. This is
 |---|---|---|---|
 | 1 | `runtime.py` — `get_server()` | `create_mcp_tool_adapter(server.tool)` stored as `server._original_tool` | Registers tool with the MCP server |
 | 2 | `runtime.py` — `get_server()` | `_create_permissioned_tool_wrapper(server._original_tool)` replaces `server.tool` | **Strips `permission_category`/`permission_action` kwargs from the call signature** |
-| 3 | `main.py` | `setup_permissioned_tool(server=server, ...)` | Checks real permissions at call time |
+| 3 | `main.py` | `setup_permissioned_tool(server=server, ...)` | Checks real permissions at call time and routes to preview/execute state machine |
 
 **Why stage 2 is the key to test isolation:**
 
@@ -118,6 +118,26 @@ Tool functions declare `permission_category` and `permission_action` as kwargs s
 - Any tool module can be imported directly in a test — the kwarg mismatch that would cause a `TypeError` at call time is already gone
 - Tests do **not** need a live controller or a mock permission system
 - Stage 3 enforcement (in `main.py`) is never reached in tests, so it can be safely absent
+
+**The permission/confirmation flow (Stage 3 in `main.py`):**
+
+Stage 3 installs the full permission enforcement chain via `setup_permissioned_tool()`:
+
+```python
+from unifi_mcp_shared.permissioned_tool import setup_permissioned_tool
+
+setup_permissioned_tool(
+    server=server,
+    category_map=category_map,           # maps tool category to permission category
+    server_prefix=server_prefix,         # used for env var resolution
+    register_tool_fn=register_tool,      # callback to add tool to tool_index
+    diagnostics_enabled_fn=lambda: diag, # callable returning bool
+    wrap_tool_fn=wrap_with_diagnostics,  # diagnostics wrapper
+    logger=logger,
+)
+```
+
+After this call, the permission system is fully operational: callers will see preview/execute state machine (confirm mode) or immediate execution (bypass mode), and policy gates block entire tool categories.
 
 **Writing a tool unit test:**
 
@@ -134,6 +154,8 @@ def test_acl_function_returns_expected(mock_manager):
 
 **If you see `TypeError: unexpected keyword argument 'permission_category'` in a test:**
 The import is happening before stage 2 completes — typically because you're importing a module that bypasses the bootstrap path. Import from the fully bootstrapped module path, not directly from an undecorated source file.
+
+**Important rule: permission logic belongs in the decorator layer, not in tool functions.** Never put branching on `permission_category` inside a tool function body — those kwargs are consumed by the decorator layer before the function is called. Any such code is dead and will never execute.
 
 **`test_tool_map_sync.py` path constraint:**
 `apps/network/tests/unit/test_tool_map_sync.py` uses a hardcoded relative path (`Path("apps/network/src/unifi_network_mcp/tools_manifest.json")`) and must be run from the **repository root**. Running pytest from a subdirectory causes it to silently pass with zero real coverage:
@@ -181,6 +203,36 @@ If a newly added tool is absent from `tool_index` output, work through this chec
 **Startup vs. on-demand load — what counts as "startup":**
 The ~200-token budget covers only the meta-tool registrations. Any performance investigation that measures "startup cost" must distinguish between meta-tool registration (always eager) and domain tool load (deferred until first use). A category that gets called on every request is effectively eager; a niche category stays cheap.
 
+## Procedure E: Permission Model and Two-Axis Safety
+
+The permission system has exactly two independent axes controlling mutating tools (create/update/delete). Conflating them causes architectural errors and incorrect PR review feedback.
+
+**Axis 1 — Permission mode (caller-controlled, runtime)**
+
+The caller invokes a mutating tool with either:
+
+- `confirm` (default): the tool enters preview mode on first call; the caller must re-invoke with `confirm=True` to execute the mutation.
+- `bypass`: skip the preview step and execute immediately. Only permitted when the admin has granted bypass for this tool category in the server config.
+
+This axis is dynamic — the same tool behaves differently depending on what the caller passes. It is NOT a configuration-time setting.
+
+**Axis 2 — Policy gates (admin-controlled, config-time)**
+
+Each tool category has a policy gate that is either enabled or disabled by the administrator in the server configuration. A disabled gate blocks execution for all callers regardless of `permission_mode`.
+
+Key invariant: **tools are always registered and visible regardless of policy gates.** The gate blocks at *execution time*, not at *registration time*. Never assume a tool appearing in the MCP tool list is unrestricted — it may be gated off.
+
+| Axis | Controls | Configured via | Trigger behavior |
+|---|---|---|---|
+| **Permission mode** | Workflow (preview vs. immediate execute) | `UNIFI_TOOL_PERMISSION_MODE` / `UNIFI_<SERVER>_TOOL_PERMISSION_MODE` env var | `"confirm"` → two-stage; `"bypass"` → inject `confirm=True` |
+| **Policy gates** | Hard on/off per tool | `PolicyGateChecker` / `category_map` config | Blocked tools return `{"success": False, "error": "..."}` on **any** call |
+
+**Key rules:**
+
+1. **Tools are always visible** — policy gates never hide a tool from the tool list. They block at call time.
+2. **Gates fire on every call** — the policy gate check runs at the top of the `gated_func` wrapper, before any `confirm` branching.
+3. **Mode and gates are independent** — `permission_mode=bypass` does not override a policy gate.
+
 ## Cross-Cutting Gotchas
 
 **No CI gate for manifest or singleton gaps.** Both the `tools_manifest.json` omission and the missing `@lru_cache` factory are silent failures that pass CI. The manifest produces invisible tools; the missing singleton produces a new instance per call (functional but expensive, and breaks any stateful caching the manager relies on).
@@ -188,3 +240,9 @@ The ~200-token budget covers only the meta-tool registrations. Any performance i
 **Singleton state leaks between tests.** `@lru_cache` persists across the test session. Add `.cache_clear()` calls to test fixtures for any manager factory that holds mutable state or connection objects.
 
 **Layer confusion is the root cause of most extension mistakes.** Before writing any code for a new manager, tool, or category, consult the change routing table in Procedure A to identify exactly which files need to change — and which ones do not.
+
+**Permission logic belongs in the decorator layer, not in tool functions.** Any branching on `permission_category` inside a tool function is dead code — those kwargs are consumed by the decorator layer before the function body runs.
+
+**DI violation in shared packages** — `unifi-mcp-shared` and `unifi-core` must never import application-level config. All context flows in via `setup_permissioned_tool()`. If you see `from app.settings import ...` inside these packages, that is a regression.
+
+**Missing `confirm` parameter breaks bypass mode.** Every mutating tool must declare `confirm: bool = False`. Bypass injection inspects the function signature; if the param is missing, bypass mode silently fails to inject `confirm=True`.
