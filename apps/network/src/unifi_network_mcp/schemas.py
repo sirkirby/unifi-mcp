@@ -1078,6 +1078,7 @@ CONTENT_FILTER_UPDATE_SCHEMA = {
             "description": "Network IDs this filter applies to",
         },
     },
+    "additionalProperties": False,
 }
 
 # OON Policy update schema
