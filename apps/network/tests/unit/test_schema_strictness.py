@@ -20,8 +20,6 @@ from __future__ import annotations
 
 import inspect
 
-import pytest
-
 from unifi_network_mcp import schemas
 
 
@@ -72,18 +70,17 @@ def test_every_schema_is_either_strict_or_documented():
 
 
 def test_sweep_escape_hatch_is_eventually_empty():
-    """Reminder: ALLOWED_PERMISSIVE_DURING_SWEEP must be empty after #205 merges.
+    """The #205 sweep is complete; the escape hatch is permanently locked.
 
-    This test does NOT fail when the set is non-empty (it would block the
-    sweep PR's own progress). It exists as a tripwire for the post-sweep
-    cleanup commit: when the sweep finishes, change ``pytest.skip`` to
-    ``assert not ...`` to permanently lock the ratchet.
+    If you find yourself wanting to add to ALLOWED_PERMISSIVE_DURING_SWEEP,
+    you almost certainly want PERMISSIVE_BY_DESIGN instead -- and you must
+    document the justification.
     """
-    if ALLOWED_PERMISSIVE_DURING_SWEEP:
-        pytest.skip(
-            "Sweep in progress; %d schemas remaining: %s"
-            % (len(ALLOWED_PERMISSIVE_DURING_SWEEP), sorted(ALLOWED_PERMISSIVE_DURING_SWEEP))
-        )
+    assert not ALLOWED_PERMISSIVE_DURING_SWEEP, (
+        "ALLOWED_PERMISSIVE_DURING_SWEEP must remain empty after #205. "
+        "Use PERMISSIVE_BY_DESIGN with justification if a schema must be "
+        "permissive."
+    )
 
 
 def test_no_schema_is_explicitly_permissive():
