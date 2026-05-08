@@ -512,12 +512,12 @@ class TestListTemplates:
             assert isinstance(summary["required_params"], list)
 
     def test_iot_isolation_has_correct_required_params(self):
-        """Test that iot-isolation template lists its required params."""
+        """Test that iot-isolation template lists its required params (V2 zone-based)."""
         templates = load_templates(_templates_path)
         summaries = list_templates(templates)
         iot = [s for s in summaries if s["name"] == "iot-isolation"][0]
-        assert "iot_network" in iot["required_params"]
-        assert "private_network" in iot["required_params"]
+        assert "iot_zone_id" in iot["required_params"]
+        assert "private_zone_id" in iot["required_params"]
 
 
 class TestParseParams:
@@ -603,35 +603,44 @@ class TestApplyTemplate:
         templates = load_templates(_templates_path)
         config = get_template_by_name(templates, "iot-isolation")
         assert config is not None
-        params = {"iot_network": "IoT Devices", "private_network": "Main LAN"}
+        params = {
+            "iot_zone_id": "iot-zone-id-123",
+            "private_zone_id": "internal-zone-id-456",
+        }
         result = apply_template("iot-isolation", config, params)
 
-        # Tool name assertion dropped — template will be migrated to V2 in #210 follow-up.
+        # V2 zone-based payload (post-#210).
         assert result["preview"] is True
-        assert "IoT Devices" in result["arguments"]["name"]
-        assert "Main LAN" in result["arguments"]["name"]
-        assert result["arguments"]["src"]["value"] == "IoT Devices"
-        assert result["arguments"]["dst"]["value"] == "Main LAN"
-        assert result["arguments"]["action"] == "reject"
+        assert result["tool"] == "unifi_create_firewall_policy"
+        assert result["arguments"]["action"] == "REJECT"
+        assert result["arguments"]["source"]["zone_id"] == "iot-zone-id-123"
+        assert result["arguments"]["source"]["matching_target"] == "ANY"
+        assert result["arguments"]["destination"]["zone_id"] == "internal-zone-id-456"
+        assert result["arguments"]["destination"]["matching_target"] == "ANY"
 
     def test_guest_lockdown(self):
         templates = load_templates(_templates_path)
         config = get_template_by_name(templates, "guest-lockdown")
         assert config is not None
-        params = {"guest_network": "Guest WiFi", "private_network": "Home"}
+        params = {
+            "guest_zone_id": "guest-zone-id-789",
+            "private_zone_id": "internal-zone-id-456",
+        }
         result = apply_template("guest-lockdown", config, params)
 
-        # Tool name assertion dropped — template will be migrated to V2 in #210 follow-up.
+        # V2 zone-based payload (post-#210).
         assert result["preview"] is True
-        assert "Guest WiFi" in result["arguments"]["name"]
-        assert result["arguments"]["src"]["value"] == "Guest WiFi"
+        assert result["tool"] == "unifi_create_firewall_policy"
+        assert result["arguments"]["action"] == "REJECT"
+        assert result["arguments"]["source"]["zone_id"] == "guest-zone-id-789"
+        assert result["arguments"]["destination"]["zone_id"] == "internal-zone-id-456"
 
     def test_single_step_output_structure(self):
         """Verify single-step output structure matches the spec."""
         templates = load_templates(_templates_path)
         config = get_template_by_name(templates, "iot-isolation")
         assert config is not None
-        params = {"iot_network": "IoT", "private_network": "Main"}
+        params = {"iot_zone_id": "iot-zone", "private_zone_id": "internal-zone"}
         result = apply_template("iot-isolation", config, params)
 
         assert set(result.keys()) == {"tool", "arguments", "preview"}
@@ -643,7 +652,11 @@ class TestApplyTemplate:
         templates = load_templates(_templates_path)
         config = get_template_by_name(templates, "camera-isolation")
         assert config is not None
-        params = {"camera_network": "Cameras", "nvr_ip_group": "NVR"}
+        params = {
+            "camera_zone_id": "cam-zone",
+            "internal_zone_id": "int-zone",
+            "nvr_ips": '["192.168.50.10"]',
+        }
         result = apply_template("camera-isolation", config, params)
 
         assert "steps" in result

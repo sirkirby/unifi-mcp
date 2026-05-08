@@ -125,10 +125,9 @@ Always available, regardless of registration mode.
 <!-- /AUTO:tools:firewall -->
 
 **Tips:**
-- Use `create_simple_firewall_policy` for straightforward block/allow rules
-- Use `create_firewall_policy` when you need full control (protocol, ports, schedule, etc.)
+- Use `create_firewall_policy` for all V2 zone-based firewall creates. Discover zone IDs with `unifi_list_firewall_zones` and network IDs with `unifi_list_networks` first; never hardcode them. See the `firewall-manager` skill for worked examples.
 - Always list existing policies first to understand current rule set before adding new ones
-- Zone names come from `unifi_list_firewall_zones` — don't guess them
+- Zone IDs come from `unifi_list_firewall_zones` — don't guess them
 
 ---
 

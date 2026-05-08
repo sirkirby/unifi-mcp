@@ -13,13 +13,12 @@ These are always registered regardless of mode:
 - `unifi_batch` — Execute multiple tools in parallel
 - `unifi_batch_status` — Check batch job status
 
-## Firewall (12 tools)
+## Firewall (11 tools)
 
 - `unifi_list_firewall_policies` — List all firewall policies
 - `unifi_get_firewall_policy_details` — Get policy details by ID
 - `unifi_toggle_firewall_policy` — Enable/disable a policy
-- `unifi_create_firewall_policy` — Create with full schema validation
-- `unifi_create_simple_firewall_policy` — Create with simplified schema
+- `unifi_create_firewall_policy` — Create a V2 zone-based policy with schema validation
 - `unifi_update_firewall_policy` — Update policy fields
 - `unifi_list_firewall_zones` — List firewall zones (V2 API)
 - `unifi_list_firewall_groups` — List firewall groups (address and port groups)

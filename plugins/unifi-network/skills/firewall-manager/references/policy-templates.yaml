@@ -1,59 +1,63 @@
 templates:
 
   - name: iot-isolation
-    description: Block IoT VLAN from accessing private networks while allowing internet access
+    description: Block IoT zone from accessing private/internal zone while allowing internet access
     params:
-      - name: iot_network
-        description: IoT VLAN/network name (e.g. "IoT", "Smart Home")
+      - name: iot_zone_id
+        description: IoT zone ID from unifi_list_firewall_zones
         required: true
-      - name: private_network
-        description: Private/main network name to protect (e.g. "Main", "Trusted")
+      - name: private_zone_id
+        description: Private/internal zone ID from unifi_list_firewall_zones
         required: true
-    tool: unifi_create_simple_firewall_policy
+    tool: unifi_create_firewall_policy
     payload:
-      name: "IoT Isolation - Block {iot_network} to {private_network}"
-      ruleset: LAN_IN
-      action: reject
+      name: "IoT Isolation - Block IoT to Internal"
+      action: REJECT
       protocol: all
-      src:
-        type: network
-        value: "{iot_network}"
-      dst:
-        type: network
-        value: "{private_network}"
       enabled: true
+      source:
+        zone_id: "{iot_zone_id}"
+        matching_target: ANY
+      destination:
+        zone_id: "{private_zone_id}"
+        matching_target: ANY
+    notes: >
+      Run unifi_list_firewall_zones to discover IoT and Internal/Private zone IDs.
+      Internet egress remains allowed because the destination is the Internal zone, not External.
 
   - name: guest-lockdown
-    description: Restrict guest VLAN to internet-only access, blocking all private LAN resources
+    description: Restrict guest zone to internet-only access, blocking all private/internal LAN resources
     params:
-      - name: guest_network
-        description: Guest network name (e.g. "Guest", "Visitor WiFi")
+      - name: guest_zone_id
+        description: Guest/Hotspot zone ID from unifi_list_firewall_zones
         required: true
-      - name: private_network
-        description: Private network name to protect (e.g. "Main", "LAN")
+      - name: private_zone_id
+        description: Private/internal zone ID to protect
         required: true
-    tool: unifi_create_simple_firewall_policy
+    tool: unifi_create_firewall_policy
     payload:
-      name: "Guest Lockdown - Block {guest_network} to {private_network}"
-      ruleset: GUEST_IN
-      action: reject
+      name: "Guest Lockdown - Block Guest to Internal"
+      action: REJECT
       protocol: all
-      src:
-        type: network
-        value: "{guest_network}"
-      dst:
-        type: network
-        value: "{private_network}"
       enabled: true
+      source:
+        zone_id: "{guest_zone_id}"
+        matching_target: ANY
+      destination:
+        zone_id: "{private_zone_id}"
+        matching_target: ANY
 
   - name: kids-content-filter
-    description: Time-based block of social media and gaming on a kids VLAN during specified hours
+    description: Time-based block from a kids network to internet for specified hours
     params:
-      - name: kids_network
-        description: Kids VLAN/network name (e.g. "Kids", "Children")
+      - name: kids_zone_id
+        description: Kids zone ID from unifi_list_firewall_zones
         required: true
-      - name: dpi_category_id
-        description: DPI category ID from unifi_get_dpi_stats (Social Media or Gaming)
+      - name: external_zone_id
+        description: External (WAN/internet) zone ID from unifi_list_firewall_zones
+        required: true
+      - name: kids_network_id
+        description: Kids VLAN network ID from unifi_list_networks (used to scope source within zone)
         required: true
       - name: block_days
         description: List of days to enforce the block (e.g. ["mon","tue","wed","thu","fri"])
@@ -66,132 +70,138 @@ templates:
         required: true
     tool: unifi_create_firewall_policy
     payload:
-      name: "Kids Filter - Block DPI {dpi_category_id} on {kids_network}"
-      ruleset: LAN_IN
-      action: reject
+      name: "Kids Content Filter - Time-based"
+      action: REJECT
       protocol: all
-      src:
-        type: network_id
-        value: "{kids_network_id}"
-      dst:
-        type: any
-      dpi_category_id: "{dpi_category_id}"
+      enabled: true
+      source:
+        zone_id: "{kids_zone_id}"
+        matching_target: NETWORK
+        matching_target_type: OBJECT
+        network_ids: ["{kids_network_id}"]
+      destination:
+        zone_id: "{external_zone_id}"
+        matching_target: ANY
       schedule:
-        mode: custom
+        mode: CUSTOM
         repeat_on_days: "{block_days}"
         time_all_day: false
         time_range_start: "{block_start}"
         time_range_end: "{block_end}"
-      enabled: true
     notes: >
-      Run unifi_get_dpi_stats first to get the correct dpi_category_id for this controller.
-      Create one rule per DPI category (e.g. separate rules for Social Media and Gaming).
+      The V2 firewall does not match by DPI category. For application-level
+      blocking (TikTok, YouTube, Steam, etc.), use unifi_update_content_filter
+      to apply DPI-category-based filtering to the kids network.
 
   - name: block-bittorrent
-    description: Block BitTorrent and P2P file sharing traffic using DPI category detection
+    description: Block BitTorrent / P2P traffic from a target network to the internet
     params:
-      - name: target_network
-        description: Network/VLAN to restrict (use network name or "any" for all)
+      - name: target_zone_id
+        description: Source zone ID for the target VLAN (from unifi_list_firewall_zones)
         required: true
-      - name: dpi_category_id
-        description: DPI category ID for BitTorrent/P2P from unifi_get_dpi_stats
+      - name: external_zone_id
+        description: External zone ID from unifi_list_firewall_zones
+        required: true
+      - name: target_network_id
+        description: Network ID to restrict (from unifi_list_networks)
         required: true
     tool: unifi_create_firewall_policy
     payload:
-      name: "Block BitTorrent - {target_network}"
-      ruleset: LAN_IN
-      action: drop
+      name: "Block BitTorrent / P2P egress"
+      action: BLOCK
       protocol: all
-      src:
-        type: network_id
-        value: "{target_network_id}"
-      dst:
-        type: any
-      dpi_category_id: "{dpi_category_id}"
       enabled: true
+      source:
+        zone_id: "{target_zone_id}"
+        matching_target: NETWORK
+        matching_target_type: OBJECT
+        network_ids: ["{target_network_id}"]
+      destination:
+        zone_id: "{external_zone_id}"
+        matching_target: ANY
     notes: >
-      Run unifi_get_dpi_stats to get the P2P/BitTorrent category ID.
-      Using "drop" instead of "reject" avoids leaking firewall presence to external peers.
+      V2 zone-based firewall does not provide DPI-category matching.
+      For protocol-aware P2P/BitTorrent blocking, complement this rule with
+      content-filter / traffic-rule tooling that supports DPI categories.
 
   - name: work-vpn-split-tunnel
-    description: Allow work VLAN to route corporate traffic via VPN while accessing local resources directly
+    description: Allow work zone to reach a corporate IP group while keeping local access intact
     params:
-      - name: work_network
-        description: Work/corporate VLAN name (e.g. "Work", "Corporate")
+      - name: work_zone_id
+        description: Work zone ID from unifi_list_firewall_zones
         required: true
-      - name: corporate_ip_group
-        description: IP group name containing corporate subnet ranges
+      - name: external_zone_id
+        description: External/WAN zone ID from unifi_list_firewall_zones
+        required: true
+      - name: corporate_ips
+        description: List of corporate IP/CIDR strings (e.g. ["10.0.0.0/8","172.16.0.0/12"])
         required: true
     tool: unifi_create_firewall_policy
     payload:
-      name: "Work VPN - Allow {work_network} to Corporate"
-      ruleset: LAN_IN
-      action: accept
+      name: "Work VPN - Allow corporate egress"
+      action: ALLOW
       protocol: all
-      src:
-        type: network_id
-        value: "{work_network_id}"
-      dst:
-        type: ip_group_id
-        value: "{corporate_ip_group_id}"
       enabled: true
+      source:
+        zone_id: "{work_zone_id}"
+        matching_target: ANY
+      destination:
+        zone_id: "{external_zone_id}"
+        matching_target: IP
+        matching_target_type: SPECIFIC
+        ips: "{corporate_ips}"
     notes: >
-      This template creates the allow rule for corporate traffic.
-      A separate routing policy or static route is required to direct matched traffic through the VPN interface.
-      Use unifi_list_firewall_groups to find or create the corporate IP group.
-      Use unifi_list_static_routes to review existing routing configuration.
+      This template creates the allow rule for corporate traffic only.
+      A separate routing policy or static route is required to direct matched
+      traffic through the VPN interface. Use unifi_list_static_routes to
+      review existing routing configuration.
 
   - name: camera-isolation
-    description: Lock IP cameras to communicate only with their NVR, blocking all other traffic
+    description: Lock camera zone to NVR-only egress (allow rule + catch-all block)
     params:
-      - name: camera_network
-        description: Camera VLAN/network name (e.g. "Cameras", "Surveillance")
+      - name: camera_zone_id
+        description: Camera zone ID from unifi_list_firewall_zones
         required: true
-      - name: nvr_ip_group
-        description: IP group name containing the NVR IP address
+      - name: internal_zone_id
+        description: Internal zone ID where the NVR lives (from unifi_list_firewall_zones)
         required: true
-      - name: allow_cloud
-        description: Whether to allow manufacturer cloud access (true/false)
-        required: false
-        default: false
-      - name: cloud_ip_group
-        description: IP group name for manufacturer cloud IPs (only if allow_cloud is true)
-        required: false
+      - name: nvr_ips
+        description: List of NVR IPs (e.g. ["192.168.50.10"])
+        required: true
     rules:
       - step: 1
-        name: "Camera Allow NVR - {camera_network}"
-        description: Allow camera traffic to NVR only
+        name: "Camera allow NVR"
+        description: Allow camera traffic to NVR IPs only
         tool: unifi_create_firewall_policy
         payload:
-          name: "Camera Allow NVR - {camera_network} to NVR"
-          ruleset: LAN_IN
-          action: accept
+          name: "Camera Allow NVR"
+          action: ALLOW
           protocol: all
-          src:
-            type: network_id
-            value: "{camera_network_id}"
-          dst:
-            type: ip_group_id
-            value: "{nvr_ip_group_id}"
           enabled: true
+          source:
+            zone_id: "{camera_zone_id}"
+            matching_target: ANY
+          destination:
+            zone_id: "{internal_zone_id}"
+            matching_target: IP
+            matching_target_type: SPECIFIC
+            ips: "{nvr_ips}"
       - step: 2
-        name: "Camera Block All - {camera_network}"
-        description: Catch-all drop rule for all other camera traffic (must follow the allow rule)
+        name: "Camera catch-all block"
+        description: Block all other camera traffic to internal/private zone
         tool: unifi_create_firewall_policy
         payload:
-          name: "Camera Block All - {camera_network}"
-          ruleset: LAN_IN
-          action: drop
+          name: "Camera Block All"
+          action: BLOCK
           protocol: all
-          src:
-            type: network_id
-            value: "{camera_network_id}"
-          dst:
-            type: any
           enabled: true
+          source:
+            zone_id: "{camera_zone_id}"
+            matching_target: ANY
+          destination:
+            zone_id: "{internal_zone_id}"
+            matching_target: ANY
     notes: >
-      Multi-step template: create rules in order (allow NVR first, then catch-all drop).
-      Rule order matters — the allow rule must have a lower rule index than the drop rule.
+      Multi-step template: create rules in order (allow NVR first, then catch-all block).
+      Rule order matters — the allow rule must be evaluated before the catch-all block.
       Verify ordering with unifi_list_firewall_policies after creation.
-      If allow_cloud is true, insert a second accept rule between step 1 and step 2
-      targeting the manufacturer cloud IP group.

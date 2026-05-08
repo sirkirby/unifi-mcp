@@ -51,7 +51,7 @@ The JSON report has this top-level structure:
     "topology":       { "score": 21, "max": 25, "findings": [...] }
   },
   "critical_findings": [...],
-  "recommendations": ["[SEG-01] No rule blocking IoT VLAN traffic... — use unifi_create_simple_firewall_policy."],
+  "recommendations": ["[SEG-01] No rule blocking IoT VLAN traffic... — use unifi_create_firewall_policy with action=REJECT and zone-based source/destination."],
   "trend": { "previous_score": 68, "change": "+5" }
 }
 ```
@@ -119,8 +119,13 @@ Each finding in the report includes a `fix` block when an automated remedy is av
   "severity": "critical",
   "message": "No rule blocking IoT VLAN traffic to private networks.",
   "fix": {
-    "tool": "unifi_create_simple_firewall_policy",
-    "params": { "name": "Block IoT to Private", "ruleset": "LAN_IN", "action": "drop", ... }
+    "tool": "unifi_create_firewall_policy",
+    "params": {
+      "name": "Block IoT to Internal",
+      "action": "REJECT",
+      "source":      { "zone_id": "<iot_zone_id>",      "matching_target": "ANY" },
+      "destination": { "zone_id": "<internal_zone_id>", "matching_target": "ANY" }
+    }
   }
 }
 ```

@@ -113,7 +113,7 @@ All changes MUST follow a golden path. If no path applies, ask before inventing 
    - **Anchor (mutating):** `apps/network/src/unifi_network_mcp/managers/firewall_manager.py`
 2. Add tool function in `apps/<server>/src/<pkg>/tools/<category>.py`
    - **Anchor (read-only):** `apps/network/src/unifi_network_mcp/tools/clients.py:lookup_by_ip`
-   - **Anchor (mutating):** `apps/network/src/unifi_network_mcp/tools/firewall.py:create_simple_firewall_policy`
+   - **Anchor (mutating):** `apps/network/src/unifi_network_mcp/tools/firewall.py:create_firewall_policy`
 3. Add tool name to `TOOL_MODULE_MAP` in `<pkg>/categories.py`
 4. Run `make manifest`
 5. Add tests in `apps/<server>/tests/unit/test_<category>.py`

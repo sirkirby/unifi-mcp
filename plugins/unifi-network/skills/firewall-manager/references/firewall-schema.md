@@ -1,33 +1,21 @@
-# Firewall Policy Schema Reference
+# Firewall Policy Schema Reference (V2 Zone-Based)
 
-Complete schema reference for creating firewall policies via the unifi-network-mcp tools.
+Complete schema reference for creating firewall policies via `unifi_create_firewall_policy`. The UniFi controller's V2 zone-based firewall API is the canonical and only supported create surface — the legacy V1 `ruleset`-based path was removed in #210.
+
+The V2 model targets traffic by **zone** (a controller-defined grouping of networks/interfaces such as Internal, External, DMZ, Hotspot, Gateway, VPN) and refines that with `matching_target` selectors. Use `unifi_list_firewall_zones` to discover the zone IDs available on a controller — never hardcode them.
 
 ---
 
-## Rulesets
+## Required Top-Level Fields
 
-Rulesets define the traffic direction and zone for a rule. Choose based on where traffic enters and exits.
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | string | Human-readable policy name (required, non-empty). |
+| `action` | enum | `ALLOW`, `BLOCK`, or `REJECT` — uppercase. |
+| `source` | object | Zone-based source selector. See [Source / Destination](#source--destination). |
+| `destination` | object | Same structure as `source`. |
 
-| Ruleset | Description |
-|---------|-------------|
-| `WAN_IN` | Traffic entering from WAN, destined for LAN/local resources |
-| `WAN_OUT` | Traffic leaving from LAN to WAN (outbound) |
-| `WAN_LOCAL` | Traffic destined for the router itself from WAN |
-| `LAN_IN` | Traffic entering from LAN (inbound to the router or forwarded) |
-| `LAN_OUT` | Traffic leaving from the router to LAN (less common) |
-| `LAN_LOCAL` | Traffic destined for the router itself from LAN |
-| `GUEST_IN` | Traffic entering from the guest network |
-| `GUEST_OUT` | Traffic leaving from the router to the guest network |
-| `GUEST_LOCAL` | Traffic destined for the router itself from the guest network |
-| `VPN_IN` | Traffic entering from VPN clients |
-| `VPN_OUT` | Traffic leaving from the router to VPN clients |
-| `VPN_LOCAL` | Traffic destined for the router itself from VPN |
-
-**Choosing the right ruleset:**
-- To block IoT from reaching the main LAN: use `LAN_IN` (traffic coming in from IoT, going to LAN)
-- To block guest internet access at specific times: use `GUEST_IN`
-- To block inbound WAN threats: use `WAN_IN`
-- To restrict what clients can reach the router: use `LAN_LOCAL` or `GUEST_LOCAL`
+Optional but commonly used: `enabled`, `protocol`, `index`, `ip_version`, `connection_state_type`, `connection_states`, `schedule`, `logging`, `description`.
 
 ---
 
@@ -35,96 +23,78 @@ Rulesets define the traffic direction and zone for a rule. Choose based on where
 
 | Action | Behavior | When to Use |
 |--------|----------|-------------|
-| `accept` | Allow the traffic through | Explicit allow rules (before a broader block) |
-| `drop` | Silently discard the packet (no response) | External-facing rules; avoids revealing firewall presence |
-| `reject` | Discard and send RST (TCP) or ICMP unreachable (UDP/ICMP) | Internal rules; clients get immediate feedback instead of timing out |
+| `ALLOW` | Allow the traffic through. | Explicit allow rules; pair with `create_allow_respond` for stateful return traffic. |
+| `BLOCK` | Silently discard the packet (no response). | External-facing rules; avoids revealing firewall presence. |
+| `REJECT` | Discard and send RST (TCP) or ICMP unreachable (UDP/ICMP). | Internal rules; clients fail fast instead of timing out. |
 
 **Recommendation:**
-- Use `reject` for inter-VLAN blocking (IoT isolation, guest lockdown) — clients fail fast instead of hanging
-- Use `drop` for WAN_IN rules blocking inbound external traffic
+- Use `REJECT` for inter-zone blocking (IoT isolation, guest lockdown) — clients fail fast instead of hanging.
+- Use `BLOCK` for inbound rules from External zones blocking unsolicited traffic.
 
 ---
 
-## Source / Destination Matching Targets
+## Source / Destination
 
-Both `source` and `destination` support the same matching options.
+Both `source` and `destination` are objects with the same shape. The required fields are `zone_id` and `matching_target`. Additional fields depend on the chosen `matching_target`.
 
-### By Zone
+### Field Reference
 
-Match all traffic belonging to a firewall zone.
+| Field | Type | Required For |
+|-------|------|--------------|
+| `zone_id` | string | always — controller zone ID from `unifi_list_firewall_zones` |
+| `matching_target` | enum | always — `ANY`, `IP`, `NETWORK`, or `OBJECT` |
+| `matching_target_type` | enum | required when `matching_target` is `IP` or `NETWORK` — `SPECIFIC` (IPs) or `OBJECT` (group/network IDs) |
+| `ips` | array of strings | required when `matching_target_type="SPECIFIC"` — list of IPs/CIDRs |
+| `network_ids` | array of strings | required when `matching_target="NETWORK"` and `matching_target_type="OBJECT"` |
 
-```json
-{
-  "type": "zone",
-  "value": "<zone_id>"
-}
-```
+### `matching_target` Enum (live-probe-confirmed)
 
-Use `unifi_list_networks` to find zone IDs. Zones group multiple networks together.
+- **`ANY`** — match all traffic in the zone. No additional selectors needed.
+- **`IP`** — match specific IPs/CIDRs. Pair with `matching_target_type: "SPECIFIC"` and `ips: [...]`.
+- **`NETWORK`** — match by network membership. Pair with `matching_target_type: "OBJECT"` and `network_ids: [...]`.
+- **`OBJECT`** — match an IP-group object. Pair with `matching_target_type: "OBJECT"` and the relevant object ID.
 
-### By Network / VLAN
-
-Match traffic from a specific network or VLAN.
-
-```json
-{
-  "type": "network_id",
-  "value": "<network_id>"
-}
-```
-
-Use `unifi_list_networks` to get network IDs. Preferred for per-VLAN rules.
-
-### By Client MAC Address
-
-Match specific devices by hardware address.
+### Example — any-in-zone to any-in-zone
 
 ```json
 {
-  "type": "client_macs",
-  "value": ["aa:bb:cc:dd:ee:ff", "11:22:33:44:55:66"]
+  "source":      { "zone_id": "<source_zone_id>", "matching_target": "ANY" },
+  "destination": { "zone_id": "<dest_zone_id>",   "matching_target": "ANY" }
 }
 ```
 
-Use `unifi_get_clients` or `unifi_lookup_client_by_mac` to find MAC addresses.
-
-### By IP Group
-
-Match a named group of IP addresses or CIDR ranges.
+### Example — specific IPs to a network
 
 ```json
 {
-  "type": "ip_group_id",
-  "value": "<ip_group_id>"
+  "source": {
+    "zone_id": "<source_zone_id>",
+    "matching_target": "IP",
+    "matching_target_type": "SPECIFIC",
+    "ips": ["192.168.10.50", "192.168.10.51/32"]
+  },
+  "destination": {
+    "zone_id": "<dest_zone_id>",
+    "matching_target": "NETWORK",
+    "matching_target_type": "OBJECT",
+    "network_ids": ["<network_id>"]
+  }
 }
 ```
-
-Use `unifi_list_firewall_groups` to find IP group IDs. Useful for maintaining shared address lists.
-
-### By Geographic Region
-
-Match traffic originating from or destined for a geographic region.
-
-```json
-{
-  "type": "region",
-  "value": "<region_code>"
-}
-```
-
-Region codes follow ISO 3166-1 alpha-2 (e.g., `CN`, `RU`, `US`). Use for country-level blocking on WAN rules.
 
 ---
 
-## Port Matching
+## Discovering IDs
 
-| Mode | Description | Example |
-|------|-------------|---------|
-| `any` | Match all ports | `{"mode": "any"}` |
-| `single_port` | Match one specific port | `{"mode": "single_port", "port": 443}` |
-| `port_range` | Match a range of ports | `{"mode": "port_range", "port_start": 8000, "port_end": 9000}` |
+Always discover IDs at runtime. Never hardcode.
 
-Port matching applies to both source and destination. Most rules only need destination port matching.
+| Tool | Returns |
+|------|---------|
+| `unifi_list_firewall_zones` | Zone IDs and names (Internal, External, DMZ, Hotspot, Gateway, VPN, ...) |
+| `unifi_list_networks` | Network IDs, names, VLAN IDs |
+| `unifi_list_firewall_groups` | IP group / port group IDs |
+| `unifi_list_firewall_policies` | Existing policy IDs and structure (use for examples) |
+| `unifi_get_dpi_stats` | Available DPI categories on this controller |
 
 ---
 
@@ -132,41 +102,60 @@ Port matching applies to both source and destination. Most rules only need desti
 
 | Value | Description |
 |-------|-------------|
-| `all` | Match all protocols (default for most rules) |
-| `tcp` | TCP only (web, SSH, most application traffic) |
-| `udp` | UDP only (DNS, streaming, VoIP) |
-| `icmp` | ICMP only (ping, traceroute) |
+| `all` | Match all protocols (default). |
+| `tcp` | TCP only. |
+| `udp` | UDP only. |
+| `icmp` | ICMP only. |
+
+---
+
+## IP Version
+
+| Value | Description |
+|-------|-------------|
+| `BOTH` | Match both IPv4 and IPv6 (default). |
+| `IPV4` | IPv4 only. |
+| `IPV6` | IPv6 only. |
+
+Mixed-case input (e.g. `"IPv4"`) is normalized server-side, but emit uppercase to be explicit.
 
 ---
 
 ## Connection States
 
-Connection state matching refines rules to only apply to specific phases of a connection.
+Controlled by `connection_state_type` and (when CUSTOM) `connection_states`.
 
-| State | Description | Common Use |
-|-------|-------------|------------|
-| `new` | First packet of a new connection | Block new connections while allowing established ones |
-| `established` | Packets that are part of an established connection | Allow return traffic |
-| `related` | Related to an existing connection (e.g., FTP data channel) | Allow related flows |
-| `invalid` | Does not match any known connection state | Drop malformed/unknown traffic |
+| `connection_state_type` | Description |
+|-------------------------|-------------|
+| `ALL` | Match every state (default). |
+| `RESPOND_ONLY` | Match only return traffic. |
+| `CUSTOM` | Match the states listed in `connection_states`. |
+
+Allowed `connection_states` (uppercase): `NEW`, `RELATED`, `INVALID`, `ESTABLISHED`.
 
 **Common pattern — stateful allow:**
 ```json
 {
-  "states": ["established", "related"]
+  "connection_state_type": "CUSTOM",
+  "connection_states": ["ESTABLISHED", "RELATED"]
 }
 ```
-This is often used at the top of a ruleset to allow return traffic before applying block rules.
 
 ---
 
-## Schedule Format (Time-Based Rules)
+## Schedule
 
-Time-based rules activate and deactivate on a defined schedule.
+`schedule` is an object. Default is always-on:
+
+```json
+{ "mode": "ALWAYS" }
+```
+
+Time-based example (custom mode):
 
 ```json
 {
-  "mode": "custom",
+  "mode": "CUSTOM",
   "repeat_on_days": ["mon", "tue", "wed", "thu", "fri"],
   "time_all_day": false,
   "time_range_start": "22:00",
@@ -174,61 +163,54 @@ Time-based rules activate and deactivate on a defined schedule.
 }
 ```
 
-| Field | Values | Description |
-|-------|--------|-------------|
-| `mode` | `always`, `custom` | `always` = rule is always active; `custom` = schedule applies |
-| `repeat_on_days` | `sun`, `mon`, `tue`, `wed`, `thu`, `fri`, `sat` | Days the rule is active |
-| `time_all_day` | `true`, `false` | If true, the rule applies all day on selected days |
-| `time_range_start` | `"HH:MM"` | Start time in 24-hour format (local controller time) |
-| `time_range_end` | `"HH:MM"` | End time in 24-hour format |
-
-Note: Time ranges that span midnight (e.g., 22:00–06:00) are supported.
+Time ranges that span midnight are supported.
 
 ---
 
-## Simple vs Full Policy Creation
+## Other Useful Optional Fields
 
-### `unifi_create_simple_firewall_policy` — Recommended for Most Requests
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `true` | Whether the policy is active. |
+| `index` | controller-assigned | Rule priority/order (lower = evaluated first). The controller assigns based on creation order; usually omit. |
+| `logging` | `false` | Log matched traffic. |
+| `create_allow_respond` | `false` | Auto-create return-traffic rule for ALLOW policies. |
+| `match_ip_sec` | `false` | Match IPSec traffic. |
+| `match_opposite_protocol` | `false` | Match opposite protocol. |
+| `icmp_typename` | `"ANY"` | ICMP type name. |
+| `icmp_v6_typename` | `"ANY"` | ICMPv6 type name. |
+| `description` | empty | Free-text policy description. |
 
-Accepts friendly names for networks, zones, and clients. The tool resolves names to IDs automatically.
+---
 
-**Use when:**
-- Blocking one network from reaching another by name (e.g., "IoT" to "Main")
-- Creating rules based on client names or hostnames
-- User has provided network names, not raw IDs
+## Full Worked Example — Block IoT zone to Internal zone
 
-**Example input:**
 ```json
 {
-  "name": "Block IoT from Main LAN",
-  "ruleset": "LAN_IN",
-  "action": "reject",
-  "source_network": "IoT",
-  "destination_network": "Main"
-}
-```
-
-### `unifi_create_firewall_policy` — Full Control
-
-Accepts raw controller IDs and the complete policy payload. No name resolution is performed.
-
-**Use when:**
-- `unifi_create_simple_firewall_policy` cannot express the required matching logic
-- Working with IP groups, geographic regions, or complex port/protocol combinations
-- Building rules programmatically from tool output (IDs already known)
-
-**Example input:**
-```json
-{
-  "name": "Block IoT from Main LAN",
-  "ruleset": "LAN_IN",
-  "action": "reject",
-  "source": {"type": "network_id", "value": "64a1b2c3d4e5f6a7b8c9d0e1"},
-  "destination": {"type": "network_id", "value": "64a1b2c3d4e5f6a7b8c9d0e2"},
+  "name": "Block IoT to Internal",
+  "action": "REJECT",
+  "enabled": true,
   "protocol": "all",
-  "enabled": true
+  "ip_version": "BOTH",
+  "source": {
+    "zone_id": "<iot_zone_id>",
+    "matching_target": "ANY"
+  },
+  "destination": {
+    "zone_id": "<internal_zone_id>",
+    "matching_target": "ANY"
+  },
+  "connection_state_type": "ALL",
+  "schedule": { "mode": "ALWAYS" },
+  "logging": false
 }
 ```
+
+---
+
+## MAC-Based Targeting (Important Caveat)
+
+The V2 zone-based firewall does **not** accept client MAC addresses as a matching target. Source/destination is always zone- + IP/network/object-based. To enforce per-client (MAC-level) blocking, use `unifi_create_acl_rule` with `source_macs=[...]` instead of the firewall surface.
 
 ---
 
@@ -238,8 +220,9 @@ Before creating policies, use these tools to gather required IDs:
 
 | Tool | What It Returns |
 |------|-----------------|
+| `unifi_list_firewall_zones` | Zone IDs and names |
 | `unifi_list_networks` | Network IDs, names, VLANs |
-| `unifi_list_firewall_policies` | Existing policy IDs and current ruleset |
-| `unifi_list_firewall_groups` | IP group and MAC group IDs |
+| `unifi_list_firewall_policies` | Existing policy IDs and structure |
+| `unifi_list_firewall_groups` | IP group and port group IDs |
 | `unifi_get_clients` | Connected client MACs and hostnames |
 | `unifi_get_dpi_stats` | Available DPI categories on this controller |

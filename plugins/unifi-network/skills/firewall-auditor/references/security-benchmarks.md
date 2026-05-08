@@ -19,15 +19,20 @@ This document defines deterministic checks for the firewall auditor skill. Each 
 
 **Severity:** critical
 
-**How to fix:** Create a LAN-in rule blocking IoT VLAN source to private destinations before any inter-VLAN allow rules.
+**How to fix:** Create a V2 zone-based block rule from the IoT zone to the Internal/Private zone. Discover zone IDs via `unifi_list_firewall_zones`. Place this rule before any inter-zone allow rules.
 
-```
-create_simple_firewall_policy:
-  ruleset: LAN_IN
-  action: drop
-  src_network: <IoT network ID>
-  dst_address: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-  description: "SEG-01 IoT to LAN block"
+```yaml
+# Security intent: deny all IoT-zone traffic into the Internal/Private zone.
+unifi_create_firewall_policy:
+  name: "SEG-01 IoT to Internal block"
+  action: REJECT
+  enabled: true
+  source:
+    zone_id: <IoT zone ID>
+    matching_target: ANY
+  destination:
+    zone_id: <Internal/Private zone ID>
+    matching_target: ANY
 ```
 
 ---
@@ -45,15 +50,20 @@ create_simple_firewall_policy:
 
 **Severity:** critical
 
-**How to fix:** Create a LAN-in block rule for the guest network source targeting private address groups. Ensure no allow rules for guest-to-LAN traffic appear at a lower index.
+**How to fix:** Create a V2 zone-based block rule from the Guest/Hotspot zone to the Internal/Private zone. Ensure no allow rules covering the same traffic exist with a lower index.
 
-```
-create_simple_firewall_policy:
-  ruleset: LAN_IN
-  action: drop
-  src_network: <guest network ID>
-  dst_address: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
-  description: "SEG-02 Guest to LAN block"
+```yaml
+# Security intent: deny all Guest-zone traffic into the Internal/Private zone.
+unifi_create_firewall_policy:
+  name: "SEG-02 Guest to Internal block"
+  action: REJECT
+  enabled: true
+  source:
+    zone_id: <Guest/Hotspot zone ID>
+    matching_target: ANY
+  destination:
+    zone_id: <Internal/Private zone ID>
+    matching_target: ANY
 ```
 
 ---
@@ -71,16 +81,43 @@ create_simple_firewall_policy:
 
 **Severity:** critical
 
-**How to fix:** Create LAN-in rules: (1) allow from admin IP group to management VLAN, (2) drop all other traffic to management VLAN destination. Ensure allow rule has lower index than the drop rule.
+**How to fix:** Create two V2 rules: (1) ALLOW from a zone scoped to the admin IPs (or an admin zone) to the management network, (2) BLOCK everything else into the management network. The ALLOW rule must have a lower index than the BLOCK rule.
 
+```yaml
+# Security intent: only explicitly whitelisted admin IPs may reach the management network.
+# Rule 1 — admin allow:
+unifi_create_firewall_policy:
+  name: "SEG-03 Allow admin IPs to management"
+  action: ALLOW
+  enabled: true
+  source:
+    zone_id: <Internal zone ID>
+    matching_target: IP
+    matching_target_type: SPECIFIC
+    ips: [<admin workstation IP / CIDR>, ...]
+  destination:
+    zone_id: <Internal zone ID>
+    matching_target: NETWORK
+    matching_target_type: OBJECT
+    network_ids: [<management network ID>]
+
+# Rule 2 — catch-all block (must follow rule 1):
+unifi_create_firewall_policy:
+  name: "SEG-03 Block non-admin to management"
+  action: BLOCK
+  enabled: true
+  source:
+    zone_id: <Internal zone ID>
+    matching_target: ANY
+  destination:
+    zone_id: <Internal zone ID>
+    matching_target: NETWORK
+    matching_target_type: OBJECT
+    network_ids: [<management network ID>]
 ```
-create_simple_firewall_policy:
-  ruleset: LAN_IN
-  action: drop
-  src_address: any
-  dst_network: <management network ID>
-  description: "SEG-03 Block non-admin to management VLAN"
-```
+
+**Note:** If the admin sources are identified by client MAC rather than IP, use `unifi_create_acl_rule` with `source_macs=[...]` instead — V2 firewall policies do not match by client MAC. <!-- TODO #210: confirm whether deployed admin allow lists are MAC- or IP-based; V2 firewall has no client_mac matching. -->
+
 
 ---
 
@@ -97,15 +134,24 @@ create_simple_firewall_policy:
 
 **Severity:** warning
 
-**How to fix:** Audit each VLAN pair and create explicit allow or block rules covering the traffic intent. Document the intent in the rule description.
+**How to fix:** Audit each VLAN pair and create explicit ALLOW or REJECT/BLOCK rules covering the traffic intent. Document the intent in the rule name.
 
-```
-create_simple_firewall_policy:
-  ruleset: LAN_IN
-  action: <allow|drop>
-  src_network: <source VLAN network ID>
-  dst_network: <destination VLAN network ID>
-  description: "SEG-04 Explicit <src>-to-<dst> policy"
+```yaml
+# Security intent: make every inter-VLAN flow explicit (no implicit reliance on default).
+unifi_create_firewall_policy:
+  name: "SEG-04 Explicit <src>-to-<dst> policy"
+  action: <ALLOW|REJECT|BLOCK>
+  enabled: true
+  source:
+    zone_id: <source zone ID>
+    matching_target: NETWORK
+    matching_target_type: OBJECT
+    network_ids: [<source VLAN network ID>]
+  destination:
+    zone_id: <destination zone ID>
+    matching_target: NETWORK
+    matching_target_type: OBJECT
+    network_ids: [<destination VLAN network ID>]
 ```
 
 ---
@@ -114,24 +160,33 @@ create_simple_firewall_policy:
 
 ### EGR-01: High-Risk VLAN Outbound Filtering
 
-**Name:** IoT and Guest VLANs have outbound (WAN_OUT) filtering
+**Name:** IoT and Guest VLANs have outbound (External-zone) filtering
 
-**What to check:** Verify that IoT and guest VLANs have at least one enabled WAN_OUT rule. The rule must restrict outbound traffic beyond standard internet access — specifically checking for rules limiting allowed destination ports (e.g., 80, 443 only) or blocking known categories. An empty WAN_OUT ruleset for these VLANs is a finding.
+**What to check:** Verify that the IoT and guest VLANs have at least one enabled V2 firewall policy whose source references their network and whose destination zone is the External zone. The rule should restrict outbound traffic — for example, scoping the destination to specific allowed IPs/CIDRs, or terminating with a catch-all BLOCK to External. No outbound rule for these high-risk zones is a finding.
 
 **MCP tools needed:**
-- `list_firewall_rules` — filter for ruleset=WAN_OUT, check source network IDs
-- `list_networks` — identify IoT and guest VLAN network IDs
+- `unifi_list_firewall_policies` — find policies whose `source.network_ids` references IoT/guest networks and whose `destination.zone_id` is the External zone
+- `unifi_list_firewall_zones` — identify the External zone ID
+- `unifi_list_networks` — identify IoT and guest VLAN network IDs
 
 **Severity:** warning
 
-**How to fix:** Create WAN_OUT rules for high-risk VLANs allowing only required outbound ports. Terminate with a drop rule for unmatched traffic.
+**How to fix:** Create rules from the IoT/Guest zones to the External zone allowing only required outbound services, then terminate with a catch-all BLOCK rule for unmatched traffic.
 
-```
-create_simple_firewall_policy:
-  ruleset: WAN_OUT
-  action: drop
-  src_network: <IoT network ID>
-  description: "EGR-01 IoT default outbound deny"
+```yaml
+# Security intent: deny unmatched outbound from high-risk zone (IoT/Guest) to External.
+unifi_create_firewall_policy:
+  name: "EGR-01 IoT default outbound deny"
+  action: BLOCK
+  enabled: true
+  source:
+    zone_id: <IoT zone ID>
+    matching_target: NETWORK
+    matching_target_type: OBJECT
+    network_ids: [<IoT network ID>]
+  destination:
+    zone_id: <External zone ID>
+    matching_target: ANY
 ```
 
 ---
@@ -148,17 +203,30 @@ create_simple_firewall_policy:
 
 **Severity:** warning
 
-**How to fix:** Create a LAN-in drop rule for port 53 traffic destined for addresses outside the approved resolver set. If using DNS interception via port forwarding, verify the port forward entry exists.
+**How to fix:** The V2 zone-based firewall policy schema does not expose per-policy port matching, so DNS-port-53 filtering is best handled with a traffic rule or DNS-redirect / port-forward configuration. As a coarse fallback, block direct egress from the client zone to the External zone except to the approved resolver IPs:
 
+```yaml
+# Security intent: clients may only reach the approved DNS resolver IPs externally.
+# Rule 1 — allow approved resolvers:
+unifi_create_firewall_policy:
+  name: "EGR-02 Allow approved DNS resolvers"
+  action: ALLOW
+  enabled: true
+  source:
+    zone_id: <client zone ID>
+    matching_target: ANY
+  destination:
+    zone_id: <External zone ID>
+    matching_target: IP
+    matching_target_type: SPECIFIC
+    ips: [<approved resolver IP>, ...]
+
+# Rule 2 — pair with a tighter DNS-specific traffic rule or DNS-redirect to fully enforce
+# the "no external DNS bypass" intent (V2 firewall has no port-level matching).
 ```
-create_simple_firewall_policy:
-  ruleset: LAN_IN
-  action: drop
-  dst_port: 53
-  protocol: tcp_udp
-  dst_address: <not approved resolver>
-  description: "EGR-02 Block external DNS bypass"
-```
+
+<!-- TODO #210: V2 firewall has no per-policy port matching. Confirm whether DNS-port-53 enforcement should be expressed via traffic rules or DNS-redirect tooling instead. -->
+
 
 ---
 
@@ -174,15 +242,24 @@ create_simple_firewall_policy:
 
 **Severity:** informational
 
-**How to fix:** Create an IP group for known malicious ranges, populate with threat intelligence CIDRs, and reference it in a LAN_IN drop rule before any allow rules.
+**How to fix:** Create a firewall group of known malicious CIDRs (`unifi_create_firewall_group` with the threat-intel addresses), then reference its members as the destination IPs of a V2 BLOCK rule. Alternatively express the destination as `matching_target: IP` with the explicit list of CIDRs.
 
+```yaml
+# Security intent: deny outbound from the client zone to known malicious IP ranges.
+unifi_create_firewall_policy:
+  name: "EGR-03 Block known malicious destinations"
+  action: BLOCK
+  enabled: true
+  source:
+    zone_id: <client zone ID>
+    matching_target: ANY
+  destination:
+    zone_id: <External zone ID>
+    matching_target: IP
+    matching_target_type: SPECIFIC
+    ips: [<malicious CIDR>, ...]
 ```
-create_simple_firewall_policy:
-  ruleset: LAN_IN
-  action: drop
-  dst_address_group: <threat IP group ID>
-  description: "EGR-03 Block known malicious destinations"
-```
+
 
 ---
 

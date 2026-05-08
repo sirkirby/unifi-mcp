@@ -81,12 +81,11 @@ For parameter details, required tool calls, and expected outcomes for each templ
 
 When no template fits, create rules manually. Consult the references before writing any policy payload.
 
-- **`references/firewall-schema.md`** — complete schema reference: rulesets (`LAN_IN`, `WAN_IN`, `GUEST_IN`, etc.), actions (`accept`/`drop`/`reject`), source/destination matching types, port matching, protocols, connection states, and schedule format.
+- **`references/firewall-schema.md`** — complete V2 schema reference: zones, actions (`ALLOW`/`BLOCK`/`REJECT`), `matching_target` / `matching_target_type` combinations, port matching, protocols, connection states, and schedule format.
 - **`references/dpi-categories.md`** — application-aware blocking. When users mention app names (TikTok, YouTube, Steam, BitTorrent), find the right DPI category here. Always call `unifi_get_dpi_stats` to confirm the exact category IDs on the user's controller before building DPI rules.
 
 **Tool selection:**
-- `unifi_create_simple_firewall_policy` — use for most requests. Accepts friendly network names; resolves IDs automatically. See `references/firewall-schema.md` for the simple policy input format.
-- `unifi_create_firewall_policy` — full schema with raw IDs. Use when the simple tool cannot express the required matching logic (IP groups, geographic regions, complex port/protocol/DPI combinations).
+- `unifi_create_firewall_policy` — creates V2 zone-based firewall policies. Required: `name`, `action` (`ALLOW`/`BLOCK`/`REJECT`), `source` (`zone_id` + `matching_target`), `destination` (same structure). Use `unifi_list_firewall_zones` to discover zone IDs and `unifi_list_networks` to discover network IDs before constructing the payload. See `references/firewall-schema.md` for the V2 input format and the `matching_target` / `matching_target_type` combinations.
 
 ---
 
@@ -128,7 +127,7 @@ Options:
 1. Run `scripts/export-policies.py` to snapshot current state.
 2. Check `references/dpi-categories.md` for the app's DPI category, then call `unifi_get_dpi_stats` to confirm the category ID on this controller.
 3. Check `scripts/apply-template.py --list` — if a matching template exists (e.g., `block-bittorrent`), use it.
-4. Otherwise: call `unifi_list_networks` and `unifi_list_firewall_zones` to gather IDs, then `unifi_create_simple_firewall_policy` with `action=reject`.
+4. Otherwise: call `unifi_list_networks` and `unifi_list_firewall_zones` to gather IDs, then `unifi_create_firewall_policy` with `action="REJECT"` and zone-based `source`/`destination`.
 5. Show preview → wait for confirmation → execute with `confirm=true`.
 6. Run `scripts/diff-policies.py` to verify.
 
@@ -188,8 +187,7 @@ Use these direct tool calls when scripts are unavailable (e.g., no Python runtim
 - `unifi_get_dpi_stats` — DPI categories available on this controller
 
 ### Create
-- `unifi_create_simple_firewall_policy` — recommended for most requests
-- `unifi_create_firewall_policy` — full schema for advanced cases
+- `unifi_create_firewall_policy` — V2 zone-based create. Pre-resolve zone IDs (`unifi_list_firewall_zones`) and network IDs (`unifi_list_networks`) before constructing the payload.
 
 ### Modify
 - `unifi_update_firewall_policy` — update specific fields of an existing policy
@@ -210,8 +208,8 @@ Use these direct tool calls when scripts are unavailable (e.g., no Python runtim
 
 ## 9. Tips
 
-- `unifi_create_simple_firewall_policy` handles most cases — try it before reaching for the full schema. See `references/firewall-schema.md` for both formats.
-- Users often say "block" when they mean `reject` (sends RST/ICMP unreachable) vs `drop` (silent discard). `reject` is usually better for internal networks; `drop` is better for external-facing rules. See `references/firewall-schema.md` for the action comparison table.
+- `unifi_create_firewall_policy` is the canonical create tool. Always discover zone IDs (`unifi_list_firewall_zones`) and network IDs (`unifi_list_networks`) up front, then build the V2 payload. See `references/firewall-schema.md` for the schema.
+- Users often say "block" when they mean `REJECT` (sends RST/ICMP unreachable) vs `BLOCK` (silent discard). `REJECT` is usually better for internal networks; `BLOCK` is better for external-facing rules. See `references/firewall-schema.md` for the action comparison table.
 - When users mention app names (TikTok, YouTube, Steam), consult `references/dpi-categories.md` first to identify the category group, then confirm the exact ID with `unifi_get_dpi_stats` on the live controller.
 - DPI rules can be bypassed by VPNs — if blocking social media or gaming, consider also blocking the VPN/Proxy DPI category. See `references/dpi-categories.md` for the VPN category group.
 - Rule order matters for `camera-isolation` and multi-rule templates — confirm ordering with `unifi_list_firewall_policies` after creation, and use `scripts/diff-policies.py` to verify the final state.

@@ -143,14 +143,23 @@ def check_segmentation(
                 "critical",
                 "No rule blocking IoT VLAN traffic to private networks.",
                 {
-                    "tool": "unifi_create_simple_firewall_policy",
+                    "tool": "unifi_create_firewall_policy",
                     "params": {
-                        "name": "Block IoT to Private",
-                        "ruleset": "LAN_IN",
-                        "action": "drop",
-                        "src": {"type": "zone", "value": "lan"},
-                        "dst": {"type": "zone", "value": "lan"},
+                        "name": "Block IoT to Internal",
+                        "action": "REJECT",
+                        "source": {
+                            "zone_id": "<iot_zone_id>",
+                            "matching_target": "ANY",
+                        },
+                        "destination": {
+                            "zone_id": "<internal_zone_id>",
+                            "matching_target": "ANY",
+                        },
                     },
+                    "_note": (
+                        "Resolve <iot_zone_id> / <internal_zone_id> via "
+                        "unifi_list_firewall_zones before applying."
+                    ),
                 },
             )
         )
@@ -166,14 +175,23 @@ def check_segmentation(
                 "critical",
                 "No rule blocking guest VLAN traffic to private networks.",
                 {
-                    "tool": "unifi_create_simple_firewall_policy",
+                    "tool": "unifi_create_firewall_policy",
                     "params": {
-                        "name": "Block Guest to Private",
-                        "ruleset": "LAN_IN",
-                        "action": "drop",
-                        "src": {"type": "zone", "value": "lan"},
-                        "dst": {"type": "zone", "value": "lan"},
+                        "name": "Block Guest to Internal",
+                        "action": "REJECT",
+                        "source": {
+                            "zone_id": "<guest_zone_id>",
+                            "matching_target": "ANY",
+                        },
+                        "destination": {
+                            "zone_id": "<internal_zone_id>",
+                            "matching_target": "ANY",
+                        },
                     },
+                    "_note": (
+                        "Resolve <guest_zone_id> / <internal_zone_id> via "
+                        "unifi_list_firewall_zones before applying."
+                    ),
                 },
             )
         )
@@ -300,14 +318,25 @@ def check_egress(
                     "warning",
                     f"No egress filtering for high-risk network '{name}' — unrestricted outbound access.",
                     {
-                        "tool": "unifi_create_simple_firewall_policy",
+                        "tool": "unifi_create_firewall_policy",
                         "params": {
                             "name": f"Restrict {name} Egress",
-                            "ruleset": "LAN_OUT",
-                            "action": "drop",
-                            "src": {"type": "network", "value": nid},
-                            "dst": {"type": "zone", "value": "wan"},
+                            "action": "BLOCK",
+                            "source": {
+                                "zone_id": "<source_zone_id>",
+                                "matching_target": "NETWORK",
+                                "matching_target_type": "OBJECT",
+                                "network_ids": [nid],
+                            },
+                            "destination": {
+                                "zone_id": "<external_zone_id>",
+                                "matching_target": "ANY",
+                            },
                         },
+                        "_note": (
+                            "Resolve <source_zone_id> / <external_zone_id> via "
+                            "unifi_list_firewall_zones before applying."
+                        ),
                     },
                 )
             )

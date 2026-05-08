@@ -199,7 +199,7 @@ def apply_template(
     # Single-step template.
     payload = template_config.get("payload", {})
     resolved = _substitute(payload, params)
-    tool = template_config.get("tool", "unifi_create_simple_firewall_policy")
+    tool = template_config.get("tool", "unifi_create_firewall_policy")
 
     return {
         "tool": tool,

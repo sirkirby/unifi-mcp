@@ -10,10 +10,13 @@ Deep Packet Inspection (DPI) allows the UniFi controller to identify and classif
 
 DPI rules inspect the traffic payload (Layer 7) to identify the application. This is more reliable than port-based blocking because many applications use non-standard ports or switch ports to evade rules.
 
-To create a DPI-based firewall rule:
+**Important:** The V2 zone-based firewall surface (`unifi_create_firewall_policy`) does **not** accept a `dpi_category_id` field — its source/destination are strictly zone- + IP/network/object-based. For DPI-category-based filtering, use the content-filter or traffic-rule tooling that supports DPI:
+
 1. Call `unifi_get_dpi_stats` to get the list of available categories and their IDs on this controller.
 2. Find the category ID for the application you want to block.
-3. Pass the category ID to `unifi_create_firewall_policy` or `unifi_create_simple_firewall_policy` using the `dpi_category_id` field.
+3. Apply the category via `unifi_update_content_filter` (DPI-aware content filtering profile) or the appropriate traffic-rule tool.
+
+For a coarse "block this network from reaching the internet" rule (no DPI), use `unifi_create_firewall_policy` with a zone-based `source` (the target network's zone) and `destination` zone set to External.
 
 ---
 
