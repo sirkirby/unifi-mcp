@@ -886,7 +886,6 @@ FIREWALL_POLICY_CREATE_SCHEMA = {
             "examples": [False],
         },
     },
-    "additionalProperties": True,  # Allow extra fields initially, tighten later
 }
 
 # QoS Rule schema
