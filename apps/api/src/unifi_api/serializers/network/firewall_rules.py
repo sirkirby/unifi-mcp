@@ -24,7 +24,6 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
 @register_serializer(
     tools={
         "unifi_create_firewall_policy": {"kind": RenderKind.DETAIL},
-        "unifi_create_simple_firewall_policy": {"kind": RenderKind.DETAIL},
         "unifi_update_firewall_policy": {"kind": RenderKind.DETAIL},
         "unifi_delete_firewall_policy": {"kind": RenderKind.DETAIL},
         "unifi_toggle_firewall_policy": {"kind": RenderKind.DETAIL},

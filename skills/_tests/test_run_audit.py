@@ -706,7 +706,7 @@ class TestRecommendations:
         categories = {
             "segmentation": {
                 "findings": [
-                    _finding("SEG-01", "critical", "Missing block", {"tool": "unifi_create_simple_firewall_policy", "params": {}})
+                    _finding("SEG-01", "critical", "Missing block", {"tool": "unifi_create_firewall_policy", "params": {}})
                 ]
             },
             "egress_control": {"findings": []},
@@ -714,4 +714,4 @@ class TestRecommendations:
             "topology": {"findings": []},
         }
         recs = build_recommendations(categories)
-        assert "unifi_create_simple_firewall_policy" in recs[0]
+        assert "unifi_create_firewall_policy" in recs[0]

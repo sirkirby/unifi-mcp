@@ -1,4 +1,4 @@
-# Network Server Tool Reference (171 tools)
+# Network Server Tool Reference (170 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 
@@ -106,7 +106,7 @@ Always available, regardless of registration mode.
 ## Firewall
 
 <!-- AUTO:tools:firewall -->
-13 tools.
+12 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -116,13 +116,12 @@ Always available, regardless of registration mode.
 | `unifi_list_firewall_policies` | Read | List firewall policies configured on the Unifi Network controller. |
 | `unifi_list_firewall_zones` | Read | List controller firewall zones (V2 API). |
 | `unifi_create_firewall_group` | Mutate | Create a new firewall group (address or port group). |
-| `unifi_create_firewall_policy` | Mutate | Create a new firewall policy with schema validation. |
-| `unifi_create_simple_firewall_policy` | Mutate | Create a firewall policy using a simplified high-level schema. |
+| `unifi_create_firewall_policy` | Mutate | Create a V2 zone-based firewall policy with schema validation. |
 | `unifi_delete_firewall_group` | Mutate | Delete a firewall group. |
 | `unifi_delete_firewall_policy` | Mutate | Delete a firewall policy by ID. |
 | `unifi_toggle_firewall_policy` | Mutate | Enable or disable a specific firewall policy by ID. |
 | `unifi_update_firewall_group` | Mutate | Update an existing firewall group. |
-| `unifi_update_firewall_policy` | Mutate | Update specific fields of an existing firewall policy by ID. |
+| `unifi_update_firewall_policy` | Mutate | Update specific fields of an existing V2 zone-based firewall policy by ID. |
 <!-- /AUTO:tools:firewall -->
 
 **Tips:**

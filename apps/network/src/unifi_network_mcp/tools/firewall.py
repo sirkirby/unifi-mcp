@@ -10,10 +10,44 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
-from unifi_network_mcp.runtime import firewall_manager, network_manager, server
+from unifi_network_mcp.runtime import firewall_manager, server
 from unifi_network_mcp.validator_registry import UniFiValidatorRegistry  # Added
 
 logger = logging.getLogger(__name__)
+
+
+# Legacy V1 firewall fields removed in #210. The V1 endpoint is dead on
+# modern firmware (UDM-SE 8.4.x); the V1 schema branch always shipped V1-shaped
+# payloads to the V2 endpoint, which rejected them. Detect these fields and
+# return an actionable migration error instead of a silent failure.
+_LEGACY_V1_FIREWALL_FIELDS = frozenset(
+    {
+        "ruleset",
+        "rule_index",
+        "src_address",
+        "dst_address",
+        "src_port",
+        "dst_port",
+    }
+)
+_LEGACY_V1_ACTIONS = frozenset({"accept", "drop", "reject"})
+
+_LEGACY_MIGRATION_ERROR = (
+    "Legacy V1 firewall fields are no longer supported (#210). "
+    "Use V2 zone-based fields: action (ALLOW/BLOCK/REJECT), source "
+    "(zone_id + matching_target), destination (zone_id + matching_target). "
+    "See unifi_list_firewall_policies for examples of valid V2 shape."
+)
+
+
+def _detect_legacy_fields(data: Dict[str, Any]) -> str | None:
+    """Return the migration error string if legacy V1 fields are detected."""
+    if _LEGACY_V1_FIREWALL_FIELDS & set(data.keys()):
+        return _LEGACY_MIGRATION_ERROR
+    action = data.get("action")
+    if isinstance(action, str) and action in _LEGACY_V1_ACTIONS:
+        return _LEGACY_MIGRATION_ERROR
+    return None
 
 
 @server.tool(
@@ -219,7 +253,6 @@ async def toggle_firewall_policy(
                 current_enabled=current_state,
                 additional_info={
                     "action": policy.get("action"),
-                    "ruleset": policy.get("ruleset"),
                     "index": policy.get("index"),
                 },
             )
@@ -260,25 +293,6 @@ async def toggle_firewall_policy(
         return {"success": False, "error": f"Failed to toggle firewall policy {policy_id}: {e}"}
 
 
-def _is_zone_based_policy(policy_data: Dict[str, Any]) -> bool:
-    """Detect whether policy_data uses zone-based targeting (newer firmware).
-
-    Zone-based policies have source/destination dicts with zone_id and no ruleset.
-    Legacy policies have a ruleset field with lowercase actions.
-    """
-    if policy_data.get("ruleset"):
-        return False
-    for direction in ("source", "destination"):
-        ep = policy_data.get(direction)
-        if isinstance(ep, dict) and ep.get("zone_id"):
-            return True
-    # Uppercase actions are a zone-based indicator
-    action = policy_data.get("action", "")
-    if isinstance(action, str) and action in ("ALLOW", "BLOCK", "REJECT"):
-        return True
-    return False
-
-
 def _validate_zone_targeting(validated_data: Dict[str, Any]) -> str | None:
     """Validate matching_target_type requirements for zone-based policies.
 
@@ -306,10 +320,14 @@ def _validate_zone_targeting(validated_data: Dict[str, Any]) -> str | None:
 @server.tool(
     name="unifi_create_firewall_policy",
     description=(
-        "Create a new firewall policy with schema validation. Supports both legacy "
-        "ruleset-based policies (action: accept/drop/reject) and zone-based policies "
-        "(action: ALLOW/BLOCK/REJECT with source/destination zone_id targeting). "
-        "Format is auto-detected from the policy_data structure."
+        "Create a V2 zone-based firewall policy with schema validation. "
+        "Required: name, action (ALLOW/BLOCK/REJECT), source (zone_id + "
+        "matching_target), destination (same structure). For specific IP "
+        "targeting: matching_target='IP', matching_target_type='SPECIFIC', "
+        "ips=[...]. For network targeting: matching_target='NETWORK', "
+        "matching_target_type='OBJECT', network_ids=[...]. For any in zone: "
+        "matching_target='ANY'. Use unifi_list_firewall_zones to discover "
+        "zone_ids; unifi_list_networks for network_ids."
     ),
     permission_category="firewall_policies",
     permission_action="create",
@@ -320,15 +338,14 @@ async def create_firewall_policy(
         Dict[str, Any],
         Field(
             description=(
-                "Firewall policy configuration dict. Two formats supported:\n"
-                "Legacy (ruleset-based): Required: name, ruleset (WAN_IN, LAN_OUT, etc.), "
-                "action (accept/drop/reject), index. Optional: enabled, description, protocol, "
-                "connection_states, source, destination, logging.\n"
-                "Zone-based (firmware 5.0+): Required: name, action (ALLOW/BLOCK/REJECT), "
-                "source (object with zone_id, matching_target), destination (same structure). "
-                "For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. "
-                "For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', "
-                "network_ids=[...]. For any in zone: matching_target='ANY'."
+                "V2 zone-based firewall policy dict. Required: name, action "
+                "(ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), "
+                "destination (same structure). For IP targeting: matching_target='IP', "
+                "matching_target_type='SPECIFIC', ips=[...]. For network targeting: "
+                "matching_target='NETWORK', matching_target_type='OBJECT', "
+                "network_ids=[...]. For any in zone: matching_target='ANY'. Optional: "
+                "enabled, description, protocol, connection_state_type, connection_states, "
+                "ip_version, schedule, logging."
             )
         ),
     ],
@@ -337,55 +354,39 @@ async def create_firewall_policy(
         Field(description="When true, creates the policy. When false (default), validates and returns a preview"),
     ] = False,
 ) -> Dict[str, Any]:
-    """Create a firewall policy. Auto-detects legacy vs zone-based format."""
+    """Create a V2 zone-based firewall policy."""
     if not isinstance(policy_data, dict) or not policy_data:
         return {
             "success": False,
             "error": "policy_data must be a non-empty dictionary.",
         }
 
-    # Auto-detect format and validate accordingly. Zone-based (V2) policies
-    # are rejected by the controller without fields like ``schedule`` and
-    # ``create_allow_respond``, so we fill missing top-level properties from
-    # schema defaults on that path. Legacy policies don't need this.
-    zone_based = _is_zone_based_policy(policy_data)
+    # Reject legacy V1 fields up front with an actionable migration error (#210).
+    legacy_error = _detect_legacy_fields(policy_data)
+    if legacy_error:
+        return {"success": False, "error": legacy_error}
 
-    if zone_based:
-        # Controller's V2 enums are strictly upper-case. Normalize common
-        # mixed-case input before validation so users can pass natural forms
-        # like "IPv4" or lowercase state names.
-        policy_data = _normalize_v2_policy_casing(policy_data)
-        schema_key = "firewall_policy_v2_create"
-        is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate_and_apply_defaults(
-            schema_key, policy_data
-        )
-    else:
-        schema_key = "firewall_policy_create"
-        is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate(schema_key, policy_data)
+    # Controller's V2 enums are strictly upper-case. Normalize common
+    # mixed-case input before validation so users can pass natural forms
+    # like "IPv4" or lowercase state names.
+    policy_data = _normalize_v2_policy_casing(policy_data)
+    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate_and_apply_defaults(
+        "firewall_policy_v2_create", policy_data
+    )
 
     if not is_valid:
         logger.warning("Invalid firewall policy data: %s", error_msg)
         return {"success": False, "error": "Validation Error: %s" % error_msg}
 
-    if zone_based:
-        # Validate zone targeting requirements (matching_target_type, ips, network_ids)
-        targeting_error = _validate_zone_targeting(validated_data)
-        if targeting_error:
-            return {"success": False, "error": targeting_error}
-        # Normalize action to uppercase
-        action = validated_data.get("action", "")
-        if action.upper() not in ("ALLOW", "BLOCK", "REJECT"):
-            return {"success": False, "error": "Invalid action '%s'. Must be ALLOW, BLOCK, or REJECT." % action}
-        validated_data["action"] = action.upper()
-    else:
-        # Normalize action to lowercase for legacy format
-        action = validated_data.get("action", "")
-        if not isinstance(action, str) or action.lower() not in ("accept", "drop", "reject"):
-            return {
-                "success": False,
-                "error": "Invalid action '%s'. Must be one of 'accept', 'drop', 'reject'." % action,
-            }
-        validated_data["action"] = action.lower()
+    # Validate zone targeting requirements (matching_target_type, ips, network_ids)
+    targeting_error = _validate_zone_targeting(validated_data)
+    if targeting_error:
+        return {"success": False, "error": targeting_error}
+    # Normalize action to uppercase and require V2 enum
+    action = validated_data.get("action", "")
+    if not isinstance(action, str) or action.upper() not in ("ALLOW", "BLOCK", "REJECT"):
+        return {"success": False, "error": "Invalid action '%s'. Must be ALLOW, BLOCK, or REJECT." % action}
+    validated_data["action"] = action.upper()
 
     policy_name = validated_data.get("name", "Unnamed Policy")
 
@@ -446,30 +447,13 @@ def _normalize_v2_policy_casing(data: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-# Fields that indicate zone-based update data (not in the legacy update schema)
-_V2_UPDATE_FIELDS = frozenset(
-    {
-        "source",
-        "destination",
-        "ip_version",
-        "connection_state_type",
-        "connection_states",
-        "create_allow_respond",
-        "match_ip_sec",
-        "match_opposite_protocol",
-        "schedule",
-        "icmp_typename",
-        "icmp_v6_typename",
-    }
-)
-
-
 @server.tool(
     name="unifi_update_firewall_policy",
     description=(
-        "Update specific fields of an existing firewall policy by ID. Supports both "
-        "legacy fields (ruleset, action as accept/drop/reject) and zone-based fields "
-        "(source, destination, action as ALLOW/BLOCK/REJECT, ip_version, etc.)."
+        "Update specific fields of an existing V2 zone-based firewall policy by ID. "
+        "Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, "
+        "protocol, ip_version, index, logging, connection_state_type, connection_states, "
+        "schedule."
     ),
     permission_category="firewall_policies",
     permission_action="update",
@@ -486,11 +470,9 @@ async def update_firewall_policy(
         Dict[str, Any],
         Field(
             description=(
-                "Dictionary of fields to update. Accepts both legacy and zone-based fields. "
-                "Legacy: name, ruleset, action (accept/drop/reject), rule_index, protocol, "
-                "src_address, dst_address, enabled, description, logging. "
-                "Zone-based: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, "
-                "protocol, ip_version, index, logging, connection_state_type, connection_states, schedule."
+                "Dictionary of V2 zone-based fields to update: name, action "
+                "(ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, "
+                "index, logging, connection_state_type, connection_states, schedule."
             )
         ),
     ],
@@ -499,47 +481,38 @@ async def update_firewall_policy(
         Field(description="When true, applies the update. When false (default), returns a preview of the changes"),
     ] = False,
 ) -> Dict[str, Any]:
-    """Update specific fields of an existing firewall policy. Requires confirmation."""
+    """Update specific fields of an existing V2 zone-based firewall policy. Requires confirmation."""
     if not policy_id:
         return {"success": False, "error": "policy_id is required"}
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Normalize action if provided (accept both cases)
+    # Reject legacy V1 fields up front with an actionable migration error (#210).
+    legacy_error = _detect_legacy_fields(update_data)
+    if legacy_error:
+        return {"success": False, "error": legacy_error}
+
+    # Normalize V2 action casing if provided.
     if "action" in update_data:
         action = update_data["action"]
         if isinstance(action, str):
             upper = action.upper()
-            lower = action.lower()
             if upper in ("ALLOW", "BLOCK", "REJECT"):
                 update_data["action"] = upper
-            elif lower in ("accept", "drop", "reject"):
-                update_data["action"] = lower
             else:
                 return {"success": False, "error": "Invalid action '%s'." % action}
 
-    # Detect whether this contains zone-based fields
-    has_v2_fields = bool(set(update_data.keys()) & _V2_UPDATE_FIELDS)
-
-    if has_v2_fields:
-        # Normalize V2 enum casing before validation so common mixed-case input
-        # ("IPv4", "custom", ["new"]) survives the strict-uppercase enum check.
-        update_data = _normalize_v2_policy_casing(update_data)
-        is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate(
-            "firewall_policy_v2_update", update_data
-        )
-        if not is_valid:
-            logger.warning("Invalid V2 firewall policy update data for ID %s: %s", policy_id, error_msg)
-            return {"success": False, "error": "Invalid update data: %s" % error_msg}
-        if not validated_data:
-            return {"success": False, "error": "Update data is effectively empty or invalid."}
-    else:
-        is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("firewall_policy_update", update_data)
-        if not is_valid:
-            logger.warning("Invalid firewall policy update data for ID %s: %s", policy_id, error_msg)
-            return {"success": False, "error": "Invalid update data: %s" % error_msg}
-        if not validated_data:
-            return {"success": False, "error": "Update data is effectively empty or invalid."}
+    # Normalize V2 enum casing before validation so common mixed-case input
+    # ("IPv4", "custom", ["new"]) survives the strict-uppercase enum check.
+    update_data = _normalize_v2_policy_casing(update_data)
+    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate(
+        "firewall_policy_v2_update", update_data
+    )
+    if not is_valid:
+        logger.warning("Invalid V2 firewall policy update data for ID %s: %s", policy_id, error_msg)
+        return {"success": False, "error": "Invalid update data: %s" % error_msg}
+    if not validated_data:
+        return {"success": False, "error": "Update data is effectively empty or invalid."}
 
     updated_fields_list = list(validated_data.keys())
 
@@ -628,148 +601,6 @@ async def update_firewall_policy(
     except Exception as e:
         logger.error("Error updating firewall policy %s: %s", policy_id, e, exc_info=True)
         return {"success": False, "error": "Failed to update firewall policy %s: %s" % (policy_id, e)}
-
-
-@server.tool(
-    name="unifi_create_simple_firewall_policy",
-    description=(
-        "Create a firewall policy using a simplified high-level schema. "
-        "Accepts friendly src/dst selectors and returns a preview unless confirm=true."
-    ),
-    permission_category="firewall_policies",
-    permission_action="create",
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
-)
-async def create_simple_firewall_policy(
-    policy: Annotated[
-        Dict[str, Any],
-        Field(
-            description="Simplified firewall policy dict. Required: name (str), ruleset (str: 'LAN_OUT', 'WAN_IN', etc.), action (str: 'drop', 'accept', 'reject'), src (dict with type+value), dst (dict with type+value). src/dst type options: 'zone' (value: 'wan'/'lan'), 'network' (value: network name/ID), 'client_mac' (value: MAC address), 'ip_group' (value: group ID). Optional: protocol, index, enabled, log"
-        ),
-    ],
-    confirm: Annotated[
-        bool,
-        Field(description="When true, creates the policy. When false (default), validates and returns a preview"),
-    ] = False,
-) -> Dict[str, Any]:
-    """Create a firewall rule with a compact schema and optional preview.
-
-    High-level schema (validated internally):
-    {
-        "name":    "Block Xbox",
-        "ruleset": "LAN_OUT",
-        "action":  "drop",
-        "src": {"type": "client_mac", "value": "4c:3b:df:2c:c8:c6"},
-        "dst": {"type": "zone", "value": "wan"},
-        "protocol": "all",           # optional
-        "index": 2010,                # optional – will auto-place if omitted
-        "enabled": true,              # default true
-        "log": true                   # default false
-    }
-
-    If *confirm* is False (default) the function only validates and returns the
-    fully-expanded UniFi payload in a preview. Set *confirm* to True to commit
-    the rule and return the controller's response.
-    """
-
-    # --- Step 1: validate high-level schema --------------------------------
-    is_valid, error, validated = UniFiValidatorRegistry.validate("firewall_policy_simple", policy)
-    if not is_valid or validated is None:
-        return {"success": False, "error": error or "Validation failed"}
-
-    pol = validated  # rename for brevity
-
-    # --- Step 2: translate src/dst selectors into UniFi endpoint structure --
-    async def _resolve_endpoint(ep: Dict[str, str]) -> Dict[str, Any]:
-        etype = ep["type"].lower()
-        value = ep["value"].strip()
-        base = {
-            "match_opposite_ports": False,
-            "port_matching_type": "any",
-        }
-        if etype == "zone":
-            return {**base, "matching_target": "zone", "zone_id": value.lower()}
-        if etype == "network":
-            # Accept network name or id
-            networks = await network_manager.get_networks()
-            net = next(
-                (n for n in networks if n.get("_id") == value or n.get("name") == value),
-                None,
-            )
-            if not net:
-                raise ValueError(f"Network '{value}' not found")
-            return {
-                **base,
-                "matching_target": "network_id",
-                "network_id": net["_id"],
-                "zone_id": "lan",  # network selectors still need zone for API; default lan
-            }
-        if etype == "client_mac":
-            return {
-                **base,
-                "matching_target": "client_macs",
-                "client_macs": [value.lower()],
-                "zone_id": "lan",
-            }
-        if etype == "ip_group":
-            return {
-                **base,
-                "matching_target": "ip_group_id",
-                "ip_group_id": value,
-                "zone_id": "lan",
-            }
-        raise ValueError(f"Unsupported selector type '{etype}'")
-
-    try:
-        src_ep = await _resolve_endpoint(pol["src"])
-        dst_ep = await _resolve_endpoint(pol["dst"])
-    except Exception as exc:
-        return {"success": False, "error": str(exc)}
-
-    # --- Step 3: build controller payload ----------------------------------
-    payload: Dict[str, Any] = {
-        "name": pol["name"],
-        "ruleset": pol["ruleset"],
-        "action": pol["action"].lower(),
-        "index": pol.get("index", 3000),  # fall-back index
-        "enabled": pol.get("enabled", True),
-        "logging": pol.get("log", False),
-        "protocol": pol.get("protocol", "all"),
-        # sane defaults for connection states (inclusive all)
-        "connection_state_type": "inclusive",
-        "connection_states": ["new", "established", "related", "invalid"],
-        "source": src_ep,
-        "destination": dst_ep,
-    }
-
-    if not confirm:
-        return create_preview(
-            resource_type="firewall_policy",
-            resource_data=payload,
-            resource_name=pol["name"],
-        )
-
-    # --- Step 4: call manager to create policy -----------------------------
-    # firewall_manager.create_firewall_policy raises on API errors so the
-    # controller's errorCode/message surface to the caller — wrap to return a
-    # structured error response instead of letting it propagate.
-    try:
-        created = await firewall_manager.create_firewall_policy(payload)
-    except Exception as exc:
-        logger.error("Error creating migrated firewall policy '%s': %s", pol["name"], exc, exc_info=True)
-        return {"success": False, "error": f"Failed to create firewall policy '{pol['name']}': {exc}"}
-
-    if created is None:
-        return {
-            "success": False,
-            "error": "Controller rejected policy creation. See logs.",
-        }
-
-    return {
-        "success": True,
-        "policy_id": created.id,
-        "details": created.raw,
-    }
 
 
 @server.tool(

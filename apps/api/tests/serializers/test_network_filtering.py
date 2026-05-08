@@ -80,7 +80,6 @@ def test_firewall_mutation_ack_dispatches_for_all_mutations() -> None:
     reg = _registry()
     for tool in (
         "unifi_create_firewall_policy",
-        "unifi_create_simple_firewall_policy",
         "unifi_update_firewall_policy",
         "unifi_delete_firewall_policy",
         "unifi_toggle_firewall_policy",

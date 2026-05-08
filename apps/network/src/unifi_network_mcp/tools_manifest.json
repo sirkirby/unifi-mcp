@@ -1,5 +1,5 @@
 {
-  "count": 171,
+  "count": 170,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -22,7 +22,6 @@
     "unifi_create_port_profile": "unifi_network_mcp.tools.switch",
     "unifi_create_qos_rule": "unifi_network_mcp.tools.qos",
     "unifi_create_route": "unifi_network_mcp.tools.routing",
-    "unifi_create_simple_firewall_policy": "unifi_network_mcp.tools.firewall",
     "unifi_create_simple_port_forward": "unifi_network_mcp.tools.port_forwards",
     "unifi_create_simple_qos_rule": "unifi_network_mcp.tools.qos",
     "unifi_create_usergroup": "unifi_network_mcp.tools.usergroups",
@@ -627,7 +626,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Create a new firewall policy with schema validation. Supports both legacy ruleset-based policies (action: accept/drop/reject) and zone-based policies (action: ALLOW/BLOCK/REJECT with source/destination zone_id targeting). Format is auto-detected from the policy_data structure.",
+      "description": "Create a V2 zone-based firewall policy with schema validation. Required: name, action (ALLOW/BLOCK/REJECT), source (zone_id + matching_target), destination (same structure). For specific IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. Use unifi_list_firewall_zones to discover zone_ids; unifi_list_networks for network_ids.",
       "name": "unifi_create_firewall_policy",
       "permission_action": "create",
       "permission_category": "firewall_policies",
@@ -639,7 +638,7 @@
               "type": "boolean"
             },
             "policy_data": {
-              "description": "Firewall policy configuration dict. Two formats supported:\nLegacy (ruleset-based): Required: name, ruleset (WAN_IN, LAN_OUT, etc.), action (accept/drop/reject), index. Optional: enabled, description, protocol, connection_states, source, destination, logging.\nZone-based (firmware 5.0+): Required: name, action (ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), destination (same structure). For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'.",
+              "description": "V2 zone-based firewall policy dict. Required: name, action (ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), destination (same structure). For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. Optional: enabled, description, protocol, connection_state_type, connection_states, ip_version, schedule, logging.",
               "type": "object"
             }
           },
@@ -894,36 +893,6 @@
             "name",
             "network",
             "nexthop"
-          ],
-          "type": "object"
-        }
-      }
-    },
-    {
-      "annotations": {
-        "destructiveHint": false,
-        "idempotentHint": false,
-        "openWorldHint": false,
-        "readOnlyHint": false
-      },
-      "description": "Create a firewall policy using a simplified high-level schema. Accepts friendly src/dst selectors and returns a preview unless confirm=true.",
-      "name": "unifi_create_simple_firewall_policy",
-      "permission_action": "create",
-      "permission_category": "firewall_policies",
-      "schema": {
-        "input": {
-          "properties": {
-            "confirm": {
-              "description": "When true, creates the policy. When false (default), validates and returns a preview",
-              "type": "boolean"
-            },
-            "policy": {
-              "description": "Simplified firewall policy dict. Required: name (str), ruleset (str: 'LAN_OUT', 'WAN_IN', etc.), action (str: 'drop', 'accept', 'reject'), src (dict with type+value), dst (dict with type+value). src/dst type options: 'zone' (value: 'wan'/'lan'), 'network' (value: network name/ID), 'client_mac' (value: MAC address), 'ip_group' (value: group ID). Optional: protocol, index, enabled, log",
-              "type": "object"
-            }
-          },
-          "required": [
-            "policy"
           ],
           "type": "object"
         }
@@ -4279,7 +4248,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update specific fields of an existing firewall policy by ID. Supports both legacy fields (ruleset, action as accept/drop/reject) and zone-based fields (source, destination, action as ALLOW/BLOCK/REJECT, ip_version, etc.).",
+      "description": "Update specific fields of an existing V2 zone-based firewall policy by ID. Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule.",
       "name": "unifi_update_firewall_policy",
       "permission_action": "update",
       "permission_category": "firewall_policies",
@@ -4295,7 +4264,7 @@
               "type": "string"
             },
             "update_data": {
-              "description": "Dictionary of fields to update. Accepts both legacy and zone-based fields. Legacy: name, ruleset, action (accept/drop/reject), rule_index, protocol, src_address, dst_address, enabled, description, logging. Zone-based: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule.",
+              "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule.",
               "type": "object"
             }
           },

@@ -250,9 +250,6 @@ def test_dispatch_overrides_specific_targets() -> None:
     assert table["unifi_toggle_wlan"].method == "toggle_wlan"
     # Toggle that needs current state
     assert table["unifi_toggle_firewall_policy"].method == "toggle_firewall_policy"
-    # Multi-manager compose
-    assert table["unifi_create_simple_firewall_policy"].manager_attr == "firewall_manager"
-    assert table["unifi_create_simple_firewall_policy"].method == "create_firewall_policy"
     # Stats: list-returning method (was AST-captured as get_X_details, a dict)
     assert table["unifi_get_device_stats"].manager_attr == "stats_manager"
     assert table["unifi_get_device_stats"].method == "get_device_stats"

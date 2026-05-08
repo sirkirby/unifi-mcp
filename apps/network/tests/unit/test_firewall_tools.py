@@ -121,39 +121,16 @@ class TestListFirewallPolicies:
 
 
 # ---------------------------------------------------------------------------
-# create_firewall_policy — auto-detection
+# create_firewall_policy — V2 zone-based validation (legacy V1 path removed in #210)
 # ---------------------------------------------------------------------------
 
 
-class TestCreateFirewallPolicyAutoDetect:
-    """Test that create_firewall_policy auto-detects legacy vs zone-based format."""
+class TestCreateFirewallPolicyV2Validation:
+    """Test that create_firewall_policy validates against the V2 zone-based schema."""
 
     @pytest.mark.asyncio
-    async def test_legacy_format_detected_by_ruleset(self):
-        """Policy with 'ruleset' key should use legacy schema validation."""
-        legacy_data = {
-            "name": "Test Block",
-            "ruleset": "LAN_OUT",
-            "action": "drop",
-            "index": 2000,
-        }
-        created_raw = {**legacy_data, "_id": "new_001"}
-        mock_created = MagicMock()
-        mock_created.raw = created_raw
-
-        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.create_firewall_policy = AsyncMock(return_value=mock_created)
-
-            from unifi_network_mcp.tools.firewall import create_firewall_policy
-
-            result = await create_firewall_policy(policy_data=legacy_data, confirm=True)
-
-        assert result["success"] is True
-        assert result["policy_id"] == "new_001"
-
-    @pytest.mark.asyncio
-    async def test_zone_format_detected_by_source_zone_id(self):
-        """Policy with source/destination zone_id should use v2 schema validation."""
+    async def test_v2_policy_with_source_zone_id(self):
+        """Policy with source/destination zone_id is validated by the V2 schema."""
         zone_data = {
             "name": "Allow IoT",
             "action": "ALLOW",
@@ -183,8 +160,8 @@ class TestCreateFirewallPolicyAutoDetect:
         assert result["policy_id"] == "new_002"
 
     @pytest.mark.asyncio
-    async def test_zone_format_detected_by_uppercase_action(self):
-        """Uppercase ALLOW/BLOCK/REJECT action should trigger zone-based detection."""
+    async def test_v2_policy_with_uppercase_action(self):
+        """Uppercase ALLOW/BLOCK/REJECT action validates against the V2 schema."""
         zone_data = {
             "name": "Block Zone",
             "action": "BLOCK",
@@ -337,16 +314,90 @@ class TestCreateZoneTargetingValidation:
 
 
 # ---------------------------------------------------------------------------
-# update_firewall_policy — v2 field acceptance
+# Legacy V1 field migration errors (#210)
+# ---------------------------------------------------------------------------
+
+
+class TestLegacyFieldMigration:
+    """Test that legacy V1 firewall fields produce a #210 migration error
+    instead of being silently forwarded to a V2 endpoint that rejects them."""
+
+    @pytest.mark.asyncio
+    async def test_create_with_ruleset_returns_migration_error(self):
+        """ruleset is a legacy V1 field — must produce a migration error."""
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        result = await create_firewall_policy(
+            policy_data={
+                "name": "Block Xbox",
+                "ruleset": "LAN_OUT",
+                "action": "drop",
+                "index": 2000,
+            },
+            confirm=True,
+        )
+
+        assert result["success"] is False
+        assert "#210" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_create_with_lowercase_action_returns_migration_error(self):
+        """Lowercase accept/drop/reject is the V1 enum — must migrate to ALLOW/BLOCK/REJECT."""
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        result = await create_firewall_policy(
+            policy_data={
+                "name": "Block IoT",
+                "action": "drop",
+                "source": {"zone_id": "internal", "matching_target": "ANY"},
+                "destination": {"zone_id": "wan", "matching_target": "ANY"},
+            },
+            confirm=True,
+        )
+
+        assert result["success"] is False
+        assert "#210" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_update_with_ruleset_returns_migration_error(self):
+        """Updating a policy with a legacy ruleset field must surface a migration error."""
+        from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+        result = await update_firewall_policy(
+            policy_id="pol_001",
+            update_data={"ruleset": "WAN_OUT"},
+            confirm=True,
+        )
+
+        assert result["success"] is False
+        assert "#210" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_update_with_src_address_returns_migration_error(self):
+        """src_address is a legacy V1 field — must produce a migration error on update."""
+        from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+        result = await update_firewall_policy(
+            policy_id="pol_001",
+            update_data={"src_address": "10.0.0.1"},
+            confirm=True,
+        )
+
+        assert result["success"] is False
+        assert "#210" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# update_firewall_policy — V2 zone-based fields (legacy V1 path removed in #210)
 # ---------------------------------------------------------------------------
 
 
 class TestUpdateFirewallPolicyV2Fields:
-    """Test that update_firewall_policy accepts zone-based fields."""
+    """Test that update_firewall_policy validates V2 zone-based fields."""
 
     @pytest.mark.asyncio
     async def test_v2_fields_pass_through(self):
-        """Update with source/destination should bypass legacy validation."""
+        """Update with source/destination is validated by the V2 schema."""
         mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
         updated_raw = copy.deepcopy(SAMPLE_ZONE_POLICY_RAW)
         updated_raw["action"] = "BLOCK"

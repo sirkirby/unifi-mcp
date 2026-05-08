@@ -30,7 +30,7 @@ def _all_referenced_keys() -> set[str]:
             keys.add(match.group(1))
     # Some keys are passed via dynamic schema_key = "..." then validate(schema_key, ...).
     # Capture the most common cases used in firewall.py.
-    keys |= {"firewall_policy_create", "firewall_policy_v2_create"}
+    keys |= {"firewall_policy_v2_create"}
     return keys
 
 
