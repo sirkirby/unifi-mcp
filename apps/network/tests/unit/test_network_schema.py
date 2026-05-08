@@ -181,3 +181,81 @@ class TestNetworkUpdateSchema:
         assert is_valid
         assert data["dhcpguard_enabled"] is True
         assert data["dhcpd_ip_1"] == "192.168.1.1"
+
+
+class TestWlanCreateSchema:
+    """Tests for WLAN_SCHEMA validation around ap_group_ids and ap_group_mode (#208).
+
+    Live-controller probe (UDM-SE 8.4.17) confirmed:
+    - ap_group_ids: required on create, array of strings, empty list rejected
+    - ap_group_mode: optional, enum ["all", "groups"], case-sensitive
+    """
+
+    def _base_payload(self, **overrides):
+        payload = {
+            "name": "TestSSID",
+            "security": "wpa2-psk",
+            "x_passphrase": "supersecret",
+            "enabled": True,
+            "ap_group_ids": ["abc"],
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_create_with_ap_group_ids_and_mode_all_accepted(self):
+        """Valid create with both ap_group_ids and ap_group_mode='all' validates."""
+        is_valid, error_msg, data = UniFiValidatorRegistry.validate(
+            "wlan",
+            self._base_payload(ap_group_mode="all"),
+        )
+        assert is_valid, error_msg
+        assert data["ap_group_ids"] == ["abc"]
+        assert data["ap_group_mode"] == "all"
+
+    def test_create_with_ap_group_ids_only_accepted(self):
+        """ap_group_mode is optional; create succeeds without it."""
+        is_valid, error_msg, data = UniFiValidatorRegistry.validate(
+            "wlan",
+            self._base_payload(),
+        )
+        assert is_valid, error_msg
+        assert data["ap_group_ids"] == ["abc"]
+        assert "ap_group_mode" not in data
+
+    def test_create_missing_ap_group_ids_rejected(self):
+        """Create without ap_group_ids fails validation with field name in error."""
+        payload = self._base_payload()
+        payload.pop("ap_group_ids")
+        is_valid, error_msg, _ = UniFiValidatorRegistry.validate("wlan", payload)
+        assert not is_valid
+        assert "ap_group_ids" in error_msg
+
+    def test_create_with_invalid_ap_group_mode_rejected(self):
+        """ap_group_mode='custom' (the wrong-but-natural guess) fails with enum listed."""
+        is_valid, error_msg, _ = UniFiValidatorRegistry.validate(
+            "wlan",
+            self._base_payload(ap_group_mode="custom"),
+        )
+        assert not is_valid
+        # Enum error should mention the accepted values
+        assert "all" in error_msg
+        assert "groups" in error_msg
+
+    def test_create_with_empty_ap_group_ids_rejected(self):
+        """ap_group_ids: [] is rejected by minItems: 1 (mirrors controller behavior)."""
+        is_valid, error_msg, _ = UniFiValidatorRegistry.validate(
+            "wlan",
+            self._base_payload(ap_group_ids=[]),
+        )
+        assert not is_valid
+        # jsonschema reports minItems violations as "should be non-empty" / "too short"
+        assert "non-empty" in error_msg.lower() or "short" in error_msg.lower() or "ap_group_ids" in error_msg
+
+    def test_create_with_int_items_in_ap_group_ids_rejected(self):
+        """ap_group_ids items must be strings; ints fail with a type error."""
+        is_valid, error_msg, _ = UniFiValidatorRegistry.validate(
+            "wlan",
+            self._base_payload(ap_group_ids=[123]),
+        )
+        assert not is_valid
+        assert "type" in error_msg.lower() or "string" in error_msg.lower()

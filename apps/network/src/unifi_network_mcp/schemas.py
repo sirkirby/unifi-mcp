@@ -235,7 +235,7 @@ TRAFFIC_ROUTE_SIMPLE_SCHEMA = {
 # WLAN (Wireless Network) schema
 WLAN_SCHEMA = {
     "type": "object",
-    "required": ["name", "security", "enabled"],
+    "required": ["name", "security", "enabled", "ap_group_ids"],
     "properties": {
         "name": {
             "type": "string",
@@ -357,6 +357,27 @@ WLAN_SCHEMA = {
         "iapp_enabled": {
             "type": "boolean",
             "description": "Enable Inter-AP communication protocol",
+        },
+        "ap_group_ids": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "description": (
+                "AP group IDs that this WLAN broadcasts on. Required on create; "
+                "an empty list is rejected by the controller. Use "
+                "`unifi_list_ap_groups` to discover available IDs (the default "
+                'all-APs group has type "All-APs").'
+            ),
+        },
+        "ap_group_mode": {
+            "type": "string",
+            "enum": ["all", "groups"],
+            "description": (
+                "Whether the WLAN broadcasts on all APs (`all`) or only the "
+                "groups listed in `ap_group_ids` (`groups`). Optional — the "
+                "controller infers and may rewrite the value to keep it "
+                "consistent with the supplied IDs. Case-sensitive."
+            ),
         },
     },
     "allOf": [
