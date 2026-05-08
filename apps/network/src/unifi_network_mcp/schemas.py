@@ -417,7 +417,14 @@ NETWORK_SCHEMA = {
         "vlan": {"type": "string", "description": "VLAN ID (if VLAN is enabled)"},
         "ip_subnet": {
             "type": "string",
-            "description": "IP subnet in CIDR notation (e.g., '192.168.1.0/24')",
+            "description": (
+                "IP subnet in host-address-form CIDR (e.g., '192.168.1.1/24'). "
+                "Note: the controller rejects the network-address form "
+                "('192.168.1.0/24') with api.err.IncorrectIPSubnetSpec. Optional "
+                "for vlan-only purpose; recommended for corporate (the network "
+                "won't be functional without it, though the controller doesn't "
+                "force-require it on create)."
+            ),
         },
         "enabled": {
             "type": "boolean",
@@ -566,7 +573,17 @@ NETWORK_SCHEMA = {
         {
             "if": {"properties": {"vlan_enabled": {"enum": [True]}}},
             "then": {"required": ["vlan"]},
-        }
+        },
+        {
+            # Controller defaults `vlan` to 1 when not supplied for corporate/vlan-only
+            # purposes, which collides with the default LAN (api.err.VlanUsed). Force
+            # callers to explicitly choose a non-conflicting VLAN. See issue #209.
+            "if": {"properties": {"purpose": {"enum": ["corporate", "vlan-only"]}}},
+            "then": {
+                "required": ["vlan", "vlan_enabled"],
+                "properties": {"vlan_enabled": {"enum": [True]}},
+            },
+        },
     ],
     "additionalProperties": False,
 }

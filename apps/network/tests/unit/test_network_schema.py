@@ -259,3 +259,76 @@ class TestWlanCreateSchema:
         )
         assert not is_valid
         assert "type" in error_msg.lower() or "string" in error_msg.lower()
+
+
+class TestNetworkCreateSchemaPurposeRequirements:
+    """Tests for NETWORK_SCHEMA conditional vlan requirement on create (#209).
+
+    Live-controller probe (UDM-SE 8.4.17) confirmed:
+    - For purpose in {corporate, vlan-only}, the controller silently defaults
+      vlan=1 when not supplied, which collides with the default LAN
+      (api.err.VlanUsed). Schema now requires explicit vlan + vlan_enabled=True.
+    - ip_subnet is NOT force-required by the controller for corporate purpose
+      (the network is non-functional without it, but create succeeds).
+    """
+
+    def test_corporate_with_explicit_vlan_accepted(self):
+        """Corporate purpose with explicit vlan + vlan_enabled=True validates."""
+        is_valid, error_msg, data = UniFiValidatorRegistry.validate(
+            "network",
+            {"name": "x", "purpose": "corporate", "vlan_enabled": True, "vlan": "100"},
+        )
+        assert is_valid, error_msg
+        assert data["vlan"] == "100"
+        assert data["vlan_enabled"] is True
+
+    def test_vlan_only_with_explicit_vlan_accepted(self):
+        """vlan-only purpose with explicit vlan + vlan_enabled=True validates."""
+        is_valid, error_msg, data = UniFiValidatorRegistry.validate(
+            "network",
+            {"name": "x", "purpose": "vlan-only", "vlan_enabled": True, "vlan": "100"},
+        )
+        assert is_valid, error_msg
+        assert data["vlan"] == "100"
+
+    def test_corporate_missing_vlan_rejected(self):
+        """Corporate purpose without vlan fails with mention of vlan."""
+        is_valid, error_msg, _ = UniFiValidatorRegistry.validate(
+            "network",
+            {"name": "x", "purpose": "corporate"},
+        )
+        assert not is_valid
+        assert "vlan" in error_msg.lower()
+
+    def test_vlan_only_missing_vlan_rejected(self):
+        """vlan-only purpose without vlan fails with mention of vlan."""
+        is_valid, error_msg, _ = UniFiValidatorRegistry.validate(
+            "network",
+            {"name": "x", "purpose": "vlan-only"},
+        )
+        assert not is_valid
+        assert "vlan" in error_msg.lower()
+
+    def test_corporate_with_vlan_enabled_false_rejected(self):
+        """Corporate with vlan_enabled=False fails the conditional rule.
+
+        The conditional `properties: {vlan_enabled: {enum: [True]}}` produces a
+        jsonschema error like "False is not one of [True]" — match on the enum
+        violation rather than the field name.
+        """
+        is_valid, error_msg, _ = UniFiValidatorRegistry.validate(
+            "network",
+            {"name": "x", "purpose": "corporate", "vlan_enabled": False, "vlan": "100"},
+        )
+        assert not is_valid
+        lowered = error_msg.lower()
+        assert "false" in lowered and "true" in lowered
+
+    def test_corporate_without_ip_subnet_accepted(self):
+        """ip_subnet is NOT force-required for corporate (per live probe findings)."""
+        is_valid, error_msg, data = UniFiValidatorRegistry.validate(
+            "network",
+            {"name": "x", "purpose": "corporate", "vlan_enabled": True, "vlan": "100"},
+        )
+        assert is_valid, error_msg
+        assert "ip_subnet" not in data
