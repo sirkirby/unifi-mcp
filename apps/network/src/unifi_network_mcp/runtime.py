@@ -20,13 +20,17 @@ errors from unrecognized decorator kwargs like `permission_category`.
 
 import os
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from unifi_core.auth import UniFiAuth
+from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
 from unifi_network_mcp.bootstrap import load_config, logger
+
+_TOOLS_MANIFEST_PATH = Path(__file__).resolve().parent / "tools_manifest.json"
 from unifi_core.network.managers.acl_manager import AclManager
 from unifi_core.network.managers.client_group_manager import ClientGroupManager
 from unifi_core.network.managers.client_manager import ClientManager
@@ -113,10 +117,11 @@ def get_server() -> FastMCP:
         "Configuring FastMCP with allowed_hosts: %s, dns_rebinding_protection: %s", allowed_hosts, enable_dns_rebinding
     )
 
-    server = FastMCP(
+    server = StrictKwargFastMCP(
         name="unifi-network-mcp",
         debug=True,
         transport_security=transport_security,
+        tools_manifest_path=_TOOLS_MANIFEST_PATH,
     )
 
     # Wrap the tool decorator to handle permission kwargs gracefully.

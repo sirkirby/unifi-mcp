@@ -43,7 +43,7 @@ class TestAllowedHostsParsing:
         with (
             patch.dict(os.environ, test_env),
             patch("dotenv.load_dotenv"),  # Prevent .env from being reloaded during import
-            patch("mcp.server.fastmcp.FastMCP") as mock_fastmcp,
+            patch("unifi_mcp_shared.strict_dispatch.StrictKwargFastMCP") as mock_fastmcp,
         ):
             try:
                 # Import triggers module-level get_server() call
@@ -136,7 +136,7 @@ class TestDnsRebindingProtection:
         with (
             patch.dict(os.environ, test_env),
             patch("dotenv.load_dotenv"),
-            patch("mcp.server.fastmcp.FastMCP") as mock_fastmcp,
+            patch("unifi_mcp_shared.strict_dispatch.StrictKwargFastMCP") as mock_fastmcp,
         ):
             try:
                 from unifi_network_mcp.runtime import get_server  # noqa: F401
