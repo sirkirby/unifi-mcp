@@ -939,6 +939,7 @@ QOS_RULE_SCHEMA = {
         },
     },
     # Note: UniFi might have more complex targeting (e.g., MAC address, user group) not covered here yet.
+    "additionalProperties": False,
 }
 
 # QoS Rule update schema
@@ -997,6 +998,7 @@ QOS_RULE_SIMPLE_SCHEMA = {
             },
         },
     },
+    "additionalProperties": False,
 }
 
 # ACL Rule validation migrated to pydantic model (models/acl.py) — see #139
