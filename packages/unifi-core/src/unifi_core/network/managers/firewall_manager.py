@@ -550,16 +550,17 @@ class FirewallManager:
             )
             response = await self._connection.request(api_request)
 
-            # V1 POST usually returns a list containing the created object within 'data'
-            created_rule = None
-            if (
-                isinstance(response, dict)
-                and "data" in response
-                and isinstance(response["data"], list)
-                and len(response["data"]) > 0
-            ):
-                created_rule = response["data"][0]
-            else:
+            # V1 POST may return either {"data": [{...}]} (older firmware) or a bare
+            # list [{...}] (UDM-SE 8.4.x and similar). Handle both — see #207.
+            data = (
+                response
+                if isinstance(response, list)
+                else response.get("data", [])
+                if isinstance(response, dict)
+                else []
+            )
+            created_rule = data[0] if data else None
+            if not created_rule:
                 logger.error("Unexpected response format creating port forward: %s", response)
                 return None
 
