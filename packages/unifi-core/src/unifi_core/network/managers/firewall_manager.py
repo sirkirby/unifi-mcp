@@ -550,9 +550,12 @@ class FirewallManager:
             )
             response = await self._connection.request(api_request)
 
-            # V1 POST usually returns a list containing the created object within 'data'
+            # V1 POST: UDM-SE 8.4.x returns a bare list; older firmware returns
+            # {"data": [...]}. Handle both formats for forward compatibility.
             created_rule = None
-            if (
+            if isinstance(response, list) and len(response) > 0 and isinstance(response[0], dict):
+                created_rule = response[0]
+            elif (
                 isinstance(response, dict)
                 and "data" in response
                 and isinstance(response["data"], list)
