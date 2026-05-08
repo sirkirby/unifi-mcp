@@ -1048,6 +1048,7 @@ CLIENT_GROUP_UPDATE_SCHEMA = {
             "description": "List of member MAC addresses",
         },
     },
+    "additionalProperties": False,
 }
 
 # Content Filter update schema
