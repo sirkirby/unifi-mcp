@@ -116,7 +116,32 @@ unifi_create_firewall_policy:
     network_ids: [<management network ID>]
 ```
 
-**Note:** If the admin sources are identified by client MAC rather than IP, use `unifi_create_acl_rule` with `source_macs=[...]` instead — V2 firewall policies do not match by client MAC. <!-- TODO #210: confirm whether deployed admin allow lists are MAC- or IP-based; V2 firewall has no client_mac matching. -->
+**MAC-based admin allow list:** If the admin sources are identified by client MAC rather than IP, V2 firewall policies cannot match by client MAC — use `unifi_create_acl_rule` instead. The example below restricts management-VLAN access to a specific set of admin workstations by MAC:
+
+```yaml
+# Security intent: only the listed admin MACs may originate traffic on the management VLAN.
+# ACL rules apply at Layer 2 within a VLAN, so this complements the firewall rules above
+# by handling the case where admin identity is keyed on MAC rather than IP.
+unifi_create_acl_rule:
+  name: "SEG-03 Allow admin MACs on management VLAN"
+  acl_index: 10                              # lower = evaluated first
+  action: "ALLOW"
+  network_id: "<management network ID>"      # from unifi_list_networks
+  source_macs: ["<admin-mac-1>", "<admin-mac-2>", ...]
+  destination_macs: []                       # empty = any destination
+  enabled: true
+
+unifi_create_acl_rule:
+  name: "SEG-03 Block all other MACs on management VLAN"
+  acl_index: 20                              # higher index = evaluated after the allow
+  action: "BLOCK"
+  network_id: "<management network ID>"
+  source_macs: []                            # empty = any source
+  destination_macs: []
+  enabled: true
+```
+
+Choose the firewall path or the ACL path based on how admin identity is actually tracked in the deployment — both implement the SEG-03 intent, the difference is whether the allow-list keys on IP/CIDR or on MAC.
 
 
 ---
@@ -203,11 +228,13 @@ unifi_create_firewall_policy:
 
 **Severity:** warning
 
-**How to fix:** The V2 zone-based firewall policy schema does not expose per-policy port matching, so DNS-port-53 filtering is best handled with a traffic rule or DNS-redirect / port-forward configuration. As a coarse fallback, block direct egress from the client zone to the External zone except to the approved resolver IPs:
+**How to fix:** This benchmark cannot be fully enforced through the firewall surface alone. V2 zone-based firewall policies do not match on port, so a literal "block UDP/TCP 53 except to approved resolvers" rule isn't expressible at this layer. The benchmark therefore splits into a **partial firewall fix** (what MCP can do today) and a **manual UniFi UI step** (the rest):
+
+**Part 1 — partial firewall fix (programmatic):** Allow client traffic to reach approved resolver IPs externally. This handles the legitimate-DNS path but does not block port-53 traffic to other destinations.
 
 ```yaml
-# Security intent: clients may only reach the approved DNS resolver IPs externally.
-# Rule 1 — allow approved resolvers:
+# Security intent: clients may reach the approved DNS resolver IPs externally.
+# This is the firewall-layer half of the benchmark.
 unifi_create_firewall_policy:
   name: "EGR-02 Allow approved DNS resolvers"
   action: ALLOW
@@ -220,12 +247,16 @@ unifi_create_firewall_policy:
     matching_target: IP
     matching_target_type: SPECIFIC
     ips: [<approved resolver IP>, ...]
-
-# Rule 2 — pair with a tighter DNS-specific traffic rule or DNS-redirect to fully enforce
-# the "no external DNS bypass" intent (V2 firewall has no port-level matching).
 ```
 
-<!-- TODO #210: V2 firewall has no per-policy port matching. Confirm whether DNS-port-53 enforcement should be expressed via traffic rules or DNS-redirect tooling instead. -->
+**Part 2 — full enforcement (operator action in the UniFi UI):** To block direct egress on port 53 to non-approved resolvers and prevent client-side DNS bypass, configure either:
+
+- A **traffic rule** (UniFi UI: Settings → Security → Traffic Rules) that drops outbound TCP/UDP port 53 from client networks, OR
+- A **DNS-redirect** policy (UniFi UI: Settings → Security → DNS Filtering or Network → DNS) that intercepts all client DNS and forwards to the approved resolver.
+
+Neither is currently exposed through MCP tooling. Tracked separately for future MCP coverage.
+
+**Auditing this benchmark:** A programmatic audit can confirm Part 1 (the firewall ALLOW rule exists pointing at approved resolver IPs). Part 2 cannot be confirmed via MCP today and must be checked manually in the UniFi UI. Flag the benchmark as `partial-pass` if Part 1 is satisfied but Part 2 cannot be verified programmatically.
 
 
 ---
