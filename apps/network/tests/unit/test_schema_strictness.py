@@ -28,8 +28,6 @@ from unifi_network_mcp import schemas
 # Schemas allowed to remain permissive at sweep-start. Each task in the
 # #205 sweep removes one entry. After merge this set MUST be empty.
 ALLOWED_PERMISSIVE_DURING_SWEEP: set[str] = {
-    "NETWORK_SCHEMA",
-    "NETWORK_UPDATE_SCHEMA",
     "VPN_PROFILE_SCHEMA",
     "FIREWALL_POLICY_SCHEMA",
     "FIREWALL_POLICY_UPDATE_SCHEMA",

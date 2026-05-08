@@ -547,6 +547,7 @@ NETWORK_SCHEMA = {
             "then": {"required": ["vlan"]},
         }
     ],
+    "additionalProperties": False,
 }
 
 # Network update schema
