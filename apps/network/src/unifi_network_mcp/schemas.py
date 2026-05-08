@@ -610,7 +610,12 @@ FIREWALL_POLICY_SCHEMA = {
             "description": "Whether the policy is enabled",
         },
         "description": {"type": "string", "description": "Description of the rule"},
+        "logging": {
+            "type": "boolean",
+            "description": "Enable logging for matched traffic",
+        },
     },
+    "additionalProperties": False,
 }
 
 # Firewall Policy update schema
@@ -891,6 +896,7 @@ FIREWALL_POLICY_CREATE_SCHEMA = {
             "examples": [False],
         },
     },
+    "additionalProperties": False,
 }
 
 # QoS Rule schema
@@ -1206,6 +1212,7 @@ FIREWALL_POLICY_SIMPLE_SCHEMA = {
             "default": "all",
         },
     },
+    "additionalProperties": False,
 }
 
 # Simplified (high-level) Port Forward schema used by the LLM-friendly create tool

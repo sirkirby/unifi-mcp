@@ -29,10 +29,6 @@ from unifi_network_mcp import schemas
 # #205 sweep removes one entry. After merge this set MUST be empty.
 ALLOWED_PERMISSIVE_DURING_SWEEP: set[str] = {
     "VPN_PROFILE_SCHEMA",
-    "FIREWALL_POLICY_SCHEMA",
-    "FIREWALL_POLICY_UPDATE_SCHEMA",
-    "FIREWALL_POLICY_CREATE_SCHEMA",
-    "FIREWALL_POLICY_SIMPLE_SCHEMA",
     "QOS_RULE_SCHEMA",
     "QOS_RULE_UPDATE_SCHEMA",
     "QOS_RULE_SIMPLE_SCHEMA",
