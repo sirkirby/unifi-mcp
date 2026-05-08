@@ -1124,6 +1124,7 @@ AP_GROUP_SCHEMA = {
             "description": "List of WLAN group IDs to assign to this AP group",
         },
     },
+    "additionalProperties": False,
 }
 
 # AP Group update schema
@@ -1142,6 +1143,7 @@ AP_GROUP_UPDATE_SCHEMA = {
             "description": "List of WLAN group IDs to assign to this AP group",
         },
     },
+    "additionalProperties": False,
 }
 
 # Simplified (high-level) Firewall Policy schema used by the LLM-friendly create tool
