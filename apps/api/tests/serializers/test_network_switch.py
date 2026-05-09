@@ -172,9 +172,10 @@ def test_lldp_neighbors_serializer_shape() -> None:
 
 
 def test_rogue_ap_serializer_shape() -> None:
-    """Phase 6 PR2 Task 20 — projection moved to a Strawberry type. ``is_known``
-    is hardcoded by the type variant — RogueAp=False, KnownRogueAp=True."""
-    from unifi_api.graphql.types.network.device import KnownRogueAp, RogueAp
+    """Projection moved to a Strawberry type. ``is_known`` is hardcoded
+    to False — the controller no longer surfaces a separate
+    known/acknowledged rogue classification."""
+    from unifi_api.graphql.types.network.device import RogueAp
 
     sample = {
         "bssid": "aa:bb:cc:11:22:33",
@@ -189,9 +190,6 @@ def test_rogue_ap_serializer_shape() -> None:
     assert out_unknown["ssid"] == "EvilTwin"
     assert out_unknown["is_known"] is False
     assert RogueAp.render_hint("list")["kind"] == "list"
-
-    out_known = KnownRogueAp.from_manager_output(sample).to_dict()
-    assert out_known["is_known"] is True
 
 
 def test_rf_scan_result_serializer_shape() -> None:

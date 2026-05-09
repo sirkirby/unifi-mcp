@@ -550,7 +550,13 @@ async def test_get_site_settings_detail(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     async def fake_get(self):
-        return {"name": "default", "desc": "Default site", "site_id": "default"}
+        return {
+            "raw": [],
+            "sections": {
+                "super_identity": {"name": "default", "_id": "default"},
+                "country": {"code": "840"},
+            },
+        }
 
     from unifi_core.network.managers.system_manager import SystemManager
     monkeypatch.setattr(SystemManager, "get_site_settings", fake_get)

@@ -1,8 +1,9 @@
-"""GET /v1/sites/{site_id}/{rogue-aps,known-rogue-aps,rf-scan-results}.
+"""GET /v1/sites/{site_id}/{rogue-aps,rf-scan-results}.
 
-RF environment LIST endpoints. ``rogue-aps`` and ``known-rogue-aps`` share the
-RogueApSerializer (Phase 4A) — the route passes ``tool_name`` so the serializer
-can stamp ``is_known`` correctly.
+RF environment LIST endpoints. ``rogue-aps`` enumerates every detected
+neighbouring AP; the project does not maintain a separate "known/
+acknowledged" classification because the controller does not expose a
+backing API for one.
 """
 
 from __future__ import annotations
@@ -92,51 +93,6 @@ async def list_rogue_aps(
     else:
         registry = request.app.state.serializer_registry
         hint = registry.render_hint_for_tool("unifi_list_rogue_aps")
-    return {
-        "items": items,
-        "next_cursor": next_cursor.encode() if next_cursor else None,
-        "render_hint": hint,
-    }
-
-
-@router.get(
-    "/sites/{site_id}/known-rogue-aps",
-    dependencies=[Depends(require_scope(Scope.READ))],
-    tags=["network/wireless"],
-)
-async def list_known_rogue_aps(
-    request: Request,
-    site_id: str,
-    controller=Depends(resolve_controller),
-    limit: int = Query(50, ge=1, le=200),
-    cursor: str | None = Query(None),
-) -> dict:
-    require_capability(controller, "network")
-    factory = request.app.state.manager_factory
-    sm = request.app.state.sessionmaker
-    async with sm() as session:
-        mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "device_manager",
-        )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
-        rows = await mgr.list_known_rogue_aps()
-
-    cursor_obj = _decode_cursor(cursor)
-    page, next_cursor = paginate(
-        list(rows), limit=limit, cursor=cursor_obj, key_fn=_bssid_key,
-    )
-
-    items = [_serialize_rogue(r, is_known=True) for r in page]
-    type_registry = request.app.state.type_registry
-    tool_type = type_registry.lookup_tool("unifi_list_known_rogue_aps")
-    if tool_type is not None:
-        type_class, kind = tool_type
-        hint = type_class.render_hint(kind)
-    else:
-        registry = request.app.state.serializer_registry
-        hint = registry.render_hint_for_tool("unifi_list_known_rogue_aps")
     return {
         "items": items,
         "next_cursor": next_cursor.encode() if next_cursor else None,

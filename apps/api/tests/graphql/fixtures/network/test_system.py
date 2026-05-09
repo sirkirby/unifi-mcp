@@ -50,9 +50,11 @@ async def test_site_settings(tmp_path, monkeypatch):
     app, key, cid = await bootstrap(tmp_path, product="network")
     stub_managers(monkeypatch, {
         ("network", "system_manager", "get_site_settings"): {
-            "site_id": "default",
-            "name": "Home",
-            "country": 840,
+            "raw": [],
+            "sections": {
+                "super_identity": {"_id": "default", "name": "Home"},
+                "country": {"code": "840"},
+            },
         },
     })
     body = await graphql_query(app, key, f'''{{
@@ -64,6 +66,7 @@ async def test_site_settings(tmp_path, monkeypatch):
     settings = body["data"]["network"]["siteSettings"]
     assert settings["siteId"] == "default"
     assert settings["name"] == "Home"
+    assert settings["country"] == 840
 
 
 @pytest.mark.asyncio

@@ -75,34 +75,6 @@ class TestDeviceManagerWifi:
         with pytest.raises(Exception):
             await device_manager.list_rogue_aps()
 
-    # ---- Known Rogue APs ----
-
-    @pytest.mark.asyncio
-    async def test_list_known_rogue_aps(self, device_manager, mock_connection):
-        """Test list_known_rogue_aps calls GET /rest/rogueknown and returns list."""
-        known_rogues = [
-            {"_id": "abc123", "bssid": "aa:bb:cc:dd:ee:01", "name": "Neighbor WiFi"},
-            {"_id": "def456", "bssid": "aa:bb:cc:dd:ee:02", "name": "Guest Net"},
-        ]
-        mock_connection.request.return_value = known_rogues
-
-        result = await device_manager.list_known_rogue_aps()
-
-        assert len(result) == 2
-        assert result[0]["name"] == "Neighbor WiFi"
-        call_args = mock_connection.request.call_args
-        api_req = call_args[0][0]
-        assert api_req.method == "get"
-        assert api_req.path == "/rest/rogueknown"
-
-    @pytest.mark.asyncio
-    async def test_list_known_rogue_aps_handles_error(self, device_manager, mock_connection):
-        """Test list_known_rogue_aps returns empty list on exception."""
-        mock_connection.request.side_effect = Exception("Connection failed")
-
-        with pytest.raises(Exception):
-            await device_manager.list_known_rogue_aps()
-
     # ---- RF Scan ----
 
     @pytest.mark.asyncio

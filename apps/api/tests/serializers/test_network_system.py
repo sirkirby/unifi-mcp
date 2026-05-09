@@ -101,12 +101,34 @@ def test_network_health_list_serializer_shape() -> None:
 
 
 def test_site_settings_detail_serializer_shape() -> None:
-    sample = {"_id": "site_id_1", "name": "default", "role": "admin", "country": 840}
+    """SiteSettings projects display fields from the manager's
+    ``{raw, sections}`` shape — name from super_identity, country from
+    the country section."""
+    sample = {
+        "raw": [],
+        "sections": {
+            "super_identity": {
+                "_id": "site_id_1",
+                "name": "default",
+                "role": "admin",
+                "key": "super_identity",
+            },
+            "country": {"code": "840", "key": "country"},
+        },
+    }
     out = SiteSettings.from_manager_output(sample).to_dict()
     assert SiteSettings.render_hint("detail")["kind"] == "detail"
     assert out["site_id"] == "site_id_1"
     assert out["name"] == "default"
+    assert out["role"] == "admin"
     assert out["country"] == 840
+
+
+def test_site_settings_serializer_handles_missing_sections() -> None:
+    """Sections absent from the firmware leave the corresponding fields None."""
+    out = SiteSettings.from_manager_output({"raw": [], "sections": {}}).to_dict()
+    assert out["name"] is None
+    assert out["country"] is None
 
 
 # ---- SNMP settings (manager returns list[dict]) ----

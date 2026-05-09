@@ -370,21 +370,30 @@ class SystemManager:
             raise
 
     async def get_site_settings(self) -> Dict[str, Any]:
-        """Retrieve general settings for the current site.
+        """Retrieve all site-level configuration sections in a single response.
 
-        This convenience wrapper consults the generic `get_settings` helper with the special
-        section key "site" which – according to the Network Application API – returns the site‑
-        level settings object.
+        UniFi exposes site-level settings as a flat collection of section
+        objects (one per subsystem: ``super_identity``, ``country``, ``mgmt``,
+        ``locale``, ``ntp``, ``connectivity``, ``guest_access``, ``snmp``,
+        and ~35 others). The controller does **not** expose a single
+        aggregated "site" section — fetching ``/get/setting/site`` returns
+        ``api.err.Invalid``.
+
+        This method fetches the unfiltered ``/get/setting`` endpoint and
+        returns a dict keyed by each section's ``key`` discriminator so
+        callers can index directly (e.g. ``result["super_identity"]["name"]``).
+        ``raw`` retains the original list for callers that need ordering or
+        sections without a ``key`` field.
         """
-
         try:
-            settings_list = await self.get_settings("site")
-            if settings_list and isinstance(settings_list[0], dict):
-                return {
-                    "raw": settings_list,
-                    **settings_list[0],
-                }
-            return {"raw": settings_list}
+            settings_list = await self.get_settings("")
+            keyed: Dict[str, Any] = {}
+            for entry in settings_list:
+                if isinstance(entry, dict):
+                    section_key = entry.get("key")
+                    if section_key:
+                        keyed[section_key] = entry
+            return {"raw": settings_list, "sections": keyed}
         except Exception as e:
             logger.error("Error getting site settings: %s", e)
             raise

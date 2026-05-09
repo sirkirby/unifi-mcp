@@ -5,7 +5,6 @@
 # tool: unifi_get_device_radio
 # tool: unifi_get_device_stats
 # tool: unifi_list_rogue_aps
-# tool: unifi_list_known_rogue_aps
 # tool: unifi_get_rf_scan_results
 # tool: unifi_list_available_channels
 # tool: unifi_get_speedtest_status
@@ -118,26 +117,6 @@ async def test_rogue_aps_list(tmp_path, monkeypatch):
     items = body["data"]["network"]["rogueAps"]["items"]
     assert len(items) == 1
     assert items[0]["bssid"] == "de:ad:be:ef:01:01"
-
-
-@pytest.mark.asyncio
-async def test_known_rogue_aps_list(tmp_path, monkeypatch):
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(monkeypatch, {
-        ("network", "device_manager", "list_known_rogue_aps"): [
-            {"bssid": "de:ad:be:ef:02:02", "ssid": "Neighbor"},
-        ],
-    })
-    body = await graphql_query(app, key, f'''{{
-        network {{ knownRogueAps(controller: "{cid}", limit: 10) {{
-            items {{ bssid ssid }}
-        }} }}
-    }}''')
-    assert body.get("errors") is None, body
-    items = body["data"]["network"]["knownRogueAps"]["items"]
-    assert len(items) == 1
-    assert items[0]["bssid"] == "de:ad:be:ef:02:02"
 
 
 @pytest.mark.asyncio

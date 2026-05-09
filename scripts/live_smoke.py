@@ -627,7 +627,13 @@ class LiveSmokeRunner:
                 return self.cache.device_mac("ap")
             return self.cache.client_mac() if "client" in name else self.cache.device_mac()
         if param in {"device_mac", "gateway_mac"}:
-            return self.cache.device_mac("gateway") if param == "gateway_mac" else self.cache.device_mac()
+            if param == "gateway_mac":
+                return self.cache.device_mac("gateway")
+            # PDU-specific tools must target a PDU; the controller rejects other
+            # device categories with a clear "not a Smart Power PDU" error.
+            if "pdu" in name or "outlet" in name:
+                return self.cache.device_mac("pdu")
+            return self.cache.device_mac()
         if param == "ap_mac":
             return self.cache.device_mac("ap") or self.cache.device_mac("uap")
         if param == "ip_address":

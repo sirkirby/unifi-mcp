@@ -999,33 +999,6 @@ async def list_available_channels() -> Dict[str, Any]:
         return {"success": False, "error": f"Failed to list available channels: {e}"}
 
 
-# ---- Known Rogue APs ----
-
-
-@server.tool(
-    name="unifi_list_known_rogue_aps",
-    description=(
-        "List APs you have previously classified as known/acknowledged. "
-        "These are neighboring APs that have been reviewed and marked as not a threat. "
-        "Returns the full list of known rogue AP entries."
-    ),
-    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
-)
-async def list_known_rogue_aps() -> Dict[str, Any]:
-    """List APs previously classified as known/acknowledged."""
-    try:
-        known_rogues = await device_manager.list_known_rogue_aps()
-        return {
-            "success": True,
-            "site": device_manager._connection.site,
-            "count": len(known_rogues),
-            "known_rogue_aps": known_rogues,
-        }
-    except Exception as e:
-        logger.error("Error listing known rogue APs: %s", e, exc_info=True)
-        return {"success": False, "error": f"Failed to list known rogue APs: {e}"}
-
-
 # ---- Device LED & State Controls ----
 
 

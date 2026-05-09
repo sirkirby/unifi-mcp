@@ -664,22 +664,6 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](https:/
 """
 scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
 
-"""A known rogue AP (allowlisted by the operator)."""
-type KnownRogueAp {
-  bssid: ID
-  ssid: String
-  channel: Int
-  signalDbm: Int
-  lastSeen: Int
-  isKnown: Boolean!
-}
-
-"""Paginated page of known (allowlisted) rogue APs."""
-type KnownRogueApPage {
-  items: [KnownRogueAp!]!
-  nextCursor: String
-}
-
 """A UniFi Protect light (PIR-triggered floodlight)."""
 type Light {
   id: ID
@@ -797,9 +781,6 @@ type NetworkQuery {
 
   """List rogue (unknown) APs detected within a window (paginated)."""
   rogueAps(controller: ID!, site: String! = "default", withinHours: Int! = 24, limit: Int! = 50, cursor: String = null): RogueApPage!
-
-  """List known (allowlisted) rogue APs (paginated)."""
-  knownRogueAps(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): KnownRogueApPage!
 
   """List RF-scan results for a specific access point."""
   rfScanResults(controller: ID!, apMac: ID!, site: String! = "default"): [RfScanResult!]!
@@ -1732,7 +1713,6 @@ Read-only access to UniFi Network resources.
 - `firewallZones: [FirewallZone!]!`  — List firewall zones (typically a small flat list — no pagination).
 - `gatewayStats: [StatPoint!]!`  — Gateway stats timeseries.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).
-- `knownRogueAps: KnownRogueApPage!`  — List known (allowlisted) rogue APs (paginated).
 - `lldpNeighbors: LldpNeighbors`  — Get LLDP neighbors reported by a switch.
 - `networkDetail: Network`  — Look up a single LAN/VLAN network by id. (Named ``networkDetail`` because ``network`` is reserved for the namespace.)
 - `networkHealth: [NetworkHealth!]!`  — Get the controller's network-health subsystems list.

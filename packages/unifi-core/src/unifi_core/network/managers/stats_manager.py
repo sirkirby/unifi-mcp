@@ -590,16 +590,31 @@ class StatsManager:
             logger.error("Error getting client sessions: %s", e)
             raise
 
-    async def get_dashboard(self) -> List[Dict[str, Any]]:
-        """Get the site dashboard summary."""
-        cache_key = f"{CACHE_PREFIX_STATS_DASHBOARD}_{self._connection.site}"
+    async def get_dashboard(self, history_seconds: int = 86400) -> List[Dict[str, Any]]:
+        """Get the site dashboard aggregate (health, WiFi standards, ISP metrics).
+
+        Hits the V2 ``/aggregated-dashboard`` endpoint that the UniFi UI uses
+        to render its dashboard view. The response is a list of one or more
+        dashboard payloads (typically one per controller-managed site rollup).
+        Each payload contains nested blocks like ``wifi`` (per-standard
+        connection counts and traffic), ``isp_metrics`` (per-WAN history),
+        and other UI-visible aggregates.
+
+        Args:
+            history_seconds: How far back to roll up history. Defaults to
+                86400 (24h), matching the UI default. The endpoint requires
+                this query parameter.
+        """
+        cache_key = f"{CACHE_PREFIX_STATS_DASHBOARD}_{history_seconds}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key, timeout=300)  # 5 minute cache
         if cached_data is not None:
             return cached_data
 
         try:
-            endpoint = "/stat/dashboard"
-            api_request = ApiRequest(method="get", path=endpoint)
+            api_request = ApiRequestV2(
+                method="get",
+                path=f"/aggregated-dashboard?historySeconds={int(history_seconds)}",
+            )
             response = await self._connection.request(api_request)
             result = response if isinstance(response, list) else []
             self._connection._update_cache(cache_key, result, timeout=300)

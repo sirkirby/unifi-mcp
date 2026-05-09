@@ -272,36 +272,6 @@ async def test_list_rogue_aps_happy_path(tmp_path, monkeypatch) -> None:
     assert body["items"][0]["bssid"].startswith("de:ad:be:ef:")
 
 
-@pytest.mark.asyncio
-async def test_list_known_rogue_aps_happy_path(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await _bootstrap(tmp_path)
-    _stub_connection(app, cid)
-
-    fake_known = [
-        {"bssid": f"11:22:33:44:55:0{i}", "essid": f"Known-{i}",
-         "channel": 36, "rssi": -55, "last_seen": 1700000000}
-        for i in range(2)
-    ]
-
-    async def fake_known_list(self, *a, **kw):
-        return fake_known
-
-    from unifi_core.network.managers.device_manager import DeviceManager
-    monkeypatch.setattr(DeviceManager, "list_known_rogue_aps", fake_known_list)
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.get(
-            f"/v1/sites/default/known-rogue-aps?controller={cid}",
-            headers={"Authorization": f"Bearer {key}"},
-        )
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["render_hint"]["kind"] == "list"
-    assert len(body["items"]) == 2
-    assert all(item["is_known"] for item in body["items"])
-
-
 # ---------- speedtest status ----------
 
 

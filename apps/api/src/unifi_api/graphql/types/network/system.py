@@ -225,11 +225,30 @@ class SiteSettings:
                 site_id=None, name=None, role=None, country=None,
                 _was_dict=False,
             )
+
+        # The system manager returns ``{"raw": [...], "sections": {key: dict}}``.
+        # Pull display fields from the sections that own them: super_identity
+        # owns the site display name and the controller's persisted ``_id``;
+        # country owns the regulatory code. Sections that don't exist on this
+        # firmware simply leave the field None.
+        sections = obj.get("sections") if isinstance(obj.get("sections"), dict) else {}
+        identity = sections.get("super_identity", {}) if isinstance(sections.get("super_identity"), dict) else {}
+        country_section = sections.get("country", {}) if isinstance(sections.get("country"), dict) else {}
+
+        site_id = _get(identity, "_id", "site_id") or _get(obj, "_id", "site_id")
+        name = _get(identity, "name") or _get(obj, "name")
+        role = _get(identity, "role") or _get(obj, "role")
+        country_raw = _get(country_section, "code") or _get(obj, "country")
+        try:
+            country = int(country_raw) if country_raw is not None else None
+        except (TypeError, ValueError):
+            country = None
+
         return cls(
-            site_id=_get(obj, "_id", "site_id"),
-            name=_get(obj, "name"),
-            role=_get(obj, "role"),
-            country=_get(obj, "country"),
+            site_id=site_id,
+            name=name,
+            role=role,
+            country=country,
             _was_dict=True,
         )
 

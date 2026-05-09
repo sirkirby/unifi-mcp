@@ -12,7 +12,6 @@ logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_DEVICES = "devices"
 CACHE_PREFIX_ROGUE_APS = "rogue_aps"
-CACHE_PREFIX_KNOWN_ROGUE_APS = "known_rogue_aps"
 CACHE_PREFIX_RF_SCAN = "rf_scan"
 CACHE_PREFIX_CHANNELS = "available_channels"
 
@@ -426,30 +425,6 @@ class DeviceManager:
             return result
         except Exception as e:
             logger.error("Error listing available channels: %s", e)
-            raise
-
-    async def list_known_rogue_aps(self) -> List[Dict[str, Any]]:
-        """List APs previously classified as known/acknowledged.
-
-        Returns:
-            List of known rogue AP dicts, or empty list on failure.
-        """
-        cache_key = f"{CACHE_PREFIX_KNOWN_ROGUE_APS}_{self._connection.site}"
-        cached_data: Optional[List[Dict[str, Any]]] = self._connection.get_cached(cache_key)
-        if cached_data is not None:
-            return cached_data
-
-        try:
-            api_request = ApiRequest(
-                method="get",
-                path="/rest/rogueknown",
-            )
-            response = await self._connection.request(api_request)
-            result = response if isinstance(response, list) else []
-            self._connection._update_cache(cache_key, result, timeout=300)
-            return result
-        except Exception as e:
-            logger.error("Error listing known rogue APs: %s", e)
             raise
 
     async def set_device_led_override(self, device_mac: str, led_override: str) -> bool:

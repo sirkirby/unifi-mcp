@@ -6,7 +6,7 @@ in ``unifi_api.graphql.types.network.device``:
 - ``DeviceSerializer``           → ``Device``
 - ``DeviceRadioSerializer``      → ``DeviceRadio``
 - ``LldpNeighborSerializer``     → ``LldpNeighbors``
-- ``RogueApSerializer``          → ``RogueAp`` / ``KnownRogueAp``
+- ``RogueApSerializer``          → ``RogueAp``
 - ``RfScanResultSerializer``     → ``RfScanResult``
 - ``AvailableChannelSerializer`` → ``AvailableChannel``
 - ``SpeedtestStatusSerializer``  → ``SpeedtestStatus``

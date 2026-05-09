@@ -62,7 +62,6 @@ from unifi_api.graphql.types.network.device import (
     AvailableChannel as NetworkAvailableChannelType,
     Device as NetworkDeviceType,
     DeviceRadio as NetworkDeviceRadioType,
-    KnownRogueAp as NetworkKnownRogueApType,
     LldpNeighbors as NetworkLldpNeighborsType,
     PduOutlets as NetworkPduOutletsType,
     RfScanResult as NetworkRfScanResultType,
@@ -205,9 +204,6 @@ def build_type_registry() -> TypeRegistry:
         "unifi_get_lldp_neighbors", NetworkLldpNeighborsType, "detail",
     )
     reg.register_tool_type("unifi_list_rogue_aps", NetworkRogueApType, "list")
-    reg.register_tool_type(
-        "unifi_list_known_rogue_aps", NetworkKnownRogueApType, "list",
-    )
     reg.register_tool_type("unifi_get_rf_scan_results", NetworkRfScanResultType, "list")
     reg.register_tool_type(
         "unifi_list_available_channels", NetworkAvailableChannelType, "list",

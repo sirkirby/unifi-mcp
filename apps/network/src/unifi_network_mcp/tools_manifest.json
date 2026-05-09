@@ -1,5 +1,5 @@
 {
-  "count": 170,
+  "count": 169,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -109,7 +109,6 @@
     "unifi_list_firewall_groups": "unifi_network_mcp.tools.firewall",
     "unifi_list_firewall_policies": "unifi_network_mcp.tools.firewall",
     "unifi_list_firewall_zones": "unifi_network_mcp.tools.firewall",
-    "unifi_list_known_rogue_aps": "unifi_network_mcp.tools.devices",
     "unifi_list_networks": "unifi_network_mcp.tools.network",
     "unifi_list_oon_policies": "unifi_network_mcp.tools.oon",
     "unifi_list_port_forwards": "unifi_network_mcp.tools.port_forwards",
@@ -2883,20 +2882,6 @@
       },
       "description": "List controller firewall zones (V2 API).",
       "name": "unifi_list_firewall_zones",
-      "schema": {
-        "input": {
-          "properties": {},
-          "type": "object"
-        }
-      }
-    },
-    {
-      "annotations": {
-        "openWorldHint": false,
-        "readOnlyHint": true
-      },
-      "description": "List APs you have previously classified as known/acknowledged. These are neighboring APs that have been reviewed and marked as not a threat. Returns the full list of known rogue AP entries.",
-      "name": "unifi_list_known_rogue_aps",
       "schema": {
         "input": {
           "properties": {},

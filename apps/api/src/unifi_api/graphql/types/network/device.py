@@ -6,8 +6,7 @@ live in ``unifi_api.serializers.network.devices``:
 - ``Device``               — list_devices + get_device_details
 - ``DeviceRadio``          — get_device_radio (wrapper-dict: name/model + radios[])
 - ``LldpNeighbors``        — get_lldp_neighbors (wrapper-dict: name/model + lldp_table[])
-- ``RogueAp``              — list_rogue_aps (is_known=False)
-- ``KnownRogueAp``         — list_known_rogue_aps (is_known=True)
+- ``RogueAp``              — list_rogue_aps
 - ``RfScanResult``         — get_rf_scan_results
 - ``AvailableChannel``     — list_available_channels
 - ``SpeedtestStatus``      — get_speedtest_status
@@ -240,10 +239,9 @@ class LldpNeighbors:
 
 
 def _rogue_row(obj: Any, *, is_known: bool) -> dict:
-    """Shared helper — both RogueAp and KnownRogueAp produce the same dict
-    shape; only the ``is_known`` flag differs and is supplied by the type's
-    ``from_manager_output`` (which hardcodes the flag based on the registered
-    tool name)."""
+    """Project a manager rogue-AP row into the ``RogueAp`` shape. The
+    ``is_known`` flag is supplied by the caller; ``RogueAp.from_manager_output``
+    sets it to False since the project does not classify rogues."""
 
     return {
         "bssid": _get(obj, "bssid"),
@@ -257,9 +255,9 @@ def _rogue_row(obj: Any, *, is_known: bool) -> dict:
 
 @strawberry.type(description="A rogue (unknown) AP detected by the controller.")
 class RogueAp:
-    """Detected rogue AP. ``is_known`` is hardcoded to False here; the
-    ``unifi_list_known_rogue_aps`` tool registers ``KnownRogueAp`` which sets
-    the flag to True. Both types share an identical field shape."""
+    """Detected rogue AP. ``is_known`` is hardcoded to False because the
+    project does not classify rogues — the controller's API surface
+    exposes only the raw scan list, with no allowlist primitive."""
 
     bssid: strawberry.ID | None
     ssid: str | None
@@ -279,36 +277,6 @@ class RogueAp:
     @classmethod
     def from_manager_output(cls, obj: Any) -> "RogueAp":
         row = _rogue_row(obj, is_known=False)
-        return cls(**row)
-
-    def to_dict(self) -> dict:
-        return asdict(self)
-
-
-@strawberry.type(description="A known rogue AP (allowlisted by the operator).")
-class KnownRogueAp:
-    """Same row shape as ``RogueAp`` but ``is_known`` is hardcoded to True.
-    Tools ``unifi_list_known_rogue_aps`` resolve to this class via
-    ``register_tool_type``."""
-
-    bssid: strawberry.ID | None
-    ssid: str | None
-    channel: int | None
-    signal_dbm: int | None
-    last_seen: int | None
-    is_known: bool
-
-    @classmethod
-    def render_hint(cls, kind: str) -> dict:
-        return {
-            "kind": kind,
-            "primary_key": "bssid",
-            "display_columns": ["bssid", "ssid", "channel", "signal_dbm", "last_seen"],
-        }
-
-    @classmethod
-    def from_manager_output(cls, obj: Any) -> "KnownRogueAp":
-        row = _rogue_row(obj, is_known=True)
         return cls(**row)
 
     def to_dict(self) -> dict:

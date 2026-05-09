@@ -305,16 +305,26 @@ class TestStatsManagerEnhanced:
 
     @pytest.mark.asyncio
     async def test_get_dashboard(self, stats_manager, mock_connection):
-        """Test get_dashboard uses GET /stat/dashboard."""
-        mock_connection.request.return_value = [{"time": 123, "tx_bytes-r": 100}]
+        """Dashboard hits the V2 aggregated endpoint with the historySeconds knob."""
+        sample = [{"gateway": {}, "wifi_activity": {}, "isp_metrics": {}}]
+        mock_connection.request.return_value = sample
 
         result = await stats_manager.get_dashboard()
 
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
-        assert api_request.path == "/stat/dashboard"
+        api_request = mock_connection.request.call_args[0][0]
+        assert api_request.path == "/aggregated-dashboard?historySeconds=86400"
         assert api_request.method == "get"
-        assert result == [{"time": 123, "tx_bytes-r": 100}]
+        assert result == sample
+
+    @pytest.mark.asyncio
+    async def test_get_dashboard_custom_history_window(self, stats_manager, mock_connection):
+        """historySeconds query param reflects the caller's window."""
+        mock_connection.request.return_value = []
+
+        await stats_manager.get_dashboard(history_seconds=3600)
+
+        api_request = mock_connection.request.call_args[0][0]
+        assert api_request.path == "/aggregated-dashboard?historySeconds=3600"
 
     @pytest.mark.asyncio
     async def test_get_anomalies(self, stats_manager, mock_connection):

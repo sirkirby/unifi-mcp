@@ -1347,19 +1347,6 @@ LIST kind per Phase 4A — manager returns multi-element list of subsystems.
 
 **Returns:** `Page_AvailableChannelModel_`
 
-### `GET /v1/sites/{site_id}/known-rogue-aps` — List Known Rogue Aps
-
-
-**Parameters:**
-
-- `site_id` (path) (required)
-- `limit` (query)
-- `cursor` (query)
-- `controller` (query)
-
-
-**Returns:** `object`
-
 ### `GET /v1/sites/{site_id}/rf-scan-results` — List Rf Scan Results
 
 

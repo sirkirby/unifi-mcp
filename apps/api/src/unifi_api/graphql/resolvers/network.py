@@ -34,7 +34,6 @@ from unifi_api.graphql.types.network.device import (
     AvailableChannel,
     Device,
     DeviceRadio,
-    KnownRogueAp,
     LldpNeighbors,
     PduOutlets,
     RfScanResult,
@@ -266,26 +265,6 @@ async def _fetch_rogue_aps(
             if cm.site != site:
                 await cm.set_site(site)
             return list(await mgr.list_rogue_aps(within_hours))
-
-    return await ctx.cache.get_or_fetch(key, _do)
-
-
-async def _fetch_known_rogue_aps(
-    ctx: GraphQLContext, controller: str, site: str,
-) -> list:
-    key = f"network/known-rogue-aps/{controller}/{site}"
-
-    async def _do() -> list:
-        async with ctx.sessionmaker() as session:
-            mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "device_manager",
-            )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
-            return list(await mgr.list_known_rogue_aps())
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -1247,12 +1226,6 @@ class RogueApPage:
     next_cursor: str | None
 
 
-@strawberry.type(description="Paginated page of known (allowlisted) rogue APs.")
-class KnownRogueApPage:
-    items: list[KnownRogueAp]
-    next_cursor: str | None
-
-
 @strawberry.type(description="Paginated page of WLAN/SSID configurations.")
 class WlanPage:
     items: list[Wlan]
@@ -1837,32 +1810,6 @@ class NetworkQuery:
         )
         return RogueApPage(
             items=[RogueAp.from_manager_output(r) for r in page],
-            next_cursor=next_cursor.encode() if next_cursor else None,
-        )
-
-    @strawberry.field(
-        permission_classes=[IsRead],
-        description="List known (allowlisted) rogue APs (paginated).",
-    )
-    async def known_rogue_aps(
-        self,
-        info: Info,
-        controller: strawberry.ID,
-        site: str = "default",
-        limit: int = 50,
-        cursor: str | None = None,
-    ) -> KnownRogueApPage:
-        ctx: GraphQLContext = info.context
-        raw = await _fetch_known_rogue_aps(ctx, controller, site)
-
-        from unifi_api.services.pagination import paginate
-
-        cursor_obj = _decode_cursor(cursor)
-        page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_bssid_key,
-        )
-        return KnownRogueApPage(
-            items=[KnownRogueAp.from_manager_output(r) for r in page],
             next_cursor=next_cursor.encode() if next_cursor else None,
         )
 
