@@ -53,33 +53,37 @@ else
   echo "  [OK]   $SETTINGS_FILE does not exist yet (will be created)"
 fi
 
-# 3. macOS-only: uv-managed Python lacks the network entitlement
-# uvx defaults to a uv-managed standalone Python build that on macOS does NOT
-# carry com.apple.security.network.client. The MCP server starts and tools
-# register, but every controller call fails with errno 65 (silent from
-# Claude Code's view). plugin.json now passes `--python-preference system` to
-# uvx, so this only fails when no system Python is installed and uv falls
-# back to its managed build. See issue #219.
+# 3. macOS interpreter selection
+# The MCP server's outbound network capability depends on which Python
+# interpreter uvx selects. macOS only grants network access to interpreters
+# that carry the com.apple.security.network.client entitlement — system and
+# Homebrew Python builds do; uv's managed standalone Python builds do not.
+# An entitlement-less interpreter will start the server cleanly, register
+# tools, and silently fail every outbound call with errno 65.
+#
+# plugin.json passes `--python-preference system` so uvx picks an entitled
+# interpreter when one is present; this check confirms one actually is and
+# warns when uv would fall back to its managed build.
 if [ "$(uname -s)" = "Darwin" ] && command -v uv >/dev/null 2>&1; then
   selected_py=$(uv python find --python-preference system 2>/dev/null || true)
   case "$selected_py" in
     */.local/share/uv/python/*)
       echo "  [WARN] uv would fall back to its managed Python on this Mac:"
       echo "           $selected_py"
-      echo "         macOS blocks outbound network from that binary (missing"
-      echo "         com.apple.security.network.client entitlement). The MCP"
-      echo "         server will appear to start but every tool call returns"
-      echo "         'Not connected to controller'. See issue #219."
+      echo "         macOS will not grant outbound network to that interpreter,"
+      echo "         so every controller call returns 'Not connected to"
+      echo "         controller' even though the server starts cleanly."
       echo ""
-      echo "         Fix: install a system Python so uvx can use it, e.g."
+      echo "         Install a system Python so uvx can use it, e.g."
       echo "           brew install python@3.13"
       echo "         Or pin the interpreter explicitly:"
       echo "           export UV_PYTHON=/opt/homebrew/bin/python3"
       warnings=$((warnings + 1))
       ;;
     "")
-      echo "  [INFO] Could not probe which Python uvx will use (older uv?)."
-      echo "         If tool calls return 'Not connected to controller', see #219."
+      echo "  [INFO] Could not probe uvx's interpreter selection (older uv?)."
+      echo "         If tool calls return 'Not connected to controller',"
+      echo "         confirm uvx is using a system or Homebrew Python."
       ;;
     *)
       echo "  [OK]   uvx will use system Python: $selected_py"

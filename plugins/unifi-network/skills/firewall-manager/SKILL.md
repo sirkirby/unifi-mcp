@@ -99,7 +99,7 @@ For app-aware rules (TikTok, YouTube, Steam, BitTorrent, etc.), consult `referen
 
 - `unifi_create_firewall_policy` — V2 zone-based create. Wraps the payload in `policy_data`. Pre-resolve zone IDs (`unifi_list_firewall_zones`) and network IDs (`unifi_list_networks`) before constructing it.
 - `unifi_update_firewall_policy` — partial update via fetch-merge-put. Pass only the fields you want to change in `update_data` (e.g., `{"enabled": true}`). This is the canonical way to enable/disable a policy because it preserves all other fields.
-- `unifi_toggle_firewall_policy` — convenience wrapper. **Currently broken on the published 0.15.2 server (issue tracked separately)** — the payload omits required fields and the controller returns 400. Use `unifi_update_firewall_policy` with `{"enabled": …}` instead until the toggle bug is fixed.
+- `unifi_toggle_firewall_policy` — convenience wrapper for flipping `enabled`. Prefer `unifi_update_firewall_policy` with `update_data={"enabled": …}` — it's the canonical fetch-merge-put path and produces the same result with no special casing.
 
 ---
 
