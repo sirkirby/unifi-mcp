@@ -77,6 +77,12 @@ class FirewallManager:
     async def toggle_firewall_policy(self, policy_id: str) -> bool:
         """Toggle a firewall policy on/off.
 
+        Delegates to ``update_firewall_policy`` so the controller PUT is a
+        deep-merge of the new ``enabled`` flag into the full policy object.
+        The controller rejects PUTs that omit any required field
+        (action, ipVersion, name, source, destination, schedule), so a
+        partial payload of ``{"enabled": ...}`` cannot be sent on its own.
+
         Returns:
             bool: True if successful.
 
@@ -96,19 +102,7 @@ class FirewallManager:
             new_state = not policy.enabled
             logger.info("Toggling firewall policy %s to %s", policy_id, "enabled" if new_state else "disabled")
 
-            update_payload = {"enabled": new_state}
-
-            api_request = ApiRequestV2(
-                method="put",
-                path=f"/firewall-policies/{policy_id}",
-                data=update_payload,
-            )
-            await self._connection.request(api_request)
-
-            self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_True_{self._connection.site}")
-            self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_False_{self._connection.site}")
-
-            return True
+            return await self.update_firewall_policy(policy_id, {"enabled": new_state})
         except Exception as e:
             logger.error("Error toggling firewall policy %s: %s", policy_id, e)
             raise

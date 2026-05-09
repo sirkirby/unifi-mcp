@@ -208,6 +208,64 @@ class TestUpdateFirewallPolicyEndpoint:
         assert policy.raw == original_raw
 
 
+class TestToggleFirewallPolicyPayload:
+    """Toggle must PUT a fully-merged object, not a partial {enabled} payload.
+
+    The controller rejects PUTs missing any required field (action,
+    ipVersion, name, source, destination, schedule). This is enforced by
+    delegating toggle through update_firewall_policy.
+    """
+
+    @pytest.mark.asyncio
+    async def test_put_payload_includes_all_required_fields(self, firewall_manager, mock_connection):
+        policy = _make_firewall_policy()  # raw enabled=True
+        policy.enabled = True  # explicit: helper uses MagicMock attrs which are truthy by default
+
+        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[policy]):
+            await firewall_manager.toggle_firewall_policy("pol001")
+
+        api_request = mock_connection.request.call_args[0][0]
+        payload = api_request.data
+        # All controller-required fields present
+        for required in ("action", "ip_version", "name", "source", "destination"):
+            assert required in payload, f"toggle PUT missing required field '{required}'"
+        # The toggled flag is what changed
+        assert payload["enabled"] is False
+        # Sibling fields preserved
+        assert payload["name"] == "Test Policy"
+        assert payload["action"] == "ALLOW"
+        assert payload["source"]["zone_id"] == "zone-internal"
+
+    @pytest.mark.asyncio
+    async def test_uses_single_policy_endpoint(self, firewall_manager, mock_connection):
+        policy = _make_firewall_policy()
+        policy.enabled = True
+        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[policy]):
+            await firewall_manager.toggle_firewall_policy("pol001")
+
+        api_request = mock_connection.request.call_args[0][0]
+        assert api_request.path == "/firewall-policies/pol001"
+        assert api_request.method == "put"
+
+    @pytest.mark.asyncio
+    async def test_flips_enabled_state(self, firewall_manager, mock_connection):
+        disabled = _make_firewall_policy({**SAMPLE_POLICY_RAW, "enabled": False})
+        disabled.enabled = False
+        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[disabled]):
+            await firewall_manager.toggle_firewall_policy("pol001")
+
+        payload = mock_connection.request.call_args[0][0].data
+        assert payload["enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_raises_when_policy_missing(self, firewall_manager):
+        from unifi_core.exceptions import UniFiNotFoundError
+
+        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[]):
+            with pytest.raises(UniFiNotFoundError):
+                await firewall_manager.toggle_firewall_policy("does-not-exist")
+
+
 # ---------------------------------------------------------------------------
 # ID-lookup iteration robustness — issue #151
 #
