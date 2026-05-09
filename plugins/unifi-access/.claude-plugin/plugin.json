@@ -18,6 +18,8 @@
     "unifi-access": {
       "command": "uvx",
       "args": [
+        "--python-preference",
+        "system",
         "unifi-access-mcp==0.2.8"
       ],
       "env": {
@@ -33,10 +35,7 @@
         "UNIFI_ACCESS_PORT": "${UNIFI_ACCESS_PORT:-443}",
         "UNIFI_ACCESS_API_PORT": "${UNIFI_ACCESS_API_PORT:-12445}",
         "UNIFI_ACCESS_VERIFY_SSL": "${UNIFI_ACCESS_VERIFY_SSL:-false}",
-        "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}",
-        "UNIFI_MCP_HTTP_ENABLED": "true",
-        "UNIFI_MCP_HTTP_FORCE": "false",
-        "UNIFI_MCP_PORT": "${UNIFI_ACCESS_MCP_PORT:-3002}"
+        "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}"
       }
     }
   }

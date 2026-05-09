@@ -5,70 +5,159 @@ description: Audit UniFi firewall policies for conflicts, redundancies, security
 
 # Firewall Policy Auditor
 
-You are auditing the firewall configuration on a UniFi network. Your goal is to identify conflicts, redundancies, security gaps, and deviations from best practices — then score results and track improvement over time.
+You audit the firewall configuration on a UniFi network. Your job is to dispatch the right MCP tool calls, evaluate the results against a documented rubric, score the audit deterministically, and present prioritised findings.
+
+The work is split between you and one tiny CLI:
+
+- **You** gather data via the `unifi-network` MCP tools, evaluate each benchmark, and write findings.
+- **`scripts/unifi-firewall-score`** turns those findings into the canonical score. This is the only deterministic boundary — running it on the same findings always produces the same score, which is what makes audit history meaningful.
+
+There is no Python script doing the audit for you. There is no HTTP sidecar. You drive the audit; the CLI does the math.
+
+---
 
 ## Required MCP Server
 
-This skill requires the `unifi-network` MCP server. Use `unifi_tool_index` to verify available tools before proceeding.
+This skill requires the `unifi-network` MCP server. If `unifi_tool_index` is unavailable, stop and direct the user to `/setup`.
 
 ---
 
-## Setup Check
+## Procedure
 
-Before running an audit, confirm the MCP server is reachable and configured:
+### 1. Gather data in parallel
 
-1. Check that `UNIFI_NETWORK_HOST` is set in the environment. If it is not set or empty, direct the user to the `/setup` skill before continuing.
-2. Call `unifi_tool_index` to verify the server responds and tools are available.
-3. If the server is unreachable, report the error and suggest checking `UNIFI_MCP_HTTP_ENABLED` and `UNIFI_NETWORK_MCP_URL`.
+Dispatch these tool calls in **a single batch** (multiple tool uses in one assistant turn — they are independent and you should not serialise them):
 
----
+- `unifi_list_firewall_policies`
+- `unifi_list_firewall_zones`
+- `unifi_list_networks`
+- `unifi_list_firewall_groups`
+- `unifi_list_devices`
+- `unifi_get_dpi_stats` *(optional but useful for HYG-05 / EGR-03 context)*
 
-## Quick Audit (preferred)
+If a tool returns `success=false`, stop the audit and surface the error. Do not partial-report.
 
-Run the audit script for a complete, scored report:
+For richer per-policy detail (needed by HYG-02 conflict detection and HYG-05 shadowing), follow up with `unifi_get_firewall_policy_details` for each policy returned by `unifi_list_firewall_policies`. Batch these calls in parallel as well.
 
-```bash
-python plugins/unifi-network/skills/firewall-auditor/scripts/run-audit.py --format json
-```
+### 2. Evaluate the 16 benchmarks
 
-The script connects to the MCP server (auto-detected from `UNIFI_NETWORK_MCP_URL` or `http://localhost:3000`), gathers firewall data in parallel, evaluates all 16 benchmarks, scores results, saves history, and prints a JSON report.
+Walk through each benchmark in `references/security-benchmarks.md` in order: **SEG-01 → SEG-04, EGR-01 → EGR-03, HYG-01 → HYG-05, TOP-01 → TOP-04**. For each benchmark, the reference document specifies:
 
-**Interpreting the output:**
+- The exact condition to verify
+- Which tool output to read
+- The default severity (`critical`, `warning`, or `info`)
+- A `fix` template you can include in the finding
 
-The JSON report has this top-level structure:
+A benchmark may produce **zero, one, or many findings** — one per offending instance. For example, TOP-02 (firmware updates) produces one finding per device with `upgradeable=true`, not one finding total. Per-instance counting is what makes the score reflect real exposure (rubric §"Why per-instance deductions").
+
+For each instance, build a finding object:
 
 ```json
 {
-  "success": true,
-  "timestamp": "<ISO-8601>",
+  "benchmark_id": "SEG-01",
+  "severity": "critical",
+  "message": "No rule blocks IoT VLAN traffic to private networks.",
+  "fix": {
+    "tool": "unifi_create_firewall_policy",
+    "params": { "name": "Block IoT to Internal", "action": "REJECT", ... }
+  }
+}
+```
+
+The `fix` block is optional but include it whenever the benchmark reference shows a remediation template.
+
+### 3. Score the findings
+
+Pipe the findings through the scoring CLI. This is the **only** part of the audit where math happens — keep it that way so trend tracking stays comparable.
+
+```bash
+echo '{"findings": [...]}' | "${CLAUDE_PLUGIN_ROOT}/skills/firewall-auditor/scripts/unifi-firewall-score"
+```
+
+The CLI returns:
+
+```json
+{
+  "rubric_version": 1,
   "overall_score": 73,
   "overall_status": "needs_attention",
-  "summary": { "total_policies": 12, "enabled": 10, "disabled": 2, "networks": 5, "devices": 8 },
   "categories": {
-    "segmentation":   { "score": 14, "max": 25, "findings": [...] },
-    "egress_control": { "score": 23, "max": 25, "findings": [...] },
-    "rule_hygiene":   { "score": 15, "max": 25, "findings": [...] },
-    "topology":       { "score": 21, "max": 25, "findings": [...] }
-  },
-  "critical_findings": [...],
-  "recommendations": ["[SEG-01] No rule blocking IoT VLAN traffic... — use unifi_create_firewall_policy with action=REJECT and zone-based source/destination."],
+    "segmentation":   {"score": 14, "max": 25, "deduction": 11, "count": 4},
+    "egress_control": {"score": 23, "max": 25, "deduction":  2, "count": 1},
+    "rule_hygiene":   {"score": 15, "max": 25, "deduction": 10, "count": 5},
+    "topology":       {"score": 21, "max": 25, "deduction":  4, "count": 2}
+  }
+}
+```
+
+Do not compute the score yourself. The CLI is stable across versions; your arithmetic is not.
+
+### 4. Append to history
+
+Maintain a single audit history file at `${UNIFI_SKILLS_STATE_DIR:-$HOME/.claude/unifi-skills}/audit-history.json`. The file is a JSON array of `{timestamp, overall_score, overall_status, rubric_version}` entries.
+
+```bash
+STATE_DIR="${UNIFI_SKILLS_STATE_DIR:-$HOME/.claude/unifi-skills}"
+mkdir -p "$STATE_DIR"
+HIST="$STATE_DIR/audit-history.json"
+[ -f "$HIST" ] || echo "[]" > "$HIST"
+
+# Compose the new entry from the score CLI output ($SCORE_JSON) and append.
+ENTRY=$(echo "$SCORE_JSON" | python3 -c "
+import json, sys, datetime
+s = json.load(sys.stdin)
+print(json.dumps({
+    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'overall_score': s['overall_score'],
+    'overall_status': s['overall_status'],
+    'rubric_version': s['rubric_version'],
+}))
+")
+python3 -c "
+import json, sys
+hist = json.load(open('$HIST'))
+hist.append(json.loads('''$ENTRY'''))
+json.dump(hist[-50:], open('$HIST', 'w'), indent=2)
+"
+```
+
+Keep the last 50 entries (enough for ~a year of weekly audits).
+
+### 5. Compute the trend
+
+Compare against the previous entry in the history file. Report:
+
+- `previous_score` — the prior entry's score, or `null` if this is the first audit
+- `change` — signed integer delta (e.g., `+5`, `-3`)
+
+If `rubric_version` differs from the prior entry, **do not** compute a trend — the scoring model changed and historical scores are not comparable. Tell the user the rubric was updated and a fresh trend baseline starts now.
+
+### 6. Present the report
+
+Format depends on user intent:
+
+**Default (interactive):** human-readable summary
+- Overall score and status (with the trend)
+- Per-category scores
+- Critical findings called out first, then warnings, then info
+- Top 3–5 prioritised recommendations with the `fix` tool name
+
+**On request ("give me JSON" / "machine-readable"):** emit the full report as JSON with this shape:
+
+```json
+{
+  "timestamp": "...",
+  "overall_score": 73,
+  "overall_status": "needs_attention",
+  "categories": { ... from CLI ... },
+  "findings": [ ... all per-instance findings ... ],
   "trend": { "previous_score": 68, "change": "+5" }
 }
 ```
 
-Read `overall_score` and `overall_status` first, then walk through `critical_findings` before the per-category detail. Findings include a `benchmark_id`, `severity`, `message`, and — when applicable — a `fix` block with the exact MCP tool and parameters to resolve it.
-
-For a human-readable summary instead of JSON:
-
-```bash
-python plugins/unifi-network/skills/firewall-auditor/scripts/run-audit.py --format human
-```
-
 ---
 
-## Understanding Results
-
-### Score thresholds (from `references/scoring-rubric.md`)
+## Score thresholds (from `references/scoring-rubric.md`)
 
 | Score | Rating | Meaning |
 |-------|--------|---------|
@@ -76,171 +165,25 @@ python plugins/unifi-network/skills/firewall-auditor/scripts/run-audit.py --form
 | 60–79 | Needs Attention | Notable gaps; address on a planned schedule |
 | 0–59 | Critical | Significant exposure requiring immediate remediation |
 
-Each of the four categories (Segmentation, Egress Control, Rule Hygiene, Topology) contributes up to 25 points. Deductions are applied per finding instance:
-
-- critical finding: -5 points per instance
-- warning: -2 points per instance
-- informational: -1 point per instance
-
-The category floor is 0 — a total segmentation failure does not obscure good hygiene scores.
-
-### What each benchmark means (from `references/security-benchmarks.md`)
-
-| ID | Category | What it checks | Default severity |
-|----|----------|----------------|-----------------|
-| SEG-01 | Segmentation | IoT VLAN blocked from private networks | critical |
-| SEG-02 | Segmentation | Guest VLAN restricted to internet only | critical |
-| SEG-03 | Segmentation | Management VLAN only reachable from admin sources | critical |
-| SEG-04 | Segmentation | Every VLAN pair has an explicit policy | warning |
-| EGR-01 | Egress Control | IoT and Guest VLANs have outbound (WAN_OUT) filtering | warning |
-| EGR-02 | Egress Control | DNS forced through approved resolvers | warning |
-| EGR-03 | Egress Control | Threat intelligence IP block groups defined and applied | informational |
-| HYG-01 | Rule Hygiene | No disabled rules duplicating enabled ones | warning |
-| HYG-02 | Rule Hygiene | No conflicting rules for identical traffic | critical |
-| HYG-03 | Rule Hygiene | All rule references resolve to valid objects | warning |
-| HYG-04 | Rule Hygiene | Rules have descriptive names | warning |
-| HYG-05 | Rule Hygiene | No broad accept rules shadowing specific drop rules | warning |
-| TOP-01 | Topology | No adopted devices offline | critical |
-| TOP-02 | Topology | All devices have current firmware | warning |
-| TOP-03 | Topology | Switch uplinks carry consistent VLAN configurations | warning |
-| TOP-04 | Topology | No orphaned port profiles | informational |
-
-Consult `references/security-benchmarks.md` for the full check definition, the MCP tools each benchmark uses, and the exact remediation command for each ID.
-
 ---
 
-## Acting on Findings
+## Acting on findings
 
-Each finding in the report includes a `fix` block when an automated remedy is available:
+For each finding, do **not** call mutating tools yourself. The auditor reads; the **firewall-manager** skill writes. For each remediation:
 
-```json
-{
-  "benchmark_id": "SEG-01",
-  "severity": "critical",
-  "message": "No rule blocking IoT VLAN traffic to private networks.",
-  "fix": {
-    "tool": "unifi_create_firewall_policy",
-    "params": {
-      "name": "Block IoT to Internal",
-      "action": "REJECT",
-      "source":      { "zone_id": "<iot_zone_id>",      "matching_target": "ANY" },
-      "destination": { "zone_id": "<internal_zone_id>", "matching_target": "ANY" }
-    }
-  }
-}
-```
+1. Explain in plain language what the finding means and why it matters.
+2. Show the `fix.tool` and `fix.params` from the report.
+3. Tell the user: "To apply this fix, switch to the firewall-manager skill, which will preview the change and wait for your confirmation before modifying the controller."
 
-For each finding:
-
-1. Explain what the finding means in plain language and why it matters.
-2. Show the `fix.tool` and `fix.params` from the report so the user knows exactly what will change.
-3. Defer actual execution to the **firewall-manager** skill. Tell the user: "To apply this fix, switch to the firewall-manager skill, which will preview the change and wait for your confirmation before modifying the controller."
-
-Never call mutating tools directly from within this skill. The auditor reads; the firewall-manager writes.
-
-**Priority order for acting:** address critical findings first (SEG-01, SEG-02, SEG-03, HYG-02, TOP-01), then warnings, then informational items.
-
----
-
-## Tracking Trends
-
-The script automatically records every audit result in `audit-history.json` (stored in `.claude/unifi-skills/` by default, or the path in `UNIFI_SKILLS_STATE_DIR`). Up to 50 entries are retained.
-
-The `trend` field in each report shows the score change since the previous run:
-
-```json
-"trend": { "previous_score": 68, "change": "+5" }
-```
-
-To compare audits over time, read the history file directly:
-
-```bash
-cat .claude/unifi-skills/audit-history.json
-```
-
-Each entry contains a `timestamp` and `overall_score`. Share this with the user to show improvement (or regression) after applying fixes. A healthy cadence is one audit per week or after any firewall change.
-
----
-
-## Manual Procedure (fallback)
-
-Use this procedure when the `run-audit.py` script is unavailable or the MCP server is not accessible via HTTP.
-
-### Step 1: Gather data (batch all together)
-
-Call via `unifi_batch`:
-- `unifi_list_firewall_policies` — all policies
-- `unifi_list_firewall_zones` — zone definitions
-- `unifi_list_networks` — all networks/VLANs
-- `unifi_list_firewall_groups` — Firewall groups (address/port) referenced by rules
-- `unifi_get_dpi_stats` — DPI data (shows what traffic is actually flowing)
-
-### Step 2: Policy analysis
-
-For each policy, extract and analyze:
-- **Source/destination zones and networks**
-- **Action** (ALLOW, REJECT, DROP)
-- **Protocol/port specificity**
-- **Enabled/disabled state**
-- **Rule ordering** (higher priority rules shadow lower ones)
-
-### Step 3: Check for issues
-
-**Conflicts:**
-- Two rules matching the same traffic with different actions
-- A broad ALLOW that undermines a specific REJECT (or vice versa, depending on order)
-
-**Redundancies:**
-- Rules that are strict subsets of other rules with the same action
-- Disabled rules that duplicate enabled rules
-- Rules targeting networks or groups that no longer exist
-
-**Security gaps:**
-- Inter-VLAN traffic allowed without explicit rules (check IoT → main network, guest → private)
-- No egress filtering on high-risk VLANs (IoT devices should not reach everything)
-- Missing rules for common best practices:
-  - IoT VLAN should not access private networks
-  - Guest VLAN should only access internet (not local resources)
-  - Management VLAN should be restricted
-
-**Unused rules:**
-- Rules targeting IP groups with no members
-- Rules for networks that have been deleted
-- Rules that have been disabled for extended periods
-
-### Step 4: Report
-
-Present findings in this format:
-
-```
-## Firewall Audit Report
-
-**Total Policies:** [count] ([enabled] enabled, [disabled] disabled)
-**Zones:** [list]
-**Networks:** [count]
-
-### Critical Issues
-[Issues that create security vulnerabilities]
-
-### Warnings
-[Redundancies, conflicts, or best practice violations]
-
-### Recommendations
-1. [Specific, actionable recommendation with which tool to use]
-2. [...]
-
-### Policy Summary Table
-| # | Name | Action | Source | Destination | Status | Notes |
-|---|------|--------|--------|-------------|--------|-------|
-```
+**Priority order:** critical findings (SEG-01 / SEG-02 / SEG-03 / HYG-02 / TOP-01) first, then warnings, then info. Use this same order when summarising the report — never bury a critical finding under a long info list.
 
 ---
 
 ## Tips
 
-- **Prefer the script.** `run-audit.py --format json` is faster, deterministic, and tracks history automatically. The manual procedure is a fallback only.
-- **Consult the benchmarks doc.** `references/security-benchmarks.md` has the authoritative definition for every check ID (SEG-*, EGR-*, HYG-*, TOP-*). When a finding is unclear, look up the benchmark there.
-- **Use the scoring rubric to set expectations.** `references/scoring-rubric.md` explains exactly how deductions are calculated. Show users their score in context: a 73/100 is "Needs Attention", not a failing grade.
-- **Track scores over time.** A single audit is a snapshot. The real value is the trend — run an audit after every batch of firewall changes to confirm the score improved.
-- **Focus on actionable findings.** Do not report "everything is fine" items. Surface critical issues first, then warnings.
-- **Defer writes to firewall-manager.** When recommending changes, name the specific tool and parameters (from the `fix` block), then hand off to the firewall-manager skill for execution.
+- **Parallel by default.** All Step 1 reads are independent — issue them in one batch. Per-policy details in Step 2 are also parallelisable.
+- **Consult the benchmark reference whenever a check is unclear.** `references/security-benchmarks.md` is authoritative; do not invent new checks. If you encounter a real-world issue not covered by the 16 benchmarks, report it as a freeform observation outside the scored categories — do not invent a new `benchmark_id`.
+- **Don't compute the score in your head.** Even simple sums drift run-to-run. Always pipe through `unifi-firewall-score`.
+- **Per-instance counting matters.** Five offline devices is five TOP-01 findings, not one.
+- **Severity comes from the benchmark, not the situation.** The reference defines the default severity for each benchmark. Don't downgrade a critical finding because the user "isn't worried about it" — record it accurately and let them decide what to act on.
+- **Skip the trend on rubric changes.** A `rubric_version` mismatch with the prior history entry means the math changed; report the new baseline and explain why no trend is shown.

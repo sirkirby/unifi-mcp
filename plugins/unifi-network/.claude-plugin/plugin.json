@@ -18,6 +18,8 @@
     "unifi-network": {
       "command": "uvx",
       "args": [
+        "--python-preference",
+        "system",
         "unifi-network-mcp==0.15.2"
       ],
       "env": {
@@ -33,10 +35,7 @@
         "UNIFI_NETWORK_PORT": "${UNIFI_NETWORK_PORT:-443}",
         "UNIFI_NETWORK_SITE": "${UNIFI_NETWORK_SITE:-default}",
         "UNIFI_NETWORK_VERIFY_SSL": "${UNIFI_NETWORK_VERIFY_SSL:-false}",
-        "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}",
-        "UNIFI_MCP_HTTP_ENABLED": "true",
-        "UNIFI_MCP_HTTP_FORCE": "false",
-        "UNIFI_MCP_PORT": "${UNIFI_NETWORK_MCP_PORT:-3000}"
+        "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}"
       }
     }
   }

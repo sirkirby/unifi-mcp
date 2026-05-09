@@ -98,7 +98,7 @@ total_score = segmentation_score + egress_score + hygiene_score + topology_score
 
 ## Reporting Format
 
-The `run-audit.py` script outputs scores in this structure:
+The `scripts/unifi-firewall-score` CLI emits the canonical score JSON, and the auditor skill renders a human-readable report on top of it. A typical render:
 
 ```
 AUDIT SCORE: 73/100 — Needs Attention
@@ -108,14 +108,16 @@ AUDIT SCORE: 73/100 — Needs Attention
   Rule Hygiene:   15/25
   Topology:       21/25
 
-FINDINGS (6 total):
-  [CRITICAL] SEG-01: IoT-to-LAN block rule exists — 1 instance
-  [WARNING]  SEG-04: No implicit allow between VLANs — 3 instances
-  [WARNING]  EGR-02: DNS forced through approved resolvers — 1 instance
-  [WARNING]  HYG-03: All rule references resolve to valid objects — 1 instance
-  [WARNING]  HYG-04: Rules have descriptive names — 4 instances
-  [WARNING]  TOP-02: Firmware current on all devices — 2 instances
+FINDINGS (12 total, 1 critical):
+  [CRITICAL] SEG-01: IoT-to-LAN block rule missing — 1 instance
+  [WARNING]  SEG-04: VLAN pair without explicit policy — 3 instances
+  [WARNING]  EGR-02: DNS not forced through approved resolvers — 1 instance
+  [WARNING]  HYG-03: Rule references non-existent object — 1 instance
+  [WARNING]  HYG-04: Rule has missing or default name — 4 instances
+  [WARNING]  TOP-02: Firmware update available — 2 instances
 ```
+
+Per-instance counts in the findings list must equal the `count` field in the scoring CLI's output for that category (e.g., 4 segmentation instances = SEG-01 + 3×SEG-04). If they don't match, the report wasn't built from the same findings the CLI scored.
 
 ---
 

@@ -1,6 +1,6 @@
 # UniFi Network Security Benchmarks
 
-This document defines deterministic checks for the firewall auditor skill. Each benchmark maps to a specific condition verifiable via MCP tools, with a defined severity and remediation path. The `run-audit.py` script implements these checks sequentially and reports findings.
+This document defines deterministic checks for the firewall auditor skill. Each benchmark maps to a specific condition verifiable via MCP tools, with a defined severity and remediation path. The auditor skill walks these benchmarks in order, builds a per-instance findings list, and pipes the findings through `scripts/unifi-firewall-score` to produce the canonical score.
 
 ---
 

@@ -127,7 +127,7 @@ Gathers a full diagnostic snapshot in a single `unifi_batch` call — system inf
 
 Natural-language firewall management with a safe preview-then-confirm workflow. Ships with:
 
-- **Policy templates** for common scenarios — apply with `scripts/apply-template.py`:
+- **Policy templates** for common scenarios (`references/policy-templates.yaml`):
 
   | Template | Description |
   |----------|-------------|
@@ -138,15 +138,14 @@ Natural-language firewall management with a safe preview-then-confirm workflow. 
   | `work-vpn-split-tunnel` | Allow corporate VPN while keeping local LAN accessible |
   | `camera-isolation` | Lock IP cameras to NVR-only communication |
 
-- **Config snapshots** via `scripts/export-policies.py` — timestamped JSON backups of all policies, zones, and IP groups before every mutation
-- **Change tracking** via `scripts/diff-policies.py` — shows added, removed, and modified policies between two snapshots
+- **Snapshot/diff workflow** — Claude saves a timestamped JSON snapshot of all policies, zones, and groups before every mutation, then diffs the after-state against it so unintended changes are caught immediately
 - **Reference docs** for firewall schema, DPI categories, and full template parameter lists
 
 ### Firewall Auditor
 
 **Trigger:** "audit firewall", "review firewall rules", "check for security issues", "score my firewall"
 
-Comprehensive automated audit across 16 security benchmarks in 4 categories, producing a 0–100 score with per-finding remediation guidance. Run with `scripts/run-audit.py`.
+Comprehensive automated audit across 16 security benchmarks in 4 categories, producing a 0–100 score with per-finding remediation guidance. Claude dispatches the MCP tool calls and evaluates each benchmark against `references/security-benchmarks.md`; a small CLI (`scripts/unifi-firewall-score`) turns the findings into the canonical, version-stable score so audit history stays comparable.
 
 **Score thresholds:**
 

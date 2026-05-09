@@ -19,6 +19,8 @@
     "unifi-protect": {
       "command": "uvx",
       "args": [
+        "--python-preference",
+        "system",
         "unifi-protect-mcp==0.3.9"
       ],
       "env": {
@@ -32,10 +34,7 @@
         "UNIFI_PROTECT_PASSWORD": "${UNIFI_PROTECT_PASSWORD:-}",
         "UNIFI_PROTECT_PORT": "${UNIFI_PROTECT_PORT:-443}",
         "UNIFI_PROTECT_VERIFY_SSL": "${UNIFI_PROTECT_VERIFY_SSL:-false}",
-        "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}",
-        "UNIFI_MCP_HTTP_ENABLED": "true",
-        "UNIFI_MCP_HTTP_FORCE": "false",
-        "UNIFI_MCP_PORT": "${UNIFI_PROTECT_MCP_PORT:-3001}"
+        "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}"
       }
     }
   }

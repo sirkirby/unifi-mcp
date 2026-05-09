@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""Score a list of firewall audit findings.
+
+Reads findings JSON on stdin, writes a deterministic scoring report on stdout.
+Pure stdlib. No network. No transport. Stable across versions so audit
+trends remain comparable.
+
+The scoring model is defined in references/scoring-rubric.md. This script is
+the single source of truth for the math; if the model changes, bump
+RUBRIC_VERSION below so historical entries can be filtered.
+
+INPUT (stdin)
+    {
+      "findings": [
+        {"benchmark_id": "SEG-01", "severity": "critical", "message": "..."},
+        {"benchmark_id": "HYG-04", "severity": "warning",  "message": "..."},
+        ...
+      ]
+    }
+
+OUTPUT (stdout)
+    {
+      "rubric_version": 1,
+      "overall_score": 73,
+      "overall_status": "needs_attention",
+      "categories": {
+        "segmentation":   {"score": 14, "max": 25, "deduction": 11, "count": 4},
+        "egress_control": {"score": 23, "max": 25, "deduction":  2, "count": 1},
+        "rule_hygiene":   {"score": 15, "max": 25, "deduction": 10, "count": 5},
+        "topology":       {"score": 21, "max": 25, "deduction":  4, "count": 2}
+      }
+    }
+
+USAGE
+    cat findings.json | unifi-firewall-score
+    echo '{"findings": [...]}' | unifi-firewall-score
+
+EXIT CODES
+    0  scoring succeeded (regardless of score value)
+    1  malformed input or unrecognised benchmark_id
+"""
+from __future__ import annotations
+
+import json
+import sys
+
+RUBRIC_VERSION = 1
+CATEGORY_MAX = 25
+
+# Map benchmark_id prefix → category key in the output report.
+# Update only by adding new prefixes; renaming a key invalidates audit history.
+CATEGORY_FROM_PREFIX = {
+    "SEG": "segmentation",
+    "EGR": "egress_control",
+    "HYG": "rule_hygiene",
+    "TOP": "topology",
+}
+
+# Per-instance deductions from references/scoring-rubric.md.
+# Keys must match the severity strings emitted by the auditor skill.
+SEVERITY_DEDUCTIONS = {
+    "critical": 5,
+    "warning": 2,
+    "info": 1,
+    "informational": 1,
+}
+
+
+def status_for(score: int) -> str:
+    if score >= 80:
+        return "healthy"
+    if score >= 60:
+        return "needs_attention"
+    return "critical"
+
+
+def score(findings: list[dict]) -> dict:
+    categories: dict[str, dict] = {
+        name: {"score": CATEGORY_MAX, "max": CATEGORY_MAX, "deduction": 0, "count": 0}
+        for name in CATEGORY_FROM_PREFIX.values()
+    }
+
+    for f in findings:
+        bid = (f.get("benchmark_id") or "").upper()
+        prefix = bid.split("-", 1)[0] if "-" in bid else ""
+        category = CATEGORY_FROM_PREFIX.get(prefix)
+        if category is None:
+            raise ValueError(
+                f"unknown benchmark_id '{bid}': expected prefix one of "
+                f"{sorted(CATEGORY_FROM_PREFIX)}"
+            )
+
+        severity = (f.get("severity") or "").lower()
+        deduction = SEVERITY_DEDUCTIONS.get(severity)
+        if deduction is None:
+            raise ValueError(
+                f"unknown severity '{severity}' on {bid}: expected one of "
+                f"{sorted(set(SEVERITY_DEDUCTIONS))}"
+            )
+
+        cat = categories[category]
+        cat["deduction"] += deduction
+        cat["count"] += 1
+
+    for cat in categories.values():
+        cat["score"] = max(0, CATEGORY_MAX - cat["deduction"])
+
+    total = sum(c["score"] for c in categories.values())
+    return {
+        "rubric_version": RUBRIC_VERSION,
+        "overall_score": total,
+        "overall_status": status_for(total),
+        "categories": categories,
+    }
+
+
+def main() -> int:
+    if any(a in {"-h", "--help"} for a in sys.argv[1:]):
+        sys.stdout.write(__doc__ or "")
+        return 0
+
+    try:
+        payload = json.load(sys.stdin)
+    except json.JSONDecodeError as e:
+        print(f"error: stdin is not valid JSON: {e}", file=sys.stderr)
+        return 1
+
+    findings = payload.get("findings") if isinstance(payload, dict) else None
+    if not isinstance(findings, list):
+        print(
+            "error: input must be an object with a 'findings' array",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        report = score(findings)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+    json.dump(report, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
