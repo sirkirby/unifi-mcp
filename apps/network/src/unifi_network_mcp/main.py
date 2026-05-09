@@ -46,6 +46,7 @@ logger.info("Using global Manager instances.")
 async def main_async():
     """Main asynchronous function to setup and run the server."""
     from unifi_core.policy_gate import check_deprecated_env_vars
+    from unifi_mcp_shared.bootstrap import assert_credentials_configured
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
     from unifi_mcp_shared.tool_registration import register_tools_for_mode
     from unifi_mcp_shared.transport import resolve_http_config, run_transports
@@ -53,6 +54,7 @@ async def main_async():
     install_asyncio_exception_handler(logger)
     apply_log_level(config, "unifi-network-mcp")
     check_deprecated_env_vars("network", logger)
+    assert_credentials_configured(config, plugin_name="unifi-network", env_prefix="NETWORK", logger=logger)
 
     # Initialize the global Unifi connection
     logger.info("Initializing global Unifi connection from main_async...")

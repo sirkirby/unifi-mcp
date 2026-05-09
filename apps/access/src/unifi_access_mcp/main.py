@@ -46,6 +46,7 @@ logger.debug("Access MCP server module loaded; singletons initialised.")
 async def main_async():
     """Main asynchronous function to setup and run the server."""
     from unifi_core.policy_gate import check_deprecated_env_vars
+    from unifi_mcp_shared.bootstrap import assert_credentials_configured
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
     from unifi_mcp_shared.tool_registration import register_tools_for_mode
     from unifi_mcp_shared.transport import resolve_http_config, run_transports
@@ -53,6 +54,7 @@ async def main_async():
     install_asyncio_exception_handler(logger)
     apply_log_level(config, "unifi-access-mcp")
     check_deprecated_env_vars("access", logger)
+    assert_credentials_configured(config, plugin_name="unifi-access", env_prefix="ACCESS", logger=logger)
 
     # Initialize the global Access connection
     logger.info("Initializing global Access connection from main_async...")
