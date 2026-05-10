@@ -18,9 +18,9 @@
     "unifi-network": {
       "command": "uvx",
       "args": [
-        "--python-preference==0.16.0",
+        "--python-preference",
         "system",
-        "unifi-network-mcp==0.15.2"
+        "unifi-network-mcp==0.16.0"
       ],
       "env": {
         "UNIFI_HOST": "${UNIFI_NETWORK_HOST:-}",

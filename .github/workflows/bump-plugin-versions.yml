@@ -65,17 +65,22 @@ jobs:
           fi
 
           python3 -c "
-        import json, sys
+        import json, re, sys
         pj = sys.argv[1]
         ver = sys.argv[2]
         with open(pj) as f:
             data = json.load(f)
         data['version'] = ver
+        pkg_pin = re.compile(r'^(unifi-[a-z]+-mcp)==')
         for server in data.get('mcpServers', {}).values():
             args = server.get('args', [])
-            if args:
-                pkg = args[0].split('==')[0]
-                args[0] = f'{pkg}=={ver}'
+            for i, arg in enumerate(args):
+                m = pkg_pin.match(arg)
+                if m:
+                    args[i] = f'{m.group(1)}=={ver}'
+                    break
+            else:
+                raise SystemExit(f'{pj}: no unifi-*-mcp package pin found in args {args!r}')
         with open(pj, 'w') as f:
             json.dump(data, f, indent=2)
             f.write('\n')
