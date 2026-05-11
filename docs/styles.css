@@ -831,11 +831,19 @@ section.block + section.block { padding-top: 0; }
   gap: 16px;
 }
 .tier-card {
+  display: block;
   background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 24px;
   min-height: 190px;
+  color: inherit;
+  transition: border-color .2s, transform .2s, background .2s;
+}
+.tier-card:hover {
+  background: var(--bg-3);
+  border-color: var(--line-bright);
+  transform: translateY(-2px);
 }
 .tier-card.featured {
   border-color: rgba(79,240,208,.45);
