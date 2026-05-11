@@ -8,6 +8,7 @@ Complete documentation for the UniFi Network MCP Server v0.2.0.
 
 - **[Main README](../README.md)** - Project overview and installation
 - **[Quick Start](../QUICKSTART.md)** - Get started in 5 minutes
+- **[Sponsor UniFi MCP](sponsor/)** - Support maintenance, AI costs, compatibility testing, and releases
 
 ---
 
@@ -142,6 +143,7 @@ See [CLAUDE.md](../CLAUDE.md) for project development guidelines.
 ### Core Documentation (docs/)
 - [context-optimization-comparison.md](context-optimization-comparison.md) - Mode comparison
 - [tool-index.md](tool-index.md) - Tool index documentation
+- [sponsor/](sponsor/) - Sponsorship landing page
 
 ---
 

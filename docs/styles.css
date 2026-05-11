@@ -177,6 +177,17 @@ h1, h2, h3, h4 { font-family: var(--ff-display); letter-spacing: -0.02em; line-h
   border: 1px solid var(--line-2);
 }
 .btn-ghost:hover { color: var(--fg); border-color: var(--line-bright); }
+.btn-sponsor {
+  color: var(--fg-2);
+  border: 1px solid rgba(255,107,138,.30);
+  background: rgba(255,107,138,.05);
+}
+.btn-sponsor svg { color: var(--rose); }
+.btn-sponsor:hover {
+  color: var(--fg);
+  border-color: rgba(255,107,138,.55);
+  background: rgba(255,107,138,.08);
+}
 .btn-primary {
   background: linear-gradient(180deg, var(--cyan) 0%, var(--cyan-2) 100%);
   color: #042418;
@@ -709,6 +720,180 @@ section.block + section.block { padding-top: 0; }
 }
 .pillar-icon svg { width: 20px; height: 20px; }
 
+/* ============== Sponsorship ============== */
+.sponsor-hero {
+  padding: 88px 0 48px;
+}
+.sponsor-grid {
+  display: grid;
+  grid-template-columns: 1.05fr .95fr;
+  gap: 56px;
+  align-items: start;
+}
+.sponsor-copy h1 {
+  font-size: clamp(44px, 5.6vw, 72px);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  margin: 22px 0;
+  max-width: 820px;
+}
+.sponsor-copy h1 .accent {
+  background: linear-gradient(120deg, var(--cyan) 0%, #6affd9 40%, var(--blue) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+.sponsor-copy .lead {
+  font-size: 19px;
+  color: var(--fg-2);
+  max-width: 680px;
+  margin-bottom: 28px;
+}
+.sponsor-panel {
+  background: linear-gradient(180deg, #0d1424, #08101e);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  position: relative;
+  overflow: hidden;
+}
+.sponsor-panel::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: radial-gradient(460px 220px at 50% 0%, rgba(79,240,208,.12), transparent 70%);
+  pointer-events: none;
+}
+.sponsor-panel > * { position: relative; }
+.sponsor-panel h2 {
+  font-size: 30px;
+  margin-bottom: 12px;
+}
+.sponsor-panel p {
+  color: var(--fg-2);
+  font-size: 15px;
+  margin-bottom: 20px;
+}
+.sponsor-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.sponsor-list li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--fg-2);
+  font-size: 14px;
+}
+.sponsor-list svg {
+  width: 18px;
+  height: 18px;
+  color: var(--cyan);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.sponsor-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.funding-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.funding-card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+.funding-card .num {
+  font-family: var(--ff-display);
+  color: var(--cyan);
+  font-weight: 700;
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+.funding-card h3 {
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+.funding-card p {
+  color: var(--fg-3);
+  font-size: 14px;
+}
+.tier-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.tier-card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  min-height: 190px;
+}
+.tier-card.featured {
+  border-color: rgba(79,240,208,.45);
+  box-shadow: var(--glow-cyan);
+}
+.tier-card .price {
+  font-family: var(--ff-display);
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--fg);
+  margin-bottom: 12px;
+}
+.tier-card .price small {
+  font-size: 14px;
+  color: var(--fg-4);
+  font-weight: 500;
+}
+.tier-card h3 {
+  font-size: 19px;
+  margin-bottom: 10px;
+}
+.tier-card p {
+  color: var(--fg-3);
+  font-size: 14px;
+}
+.tier-note {
+  margin-top: 18px;
+  color: var(--fg-3);
+  font-size: 14px;
+  max-width: 760px;
+}
+.tier-note a {
+  color: var(--cyan);
+  font-weight: 600;
+}
+.principles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.principle {
+  background: var(--bg-2);
+  padding: 28px;
+}
+.principle h3 {
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+.principle p {
+  color: var(--fg-3);
+  font-size: 14px;
+}
+
 /* ============== FAQ ============== */
 .faq { display: flex; flex-direction: column; gap: 0; }
 .faq-item {
@@ -836,6 +1021,7 @@ footer.footer {
   .relay-card { grid-template-columns: 1fr; padding: 28px; }
   .asks-grid, .skills-grid, .install-meta { grid-template-columns: 1fr; }
   .pillars { grid-template-columns: 1fr; }
+  .sponsor-grid, .funding-grid, .tier-grid, .principles { grid-template-columns: 1fr; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
   .nav-links { display: none; }
   .nav-cta .btn-ghost { display: none; }
@@ -845,6 +1031,8 @@ footer.footer {
   .stats { grid-template-columns: 1fr 1fr; }
   .stat { padding: 20px; }
   .stat .num { font-size: 32px; }
+  .btn-sponsor span { display: none; }
+  .btn-sponsor { padding: 10px 12px; }
   section.block { padding: 60px 0; }
   .cta-card { padding: 36px 24px; }
 }

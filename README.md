@@ -207,6 +207,13 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, including how to work with the monorepo, run tests, and submit PRs.
 
+## Support the Project
+
+UniFi MCP is maintained as an independent open-source project. Sponsorship helps cover the ongoing AI costs behind building, testing, and maintaining the project, plus live controller compatibility testing, release maintenance, documentation, and issue triage across the Network, Protect, Access, API, relay, and plugin packages.
+
+- [Sponsor on GitHub](https://github.com/sponsors/sirkirby)
+- [See what sponsorship funds](https://unifimcp.com/sponsor/)
+
 ## License
 
 [MIT](LICENSE)
