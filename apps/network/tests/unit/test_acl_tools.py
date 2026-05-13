@@ -50,7 +50,7 @@ class TestAclRuleModel:
 
     def test_from_controller_flattens_correctly(self):
         """from_controller extracts nested MACs into flat fields."""
-        from unifi_network_mcp.models.acl import from_controller
+        from unifi_core.network.models.acl import from_controller
 
         rule = from_controller(SAMPLE_CONTROLLER_RULE)
         assert rule.id == "rule001"
@@ -63,7 +63,7 @@ class TestAclRuleModel:
 
     def test_to_controller_create_nests_correctly(self):
         """to_controller_create builds the nested traffic_source/destination."""
-        from unifi_network_mcp.models.acl import AclRule, to_controller_create
+        from unifi_core.network.models.acl import AclRule, to_controller_create
 
         rule = AclRule(
             name="New Rule",
@@ -83,7 +83,7 @@ class TestAclRuleModel:
 
     def test_round_trip_preserves_data(self):
         """from_controller → to_controller_create preserves all mutable fields."""
-        from unifi_network_mcp.models.acl import from_controller, to_controller_create
+        from unifi_core.network.models.acl import from_controller, to_controller_create
 
         rule = from_controller(SAMPLE_CONTROLLER_RULE)
         payload = to_controller_create(rule)
@@ -99,7 +99,7 @@ class TestAclRuleModel:
 
     def test_to_controller_update_partial(self):
         """to_controller_update only includes provided fields."""
-        from unifi_network_mcp.models.acl import to_controller_update
+        from unifi_core.network.models.acl import to_controller_update
 
         result = to_controller_update({"source_macs": ["11:22:33:44:55:66"], "name": "Renamed"})
 
@@ -110,7 +110,7 @@ class TestAclRuleModel:
 
     def test_to_controller_update_network_id_maps(self):
         """network_id in model maps to mac_acl_network_id in controller."""
-        from unifi_network_mcp.models.acl import to_controller_update
+        from unifi_core.network.models.acl import to_controller_update
 
         result = to_controller_update({"network_id": "net999"})
         assert result["mac_acl_network_id"] == "net999"
@@ -118,7 +118,7 @@ class TestAclRuleModel:
 
     def test_mutable_fields_excludes_read_only(self):
         """MUTABLE_FIELDS does not contain read-only fields."""
-        from unifi_network_mcp.models.acl import MUTABLE_FIELDS, READ_ONLY_FIELDS
+        from unifi_core.network.models.acl import MUTABLE_FIELDS, READ_ONLY_FIELDS
 
         assert "id" not in MUTABLE_FIELDS
         assert "source_type" not in MUTABLE_FIELDS
@@ -484,7 +484,7 @@ class TestListAclRules:
         to_controller_update because it's not in UPDATE_FIELD_MAP or the
         MAC translation branches.
         """
-        from unifi_network_mcp.models.acl import (
+        from unifi_core.network.models.acl import (
             MAC_TRANSLATED_FIELDS,
             MUTABLE_FIELDS,
             UPDATE_FIELD_MAP,
@@ -507,7 +507,7 @@ class TestListAclRules:
         """
         import inspect
 
-        from unifi_network_mcp.models.acl import MUTABLE_FIELDS
+        from unifi_core.network.models.acl import MUTABLE_FIELDS
 
         # Get the create tool's param names
         from unifi_network_mcp.tools.acl import create_acl_rule

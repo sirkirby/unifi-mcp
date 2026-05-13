@@ -19,7 +19,7 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_network_mcp.models.acl import (
+from unifi_core.network.models.acl import (
     MUTABLE_FIELDS,
     AclRule,
     from_controller,
