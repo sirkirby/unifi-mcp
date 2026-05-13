@@ -1,5 +1,5 @@
-.PHONY: help test lint format format-fix manifest generate server-manifests skill-references sync-skills \
-       check-skill-references check-skills-sync check-generated pre-commit ci core-test shared-test \
+.PHONY: help test lint format format-fix manifest generate server-manifests skill-references \
+       check-skill-references check-generated pre-commit ci core-test shared-test \
        relay-test docker-relay sync docker-build docker-up docker-down docker-logs
 
 help:
@@ -61,7 +61,6 @@ manifest:
 	$(MAKE) -C apps/network manifest
 	$(MAKE) -C apps/protect manifest
 	$(MAKE) -C apps/access manifest
-	$(MAKE) sync-skills
 	$(MAKE) skill-references
 	$(MAKE) server-manifests
 
@@ -76,13 +75,7 @@ skill-references:
 check-skill-references:
 	python3 scripts/generate_skill_references.py --check
 
-sync-skills:
-	python3 skills/_build/sync_shared.py
-
-check-skills-sync:
-	python3 skills/_build/sync_shared.py --check
-
-check-generated: check-skills-sync check-skill-references
+check-generated: check-skill-references
 
 relay-test:
 	uv run --package unifi-mcp-relay pytest packages/unifi-mcp-relay/tests -v

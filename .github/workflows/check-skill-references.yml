@@ -6,9 +6,6 @@ on:
     paths:
       - 'apps/*/src/*/tools_manifest.json'
       - 'plugins/*/skills/*/references/*.md'
-      - 'plugins/*/skills/*/scripts/*.py'
-      - 'skills/_shared/*.py'
-      - 'skills/_build/sync_shared.py'
       - 'scripts/generate_skill_references.py'
       - 'Makefile'
   pull_request:
@@ -17,9 +14,6 @@ on:
     paths:
       - 'apps/*/src/*/tools_manifest.json'
       - 'plugins/*/skills/*/references/*.md'
-      - 'plugins/*/skills/*/scripts/*.py'
-      - 'skills/_shared/*.py'
-      - 'skills/_build/sync_shared.py'
       - 'scripts/generate_skill_references.py'
       - 'Makefile'
 
