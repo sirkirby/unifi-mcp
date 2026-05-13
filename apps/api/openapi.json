@@ -4,6 +4,17 @@
       "AclRuleModel": {
         "additionalProperties": true,
         "properties": {
+          "acl_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acl Index"
+          },
           "action": {
             "anyOf": [
               {
@@ -15,14 +26,23 @@
             ],
             "title": "Action"
           },
-          "destination": {
+          "destination_macs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Destination Macs",
+            "type": "array"
+          },
+          "destination_type": {
             "anyOf": [
-              {},
+              {
+                "type": "string"
+              },
               {
                 "type": "null"
               }
             ],
-            "title": "Destination"
+            "title": "Destination Type"
           },
           "enabled": {
             "title": "Enabled",
@@ -50,14 +70,34 @@
             ],
             "title": "Name"
           },
-          "source": {
+          "network_id": {
             "anyOf": [
-              {},
+              {
+                "type": "string"
+              },
               {
                 "type": "null"
               }
             ],
-            "title": "Source"
+            "title": "Network Id"
+          },
+          "source_macs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Macs",
+            "type": "array"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
           }
         },
         "title": "AclRuleModel",

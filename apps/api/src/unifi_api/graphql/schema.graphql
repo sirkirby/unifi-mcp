@@ -119,8 +119,12 @@ type AclRule {
   name: String
   enabled: Boolean!
   action: String
-  source: JSON
-  destination: JSON
+  aclIndex: Int
+  networkId: String
+  sourceType: String
+  destinationType: String
+  sourceMacs: [String!]!
+  destinationMacs: [String!]!
 }
 
 """Paginated page of ACL rules."""
