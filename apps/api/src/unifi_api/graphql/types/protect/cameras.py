@@ -56,6 +56,13 @@ class Camera:
     is_smart_detected: bool | None
     host: str | None
     channels: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    ir_led_mode: str | None
+    hdr_mode: str | None
+    mic_enabled: bool | None
+    mic_volume: int | None
+    status_light_on: bool | None
+    speaker_volume: int | None
+    motion_detection: bool | None
 
     # Context for relationship edges — NOT in SDL, NOT in to_dict().
     # Set by the resolver after construction so edge resolvers can look up
@@ -84,6 +91,13 @@ class Camera:
             is_smart_detected=_get(obj, "is_smart_detected"),
             host=_get(obj, "ip_address") or _get(obj, "host"),
             channels=_get(obj, "channels") or [],
+            ir_led_mode=_get(obj, "ir_led_mode"),
+            hdr_mode=_get(obj, "hdr_mode"),
+            mic_enabled=_get(obj, "mic_enabled"),
+            mic_volume=_get(obj, "mic_volume"),
+            status_light_on=_get(obj, "status_light_on"),
+            speaker_volume=_get(obj, "speaker_volume"),
+            motion_detection=_get(obj, "motion_detection"),
         )
 
     def to_dict(self) -> dict:

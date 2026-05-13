@@ -13,6 +13,11 @@ from pydantic import Field
 
 from unifi_core.confirmation import preview_response
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.models.cameras import (
+    Camera,
+    from_controller as camera_from_controller,
+    to_controller_update as camera_to_controller_update,
+)
 from unifi_protect_mcp.runtime import camera_manager, server
 
 logger = logging.getLogger(__name__)
@@ -36,7 +41,8 @@ async def protect_list_cameras() -> Dict[str, Any]:
     logger.info("protect_list_cameras tool called")
     try:
         cameras = await camera_manager.list_cameras()
-        return {"success": True, "data": {"cameras": cameras, "count": len(cameras)}}
+        shaped = [camera_from_controller(c).model_dump(exclude_none=True) for c in cameras]
+        return {"success": True, "data": {"cameras": shaped, "count": len(shaped)}}
     except Exception as e:
         logger.error("Error listing cameras: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list cameras: {e}"}
@@ -58,7 +64,7 @@ async def protect_get_camera(
     logger.info("protect_get_camera tool called for %s", camera_id)
     try:
         detail = await camera_manager.get_camera(camera_id)
-        return {"success": True, "data": detail}
+        return {"success": True, "data": camera_from_controller(detail).model_dump(exclude_none=True)}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -214,7 +220,11 @@ async def protect_update_camera_settings(
         if not settings:
             return {"success": False, "error": "No settings provided. Specify at least one setting to update."}
 
-        preview_data = await camera_manager.update_camera_settings(camera_id, settings)
+        filtered = camera_to_controller_update(settings)
+        if not filtered:
+            return {"success": False, "error": "No supported settings provided."}
+
+        preview_data = await camera_manager.update_camera_settings(camera_id, filtered)
 
         if not confirm:
             return preview_response(
@@ -227,7 +237,7 @@ async def protect_update_camera_settings(
             )
 
         # Apply the changes
-        result = await camera_manager.apply_camera_settings(camera_id, settings)
+        result = await camera_manager.apply_camera_settings(camera_id, filtered)
         return {"success": True, "data": result}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
