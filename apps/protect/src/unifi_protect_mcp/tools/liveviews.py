@@ -10,6 +10,11 @@ from typing import Annotated, Any, Dict, List
 
 from mcp.types import ToolAnnotations
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.models.liveviews import (
+    Liveview,
+    from_controller as liveview_from_controller,
+    to_controller_create as liveview_to_controller_create,
+)
 from pydantic import Field
 
 from unifi_protect_mcp.runtime import liveview_manager, server
@@ -36,7 +41,8 @@ async def protect_list_liveviews() -> Dict[str, Any]:
     """List all liveviews."""
     logger.info("protect_list_liveviews tool called")
     try:
-        liveviews = await liveview_manager.list_liveviews()
+        raw_liveviews = await liveview_manager.list_liveviews()
+        liveviews = [liveview_from_controller(lv).model_dump(exclude_none=True) for lv in raw_liveviews]
         return {"success": True, "data": {"liveviews": liveviews, "count": len(liveviews)}}
     except Exception as e:
         logger.error("Error listing liveviews: %s", e, exc_info=True)
@@ -83,7 +89,13 @@ async def protect_create_liveview(
         if not camera_ids:
             return {"success": False, "error": "At least one camera ID is required."}
 
-        result = await liveview_manager.create_liveview(name=name, camera_ids=camera_ids)
+        try:
+            model = Liveview(name=name, cameras=camera_ids)
+        except Exception as e:
+            return {"success": False, "error": f"Invalid liveview input: {e}"}
+        payload = liveview_to_controller_create(model)
+
+        result = await liveview_manager.create_liveview(payload["name"], payload["camera_ids"])
 
         # Since creation is not supported via uiprotect, return info regardless of confirm
         return {"success": False, "error": result["message"], "data": result}
