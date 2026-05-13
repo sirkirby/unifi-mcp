@@ -2087,6 +2087,17 @@
             ],
             "title": "Camera"
           },
+          "detected_thumbnail_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detected Thumbnail Id"
+          },
           "end": {
             "anyOf": [
               {
@@ -2108,6 +2119,39 @@
               }
             ],
             "title": "Id"
+          },
+          "recognized_person_confidence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recognized Person Confidence"
+          },
+          "recognized_person_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recognized Person Id"
+          },
+          "recognized_person_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recognized Person Name"
           },
           "score": {
             "anyOf": [

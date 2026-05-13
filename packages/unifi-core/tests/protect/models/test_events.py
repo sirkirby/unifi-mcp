@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from unifi_core.protect.models.events import (
-    Event,
-    SmartDetection,
-    EventThumbnail,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    Event,
+    EventThumbnail,
+    SmartDetection,
     from_controller,
     smart_detection_from_controller,
     thumbnail_from_controller,
@@ -52,6 +52,10 @@ class TestFromController:
             "smart_detect_types": ["person"],
             "camera": "cam-001",
             "thumbnail": "thumb-001",
+            "recognized_person_id": "face-group-1",
+            "recognized_person_name": "Assigned Person",
+            "recognized_person_confidence": 94,
+            "detected_thumbnail_id": "crop-1",
         }
         evt = from_controller(raw)
         assert evt.id == "evt-001"
@@ -62,6 +66,10 @@ class TestFromController:
         assert evt.smart_detect_types == ["person"]
         assert evt.camera == "cam-001"
         assert evt.thumbnail == "thumb-001"
+        assert evt.recognized_person_id == "face-group-1"
+        assert evt.recognized_person_name == "Assigned Person"
+        assert evt.recognized_person_confidence == 94
+        assert evt.detected_thumbnail_id == "crop-1"
 
     def test_missing_fields_default_to_none_or_empty(self) -> None:
         evt = from_controller({"id": "evt-002"})
@@ -123,6 +131,10 @@ class TestFromController:
         evt = from_controller({"id": "evt-012", "smart_detect_types": ["person", "vehicle"]})
         assert evt.smart_detect_types == ["person", "vehicle"]
 
+    def test_detected_thumbnail_id_camel_case(self) -> None:
+        evt = from_controller({"id": "evt-013", "detectedThumbnailId": "crop-camel"})
+        assert evt.detected_thumbnail_id == "crop-camel"
+
 
 class TestSmartDetectionFromController:
     def test_full_dict(self) -> None:
@@ -135,6 +147,10 @@ class TestSmartDetectionFromController:
             "smart_detect_types": ["person", "animal"],
             "camera": "cam-002",
             "thumbnail": "thumb-002",
+            "recognized_person_id": "face-group-2",
+            "recognized_person_name": "Another Person",
+            "recognized_person_confidence": 91,
+            "detected_thumbnail_id": "crop-2",
         }
         sd = smart_detection_from_controller(raw)
         assert isinstance(sd, SmartDetection)
@@ -146,6 +162,10 @@ class TestSmartDetectionFromController:
         assert sd.smart_detect_types == ["person", "animal"]
         assert sd.camera == "cam-002"
         assert sd.thumbnail == "thumb-002"
+        assert sd.recognized_person_id == "face-group-2"
+        assert sd.recognized_person_name == "Another Person"
+        assert sd.recognized_person_confidence == 91
+        assert sd.detected_thumbnail_id == "crop-2"
 
     def test_missing_fields_default_to_none_or_empty(self) -> None:
         sd = smart_detection_from_controller({"id": "sd-002"})

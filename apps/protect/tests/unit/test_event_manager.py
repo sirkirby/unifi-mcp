@@ -26,6 +26,8 @@ def _make_event(**overrides) -> MagicMock:
     ev.category = overrides.get("category", "motion")
     ev.sub_category = overrides.get("sub_category", None)
     ev.is_favorite = overrides.get("is_favorite", False)
+    ev.metadata = overrides.get("metadata", None)
+    ev.get_detected_thumbnail = MagicMock(return_value=overrides.get("detected_thumbnail", None))
     ev.model = overrides.get("model", ModelType.EVENT)
     ev.save_device = AsyncMock()
     return ev
@@ -45,6 +47,7 @@ def _make_connection_manager(events=None) -> MagicMock:
     cm.client.get_events = AsyncMock(return_value=events or [])
     cm.client.get_event = AsyncMock()
     cm.client.get_event_thumbnail = AsyncMock()
+    cm.client.api_request = AsyncMock(return_value={"groups": []})
     cm.client.subscribe_websocket = MagicMock(return_value=MagicMock())  # unsub callable
     return cm
 
@@ -314,6 +317,41 @@ class TestEventManagerGetEvent:
         cm.client.get_event.assert_awaited_once_with("evt-123")
 
     @pytest.mark.asyncio
+    async def test_backfills_recognition_metadata_from_list_path(self):
+        detail_event = _make_event(
+            id="evt-123",
+            type=EventType.SMART_DETECT,
+            smart_detect_types=[SmartDetectObjectType.FACE],
+            metadata={"detectedThumbnails": [{"type": "face", "croppedId": "detail-crop"}]},
+        )
+        list_event = _make_event(
+            id="evt-123",
+            type=EventType.SMART_DETECT,
+            smart_detect_types=[SmartDetectObjectType.FACE],
+            metadata={
+                "detectedThumbnails": [
+                    {
+                        "type": "face",
+                        "croppedId": "list-crop",
+                        "group": {"id": "face-group-1", "matchedName": "Assigned Person", "confidence": 94},
+                    }
+                ]
+            },
+        )
+        cm = _make_connection_manager()
+        cm.client.get_event = AsyncMock(return_value=detail_event)
+        cm.client.get_events = AsyncMock(return_value=[list_event])
+        mgr = EventManager(cm)
+
+        result = await mgr.get_event("evt-123")
+
+        assert result["recognized_person_id"] == "face-group-1"
+        assert result["recognized_person_name"] == "Assigned Person"
+        assert result["recognized_person_confidence"] == 94
+        assert result["detected_thumbnail_id"] == "list-crop"
+        cm.client.get_events.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_not_found(self):
         cm = _make_connection_manager()
         cm.client.get_event = AsyncMock(side_effect=Exception("404 Not Found"))
@@ -431,6 +469,45 @@ class TestEventManagerListSmartDetections:
         results = await mgr.list_smart_detections(camera_id="cam-001")
         assert len(results) == 1
 
+    @pytest.mark.asyncio
+    async def test_known_face_name_join(self):
+        events = [
+            _make_event(
+                id="sd-1",
+                type=EventType.SMART_DETECT,
+                score=90,
+                smart_detect_types=[SmartDetectObjectType.FACE],
+                metadata={
+                    "detectedThumbnails": [
+                        {
+                            "type": "face",
+                            "croppedId": "crop-1",
+                            "group": {"id": "face-group-1", "confidence": 88},
+                        }
+                    ]
+                },
+            )
+        ]
+        cm = _make_connection_manager(events=events)
+        cm.client.api_request = AsyncMock(
+            return_value={
+                "groups": [
+                    {
+                        "id": "face-group-1",
+                        "name": "Assigned Person",
+                        "matchedName": "Assigned Person",
+                    }
+                ]
+            }
+        )
+        mgr = EventManager(cm)
+
+        results = await mgr.list_smart_detections(detection_type="face", min_confidence=0)
+
+        assert results[0]["recognized_person_id"] == "face-group-1"
+        assert results[0]["recognized_person_name"] == "Assigned Person"
+        cm.client.api_request.assert_awaited_once()
+
 
 # ---------------------------------------------------------------------------
 # REST API: acknowledge_event
@@ -510,6 +587,85 @@ class TestEventToDict:
         assert d["is_favorite"] is True
         assert d["start"] is not None
         assert d["end"] is not None
+
+    def test_face_recognition_metadata_from_detected_thumbnail(self):
+        cm = _make_connection_manager()
+        mgr = EventManager(cm)
+        group = MagicMock()
+        group.id = "face-group-1"
+        group.name = "Lobby Person"
+        group.matched_name = "Assigned Person"
+        group.confidence = 94
+        thumbnail = MagicMock()
+        thumbnail.type = "face"
+        thumbnail.thumbnail_id = None
+        thumbnail.thumbnailId = None
+        thumbnail.cropped_id = "crop-1"
+        thumbnail.clock_best_wall = datetime(2026, 3, 16, 12, 0, tzinfo=timezone.utc)
+        thumbnail.confidence = 88
+        thumbnail.group = group
+        metadata = MagicMock()
+        metadata.detected_thumbnails = [thumbnail]
+        event = _make_event(
+            type=EventType.SMART_DETECT,
+            smart_detect_types=[SmartDetectObjectType.FACE],
+            metadata=metadata,
+        )
+
+        d = mgr._event_to_dict(event)
+
+        assert d["recognized_person_id"] == "face-group-1"
+        assert d["recognized_person_name"] == "Assigned Person"
+        assert d["recognized_person_confidence"] == 94
+        assert d["detected_thumbnail_id"] == "crop-1"
+
+    def test_face_recognition_uses_group_id_without_name(self):
+        cm = _make_connection_manager()
+        mgr = EventManager(cm)
+        metadata = {
+            "detectedThumbnails": [
+                {
+                    "type": "face",
+                    "croppedId": "crop-2",
+                    "group": {"id": "face-group-2", "confidence": 81},
+                }
+            ]
+        }
+        event = _make_event(
+            type=EventType.SMART_DETECT,
+            smart_detect_types=[SmartDetectObjectType.FACE],
+            metadata=metadata,
+        )
+
+        d = mgr._event_to_dict(event)
+
+        assert d["recognized_person_id"] == "face-group-2"
+        assert d["recognized_person_confidence"] == 81
+        assert "recognized_person_name" not in d
+        assert d["detected_thumbnail_id"] == "crop-2"
+
+    def test_non_face_recognition_group_is_not_reported_as_person(self):
+        cm = _make_connection_manager()
+        mgr = EventManager(cm)
+        metadata = {
+            "detectedThumbnails": [
+                {
+                    "type": "licensePlate",
+                    "croppedId": "plate-crop",
+                    "group": {"id": "plate-group", "matchedName": "ABC123", "confidence": 99},
+                }
+            ]
+        }
+        event = _make_event(
+            type=EventType.SMART_DETECT,
+            smart_detect_types=[SmartDetectObjectType.LICENSE_PLATE],
+            metadata=metadata,
+        )
+
+        d = mgr._event_to_dict(event)
+
+        assert "recognized_person_id" not in d
+        assert "recognized_person_name" not in d
 
     def test_event_with_no_end(self):
         cm = _make_connection_manager()

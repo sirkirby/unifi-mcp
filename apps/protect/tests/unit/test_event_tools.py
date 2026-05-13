@@ -101,10 +101,21 @@ class TestProtectGetEvent:
     async def test_success(self, mock_event_manager):
         from unifi_protect_mcp.tools.events import protect_get_event
 
-        mock_event_manager.get_event = AsyncMock(return_value={"id": "evt-123", "type": "motion", "score": 85})
+        mock_event_manager.get_event = AsyncMock(
+            return_value={
+                "id": "evt-123",
+                "type": "smartDetectZone",
+                "score": 85,
+                "recognized_person_id": "face-group-1",
+                "recognized_person_name": "Assigned Person",
+                "recognized_person_confidence": 94,
+                "detected_thumbnail_id": "crop-1",
+            }
+        )
         result = await protect_get_event("evt-123")
         assert result["success"] is True
         assert result["data"]["id"] == "evt-123"
+        assert result["data"]["recognized_person_name"] == "Assigned Person"
 
     @pytest.mark.asyncio
     async def test_not_found(self, mock_event_manager):
@@ -186,12 +197,20 @@ class TestProtectListSmartDetections:
 
         mock_event_manager.list_smart_detections = AsyncMock(
             return_value=[
-                {"id": "sd-1", "type": "smartDetectZone", "score": 90, "smart_detect_types": ["person"]},
+                {
+                    "id": "sd-1",
+                    "type": "smartDetectZone",
+                    "score": 90,
+                    "smart_detect_types": ["face"],
+                    "recognized_person_id": "face-group-1",
+                    "recognized_person_name": "Assigned Person",
+                },
             ]
         )
         result = await protect_list_smart_detections()
         assert result["success"] is True
         assert result["data"]["count"] == 1
+        assert result["data"]["detections"][0]["recognized_person_id"] == "face-group-1"
 
     @pytest.mark.asyncio
     async def test_with_filters(self, mock_event_manager):
@@ -231,7 +250,7 @@ class TestProtectRecentEvents:
         from unifi_protect_mcp.tools.events import protect_recent_events
 
         mock_event_manager.get_recent_from_buffer.return_value = [
-            {"id": "evt-1", "type": "motion"},
+            {"id": "evt-1", "type": "motion", "recognized_person_name": "Assigned Person"},
             {"id": "evt-2", "type": "ring"},
         ]
         mock_event_manager.buffer_size = 10
@@ -240,6 +259,7 @@ class TestProtectRecentEvents:
         assert result["data"]["count"] == 2
         assert result["data"]["source"] == "websocket_buffer"
         assert result["data"]["buffer_size"] == 10
+        assert result["data"]["events"][0]["recognized_person_name"] == "Assigned Person"
 
     @pytest.mark.asyncio
     async def test_with_filters(self, mock_event_manager):

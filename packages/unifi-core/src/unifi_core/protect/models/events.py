@@ -17,13 +17,43 @@ class Event(BaseModel):
     """Canonical Protect event row (list + detail share this shape, read-only)."""
 
     id: Optional[str] = Field(default=None, description="Event UUID", json_schema_extra={"mutable": False})
-    type: Optional[str] = Field(default=None, description="Event type (motion, smartDetectZone, ring, etc.)", json_schema_extra={"mutable": False})
+    type: Optional[str] = Field(
+        default=None,
+        description="Event type (motion, smartDetectZone, ring, etc.)",
+        json_schema_extra={"mutable": False},
+    )
     start: Optional[str] = Field(default=None, description="ISO start timestamp", json_schema_extra={"mutable": False})
     end: Optional[str] = Field(default=None, description="ISO end timestamp", json_schema_extra={"mutable": False})
-    score: Optional[int] = Field(default=None, description="Detection confidence score (0-100)", json_schema_extra={"mutable": False})
-    smart_detect_types: List[str] = Field(default_factory=list, description="Smart detection sub-types (person, vehicle, etc.)", json_schema_extra={"mutable": False})
-    camera: Optional[str] = Field(default=None, description="Camera UUID this event belongs to", json_schema_extra={"mutable": False})
-    thumbnail: Optional[str] = Field(default=None, description="Thumbnail ID for this event", json_schema_extra={"mutable": False})
+    score: Optional[int] = Field(
+        default=None, description="Detection confidence score (0-100)", json_schema_extra={"mutable": False}
+    )
+    smart_detect_types: List[str] = Field(
+        default_factory=list,
+        description="Smart detection sub-types (person, vehicle, etc.)",
+        json_schema_extra={"mutable": False},
+    )
+    camera: Optional[str] = Field(
+        default=None, description="Camera UUID this event belongs to", json_schema_extra={"mutable": False}
+    )
+    thumbnail: Optional[str] = Field(
+        default=None, description="Thumbnail ID for this event", json_schema_extra={"mutable": False}
+    )
+    recognized_person_id: Optional[str] = Field(
+        default=None, description="Recognized Known Face group UUID when present", json_schema_extra={"mutable": False}
+    )
+    recognized_person_name: Optional[str] = Field(
+        default=None,
+        description="Recognized Known Face display name when present",
+        json_schema_extra={"mutable": False},
+    )
+    recognized_person_confidence: Optional[int] = Field(
+        default=None, description="Known Face match confidence when present", json_schema_extra={"mutable": False}
+    )
+    detected_thumbnail_id: Optional[str] = Field(
+        default=None,
+        description="Detected thumbnail/crop reference ID when present",
+        json_schema_extra={"mutable": False},
+    )
 
 
 class SmartDetection(BaseModel):
@@ -34,26 +64,70 @@ class SmartDetection(BaseModel):
     """
 
     id: Optional[str] = Field(default=None, description="Event UUID", json_schema_extra={"mutable": False})
-    type: Optional[str] = Field(default=None, description="Event type (smartDetectZone)", json_schema_extra={"mutable": False})
+    type: Optional[str] = Field(
+        default=None, description="Event type (smartDetectZone)", json_schema_extra={"mutable": False}
+    )
     start: Optional[str] = Field(default=None, description="ISO start timestamp", json_schema_extra={"mutable": False})
     end: Optional[str] = Field(default=None, description="ISO end timestamp", json_schema_extra={"mutable": False})
-    score: Optional[int] = Field(default=None, description="Detection confidence score (0-100)", json_schema_extra={"mutable": False})
-    smart_detect_types: List[str] = Field(default_factory=list, description="Smart detection sub-types (person, vehicle, etc.)", json_schema_extra={"mutable": False})
-    camera: Optional[str] = Field(default=None, description="Camera UUID this event belongs to", json_schema_extra={"mutable": False})
-    thumbnail: Optional[str] = Field(default=None, description="Thumbnail ID for this event", json_schema_extra={"mutable": False})
+    score: Optional[int] = Field(
+        default=None, description="Detection confidence score (0-100)", json_schema_extra={"mutable": False}
+    )
+    smart_detect_types: List[str] = Field(
+        default_factory=list,
+        description="Smart detection sub-types (person, vehicle, etc.)",
+        json_schema_extra={"mutable": False},
+    )
+    camera: Optional[str] = Field(
+        default=None, description="Camera UUID this event belongs to", json_schema_extra={"mutable": False}
+    )
+    thumbnail: Optional[str] = Field(
+        default=None, description="Thumbnail ID for this event", json_schema_extra={"mutable": False}
+    )
+    recognized_person_id: Optional[str] = Field(
+        default=None, description="Recognized Known Face group UUID when present", json_schema_extra={"mutable": False}
+    )
+    recognized_person_name: Optional[str] = Field(
+        default=None,
+        description="Recognized Known Face display name when present",
+        json_schema_extra={"mutable": False},
+    )
+    recognized_person_confidence: Optional[int] = Field(
+        default=None, description="Known Face match confidence when present", json_schema_extra={"mutable": False}
+    )
+    detected_thumbnail_id: Optional[str] = Field(
+        default=None,
+        description="Detected thumbnail/crop reference ID when present",
+        json_schema_extra={"mutable": False},
+    )
 
 
 class EventThumbnail(BaseModel):
     """Thumbnail metadata for a Protect event (read-only)."""
 
-    event_id: Optional[str] = Field(default=None, description="Event UUID this thumbnail belongs to", json_schema_extra={"mutable": False})
-    thumbnail_id: Optional[str] = Field(default=None, description="Thumbnail asset ID", json_schema_extra={"mutable": False})
-    thumbnail_available: Optional[bool] = Field(default=None, description="Whether the thumbnail is available", json_schema_extra={"mutable": False})
-    image_base64: Optional[str] = Field(default=None, description="Base64-encoded JPEG thumbnail data", json_schema_extra={"mutable": False})
-    content_type: Optional[str] = Field(default=None, description="MIME type of the thumbnail (e.g. image/jpeg)", json_schema_extra={"mutable": False})
-    message: Optional[str] = Field(default=None, description="Status or error message", json_schema_extra={"mutable": False})
-    url: Optional[str] = Field(default=None, description="URL to the thumbnail resource", json_schema_extra={"mutable": False})
-    size_bytes: Optional[int] = Field(default=None, description="Thumbnail size in bytes", json_schema_extra={"mutable": False})
+    event_id: Optional[str] = Field(
+        default=None, description="Event UUID this thumbnail belongs to", json_schema_extra={"mutable": False}
+    )
+    thumbnail_id: Optional[str] = Field(
+        default=None, description="Thumbnail asset ID", json_schema_extra={"mutable": False}
+    )
+    thumbnail_available: Optional[bool] = Field(
+        default=None, description="Whether the thumbnail is available", json_schema_extra={"mutable": False}
+    )
+    image_base64: Optional[str] = Field(
+        default=None, description="Base64-encoded JPEG thumbnail data", json_schema_extra={"mutable": False}
+    )
+    content_type: Optional[str] = Field(
+        default=None, description="MIME type of the thumbnail (e.g. image/jpeg)", json_schema_extra={"mutable": False}
+    )
+    message: Optional[str] = Field(
+        default=None, description="Status or error message", json_schema_extra={"mutable": False}
+    )
+    url: Optional[str] = Field(
+        default=None, description="URL to the thumbnail resource", json_schema_extra={"mutable": False}
+    )
+    size_bytes: Optional[int] = Field(
+        default=None, description="Thumbnail size in bytes", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS = frozenset()
@@ -95,6 +169,14 @@ def _coerce_id(raw: Any, key: str) -> Optional[str]:
     return str(value)
 
 
+def _get_any(raw: Any, *keys: str) -> Any:
+    for key in keys:
+        value = _get(raw, key)
+        if value is not None:
+            return value
+    return None
+
+
 def from_controller(raw: Any) -> Event:
     """Build an Event from a uiprotect / manager dict or object."""
     sdt = _get(raw, "smart_detect_types")
@@ -113,6 +195,10 @@ def from_controller(raw: Any) -> Event:
         smart_detect_types=sdt,
         camera=camera,
         thumbnail=thumbnail,
+        recognized_person_id=_get(raw, "recognized_person_id"),
+        recognized_person_name=_get(raw, "recognized_person_name"),
+        recognized_person_confidence=_get(raw, "recognized_person_confidence"),
+        detected_thumbnail_id=_get_any(raw, "detected_thumbnail_id", "detectedThumbnailId"),
     )
 
 
@@ -134,6 +220,10 @@ def smart_detection_from_controller(raw: Any) -> SmartDetection:
         smart_detect_types=sdt,
         camera=camera,
         thumbnail=thumbnail,
+        recognized_person_id=_get(raw, "recognized_person_id"),
+        recognized_person_name=_get(raw, "recognized_person_name"),
+        recognized_person_confidence=_get(raw, "recognized_person_confidence"),
+        detected_thumbnail_id=_get_any(raw, "detected_thumbnail_id", "detectedThumbnailId"),
     )
 
 

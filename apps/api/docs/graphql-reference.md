@@ -607,6 +607,10 @@ type Event {
   smartDetectTypes: [String!]!
   camera: ID
   thumbnail: ID
+  recognizedPersonId: ID
+  recognizedPersonName: String
+  recognizedPersonConfidence: Int
+  detectedThumbnailId: ID
 }
 
 """A curated event-log entry."""
@@ -1527,6 +1531,10 @@ type SmartDetection {
   smartDetectTypes: [String!]!
   camera: ID
   thumbnail: ID
+  recognizedPersonId: ID
+  recognizedPersonName: String
+  recognizedPersonConfidence: Int
+  detectedThumbnailId: ID
 }
 
 """Paginated page of UniFi Protect smart-detections."""

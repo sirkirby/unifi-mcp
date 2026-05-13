@@ -61,6 +61,10 @@ class Event:
     smart_detect_types: list[str]
     camera: strawberry.ID | None
     thumbnail: strawberry.ID | None
+    recognized_person_id: strawberry.ID | None
+    recognized_person_name: str | None
+    recognized_person_confidence: int | None
+    detected_thumbnail_id: strawberry.ID | None
 
     # Context for relationship edges — NOT in SDL, NOT in to_dict().
     _controller_id: strawberry.Private[str | None] = None
@@ -85,6 +89,10 @@ class Event:
             smart_detect_types=_get(obj, "smart_detect_types") or [],
             camera=_get(obj, "camera_id"),
             thumbnail=_get(obj, "thumbnail_id"),
+            recognized_person_id=_get(obj, "recognized_person_id"),
+            recognized_person_name=_get(obj, "recognized_person_name"),
+            recognized_person_confidence=_get(obj, "recognized_person_confidence"),
+            detected_thumbnail_id=_get(obj, "detected_thumbnail_id"),
         )
 
     def to_dict(self) -> dict:
@@ -97,6 +105,10 @@ class Event:
             "smart_detect_types": list(self.smart_detect_types),
             "camera": self.camera,
             "thumbnail": self.thumbnail,
+            "recognized_person_id": self.recognized_person_id,
+            "recognized_person_name": self.recognized_person_name,
+            "recognized_person_confidence": self.recognized_person_confidence,
+            "detected_thumbnail_id": self.detected_thumbnail_id,
         }
 
 
@@ -115,13 +127,17 @@ class SmartDetection:
     smart_detect_types: list[str]
     camera: strawberry.ID | None
     thumbnail: strawberry.ID | None
+    recognized_person_id: strawberry.ID | None
+    recognized_person_name: str | None
+    recognized_person_confidence: int | None
+    detected_thumbnail_id: strawberry.ID | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
         return {
             "kind": kind,
             "primary_key": "id",
-            "display_columns": ["type", "start", "score", "smart_detect_types"],
+            "display_columns": ["type", "start", "score", "smart_detect_types", "recognized_person_name"],
             "sort_default": "start:desc",
         }
 
@@ -136,6 +152,10 @@ class SmartDetection:
             smart_detect_types=_get(obj, "smart_detect_types") or [],
             camera=_get(obj, "camera_id"),
             thumbnail=_get(obj, "thumbnail_id"),
+            recognized_person_id=_get(obj, "recognized_person_id"),
+            recognized_person_name=_get(obj, "recognized_person_name"),
+            recognized_person_confidence=_get(obj, "recognized_person_confidence"),
+            detected_thumbnail_id=_get(obj, "detected_thumbnail_id"),
         )
 
     def to_dict(self) -> dict:
@@ -148,6 +168,10 @@ class SmartDetection:
             "smart_detect_types": list(self.smart_detect_types),
             "camera": self.camera,
             "thumbnail": self.thumbnail,
+            "recognized_person_id": self.recognized_person_id,
+            "recognized_person_name": self.recognized_person_name,
+            "recognized_person_confidence": self.recognized_person_confidence,
+            "detected_thumbnail_id": self.detected_thumbnail_id,
         }
 
 

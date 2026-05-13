@@ -56,7 +56,9 @@ def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
         "Query events from the NVR with optional filters. Returns events from "
         "the Protect controller's database via REST API. Supports filtering by "
         "time range, event type (motion, smartDetectZone, ring, etc.), camera ID, "
-        "and result limit. For real-time buffer events use protect_recent_events."
+        "and result limit. Face events include recognized Known Face identity "
+        "fields when Protect provides them. For real-time buffer events use "
+        "protect_recent_events."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -116,7 +118,8 @@ async def protect_list_events(
     name="protect_get_event",
     description=(
         "Get detailed information for a single event by ID. Returns event type, "
-        "camera, timestamps, score, smart detection types, and thumbnail info."
+        "camera, timestamps, score, smart detection types, thumbnail info, and "
+        "recognized Known Face identity fields when Protect provides them."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -177,7 +180,9 @@ async def protect_get_event_thumbnail(
         "List smart detection events (person, vehicle, animal, package, etc.) "
         "with optional filters. Filters by detection type, camera, confidence "
         "score, and time range. Only returns events above the minimum confidence "
-        "threshold (default 50, configurable via PROTECT_SMART_DETECTION_MIN_CONFIDENCE)."
+        "threshold (default 50, configurable via PROTECT_SMART_DETECTION_MIN_CONFIDENCE). "
+        "Face detections include recognized Known Face identity fields when "
+        "Protect provides them."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -248,8 +253,9 @@ async def protect_list_smart_detections(
         "Get recent events from the in-memory websocket buffer. This is fast "
         "(no API call) and returns events received via the real-time websocket "
         "stream. Supports filtering by event_type, camera_id, min_confidence, "
-        "and limit. Use this for real-time monitoring; use protect_list_events "
-        "for historical queries."
+        "and limit. Face events include recognized Known Face identity fields "
+        "when Protect provides them. Use this for real-time monitoring; use "
+        "protect_list_events for historical queries."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )

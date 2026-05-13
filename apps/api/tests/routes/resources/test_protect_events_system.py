@@ -8,19 +8,17 @@ Covers 9 endpoint families across 4 route modules:
   /protect/health, /protect/system-info, /viewers
 """
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
-from unifi_core.exceptions import UniFiNotFoundError
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
+from unifi_core.exceptions import UniFiNotFoundError
 
 
 def _cfg(tmp_path):
@@ -40,17 +38,29 @@ async def _bootstrap(tmp_path, products="protect"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="P", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="P",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -87,6 +97,8 @@ async def test_list_smart_detections_happy_path(tmp_path, monkeypatch) -> None:
             "score": 90,
             "smart_detect_types": ["person"],
             "camera_id": "cam-1",
+            "recognized_person_id": "face-group-1",
+            "recognized_person_name": "Assigned Person",
         }
         for i in range(3)
     ]
@@ -95,6 +107,7 @@ async def test_list_smart_detections_happy_path(tmp_path, monkeypatch) -> None:
         return fake_events
 
     from unifi_core.protect.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "list_smart_detections", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -105,6 +118,7 @@ async def test_list_smart_detections_happy_path(tmp_path, monkeypatch) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert len(body["items"]) == 3
+    assert body["items"][0]["recognized_person_name"] == "Assigned Person"
     assert body["render_hint"]["kind"] == "event_log"
 
 
@@ -120,9 +134,13 @@ async def test_recent_events_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     def fake_buffer(self, *a, **kw):
-        return [{"id": "ev-1", "type": "motion"}, {"id": "ev-2", "type": "ring"}]
+        return [
+            {"id": "ev-1", "type": "motion", "recognized_person_name": "Assigned Person"},
+            {"id": "ev-2", "type": "ring"},
+        ]
 
     from unifi_core.protect.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "get_recent_from_buffer", fake_buffer)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -135,6 +153,7 @@ async def test_recent_events_happy_path(tmp_path, monkeypatch) -> None:
     assert body["render_hint"]["kind"] == "detail"
     assert body["data"]["count"] == 2
     assert len(body["data"]["events"]) == 2
+    assert body["data"]["events"][0]["recognized_person_name"] == "Assigned Person"
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +174,10 @@ async def test_get_event_happy_path(tmp_path, monkeypatch) -> None:
         "end": 1700000010,
         "camera_id": "cam-1",
         "score": 88,
+        "recognized_person_id": "face-group-1",
+        "recognized_person_name": "Assigned Person",
+        "recognized_person_confidence": 94,
+        "detected_thumbnail_id": "crop-1",
     }
 
     async def fake(self, event_id):
@@ -162,6 +185,7 @@ async def test_get_event_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.protect.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "get_event", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -172,6 +196,7 @@ async def test_get_event_happy_path(tmp_path, monkeypatch) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["data"]["id"] == "ev-1"
+    assert body["data"]["recognized_person_name"] == "Assigned Person"
     assert body["render_hint"]["kind"] == "detail"
 
 
@@ -185,6 +210,7 @@ async def test_get_event_404_via_unifi_not_found(tmp_path, monkeypatch) -> None:
         raise UniFiNotFoundError("event", event_id)
 
     from unifi_core.protect.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "get_event", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -213,6 +239,7 @@ async def test_get_event_thumbnail_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.protect.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "get_event_thumbnail", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -254,6 +281,7 @@ async def test_get_recording_status_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.protect.managers.recording_manager import RecordingManager
+
     monkeypatch.setattr(RecordingManager, "get_recording_status", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -307,6 +335,7 @@ async def test_list_liveviews_happy_path(tmp_path, monkeypatch) -> None:
         return fake_lvs
 
     from unifi_core.protect.managers.liveview_manager import LiveviewManager
+
     monkeypatch.setattr(LiveviewManager, "list_liveviews", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -344,6 +373,7 @@ async def test_get_liveview_filter_404(tmp_path, monkeypatch) -> None:
         return fake_lvs
 
     from unifi_core.protect.managers.liveview_manager import LiveviewManager
+
     monkeypatch.setattr(LiveviewManager, "list_liveviews", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -383,6 +413,7 @@ async def test_get_firmware_status_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.protect.managers.system_manager import SystemManager
+
     monkeypatch.setattr(SystemManager, "get_firmware_status", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -418,6 +449,7 @@ async def test_alarm_get_status_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.protect.managers.alarm_manager import AlarmManager
+
     monkeypatch.setattr(AlarmManager, "get_arm_state", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -446,6 +478,7 @@ async def test_alarm_list_profiles_happy_path(tmp_path, monkeypatch) -> None:
         return fake_profiles
 
     from unifi_core.protect.managers.alarm_manager import AlarmManager
+
     monkeypatch.setattr(AlarmManager, "list_arm_profiles", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -473,8 +506,11 @@ async def test_protect_health_happy_path(tmp_path, monkeypatch) -> None:
         "cpu": {"average_load": 12.5, "temperature_c": 50.0},
         "memory": {"available_bytes": 1, "free_bytes": 2, "total_bytes": 3},
         "storage": {
-            "available_bytes": 1, "size_bytes": 2, "used_bytes": 3,
-            "is_recycling": False, "type": "hdd",
+            "available_bytes": 1,
+            "size_bytes": 2,
+            "used_bytes": 3,
+            "is_recycling": False,
+            "type": "hdd",
         },
         "is_updating": False,
         "uptime_seconds": 3600,
@@ -484,6 +520,7 @@ async def test_protect_health_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.protect.managers.system_manager import SystemManager
+
     monkeypatch.setattr(SystemManager, "get_health", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -517,6 +554,7 @@ async def test_protect_system_info_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.protect.managers.system_manager import SystemManager
+
     monkeypatch.setattr(SystemManager, "get_system_info", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -562,6 +600,7 @@ async def test_list_viewers_happy_path(tmp_path, monkeypatch) -> None:
         return fake_viewers
 
     from unifi_core.protect.managers.system_manager import SystemManager
+
     monkeypatch.setattr(SystemManager, "list_viewers", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

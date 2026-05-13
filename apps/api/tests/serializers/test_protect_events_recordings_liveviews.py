@@ -117,6 +117,10 @@ def test_event_detail_serializer_shape() -> None:
         "smart_detect_types": ["person"],
         "camera_id": "cam1",
         "thumbnail_id": "thumb-1",
+        "recognized_person_id": "face-group-1",
+        "recognized_person_name": "Assigned Person",
+        "recognized_person_confidence": 94,
+        "detected_thumbnail_id": "crop-1",
     }
     out = Event.from_manager_output(sample).to_dict()
     assert out["id"] == "evt-1"
@@ -125,6 +129,10 @@ def test_event_detail_serializer_shape() -> None:
     assert out["camera"] == "cam1"
     assert out["thumbnail"] == "thumb-1"
     assert out["smart_detect_types"] == ["person"]
+    assert out["recognized_person_id"] == "face-group-1"
+    assert out["recognized_person_name"] == "Assigned Person"
+    assert out["recognized_person_confidence"] == 94
+    assert out["detected_thumbnail_id"] == "crop-1"
     assert Event.render_hint("detail")["kind"] == "detail"
     assert Event.render_hint("event_log")["sort_default"] == "start:desc"
 
@@ -177,13 +185,21 @@ def test_smart_detections_serializer_shape() -> None:
         "smart_detect_types": ["vehicle"],
         "camera_id": "cam1",
         "thumbnail_id": "thumb-2",
+        "recognized_person_id": "face-group-2",
+        "recognized_person_name": "Another Person",
+        "recognized_person_confidence": 91,
+        "detected_thumbnail_id": "crop-2",
     }
     out = SmartDetection.from_manager_output(sample).to_dict()
     assert out["id"] == "evt-2"
     assert out["smart_detect_types"] == ["vehicle"]
     assert out["camera"] == "cam1"
+    assert out["recognized_person_name"] == "Another Person"
+    assert out["recognized_person_confidence"] == 91
+    assert out["detected_thumbnail_id"] == "crop-2"
     assert SmartDetection.render_hint("event_log")["kind"] == "event_log"
     assert "smart_detect_types" in SmartDetection.render_hint("event_log")["display_columns"]
+    assert "recognized_person_name" in SmartDetection.render_hint("event_log")["display_columns"]
 
 
 def test_recent_events_serializer_passthrough() -> None:

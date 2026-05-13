@@ -364,7 +364,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get detailed information for a single event by ID. Returns event type, camera, timestamps, score, smart detection types, and thumbnail info.",
+      "description": "Get detailed information for a single event by ID. Returns event type, camera, timestamps, score, smart detection types, thumbnail info, and recognized Known Face identity fields when Protect provides them.",
       "name": "protect_get_event",
       "schema": {
         "input": {
@@ -539,7 +539,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Query events from the NVR with optional filters. Returns events from the Protect controller's database via REST API. Supports filtering by time range, event type (motion, smartDetectZone, ring, etc.), camera ID, and result limit. For real-time buffer events use protect_recent_events.",
+      "description": "Query events from the NVR with optional filters. Returns events from the Protect controller's database via REST API. Supports filtering by time range, event type (motion, smartDetectZone, ring, etc.), camera ID, and result limit. Face events include recognized Known Face identity fields when Protect provides them. For real-time buffer events use protect_recent_events.",
       "name": "protect_list_events",
       "schema": {
         "input": {
@@ -689,7 +689,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List smart detection events (person, vehicle, animal, package, etc.) with optional filters. Filters by detection type, camera, confidence score, and time range. Only returns events above the minimum confidence threshold (default 50, configurable via PROTECT_SMART_DETECTION_MIN_CONFIDENCE).",
+      "description": "List smart detection events (person, vehicle, animal, package, etc.) with optional filters. Filters by detection type, camera, confidence score, and time range. Only returns events above the minimum confidence threshold (default 50, configurable via PROTECT_SMART_DETECTION_MIN_CONFIDENCE). Face detections include recognized Known Face identity fields when Protect provides them.",
       "name": "protect_list_smart_detections",
       "schema": {
         "input": {
@@ -890,7 +890,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by event_type, camera_id, min_confidence, and limit. Use this for real-time monitoring; use protect_list_events for historical queries.",
+      "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by event_type, camera_id, min_confidence, and limit. Face events include recognized Known Face identity fields when Protect provides them. Use this for real-time monitoring; use protect_list_events for historical queries.",
       "name": "protect_recent_events",
       "schema": {
         "input": {
