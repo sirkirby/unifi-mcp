@@ -44,6 +44,7 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("network", "clients", "Client"),
     ("network", "clients", "BlockedClient"),
     ("network", "clients", "ClientLookup"),
+    ("network", "events", "EventLog"),
     ("protect", "cameras", "Camera"),
     ("protect", "lights", "Light"),
     ("protect", "chimes", "Chime"),

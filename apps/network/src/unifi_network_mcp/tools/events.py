@@ -11,6 +11,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import preview_response
+from unifi_core.network.models.events import event_log_from_controller
 from unifi_network_mcp.runtime import server
 
 logger = logging.getLogger(__name__)
@@ -62,17 +63,18 @@ async def list_events(
             event_type=event_type,
         )
 
+        shaped = [event_log_from_controller(e).model_dump(exclude_none=True) for e in events]
         return {
             "success": True,
             "site": event_manager._connection.site,
-            "count": len(events),
+            "count": len(shaped),
             "filters": {
                 "within_hours": within_hours,
                 "limit": limit,
                 "start": start,
                 "event_type": event_type,
             },
-            "events": events,
+            "events": shaped,
         }
     except Exception as e:
         logger.error("Error listing events: %s", e, exc_info=True)
@@ -146,7 +148,8 @@ async def unifi_recent_events(
     logger.info("unifi_recent_events called (type=%s, mac=%s)", event_type, mac)
     mgr = _get_event_manager()
     events = mgr.get_recent_from_buffer(event_type=event_type, mac=mac, limit=limit)
-    return {"events": events, "count": len(events), "buffer_size": mgr.buffer_size}
+    shaped = [event_log_from_controller(e).model_dump(exclude_none=True) for e in events]
+    return {"events": shaped, "count": len(shaped), "buffer_size": mgr.buffer_size}
 
 
 @server.tool(
