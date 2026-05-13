@@ -131,10 +131,13 @@ class TrafficRoute:
     id: strawberry.ID | None
     name: str | None
     matching_target: str | None
-    source_targets: strawberry.scalars.JSON | None  # type: ignore[name-defined]
-    destination_targets: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    network_id: str | None
     next_hop: str | None
     enabled: bool
+    kill_switch_enabled: bool | None
+    # Aggregated read views of the per-type target lists (read-only shapes).
+    source_targets: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    destination_targets: strawberry.scalars.JSON | None  # type: ignore[name-defined]
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -151,6 +154,10 @@ class TrafficRoute:
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "description") or _get(obj, "name"),
             matching_target=_get(obj, "matching_target"),
+            network_id=_get(obj, "network_id"),
+            next_hop=_get(obj, "next_hop"),
+            enabled=bool(_get(obj, "enabled", True)),
+            kill_switch_enabled=_get(obj, "kill_switch_enabled"),
             source_targets=_summarize_targets(_get(obj, "target_devices")),
             destination_targets=_summarize_targets(
                 _get(obj, "domains")
@@ -158,8 +165,6 @@ class TrafficRoute:
                 or _get(obj, "ip_ranges")
                 or _get(obj, "regions")
             ),
-            next_hop=_get(obj, "next_hop") or _get(obj, "network_id"),
-            enabled=bool(_get(obj, "enabled", True)),
         )
 
     def to_dict(self) -> dict:

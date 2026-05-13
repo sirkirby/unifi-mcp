@@ -33,6 +33,7 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("network", "port_forwards", "PortForward"),
     ("network", "switch", "PortProfile"),
     ("network", "qos", "QosRule"),
+    ("network", "traffic_routes", "TrafficRoute"),
     ("protect", "cameras", "Camera"),
     ("protect", "lights", "Light"),
     ("protect", "chimes", "Chime"),
