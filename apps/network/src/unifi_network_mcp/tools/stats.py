@@ -10,6 +10,10 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from unifi_core.network.models.sessions import (
+    client_session_from_controller,
+    client_wifi_details_from_controller,
+)
 from unifi_network_mcp.runtime import client_manager, device_manager, server, stats_manager
 
 logger = logging.getLogger(__name__)
@@ -529,13 +533,14 @@ async def get_client_sessions(
         sessions = await stats_manager.get_client_sessions(
             client_mac=client_mac, duration_hours=duration_hours, limit=limit
         )
+        shaped = [client_session_from_controller(s).model_dump(exclude_none=True) for s in sessions]
         result: Dict[str, Any] = {
             "success": True,
             "site": stats_manager._connection.site,
             "duration": duration,
             "limit": limit,
-            "count": len(sessions),
-            "sessions": sessions,
+            "count": len(shaped),
+            "sessions": shaped,
         }
         if client_mac:
             result["client_mac"] = client_mac
@@ -608,11 +613,12 @@ async def get_client_wifi_details(
         if not wifi_details:
             return {"success": False, "error": f"Client '{client_mac}' not found or is not wireless."}
 
+        shaped = client_wifi_details_from_controller(wifi_details)
         return {
             "success": True,
             "site": stats_manager._connection.site,
             "client_mac": client_mac,
-            "wifi_details": wifi_details,
+            "wifi_details": shaped.model_dump(exclude_none=True),
         }
     except Exception as e:
         logger.error("Error getting WiFi details for %s: %s", client_mac, e, exc_info=True)
