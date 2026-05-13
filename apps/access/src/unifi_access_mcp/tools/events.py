@@ -13,6 +13,10 @@ from unifi_core.exceptions import UniFiNotFoundError
 from pydantic import Field
 
 from unifi_access_mcp.runtime import event_manager, server
+from unifi_core.access.models.events import (
+    activity_summary_from_controller,
+    event_from_controller,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +65,7 @@ async def access_list_events(
     """List access events."""
     logger.info("access_list_events tool called (topic=%s, door=%s, user=%s, limit=%s)", topic, door_id, user_id, limit)
     try:
-        events = await event_manager.list_events(
+        raw_events = await event_manager.list_events(
             topic=topic,
             start=start,
             end=end,
@@ -69,6 +73,7 @@ async def access_list_events(
             user_id=user_id,
             limit=limit,
         )
+        events = [event_from_controller(e).model_dump(exclude_none=True) for e in raw_events]
         return {"success": True, "data": {"events": events, "count": len(events)}}
     except Exception as e:
         logger.error("Error listing events: %s", e, exc_info=True)
@@ -92,7 +97,8 @@ async def access_get_event(
     """Get a single event by ID."""
     logger.info("access_get_event tool called for %s", event_id)
     try:
-        event = await event_manager.get_event(event_id)
+        raw = await event_manager.get_event(event_id)
+        event = event_from_controller(raw).model_dump(exclude_none=True)
         return {"success": True, "data": event}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
@@ -209,7 +215,8 @@ async def access_get_activity_summary(
     """Get activity summary."""
     logger.info("access_get_activity_summary called (door=%s, days=%s)", door_id, days)
     try:
-        summary = await event_manager.get_activity_summary(door_id=door_id, days=days)
+        raw = await event_manager.get_activity_summary(door_id=door_id, days=days)
+        summary = activity_summary_from_controller(raw).model_dump(exclude_none=True)
         return {"success": True, "data": summary}
     except Exception as e:
         logger.error("Error getting activity summary: %s", e, exc_info=True)
