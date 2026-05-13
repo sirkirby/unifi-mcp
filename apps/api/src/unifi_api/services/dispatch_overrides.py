@@ -23,9 +23,24 @@ Each entry is ``tool_name → (manager_attr, method)`` exactly matching the
 here always wins over the AST-derived one.
 
 PR4 of the manager-owned-existence-checks refactor (siblings #172 #173 #175).
+
+Argument translators
+--------------------
+A second mechanism, :data:`DISPATCH_ARG_TRANSLATORS`, addresses a different
+mismatch: tools whose body translates flat user-facing kwargs into a
+controller-shaped payload before calling the manager. The AST walker
+correctly maps the tool to the manager method, but the dispatcher's default
+``await method(**args)`` skips the tool body's translation step. Register a
+translator that converts the action endpoint's ``args`` dict into the
+``(positional, keyword)`` shape the manager expects. Phase 0 seeded this
+for ACL create/update; other tools that share the shape-translation pattern
+should follow the same approach as they migrate to the shared field-symmetry
+model.
 """
 
 from __future__ import annotations
+
+from typing import Any, Callable
 
 # Format: tool_name -> (manager_attr, method_name)
 DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
@@ -93,4 +108,57 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "access_update_policy": ("policy_manager", "apply_update_policy"),
     "access_create_visitor": ("visitor_manager", "apply_create_visitor"),
     "access_delete_visitor": ("visitor_manager", "apply_delete_visitor"),
+}
+
+
+# Format: tool_name -> callable(args_dict) -> (positional_args, keyword_args)
+#
+# The default dispatcher invokes ``manager.method(**args)``. Tools registered
+# here override that with a translator that returns the exact positional and
+# keyword arguments the manager method accepts. Use this when the MCP tool
+# layer does meaningful shape translation (e.g., flat kwargs -> controller-
+# nested payload) that the dispatcher would otherwise skip.
+ArgTranslator = Callable[[dict[str, Any]], tuple[tuple[Any, ...], dict[str, Any]]]
+
+
+def _translate_acl_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Build the controller-shaped payload AclManager.create_acl_rule expects.
+
+    Mirrors the translation in
+    ``apps/network/src/unifi_network_mcp/tools/acl.py:create_acl_rule``.
+    """
+    from unifi_core.network.models.acl import AclRule, to_controller_create
+
+    rule = AclRule(
+        name=args["name"],
+        acl_index=args["acl_index"],
+        action=str(args["action"]).upper(),
+        enabled=args.get("enabled", True),
+        network_id=args["network_id"],
+        source_macs=args.get("source_macs") or [],
+        destination_macs=args.get("destination_macs") or [],
+    )
+    return (to_controller_create(rule),), {}
+
+
+def _translate_acl_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Build (rule_id, controller_update_payload) for AclManager.update_acl_rule.
+
+    Mirrors the translation in
+    ``apps/network/src/unifi_network_mcp/tools/acl.py:update_acl_rule``.
+    Only fields the caller actually supplied are passed through.
+    """
+    from unifi_core.network.models.acl import MUTABLE_FIELDS, to_controller_update
+
+    rule_id = args["rule_id"]
+    fields = {
+        k: v for k, v in args.items()
+        if k != "rule_id" and k in MUTABLE_FIELDS and v is not None
+    }
+    return (rule_id, to_controller_update(fields)), {}
+
+
+DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
+    "unifi_create_acl_rule": _translate_acl_create,
+    "unifi_update_acl_rule": _translate_acl_update,
 }

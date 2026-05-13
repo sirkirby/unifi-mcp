@@ -264,3 +264,176 @@ def test_dispatch_overrides_specific_targets() -> None:
     assert table["access_lock_door"].method == "apply_lock_door"
     assert table["access_create_credential"].method == "apply_create_credential"
     assert table["access_update_policy"].method == "apply_update_policy"
+
+
+# -----------------------------------------------------------------------------
+# Argument translators — bridge tool flat kwargs → manager-shaped positional args
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_acl_create_kwargs_to_controller_payload() -> None:
+    """unifi_create_acl_rule: the MCP tool accepts flat kwargs and builds a
+    controller-shaped payload before calling AclManager.create_acl_rule(payload).
+    The action dispatcher must apply the same translation."""
+    entry = ToolEntry(
+        name="unifi_create_acl_rule",
+        product="network",
+        category="acl_rules",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.create_acl_rule = AsyncMock(return_value={"_id": "r1"})
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_create_acl_rule",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={
+            "name": "Block guest IoT",
+            "acl_index": 65000,
+            "action": "block",  # lowercase — tool layer uppercases
+            "network_id": "net001",
+            "source_macs": ["aa:bb:cc:dd:ee:ff"],
+            "destination_macs": [],
+            "enabled": True,
+        },
+        confirm=True,
+        dispatch_table={
+            "unifi_create_acl_rule": DispatchEntry(
+                manager_attr="acl_manager", method="create_acl_rule"
+            ),
+        },
+    )
+
+    assert result == {"_id": "r1"}
+    # Manager called with exactly one positional dict containing controller-shape
+    domain_manager.create_acl_rule.assert_awaited_once()
+    (positional, keyword) = domain_manager.create_acl_rule.await_args
+    assert keyword == {}, f"expected no kwargs; got {keyword}"
+    assert len(positional) == 1, f"expected one positional arg; got {positional}"
+    payload = positional[0]
+    assert payload["name"] == "Block guest IoT"
+    assert payload["acl_index"] == 65000
+    assert payload["action"] == "BLOCK"  # uppercased
+    assert payload["mac_acl_network_id"] == "net001"
+    assert payload["traffic_source"]["specific_mac_addresses"] == ["aa:bb:cc:dd:ee:ff"]
+    assert payload["traffic_source"]["type"] == "CLIENT_MAC"
+    assert payload["traffic_destination"]["specific_mac_addresses"] == []
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_acl_update_kwargs_to_rule_id_plus_payload() -> None:
+    """unifi_update_acl_rule: the tool accepts (rule_id, **fields) and calls
+    AclManager.update_acl_rule(rule_id, controller_update_payload). The action
+    dispatcher must perform the same translation."""
+    entry = ToolEntry(
+        name="unifi_update_acl_rule",
+        product="network",
+        category="acl_rules",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.update_acl_rule = AsyncMock(return_value={"_id": "r1", "name": "New"})
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_update_acl_rule",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={
+            "rule_id": "r1",
+            "name": "New",
+            "source_macs": ["11:22:33:44:55:66"],
+        },
+        confirm=True,
+        dispatch_table={
+            "unifi_update_acl_rule": DispatchEntry(
+                manager_attr="acl_manager", method="update_acl_rule"
+            ),
+        },
+    )
+
+    domain_manager.update_acl_rule.assert_awaited_once()
+    (positional, keyword) = domain_manager.update_acl_rule.await_args
+    assert keyword == {}, f"expected no kwargs; got {keyword}"
+    assert positional[0] == "r1"
+    update_payload = positional[1]
+    assert update_payload["name"] == "New"
+    assert update_payload["traffic_source"]["specific_mac_addresses"] == ["11:22:33:44:55:66"]
+    # Field not provided in args is absent from the controller update payload
+    assert "traffic_destination" not in update_payload
+    assert "acl_index" not in update_payload
+
+
+@pytest.mark.asyncio
+async def test_dispatch_delete_acl_passes_rule_id_unchanged() -> None:
+    """unifi_delete_acl_rule already aligns: manager takes rule_id as the only
+    kwarg, so the default **args dispatch works. No translator needed."""
+    entry = ToolEntry(
+        name="unifi_delete_acl_rule",
+        product="network",
+        category="acl_rules",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.delete_acl_rule = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_delete_acl_rule",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"rule_id": "r1"},
+        confirm=True,
+        dispatch_table={
+            "unifi_delete_acl_rule": DispatchEntry(
+                manager_attr="acl_manager", method="delete_acl_rule"
+            ),
+        },
+    )
+
+    domain_manager.delete_acl_rule.assert_awaited_once_with(rule_id="r1")

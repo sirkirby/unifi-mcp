@@ -43,7 +43,10 @@ from typing import Any, Iterable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from unifi_api.services.dispatch_overrides import DISPATCH_OVERRIDES
+from unifi_api.services.dispatch_overrides import (
+    DISPATCH_ARG_TRANSLATORS,
+    DISPATCH_OVERRIDES,
+)
 from unifi_api.services.managers import ManagerFactory
 from unifi_api.services.manifest import ManifestRegistry, ToolEntry
 
@@ -309,4 +312,8 @@ async def dispatch_action(
             f"'{binding.method}' for tool '{tool_name}'"
         )
 
+    translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)
+    if translator is not None:
+        positional, keyword = translator(args)
+        return await method(*positional, **keyword)
     return await method(**args)
