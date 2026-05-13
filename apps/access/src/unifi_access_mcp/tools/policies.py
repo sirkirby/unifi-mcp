@@ -14,6 +14,7 @@ from unifi_core.access.models.policies import (
     from_controller as policy_from_controller,
     to_controller_update as policy_to_controller_update,
 )
+from unifi_core.access.models.schedules import from_controller as schedule_from_controller
 from unifi_core.confirmation import update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 
@@ -82,7 +83,8 @@ async def access_list_schedules() -> Dict[str, Any]:
     """List all access schedules."""
     logger.info("access_list_schedules tool called")
     try:
-        schedules = await policy_manager.list_schedules()
+        raw_schedules = await policy_manager.list_schedules()
+        schedules = [schedule_from_controller(s).model_dump(exclude_none=True) for s in raw_schedules]
         return {"success": True, "data": {"schedules": schedules, "count": len(schedules)}}
     except Exception as e:
         logger.error("Error listing schedules: %s", e, exc_info=True)
