@@ -339,7 +339,7 @@ class TestProtectListRecordingsTool:
         mock_recording_manager.list_recordings = AsyncMock(return_value={"camera_id": "cam-001", "is_recording": True})
         result = await protect_list_recordings("cam-001")
         assert result["success"] is True
-        assert result["data"]["camera_id"] == "cam-001"
+        assert result["data"]["camera"] == "cam-001"
 
     @pytest.mark.asyncio
     async def test_with_time_range(self, mock_recording_manager):

@@ -10,6 +10,10 @@ from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.models.recordings import (
+    from_controller as recording_from_controller,
+    status_list_from_controller,
+)
 from pydantic import Field
 
 from unifi_protect_mcp.runtime import recording_manager, server
@@ -62,7 +66,8 @@ async def protect_get_recording_status(
     logger.info("protect_get_recording_status called (camera_id=%s)", camera_id)
     try:
         result = await recording_manager.get_recording_status(camera_id=camera_id)
-        return {"success": True, "data": result}
+        shaped = status_list_from_controller(result).model_dump(exclude_none=True)
+        return {"success": True, "data": shaped}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -102,7 +107,8 @@ async def protect_list_recordings(
             start=_parse_datetime(start),
             end=_parse_datetime(end),
         )
-        return {"success": True, "data": result}
+        shaped = recording_from_controller(result).model_dump(exclude_none=True)
+        return {"success": True, "data": shaped}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
