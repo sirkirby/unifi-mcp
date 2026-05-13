@@ -47,6 +47,7 @@ class ClientGroup:
     name: str | None
     qos_rate_max_down: int | None
     qos_rate_max_up: int | None
+    members: list[str]
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -58,11 +59,15 @@ class ClientGroup:
 
     @classmethod
     def from_manager_output(cls, obj: Any) -> "ClientGroup":
+        members = _get(obj, "members") or []
+        if not isinstance(members, list):
+            members = []
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
             qos_rate_max_down=_get(obj, "qos_rate_max_down"),
             qos_rate_max_up=_get(obj, "qos_rate_max_up"),
+            members=list(members),
         )
 
     def to_dict(self) -> dict:

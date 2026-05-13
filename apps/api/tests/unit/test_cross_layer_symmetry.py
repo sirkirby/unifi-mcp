@@ -21,6 +21,8 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     # (server, domain, pydantic_class_name)
     ("network", "acl", "AclRule"),
     ("network", "ap_group", "ApGroup"),
+    ("network", "client_group", "ClientGroup"),
+    ("network", "client_group", "UserGroup"),
     ("protect", "cameras", "Camera"),
     ("protect", "lights", "Light"),
     ("protect", "chimes", "Chime"),
@@ -62,7 +64,12 @@ def test_cross_layer_symmetry(server: str, domain: str, pydantic_name: str) -> N
 
     pydantic_cls = getattr(pydantic_mod, pydantic_name)
     strawberry_cls = getattr(strawberry_mod, pydantic_name)
-    mutable_fields = getattr(pydantic_mod, "MUTABLE_FIELDS")
+    # Prefer a per-class field set (e.g. USERGROUP_MUTABLE_FIELDS for UserGroup)
+    # before falling back to the module-level MUTABLE_FIELDS.
+    per_class_key = f"{pydantic_name.upper()}_MUTABLE_FIELDS"
+    mutable_fields = getattr(pydantic_mod, per_class_key, None)
+    if mutable_fields is None:
+        mutable_fields = getattr(pydantic_mod, "MUTABLE_FIELDS")
 
     errors = compare_pair(pydantic_cls, mutable_fields, strawberry_cls)
     assert not errors, (
