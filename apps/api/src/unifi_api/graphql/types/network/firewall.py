@@ -47,6 +47,18 @@ class FirewallRule:
     predefined: bool
     source: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     destination: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    index: int | None
+    protocol: str | None
+    ip_version: str | None
+    connection_state_type: str | None
+    connection_states: list[str]
+    create_allow_respond: bool | None
+    match_ip_sec: bool | None
+    match_opposite_protocol: bool | None
+    icmp_typename: str | None
+    icmp_v6_typename: str | None
+    schedule: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    logging: bool | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -60,6 +72,7 @@ class FirewallRule:
     @classmethod
     def from_manager_output(cls, obj: Any) -> "FirewallRule":
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
+        connection_states = raw.get("connection_states") or []
         return cls(
             id=raw.get("_id") or raw.get("id"),
             name=raw.get("name"),
@@ -68,6 +81,18 @@ class FirewallRule:
             predefined=bool(raw.get("predefined", False)),
             source=raw.get("source"),
             destination=raw.get("destination"),
+            index=raw.get("index") or raw.get("rule_index"),
+            protocol=raw.get("protocol"),
+            ip_version=raw.get("ip_version"),
+            connection_state_type=raw.get("connection_state_type"),
+            connection_states=list(connection_states) if isinstance(connection_states, list) else [],
+            create_allow_respond=raw.get("create_allow_respond"),
+            match_ip_sec=raw.get("match_ip_sec"),
+            match_opposite_protocol=raw.get("match_opposite_protocol"),
+            icmp_typename=raw.get("icmp_typename"),
+            icmp_v6_typename=raw.get("icmp_v6_typename"),
+            schedule=raw.get("schedule"),
+            logging=raw.get("logging"),
         )
 
     def to_dict(self) -> dict:
@@ -79,7 +104,7 @@ class FirewallGroup:
     id: strawberry.ID | None
     name: str | None
     group_type: str | None
-    members: strawberry.scalars.JSON  # type: ignore[name-defined]
+    members: list[str]
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -93,11 +118,13 @@ class FirewallGroup:
     @classmethod
     def from_manager_output(cls, obj: Any) -> "FirewallGroup":
         members = _get(obj, "group_members") or _get(obj, "members") or []
+        if not isinstance(members, list):
+            members = []
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
             group_type=_get(obj, "group_type"),
-            members=members,
+            members=list(members),
         )
 
     def to_dict(self) -> dict:
