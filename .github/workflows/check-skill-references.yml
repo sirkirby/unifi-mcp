@@ -6,14 +6,22 @@ on:
     paths:
       - 'apps/*/src/*/tools_manifest.json'
       - 'plugins/*/skills/*/references/*.md'
+      - 'plugins/*/skills/*/scripts/*.py'
+      - 'skills/_shared/*.py'
+      - 'skills/_build/sync_shared.py'
       - 'scripts/generate_skill_references.py'
+      - 'Makefile'
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main, develop]
     paths:
       - 'apps/*/src/*/tools_manifest.json'
       - 'plugins/*/skills/*/references/*.md'
+      - 'plugins/*/skills/*/scripts/*.py'
+      - 'skills/_shared/*.py'
+      - 'skills/_build/sync_shared.py'
       - 'scripts/generate_skill_references.py'
+      - 'Makefile'
 
 jobs:
   check-drift:
@@ -28,5 +36,5 @@ jobs:
       with:
         python-version: "3.13"
 
-    - name: Check for drift
-      run: python3 scripts/generate_skill_references.py --check
+    - name: Check generated files for drift
+      run: make check-generated

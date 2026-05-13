@@ -1,4 +1,5 @@
-.PHONY: help test lint format manifest server-manifests skill-references sync-skills check-skills-sync pre-commit core-test shared-test \
+.PHONY: help test lint format format-fix manifest generate server-manifests skill-references sync-skills \
+       check-skill-references check-skills-sync check-generated pre-commit ci core-test shared-test \
        relay-test docker-relay sync docker-build docker-up docker-down docker-logs
 
 help:
@@ -8,10 +9,14 @@ help:
 	@echo "  make test           Run all tests (core + shared + all apps)"
 	@echo "  make lint           Lint all apps"
 	@echo "  make format         Format all apps"
+	@echo "  make format-fix     Auto-fix lint issues in all apps"
+	@echo "  make generate       Regenerate committed generated artifacts"
 	@echo "  make manifest       Regenerate tool manifests + skill references"
+	@echo "  make check-generated  Check generated artifacts for drift"
+	@echo "  make ci             Lint + generated drift checks + tests"
 	@echo "  make server-manifests  Regenerate server.json for all apps (MCP Registry)"
 	@echo "  make skill-references  Update skill tool tables from manifests"
-	@echo "  make pre-commit     Format + lint + test"
+	@echo "  make pre-commit     Format + generate + lint + test + drift checks"
 	@echo ""
 	@echo "  make docker-build   Build all Docker images"
 	@echo "  make docker-up      Start all servers (docker compose)"
@@ -45,6 +50,13 @@ format:
 	$(MAKE) -C apps/protect format
 	$(MAKE) -C apps/access format
 
+format-fix:
+	$(MAKE) -C apps/network format-fix
+	$(MAKE) -C apps/protect format-fix
+	$(MAKE) -C apps/access format-fix
+
+generate: manifest
+
 manifest:
 	$(MAKE) -C apps/network manifest
 	$(MAKE) -C apps/protect manifest
@@ -61,11 +73,16 @@ server-manifests:
 skill-references:
 	python3 scripts/generate_skill_references.py
 
+check-skill-references:
+	python3 scripts/generate_skill_references.py --check
+
 sync-skills:
 	python3 skills/_build/sync_shared.py
 
 check-skills-sync:
 	python3 skills/_build/sync_shared.py --check
+
+check-generated: check-skills-sync check-skill-references
 
 relay-test:
 	uv run --package unifi-mcp-relay pytest packages/unifi-mcp-relay/tests -v
@@ -73,7 +90,9 @@ relay-test:
 docker-relay:
 	docker build -f packages/unifi-mcp-relay/Dockerfile -t unifi-mcp-relay .
 
-pre-commit: format lint sync-skills test
+pre-commit: format generate lint test check-generated
+
+ci: lint check-generated test
 
 docker-build:
 	docker compose -f docker/docker-compose.yml build

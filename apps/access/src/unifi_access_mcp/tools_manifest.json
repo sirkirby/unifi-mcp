@@ -726,7 +726,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update an access policy's configuration. Supported fields include name, doors, schedule_id, and user groups. Requires confirm=true to apply. Only available via local proxy session.",
+      "description": "Update an access policy's configuration. Supported fields include name, door_ids, schedule_id, user_group_ids, and enabled. Requires confirm=true to apply. Only available via local proxy session.",
       "name": "access_update_policy",
       "permission_action": "update",
       "permission_category": "policy",
@@ -734,7 +734,7 @@
         "input": {
           "properties": {
             "changes": {
-              "description": "Dictionary of fields to update. Supported keys: name (string - policy display name), doors (list - door UUIDs to assign), schedule_id (string - schedule UUID to assign), user_groups (list - user group UUIDs).",
+              "description": "Dictionary of fields to update. Supported keys: name (string - policy display name), door_ids (list[str] - door UUIDs to assign), schedule_id (string - schedule UUID to assign), user_group_ids (list[str] - user group UUIDs), enabled (bool - whether the policy is active).",
               "type": "object"
             },
             "confirm": {
