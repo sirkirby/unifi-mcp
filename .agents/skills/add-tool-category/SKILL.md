@@ -7,7 +7,7 @@ description: >
   (managers/{resource}_manager.py), new tool module (tools/{resource}.py), or new
   UniFi subsystem support, even if the user only asks to "add support for X" without
   specifying each step. Covers: manager class with CRUD + lru_cache factory, 405
-  endpoint workarounds, schema definition and validator registry wiring, tool layer
+  endpoint workarounds, pydantic model definition in unifi-core, tool layer
   with preview/confirm flow and correct ToolAnnotations, test file requirements (both
   layers), V2 API response unwrapping, manifest regeneration, test_scaffold.py CI
   registration, and Protect-package naming conventions.
@@ -29,7 +29,6 @@ A "tool category" is a new UniFi resource type — DNS records, DHCP leases, ala
 - Understand key API endpoint patterns: V2 vs V1, response shape normalization, 405 workarounds, and resource-specific required fields (see Cross-Cutting Gotchas).
 - Review `implement-update-tool-fetch-merge-put` skill before writing any update method.
 - Have a live controller available for final validation output in the PR description.
-- Understand `UniFiValidatorRegistry.validate()` usage patterns (covered in Step 3).
 
 ## Step 1 — Create the Manager Class
 
@@ -110,160 +109,72 @@ return response
 
 Three production bugs shared this root cause: `get_acl_rule_by_id`, `get_client_group_by_id`, and `get_oon_policy_by_id` (fixed in commit `30f6421`).
 
-## Step 3 — Define Schemas and Register the Validator
+## Step 3 — Define the Domain Pydantic Model
 
-**File:** `apps/{package}/schemas.py`
+**File:** `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py`
 
-```python
-DNS_RECORD_CREATE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "record_type": {"type": "string", "enum": ["A", "AAAA", "CNAME", "MX", "TXT"]},
-        "key": {"type": "string"},
-        "value": {"type": "string"},
-        "ttl": {"type": "integer", "minimum": 0},
-        "enabled": {"type": "boolean"},
-    },
-    "required": ["record_type", "key", "value"],
-}
-
-DNS_RECORD_UPDATE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        # Same fields, all optional for partial updates
-        "record_type": {"type": "string"},
-        "key": {"type": "string"},
-        "value": {"type": "string"},
-        "ttl": {"type": "integer", "minimum": 0},
-        "enabled": {"type": "boolean"},
-    },
-    "minProperties": 1,
-}
-```
-
-**File:** `apps/{package}/validator_registry.py` — register both schemas:
+All field definitions, mutability metadata, and controller translation helpers live here. The model is imported by both the MCP tool layer and the API server — keeping field names in one place.
 
 ```python
-from .schemas import DNS_RECORD_CREATE_SCHEMA, DNS_RECORD_UPDATE_SCHEMA
+from pydantic import BaseModel
+from typing import Optional, FrozenSet
 
-class UniFiValidatorRegistry:
-    def __init__(self):
-        self._validators = {
-            # ... existing entries ...
-            "dns_record_create": DNS_RECORD_CREATE_SCHEMA,
-            "dns_record_update": DNS_RECORD_UPDATE_SCHEMA,
-        }
+class DnsRecord(BaseModel):
+    # Read-only fields (controller-assigned)
+    id: Optional[str] = None  # json_schema_extra={"mutable": False} marks read-only
+    created_at: Optional[str] = None
+
+    # Mutable fields (default mutability)
+    record_type: Optional[str] = None
+    key: Optional[str] = None
+    value: Optional[str] = None
+    ttl: Optional[int] = None
+    enabled: Optional[bool] = None
+
+    model_config = {"populate_by_name": True}
+
+MUTABLE_FIELDS: FrozenSet[str] = frozenset({
+    "record_type", "key", "value", "ttl", "enabled",
+})
+READ_ONLY_FIELDS: FrozenSet[str] = frozenset({"id", "created_at"})
+
+def from_controller(raw: dict) -> DnsRecord:
+    return DnsRecord(**{k: raw.get(k) for k in DnsRecord.model_fields})
+
+def to_controller_create(model: DnsRecord) -> dict:
+    return model.model_dump(exclude_none=True, exclude=READ_ONLY_FIELDS)
+
+def to_controller_update(fields: dict) -> dict:
+    invalid = set(fields) - MUTABLE_FIELDS
+    if invalid:
+        raise ValueError(f"Read-only or unknown fields: {invalid}")
+    return fields
 ```
 
-### Validator Registry Usage Pattern
+**Anchor:** `packages/unifi-core/src/unifi_core/network/models/acl.py`
 
-The `UniFiValidatorRegistry` provides schema validation and normalization for UniFi controller parameters. The key insight is that `registry.validate()` returns a coerced, normalized dict — not a boolean — and using the original parameters bypasses this normalization silently.
-
-#### Procedure A: Implement Validation Pattern
-
-The core validation pattern has 4 steps:
-
-```python
-# 1. Call registry.validate() on raw input params
-validated_data = self.registry.validate(tool_name, params)
-
-# 2. The returned dict is coerced/normalized — capture it as validated_data
-# (validated_data may differ from params due to type coercion, defaults, etc.)
-
-# 3. Pass validated_data to API layer — NOT the original params
-response = await self.api_client.update_device(validated_data)
-
-# 4. Validation errors are raised automatically before this point
-```
-
-**Critical gotcha:** `registry.validate()` does NOT return `True`/`False`. It returns a dict. Using `params` after validation bypasses normalization entirely.
-
-**Verification heuristic:** After the `.validate()` call, scan for any downstream reference to `params`. If `params` appears in API calls after step 1, the bug is present.
-
-#### Procedure B: Handle Validation Errors
-
-Validation errors surface automatically, but you may want to add context:
-
-```python
-try:
-    validated_data = self.registry.validate("update_device", params)
-    response = await self.api_client.update_device(validated_data)
-    return response
-except ValidationError as e:
-    # Add tool-specific context if helpful
-    raise ValueError(f"Invalid device update parameters: {e}")
-```
-
-The registry will raise detailed validation errors before any API call is made.
-
-#### Procedure C: Debug Normalization Differences
-
-If you suspect normalization is changing your data unexpectedly:
-
-```python
-# Log the difference between input and normalized output
-validated_data = self.registry.validate(tool_name, params)
-if validated_data != params:
-    logger.debug(f"Validation normalized: {params} -> {validated_data}")
-
-# Continue with validated_data
-response = await self.api_client.call_endpoint(validated_data)
-```
-
-Common normalizations:
-- String IDs converted to appropriate types
-- Missing optional fields filled with defaults
-- Enum values standardized to expected case
-
-**Critical — always capture `validated_data`:**
-
-```python
-# CORRECT
-validated_data = registry.validate("dns_record_create", raw_args)
-manager.create(validated_data)
-
-# WRONG — silent data corruption, recurring error in PRs #123 and #126
-registry.validate("dns_record_create", raw_args)
-manager.create(raw_args)   # ← uses unvalidated original dict
-```
-
-The return value of `registry.validate()` is the coerced, validated dict. Discarding it and using the raw input bypasses all schema enforcement.
-
-**Tool name matching:** The `tool_name` passed to `.validate()` must exactly match the registered schema name in `validator_registry.py`.
-
-**ResourceValidator Blast Radius — NEVER Add Schema Defaults:**
-
-Schema defaults in `UniFiValidatorRegistry` create a blast radius across all tools. If a shared validator injects defaults, update tools that intentionally omit fields will overwrite existing data with those defaults, causing silent data loss. This affects 37+ properties across all three app packages.
-
-```python
-# NEVER DO THIS in shared schemas registered with UniFiValidatorRegistry
-BAD_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "enabled": {"type": "boolean", "default": True},  # ← FORBIDDEN - blast radius
-        "priority": {"type": "integer", "default": 1},    # ← FORBIDDEN - blast radius
-    }
-}
-
-# Instead, handle defaults in tool-specific logic
-def create_firewall_rule(enabled: bool = True, priority: int = 1, ...):
-    data = {"enabled": enabled, "priority": priority, ...}
-    validated_data = registry.validate("firewall_rule_create", data)
-```
-
-This constraint affects 37+ properties across all three app packages (network, protect, access). Discovered during PR #146 review when a schema default silently overwrote existing firewall rule data.
-
-**Impact scope:** The shared `ResourceValidator.validate()` method is called by update tools in all manager classes. Any schema defaults would apply to every update operation across the entire project, not just the specific tool that needs the default.
+In the tool layer:
+- Create tools: validate caller args, call `to_controller_create()`, pass result to manager.
+- Update tools: call `to_controller_update(fields)` to reject read-only/unknown keys, then pass to manager's fetch-merge-put.
+- List/get tools: `from_controller(raw).model_dump()` for normalized output.
 
 ## Step 4 — Create the Tool Module
 
 **File:** `apps/{package}/tools/{resource}.py`
 
+Tool `inputSchema` is derived from the pydantic model — no separate JSON schema dicts needed.
+
 ```python
 from mcp.types import Tool, ToolAnnotations
 from ..runtime import get_dns_manager
+from unifi_core.network.models.dns_record import DnsRecord, MUTABLE_FIELDS
 
 def get_tools() -> list[Tool]:
+    # Derive a mutable-only schema for the update inputSchema
+    _mutable_props = {
+        k: v for k, v in DnsRecord.model_json_schema()["properties"].items()
+        if k in MUTABLE_FIELDS
+    }
     return [
         Tool(
             name="network_dns_record_list",
@@ -274,13 +185,18 @@ def get_tools() -> list[Tool]:
         Tool(
             name="network_dns_record_create",
             description="Create a new DNS record. Returns a preview; requires confirmation.",
-            inputSchema=DNS_RECORD_CREATE_SCHEMA,
+            inputSchema=DnsRecord.model_json_schema(),
             annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False),
         ),
         Tool(
             name="network_dns_record_update",
             description="Update an existing DNS record. Fetches current state and merges.",
-            inputSchema={**DNS_RECORD_UPDATE_SCHEMA, "required": ["record_id"]},
+            inputSchema={
+                "type": "object",
+                "properties": {"record_id": {"type": "string"}, **_mutable_props},
+                "required": ["record_id"],
+                "additionalProperties": False,
+            },
             annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True),
         ),
         Tool(
@@ -374,10 +290,6 @@ This regenerates `CATEGORY_MAP` and `TOOL_MODULE_MAP` entries. After running:
 Manager class: `{Resource}Manager` (PascalCase). Factory function: `get_{resource}_manager` with `@lru_cache(maxsize=None)`.
 
 ## Cross-Cutting Gotchas
-
-**`validated_data` capture** — the most common community contributor error (PRs #123, #126). `registry.validate()` returns the validated dict. Always assign and use that return value; never pass the raw input dict downstream. **Review gate:** This pattern is now a formal requirement in community PR reviews. Any tool using `UniFiValidatorRegistry` must follow the 4-step validation pattern.
-
-**Silent failure mode** — Using original `params` instead of `validated_data` produces no Python error but sends unnormalized data to the UniFi controller. Two community contributors (PRs #123, #126) made this identical mistake.
 
 **`args: dict` parameter pattern** — silently drops all named kwargs in FastMCP. Always use explicit named parameters in tool handlers.
 
