@@ -158,12 +158,13 @@ Update tools MUST use the fetch-merge-put pattern. The manager fetches current s
 
 When a tool domain has list/create/update tools, define a shared pydantic model as the single source of truth for field names, types, and mutability. This ensures list output field names are always accepted by create/update tools — preventing silent data loss when callers round-trip fields from list output into create/update calls.
 
-1. Create model in `apps/<server>/src/<pkg>/models/<domain>.py`
+1. Create model in `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py`
    - One `BaseModel` class with all fields (mutable + read-only)
    - Read-only fields marked with `json_schema_extra={"mutable": False}`
    - Export `MUTABLE_FIELDS` and `READ_ONLY_FIELDS` frozensets
    - Co-locate translation helpers: `from_controller(raw)`, `to_controller_create(model)`, `to_controller_update(fields)`
-   - **Anchor:** `apps/network/src/unifi_network_mcp/models/acl.py`
+   - Models live in `unifi-core` so both the MCP tool layer and the API server can import them
+   - **Anchor:** `packages/unifi-core/src/unifi_core/network/models/acl.py`
 2. Refactor tool functions to derive I/O from the model
    - List/get tools: `from_controller(raw).model_dump()`
    - Create tool: build model from params → `to_controller_create()` → manager
@@ -175,8 +176,12 @@ When a tool domain has list/create/update tools, define a shared pydantic model 
 4. Manager layer is unchanged — continues to speak the controller API dialect
 5. Add a field symmetry test asserting every mutable field is a create param
    - **Anchor:** `apps/network/tests/unit/test_acl_tools.py:TestListAclRules.test_list_and_create_field_symmetry`
-6. Run `make manifest`
-7. Commit model + refactored tools + retired schema + tests together
+6. Register the `(server, domain)` pair in the cross-layer symmetry test
+   - The matching Strawberry type at `unifi_api.graphql.types.<server>.<domain>` must expose every pydantic `MUTABLE_FIELDS` name with a compatible type annotation
+   - This catches MCP↔API drift at PR time
+   - **Anchor:** `apps/api/tests/unit/test_cross_layer_symmetry.py`
+7. Run `make manifest`
+8. Commit model + refactored tools + retired schema + tests together
 
 ### Modify the permission system
 
