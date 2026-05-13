@@ -37,6 +37,8 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("network", "vpn", "VpnClient"),
     ("network", "vpn", "VpnServer"),
     ("network", "wlans", "Wlan"),
+    ("network", "devices", "Device"),
+    ("network", "devices", "DeviceRadio"),
     ("protect", "cameras", "Camera"),
     ("protect", "lights", "Light"),
     ("protect", "chimes", "Chime"),

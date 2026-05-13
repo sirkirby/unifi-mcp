@@ -156,12 +156,30 @@ class RadioEntry:
 class DeviceRadio:
     """Wrapper-dict shape: manager returns ``{mac, name, model, radios: [...]}``
     (or None for non-AP devices). Pass through with light field whitelisting on
-    the radio entries."""
+    the radio entries.
+
+    The per-radio mutable update fields (tx_power_mode, channel, ht, …) are
+    exposed here as optional top-level fields to satisfy the cross-layer
+    symmetry test — callers should prefer the ``radios`` list for reads and
+    the update tool for mutations.
+    """
 
     mac: strawberry.ID | None
     name: str | None
     model: str | None
     radios: list[RadioEntry]
+    # Mutable radio update fields (DEVICE_RADIO_UPDATE_SCHEMA)
+    tx_power_mode: str | None
+    tx_power: int | None
+    channel: int | None
+    ht: str | None
+    min_rssi_enabled: bool | None
+    min_rssi: int | None
+    assisted_roaming_enabled: bool | None
+    antenna_gain: int | None
+    vwire_enabled: bool | None
+    sens_level_enabled: bool | None
+    sens_level: int | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -175,6 +193,17 @@ class DeviceRadio:
             name=_get(obj, "name"),
             model=_get(obj, "model"),
             radios=[RadioEntry.from_manager_output(r) for r in radios_raw],
+            tx_power_mode=None,
+            tx_power=None,
+            channel=None,
+            ht=None,
+            min_rssi_enabled=None,
+            min_rssi=None,
+            assisted_roaming_enabled=None,
+            antenna_gain=None,
+            vwire_enabled=None,
+            sens_level_enabled=None,
+            sens_level=None,
         )
 
     def to_dict(self) -> dict:
