@@ -9,6 +9,14 @@ from typing import Any, Dict
 
 from mcp.types import ToolAnnotations
 
+from unifi_core.protect.models.system import (
+    firmware_status_from_controller,
+    health_from_controller,
+    system_info_from_controller,
+    viewer_from_controller,
+    viewer_list_from_controller,
+)
+
 from unifi_protect_mcp.runtime import server, system_manager
 
 logger = logging.getLogger(__name__)
@@ -26,8 +34,9 @@ async def protect_get_system_info() -> Dict[str, Any]:
     """Get Protect NVR system information."""
     logger.info("protect_get_system_info tool called")
     try:
-        info = await system_manager.get_system_info()
-        return {"success": True, "data": info}
+        raw = await system_manager.get_system_info()
+        data = system_info_from_controller(raw).model_dump(exclude_none=True)
+        return {"success": True, "data": data}
     except Exception as e:
         logger.error("Error getting system info: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to get system info: {e}"}
@@ -45,8 +54,9 @@ async def protect_get_health() -> Dict[str, Any]:
     """Get Protect NVR health metrics."""
     logger.info("protect_get_health tool called")
     try:
-        health = await system_manager.get_health()
-        return {"success": True, "data": health}
+        raw = await system_manager.get_health()
+        data = health_from_controller(raw).model_dump(exclude_none=True)
+        return {"success": True, "data": data}
     except Exception as e:
         logger.error("Error getting health: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to get health: {e}"}
@@ -64,8 +74,10 @@ async def protect_list_viewers() -> Dict[str, Any]:
     """List connected Protect viewers."""
     logger.info("protect_list_viewers tool called")
     try:
-        viewers = await system_manager.list_viewers()
-        return {"success": True, "data": {"viewers": viewers, "count": len(viewers)}}
+        raw_viewers = await system_manager.list_viewers()
+        shaped_viewers = [viewer_from_controller(v).model_dump(exclude_none=True) for v in raw_viewers]
+        data = viewer_list_from_controller({"viewers": shaped_viewers, "count": len(shaped_viewers)}).model_dump(exclude_none=True)
+        return {"success": True, "data": data}
     except Exception as e:
         logger.error("Error listing viewers: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list viewers: {e}"}
@@ -84,8 +96,9 @@ async def protect_get_firmware_status() -> Dict[str, Any]:
     """Get firmware status for NVR and devices."""
     logger.info("protect_get_firmware_status tool called")
     try:
-        status = await system_manager.get_firmware_status()
-        return {"success": True, "data": status}
+        raw = await system_manager.get_firmware_status()
+        data = firmware_status_from_controller(raw).model_dump(exclude_none=True)
+        return {"success": True, "data": data}
     except Exception as e:
         logger.error("Error getting firmware status: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to get firmware status: {e}"}

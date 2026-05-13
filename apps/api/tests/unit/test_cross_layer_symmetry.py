@@ -33,6 +33,11 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("protect", "alarms", "AlarmStatus"),
     ("protect", "alarms", "AlarmProfile"),
     ("protect", "alarms", "AlarmProfileList"),
+    ("protect", "system", "ProtectSystemInfo"),
+    ("protect", "system", "ProtectHealth"),
+    ("protect", "system", "FirmwareStatus"),
+    ("protect", "system", "Viewer"),
+    ("protect", "system", "ViewerList"),
 ]
 
 
