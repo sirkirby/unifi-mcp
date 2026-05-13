@@ -25,6 +25,12 @@ from unifi_core.network.models.networks import (
     to_controller_update as network_to_update,
     Network,
 )
+from unifi_core.network.models.wlans import (
+    MUTABLE_FIELDS as WLAN_MUTABLE_FIELDS,
+    from_controller as wlan_from_controller,
+    to_controller_create as wlan_to_create,
+    to_controller_update as wlan_to_update,
+)
 from unifi_network_mcp.runtime import network_manager, server
 from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
@@ -720,11 +726,8 @@ async def update_wlan(
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Validate the update data
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("wlan_update", update_data)
-    if not is_valid:
-        logger.warning("Invalid WLAN update data for ID %s: %s", wlan_id, error_msg)
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
+    # Translate to controller-compatible update payload via pydantic model
+    validated_data = wlan_to_update(update_data)
 
     if not validated_data:
         logger.warning("WLAN update data for ID %s is empty after validation.", wlan_id)
@@ -835,14 +838,13 @@ async def create_wlan(
     - details (object): Details of the created WLAN
     - error (string): Error message if unsuccessful
     """
-    # Moved imports
-    from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
-
-    # Validate the input
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("wlan", wlan_data)
-    if not is_valid:
-        logger.warning("Invalid WLAN data: %s", error_msg)
-        return {"success": False, "error": error_msg}
+    # Filter input to known mutable fields via pydantic model
+    from unifi_core.network.models.wlans import Wlan as WlanModel
+    try:
+        wlan_model = WlanModel(**{k: v for k, v in wlan_data.items() if k in WLAN_MUTABLE_FIELDS})
+    except Exception as exc:
+        return {"success": False, "error": f"Invalid WLAN data: {exc}"}
+    validated_data = wlan_to_create(wlan_model)
 
     # Required fields check
     required_fields = ["name", "security"]
