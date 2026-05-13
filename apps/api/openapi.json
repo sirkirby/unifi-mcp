@@ -323,6 +323,17 @@
             ],
             "title": "Channels"
           },
+          "hdr_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hdr Mode"
+          },
           "host": {
             "anyOf": [
               {
@@ -344,6 +355,17 @@
               }
             ],
             "title": "Id"
+          },
+          "ir_led_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ir Led Mode"
           },
           "is_motion_detected": {
             "anyOf": [
@@ -389,6 +411,28 @@
             ],
             "title": "Mac"
           },
+          "mic_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mic Enabled"
+          },
+          "mic_volume": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mic Volume"
+          },
           "model": {
             "anyOf": [
               {
@@ -399,6 +443,17 @@
               }
             ],
             "title": "Model"
+          },
+          "motion_detection": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Motion Detection"
           },
           "name": {
             "anyOf": [
@@ -411,6 +466,17 @@
             ],
             "title": "Name"
           },
+          "speaker_volume": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker Volume"
+          },
           "state": {
             "anyOf": [
               {
@@ -421,6 +487,17 @@
               }
             ],
             "title": "State"
+          },
+          "status_light_on": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Light On"
           },
           "type": {
             "anyOf": [
