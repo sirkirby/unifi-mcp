@@ -14,6 +14,7 @@ from unifi_core.network.models.sessions import (
     client_session_from_controller,
     client_wifi_details_from_controller,
 )
+from unifi_core.network.models.stats import dpi_stats_from_controller
 from unifi_network_mcp.runtime import client_manager, device_manager, server, stats_manager
 
 logger = logging.getLogger(__name__)
@@ -267,20 +268,12 @@ async def get_dpi_stats() -> Dict[str, Any]:
     """Implementation for getting DPI stats."""
     try:
         dpi_stats_result = await stats_manager.get_dpi_stats()
-
-        def serialize_dpi(item):
-            return item.raw if hasattr(item, "raw") else item
-
-        serialized_apps = [serialize_dpi(app) for app in dpi_stats_result.get("applications", [])]
-        serialized_cats = [serialize_dpi(cat) for cat in dpi_stats_result.get("categories", [])]
+        shaped = dpi_stats_from_controller(dpi_stats_result)
 
         return {
             "success": True,
             "site": stats_manager._connection.site,
-            "dpi_stats": {
-                "applications": serialized_apps,
-                "categories": serialized_cats,
-            },
+            "dpi_stats": shaped.model_dump(exclude_none=True),
         }
     except Exception as e:
         logger.error("Error getting DPI stats: %s", e, exc_info=True)
