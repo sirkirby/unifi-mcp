@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_access_mcp.runtime import server, system_manager
+from unifi_core.access.models.users import from_controller as user_from_controller
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,8 @@ async def access_list_users(
     logger.info("access_list_users tool called (limit=%s, compact=%s)", limit, compact)
     try:
         page_size = limit if limit and limit > 0 else 25
-        users = await system_manager.list_users(page_size=page_size, compact=compact)
+        raw_users = await system_manager.list_users(page_size=page_size, compact=compact)
+        users = [user_from_controller(u).model_dump(exclude_none=True) for u in raw_users]
         return {"success": True, "data": {"users": users, "count": len(users)}}
     except Exception as e:
         logger.error("Failed to list users: %s", e, exc_info=True)
