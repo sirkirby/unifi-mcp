@@ -98,7 +98,6 @@ def load_config(path_override: str | Path | None = None):
 # future SDKs) shares one source of truth — see commit history for the bug
 # that motivated extracting it.
 from unifi_core.network.controller_type import (  # noqa: E402
-    VALID_CONTROLLER_TYPES,
     resolve_controller_type,
 )
 

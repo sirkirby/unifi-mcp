@@ -14,6 +14,8 @@ from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import QosRuleSimpleInput
 from unifi_core.network.models.qos import (
     from_controller as qos_from_controller,
+)
+from unifi_core.network.models.qos import (
     to_controller_update as qos_to_update,
 )
 from unifi_network_mcp.runtime import qos_manager, server

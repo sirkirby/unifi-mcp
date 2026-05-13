@@ -212,6 +212,10 @@ def test_build_dispatch_table_finds_real_tools() -> None:
     assert protect_entry is not None
     assert protect_entry.manager_attr == "camera_manager"
     assert protect_entry.method == "list_cameras"
+    recognition_entry = table.get("protect_list_known_faces")
+    assert recognition_entry is not None
+    assert recognition_entry.manager_attr == "recognition_manager"
+    assert recognition_entry.method == "list_known_faces"
 
     # access_list_doors -> door_manager.list_doors
     access_entry = table.get("access_list_doors")

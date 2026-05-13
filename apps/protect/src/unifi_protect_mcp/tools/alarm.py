@@ -42,8 +42,7 @@ async def protect_alarm_list_profiles() -> Dict[str, Any]:
         raw = {"profiles": profiles, "count": len(profiles)}
         shaped_list = profile_list_from_controller(raw)
         shaped_profiles = [
-            profile_from_controller(p).model_dump(exclude_none=True)
-            for p in (shaped_list.profiles or [])
+            profile_from_controller(p).model_dump(exclude_none=True) for p in (shaped_list.profiles or [])
         ]
         return {
             "success": True,
@@ -110,7 +109,7 @@ async def protect_alarm_arm(
     logger.info("protect_alarm_arm tool called (profile_id=%s, confirm=%s)", profile_id, confirm)
     try:
         try:
-            params = AlarmArmInput(profile_id=profile_id)
+            AlarmArmInput(profile_id=profile_id)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         if not confirm:
@@ -153,7 +152,7 @@ async def protect_alarm_disarm(
     """Disarm the Protect Alarm Manager."""
     logger.info("protect_alarm_disarm tool called (confirm=%s)", confirm)
     try:
-        params = AlarmDisarmInput()
+        AlarmDisarmInput()
         if not confirm:
             preview_data = await alarm_manager.preview_disarm()
             return preview_response(

@@ -12,9 +12,8 @@ import logging
 from typing import Annotated, Any, Dict, List
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
-from pydantic import ValidationError
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import (
@@ -25,6 +24,8 @@ from unifi_core.network.models._actions import (
 )
 from unifi_core.network.models.switch import (
     from_controller as pp_from_controller,
+)
+from unifi_core.network.models.switch import (
     to_controller_update as pp_to_update,
 )
 from unifi_network_mcp.runtime import server, switch_manager

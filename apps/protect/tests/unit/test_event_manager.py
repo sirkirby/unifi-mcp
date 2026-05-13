@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from unifi_core.exceptions import UniFiNotFoundError
 from uiprotect.data import EventType, ModelType, SmartDetectObjectType, WSAction
 
+from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.event_manager import EventManager
 
 

@@ -9,7 +9,6 @@ import logging
 from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
-from unifi_core.exceptions import UniFiNotFoundError
 from pydantic import Field
 
 from unifi_access_mcp.runtime import event_manager, server
@@ -17,6 +16,7 @@ from unifi_core.access.models.events import (
     activity_summary_from_controller,
     event_from_controller,
 )
+from unifi_core.exceptions import UniFiNotFoundError
 
 logger = logging.getLogger(__name__)
 

@@ -433,9 +433,7 @@ class TestGetAclRuleDetails:
         from unifi_core.exceptions import UniFiNotFoundError
 
         with patch("unifi_network_mcp.tools.acl.acl_manager") as mock_mgr:
-            mock_mgr.get_acl_rule_by_id = AsyncMock(
-                side_effect=UniFiNotFoundError("acl_rule", "missing")
-            )
+            mock_mgr.get_acl_rule_by_id = AsyncMock(side_effect=UniFiNotFoundError("acl_rule", "missing"))
 
             from unifi_network_mcp.tools.acl import get_acl_rule_details
 

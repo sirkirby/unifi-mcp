@@ -453,13 +453,9 @@ class TestCreatePortForwardResponseShapes:
     """Issue #207 — create_port_forward must accept both wrapped and bare-list responses."""
 
     @pytest.mark.asyncio
-    async def test_create_port_forward_handles_wrapped_response_shape(
-        self, firewall_manager, mock_connection
-    ):
+    async def test_create_port_forward_handles_wrapped_response_shape(self, firewall_manager, mock_connection):
         """Older firmware returns {"data": [{...}]} — manager must extract the rule."""
-        mock_connection.request = AsyncMock(
-            return_value={"data": [copy.deepcopy(SAMPLE_CREATED_PORT_FORWARD)]}
-        )
+        mock_connection.request = AsyncMock(return_value={"data": [copy.deepcopy(SAMPLE_CREATED_PORT_FORWARD)]})
 
         result = await firewall_manager.create_port_forward(
             {"name": "test", "dst_port": "80", "fwd_port": "80", "fwd_ip": "10.0.0.1"}
@@ -470,13 +466,9 @@ class TestCreatePortForwardResponseShapes:
         assert result["name"] == "test"
 
     @pytest.mark.asyncio
-    async def test_create_port_forward_handles_bare_list_response_shape(
-        self, firewall_manager, mock_connection
-    ):
+    async def test_create_port_forward_handles_bare_list_response_shape(self, firewall_manager, mock_connection):
         """UDM-SE 8.4.x returns [{...}] — manager must extract the rule (regression test for #207)."""
-        mock_connection.request = AsyncMock(
-            return_value=[copy.deepcopy(SAMPLE_CREATED_PORT_FORWARD)]
-        )
+        mock_connection.request = AsyncMock(return_value=[copy.deepcopy(SAMPLE_CREATED_PORT_FORWARD)])
 
         result = await firewall_manager.create_port_forward(
             {"name": "test", "dst_port": "80", "fwd_port": "80", "fwd_ip": "10.0.0.1"}

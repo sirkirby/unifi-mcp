@@ -16,7 +16,6 @@ from unifi_core.protect.models.system import (
     viewer_from_controller,
     viewer_list_from_controller,
 )
-
 from unifi_protect_mcp.runtime import server, system_manager
 
 logger = logging.getLogger(__name__)
@@ -76,7 +75,9 @@ async def protect_list_viewers() -> Dict[str, Any]:
     try:
         raw_viewers = await system_manager.list_viewers()
         shaped_viewers = [viewer_from_controller(v).model_dump(exclude_none=True) for v in raw_viewers]
-        data = viewer_list_from_controller({"viewers": shaped_viewers, "count": len(shaped_viewers)}).model_dump(exclude_none=True)
+        data = viewer_list_from_controller({"viewers": shaped_viewers, "count": len(shaped_viewers)}).model_dump(
+            exclude_none=True
+        )
         return {"success": True, "data": data}
     except Exception as e:
         logger.error("Error listing viewers: %s", e, exc_info=True)

@@ -110,9 +110,7 @@ class TestGetDnsRecordDetails:
     async def test_get_not_found(self):
         """Get returns error when manager raises UniFiNotFoundError."""
         with patch("unifi_network_mcp.tools.dns.dns_manager") as mock_mgr:
-            mock_mgr.get_dns_record = AsyncMock(
-                side_effect=UniFiNotFoundError("dns_record", "nonexistent")
-            )
+            mock_mgr.get_dns_record = AsyncMock(side_effect=UniFiNotFoundError("dns_record", "nonexistent"))
 
             from unifi_network_mcp.tools.dns import get_dns_record_details
 
@@ -287,9 +285,7 @@ class TestUpdateDnsRecord:
     async def test_update_not_found(self):
         """Update returns error when manager raises UniFiNotFoundError."""
         with patch("unifi_network_mcp.tools.dns.dns_manager") as mock_mgr:
-            mock_mgr.update_dns_record = AsyncMock(
-                side_effect=UniFiNotFoundError("dns_record", "nonexistent")
-            )
+            mock_mgr.update_dns_record = AsyncMock(side_effect=UniFiNotFoundError("dns_record", "nonexistent"))
 
             from unifi_network_mcp.tools.dns import update_dns_record
 

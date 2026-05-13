@@ -16,8 +16,14 @@ from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.dns import (
     DnsRecord,
+)
+from unifi_core.network.models.dns import (
     from_controller as dns_from_controller,
+)
+from unifi_core.network.models.dns import (
     to_controller_create as dns_to_create,
+)
+from unifi_core.network.models.dns import (
     to_controller_update as dns_to_update,
 )
 from unifi_network_mcp.runtime import dns_manager, server
@@ -98,9 +104,13 @@ async def create_dns_record(
     logger.info("unifi_create_dns_record tool called (confirm=%s)", confirm)
 
     try:
-        model = DnsRecord(**{k: v for k, v in record_data.items() if k in (
-            "key", "value", "record_type", "enabled", "ttl", "port", "priority", "weight"
-        )})
+        model = DnsRecord(
+            **{
+                k: v
+                for k, v in record_data.items()
+                if k in ("key", "value", "record_type", "enabled", "ttl", "port", "priority", "weight")
+            }
+        )
     except Exception as exc:
         return {"success": False, "error": f"Validation error: {exc}"}
     if not model.key or not model.value or not model.record_type:

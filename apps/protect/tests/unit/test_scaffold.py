@@ -16,6 +16,7 @@ def test_managers_importable():
     from unifi_core.protect.managers.event_manager import EventManager
     from unifi_core.protect.managers.light_manager import LightManager
     from unifi_core.protect.managers.liveview_manager import LiveviewManager
+    from unifi_core.protect.managers.recognition_manager import RecognitionManager
     from unifi_core.protect.managers.recording_manager import RecordingManager
     from unifi_core.protect.managers.sensor_manager import SensorManager
     from unifi_core.protect.managers.system_manager import SystemManager
@@ -28,6 +29,7 @@ def test_managers_importable():
     assert LightManager(cm) is not None
     assert LiveviewManager(cm) is not None
     assert RecordingManager(cm) is not None
+    assert RecognitionManager(cm) is not None
     assert SensorManager(cm) is not None
     assert SystemManager(cm) is not None
 
@@ -44,6 +46,7 @@ def test_categories_importable():
     assert "sensor" in PROTECT_CATEGORY_MAP
     assert "chime" in PROTECT_CATEGORY_MAP
     assert "liveview" in PROTECT_CATEGORY_MAP
+    assert "recognition" in PROTECT_CATEGORY_MAP
     assert "system" in PROTECT_CATEGORY_MAP
     assert isinstance(TOOL_MODULE_MAP, dict)
 
@@ -89,5 +92,16 @@ def test_protect_category_map_values():
     """Verify category map values match config.yaml permissions keys."""
     from unifi_protect_mcp.categories import PROTECT_CATEGORY_MAP
 
-    expected_values = {"cameras", "events", "recordings", "lights", "sensors", "chimes", "liveviews", "system", "alarm"}
+    expected_values = {
+        "cameras",
+        "events",
+        "recordings",
+        "lights",
+        "sensors",
+        "chimes",
+        "liveviews",
+        "recognition",
+        "system",
+        "alarm",
+    }
     assert set(PROTECT_CATEGORY_MAP.values()) == expected_values

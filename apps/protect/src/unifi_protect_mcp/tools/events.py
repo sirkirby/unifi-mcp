@@ -16,6 +16,8 @@ from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.models._actions import AcknowledgeEventInput
 from unifi_core.protect.models.events import (
     from_controller as event_from_controller,
+)
+from unifi_core.protect.models.events import (
     smart_detection_from_controller,
     thumbnail_from_controller,
 )
@@ -360,7 +362,7 @@ async def protect_acknowledge_event(
     logger.info("protect_acknowledge_event called for %s (confirm=%s)", event_id, confirm)
     try:
         try:
-            params = AcknowledgeEventInput(event_id=event_id)
+            AcknowledgeEventInput(event_id=event_id)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         preview_data = await event_manager.acknowledge_event(event_id)

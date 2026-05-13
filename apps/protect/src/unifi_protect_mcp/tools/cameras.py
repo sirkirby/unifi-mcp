@@ -21,8 +21,9 @@ from unifi_core.protect.models._actions import (
     ToggleRecordingInput,
 )
 from unifi_core.protect.models.cameras import (
-    Camera,
     from_controller as camera_from_controller,
+)
+from unifi_core.protect.models.cameras import (
     to_controller_update as camera_to_controller_update,
 )
 from unifi_protect_mcp.runtime import camera_manager, server
@@ -280,7 +281,7 @@ async def protect_toggle_recording(
     logger.info("protect_toggle_recording tool called for %s (enabled=%s, confirm=%s)", camera_id, enabled, confirm)
     try:
         try:
-            params = ToggleRecordingInput(camera_id=camera_id, enabled=enabled)
+            ToggleRecordingInput(camera_id=camera_id, enabled=enabled)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         preview_data = await camera_manager.toggle_recording(camera_id, enabled)
@@ -351,7 +352,7 @@ async def protect_ptz_move(
     )
     try:
         try:
-            params = PtzMoveInput(camera_id=camera_id, pan=pan, tilt=tilt, duration_ms=duration_ms)
+            PtzMoveInput(camera_id=camera_id, pan=pan, tilt=tilt, duration_ms=duration_ms)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         if not confirm:
@@ -411,7 +412,7 @@ async def protect_ptz_zoom(
     )
     try:
         try:
-            params = PtzZoomInput(camera_id=camera_id, zoom_speed=zoom_speed, duration_ms=duration_ms)
+            PtzZoomInput(camera_id=camera_id, zoom_speed=zoom_speed, duration_ms=duration_ms)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         if not confirm:
@@ -464,7 +465,7 @@ async def protect_ptz_preset(
     logger.info("protect_ptz_preset tool called for %s (slot=%s, confirm=%s)", camera_id, preset_slot, confirm)
     try:
         try:
-            params = PtzPresetInput(camera_id=camera_id, preset_slot=preset_slot)
+            PtzPresetInput(camera_id=camera_id, preset_slot=preset_slot)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         if not confirm:
@@ -512,7 +513,7 @@ async def protect_reboot_camera(
     logger.info("protect_reboot_camera tool called for %s (confirm=%s)", camera_id, confirm)
     try:
         try:
-            params = RebootCameraInput(camera_id=camera_id)
+            RebootCameraInput(camera_id=camera_id)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         preview_data = await camera_manager.reboot_camera(camera_id)

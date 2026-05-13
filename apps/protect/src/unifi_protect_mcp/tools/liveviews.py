@@ -9,15 +9,19 @@ import logging
 from typing import Annotated, Any, Dict, List
 
 from mcp.types import ToolAnnotations
+from pydantic import Field, ValidationError
+
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.models._actions import DeleteLiveviewInput
 from unifi_core.protect.models.liveviews import (
     Liveview,
+)
+from unifi_core.protect.models.liveviews import (
     from_controller as liveview_from_controller,
+)
+from unifi_core.protect.models.liveviews import (
     to_controller_create as liveview_to_controller_create,
 )
-from pydantic import Field, ValidationError
-
 from unifi_protect_mcp.runtime import liveview_manager, server
 
 logger = logging.getLogger(__name__)
@@ -131,7 +135,7 @@ async def protect_delete_liveview(
     logger.info("protect_delete_liveview called for %s (confirm=%s)", liveview_id, confirm)
     try:
         try:
-            params = DeleteLiveviewInput(liveview_id=liveview_id)
+            DeleteLiveviewInput(liveview_id=liveview_id)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         result = await liveview_manager.delete_liveview(liveview_id)

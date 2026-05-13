@@ -63,7 +63,7 @@ class TestVersion:
         git_version = git_describe
         for prefix in ("network/v", "v"):
             if git_version.startswith(prefix):
-                git_version = git_version[len(prefix):]
+                git_version = git_version[len(prefix) :]
                 break
 
         # Check if working tree is dirty (uncommitted changes)

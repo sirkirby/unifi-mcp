@@ -21,6 +21,8 @@ from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.content_filter import (
     from_controller as cf_from_controller,
+)
+from unifi_core.network.models.content_filter import (
     to_controller_update as cf_to_update,
 )
 from unifi_network_mcp.runtime import content_filter_manager, server

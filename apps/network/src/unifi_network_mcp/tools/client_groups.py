@@ -16,6 +16,8 @@ from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.client_group import (
     from_controller as cg_from_controller,
+)
+from unifi_core.network.models.client_group import (
     to_controller_update as cg_to_update,
 )
 from unifi_network_mcp.runtime import client_group_manager, server

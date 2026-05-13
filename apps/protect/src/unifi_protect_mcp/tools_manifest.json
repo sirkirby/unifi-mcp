@@ -1,5 +1,5 @@
 {
-  "count": 39,
+  "count": 40,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -24,6 +24,7 @@
     "protect_list_cameras": "unifi_protect_mcp.tools.cameras",
     "protect_list_chimes": "unifi_protect_mcp.tools.devices",
     "protect_list_events": "unifi_protect_mcp.tools.events",
+    "protect_list_known_faces": "unifi_protect_mcp.tools.recognition",
     "protect_list_lights": "unifi_protect_mcp.tools.devices",
     "protect_list_liveviews": "unifi_protect_mcp.tools.liveviews",
     "protect_list_recordings": "unifi_protect_mcp.tools.recordings",
@@ -566,6 +567,45 @@
             "start": {
               "description": "Start time as ISO 8601 timestamp (e.g., 2026-03-17T00:00:00Z). Defaults to 24 hours ago.",
               "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "List assigned UniFi Protect Known Faces / named face recognition groups. Returns metadata and controller image references only; image bytes are not fetched.",
+      "name": "protect_list_known_faces",
+      "schema": {
+        "input": {
+          "properties": {
+            "include_interest": {
+              "description": "When true, include Protect groups labeled as known or interest. When false, only known groups.",
+              "type": "boolean"
+            },
+            "min_confidence": {
+              "description": "Minimum recognition confidence filter used by Protect (0-100, default 30).",
+              "type": "integer"
+            },
+            "order_by": {
+              "description": "Sort field: name, createdAt, firstDetectedAt, lastDetectedAt, or detectionsCount.",
+              "type": "string"
+            },
+            "order_direction": {
+              "description": "Sort direction: asc or desc.",
+              "type": "string"
+            },
+            "page": {
+              "description": "Optional 1-based Protect recognition page number.",
+              "type": "integer"
+            },
+            "page_size": {
+              "description": "Maximum number of face groups to return (default 100).",
+              "type": "integer"
             }
           },
           "type": "object"

@@ -9,9 +9,8 @@ from datetime import datetime, timedelta
 from typing import Annotated, Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
-from pydantic import ValidationError
 from unifi_core.confirmation import create_preview, preview_response, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import (

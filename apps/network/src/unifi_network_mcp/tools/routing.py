@@ -20,6 +20,8 @@ from unifi_core.network.models.route import (
 from unifi_network_mcp.runtime import routing_manager, server
 
 logger = logging.getLogger(__name__)
+
+
 def _validate_cidr(network: str) -> bool:
     """Validate a CIDR network notation."""
     pattern = r"^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$"
@@ -29,12 +31,16 @@ def _validate_cidr(network: str) -> bool:
     ip_parts = parts[0].split(".")
     prefix = int(parts[1])
     return all(0 <= int(p) <= 255 for p in ip_parts) and 0 <= prefix <= 32
+
+
 def _validate_ip(ip: str) -> bool:
     """Validate an IP address."""
     pattern = r"^(\d{1,3}\.){3}\d{1,3}$"
     if not re.match(pattern, ip):
         return False
     return all(0 <= int(p) <= 255 for p in ip.split("."))
+
+
 @server.tool(
     name="unifi_list_routes",
     description="""List all user-defined static routes for the current site.
@@ -57,6 +63,8 @@ async def list_routes() -> Dict[str, Any]:
     except Exception as e:
         logger.error("Error listing routes: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list routes: {e}"}
+
+
 @server.tool(
     name="unifi_list_active_routes",
     description="""List all active routes from the device routing table.
@@ -82,6 +90,8 @@ async def list_active_routes() -> Dict[str, Any]:
     except Exception as e:
         logger.error("Error listing active routes: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list active routes: {e}"}
+
+
 @server.tool(
     name="unifi_get_route_details",
     description="Get detailed information about a specific static route by its ID",
@@ -103,6 +113,8 @@ async def get_route_details(
     except Exception as e:
         logger.error("Error getting route details for %s: %s", route_id, e, exc_info=True)
         return {"success": False, "error": f"Failed to get route details for {route_id}: {e}"}
+
+
 @server.tool(
     name="unifi_create_route",
     description="""Create a new static route for advanced routing configuration.
@@ -161,7 +173,6 @@ async def create_route(
         )
 
     try:
-        
         route = await routing_manager.create_route(
             name=name.strip(),
             static_route_network=network,
@@ -181,6 +192,8 @@ async def create_route(
     except Exception as e:
         logger.error("Error creating route: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to create route: {e}"}
+
+
 @server.tool(
     name="unifi_update_route",
     description="""Update an existing static route's properties.

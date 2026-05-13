@@ -5,11 +5,10 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unifi_core.exceptions import UniFiNotFoundError
 
 from unifi_core.access.managers.connection_manager import AccessConnectionManager
 from unifi_core.access.managers.event_manager import EventBuffer, EventManager
-from unifi_core.exceptions import UniFiConnectionError
+from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError
 
 # ---------------------------------------------------------------------------
 # Fixtures

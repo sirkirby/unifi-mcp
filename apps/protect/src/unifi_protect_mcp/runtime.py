@@ -38,6 +38,7 @@ from unifi_core.protect.managers.connection_manager import ProtectConnectionMana
 from unifi_core.protect.managers.event_manager import EventManager
 from unifi_core.protect.managers.light_manager import LightManager
 from unifi_core.protect.managers.liveview_manager import LiveviewManager
+from unifi_core.protect.managers.recognition_manager import RecognitionManager
 from unifi_core.protect.managers.recording_manager import RecordingManager
 from unifi_core.protect.managers.sensor_manager import SensorManager
 from unifi_core.protect.managers.system_manager import SystemManager
@@ -196,6 +197,11 @@ def get_liveview_manager() -> LiveviewManager:
 
 
 @lru_cache
+def get_recognition_manager() -> RecognitionManager:
+    return RecognitionManager(get_connection_manager())
+
+
+@lru_cache
 def get_system_manager() -> SystemManager:
     return SystemManager(get_connection_manager())
 
@@ -229,6 +235,7 @@ light_manager = get_light_manager()
 sensor_manager = get_sensor_manager()
 chime_manager = get_chime_manager()
 liveview_manager = get_liveview_manager()
+recognition_manager = get_recognition_manager()
 system_manager = get_system_manager()
 alarm_manager = get_alarm_manager()
 tool_registry = get_tool_registry()

@@ -164,6 +164,9 @@ from unifi_api.graphql.types.protect.recordings import (
     Recording as ProtectRecordingType,
     RecordingStatusList as ProtectRecordingStatusListType,
 )
+from unifi_api.graphql.types.protect.recognition import (
+    KnownFace as ProtectKnownFaceType,
+)
 from unifi_api.graphql.types.protect.sensors import (
     Sensor as ProtectSensorType,
 )
@@ -441,6 +444,10 @@ def build_type_registry() -> TypeRegistry:
     reg.register_type("protect", "liveviews", ProtectLiveviewType)
     reg.register_type("protect", "liveviews/{id}", ProtectLiveviewType)
     reg.register_tool_type("protect_list_liveviews", ProtectLiveviewType, "list")
+
+    # protect/recognition
+    reg.register_type("protect", "known_faces", ProtectKnownFaceType)
+    reg.register_tool_type("protect_list_known_faces", ProtectKnownFaceType, "list")
 
     # protect/system (tool-keyed only) + viewers resource
     reg.register_type("protect", "viewers", ProtectViewerType)

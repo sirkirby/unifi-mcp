@@ -1682,6 +1682,26 @@ No native ``protect_get_liveview`` tool — filter from LIST.
 **Returns:** `object`
 
 
+## protect/recognition
+
+### `GET /v1/sites/{site_id}/known-faces` — List Known Faces
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `limit` (query)
+- `cursor` (query)
+- `min_confidence` (query)
+- `include_interest` (query)
+- `order_by` (query)
+- `order_direction` (query)
+- `controller` (query)
+
+
+**Returns:** `Page_KnownFaceModel_`
+
+
 ## protect/sensors
 
 ### `GET /v1/sites/{site_id}/sensors` — List Sensors

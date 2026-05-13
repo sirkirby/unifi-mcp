@@ -10,11 +10,11 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_access_mcp.runtime import server, system_manager
-from unifi_core.access.models.users import from_controller as user_from_controller
 from unifi_core.access.models.system import (
     health_from_controller,
     system_info_from_controller,
 )
+from unifi_core.access.models.users import from_controller as user_from_controller
 
 logger = logging.getLogger(__name__)
 

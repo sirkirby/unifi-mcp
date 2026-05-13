@@ -15,10 +15,14 @@ from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.models._actions import TriggerChimeInput
 from unifi_core.protect.models.chimes import (
     from_controller as chime_from_controller,
+)
+from unifi_core.protect.models.chimes import (
     to_controller_update as chime_to_controller_update,
 )
 from unifi_core.protect.models.lights import (
     from_controller as light_from_controller,
+)
+from unifi_core.protect.models.lights import (
     to_controller_update as light_to_controller_update,
 )
 from unifi_core.protect.models.sensors import from_controller as sensor_from_controller
@@ -262,7 +266,7 @@ async def protect_trigger_chime(
     logger.info("protect_trigger_chime tool called for %s (volume=%s, repeat=%s)", chime_id, volume, repeat_times)
     try:
         try:
-            params = TriggerChimeInput(chime_id=chime_id, volume=volume, repeat_times=repeat_times)
+            TriggerChimeInput(chime_id=chime_id, volume=volume, repeat_times=repeat_times)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         result = await chime_manager.trigger_chime(

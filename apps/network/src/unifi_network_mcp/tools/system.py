@@ -12,16 +12,13 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.network.models.system import (
-    alarm_from_controller,
     autobackup_to_controller_update,
     backup_from_controller,
     network_health_from_controller,
     site_settings_from_controller,
     snmp_from_controller,
     snmp_to_controller_update,
-    speedtest_result_from_controller,
     system_info_from_controller,
-    top_client_from_controller,
 )
 from unifi_network_mcp.runtime import server, system_manager
 

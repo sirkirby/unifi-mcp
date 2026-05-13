@@ -156,6 +156,46 @@ async def test_get_camera_happy_and_404(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_known_faces_happy_path(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    fake_faces = [
+        {
+            "id": f"face-{i}",
+            "name": f"Person {i}",
+            "matched_name": f"Person {i}",
+            "type": "face",
+            "detections_count": i + 1,
+            "last_detected_at": str(1778700000000 + i),
+            "metadata": {},
+        }
+        for i in range(3)
+    ]
+
+    async def fake_list(self, *a, **kw):
+        return {"faces": fake_faces, "count": len(fake_faces), "links": {}}
+
+    from unifi_core.protect.managers.recognition_manager import RecognitionManager
+    monkeypatch.setattr(RecognitionManager, "list_known_faces", fake_list)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/known-faces?controller={cid}&limit=2",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["items"]) == 2
+    assert {item["id"] for item in body["items"]} == {"face-1", "face-2"}
+    assert {item["matched_name"] for item in body["items"]} == {"Person 1", "Person 2"}
+    assert body["next_cursor"] is not None
+    assert body["render_hint"]["kind"] == "list"
+
+
+@pytest.mark.asyncio
 async def test_list_events_happy_path(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)

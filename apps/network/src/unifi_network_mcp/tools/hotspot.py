@@ -8,9 +8,8 @@ import logging
 from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
-from pydantic import ValidationError
 from unifi_core.confirmation import create_preview, preview_response
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import RevokeVoucherInput
@@ -31,7 +30,6 @@ Vouchers are used for guest network access in captive portal setups.""",
 async def list_vouchers() -> Dict[str, Any]:
     """List all hotspot vouchers."""
     try:
-
         vouchers = await hotspot_manager.get_vouchers()
 
         formatted_vouchers = []
@@ -159,7 +157,6 @@ async def create_voucher(
         )
 
     try:
-        
         vouchers = await hotspot_manager.create_voucher(
             expire_minutes=expire_minutes,
             count=count,

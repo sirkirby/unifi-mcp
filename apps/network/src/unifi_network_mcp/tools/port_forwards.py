@@ -7,9 +7,8 @@ import logging
 from typing import Annotated, Any, Dict
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
-from pydantic import ValidationError
 from unifi_core.confirmation import toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import (
@@ -19,6 +18,8 @@ from unifi_core.network.models._actions import (
 )
 from unifi_core.network.models.port_forwards import (
     from_controller as pf_from_controller,
+)
+from unifi_core.network.models.port_forwards import (
     to_controller_update as pf_to_update,
 )
 from unifi_network_mcp.runtime import firewall_manager, server

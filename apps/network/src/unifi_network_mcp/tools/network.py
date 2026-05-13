@@ -13,22 +13,28 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
-from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.ap_group import (
     from_controller as ap_group_from_controller,
+)
+from unifi_core.network.models.ap_group import (
     to_controller_create as ap_group_to_create,
+)
+from unifi_core.network.models.ap_group import (
     to_controller_update as ap_group_to_update,
 )
 from unifi_core.network.models.networks import (
     from_controller as network_from_controller,
-    to_controller_create as network_to_create,
+)
+from unifi_core.network.models.networks import (
     to_controller_update as network_to_update,
-    Network,
 )
 from unifi_core.network.models.wlans import (
     MUTABLE_FIELDS as WLAN_MUTABLE_FIELDS,
-    from_controller as wlan_from_controller,
+)
+from unifi_core.network.models.wlans import (
     to_controller_create as wlan_to_create,
+)
+from unifi_core.network.models.wlans import (
     to_controller_update as wlan_to_update,
 )
 from unifi_network_mcp.runtime import network_manager, server
@@ -427,8 +433,7 @@ async def create_network(
     validated_data = network_to_update(network_data) if network_data else {}
     # Supplement with any required-on-create fields that to_controller_update might drop
     # (to_controller_update drops None; required fields must still be present)
-    for k in ("name", "purpose", "ip_subnet", "vlan", "vlan_enabled",
-              "dhcpd_start", "dhcpd_stop"):
+    for k in ("name", "purpose", "ip_subnet", "vlan", "vlan_enabled", "dhcpd_start", "dhcpd_stop"):
         if k in network_data and k not in validated_data and network_data[k] is not None:
             validated_data[k] = network_data[k]
     if not validated_data:
@@ -839,6 +844,7 @@ async def create_wlan(
     """
     # Filter input to known mutable fields via pydantic model
     from unifi_core.network.models.wlans import Wlan as WlanModel
+
     try:
         wlan_model = WlanModel(**{k: v for k, v in wlan_data.items() if k in WLAN_MUTABLE_FIELDS})
     except Exception as exc:

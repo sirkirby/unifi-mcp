@@ -80,6 +80,7 @@ from unifi_api.routes.resources.protect import (
     events as protect_events_routes,
     lights as protect_lights_routes,
     liveviews as protect_liveviews_routes,
+    recognition as protect_recognition_routes,
     recordings as protect_recordings_routes,
     sensors as protect_sensors_routes,
     system as protect_system_routes,
@@ -413,6 +414,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         protect_sensors_routes,
         protect_chimes_routes,
         protect_liveviews_routes,
+        protect_recognition_routes,
         protect_system_routes,
     ):
         app.include_router(r.router, prefix="/v1")

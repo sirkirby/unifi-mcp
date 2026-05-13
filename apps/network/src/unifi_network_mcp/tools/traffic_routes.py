@@ -29,7 +29,6 @@ IP addresses, regions, or target devices. Often used for VPN routing.""",
 async def list_traffic_routes() -> Dict[str, Any]:
     """List all traffic routes."""
     try:
-        
         routes = await traffic_route_manager.get_traffic_routes()
 
         # Format routes for readability
@@ -183,8 +182,6 @@ async def toggle_traffic_route(
 ) -> Dict[str, Any]:
     """Toggle a traffic route's enabled state."""
     try:
-        
-
         # Get current state for preview/message
         current = await traffic_route_manager.get_traffic_route_details(route_id)
         if not current:

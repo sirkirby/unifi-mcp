@@ -9,14 +9,16 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
+from pydantic import Field, ValidationError
+
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.models._actions import DeleteRecordingInput, ExportClipInput
 from unifi_core.protect.models.recordings import (
     from_controller as recording_from_controller,
+)
+from unifi_core.protect.models.recordings import (
     status_list_from_controller,
 )
-from pydantic import Field, ValidationError
-
 from unifi_protect_mcp.runtime import recording_manager, server
 
 logger = logging.getLogger(__name__)
@@ -152,9 +154,7 @@ async def protect_export_clip(
     logger.info("protect_export_clip called (camera=%s, start=%s, end=%s, fps=%s)", camera_id, start, end, fps)
     try:
         try:
-            params = ExportClipInput(
-                camera_id=camera_id, start=start, end=end, channel_index=channel_index, fps=fps
-            )
+            ExportClipInput(camera_id=camera_id, start=start, end=end, channel_index=channel_index, fps=fps)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         start_dt = _parse_datetime(start)
@@ -219,7 +219,7 @@ async def protect_delete_recording(
     )
     try:
         try:
-            params = DeleteRecordingInput(camera_id=camera_id, start=start, end=end)
+            DeleteRecordingInput(camera_id=camera_id, start=start, end=end)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         start_dt = _parse_datetime(start)

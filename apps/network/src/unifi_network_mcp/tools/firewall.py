@@ -11,10 +11,14 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
 from unifi_core.network.models.firewall import (
-    from_controller as fw_from_controller,
-    to_controller_update as fw_to_update,
     firewall_group_from_controller,
     firewall_zone_from_controller,
+)
+from unifi_core.network.models.firewall import (
+    from_controller as fw_from_controller,
+)
+from unifi_core.network.models.firewall import (
+    to_controller_update as fw_to_update,
 )
 from unifi_network_mcp.runtime import firewall_manager, server
 
@@ -353,13 +357,28 @@ async def create_firewall_policy(
         return {"success": False, "error": "Validation Error: %s" % err}
 
     # Reject unknown top-level keys (mirrors additionalProperties: False in the schema).
-    _allowed_keys = frozenset({
-        "name", "action", "enabled", "index", "protocol", "ip_version",
-        "logging", "connection_state_type", "connection_states",
-        "create_allow_respond", "match_ip_sec", "match_opposite_protocol",
-        "icmp_typename", "icmp_v6_typename", "schedule", "source", "destination",
-        "description",
-    })
+    _allowed_keys = frozenset(
+        {
+            "name",
+            "action",
+            "enabled",
+            "index",
+            "protocol",
+            "ip_version",
+            "logging",
+            "connection_state_type",
+            "connection_states",
+            "create_allow_respond",
+            "match_ip_sec",
+            "match_opposite_protocol",
+            "icmp_typename",
+            "icmp_v6_typename",
+            "schedule",
+            "source",
+            "destination",
+            "description",
+        }
+    )
     _unknown = sorted(set(policy_data.keys()) - _allowed_keys)
     if _unknown:
         err = "Additional properties not allowed: %s" % ", ".join(_unknown)

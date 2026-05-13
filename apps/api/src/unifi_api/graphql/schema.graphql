@@ -709,6 +709,31 @@ The `JSON` scalar type represents JSON values as specified by [ECMA-404](https:/
 """
 scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
 
+"""A UniFi Protect Known Face / assigned face recognition group."""
+type KnownFace {
+  id: ID
+  name: String
+  matchedName: String
+  type: String
+  imagePath: String
+  enhancedPath: String
+  detectionsCount: Int
+  firstDetectedAt: String
+  lastDetectedAt: String
+  isNotificationEnabled: Boolean
+  isDegraded: Boolean
+  tags: JSON
+  description: String
+  createdAt: String
+  metadata: JSON
+}
+
+"""Paginated page of UniFi Protect Known Faces."""
+type KnownFacePage {
+  items: [KnownFace!]!
+  nextCursor: String
+}
+
 """A UniFi Protect light (PIR-triggered floodlight)."""
 type Light {
   id: ID
@@ -1251,6 +1276,9 @@ type ProtectQuery {
 
   """Capture a JPEG snapshot from a camera (metadata only)."""
   snapshot(controller: ID!, id: ID!, width: Int = null, height: Int = null): Snapshot
+
+  """List assigned Protect Known Faces / named face recognition groups."""
+  knownFaces(controller: ID!, limit: Int! = 50, cursor: String = null, minConfidence: Int! = 30, includeInterest: Boolean! = true, orderBy: String! = "name", orderDirection: String! = "asc"): KnownFacePage!
 
   """List paired Protect chimes (paginated)."""
   chimes(controller: ID!, limit: Int! = 50, cursor: String = null): ChimePage!

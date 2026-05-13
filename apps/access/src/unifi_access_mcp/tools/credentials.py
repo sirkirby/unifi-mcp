@@ -14,7 +14,11 @@ from unifi_access_mcp.runtime import credential_manager, server
 from unifi_core.access.models._actions import RevokeCredentialInput
 from unifi_core.access.models.credentials import (
     Credential,
+)
+from unifi_core.access.models.credentials import (
     from_controller as credential_from_controller,
+)
+from unifi_core.access.models.credentials import (
     to_controller_create as credential_to_controller_create,
 )
 from unifi_core.confirmation import create_preview, preview_response
@@ -38,10 +42,7 @@ async def access_list_credentials() -> Dict[str, Any]:
     logger.info("access_list_credentials tool called")
     try:
         raw_list = await credential_manager.list_credentials()
-        credentials = [
-            credential_from_controller(raw).model_dump(exclude_none=True)
-            for raw in raw_list
-        ]
+        credentials = [credential_from_controller(raw).model_dump(exclude_none=True) for raw in raw_list]
         return {"success": True, "data": {"credentials": credentials, "count": len(credentials)}}
     except Exception as e:
         logger.error("Error listing credentials: %s", e, exc_info=True)

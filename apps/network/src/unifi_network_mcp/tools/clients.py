@@ -8,11 +8,9 @@ import logging
 from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
-from pydantic import ValidationError
 from unifi_core.confirmation import toggle_preview, update_preview
-from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import (
     AuthorizeGuestInput,
     BlockClientInput,

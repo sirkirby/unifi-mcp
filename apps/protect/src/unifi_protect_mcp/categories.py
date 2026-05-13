@@ -32,6 +32,7 @@ PROTECT_CATEGORY_MAP = {
     "sensor": "sensors",
     "chime": "chimes",
     "liveview": "liveviews",
+    "recognition": "recognition",
     "system": "system",
     "alarm": "alarm",
 }

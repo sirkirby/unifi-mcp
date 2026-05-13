@@ -102,6 +102,7 @@ def _build_protect_managers() -> dict[str, Callable[[Any], Any]]:
     from unifi_core.protect.managers.event_manager import EventManager
     from unifi_core.protect.managers.light_manager import LightManager
     from unifi_core.protect.managers.liveview_manager import LiveviewManager
+    from unifi_core.protect.managers.recognition_manager import RecognitionManager
     from unifi_core.protect.managers.recording_manager import RecordingManager
     from unifi_core.protect.managers.sensor_manager import SensorManager
     from unifi_core.protect.managers.system_manager import SystemManager
@@ -113,6 +114,7 @@ def _build_protect_managers() -> dict[str, Callable[[Any], Any]]:
         "event_manager": lambda cm: EventManager(cm),
         "light_manager": lambda cm: LightManager(cm),
         "liveview_manager": lambda cm: LiveviewManager(cm),
+        "recognition_manager": lambda cm: RecognitionManager(cm),
         "recording_manager": lambda cm: RecordingManager(cm),
         "sensor_manager": lambda cm: SensorManager(cm),
         "system_manager": lambda cm: SystemManager(cm),
@@ -167,9 +169,7 @@ class ManagerFactory:
         self._locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._builder_cache: dict[str, dict[str, Callable[[Any], Any]]] = {}
 
-    async def get_connection_manager(
-        self, session: AsyncSession, controller_id: str, product: str
-    ) -> Any:
+    async def get_connection_manager(self, session: AsyncSession, controller_id: str, product: str) -> Any:
         key = (controller_id, product)
         cm = self._connection_cache.get(key)
         if cm is not None:
@@ -182,17 +182,13 @@ class ManagerFactory:
             self._connection_cache[key] = cm
             return cm
 
-    async def _construct_connection_manager(
-        self, session: AsyncSession, controller_id: str, product: str
-    ) -> Any:
+    async def _construct_connection_manager(self, session: AsyncSession, controller_id: str, product: str) -> Any:
         controller = await session.get(Controller, controller_id)
         if controller is None:
             raise ValueError(f"controller {controller_id} not found")
         products = [p for p in controller.product_kinds.split(",") if p]
         if product not in products:
-            raise UnknownProduct(
-                f"controller {controller_id} does not support product '{product}'"
-            )
+            raise UnknownProduct(f"controller {controller_id} does not support product '{product}'")
         creds = json.loads(self._cipher.decrypt(controller.credentials_blob))
         host, port = _split_base_url(controller.base_url)
 
@@ -301,9 +297,7 @@ class ManagerFactory:
         builders = self._builders_for(product)
         builder = builders.get(attr_name)
         if builder is None:
-            raise UnknownManager(
-                f"product '{product}' has no domain manager named '{attr_name}'"
-            )
+            raise UnknownManager(f"product '{product}' has no domain manager named '{attr_name}'")
         cm = await self.get_connection_manager(session, controller_id, product)
         instance = builder(cm)
         self._domain_cache[key] = instance
