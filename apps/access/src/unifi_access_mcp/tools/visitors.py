@@ -10,6 +10,11 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_access_mcp.runtime import server, visitor_manager
+from unifi_core.access.models.visitors import (
+    Visitor,
+    from_controller as visitor_from_controller,
+    to_controller_create as visitor_to_controller_create,
+)
 from unifi_core.confirmation import create_preview, preview_response
 from unifi_core.exceptions import UniFiNotFoundError
 
@@ -28,7 +33,8 @@ async def access_list_visitors() -> Dict[str, Any]:
     """List all visitors."""
     logger.info("access_list_visitors tool called")
     try:
-        visitors = await visitor_manager.list_visitors()
+        raw_visitors = await visitor_manager.list_visitors()
+        visitors = [visitor_from_controller(v).model_dump(exclude_none=True) for v in raw_visitors]
         return {"success": True, "data": {"visitors": visitors, "count": len(visitors)}}
     except Exception as e:
         logger.error("Error listing visitors: %s", e, exc_info=True)
@@ -52,7 +58,8 @@ async def access_get_visitor(
     """Get detailed visitor information by ID."""
     logger.info("access_get_visitor tool called for %s", visitor_id)
     try:
-        detail = await visitor_manager.get_visitor(visitor_id)
+        raw = await visitor_manager.get_visitor(visitor_id)
+        detail = visitor_from_controller(raw).model_dump(exclude_none=True)
         return {"success": True, "data": detail}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
@@ -99,27 +106,24 @@ async def access_create_visitor(
     """Create a visitor pass with preview/confirm."""
     logger.info("access_create_visitor tool called (name=%s, confirm=%s)", name, confirm)
     try:
-        extra: Dict[str, Any] = {}
-        if email:
-            extra["email"] = email
-        if phone:
-            extra["phone"] = phone
+        try:
+            model = Visitor(
+                name=name,
+                valid_from=access_start,
+                valid_until=access_end,
+                email=email,
+                phone=phone,
+            )
+        except Exception as e:
+            return {"success": False, "error": f"Invalid visitor input: {e}"}
+
+        payload = visitor_to_controller_create(model)
 
         if confirm:
-            result = await visitor_manager.apply_create_visitor(
-                name=name,
-                access_start=access_start,
-                access_end=access_end,
-                **extra,
-            )
+            result = await visitor_manager.apply_create_visitor(**payload)
             return {"success": True, "data": result}
 
-        preview_data = await visitor_manager.create_visitor(
-            name=name,
-            access_start=access_start,
-            access_end=access_end,
-            **extra,
-        )
+        preview_data = await visitor_manager.create_visitor(**payload)
         return create_preview(
             resource_type="visitor_pass",
             resource_data=preview_data["proposed_changes"],

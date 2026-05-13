@@ -43,6 +43,8 @@ class Visitor:
     valid_until: str | None
     status: str | None
     credential_count: int | None
+    email: str | None
+    phone: str | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -68,6 +70,8 @@ class Visitor:
             valid_until=_get(obj, "valid_until") or _get(obj, "access_end"),
             status=_get(obj, "status"),
             credential_count=_get(obj, "credential_count"),
+            email=_get(obj, "email"),
+            phone=_get(obj, "phone"),
         )
 
     def to_dict(self) -> dict:
