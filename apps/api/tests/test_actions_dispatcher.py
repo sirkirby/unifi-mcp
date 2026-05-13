@@ -437,3 +437,109 @@ async def test_dispatch_delete_acl_passes_rule_id_unchanged() -> None:
     )
 
     domain_manager.delete_acl_rule.assert_awaited_once_with(rule_id="r1")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_export_clip_iso_to_datetime() -> None:
+    """protect_export_clip: action endpoint sends ISO strings; manager
+    expects datetime. The translator must parse before invocation."""
+    from datetime import datetime, timezone
+
+    entry = ToolEntry(
+        name="protect_export_clip",
+        product="protect",
+        category="recordings",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.export_clip = AsyncMock(return_value={"ok": True})
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=MagicMock(site=None))
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="protect_export_clip",
+        controller_id="cid",
+        controller_products=["protect"],
+        site="default",
+        args={
+            "camera_id": "cam001",
+            "start": "2026-05-13T12:00:00Z",
+            "end": "2026-05-13T12:30:00Z",
+            "channel_index": 0,
+            "fps": 4,
+        },
+        confirm=True,
+        dispatch_table={
+            "protect_export_clip": DispatchEntry(
+                manager_attr="recording_manager", method="export_clip"
+            ),
+        },
+    )
+
+    domain_manager.export_clip.assert_awaited_once()
+    (positional, keyword) = domain_manager.export_clip.await_args
+    assert positional == ()
+    assert keyword["camera_id"] == "cam001"
+    assert isinstance(keyword["start"], datetime)
+    assert keyword["start"] == datetime(2026, 5, 13, 12, 0, 0, tzinfo=timezone.utc)
+    assert isinstance(keyword["end"], datetime)
+    assert keyword["channel_index"] == 0
+    assert keyword["fps"] == 4
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_delete_recording_iso_to_datetime() -> None:
+    """protect_delete_recording: same datetime parsing pattern as export_clip."""
+    from datetime import datetime, timezone
+
+    entry = ToolEntry(
+        name="protect_delete_recording",
+        product="protect",
+        category="recordings",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.delete_recording = AsyncMock(return_value={"ok": True})
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=MagicMock(site=None))
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="protect_delete_recording",
+        controller_id="cid",
+        controller_products=["protect"],
+        site="default",
+        args={
+            "camera_id": "cam001",
+            "start": "2026-05-13T00:00:00+00:00",
+            "end": "2026-05-13T12:00:00+00:00",
+        },
+        confirm=True,
+        dispatch_table={
+            "protect_delete_recording": DispatchEntry(
+                manager_attr="recording_manager", method="delete_recording"
+            ),
+        },
+    )
+
+    domain_manager.delete_recording.assert_awaited_once()
+    (positional, keyword) = domain_manager.delete_recording.await_args
+    assert positional == ()
+    assert isinstance(keyword["start"], datetime)
+    assert isinstance(keyword["end"], datetime)
+    assert keyword["start"].tzinfo == timezone.utc

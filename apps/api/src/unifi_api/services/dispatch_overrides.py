@@ -158,7 +158,48 @@ def _translate_acl_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[s
     return (rule_id, to_controller_update(fields)), {}
 
 
+def _parse_iso_datetime(value: Any) -> Any:
+    """Parse an ISO 8601 string into a datetime; pass through datetime values."""
+    from datetime import datetime
+
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        s = value
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        return datetime.fromisoformat(s)
+    raise ValueError(f"cannot parse datetime from {type(value).__name__}: {value!r}")
+
+
+def _translate_export_clip(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Parse ISO start/end strings into datetime for recording_manager.export_clip."""
+    kwargs: dict[str, Any] = {
+        "camera_id": args["camera_id"],
+        "start": _parse_iso_datetime(args["start"]),
+        "end": _parse_iso_datetime(args["end"]),
+    }
+    if "channel_index" in args and args["channel_index"] is not None:
+        kwargs["channel_index"] = args["channel_index"]
+    if "fps" in args and args["fps"] is not None:
+        kwargs["fps"] = args["fps"]
+    return (), kwargs
+
+
+def _translate_delete_recording(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Parse ISO start/end strings into datetime for recording_manager.delete_recording."""
+    return (), {
+        "camera_id": args["camera_id"],
+        "start": _parse_iso_datetime(args["start"]),
+        "end": _parse_iso_datetime(args["end"]),
+    }
+
+
 DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
     "unifi_create_acl_rule": _translate_acl_create,
     "unifi_update_acl_rule": _translate_acl_update,
+    "protect_export_clip": _translate_export_clip,
+    "protect_delete_recording": _translate_delete_recording,
 }
