@@ -197,9 +197,159 @@ def _translate_delete_recording(args: dict[str, Any]) -> tuple[tuple[Any, ...], 
     }
 
 
+# ---------------------------------------------------------------------------
+# Network — client manager tools
+# ---------------------------------------------------------------------------
+# All eight client mutation tools expose ``mac_address`` to the LLM; every
+# manager method takes ``client_mac`` instead.  A single shared helper
+# covers the rename; callers that pass additional kwargs (rename, authorize,
+# set_client_ip_settings) carry those through unchanged.
+
+def _rename_mac_address_to_client_mac(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Rename ``mac_address`` → ``client_mac`` for client manager methods.
+
+    Shared by all eight client mutation tools whose LLM-facing parameter is
+    ``mac_address`` but whose manager method parameter is ``client_mac``.
+    All other kwargs are passed through unchanged.
+    """
+    out = dict(args)
+    if "mac_address" in out:
+        out["client_mac"] = out.pop("mac_address")
+    return (), out
+
+
+# ---------------------------------------------------------------------------
+# Network — list_clients
+# ---------------------------------------------------------------------------
+# ``get_clients()`` takes no arguments.  The tool exposes ``filter_type``,
+# ``include_offline``, and ``limit`` to the LLM for its own filtering logic,
+# but since the dispatcher bypasses the tool body we must strip those kwargs
+# before invoking the no-arg manager method.
+
+def _translate_list_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Strip tool-only filter kwargs; ``get_clients()`` accepts no arguments."""
+    return (), {}
+
+
+# ---------------------------------------------------------------------------
+# Network — update_firewall_policy
+# ---------------------------------------------------------------------------
+# Tool exposes ``update_data``; manager method takes ``updates``.
+
+def _translate_update_firewall_policy(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Rename ``update_data`` → ``updates`` for firewall_manager.update_firewall_policy."""
+    out = dict(args)
+    if "update_data" in out:
+        out["updates"] = out.pop("update_data")
+    return (), out
+
+
+# ---------------------------------------------------------------------------
+# Network — toggle_port_forward
+# ---------------------------------------------------------------------------
+# Tool exposes ``port_forward_id``; manager method ``toggle_port_forward``
+# takes ``rule_id``.
+
+def _translate_toggle_port_forward(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Rename ``port_forward_id`` → ``rule_id`` for firewall_manager.toggle_port_forward."""
+    out = dict(args)
+    if "port_forward_id" in out:
+        out["rule_id"] = out.pop("port_forward_id")
+    return (), out
+
+
+# ---------------------------------------------------------------------------
+# Network — update_device_radio
+# ---------------------------------------------------------------------------
+# Tool exposes flat radio settings (``mac_address``, ``radio``, individual
+# update fields) alongside ``confirm``.  Manager ``update_device_radio``
+# expects ``(device_mac, radio_id, updates)`` where ``updates`` is a dict
+# of radio-table fields.  The translator renames ``mac_address`` →
+# ``device_mac``, ``radio`` → ``radio_id``, and collects the per-field
+# kwargs into an ``updates`` dict.
+
+_RADIO_UPDATE_FIELDS = frozenset({
+    "tx_power_mode",
+    "tx_power",
+    "channel",
+    "ht",
+    "min_rssi_enabled",
+    "min_rssi",
+    "assisted_roaming_enabled",
+    "antenna_gain",
+    "vwire_enabled",
+    "sens_level_enabled",
+    "sens_level",
+})
+
+
+def _translate_update_device_radio(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Translate flat radio kwargs to (device_mac, radio_id, updates) shape.
+
+    The MCP tool accepts individual radio-setting fields alongside
+    ``mac_address`` and ``radio``; the manager method takes them bundled
+    into an ``updates`` dict.
+    """
+    out = dict(args)
+    device_mac = out.pop("mac_address", None)
+    radio_id = out.pop("radio", None)
+    # Collect radio-table field kwargs into the updates bundle.
+    updates = {k: out.pop(k) for k in list(out.keys()) if k in _RADIO_UPDATE_FIELDS}
+    kwargs: dict[str, Any] = {}
+    if device_mac is not None:
+        kwargs["device_mac"] = device_mac
+    if radio_id is not None:
+        kwargs["radio_id"] = radio_id
+    if updates:
+        kwargs["updates"] = updates
+    return (), kwargs
+
+
+# ---------------------------------------------------------------------------
+# Network — stats tools
+# ---------------------------------------------------------------------------
+# ``get_top_clients(duration_hours, limit)`` — tool passes ``duration`` (a
+# string like "daily") and ``limit``; manager expects ``duration_hours``
+# (an integer).
+
+_DURATION_HOURS: dict[str, int] = {
+    "hourly": 1,
+    "daily": 24,
+    "weekly": 168,
+    "monthly": 720,
+}
+
+
+def _translate_get_top_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Convert ``duration`` string → ``duration_hours`` int for stats_manager.get_top_clients."""
+    out = dict(args)
+    duration = out.pop("duration", "daily")
+    duration_hours = _DURATION_HOURS.get(str(duration), 24)
+    return (), {"duration_hours": duration_hours, "limit": out.get("limit", 10)}
+
+
 DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
     "unifi_create_acl_rule": _translate_acl_create,
     "unifi_update_acl_rule": _translate_acl_update,
     "protect_export_clip": _translate_export_clip,
     "protect_delete_recording": _translate_delete_recording,
+    # Network — client mutations: tool uses mac_address, manager uses client_mac
+    "unifi_block_client": _rename_mac_address_to_client_mac,
+    "unifi_unblock_client": _rename_mac_address_to_client_mac,
+    "unifi_rename_client": _rename_mac_address_to_client_mac,
+    "unifi_force_reconnect_client": _rename_mac_address_to_client_mac,
+    "unifi_authorize_guest": _rename_mac_address_to_client_mac,
+    "unifi_unauthorize_guest": _rename_mac_address_to_client_mac,
+    "unifi_set_client_ip_settings": _rename_mac_address_to_client_mac,
+    "unifi_forget_client": _rename_mac_address_to_client_mac,
+    # Network — list clients: manager get_clients() takes no args
+    "unifi_list_clients": _translate_list_clients,
+    # Network — firewall: kwarg rename
+    "unifi_update_firewall_policy": _translate_update_firewall_policy,
+    # Network — port forward toggle: kwarg rename
+    "unifi_toggle_port_forward": _translate_toggle_port_forward,
+    # Network — device radio update: flatten → (device_mac, radio_id, updates)
+    "unifi_update_device_radio": _translate_update_device_radio,
+    # Network — stats: convert duration string to duration_hours integer
+    "unifi_get_top_clients": _translate_get_top_clients,
 }

@@ -189,7 +189,8 @@ async def test_dispatch_updates_site_when_changed() -> None:
     )
 
     conn_manager.set_site.assert_awaited_once_with("upstairs")
-    domain_manager.get_clients.assert_awaited_once_with(limit=10)
+    # The list_clients translator strips filter kwargs; get_clients() takes no args.
+    domain_manager.get_clients.assert_awaited_once_with()
 
 
 def test_build_dispatch_table_finds_real_tools() -> None:
@@ -543,3 +544,495 @@ async def test_dispatch_translates_delete_recording_iso_to_datetime() -> None:
     assert isinstance(keyword["start"], datetime)
     assert isinstance(keyword["end"], datetime)
     assert keyword["start"].tzinfo == timezone.utc
+
+
+# ---------------------------------------------------------------------------
+# Network client tools — mac_address → client_mac rename
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_block_client_mac_address_to_client_mac() -> None:
+    """unifi_block_client: LLM sends mac_address; manager.block_client expects client_mac."""
+    entry = ToolEntry(
+        name="unifi_block_client",
+        product="network",
+        category="clients",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.block_client = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_block_client",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"mac_address": "aa:bb:cc:dd:ee:ff"},
+        confirm=True,
+        dispatch_table={
+            "unifi_block_client": DispatchEntry(
+                manager_attr="client_manager", method="block_client"
+            ),
+        },
+    )
+
+    domain_manager.block_client.assert_awaited_once_with(client_mac="aa:bb:cc:dd:ee:ff")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_unblock_client_mac_address_to_client_mac() -> None:
+    """unifi_unblock_client: same mac_address → client_mac rename."""
+    entry = ToolEntry(
+        name="unifi_unblock_client",
+        product="network",
+        category="clients",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.unblock_client = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_unblock_client",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"mac_address": "aa:bb:cc:dd:ee:ff"},
+        confirm=True,
+        dispatch_table={
+            "unifi_unblock_client": DispatchEntry(
+                manager_attr="client_manager", method="unblock_client"
+            ),
+        },
+    )
+
+    domain_manager.unblock_client.assert_awaited_once_with(client_mac="aa:bb:cc:dd:ee:ff")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_rename_client_mac_address_to_client_mac() -> None:
+    """unifi_rename_client: mac_address → client_mac; name passes through."""
+    entry = ToolEntry(
+        name="unifi_rename_client",
+        product="network",
+        category="clients",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.rename_client = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_rename_client",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"mac_address": "aa:bb:cc:dd:ee:ff", "name": "Living Room TV"},
+        confirm=True,
+        dispatch_table={
+            "unifi_rename_client": DispatchEntry(
+                manager_attr="client_manager", method="rename_client"
+            ),
+        },
+    )
+
+    domain_manager.rename_client.assert_awaited_once_with(
+        client_mac="aa:bb:cc:dd:ee:ff", name="Living Room TV"
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_authorize_guest_mac_address_to_client_mac() -> None:
+    """unifi_authorize_guest: mac_address → client_mac; bandwidth kwargs pass through."""
+    entry = ToolEntry(
+        name="unifi_authorize_guest",
+        product="network",
+        category="clients",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.authorize_guest = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_authorize_guest",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={
+            "mac_address": "aa:bb:cc:dd:ee:ff",
+            "minutes": 480,
+            "up_kbps": 5000,
+            "down_kbps": 10000,
+        },
+        confirm=True,
+        dispatch_table={
+            "unifi_authorize_guest": DispatchEntry(
+                manager_attr="client_manager", method="authorize_guest"
+            ),
+        },
+    )
+
+    domain_manager.authorize_guest.assert_awaited_once_with(
+        client_mac="aa:bb:cc:dd:ee:ff",
+        minutes=480,
+        up_kbps=5000,
+        down_kbps=10000,
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_set_client_ip_settings_mac_address_to_client_mac() -> None:
+    """unifi_set_client_ip_settings: mac_address → client_mac; IP fields pass through."""
+    entry = ToolEntry(
+        name="unifi_set_client_ip_settings",
+        product="network",
+        category="clients",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.set_client_ip_settings = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_set_client_ip_settings",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={
+            "mac_address": "aa:bb:cc:dd:ee:ff",
+            "use_fixedip": True,
+            "fixed_ip": "192.168.1.50",
+        },
+        confirm=True,
+        dispatch_table={
+            "unifi_set_client_ip_settings": DispatchEntry(
+                manager_attr="client_manager", method="set_client_ip_settings"
+            ),
+        },
+    )
+
+    domain_manager.set_client_ip_settings.assert_awaited_once_with(
+        client_mac="aa:bb:cc:dd:ee:ff",
+        use_fixedip=True,
+        fixed_ip="192.168.1.50",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Network — list_clients: manager get_clients() takes no arguments
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_list_clients_strips_filter_kwargs() -> None:
+    """unifi_list_clients: filter_type/include_offline/limit are tool-only;
+    get_clients() accepts no arguments."""
+    entry = ToolEntry(
+        name="unifi_list_clients",
+        product="network",
+        category="clients",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.get_clients = AsyncMock(return_value=[])
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_list_clients",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"filter_type": "wireless", "include_offline": False, "limit": 50},
+        confirm=False,
+        dispatch_table={
+            "unifi_list_clients": DispatchEntry(
+                manager_attr="client_manager", method="get_clients"
+            ),
+        },
+    )
+
+    domain_manager.get_clients.assert_awaited_once_with()
+
+
+# ---------------------------------------------------------------------------
+# Network — update_firewall_policy: update_data → updates rename
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_update_firewall_policy_update_data_to_updates() -> None:
+    """unifi_update_firewall_policy: tool sends update_data; manager takes updates."""
+    entry = ToolEntry(
+        name="unifi_update_firewall_policy",
+        product="network",
+        category="firewall_policies",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.update_firewall_policy = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_update_firewall_policy",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"policy_id": "p1", "update_data": {"enabled": False}},
+        confirm=True,
+        dispatch_table={
+            "unifi_update_firewall_policy": DispatchEntry(
+                manager_attr="firewall_manager", method="update_firewall_policy"
+            ),
+        },
+    )
+
+    domain_manager.update_firewall_policy.assert_awaited_once_with(
+        policy_id="p1", updates={"enabled": False}
+    )
+
+
+# ---------------------------------------------------------------------------
+# Network — toggle_port_forward: port_forward_id → rule_id rename
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_toggle_port_forward_id_to_rule_id() -> None:
+    """unifi_toggle_port_forward: tool sends port_forward_id; manager takes rule_id."""
+    entry = ToolEntry(
+        name="unifi_toggle_port_forward",
+        product="network",
+        category="port_forwards",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.toggle_port_forward = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_toggle_port_forward",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"port_forward_id": "pf001"},
+        confirm=True,
+        dispatch_table={
+            "unifi_toggle_port_forward": DispatchEntry(
+                manager_attr="firewall_manager", method="toggle_port_forward"
+            ),
+        },
+    )
+
+    domain_manager.toggle_port_forward.assert_awaited_once_with(rule_id="pf001")
+
+
+# ---------------------------------------------------------------------------
+# Network — update_device_radio: flatten to (device_mac, radio_id, updates)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_update_device_radio_to_manager_shape() -> None:
+    """unifi_update_device_radio: flat kwargs → (device_mac, radio_id, updates)."""
+    entry = ToolEntry(
+        name="unifi_update_device_radio",
+        product="network",
+        category="devices",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.update_device_radio = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_update_device_radio",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={
+            "mac_address": "aa:bb:cc:dd:ee:ff",
+            "radio": "na",
+            "tx_power_mode": "auto",
+            "channel": 36,
+        },
+        confirm=True,
+        dispatch_table={
+            "unifi_update_device_radio": DispatchEntry(
+                manager_attr="device_manager", method="update_device_radio"
+            ),
+        },
+    )
+
+    domain_manager.update_device_radio.assert_awaited_once_with(
+        device_mac="aa:bb:cc:dd:ee:ff",
+        radio_id="na",
+        updates={"tx_power_mode": "auto", "channel": 36},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Network — get_top_clients: duration string → duration_hours integer
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_get_top_clients_duration_to_hours() -> None:
+    """unifi_get_top_clients: duration='daily' → duration_hours=24."""
+    entry = ToolEntry(
+        name="unifi_get_top_clients",
+        product="network",
+        category="stats",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.get_top_clients = AsyncMock(return_value=[])
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_get_top_clients",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"duration": "weekly", "limit": 5},
+        confirm=False,
+        dispatch_table={
+            "unifi_get_top_clients": DispatchEntry(
+                manager_attr="stats_manager", method="get_top_clients"
+            ),
+        },
+    )
+
+    domain_manager.get_top_clients.assert_awaited_once_with(duration_hours=168, limit=5)
