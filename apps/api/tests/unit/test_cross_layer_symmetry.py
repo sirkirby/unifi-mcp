@@ -39,6 +39,8 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("network", "wlans", "Wlan"),
     ("network", "devices", "Device"),
     ("network", "devices", "DeviceRadio"),
+    ("network", "system", "SnmpSettings"),
+    ("network", "system", "AutoBackupSettings"),
     ("protect", "cameras", "Camera"),
     ("protect", "lights", "Light"),
     ("protect", "chimes", "Chime"),

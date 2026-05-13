@@ -333,6 +333,13 @@ class AutoBackupSettings:
     enabled: bool
     schedule: str | None
     max_count: int | None
+    # Mutable update fields (AUTOBACKUP_SETTINGS_UPDATE_SCHEMA)
+    autobackup_enabled: bool | None
+    autobackup_cron_expr: str | None
+    autobackup_days: int | None
+    autobackup_max_files: int | None
+    autobackup_timezone: str | None
+    autobackup_cloud_enabled: bool | None
     _was_dict: strawberry.Private[bool] = True
 
     @classmethod
@@ -344,12 +351,21 @@ class AutoBackupSettings:
         if not isinstance(obj, dict):
             return cls(
                 enabled=False, schedule=None, max_count=None,
+                autobackup_enabled=None, autobackup_cron_expr=None,
+                autobackup_days=None, autobackup_max_files=None,
+                autobackup_timezone=None, autobackup_cloud_enabled=None,
                 _was_dict=False,
             )
         return cls(
-            enabled=bool(obj.get("enabled", False)),
-            schedule=_get(obj, "schedule", "cron"),
-            max_count=_get(obj, "max_count", "max_backups"),
+            enabled=bool(obj.get("autobackup_enabled", obj.get("enabled", False))),
+            schedule=_get(obj, "autobackup_cron_expr", "schedule", "cron"),
+            max_count=_get(obj, "autobackup_max_files", "max_count", "max_backups"),
+            autobackup_enabled=obj.get("autobackup_enabled"),
+            autobackup_cron_expr=_get(obj, "autobackup_cron_expr", "cron"),
+            autobackup_days=obj.get("autobackup_days"),
+            autobackup_max_files=_get(obj, "autobackup_max_files", "max_backups"),
+            autobackup_timezone=_get(obj, "autobackup_timezone", "timezone"),
+            autobackup_cloud_enabled=obj.get("autobackup_cloud_enabled"),
             _was_dict=True,
         )
 

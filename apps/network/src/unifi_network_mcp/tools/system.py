@@ -11,8 +11,11 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.network.models.system import (
+    autobackup_to_controller_update,
+    snmp_to_controller_update,
+)
 from unifi_network_mcp.runtime import server, system_manager
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -149,9 +152,7 @@ async def update_snmp_settings(
     if community is not None:
         updates["community"] = community
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("snmp_settings_update", updates)
-    if not is_valid:
-        return {"success": False, "error": f"Validation error: {error_msg}"}
+    validated_data = snmp_to_controller_update(updates)
     if not validated_data:
         return {"success": False, "error": "No valid fields to update after validation."}
 
@@ -324,9 +325,7 @@ async def update_autobackup_settings(
     if not update_data:
         return {"success": False, "error": "No settings provided to update."}
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("autobackup_settings_update", update_data)
-    if not is_valid:
-        return {"success": False, "error": f"Validation error: {error_msg}"}
+    validated_data = autobackup_to_controller_update(update_data)
     if not validated_data:
         return {"success": False, "error": "No valid fields to update after validation."}
 
