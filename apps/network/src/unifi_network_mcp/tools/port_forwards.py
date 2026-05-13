@@ -9,10 +9,19 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from pydantic import ValidationError
 from unifi_core.confirmation import toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import (
+    PortForwardCreateInput,
+    PortForwardSimpleInput,
+    PortForwardUpdateInput,
+)
+from unifi_core.network.models.port_forwards import (
+    from_controller as pf_from_controller,
+    to_controller_update as pf_to_update,
+)
 from unifi_network_mcp.runtime import firewall_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry  # Added for validation
 
 logger = logging.getLogger(__name__)  # Changed logger name for consistency
 
@@ -61,23 +70,12 @@ async def list_port_forwards() -> Dict[str, Any]:  # Removed context, adjusted r
     try:
         rules = await firewall_manager.get_port_forwards()
         rules_raw = [r.raw if hasattr(r, "raw") else r for r in rules]
-        port_forward_list = [
-            {
-                "id": r.get("_id"),
-                "name": r.get("name"),
-                "enabled": r.get("enabled"),
-                "src_port": r.get("dst_port"),  # Note: UniFi uses dst_port for external
-                "dst_port": r.get("fwd_port"),  # Note: UniFi uses fwd_port for internal
-                "protocol": r.get("proto"),
-                "dest_ip": r.get("fwd"),
-            }
-            for r in rules_raw
-        ]
+        formatted = [pf_from_controller(r).model_dump(exclude_none=True) for r in rules_raw]
         return {
             "success": True,
             "site": firewall_manager._connection.site,
-            "count": len(port_forward_list),
-            "port_forwards": port_forward_list,
+            "count": len(formatted),
+            "port_forwards": formatted,
         }
     except Exception as e:
         logger.error("Error listing port forwards: %s", e, exc_info=True)
@@ -216,15 +214,7 @@ async def toggle_port_forward(
         new_state = not current_enabled
 
         logger.info("Attempting to toggle port forward '%s' (%s) to %s", rule_name, port_forward_id, new_state)
-        # Assuming toggle_port_forward directly updates the rule state.
-        # If firewall_manager.toggle_port_forward doesn't exist or works differently,
-        # we might need to fetch, modify 'enabled', and call update_port_forward.
-        # For now, assuming toggle_port_forward exists and returns success/failure.
-
-        # Let's simulate the update pattern more closely: fetch, modify, update
-        update_payload = {"enabled": new_state}
-        # Assuming firewall_manager has an update_port_forward method
-        # This requires checking/adding the update_port_forward method in the manager layer
+        update_payload = pf_to_update({"enabled": new_state})
         success = await firewall_manager.update_port_forward(port_forward_id, update_payload)
 
         if success:
@@ -306,46 +296,37 @@ async def create_port_forward(
     - details (object): Additional details about the created rule
     - error (string): Error message if unsuccessful
     """
-    from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
-
-    # Validate the input
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("port_forward", port_forward_data)
-    if not is_valid:
-        logger.warning("Invalid port forward data: %s", error_msg)
-        return {"success": False, "error": error_msg}
-
-    # Required fields check
-    required_fields = ["name", "dst_port", "fwd_port", "fwd_ip"]
-    missing_fields = [field for field in required_fields if field not in validated_data]
-    if missing_fields:
-        error = f"Missing required fields: {', '.join(missing_fields)}"
-        logger.warning(error)
-        return {"success": False, "error": error}
+    try:
+        validated = PortForwardCreateInput(**port_forward_data)
+    except ValidationError as exc:
+        err = exc.errors()[0]["msg"]
+        logger.warning("Invalid port forward data: %s", err)
+        return {"success": False, "error": err}
 
     try:
         # Prepare data for the manager
         rule_data = {
-            "name": validated_data["name"],
-            "dst_port": validated_data["dst_port"],
-            "fwd_port": validated_data["fwd_port"],
-            "fwd_ip": validated_data["fwd_ip"],
-            "proto": validated_data.get("protocol", "tcp_udp").replace("_", "/"),  # Manager expects 'tcp/udp'
+            "name": validated.name,
+            "dst_port": validated.dst_port,
+            "fwd_port": validated.fwd_port,
+            "fwd_ip": validated.fwd_ip,
+            "proto": validated.protocol.replace("_", "/"),  # Manager expects 'tcp/udp'
             "protocol_match_excepted": False,
-            "enabled": validated_data.get("enabled", True),
-            "log": validated_data.get("log", False),
+            "enabled": validated.enabled,
+            "log": validated.log,
         }
 
         # Handle optional source IP
-        if validated_data.get("src_ip"):
-            rule_data["src"] = validated_data["src_ip"]
+        if validated.src_ip:
+            rule_data["src"] = validated.src_ip
 
         logger.info(
             "Attempting to create port forward: %s (%s %s -> %s:%s)",
-            validated_data["name"],
+            validated.name,
             rule_data["proto"],
-            validated_data["dst_port"],
-            validated_data["fwd_ip"],
-            validated_data["fwd_port"],
+            validated.dst_port,
+            validated.fwd_ip,
+            validated.fwd_port,
         )
 
         result = await firewall_manager.create_port_forward(rule_data)
@@ -353,29 +334,29 @@ async def create_port_forward(
         if result:
             new_rule_id = result if isinstance(result, str) else result.get("_id", "unknown")
             details = result if isinstance(result, dict) else {"id": new_rule_id}
-            logger.info("Successfully created port forward '%s' with ID %s", validated_data["name"], new_rule_id)
+            logger.info("Successfully created port forward '%s' with ID %s", validated.name, new_rule_id)
             return {
                 "success": True,
-                "message": f"Port forward '{validated_data['name']}' created successfully.",
+                "message": f"Port forward '{validated.name}' created successfully.",
                 "port_forward_id": new_rule_id,
                 "details": json.loads(json.dumps(details, default=str)),
             }
         else:
-            error_msg = (
+            fail_msg = (
                 result.get("error", "Manager returned failure")
                 if isinstance(result, dict)
                 else "Manager returned failure"
             )
-            logger.error("Failed to create port forward '%s'. Reason: %s", validated_data["name"], error_msg)
+            logger.error("Failed to create port forward '%s'. Reason: %s", validated.name, fail_msg)
             return {
                 "success": False,
-                "error": f"Failed to create port forward '{validated_data['name']}'. {error_msg}",
+                "error": f"Failed to create port forward '{validated.name}'. {fail_msg}",
             }
 
     except Exception as e:
         logger.error(
             "Error creating port forward '%s': %s",
-            validated_data.get("name", "unknown"),
+            port_forward_data.get("name", "unknown"),
             e,
             exc_info=True,
         )
@@ -461,12 +442,17 @@ async def update_port_forward(
         return {"success": False, "error": "update_data dictionary cannot be empty"}
 
     # Validate the update data against the update schema
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("port_forward_update", update_data)
-    if not is_valid:
-        logger.warning("Invalid port forward update data for ID %s: %s", port_forward_id, error_msg)
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
+    try:
+        validated_obj = PortForwardUpdateInput(**update_data)
+    except ValidationError as exc:
+        err = exc.errors()[0]["msg"]
+        logger.warning("Invalid port forward update data for ID %s: %s", port_forward_id, err)
+        return {"success": False, "error": f"Invalid update data: {err}"}
 
-    if not validated_data:  # Ensure validation didn't return an empty dict if input was invalid
+    # Build validated_data dict from the model (exclude unset/None values)
+    validated_data = validated_obj.model_dump(exclude_none=True)
+
+    if not validated_data:
         logger.warning("Port forward update data for ID %s is empty after validation.", port_forward_id)
         return {
             "success": False,
@@ -548,24 +534,23 @@ async def create_simple_port_forward(
     }
     """
 
-    ok, err, validated = UniFiValidatorRegistry.validate("port_forward_simple", rule)
-    if not ok or validated is None:
-        return {"success": False, "error": err or "Validation failed"}
-
-    r = validated
+    try:
+        r = PortForwardSimpleInput(**rule)
+    except ValidationError as exc:
+        return {"success": False, "error": exc.errors()[0]["msg"]}
 
     # Build API payload matching existing V1 schema keys
     payload: Dict[str, Any] = {
-        "name": r["name"],
-        "dst_port": str(r["ext_port"]),
-        "fwd_port": str(r.get("int_port", r["ext_port"])),
-        "fwd_ip": r["to_ip"],
+        "name": r.name,
+        "dst_port": str(r.ext_port),
+        "fwd_port": str(r.int_port if r.int_port is not None else r.ext_port),
+        "fwd_ip": r.to_ip,
         "protocol": {
             "tcp": "tcp",
             "udp": "udp",
             "both": "tcp_udp",
-        }.get(r.get("protocol", "both"), "tcp_udp"),
-        "enabled": r.get("enabled", True),
+        }.get(r.protocol, "tcp_udp"),
+        "enabled": r.enabled,
     }
 
     if not confirm:

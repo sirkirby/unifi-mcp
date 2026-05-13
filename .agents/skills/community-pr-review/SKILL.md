@@ -92,8 +92,8 @@ models, changes base class hierarchy, or implements a field-symmetry sub-issue
    read-surface output and create/update input. Name-match alone is insufficient — a field can
    appear in both surfaces but fail silently if types diverge (e.g., `source_macs: list[str]`
    returned by list tools vs. `source_macs: str` accepted by create). This is CI-enforced via
-   `tests/unit/test_tool_field_symmetry.py`'s type assertion requirement (issue #137 scope
-   extension).
+   `tests/unit/test_tool_field_symmetry.py`'s type assertion requirement (the field-symmetry
+   pattern, formalised in #137 and rolled out in Phases 0–4).
 4. **No field leakage?** — Fields belonging to one resource variant must not silently appear
    on another through inheritance.
 5. **Matches issue spec?** — Compare against the linked GitHub issue. Every scoped item should
@@ -163,21 +163,15 @@ unnecessary overhead on every suppressed call.
 
 ---
 
-### Gate 2: Validator Registry — Silent Failure Risk
+### Gate 2: Pydantic Model Wiring — Silent Failure Risk
 
-**Target:** Any PR introducing a new tool or manager.
+**Target:** Any PR introducing a new tool or manager for a domain that has create/update tools.
 
-New tools must be registered in the validator registry. An unregistered tool silently skips
-validation at runtime — no error, no warning, just unvalidated data passing through.
+New domains must define a pydantic model in `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py` and wire it into the tool layer. A domain without a model silently bypasses field validation — unknown or read-only fields pass through unchecked.
 
-Check that each new tool has a corresponding entry. Verify the registration file exists and
-the new tool's name appears in it. If the contributor added a tool but not a registry entry,
-add it before merging.
+Check that each new domain has a corresponding model with `MUTABLE_FIELDS` / `READ_ONLY_FIELDS` frozensets and `to_controller_create` / `to_controller_update` helpers. Verify the tool layer calls `to_controller_update(fields)` (not a raw dict pass-through) for update tools.
 
-**The `validated_data` gotcha (from PR #123):** When a validator exists but the tool accesses
-`request.params` directly instead of `validated_data`, validation runs but its output is
-silently discarded. After confirming a tool is registered, also confirm it reads from
-`validated_data`, not from the raw params object.
+**The `to_controller_update` gotcha:** When a model exists but the tool bypasses it and passes raw caller args directly to the manager, the model's field validation is silently skipped. Confirm the tool calls `to_controller_update(fields)` and passes the result, not the original dict.
 
 ---
 
@@ -196,34 +190,30 @@ merged? If not, either request the update or make it yourself before merging (se
 
 ---
 
-### Gate 4: Shared Validator Modifications — Blast Radius Check
+### Gate 4: Shared Pydantic Model Defaults — Blast Radius Check
 
-**Target:** Any PR that modifies a shared validator class (e.g., `ResourceValidator.validate()`).
+**Target:** Any PR that modifies a shared `<Domain>Base` pydantic model in `packages/unifi-core`.
 
-If a PR injects schema defaults into a shared `validate()` method, every update tool that calls
-the method will silently overwrite fields the caller intentionally omitted — a data-loss bug with
-blast radius across all 37+ default-using properties and all three app packages.
+If a PR adds non-`None` defaults to mutable fields on a shared base model, every update tool that uses the model will silently inject those defaults when the caller omits the field — a data-loss bug with blast radius across all tools that import the model.
 
 **Hard blocker pattern:**
 
 ```python
-# DANGEROUS — defaults injected into shared validator
-class ResourceValidator:
-    def validate(self, data: dict) -> dict:
-        data.setdefault("create_allow_respond", False)  # silently overwrites on update
-        data.setdefault("schedule", {"mode": "ALWAYS"})  # silently overwrites on update
-        return data
+# DANGEROUS — non-None default on shared base model field
+class FirewallPolicyBase(BaseModel):
+    create_allow_respond: bool = False   # silently overwrites on update
+    schedule: dict = {"mode": "ALWAYS"}  # silently overwrites on update
 ```
 
-With this code, `update_firewall_policy({"name": "new"})` would silently inject unwanted field
+With this model, `update_firewall_policy({"name": "new"})` would silently inject unwanted field
 values — overwriting whatever the controller currently has, regardless of what the caller specified.
 
-**The rule:** Defaults belong in create-specific code paths only (or in an explicit opt-in method
-such as `validate_and_apply_defaults()` that update tools do not call). Any PR that adds defaults
-to a shared validator code path is a **hard blocker**.
+**The rule:** Non-`None` defaults belong only in create-specific subclasses or create-specific
+code paths. Shared base model fields must use `= None`. Any PR that adds non-`None` defaults to
+a shared base model field is a **hard blocker**.
 
-This gate emerged from PR #146. Check for it whenever the PR diff touches a class that both
-create and update tools inherit from or call into.
+This gate emerged from PR #146. Check for it whenever the PR diff touches a `<Domain>Base` class
+that both create and update tools inherit from.
 
 ---
 
@@ -535,9 +525,9 @@ using this exact approach and a fix PR was opened the same session.
 | First-time CI auth (Step 0b) | Blocking | GitHub Actions tab | Manual workflow approval not triggered |
 | PR type (Gate 0) | Routing gate | PR description + linked issue | Applying feature-addition checklist to a governance/refactor PR |
 | F-string loggers (Gate 1) | Hard block | `*_manager.py` | Manager layer even when tool layer is clean; full-payload calls promoted to INFO |
-| Validator registry (Gate 2) | Critical (silent) | Registry file + `validated_data` usage | Tool registered but reads raw params |
+| Pydantic model wiring (Gate 2) | Critical (silent) | `unifi-core/models/<domain>.py` + tool `to_controller_update` call | Domain model exists but tool bypasses it with raw dict |
 | Doc site count (Gate 3) | Ordering gate | Doc site entry count | Updated after merge instead of before |
-| Shared validator defaults (Gate 4) | Hard block | `ResourceValidator.validate()` and any shared validator class | Defaults injected into shared path silently overwrite update-tool fields |
+| Shared pydantic model defaults (Gate 4) | Hard block | `<Domain>Base` model in `unifi-core` | Non-None defaults on shared base model fields silently overwrite update-tool fields |
 | AI-Bot vs human (Step 1.5b) | Precedent gate | Issue tracker + PR scope | Merging bot PRs with parallel in-house work; missing credit for human contributors |
 | Live smoke tests (Step 1.5) | Validation requirement | `scripts/live_smoke.py` output | Approval without actual live controller tests; mock-only validation |
 | Mutation cycles (Step 1.5) | Field preservation blocker | Create → update → verify → delete cycle | Update tools that reconstruct objects silently zero fields |

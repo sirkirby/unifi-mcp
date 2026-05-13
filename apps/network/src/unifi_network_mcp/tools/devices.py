@@ -11,12 +11,24 @@ from typing import Annotated, Any, Dict, List, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from pydantic import ValidationError
 from unifi_core.confirmation import create_preview, preview_response, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import (
+    AdoptDeviceInput,
+    ForceProvisionDeviceInput,
+    LocateDeviceInput,
+    RebootDeviceInput,
+    RenameDeviceInput,
+    SetDeviceLedInput,
+    SetOutletStateInput,
+    SetSiteLedsInput,
+    UpgradeDeviceInput,
+)
+from unifi_core.network.models.devices import radio_to_controller_update
 
 # Import the global FastMCP server instance, config, and managers
 from unifi_network_mcp.runtime import device_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +315,11 @@ async def reboot_device(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for rebooting a device."""
+    try:
+        RebootDeviceInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return preview_response(
             action="reboot",
@@ -348,6 +365,11 @@ async def rename_device(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for renaming a device."""
+    try:
+        RenameDeviceInput(mac_address=mac_address, name=name)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return update_preview(
             resource_type="device",
@@ -394,6 +416,11 @@ async def adopt_device(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for adopting a device."""
+    try:
+        AdoptDeviceInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="device_adoption",
@@ -442,6 +469,11 @@ async def upgrade_device(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for upgrading a device."""
+    try:
+        UpgradeDeviceInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return preview_response(
             action="upgrade",
@@ -644,11 +676,8 @@ async def update_device_radio(
     if not updates:
         return {"success": False, "error": "No radio settings provided to update."}
 
-    # Validate against schema (type checks, bounds, no unknown keys)
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("device_radio_update", updates)
-    if not is_valid:
-        logger.warning("Invalid radio update data for %s: %s", mac_address, error_msg)
-        return {"success": False, "error": f"Invalid radio update data: {error_msg}"}
+    # Filter to known mutable radio fields via pydantic model
+    validated_data = radio_to_controller_update(updates)
 
     try:
         radio_data = await device_manager.get_device_radio(mac_address)
@@ -722,6 +751,11 @@ async def locate_device(
     ] = False,
 ) -> Dict[str, Any]:
     """Toggles device locate mode (LED blinking)."""
+    try:
+        LocateDeviceInput(device_mac=device_mac, enabled=enabled)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         action = "start" if enabled else "stop"
         return create_preview(
@@ -759,6 +793,11 @@ async def force_provision_device(
     ] = False,
 ) -> Dict[str, Any]:
     """Force re-provisions a device."""
+    try:
+        ForceProvisionDeviceInput(device_mac=device_mac)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="force_provision",
@@ -1025,6 +1064,11 @@ async def set_device_led(
     ] = False,
 ) -> Dict[str, Any]:
     """Set LED override state on a device."""
+    try:
+        SetDeviceLedInput(device_mac=device_mac, led_state=led_state)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     valid_states = ("on", "off", "default")
     if led_state not in valid_states:
         return {
@@ -1108,6 +1152,11 @@ async def set_site_leds(
     ] = False,
 ) -> Dict[str, Any]:
     """Toggle all device LEDs site-wide."""
+    try:
+        SetSiteLedsInput(enabled=enabled)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         action = "enable" if enabled else "disable"
         return create_preview(
@@ -1218,6 +1267,16 @@ async def set_outlet_state(
     ] = False,
 ) -> Dict[str, Any]:
     """Set per-outlet relay/cycle state on a UP6 / USP-Strip PDU."""
+    try:
+        SetOutletStateInput(
+            mac_address=mac_address,
+            outlet_index=outlet_index,
+            relay_state=relay_state,
+            cycle_enabled=cycle_enabled,
+        )
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if outlet_index < 1:
         return {"success": False, "error": "outlet_index must be >= 1."}
 

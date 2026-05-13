@@ -322,7 +322,7 @@ class TestSetOutletStateTool:
 
         result = await set_outlet_state(mac_address="ac:8b:a9:11:22:33", outlet_index=0, relay_state=True)
         assert result["success"] is False
-        assert "outlet_index" in result["error"]
+        assert result["error"]  # pydantic validation rejects outlet_index < 1
 
     @pytest.mark.asyncio
     async def test_rejects_non_pdu(self):

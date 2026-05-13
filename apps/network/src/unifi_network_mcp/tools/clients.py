@@ -10,8 +10,24 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from pydantic import ValidationError
 from unifi_core.confirmation import toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import (
+    AuthorizeGuestInput,
+    BlockClientInput,
+    ForceReconnectClientInput,
+    ForgetClientInput,
+    RenameClientInput,
+    SetClientIpSettingsInput,
+    UnauthorizeGuestInput,
+    UnblockClientInput,
+)
+from unifi_core.network.models.clients import (
+    blocked_client_from_controller,
+    client_from_controller,
+    client_lookup_from_controller,
+)
 
 # Import the global FastMCP server instance, config, and managers
 from unifi_network_mcp.runtime import client_manager, server
@@ -35,14 +51,12 @@ async def lookup_by_ip(
     try:
         client_obj = await client_manager.get_client_by_ip(ip_address)
         if client_obj:
-            client_raw = client_obj.raw if hasattr(client_obj, "raw") else client_obj
+            shaped = client_lookup_from_controller(client_obj)
+            result = shaped.model_dump(exclude_none=True)
             return {
                 "success": True,
                 "site": client_manager._connection.site,
-                "ip": ip_address,
-                "hostname": client_raw.get("hostname", ""),
-                "name": client_raw.get("name", ""),
-                "mac": client_raw.get("mac", ""),
+                **result,
             }
         return {
             "success": False,
@@ -78,11 +92,10 @@ async def list_clients(
     try:
         clients = await client_manager.get_all_clients() if include_offline else await client_manager.get_clients()
 
-        def _client_to_dict(c):
-            raw = c.raw if hasattr(c, "raw") else c  # c might already be a dict
-            return raw
+        def _raw(c):
+            return c.raw if hasattr(c, "raw") else c  # c might already be a dict
 
-        clients_raw = [_client_to_dict(c) for c in clients]
+        clients_raw = [_raw(c) for c in clients]
 
         if filter_type == "wireless":
             clients_raw = [c for c in clients_raw if not c.get("is_wired", False)]
@@ -93,29 +106,16 @@ async def list_clients(
 
         formatted_clients = []
         for client in clients_raw:
-            formatted = {
-                "mac": client.get("mac"),
-                "name": client.get("name") or client.get("hostname", "Unknown"),
-                "hostname": client.get("hostname", "Unknown"),
-                "ip": client.get("ip", "Unknown"),
-                "connection_type": "Wired" if client.get("is_wired", False) else "Wireless",
-                "status": "Online"
-                if not include_offline
-                else ("Online" if client.get("is_wired", False) or (client.get("last_seen", 0) > 0) else "Offline"),
-                "last_seen": client.get("last_seen", 0),
-                "_id": client.get("_id"),
-            }
-
+            shaped = client_from_controller(client)
+            formatted = shaped.model_dump(exclude_none=True)
+            # Preserve wired/wireless display fields not in the base model
+            formatted["connection_type"] = "Wired" if client.get("is_wired", False) else "Wireless"
+            formatted["_id"] = client.get("_id")
             if not client.get("is_wired", False):
-                formatted.update(
-                    {
-                        "essid": client.get("essid", "Unknown"),
-                        "signal_dbm": client.get("signal"),
-                        "channel": client.get("channel", "Unknown"),
-                        "radio": client.get("radio", "Unknown"),
-                    }
-                )
-
+                formatted["essid"] = client.get("essid", "Unknown")
+                formatted["signal_dbm"] = client.get("signal")
+                formatted["channel"] = client.get("channel", "Unknown")
+                formatted["radio"] = client.get("radio", "Unknown")
             formatted_clients.append(formatted)
 
         return {
@@ -148,11 +148,11 @@ async def get_client_details(
     try:
         client_obj = await client_manager.get_client_details(mac_address)
         if client_obj:
-            client_raw = client_obj.raw if hasattr(client_obj, "raw") else client_obj
+            shaped = client_from_controller(client_obj)
             return {
                 "success": True,
                 "site": client_manager._connection.site,
-                "client": client_raw,
+                "client": shaped.model_dump(exclude_none=True),
             }
         return {
             "success": False,
@@ -175,19 +175,8 @@ async def list_blocked_clients() -> Dict[str, Any]:
 
         formatted_clients = []
         for c in clients:
-            client = c.raw if hasattr(c, "raw") else c
-
-            formatted_clients.append(
-                {
-                    "mac": client.get("mac"),
-                    "name": client.get("name") or client.get("hostname", "Unknown"),
-                    "hostname": client.get("hostname", "Unknown"),
-                    "ip": client.get("ip", "Unknown"),
-                    "connection_type": "Wired" if client.get("is_wired", False) else "Wireless",
-                    "blocked_since": client.get("blocked_since", 0),
-                    "_id": client.get("_id"),
-                }
-            )
+            shaped = blocked_client_from_controller(c)
+            formatted_clients.append(shaped.model_dump(exclude_none=True))
 
         return {
             "success": True,
@@ -218,6 +207,11 @@ async def block_client(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for blocking a client."""
+    try:
+        BlockClientInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
@@ -278,6 +272,11 @@ async def unblock_client(
 ) -> Dict[str, Any]:
     """Implementation for unblocking a client."""
     try:
+        UnblockClientInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+    try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
         if not client_obj:
@@ -336,6 +335,11 @@ async def rename_client(
 ) -> Dict[str, Any]:
     """Implementation for renaming a client."""
     try:
+        RenameClientInput(mac_address=mac_address, name=name)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+    try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
         if not client_obj:
@@ -391,6 +395,11 @@ async def force_reconnect_client(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for forcing a client to reconnect."""
+    try:
+        ForceReconnectClientInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
@@ -456,6 +465,11 @@ async def forget_client(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for forgetting/removing a client from the controller."""
+    try:
+        ForgetClientInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
@@ -534,6 +548,11 @@ async def authorize_guest(
 ) -> Dict[str, Any]:
     """Implementation for authorizing a guest."""
     try:
+        AuthorizeGuestInput(mac_address=mac_address, minutes=minutes)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+    try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
         if not client_obj:
@@ -604,6 +623,11 @@ async def unauthorize_guest(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for unauthorizing a guest."""
+    try:
+        UnauthorizeGuestInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
@@ -694,6 +718,17 @@ async def set_client_ip_settings(
     ] = False,
 ) -> Dict[str, Any]:
     """Set fixed IP and/or local DNS record for a client."""
+    try:
+        SetClientIpSettingsInput(
+            mac_address=mac_address,
+            use_fixedip=use_fixedip,
+            fixed_ip=fixed_ip,
+            local_dns_record_enabled=local_dns_record_enabled,
+            local_dns_record=local_dns_record,
+        )
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     # Validate that at least one setting is provided
     if all(v is None for v in [use_fixedip, fixed_ip, local_dns_record_enabled, local_dns_record]):
         return {

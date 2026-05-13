@@ -39,6 +39,7 @@ class ApGroup:
     name: str | None
     ap_count: int
     device_macs: list[str]
+    wlan_group_ids: list[str]
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -54,11 +55,15 @@ class ApGroup:
         device_macs = _get(obj, "device_macs") or []
         if not isinstance(device_macs, list):
             device_macs = []
+        wlan_group_ids = _get(obj, "wlan_group_ids") or []
+        if not isinstance(wlan_group_ids, list):
+            wlan_group_ids = []
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
             ap_count=len(device_macs),
             device_macs=list(device_macs),
+            wlan_group_ids=list(wlan_group_ids),
         )
 
     def to_dict(self) -> dict:

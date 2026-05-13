@@ -8,7 +8,8 @@ description: |
   implementing field validation, and ensuring field symmetry compliance. Also enforces the critical
   ResourceValidator safety constraint: shared validator defaults are forbidden
   (blast-radius anti-pattern). Reference implementation: acl_manager.py +
-  models/acl.py. Active rollout: 7 domains remaining as of April 2026.
+  models/acl.py. Rollout complete as of Phase 4 (May 2026). All three servers
+  (Network, Protect, Access) now use this pattern. Issue #137 closed via PR #235.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -20,8 +21,8 @@ The field-symmetry rule (AGENTS.md) requires that every field name
 a `list_*` tool exposes in its output must be accepted under the same name by
 the matching `create_*` / `update_*` tool. Violating this causes silent drops
 (callers believe a constraint was applied; it wasn't) or spurious validation
-errors. The ACL domain was the pilot; 7 network-app domains remain
-as of April 2026.
+errors. The ACL domain was the pilot; rollout is complete across all three
+servers (Network, Protect, Access) as of Phase 4 (May 2026).
 
 ## Prerequisites
 
@@ -240,7 +241,7 @@ your new model handles.
 
 | File | Purpose |
 |------|---------|
-| `apps/network/src/unifi_network_mcp/models/acl.py` | Pilot model |
+| `packages/unifi-core/src/unifi_core/network/models/acl.py` | Pilot model |
 | `apps/network/src/unifi_network_mcp/managers/acl_manager.py` | Pilot manager wiring |
 | `apps/api/tests/unit/test_cross_layer_symmetry.py` | MCP↔API drift gate (REGISTERED_PAIRS) |
 | `packages/unifi-mcp-shared/src/unifi_mcp_shared/validators.py` | Shared validator patterns |

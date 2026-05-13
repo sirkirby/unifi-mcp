@@ -11,8 +11,19 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.network.models.system import (
+    alarm_from_controller,
+    autobackup_to_controller_update,
+    backup_from_controller,
+    network_health_from_controller,
+    site_settings_from_controller,
+    snmp_from_controller,
+    snmp_to_controller_update,
+    speedtest_result_from_controller,
+    system_info_from_controller,
+    top_client_from_controller,
+)
 from unifi_network_mcp.runtime import server, system_manager
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +46,11 @@ async def get_system_info() -> Dict[str, Any]:
     logger.info("unifi_get_system_info tool called")
     try:
         info = await system_manager.get_system_info()
+        shaped = system_info_from_controller(info).model_dump(exclude_none=False)
         return {
             "success": True,
             "site": system_manager._connection.site,
-            "system_info": info,
+            "system_info": shaped,
         }
     except Exception as e:
         logger.error("Error getting system info: %s", e, exc_info=True)
@@ -64,10 +76,12 @@ async def get_network_health() -> Dict[str, Any]:
     logger.info("unifi_get_network_health tool called")
     try:
         health = await system_manager.get_network_health()
+        subsystems = health if isinstance(health, list) else [health]
+        shaped = [network_health_from_controller(s).model_dump(exclude_none=False) for s in subsystems]
         return {
             "success": True,
             "site": system_manager._connection.site,
-            "health_summary": health,
+            "health_summary": shaped,
         }
     except Exception as e:
         logger.error("Error getting network health: %s", e, exc_info=True)
@@ -84,10 +98,11 @@ async def get_site_settings() -> Dict[str, Any]:
     logger.info("unifi_get_site_settings tool called")
     try:
         settings = await system_manager.get_site_settings()
+        shaped = site_settings_from_controller(settings).model_dump(exclude_none=False)
         return {
             "success": True,
             "site": system_manager._connection.site,
-            "site_settings": settings,
+            "site_settings": shaped,
         }
     except Exception as e:
         logger.error("Error getting site settings: %s", e, exc_info=True)
@@ -104,14 +119,11 @@ async def get_snmp_settings() -> Dict[str, Any]:
     logger.info("unifi_get_snmp_settings tool called")
     try:
         settings_list = await system_manager.get_settings("snmp")
-        snmp_settings = settings_list[0] if settings_list else {}
+        shaped = snmp_from_controller(settings_list).model_dump(exclude_none=False)
         return {
             "success": True,
             "site": system_manager._connection.site,
-            "snmp_settings": {
-                "enabled": snmp_settings.get("enabled", False),
-                "community": snmp_settings.get("community", ""),
-            },
+            "snmp_settings": shaped,
         }
     except Exception as e:
         logger.error("Error getting SNMP settings: %s", e, exc_info=True)
@@ -149,9 +161,7 @@ async def update_snmp_settings(
     if community is not None:
         updates["community"] = community
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("snmp_settings_update", updates)
-    if not is_valid:
-        return {"success": False, "error": f"Validation error: {error_msg}"}
+    validated_data = snmp_to_controller_update(updates)
     if not validated_data:
         return {"success": False, "error": "No valid fields to update after validation."}
 
@@ -194,11 +204,12 @@ async def list_backups() -> Dict[str, Any]:
     logger.info("unifi_list_backups tool called")
     try:
         backups = await system_manager.list_backups()
+        shaped = [backup_from_controller(b).model_dump(exclude_none=False) for b in backups]
         return {
             "success": True,
             "site": system_manager._connection.site,
-            "count": len(backups),
-            "backups": backups,
+            "count": len(shaped),
+            "backups": shaped,
         }
     except Exception as e:
         logger.error("Error listing backups: %s", e, exc_info=True)
@@ -324,9 +335,7 @@ async def update_autobackup_settings(
     if not update_data:
         return {"success": False, "error": "No settings provided to update."}
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("autobackup_settings_update", update_data)
-    if not is_valid:
-        return {"success": False, "error": f"Validation error: {error_msg}"}
+    validated_data = autobackup_to_controller_update(update_data)
     if not validated_data:
         return {"success": False, "error": "No valid fields to update after validation."}
 

@@ -14,8 +14,11 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.client_group import (
+    from_controller as cg_from_controller,
+    to_controller_update as cg_to_update,
+)
 from unifi_network_mcp.runtime import client_group_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -38,16 +41,7 @@ async def list_client_groups() -> Dict[str, Any]:
     """
     try:
         groups = await client_group_manager.get_client_groups()
-        formatted = [
-            {
-                "id": g.get("id", g.get("_id")),
-                "name": g.get("name"),
-                "type": g.get("type"),
-                "member_count": len(g.get("members", [])),
-                "members": g.get("members", []),
-            }
-            for g in groups
-        ]
+        formatted = [cg_from_controller(g).model_dump(exclude_none=True) for g in groups]
         return {
             "success": True,
             "site": client_group_manager._connection.site,
@@ -181,9 +175,7 @@ async def update_client_group(
     if not group_data:
         return {"success": False, "error": "group_data cannot be empty"}
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("client_group_update", group_data)
-    if not is_valid:
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
+    validated_data = cg_to_update(group_data)
     if not validated_data:
         return {"success": False, "error": "Update data is effectively empty or invalid."}
 

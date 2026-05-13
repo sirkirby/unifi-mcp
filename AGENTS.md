@@ -77,7 +77,7 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 - Hardcoding host, port, credentials, or feature flags in Python source is **banned** — use `config.yaml` with `${oc.env:VAR,default}` or `UNIFI_`-prefixed env vars
 - Permission category strings MUST be defined in `<app>/categories.py` (`NETWORK_CATEGORY_MAP`, etc.)
 - Tool-to-module mappings MUST be in `TOOL_MODULE_MAP` in `<app>/categories.py`
-- Validation schemas MUST be in `<app>/schemas.py` — never inline JSON schema dicts in tool functions
+- Validation models MUST be pydantic BaseModel classes in `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py` — never inline JSON schema dicts in tool functions or app-local schemas modules
 - No monkey-patches in production code
 - **Anchor:** `apps/network/src/unifi_network_mcp/config/config.yaml`
 
@@ -142,14 +142,14 @@ All changes MUST follow a golden path. If no path applies, ask before inventing 
 
 ### Add or modify an update tool
 
-Update tools MUST use the fetch-merge-put pattern. The manager fetches current state, merges the caller's partial updates, and PUTs the full object. The tool layer accepts a partial dict, validates via schema, and shows a before/after preview.
+Update tools MUST use the fetch-merge-put pattern. The manager fetches current state, merges the caller's partial updates, and PUTs the full object. The tool layer accepts a partial dict, validates via the domain's pydantic model (`<Model>.to_controller_update`), and shows a before/after preview.
 
 1. Manager method: fetch existing → copy → merge updates → PUT full object
    - **Anchor:** `apps/network/src/unifi_network_mcp/managers/network_manager.py:update_network`
-2. Add update schema in `<pkg>/schemas.py` — all properties optional, no `required` key
-3. Register schema in `<pkg>/validator_registry.py`
-4. Tool function: validate via `UniFiValidatorRegistry`, fetch for preview, use `update_preview`
-   - **Anchor:** `apps/network/src/unifi_network_mcp/tools/network.py:update_network`
+2. Define or extend the pydantic model in `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py`. Mark mutable fields as such (default mutability); read-only fields use `json_schema_extra={"mutable": False}`.
+3. Tool function: validate the caller's partial dict via `<Model>.to_controller_update(fields)`, fetch current state for preview, use `update_preview`.
+   - **Anchor (model):** `packages/unifi-core/src/unifi_core/network/models/wlans.py`
+   - **Anchor (tool):** `apps/network/src/unifi_network_mcp/tools/wlans.py:update_wlan`
 5. Tool description MUST include: "Pass only the fields you want to change — current values are automatically preserved."
 6. Run `make manifest`
 7. Add tests covering: partial merge preserves unmentioned fields, not-found returns False, empty update is a no-op
@@ -170,18 +170,15 @@ When a tool domain has list/create/update tools, define a shared pydantic model 
    - Create tool: build model from params → `to_controller_create()` → manager
    - Update tool: validate keys against `MUTABLE_FIELDS`, translate via `to_controller_update()` → manager
    - **Anchor:** `apps/network/src/unifi_network_mcp/tools/acl.py`
-3. Retire the domain's JSON Schema from `schemas.py` and `validator_registry.py`
-   - The pydantic model replaces the JSON Schema for validation
-   - Leave a comment noting the migration for other contributors
-4. Manager layer is unchanged — continues to speak the controller API dialect
-5. Add a field symmetry test asserting every mutable field is a create param
+3. Manager layer is unchanged — continues to speak the controller API dialect
+4. Add a field symmetry test asserting every mutable field is a create param
    - **Anchor:** `apps/network/tests/unit/test_acl_tools.py:TestListAclRules.test_list_and_create_field_symmetry`
-6. Register the `(server, domain)` pair in the cross-layer symmetry test
+5. Register the `(server, domain)` pair in the cross-layer symmetry test
    - The matching Strawberry type at `unifi_api.graphql.types.<server>.<domain>` must expose every pydantic `MUTABLE_FIELDS` name with a compatible type annotation
    - This catches MCP↔API drift at PR time
    - **Anchor:** `apps/api/tests/unit/test_cross_layer_symmetry.py`
-7. Run `make manifest`
-8. Commit model + refactored tools + retired schema + tests together
+6. Run `make manifest`
+7. Commit model + refactored tools + tests together
 
 ### Modify the permission system
 

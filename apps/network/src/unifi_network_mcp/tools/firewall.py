@@ -10,8 +10,13 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
+from unifi_core.network.models.firewall import (
+    from_controller as fw_from_controller,
+    to_controller_update as fw_to_update,
+    firewall_group_from_controller,
+    firewall_zone_from_controller,
+)
 from unifi_network_mcp.runtime import firewall_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry  # Added
 
 logger = logging.getLogger(__name__)
 
@@ -75,39 +80,7 @@ async def list_firewall_policies(
     """
     try:
         policies = await firewall_manager.get_firewall_policies(include_predefined=include_predefined)
-        policies_raw = [p.raw if hasattr(p, "raw") else p for p in policies]
-
-        formatted_policies = []
-        for p in policies_raw:
-            entry = {
-                "id": p.get("_id"),
-                "name": p.get("name"),
-                "enabled": p.get("enabled"),
-                "action": p.get("action"),
-                "rule_index": p.get("index", p.get("rule_index")),
-                "description": p.get("description", p.get("desc", "")),
-            }
-            # Include ruleset when present (legacy policies)
-            if p.get("ruleset"):
-                entry["ruleset"] = p["ruleset"]
-            # Include zone-based source/destination targeting when present
-            for direction in ("source", "destination"):
-                ep = p.get(direction)
-                if ep and isinstance(ep, dict):
-                    targeting = {
-                        "zone_id": ep.get("zone_id"),
-                        "matching_target": ep.get("matching_target"),
-                    }
-                    if ep.get("matching_target_type"):
-                        targeting["matching_target_type"] = ep["matching_target_type"]
-                    if ep.get("ips"):
-                        targeting["ips"] = ep["ips"]
-                    if ep.get("network_ids"):
-                        targeting["network_ids"] = ep["network_ids"]
-                    if ep.get("client_macs"):
-                        targeting["client_macs"] = ep["client_macs"]
-                    entry[direction] = targeting
-            formatted_policies.append(entry)
+        formatted_policies = [fw_from_controller(p).model_dump(exclude_none=True) for p in policies]
 
         return {
             "success": True,
@@ -370,13 +343,38 @@ async def create_firewall_policy(
     # mixed-case input before validation so users can pass natural forms
     # like "IPv4" or lowercase state names.
     policy_data = _normalize_v2_policy_casing(policy_data)
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate_and_apply_defaults(
-        "firewall_policy_v2_create", policy_data
-    )
 
-    if not is_valid:
-        logger.warning("Invalid firewall policy data: %s", error_msg)
-        return {"success": False, "error": "Validation Error: %s" % error_msg}
+    # Validate required fields and apply schema defaults directly.
+    _required = ("name", "action", "source", "destination")
+    _missing = [f for f in _required if f not in policy_data]
+    if _missing:
+        err = "Missing required fields: %s" % ", ".join(_missing)
+        logger.warning("Invalid firewall policy data: %s", err)
+        return {"success": False, "error": "Validation Error: %s" % err}
+
+    # Reject unknown top-level keys (mirrors additionalProperties: False in the schema).
+    _allowed_keys = frozenset({
+        "name", "action", "enabled", "index", "protocol", "ip_version",
+        "logging", "connection_state_type", "connection_states",
+        "create_allow_respond", "match_ip_sec", "match_opposite_protocol",
+        "icmp_typename", "icmp_v6_typename", "schedule", "source", "destination",
+        "description",
+    })
+    _unknown = sorted(set(policy_data.keys()) - _allowed_keys)
+    if _unknown:
+        err = "Additional properties not allowed: %s" % ", ".join(_unknown)
+        logger.warning("Invalid firewall policy data: %s", err)
+        return {"success": False, "error": "Validation Error: %s" % err}
+
+    # Apply the same defaults the legacy schema validator provided.
+    validated_data: Dict[str, Any] = {
+        "enabled": True,
+        "protocol": "all",
+        "ip_version": "BOTH",
+        "logging": False,
+        "connection_state_type": "ALL",
+        **policy_data,
+    }
 
     # Validate zone targeting requirements (matching_target_type, ips, network_ids)
     targeting_error = _validate_zone_targeting(validated_data)
@@ -502,15 +500,10 @@ async def update_firewall_policy(
             else:
                 return {"success": False, "error": "Invalid action '%s'." % action}
 
-    # Normalize V2 enum casing before validation so common mixed-case input
-    # ("IPv4", "custom", ["new"]) survives the strict-uppercase enum check.
+    # Normalize V2 enum casing before filtering so common mixed-case input
+    # ("IPv4", "custom", ["new"]) is preserved.
     update_data = _normalize_v2_policy_casing(update_data)
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate(
-        "firewall_policy_v2_update", update_data
-    )
-    if not is_valid:
-        logger.warning("Invalid V2 firewall policy update data for ID %s: %s", policy_id, error_msg)
-        return {"success": False, "error": "Invalid update data: %s" % error_msg}
+    validated_data = fw_to_update(update_data)
     if not validated_data:
         return {"success": False, "error": "Update data is effectively empty or invalid."}
 
@@ -611,14 +604,7 @@ async def update_firewall_policy(
 async def list_firewall_zones() -> Dict[str, Any]:
     try:
         zones = await firewall_manager.get_firewall_zones()
-        formatted = [
-            {
-                "id": z.get("_id"),
-                "name": z.get("name"),
-                "zone_key": z.get("zone_key", ""),
-            }
-            for z in zones
-        ]
+        formatted = [firewall_zone_from_controller(z).model_dump(exclude_none=True) for z in zones]
         return {
             "success": True,
             "site": firewall_manager._connection.site,
@@ -644,16 +630,7 @@ async def list_firewall_groups() -> Dict[str, Any]:
     """Lists all firewall groups."""
     try:
         groups = await firewall_manager.get_firewall_groups()
-        formatted = [
-            {
-                "id": g.get("_id"),
-                "name": g.get("name"),
-                "group_type": g.get("group_type"),
-                "member_count": len(g.get("group_members", [])),
-                "group_members": g.get("group_members", []),
-            }
-            for g in groups
-        ]
+        formatted = [firewall_group_from_controller(g).model_dump(exclude_none=True) for g in groups]
         return {
             "success": True,
             "site": firewall_manager._connection.site,

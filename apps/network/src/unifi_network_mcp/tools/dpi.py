@@ -19,6 +19,10 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from unifi_core.network.models.dpi import (
+    dpi_application_from_controller,
+    dpi_category_from_controller,
+)
 from unifi_network_mcp.runtime import dpi_manager, server
 
 logger = logging.getLogger(__name__)
@@ -67,7 +71,7 @@ async def list_dpi_applications(
         )
 
         apps = result.get("data", [])
-        formatted = [{"id": a.get("id"), "name": a.get("name")} for a in apps]
+        formatted = [dpi_application_from_controller(a).model_dump(exclude_none=True) for a in apps]
 
         response = {
             "success": True,
@@ -119,7 +123,7 @@ async def list_dpi_categories(
         result = await dpi_manager.get_dpi_categories(limit=limit, offset=offset)
 
         categories = result.get("data", [])
-        formatted = [{"id": c.get("id"), "name": c.get("name")} for c in categories]
+        formatted = [dpi_category_from_controller(c).model_dump(exclude_none=True) for c in categories]
 
         return {
             "success": True,

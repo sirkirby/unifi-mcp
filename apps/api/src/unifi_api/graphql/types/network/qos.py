@@ -35,6 +35,12 @@ class QosRule:
     id: strawberry.ID | None
     name: str | None
     enabled: bool
+    interface: str | None
+    direction: str | None
+    bandwidth_limit_kbps: int | None
+    target_ip_address: str | None
+    target_subnet: str | None
+    dscp_value: int | None
     rate_max_down: int | None
     rate_max_up: int | None
     priority: int | None
@@ -56,6 +62,12 @@ class QosRule:
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
             enabled=bool(_get(obj, "enabled", False)),
+            interface=_get(obj, "interface"),
+            direction=_get(obj, "direction"),
+            bandwidth_limit_kbps=_get(obj, "bandwidth_limit_kbps"),
+            target_ip_address=_get(obj, "target_ip_address"),
+            target_subnet=_get(obj, "target_subnet"),
+            dscp_value=_get(obj, "dscp_value"),
             rate_max_down=_get(obj, "rate_max_down"),
             rate_max_up=_get(obj, "rate_max_up"),
             priority=_get(obj, "priority"),

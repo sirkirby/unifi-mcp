@@ -16,7 +16,7 @@ All update tools in unifi-mcp follow the **fetch-merge-put** pattern. Skipping t
 - The resource's manager already has a `get_<resource>_by_id` method. If not, write it first (check the V2 API gotcha below before you do).
 - `deep_merge` is importable from `unifi-core`. Tests for merge behavior live in `packages/unifi-core/tests/test_merge.py` — run them after any merge logic change.
 - The create tool for this resource already exists. Update tools assume the object exists; if it doesn't, the caller should use create, not update.
-- The field symmetry rule (issue #137) requires `update_data` to accept all field names and compatible types from the read surface. Field symmetry validation is enforced via test patterns in the test layer.
+- The field symmetry rule (formalised in #137, fully implemented across all servers in Phases 0–4) requires `update_data` to accept all field names and compatible types from the read surface. Field symmetry validation is enforced via test patterns in the test layer.
 
 ## Steps
 
@@ -110,38 +110,36 @@ How to check: read the `list_<resource>` and `get_<resource>` return fields, the
 one either (a) appears in `update_data`, or (b) is documented as intentionally read-only with
 a comment explaining why (e.g., server-assigned fields like `id` or `created_at`).
 
-**Known current violations (as of issue #137):**
-- `update_content_filter`: does not handle `schedule_mode`, which is returned by the list surface.
-- `create_oon_policy`: the list surface (`list_oon_policies`) exposes `qos_enabled` and `route_enabled` as flat booleans, but `create_oon_policy` expects them as nested `qos`/`route` dicts — a structural shape mismatch, not just a missing field.
+**Historical violations (resolved in Phase 4):**
+- `update_content_filter`: was missing `schedule_mode` handling — fixed in the Phase 4 rollout.
+- `create_oon_policy`: the list surface exposed `qos_enabled`/`route_enabled` as flat booleans but create expected nested dicts — structural shape mismatch resolved in the rollout.
 
-Issue #137 tracks remediation of these violations.
-
-**CI rollout — allow-list in test patterns:** When adding field symmetry tests for a new resource domain, document any pre-existing violations with a comment linking the tracking issue — do not block CI on legacy gaps.
+Issue #137 is closed. All known field symmetry violations across Network, Protect, and Access are resolved.
 
 ### 7. Add additionalProperties: false to the UPDATE_SCHEMA entry
 
-Every `*_UPDATE_SCHEMA` entry in the schema definitions must include `"additionalProperties": false`.
+Every update tool's `inputSchema` must include `"additionalProperties": false`.
 This is Layer-2 hardening against the ArgModelBase silent-drop vulnerability: FastMCP's
 `ArgModelBase` is missing `model_config = ConfigDict(extra="forbid")`, so extra keys passed to
-a tool are silently dropped before your validator sees them. The schema-level restriction closes
+a tool are silently dropped before validation sees them. The schema-level restriction closes
 this gap at the transport boundary.
 
+When deriving the schema from the pydantic model (the standard pattern), set it inline on the Tool definition:
+
 ```python
-# In schema definitions
-NETWORK_UPDATE_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,   # ← required on every update schema
-    "properties": {
-        "network_id": {"type": "string"},
-        "update_data": {"type": "object"},
-        "confirm": {"type": "boolean"},
+Tool(
+    name="network_dns_record_update",
+    inputSchema={
+        "type": "object",
+        "properties": {"record_id": {"type": "string"}, **_mutable_props},
+        "required": ["record_id"],
+        "additionalProperties": False,   # ← required on every update tool inputSchema
     },
-    "required": ["network_id", "update_data"],
-}
+    ...
+)
 ```
 
-This applies to all update schemas, including existing ones. When patching managers for issue #113
-or any future batch fix, add `additionalProperties: false` to each schema entry at the same time.
+This applies to all update tool definitions.
 
 ### 8. Implement the confirm preview using a delta, not the merged result
 
@@ -162,36 +160,32 @@ This is a deliberate design decision, not an oversight. The confirm flow does a 
 
 If you're adding or changing merge behavior that affects multiple managers, check documentation for the list of managers that implement update tools. All managers with update tools should be patched in the same PR — partial patches leave the codebase inconsistent.
 
-## Validator Pitfall: Schema Defaults in Shared Validators
+## Pydantic Model Defaults: Same Blast-Radius Rule
 
-The `ResourceValidator.validate()` shared base method is a **blast-radius risk** for update tools. If a PR injects schema defaults into this shared method, every update tool that calls `.validate()` will silently overwrite fields the caller intentionally omitted — exactly the data-loss bug the fetch-merge-put pattern was designed to prevent.
+The shared `<Domain>Base` pydantic model is a **blast-radius risk** for update tools if non-`None` defaults are added to mutable fields. If the model sets `enabled: bool = True`, then every update call that omits `enabled` will silently inject `True` — exactly the data-loss bug the fetch-merge-put pattern was designed to prevent.
 
 **Example of the failure mode:**
 
 ```python
-# DANGEROUS: defaults injected into shared validator
-class ResourceValidator:
-    def validate(self, data: dict) -> dict:
-        data.setdefault("create_allow_respond", False)  # ← blast radius
-        data.setdefault("schedule", {"mode": "ALWAYS"})  # ← blast radius
-        return data
+# DANGEROUS: non-None default on a shared pydantic field
+class FirewallPolicyBase(BaseModel):
+    create_allow_respond: bool = False   # ← blast radius on update path
+    schedule: dict = {"mode": "ALWAYS"}  # ← blast radius on update path
 ```
 
-With this code, `update_firewall_policy({"name": "new"})` would silently inject
+With this model, `update_firewall_policy({"name": "new"})` would silently inject
 `create_allow_respond: False` and `schedule: {"mode": "ALWAYS"}` — overwriting whatever the
 controller currently has, regardless of what the caller specified.
 
-**The rule:** Schema defaults must **never** live in the shared base validator. Defaults belong
-exclusively in:
-- Create-specific code paths (a separate `create` method or subclass override), or
-- An explicit opt-in method such as `validate_and_apply_defaults()` that update tools do not call.
+**The rule:** Non-`None` defaults belong only in create-specific subclasses or create-specific
+code paths. Shared base model fields must use `= None` only so that `to_controller_update()`
+can safely exclude fields the caller did not provide.
 
-When reviewing a PR that modifies `ResourceValidator` or any shared validator class, check whether
-defaults are being added to a code path that update tools share. If so, this is a **hard blocker**:
-the blast radius spans all 37+ default-using properties and all three app packages.
+When reviewing a PR that modifies a shared `<Domain>Base` model, check whether non-`None`
+defaults are being added to fields that update tools share. If so, this is a **hard blocker**.
 
-This pitfall emerged from PR #146 review. It is structurally independent of the `additionalProperties`
-gate (Step 7) — both protections are needed.
+This pitfall originally emerged from PR #146 review. It is structurally independent of the
+`additionalProperties` gate (Step 7) — both protections are needed.
 
 ## Create vs. Update Asymmetry
 

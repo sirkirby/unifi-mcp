@@ -14,8 +14,13 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.dns import (
+    DnsRecord,
+    from_controller as dns_from_controller,
+    to_controller_create as dns_to_create,
+    to_controller_update as dns_to_update,
+)
 from unifi_network_mcp.runtime import dns_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -31,20 +36,7 @@ async def list_dns_records() -> Dict[str, Any]:
     logger.info("unifi_list_dns_records tool called")
     try:
         records = await dns_manager.list_dns_records()
-        formatted = [
-            {
-                "id": r.get("_id"),
-                "key": r.get("key"),
-                "value": r.get("value"),
-                "record_type": r.get("record_type"),
-                "enabled": r.get("enabled", True),
-                "ttl": r.get("ttl", 0),
-                "port": r.get("port", 0),
-                "priority": r.get("priority", 0),
-                "weight": r.get("weight", 0),
-            }
-            for r in records
-        ]
+        formatted = [dns_from_controller(r).model_dump(exclude_none=True) for r in records]
         return {
             "success": True,
             "site": dns_manager._connection.site,
@@ -105,11 +97,15 @@ async def create_dns_record(
     """Create a new static DNS record."""
     logger.info("unifi_create_dns_record tool called (confirm=%s)", confirm)
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("dns_record", record_data)
-    if not is_valid:
-        return {"success": False, "error": f"Validation error: {error_msg}"}
-    if not validated_data:
-        return {"success": False, "error": "No valid fields after validation."}
+    try:
+        model = DnsRecord(**{k: v for k, v in record_data.items() if k in (
+            "key", "value", "record_type", "enabled", "ttl", "port", "priority", "weight"
+        )})
+    except Exception as exc:
+        return {"success": False, "error": f"Validation error: {exc}"}
+    if not model.key or not model.value or not model.record_type:
+        return {"success": False, "error": "Validation error: 'key', 'value', and 'record_type' are required"}
+    validated_data = dns_to_create(model)
 
     if not confirm:
         return create_preview(
@@ -160,9 +156,7 @@ async def update_dns_record(
     if not update_data:
         return {"success": False, "error": "No fields provided to update."}
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("dns_record_update", update_data)
-    if not is_valid:
-        return {"success": False, "error": f"Validation error: {error_msg}"}
+    validated_data = dns_to_update(update_data)
     if not validated_data:
         return {"success": False, "error": "No valid fields to update after validation."}
 

@@ -13,6 +13,10 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.route import (
+    active_route_from_controller,
+    route_from_controller,
+)
 from unifi_network_mcp.runtime import routing_manager, server
 
 logger = logging.getLogger(__name__)
@@ -42,28 +46,13 @@ These are manually configured routes, not dynamic or system routes.""",
 async def list_routes() -> Dict[str, Any]:
     """List all user-defined static routes."""
     try:
-        
         routes = await routing_manager.get_routes()
-
-        # Format routes for readability
-        formatted_routes = []
-        for r in routes:
-            formatted = {
-                "_id": r.get("_id"),
-                "name": r.get("name"),
-                "network": r.get("static-route_network"),
-                "nexthop": r.get("static-route_nexthop"),
-                "distance": r.get("static-route_distance", 1),
-                "enabled": r.get("enabled", True),
-                "type": r.get("type", "nexthop-route"),
-            }
-            formatted_routes.append(formatted)
-
+        shaped = [route_from_controller(r).model_dump(exclude_none=False) for r in routes]
         return {
             "success": True,
             "site": routing_manager._connection.site,
-            "count": len(formatted_routes),
-            "routes": formatted_routes,
+            "count": len(shaped),
+            "routes": shaped,
         }
     except Exception as e:
         logger.error("Error listing routes: %s", e, exc_info=True)
@@ -82,14 +71,13 @@ Returns empty list if unavailable.""",
 async def list_active_routes() -> Dict[str, Any]:
     """List all active routes from the routing table."""
     try:
-        
         routes = await routing_manager.get_active_routes()
-
+        shaped = [active_route_from_controller(r).model_dump(exclude_none=False) for r in routes]
         return {
             "success": True,
             "site": routing_manager._connection.site,
-            "count": len(routes),
-            "active_routes": routes,
+            "count": len(shaped),
+            "active_routes": shaped,
         }
     except Exception as e:
         logger.error("Error listing active routes: %s", e, exc_info=True)

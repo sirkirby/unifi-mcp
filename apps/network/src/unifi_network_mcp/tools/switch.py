@@ -14,10 +14,20 @@ from typing import Annotated, Any, Dict, List
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from pydantic import ValidationError
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import (
+    ConfigurePortAggregationInput,
+    ConfigurePortMirrorInput,
+    SetJumboFramesInput,
+    SetSwitchPortProfileInput,
+)
+from unifi_core.network.models.switch import (
+    from_controller as pp_from_controller,
+    to_controller_update as pp_to_update,
+)
 from unifi_network_mcp.runtime import server, switch_manager
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -36,20 +46,7 @@ async def list_port_profiles() -> Dict[str, Any]:
     """Lists all port profiles."""
     try:
         profiles = await switch_manager.get_port_profiles()
-        formatted = [
-            {
-                "id": p.get("_id"),
-                "name": p.get("name"),
-                "forward": p.get("forward"),
-                "native_network_id": p.get("native_networkconf_id"),
-                "isolation": p.get("isolation", False),
-                "poe_mode": p.get("poe_mode"),
-                "stp_port_mode": p.get("stp_port_mode"),
-                "dot1x_ctrl": p.get("dot1x_ctrl"),
-                "attr_no_delete": p.get("attr_no_delete", False),
-            }
-            for p in profiles
-        ]
+        formatted = [pp_from_controller(p).model_dump(exclude_none=True) for p in profiles]
         return {
             "success": True,
             "site": switch_manager._connection.site,
@@ -183,11 +180,9 @@ async def update_port_profile(
     if not profile_data:
         return {"success": False, "error": "profile_data cannot be empty"}
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("port_profile_update", profile_data)
-    if not is_valid:
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
+    validated_data = pp_to_update(profile_data)
     if not validated_data:
-        return {"success": False, "error": "Update data is effectively empty or invalid."}
+        return {"success": False, "error": "No valid mutable fields provided for update."}
 
     if not confirm:
         return update_preview(
@@ -392,6 +387,11 @@ async def set_switch_port_profile(
     ] = False,
 ) -> Dict[str, Any]:
     """Sets port overrides for a switch."""
+    try:
+        SetSwitchPortProfileInput(device_mac=device_mac, port_overrides=port_overrides)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="switch_port_assignment",
@@ -472,6 +472,11 @@ async def configure_port_mirror(
     ] = False,
 ) -> Dict[str, Any]:
     """Configures port mirroring."""
+    try:
+        ConfigurePortMirrorInput(device_mac=device_mac, port_overrides=port_overrides)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="port_mirror",
@@ -517,6 +522,11 @@ async def configure_port_aggregation(
     ] = False,
 ) -> Dict[str, Any]:
     """Configures link aggregation."""
+    try:
+        ConfigurePortAggregationInput(device_mac=device_mac, port_overrides=port_overrides)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="port_aggregation",
@@ -597,6 +607,11 @@ async def set_jumbo_frames(
     ] = False,
 ) -> Dict[str, Any]:
     """Enables or disables jumbo frames on a switch."""
+    try:
+        SetJumboFramesInput(device_mac=device_mac, enabled=enabled)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="jumbo_frames",

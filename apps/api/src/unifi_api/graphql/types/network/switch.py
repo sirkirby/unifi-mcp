@@ -44,17 +44,21 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
 class PortProfile:
     id: strawberry.ID | None
     name: str | None
+    forward: str | None
     native_networkconf_id: str | None
     tagged_networkconf_ids: list[str]
+    voice_networkconf_id: str | None
     poe_mode: str | None
     isolation: bool | None
+    stp_port_mode: bool | None
+    dot1x_ctrl: str | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
         return {
             "kind": kind,
             "primary_key": "id",
-            "display_columns": ["name", "poe_mode", "native_networkconf_id"],
+            "display_columns": ["name", "forward", "poe_mode", "native_networkconf_id"],
         }
 
     @classmethod
@@ -65,10 +69,14 @@ class PortProfile:
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
+            forward=_get(obj, "forward"),
             native_networkconf_id=_get(obj, "native_networkconf_id"),
             tagged_networkconf_ids=list(tagged),
+            voice_networkconf_id=_get(obj, "voice_networkconf_id"),
             poe_mode=_get(obj, "poe_mode"),
             isolation=_get(obj, "isolation"),
+            stp_port_mode=_get(obj, "stp_port_mode"),
+            dot1x_ctrl=_get(obj, "dot1x_ctrl"),
         )
 
     def to_dict(self) -> dict:

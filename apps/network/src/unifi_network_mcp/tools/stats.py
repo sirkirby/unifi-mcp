@@ -10,6 +10,12 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from unifi_core.network.models.sessions import (
+    client_session_from_controller,
+    client_wifi_details_from_controller,
+)
+from unifi_core.network.models.stats import dpi_stats_from_controller
+from unifi_core.network.models.system import speedtest_result_from_controller, top_client_from_controller
 from unifi_network_mcp.runtime import client_manager, device_manager, server, stats_manager
 
 logger = logging.getLogger(__name__)
@@ -230,24 +236,24 @@ async def get_top_clients(
         duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 1)
         top_client_stats = await stats_manager.get_top_clients(duration_hours=duration_hours, limit=limit)
 
-        enhanced_clients = []
+        enriched = []
         for entry in top_client_stats:
             mac = entry.get("mac")
-            name = "Unknown"
             if mac:
                 details = await client_manager.get_client_details(mac)
                 if details:
                     raw = details.raw if hasattr(details, "raw") else details
-                    name = raw.get("name") or raw.get("hostname") or mac
-            entry["name"] = name
-            enhanced_clients.append(entry)
+                    if not entry.get("name") and not entry.get("hostname"):
+                        entry["name"] = raw.get("name") or raw.get("hostname") or mac
+            enriched.append(entry)
 
+        shaped = [top_client_from_controller(e).model_dump(exclude_none=False) for e in enriched]
         return {
             "success": True,
             "site": stats_manager._connection.site,
             "duration": duration,
             "limit": limit,
-            "top_clients": enhanced_clients,
+            "top_clients": shaped,
         }
     except Exception as e:
         logger.error("Error getting top clients: %s", e, exc_info=True)
@@ -263,20 +269,12 @@ async def get_dpi_stats() -> Dict[str, Any]:
     """Implementation for getting DPI stats."""
     try:
         dpi_stats_result = await stats_manager.get_dpi_stats()
-
-        def serialize_dpi(item):
-            return item.raw if hasattr(item, "raw") else item
-
-        serialized_apps = [serialize_dpi(app) for app in dpi_stats_result.get("applications", [])]
-        serialized_cats = [serialize_dpi(cat) for cat in dpi_stats_result.get("categories", [])]
+        shaped = dpi_stats_from_controller(dpi_stats_result)
 
         return {
             "success": True,
             "site": stats_manager._connection.site,
-            "dpi_stats": {
-                "applications": serialized_apps,
-                "categories": serialized_cats,
-            },
+            "dpi_stats": shaped.model_dump(exclude_none=True),
         }
     except Exception as e:
         logger.error("Error getting DPI stats: %s", e, exc_info=True)
@@ -376,31 +374,13 @@ async def get_speedtest_results(
         duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 24)
         results = await stats_manager.get_speedtest_results(duration_hours=duration_hours)
 
-        formatted = []
-        for r in results:
-            entry: Dict[str, Any] = {}
-            if "xput_download" in r:
-                entry["download_mbps"] = round(r["xput_download"], 2)
-            if "xput_upload" in r:
-                entry["upload_mbps"] = round(r["xput_upload"], 2)
-            if "latency" in r:
-                entry["latency_ms"] = r["latency"]
-            if "datetime" in r:
-                entry["datetime"] = r["datetime"]
-            elif "time" in r:
-                entry["datetime"] = r["time"]
-            # Preserve any extra fields
-            for k, v in r.items():
-                if k not in ("xput_download", "xput_upload", "latency", "datetime", "time"):
-                    entry[k] = v
-            formatted.append(entry)
-
+        shaped = [speedtest_result_from_controller(r).model_dump(exclude_none=False) for r in results]
         return {
             "success": True,
             "site": stats_manager._connection.site,
             "duration": duration,
-            "count": len(formatted),
-            "results": formatted,
+            "count": len(shaped),
+            "results": shaped,
         }
     except Exception as e:
         logger.error("Error getting speedtest results: %s", e, exc_info=True)
@@ -529,13 +509,14 @@ async def get_client_sessions(
         sessions = await stats_manager.get_client_sessions(
             client_mac=client_mac, duration_hours=duration_hours, limit=limit
         )
+        shaped = [client_session_from_controller(s).model_dump(exclude_none=True) for s in sessions]
         result: Dict[str, Any] = {
             "success": True,
             "site": stats_manager._connection.site,
             "duration": duration,
             "limit": limit,
-            "count": len(sessions),
-            "sessions": sessions,
+            "count": len(shaped),
+            "sessions": shaped,
         }
         if client_mac:
             result["client_mac"] = client_mac
@@ -608,11 +589,12 @@ async def get_client_wifi_details(
         if not wifi_details:
             return {"success": False, "error": f"Client '{client_mac}' not found or is not wireless."}
 
+        shaped = client_wifi_details_from_controller(wifi_details)
         return {
             "success": True,
             "site": stats_manager._connection.site,
             "client_mac": client_mac,
-            "wifi_details": wifi_details,
+            "wifi_details": shaped.model_dump(exclude_none=True),
         }
     except Exception as e:
         logger.error("Error getting WiFi details for %s: %s", client_mac, e, exc_info=True)

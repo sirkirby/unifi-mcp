@@ -10,8 +10,11 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from pydantic import ValidationError
 from unifi_core.confirmation import create_preview, preview_response
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import RevokeVoucherInput
+from unifi_core.network.models.vouchers import voucher_from_controller
 from unifi_network_mcp.runtime import hotspot_manager, server
 
 logger = logging.getLogger(__name__)
@@ -28,28 +31,27 @@ Vouchers are used for guest network access in captive portal setups.""",
 async def list_vouchers() -> Dict[str, Any]:
     """List all hotspot vouchers."""
     try:
-        
+
         vouchers = await hotspot_manager.get_vouchers()
 
-        # Format vouchers for readability
         formatted_vouchers = []
         for v in vouchers:
-            formatted = {
-                "_id": v.get("_id"),
-                "code": v.get("code"),
-                "quota": v.get("quota", 1),
-                "duration_minutes": v.get("duration"),
-                "used": v.get("used", 0),
-                "create_time": v.get("create_time"),
-                "note": v.get("note"),
-            }
-            # Add bandwidth limits if set
-            if v.get("qos_rate_max_up"):
-                formatted["up_limit_kbps"] = v.get("qos_rate_max_up")
-            if v.get("qos_rate_max_down"):
-                formatted["down_limit_kbps"] = v.get("qos_rate_max_down")
-            if v.get("qos_usage_quota"):
-                formatted["data_limit_mb"] = v.get("qos_usage_quota")
+            shaped = voucher_from_controller(v)
+            formatted = shaped.model_dump(exclude_none=True)
+            # Preserve extra fields not captured by the base shape
+            raw = v if isinstance(v, dict) else {}
+            if raw.get("quota") is not None:
+                formatted["quota"] = raw.get("quota", 1)
+            if raw.get("used") is not None:
+                formatted["used"] = raw.get("used", 0)
+            if raw.get("note"):
+                formatted["note"] = raw.get("note")
+            if raw.get("qos_rate_max_up"):
+                formatted["up_limit_kbps"] = raw.get("qos_rate_max_up")
+            if raw.get("qos_rate_max_down"):
+                formatted["down_limit_kbps"] = raw.get("qos_rate_max_down")
+            if raw.get("qos_usage_quota"):
+                formatted["data_limit_mb"] = raw.get("qos_usage_quota")
             formatted_vouchers.append(formatted)
 
         return {
@@ -74,10 +76,11 @@ async def get_voucher_details(
     """Get details for a specific voucher."""
     try:
         voucher = await hotspot_manager.get_voucher_details(voucher_id)
+        shaped = voucher_from_controller(voucher)
         return {
             "success": True,
             "site": hotspot_manager._connection.site,
-            "voucher": voucher,
+            "voucher": shaped.model_dump(exclude_none=True),
         }
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
@@ -199,6 +202,11 @@ async def revoke_voucher(
     ] = False,
 ) -> Dict[str, Any]:
     """Revoke a hotspot voucher."""
+    try:
+        RevokeVoucherInput(voucher_id=voucher_id)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return preview_response(
             action="revoke",

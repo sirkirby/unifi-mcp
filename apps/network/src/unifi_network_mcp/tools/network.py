@@ -14,8 +14,24 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.ap_group import (
+    from_controller as ap_group_from_controller,
+    to_controller_create as ap_group_to_create,
+    to_controller_update as ap_group_to_update,
+)
+from unifi_core.network.models.networks import (
+    from_controller as network_from_controller,
+    to_controller_create as network_to_create,
+    to_controller_update as network_to_update,
+    Network,
+)
+from unifi_core.network.models.wlans import (
+    MUTABLE_FIELDS as WLAN_MUTABLE_FIELDS,
+    from_controller as wlan_from_controller,
+    to_controller_create as wlan_to_create,
+    to_controller_update as wlan_to_update,
+)
 from unifi_network_mcp.runtime import network_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -90,19 +106,13 @@ async def list_networks() -> Dict[str, Any]:
     }
     """
     try:
-        # Get networks directly from the manager (which now uses V1)
         networks_data = await network_manager.get_networks()
-
-        # Manager returns list of dicts from V1 API or [] on error
-        # Basic reformatting/selection could be done here if needed,
-        # but for now, return the raw V1 structure received from manager.
-        serializable_networks = json.loads(json.dumps(networks_data, default=str))
-
+        formatted = [network_from_controller(n).model_dump(exclude_none=True) for n in networks_data]
         return {
             "success": True,
             "site": network_manager._connection.site,
-            "count": len(serializable_networks),
-            "networks": serializable_networks,
+            "count": len(formatted),
+            "networks": formatted,
         }
     except Exception as e:
         logger.error("Error listing networks in tool: %s", e, exc_info=True)
@@ -279,17 +289,13 @@ async def update_network(
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Validate the update data
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("network_update", update_data)
-    if not is_valid:
-        logger.warning("Invalid network update data for ID %s: %s", network_id, error_msg)
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
-
+    # Translate to controller-safe mutable fields
+    validated_data = network_to_update(update_data)
     if not validated_data:
-        logger.warning("Network update data for ID %s is empty after validation.", network_id)
+        logger.warning("Network update data for ID %s is empty after filtering.", network_id)
         return {
             "success": False,
-            "error": "Update data is effectively empty or invalid.",
+            "error": "No valid mutable fields provided for update.",
         }
 
     # Fetch current state for preview
@@ -417,14 +423,16 @@ async def create_network(
     - details (object): Details of the created network
     - error (string): Error message if unsuccessful
     """
-    # Moved imports
-    from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
-
-    # Validate the input
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("network", network_data)
-    if not is_valid:
-        logger.warning("Invalid network data: %s", error_msg)
-        return {"success": False, "error": error_msg}
+    # Filter input to known mutable fields
+    validated_data = network_to_update(network_data) if network_data else {}
+    # Supplement with any required-on-create fields that to_controller_update might drop
+    # (to_controller_update drops None; required fields must still be present)
+    for k in ("name", "purpose", "ip_subnet", "vlan", "vlan_enabled",
+              "dhcpd_start", "dhcpd_stop"):
+        if k in network_data and k not in validated_data and network_data[k] is not None:
+            validated_data[k] = network_data[k]
+    if not validated_data:
+        return {"success": False, "error": "network_data cannot be empty"}
 
     # Required fields check
     required_fields = ["name", "purpose"]
@@ -693,13 +701,13 @@ async def update_wlan(
     """Updates specific fields of an existing WLAN (Wireless SSID).
 
     Only provided fields are updated — current values are automatically preserved.
-    Supported fields are defined in WLAN_UPDATE_SCHEMA and validated via UniFiValidatorRegistry.
+    Supported fields are defined by the WLAN pydantic model in unifi_core.network.models.wlans.
     Requires confirmation.
 
     Args:
         wlan_id (str): The unique identifier (_id) of the WLAN to update.
         update_data (Dict[str, Any]): Dictionary of fields to update. See tool description
-            and WLAN_UPDATE_SCHEMA in schemas.py for all supported fields.
+            for all supported fields.
         confirm (bool): Must be set to `True` to execute. Defaults to `False`.
 
     Returns:
@@ -717,11 +725,8 @@ async def update_wlan(
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Validate the update data
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("wlan_update", update_data)
-    if not is_valid:
-        logger.warning("Invalid WLAN update data for ID %s: %s", wlan_id, error_msg)
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
+    # Translate to controller-compatible update payload via pydantic model
+    validated_data = wlan_to_update(update_data)
 
     if not validated_data:
         logger.warning("WLAN update data for ID %s is empty after validation.", wlan_id)
@@ -832,14 +837,13 @@ async def create_wlan(
     - details (object): Details of the created WLAN
     - error (string): Error message if unsuccessful
     """
-    # Moved imports
-    from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
-
-    # Validate the input
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("wlan", wlan_data)
-    if not is_valid:
-        logger.warning("Invalid WLAN data: %s", error_msg)
-        return {"success": False, "error": error_msg}
+    # Filter input to known mutable fields via pydantic model
+    from unifi_core.network.models.wlans import Wlan as WlanModel
+    try:
+        wlan_model = WlanModel(**{k: v for k, v in wlan_data.items() if k in WLAN_MUTABLE_FIELDS})
+    except Exception as exc:
+        return {"success": False, "error": f"Invalid WLAN data: {exc}"}
+    validated_data = wlan_to_create(wlan_model)
 
     # Required fields check
     required_fields = ["name", "security"]
@@ -1039,11 +1043,12 @@ async def list_ap_groups() -> Dict[str, Any]:
     """List all AP groups."""
     try:
         groups = await network_manager.list_ap_groups()
+        formatted = [ap_group_from_controller(g).model_dump(exclude_none=True) for g in groups]
         return {
             "success": True,
             "site": network_manager._connection.site,
-            "count": len(groups),
-            "ap_groups": groups,
+            "count": len(formatted),
+            "ap_groups": formatted,
         }
     except Exception as e:
         logger.error("Error listing AP groups: %s", e, exc_info=True)
@@ -1068,7 +1073,7 @@ async def get_ap_group_details(
                 "success": True,
                 "site": network_manager._connection.site,
                 "group_id": group_id,
-                "details": json.loads(json.dumps(group, default=str)),
+                "details": ap_group_from_controller(group).model_dump(exclude_none=True),
             }
         return {"success": False, "error": f"AP group with ID '{group_id}' not found."}
     except Exception as e:
@@ -1097,10 +1102,15 @@ async def create_ap_group(
     ] = False,
 ) -> Dict[str, Any]:
     """Create a new AP group."""
-    # Validate the input
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("ap_group", group_data)
-    if not is_valid:
-        return {"success": False, "error": f"Invalid AP group data: {error_msg}"}
+    from unifi_core.network.models.ap_group import ApGroup
+
+    try:
+        model = ApGroup(**{k: v for k, v in group_data.items() if k in ("name", "device_macs", "wlan_group_ids")})
+    except Exception as exc:
+        return {"success": False, "error": f"Invalid AP group data: {exc}"}
+    validated_data = ap_group_to_create(model)
+    if not validated_data.get("name"):
+        return {"success": False, "error": "Invalid AP group data: 'name' is required"}
 
     if not confirm:
         return create_preview(
@@ -1160,10 +1170,10 @@ async def update_ap_group(
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Validate the update data
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("ap_group_update", update_data)
-    if not is_valid:
-        return {"success": False, "error": f"Invalid AP group update data: {error_msg}"}
+    # Translate to controller-safe mutable fields
+    validated_data = ap_group_to_update(update_data)
+    if not validated_data:
+        return {"success": False, "error": "No valid mutable fields provided for update."}
 
     # Fetch current state for preview
     current = await network_manager.get_ap_group_details(group_id)

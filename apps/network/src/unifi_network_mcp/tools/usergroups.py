@@ -12,6 +12,7 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.client_group import usergroup_from_controller
 from unifi_network_mcp.runtime import server, usergroup_manager
 
 logger = logging.getLogger(__name__)
@@ -29,28 +30,7 @@ async def list_usergroups() -> Dict[str, Any]:
     """List all user groups."""
     try:
         groups = await usergroup_manager.get_usergroups()
-
-        # Format groups for readability
-        formatted_groups = []
-        for g in groups:
-            formatted = {
-                "_id": g.get("_id"),
-                "name": g.get("name"),
-                "down_limit_kbps": g.get("qos_rate_max_down", -1),
-                "up_limit_kbps": g.get("qos_rate_max_up", -1),
-            }
-            # -1 means unlimited
-            if formatted["down_limit_kbps"] == -1:
-                formatted["down_limit"] = "unlimited"
-            else:
-                formatted["down_limit"] = f"{formatted['down_limit_kbps']} Kbps"
-
-            if formatted["up_limit_kbps"] == -1:
-                formatted["up_limit"] = "unlimited"
-            else:
-                formatted["up_limit"] = f"{formatted['up_limit_kbps']} Kbps"
-
-            formatted_groups.append(formatted)
+        formatted_groups = [usergroup_from_controller(g).model_dump(exclude_none=True) for g in groups]
 
         return {
             "success": True,

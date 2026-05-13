@@ -11,8 +11,12 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import QosRuleSimpleInput
+from unifi_core.network.models.qos import (
+    from_controller as qos_from_controller,
+    to_controller_update as qos_to_update,
+)
 from unifi_network_mcp.runtime import qos_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry  # Added
 
 logger = logging.getLogger(__name__)
 
@@ -54,15 +58,7 @@ async def list_qos_rules() -> Dict[str, Any]:
     try:
         qos_rules = await qos_manager.get_qos_rules()
         rules_raw = [r.raw if hasattr(r, "raw") else r for r in qos_rules]
-        formatted_rules = [
-            {
-                "id": r.get("_id"),
-                "name": r.get("name"),
-                "enabled": r.get("enabled"),
-                # Add other fields as needed for summary
-            }
-            for r in rules_raw
-        ]
+        formatted_rules = [qos_from_controller(r).model_dump(exclude_none=True) for r in rules_raw]
         return {
             "success": True,
             "site": qos_manager._connection.site,
@@ -196,9 +192,7 @@ async def toggle_qos_rule_enabled(
 
         logger.info("Attempting to toggle QoS rule '%s' (%s) to %s", rule_name, rule_id, new_state)
 
-        update_data = {"enabled": new_state}
-        # Assuming qos_manager.update_qos_rule handles fetch-merge-put or accepts partial data
-        # If it requires full object, this needs adjustment in the manager.
+        update_data = qos_to_update({"enabled": new_state})
         success = await qos_manager.update_qos_rule(rule_id, update_data)
 
         if success:
@@ -287,17 +281,13 @@ async def update_qos_rule(
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Validate the update data
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("qos_rule_update", update_data)
-    if not is_valid:
-        logger.warning("Invalid QoS rule update data for ID %s: %s", rule_id, error_msg)
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
-
+    # Translate to controller-safe mutable fields
+    validated_data = qos_to_update(update_data)
     if not validated_data:
-        logger.warning("QoS rule update data for ID %s is empty after validation.", rule_id)
+        logger.warning("QoS rule update data for ID %s is empty after filtering.", rule_id)
         return {
             "success": False,
-            "error": "Update data is effectively empty or invalid.",
+            "error": "No valid mutable fields provided for update.",
         }
 
     if not confirm:
@@ -378,16 +368,12 @@ async def create_qos_rule(
     - details (object): Details of the created rule.
     - error (string): Error message if unsuccessful.
     """
-    # Validate the input data
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("qos_rule", qos_data)
-    if not is_valid:
-        logger.warning("Invalid QoS rule data: %s", error_msg)
-        return {"success": False, "error": f"Invalid data: {error_msg}"}
-
-    # Basic required field check (covered by schema, but belt-and-suspenders)
+    # Filter input to known mutable fields
+    validated_data = qos_to_update(qos_data) if qos_data else {}
+    # Required field check
     required = ["name", "interface", "direction", "bandwidth_limit_kbps"]
-    if not all(k in validated_data for k in required):
-        missing = [k for k in required if k not in validated_data]
+    missing = [k for k in required if k not in validated_data]
+    if missing:
         return {"success": False, "error": f"Missing required fields: {missing}"}
 
     if not confirm:
@@ -472,28 +458,29 @@ async def create_simple_qos_rule(
     """
 
     # --- Step 1: validate high-level schema --------------------------------
-    is_valid, error_msg, validated = UniFiValidatorRegistry.validate("qos_rule_simple", rule)
-    if not is_valid or validated is None:
-        return {"success": False, "error": error_msg or "Validation failed"}
+    from pydantic import ValidationError
 
-    r = validated  # alias for brevity
+    try:
+        r = QosRuleSimpleInput(**rule)
+    except ValidationError as exc:
+        return {"success": False, "error": exc.errors()[0]["msg"]}
 
     # --- Step 2: translate into controller payload -------------------------
     payload: Dict[str, Any] = {
-        "name": r["name"],
-        "interface": r["interface"],
-        "direction": r["direction"],
-        "bandwidth_limit_kbps": r["limit_kbps"],
-        "enabled": r.get("enabled", True),
+        "name": r.name,
+        "interface": r.interface,
+        "direction": r.direction,
+        "bandwidth_limit_kbps": r.limit_kbps,
+        "enabled": r.enabled,
     }
 
-    if "dscp_value" in r:
-        payload["dscp_value"] = r["dscp_value"]
+    if r.dscp_value is not None:
+        payload["dscp_value"] = r.dscp_value
 
-    target = r.get("target")
+    target = r.target
     if target:
-        t_type = target["type"].lower()
-        value = target["value"]
+        t_type = target.type.lower()
+        value = target.value
         if t_type == "ip":
             payload["target_ip_address"] = value
         elif t_type == "subnet":

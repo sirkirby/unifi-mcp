@@ -41,6 +41,11 @@ class ContentFilter:
     enabled: bool
     profile: str | None
     applies_to: strawberry.scalars.JSON  # type: ignore[name-defined]
+    blocked_categories: list[str]
+    safe_search: list[str]
+    client_macs: list[str]
+    network_ids: list[str]
+    schedule_mode: str | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -53,12 +58,23 @@ class ContentFilter:
 
     @classmethod
     def from_manager_output(cls, obj: Any) -> "ContentFilter":
+        categories = _get(obj, "blocked_categories") or _get(obj, "categories") or []
+        client_macs = _get(obj, "client_macs") or []
+        network_ids = _get(obj, "network_ids") or []
+        safe_search = _get(obj, "safe_search") or []
+        schedule = _get(obj, "schedule") or {}
+        schedule_mode = schedule.get("mode") if isinstance(schedule, dict) else _get(obj, "schedule_mode")
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
             enabled=bool(_get(obj, "enabled", False)),
             profile=_get(obj, "profile"),
-            applies_to=_get(obj, "applies_to") or _get(obj, "network_ids") or [],
+            applies_to=_get(obj, "applies_to") or network_ids or [],
+            blocked_categories=list(categories) if isinstance(categories, list) else [],
+            safe_search=list(safe_search) if isinstance(safe_search, list) else [],
+            client_macs=list(client_macs) if isinstance(client_macs, list) else [],
+            network_ids=list(network_ids) if isinstance(network_ids, list) else [],
+            schedule_mode=schedule_mode,
         )
 
     def to_dict(self) -> dict:

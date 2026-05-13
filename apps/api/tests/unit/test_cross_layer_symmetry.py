@@ -20,6 +20,48 @@ from _cross_layer_helpers import compare_pair
 REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     # (server, domain, pydantic_class_name)
     ("network", "acl", "AclRule"),
+    ("network", "ap_group", "ApGroup"),
+    ("network", "client_group", "ClientGroup"),
+    ("network", "client_group", "UserGroup"),
+    ("network", "content_filter", "ContentFilter"),
+    ("network", "dns", "DnsRecord"),
+    ("network", "firewall", "FirewallRule"),
+    ("network", "firewall", "FirewallGroup"),
+    ("network", "firewall", "FirewallZone"),
+    ("network", "networks", "Network"),
+    ("network", "oon", "OonPolicy"),
+    ("network", "port_forwards", "PortForward"),
+    ("network", "switch", "PortProfile"),
+    ("network", "qos", "QosRule"),
+    ("network", "traffic_routes", "TrafficRoute"),
+    ("network", "route", "Route"),
+    ("network", "route", "ActiveRoute"),
+    ("network", "vpn", "VpnClient"),
+    ("network", "vpn", "VpnServer"),
+    ("network", "wlans", "Wlan"),
+    ("network", "devices", "Device"),
+    ("network", "devices", "DeviceRadio"),
+    ("network", "system", "SnmpSettings"),
+    ("network", "system", "AutoBackupSettings"),
+    ("network", "system", "SystemInfo"),
+    ("network", "system", "NetworkHealth"),
+    ("network", "system", "Alarm"),
+    ("network", "system", "Backup"),
+    ("network", "system", "SiteSettings"),
+    ("network", "system", "EventTypes"),
+    ("network", "system", "TopClient"),
+    ("network", "system", "SpeedtestResult"),
+    ("network", "clients", "Client"),
+    ("network", "clients", "BlockedClient"),
+    ("network", "clients", "ClientLookup"),
+    ("network", "events", "EventLog"),
+    ("network", "sessions", "ClientSession"),
+    ("network", "sessions", "ClientWifiDetails"),
+    ("network", "stats", "StatPoint"),
+    ("network", "stats", "DpiStats"),
+    ("network", "vouchers", "Voucher"),
+    ("network", "dpi", "DpiApplication"),
+    ("network", "dpi", "DpiCategory"),
     ("protect", "cameras", "Camera"),
     ("protect", "lights", "Light"),
     ("protect", "chimes", "Chime"),
@@ -61,7 +103,12 @@ def test_cross_layer_symmetry(server: str, domain: str, pydantic_name: str) -> N
 
     pydantic_cls = getattr(pydantic_mod, pydantic_name)
     strawberry_cls = getattr(strawberry_mod, pydantic_name)
-    mutable_fields = getattr(pydantic_mod, "MUTABLE_FIELDS")
+    # Prefer a per-class field set (e.g. USERGROUP_MUTABLE_FIELDS for UserGroup)
+    # before falling back to the module-level MUTABLE_FIELDS.
+    per_class_key = f"{pydantic_name.upper()}_MUTABLE_FIELDS"
+    mutable_fields = getattr(pydantic_mod, per_class_key, None)
+    if mutable_fields is None:
+        mutable_fields = getattr(pydantic_mod, "MUTABLE_FIELDS")
 
     errors = compare_pair(pydantic_cls, mutable_fields, strawberry_cls)
     assert not errors, (

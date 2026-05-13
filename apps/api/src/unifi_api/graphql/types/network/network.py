@@ -37,8 +37,45 @@ class Network:
     name: str | None
     purpose: str | None
     enabled: bool
-    vlan: int | None
-    subnet: str | None
+    vlan_enabled: bool | None
+    vlan: str | None
+    ip_subnet: str | None
+    subnet: str | None  # alias kept for backward compat (mapped from ip_subnet)
+    domain_name: str | None
+    # DHCP
+    dhcpd_enabled: bool | None
+    dhcpd_start: str | None
+    dhcpd_stop: str | None
+    dhcpd_leasetime: int | None
+    dhcpd_gateway: str | None
+    dhcpd_gateway_enabled: bool | None
+    dhcpd_dns_1: str | None
+    dhcpd_dns_2: str | None
+    dhcpd_dns_enabled: bool | None
+    dhcpd_ntp_1: str | None
+    dhcpd_ntp_2: str | None
+    dhcpd_ntp_enabled: bool | None
+    dhcpd_wins_1: str | None
+    dhcpd_wins_2: str | None
+    dhcpd_wins_enabled: bool | None
+    dhcpd_unifi_controller: str | None
+    dhcpd_tftp_server: str | None
+    dhcpd_boot_server: str | None
+    dhcpd_boot_filename: str | None
+    dhcpd_boot_enabled: bool | None
+    dhcpd_conflict_checking: bool | None
+    dhcp_relay_enabled: bool | None
+    dhcpd_ip_1: str | None
+    dhcpguard_enabled: bool | None
+    # Multicast / mDNS
+    igmp_snooping: bool | None
+    igmp_querier_switches: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    igmp_flood_unknown_multicast: bool | None
+    mdns_enabled: bool | None
+    # Access control
+    network_isolation_enabled: bool | None
+    internet_access_enabled: bool | None
+    upnp_lan_enabled: bool | None
 
     # Context for relationship edges — NOT in SDL, NOT in to_dict().
     _controller_id: strawberry.Private[str | None] = None
@@ -56,13 +93,49 @@ class Network:
     @classmethod
     def from_manager_output(cls, obj: Any) -> "Network":
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
+        ip_subnet = raw.get("ip_subnet") or raw.get("subnet")
+        vlan_raw = raw.get("vlan")
         return cls(
             id=raw.get("_id") or raw.get("id"),
             name=raw.get("name"),
             purpose=raw.get("purpose"),
             enabled=bool(raw.get("enabled", False)),
-            vlan=raw.get("vlan"),
-            subnet=raw.get("ip_subnet") or raw.get("subnet"),
+            vlan_enabled=raw.get("vlan_enabled"),
+            vlan=str(vlan_raw) if vlan_raw is not None else None,
+            ip_subnet=ip_subnet,
+            subnet=ip_subnet,
+            domain_name=raw.get("domain_name"),
+            dhcpd_enabled=raw.get("dhcpd_enabled"),
+            dhcpd_start=raw.get("dhcpd_start"),
+            dhcpd_stop=raw.get("dhcpd_stop"),
+            dhcpd_leasetime=raw.get("dhcpd_leasetime"),
+            dhcpd_gateway=raw.get("dhcpd_gateway"),
+            dhcpd_gateway_enabled=raw.get("dhcpd_gateway_enabled"),
+            dhcpd_dns_1=raw.get("dhcpd_dns_1"),
+            dhcpd_dns_2=raw.get("dhcpd_dns_2"),
+            dhcpd_dns_enabled=raw.get("dhcpd_dns_enabled"),
+            dhcpd_ntp_1=raw.get("dhcpd_ntp_1"),
+            dhcpd_ntp_2=raw.get("dhcpd_ntp_2"),
+            dhcpd_ntp_enabled=raw.get("dhcpd_ntp_enabled"),
+            dhcpd_wins_1=raw.get("dhcpd_wins_1"),
+            dhcpd_wins_2=raw.get("dhcpd_wins_2"),
+            dhcpd_wins_enabled=raw.get("dhcpd_wins_enabled"),
+            dhcpd_unifi_controller=raw.get("dhcpd_unifi_controller"),
+            dhcpd_tftp_server=raw.get("dhcpd_tftp_server"),
+            dhcpd_boot_server=raw.get("dhcpd_boot_server"),
+            dhcpd_boot_filename=raw.get("dhcpd_boot_filename"),
+            dhcpd_boot_enabled=raw.get("dhcpd_boot_enabled"),
+            dhcpd_conflict_checking=raw.get("dhcpd_conflict_checking"),
+            dhcp_relay_enabled=raw.get("dhcp_relay_enabled"),
+            dhcpd_ip_1=raw.get("dhcpd_ip_1"),
+            dhcpguard_enabled=raw.get("dhcpguard_enabled"),
+            igmp_snooping=raw.get("igmp_snooping"),
+            igmp_querier_switches=raw.get("igmp_querier_switches"),
+            igmp_flood_unknown_multicast=raw.get("igmp_flood_unknown_multicast"),
+            mdns_enabled=raw.get("mdns_enabled"),
+            network_isolation_enabled=raw.get("network_isolation_enabled"),
+            internet_access_enabled=raw.get("internet_access_enabled"),
+            upnp_lan_enabled=raw.get("upnp_lan_enabled"),
         )
 
     def to_dict(self) -> dict:
