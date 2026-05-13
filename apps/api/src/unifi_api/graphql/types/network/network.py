@@ -69,7 +69,7 @@ class Network:
     dhcpguard_enabled: bool | None
     # Multicast / mDNS
     igmp_snooping: bool | None
-    igmp_querier_switches: list[Any] | None
+    igmp_querier_switches: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     igmp_flood_unknown_multicast: bool | None
     mdns_enabled: bool | None
     # Access control

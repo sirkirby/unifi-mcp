@@ -73,8 +73,16 @@ def types_compatible(pydantic_annotation: Any, strawberry_annotation: Any) -> bo
     py_norm = _normalize_for_compare(py_inner)
     sb_norm = _normalize_for_compare(sb_inner)
 
-    # pydantic dict ↔ strawberry JSON scalar
-    if py_norm == "dict":
+    # pydantic dict / list[Any] / Any ↔ strawberry JSON scalar
+    # All three pydantic shapes map to opaque structured data; Strawberry
+    # represents them as the JSON scalar (arbitrary serialisable value).
+    _is_any = py_inner is Any
+    _is_list_any = (
+        isinstance(py_norm, tuple)
+        and py_norm[0] == "list"
+        and (py_norm[1] is Any or py_norm[1] == Any)
+    )
+    if py_norm == "dict" or _is_any or _is_list_any:
         sb_repr = repr(sb_inner)
         if "JSON" in sb_repr or sb_norm == "dict":
             return True

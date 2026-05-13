@@ -44,8 +44,8 @@ class OonPolicy:
     name: str | None
     enabled: bool
     target_type: str | None
-    targets: list[Any] | None
-    applies_to: list[Any] | None
+    targets: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    applies_to: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     secure: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     qos: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     qos_enabled: bool | None

@@ -209,6 +209,7 @@ type ApGroup {
   name: String
   apCount: Int!
   deviceMacs: [String!]!
+  wlanGroupIds: [String!]!
 }
 
 """Paginated page of AP groups."""
@@ -222,6 +223,12 @@ type AutoBackupSettings {
   enabled: Boolean!
   schedule: String
   maxCount: Int
+  autobackupEnabled: Boolean
+  autobackupCronExpr: String
+  autobackupDays: Int
+  autobackupMaxFiles: Int
+  autobackupTimezone: String
+  autobackupCloudEnabled: Boolean
 }
 
 """A wireless channel allowed by the regulatory domain."""
@@ -361,6 +368,7 @@ type ClientGroup {
   name: String
   qosRateMaxDown: Int
   qosRateMaxUp: Int
+  members: [String!]!
 }
 
 """Paginated page of network member client groups."""
@@ -419,6 +427,11 @@ type ContentFilter {
   enabled: Boolean!
   profile: String
   appliesTo: JSON!
+  blockedCategories: [String!]!
+  safeSearch: [String!]!
+  clientMacs: [String!]!
+  networkIds: [String!]!
+  scheduleMode: String
 }
 
 """Paginated page of content filters."""
@@ -473,6 +486,17 @@ type DeviceRadio {
   name: String
   model: String
   radios: [RadioEntry!]!
+  txPowerMode: String
+  txPower: Int
+  channel: Int
+  ht: String
+  minRssiEnabled: Boolean
+  minRssi: Int
+  assistedRoamingEnabled: Boolean
+  antennaGain: Int
+  vwireEnabled: Boolean
+  sensLevelEnabled: Boolean
+  sensLevel: Int
 }
 
 """A static DNS record served by the controller."""
@@ -483,6 +507,12 @@ type DnsRecord {
   type: String
   ttl: Int
   enabled: Boolean!
+  key: String
+  value: String
+  recordType: String
+  port: Int
+  priority: Int
+  weight: Int
 }
 
 """Paginated page of DNS records."""
@@ -624,7 +654,7 @@ type FirewallGroup {
   id: ID
   name: String
   groupType: String
-  members: JSON!
+  members: [String!]!
 }
 
 """Paginated page of firewall groups."""
@@ -642,6 +672,18 @@ type FirewallRule {
   predefined: Boolean!
   source: JSON
   destination: JSON
+  index: Int
+  protocol: String
+  ipVersion: String
+  connectionStateType: String
+  connectionStates: [String!]!
+  createAllowRespond: Boolean
+  matchIpSec: Boolean
+  matchOppositeProtocol: Boolean
+  icmpTypename: String
+  icmpV6Typename: String
+  schedule: JSON
+  logging: Boolean
 }
 
 """Paginated page of firewall policies/rules."""
@@ -744,8 +786,42 @@ type Network {
   name: String
   purpose: String
   enabled: Boolean!
-  vlan: Int
+  vlanEnabled: Boolean
+  vlan: String
+  ipSubnet: String
   subnet: String
+  domainName: String
+  dhcpdEnabled: Boolean
+  dhcpdStart: String
+  dhcpdStop: String
+  dhcpdLeasetime: Int
+  dhcpdGateway: String
+  dhcpdGatewayEnabled: Boolean
+  dhcpdDns1: String
+  dhcpdDns2: String
+  dhcpdDnsEnabled: Boolean
+  dhcpdNtp1: String
+  dhcpdNtp2: String
+  dhcpdNtpEnabled: Boolean
+  dhcpdWins1: String
+  dhcpdWins2: String
+  dhcpdWinsEnabled: Boolean
+  dhcpdUnifiController: String
+  dhcpdTftpServer: String
+  dhcpdBootServer: String
+  dhcpdBootFilename: String
+  dhcpdBootEnabled: Boolean
+  dhcpdConflictChecking: Boolean
+  dhcpRelayEnabled: Boolean
+  dhcpdIp1: String
+  dhcpguardEnabled: Boolean
+  igmpSnooping: Boolean
+  igmpQuerierSwitches: JSON
+  igmpFloodUnknownMulticast: Boolean
+  mdnsEnabled: Boolean
+  networkIsolationEnabled: Boolean
+  internetAccessEnabled: Boolean
+  upnpLanEnabled: Boolean
 
   """Clients on this network."""
   clients: [Client!]!
@@ -1034,7 +1110,14 @@ type OonPolicy {
   id: ID
   name: String
   enabled: Boolean!
-  appliesTo: JSON!
+  targetType: String
+  targets: JSON
+  appliesTo: JSON
+  secure: JSON
+  qos: JSON
+  qosEnabled: Boolean
+  route: JSON
+  routeEnabled: Boolean
   restrictionLevel: String
 }
 
@@ -1089,6 +1172,7 @@ type PortForward {
   fwdProtocol: String
   dstPort: String
   fwdPort: String
+  fwdIp: String
   src: String
   log: Boolean!
 }
@@ -1112,10 +1196,14 @@ type PortOverrideRow {
 type PortProfile {
   id: ID
   name: String
+  forward: String
   nativeNetworkconfId: String
   taggedNetworkconfIds: [String!]!
+  voiceNetworkconfId: String
   poeMode: String
   isolation: Boolean
+  stpPortMode: Boolean
+  dot1xCtrl: String
 }
 
 """Paginated page of switch port profiles."""
@@ -1251,6 +1339,12 @@ type QosRule {
   id: ID
   name: String
   enabled: Boolean!
+  interface: String
+  direction: String
+  bandwidthLimitKbps: Int
+  targetIpAddress: String
+  targetSubnet: String
+  dscpValue: Int
   rateMaxDown: Int
   rateMaxUp: Int
   priority: Int
@@ -1499,10 +1593,12 @@ type TrafficRoute {
   id: ID
   name: String
   matchingTarget: String
-  sourceTargets: JSON
-  destinationTargets: JSON
+  networkId: String
   nextHop: String
   enabled: Boolean!
+  killSwitchEnabled: Boolean
+  sourceTargets: JSON
+  destinationTargets: JSON
 }
 
 """Paginated page of traffic-route policies."""
@@ -1625,8 +1721,35 @@ type Wlan {
   enabled: Boolean!
   security: String
   networkId: String
-  hideSsid: Boolean!
+  hideSsid: Boolean
   vlanId: Int
+  xPassphrase: String
+  guestPolicy: Boolean
+  usergroupId: String
+  fastRoamingEnabled: Boolean
+  pmfMode: String
+  wpa3Support: Boolean
+  wpa3Transition: Boolean
+  macFilterEnabled: Boolean
+  macFilterPolicy: String
+  macFilterList: [String!]
+  scheduleEnabled: Boolean
+  l2Isolation: Boolean
+  wlanBand: String
+  multicastEnhanceEnabled: Boolean
+  dtimMode: String
+  dtimNa: Int
+  dtimNg: Int
+  minrateNgEnabled: Boolean
+  minrateNgDataRateKbps: Int
+  minrateNaEnabled: Boolean
+  minrateNaDataRateKbps: Int
+  groupRekey: Int
+  uapsdEnabled: Boolean
+  proxyArp: Boolean
+  iappEnabled: Boolean
+  apGroupIds: [String!]
+  apGroupMode: String
 }
 
 """Paginated page of WLAN/SSID configurations."""

@@ -218,6 +218,13 @@
               }
             ],
             "title": "Name"
+          },
+          "wlan_group_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Wlan Group Ids",
+            "type": "array"
           }
         },
         "title": "ApGroupModel",
@@ -528,6 +535,13 @@
             ],
             "title": "Id"
           },
+          "members": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Members",
+            "type": "array"
+          },
           "name": {
             "anyOf": [
               {
@@ -667,6 +681,20 @@
           "applies_to": {
             "title": "Applies To"
           },
+          "blocked_categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked Categories",
+            "type": "array"
+          },
+          "client_macs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Client Macs",
+            "type": "array"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -693,6 +721,13 @@
             ],
             "title": "Name"
           },
+          "network_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Network Ids",
+            "type": "array"
+          },
           "profile": {
             "anyOf": [
               {
@@ -703,6 +738,24 @@
               }
             ],
             "title": "Profile"
+          },
+          "safe_search": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Safe Search",
+            "type": "array"
+          },
+          "schedule_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Mode"
           }
         },
         "title": "ContentFilterModel",
@@ -1777,6 +1830,50 @@
             ],
             "title": "Ip"
           },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "priority": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority"
+          },
+          "record_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Type"
+          },
           "ttl": {
             "anyOf": [
               {
@@ -1798,6 +1895,28 @@
               }
             ],
             "title": "Type"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight"
           }
         },
         "title": "DnsRecordModel",
@@ -2071,7 +2190,11 @@
             "title": "Id"
           },
           "members": {
-            "title": "Members"
+            "items": {
+              "type": "string"
+            },
+            "title": "Members",
+            "type": "array"
           },
           "name": {
             "anyOf": [
@@ -2102,6 +2225,35 @@
             ],
             "title": "Action"
           },
+          "connection_state_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection State Type"
+          },
+          "connection_states": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Connection States",
+            "type": "array"
+          },
+          "create_allow_respond": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Create Allow Respond"
+          },
           "destination": {
             "anyOf": [
               {},
@@ -2115,6 +2267,28 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "icmp_typename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icmp Typename"
+          },
+          "icmp_v6_typename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Icmp V6 Typename"
+          },
           "id": {
             "anyOf": [
               {
@@ -2125,6 +2299,61 @@
               }
             ],
             "title": "Id"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "ip_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Version"
+          },
+          "logging": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logging"
+          },
+          "match_ip_sec": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Ip Sec"
+          },
+          "match_opposite_protocol": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Opposite Protocol"
           },
           "name": {
             "anyOf": [
@@ -2140,6 +2369,26 @@
           "predefined": {
             "title": "Predefined",
             "type": "boolean"
+          },
+          "protocol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protocol"
+          },
+          "schedule": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
           },
           "source": {
             "anyOf": [
@@ -2213,6 +2462,281 @@
       "NetworkModel": {
         "additionalProperties": true,
         "properties": {
+          "dhcp_relay_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcp Relay Enabled"
+          },
+          "dhcpd_boot_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Boot Enabled"
+          },
+          "dhcpd_boot_filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Boot Filename"
+          },
+          "dhcpd_boot_server": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Boot Server"
+          },
+          "dhcpd_conflict_checking": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Conflict Checking"
+          },
+          "dhcpd_dns_1": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Dns 1"
+          },
+          "dhcpd_dns_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Dns 2"
+          },
+          "dhcpd_dns_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Dns Enabled"
+          },
+          "dhcpd_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Enabled"
+          },
+          "dhcpd_gateway": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Gateway"
+          },
+          "dhcpd_gateway_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Gateway Enabled"
+          },
+          "dhcpd_ip_1": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Ip 1"
+          },
+          "dhcpd_leasetime": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Leasetime"
+          },
+          "dhcpd_ntp_1": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Ntp 1"
+          },
+          "dhcpd_ntp_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Ntp 2"
+          },
+          "dhcpd_ntp_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Ntp Enabled"
+          },
+          "dhcpd_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Start"
+          },
+          "dhcpd_stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Stop"
+          },
+          "dhcpd_tftp_server": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Tftp Server"
+          },
+          "dhcpd_unifi_controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Unifi Controller"
+          },
+          "dhcpd_wins_1": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Wins 1"
+          },
+          "dhcpd_wins_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Wins 2"
+          },
+          "dhcpd_wins_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpd Wins Enabled"
+          },
+          "dhcpguard_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpguard Enabled"
+          },
+          "domain_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain Name"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -2228,6 +2752,70 @@
             ],
             "title": "Id"
           },
+          "igmp_flood_unknown_multicast": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Igmp Flood Unknown Multicast"
+          },
+          "igmp_querier_switches": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Igmp Querier Switches"
+          },
+          "igmp_snooping": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Igmp Snooping"
+          },
+          "internet_access_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Internet Access Enabled"
+          },
+          "ip_subnet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Subnet"
+          },
+          "mdns_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mdns Enabled"
+          },
           "name": {
             "anyOf": [
               {
@@ -2238,6 +2826,17 @@
               }
             ],
             "title": "Name"
+          },
+          "network_isolation_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Isolation Enabled"
           },
           "purpose": {
             "anyOf": [
@@ -2261,16 +2860,38 @@
             ],
             "title": "Subnet"
           },
+          "upnp_lan_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upnp Lan Enabled"
+          },
           "vlan": {
             "anyOf": [
               {
-                "type": "integer"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
             "title": "Vlan"
+          },
+          "vlan_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vlan Enabled"
           }
         },
         "title": "NetworkModel",
@@ -2280,6 +2901,12 @@
         "additionalProperties": true,
         "properties": {
           "applies_to": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
             "title": "Applies To"
           },
           "enabled": {
@@ -2308,6 +2935,26 @@
             ],
             "title": "Name"
           },
+          "qos": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qos"
+          },
+          "qos_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qos Enabled"
+          },
           "restriction_level": {
             "anyOf": [
               {
@@ -2318,6 +2965,55 @@
               }
             ],
             "title": "Restriction Level"
+          },
+          "route": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "route_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route Enabled"
+          },
+          "secure": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secure"
+          },
+          "target_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Type"
+          },
+          "targets": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targets"
           }
         },
         "title": "OonPolicyModel",
@@ -3661,6 +4357,17 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "fwd_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fwd Ip"
+          },
           "fwd_port": {
             "anyOf": [
               {
@@ -3727,6 +4434,28 @@
       "PortProfileModel": {
         "additionalProperties": true,
         "properties": {
+          "dot1x_ctrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dot1X Ctrl"
+          },
+          "forward": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward"
+          },
           "id": {
             "anyOf": [
               {
@@ -3782,12 +4511,34 @@
             ],
             "title": "Poe Mode"
           },
+          "stp_port_mode": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stp Port Mode"
+          },
           "tagged_networkconf_ids": {
             "items": {
               "type": "string"
             },
             "title": "Tagged Networkconf Ids",
             "type": "array"
+          },
+          "voice_networkconf_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice Networkconf Id"
           }
         },
         "title": "PortProfileModel",
@@ -3796,6 +4547,39 @@
       "QosRuleModel": {
         "additionalProperties": true,
         "properties": {
+          "bandwidth_limit_kbps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandwidth Limit Kbps"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "dscp_value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dscp Value"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -3810,6 +4594,17 @@
               }
             ],
             "title": "Id"
+          },
+          "interface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interface"
           },
           "name": {
             "anyOf": [
@@ -3854,6 +4649,28 @@
               }
             ],
             "title": "Rate Max Up"
+          },
+          "target_ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Ip Address"
+          },
+          "target_subnet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Subnet"
           }
         },
         "title": "QosRuleModel",
@@ -4030,6 +4847,17 @@
             ],
             "title": "Id"
           },
+          "kill_switch_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kill Switch Enabled"
+          },
           "matching_target": {
             "anyOf": [
               {
@@ -4051,6 +4879,17 @@
               }
             ],
             "title": "Name"
+          },
+          "network_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Id"
           },
           "next_hop": {
             "anyOf": [
@@ -4455,13 +5294,122 @@
       "WlanModel": {
         "additionalProperties": true,
         "properties": {
+          "ap_group_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap Group Ids"
+          },
+          "ap_group_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ap Group Mode"
+          },
+          "dtim_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dtim Mode"
+          },
+          "dtim_na": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dtim Na"
+          },
+          "dtim_ng": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dtim Ng"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
           },
+          "fast_roaming_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fast Roaming Enabled"
+          },
+          "group_rekey": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Rekey"
+          },
+          "guest_policy": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guest Policy"
+          },
           "hide_ssid": {
-            "title": "Hide Ssid",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hide Ssid"
+          },
+          "iapp_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iapp Enabled"
           },
           "id": {
             "anyOf": [
@@ -4473,6 +5421,108 @@
               }
             ],
             "title": "Id"
+          },
+          "l2_isolation": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "L2 Isolation"
+          },
+          "mac_filter_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mac Filter Enabled"
+          },
+          "mac_filter_list": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mac Filter List"
+          },
+          "mac_filter_policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mac Filter Policy"
+          },
+          "minrate_na_data_rate_kbps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minrate Na Data Rate Kbps"
+          },
+          "minrate_na_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minrate Na Enabled"
+          },
+          "minrate_ng_data_rate_kbps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minrate Ng Data Rate Kbps"
+          },
+          "minrate_ng_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minrate Ng Enabled"
+          },
+          "multicast_enhance_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multicast Enhance Enabled"
           },
           "name": {
             "anyOf": [
@@ -4496,6 +5546,39 @@
             ],
             "title": "Network Id"
           },
+          "pmf_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmf Mode"
+          },
+          "proxy_arp": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Arp"
+          },
+          "schedule_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Enabled"
+          },
           "security": {
             "anyOf": [
               {
@@ -4507,6 +5590,28 @@
             ],
             "title": "Security"
           },
+          "uapsd_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uapsd Enabled"
+          },
+          "usergroup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usergroup Id"
+          },
           "vlan_id": {
             "anyOf": [
               {
@@ -4517,6 +5622,50 @@
               }
             ],
             "title": "Vlan Id"
+          },
+          "wlan_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wlan Band"
+          },
+          "wpa3_support": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wpa3 Support"
+          },
+          "wpa3_transition": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wpa3 Transition"
+          },
+          "x_passphrase": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Passphrase"
           }
         },
         "title": "WlanModel",
