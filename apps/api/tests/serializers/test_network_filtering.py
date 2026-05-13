@@ -234,7 +234,7 @@ def test_acl_rule_list_serializer_shape() -> None:
         "name": "Block guest IoT",
         "enabled": True,
         "action": "BLOCK",
-        "traffic_source": {"type": "MAC", "value": "aa:bb:cc:dd:ee:ff"},
+        "traffic_source": {"type": "MAC", "specific_mac_addresses": ["aa:bb:cc:dd:ee:ff"]},
         "traffic_destination": {"type": "ANY"},
     }
     out = AclRule.from_manager_output(sample).to_dict()
@@ -242,8 +242,10 @@ def test_acl_rule_list_serializer_shape() -> None:
     assert out["name"] == "Block guest IoT"
     assert out["enabled"] is True
     assert out["action"] == "BLOCK"
-    assert out["source"] == {"type": "MAC", "value": "aa:bb:cc:dd:ee:ff"}
-    assert out["destination"] == {"type": "ANY"}
+    assert out["source_type"] == "MAC"
+    assert out["source_macs"] == ["aa:bb:cc:dd:ee:ff"]
+    assert out["destination_type"] == "ANY"
+    assert out["destination_macs"] == []
     assert AclRule.render_hint("list")["kind"] == "list"
 
 
