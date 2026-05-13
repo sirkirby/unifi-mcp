@@ -39,6 +39,12 @@ class DnsRecord:
     type: str | None
     ttl: int | None
     enabled: bool
+    key: str | None
+    value: str | None
+    record_type: str | None
+    port: int | None
+    priority: int | None
+    weight: int | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -51,13 +57,22 @@ class DnsRecord:
 
     @classmethod
     def from_manager_output(cls, obj: Any) -> "DnsRecord":
+        key = _get(obj, "key") or _get(obj, "hostname")
+        value = _get(obj, "value") or _get(obj, "ip")
+        record_type = _get(obj, "record_type") or _get(obj, "type")
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
-            hostname=_get(obj, "key") or _get(obj, "hostname"),
-            ip=_get(obj, "value") or _get(obj, "ip"),
-            type=_get(obj, "record_type") or _get(obj, "type"),
+            hostname=key,
+            ip=value,
+            type=record_type,
             ttl=_get(obj, "ttl"),
             enabled=bool(_get(obj, "enabled", True)),
+            key=key,
+            value=value,
+            record_type=record_type,
+            port=_get(obj, "port"),
+            priority=_get(obj, "priority"),
+            weight=_get(obj, "weight"),
         )
 
     def to_dict(self) -> dict:
