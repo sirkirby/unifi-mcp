@@ -242,7 +242,7 @@ def test_network_update_rejects_unknown_field():
 
 ### D2. validate_update_fields() tests (models/acl.py pattern)
 
-For Pydantic-backed update tools, `validate_update_fields()` in `apps/network/src/unifi_network_mcp/models/acl.py` is the reference template. Write at minimum three tests:
+For Pydantic-backed update tools, `validate_update_fields()` in `packages/unifi-core/src/unifi_core/network/models/acl.py` is the reference template. Write at minimum three tests:
 
 1. Valid update dict → passes without raising
 2. Wrong type for a field → raises `ValueError`

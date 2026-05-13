@@ -147,7 +147,7 @@ Create a test file to validate field symmetry for this domain.
 
    ```python
    import pytest
-   from unifi_network_mcp.models.<domain> import Update<Domain>
+   from unifi_core.<server>.models.<domain> import Update<Domain>
 
    def test_<domain>_field_symmetry():
        """Test that list output fields are accepted by update."""
