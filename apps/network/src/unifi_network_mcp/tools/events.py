@@ -12,6 +12,7 @@ from pydantic import Field
 
 from unifi_core.confirmation import preview_response
 from unifi_core.network.models.events import event_log_from_controller
+from unifi_core.network.models.system import alarm_from_controller, event_types_from_controller
 from unifi_network_mcp.runtime import server
 
 logger = logging.getLogger(__name__)
@@ -105,12 +106,13 @@ async def list_alarms(
             limit=limit,
         )
 
+        shaped = [alarm_from_controller(a).model_dump(exclude_none=False) for a in alarms]
         return {
             "success": True,
             "site": event_manager._connection.site,
-            "count": len(alarms),
+            "count": len(shaped),
             "include_archived": include_archived,
-            "alarms": alarms,
+            "alarms": shaped,
         }
     except Exception as e:
         logger.error("Error listing alarms: %s", e, exc_info=True)
@@ -189,10 +191,11 @@ async def get_event_types() -> Dict[str, Any]:
     try:
         event_manager = _get_event_manager()
         prefixes = event_manager.get_event_type_prefixes()
+        shaped = event_types_from_controller(prefixes)
 
         return {
             "success": True,
-            "event_types": prefixes,
+            "event_types": shaped.event_types,
             "usage": "Use prefix value with unifi_list_events event_type parameter",
         }
     except Exception as e:

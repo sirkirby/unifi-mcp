@@ -15,6 +15,7 @@ from unifi_core.network.models.sessions import (
     client_wifi_details_from_controller,
 )
 from unifi_core.network.models.stats import dpi_stats_from_controller
+from unifi_core.network.models.system import speedtest_result_from_controller, top_client_from_controller
 from unifi_network_mcp.runtime import client_manager, device_manager, server, stats_manager
 
 logger = logging.getLogger(__name__)
@@ -235,24 +236,24 @@ async def get_top_clients(
         duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 1)
         top_client_stats = await stats_manager.get_top_clients(duration_hours=duration_hours, limit=limit)
 
-        enhanced_clients = []
+        enriched = []
         for entry in top_client_stats:
             mac = entry.get("mac")
-            name = "Unknown"
             if mac:
                 details = await client_manager.get_client_details(mac)
                 if details:
                     raw = details.raw if hasattr(details, "raw") else details
-                    name = raw.get("name") or raw.get("hostname") or mac
-            entry["name"] = name
-            enhanced_clients.append(entry)
+                    if not entry.get("name") and not entry.get("hostname"):
+                        entry["name"] = raw.get("name") or raw.get("hostname") or mac
+            enriched.append(entry)
 
+        shaped = [top_client_from_controller(e).model_dump(exclude_none=False) for e in enriched]
         return {
             "success": True,
             "site": stats_manager._connection.site,
             "duration": duration,
             "limit": limit,
-            "top_clients": enhanced_clients,
+            "top_clients": shaped,
         }
     except Exception as e:
         logger.error("Error getting top clients: %s", e, exc_info=True)
@@ -373,31 +374,13 @@ async def get_speedtest_results(
         duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 24)
         results = await stats_manager.get_speedtest_results(duration_hours=duration_hours)
 
-        formatted = []
-        for r in results:
-            entry: Dict[str, Any] = {}
-            if "xput_download" in r:
-                entry["download_mbps"] = round(r["xput_download"], 2)
-            if "xput_upload" in r:
-                entry["upload_mbps"] = round(r["xput_upload"], 2)
-            if "latency" in r:
-                entry["latency_ms"] = r["latency"]
-            if "datetime" in r:
-                entry["datetime"] = r["datetime"]
-            elif "time" in r:
-                entry["datetime"] = r["time"]
-            # Preserve any extra fields
-            for k, v in r.items():
-                if k not in ("xput_download", "xput_upload", "latency", "datetime", "time"):
-                    entry[k] = v
-            formatted.append(entry)
-
+        shaped = [speedtest_result_from_controller(r).model_dump(exclude_none=False) for r in results]
         return {
             "success": True,
             "site": stats_manager._connection.site,
             "duration": duration,
-            "count": len(formatted),
-            "results": formatted,
+            "count": len(shaped),
+            "results": shaped,
         }
     except Exception as e:
         logger.error("Error getting speedtest results: %s", e, exc_info=True)
