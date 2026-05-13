@@ -12,6 +12,10 @@ from pydantic import Field
 
 from unifi_core.confirmation import preview_response
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.models.lights import (
+    from_controller as light_from_controller,
+    to_controller_update as light_to_controller_update,
+)
 from unifi_protect_mcp.runtime import chime_manager, light_manager, sensor_manager, server
 
 logger = logging.getLogger(__name__)
@@ -35,7 +39,8 @@ async def protect_list_lights() -> Dict[str, Any]:
     """List all lights."""
     logger.info("protect_list_lights tool called")
     try:
-        lights = await light_manager.list_lights()
+        raw_lights = await light_manager.list_lights()
+        lights = [light_from_controller(raw).model_dump(exclude_none=True) for raw in raw_lights]
         return {"success": True, "data": {"lights": lights, "count": len(lights)}}
     except Exception as e:
         logger.error("Error listing lights: %s", e, exc_info=True)
@@ -81,7 +86,11 @@ async def protect_update_light(
         if not settings:
             return {"success": False, "error": "No settings provided. Specify at least one setting to update."}
 
-        preview_data = await light_manager.update_light(light_id, settings)
+        filtered = light_to_controller_update(settings)
+        if not filtered:
+            return {"success": False, "error": "No supported settings provided."}
+
+        preview_data = await light_manager.update_light(light_id, filtered)
 
         if not confirm:
             return preview_response(
@@ -94,7 +103,7 @@ async def protect_update_light(
             )
 
         # Apply the changes
-        result = await light_manager.apply_light_settings(light_id, settings)
+        result = await light_manager.apply_light_settings(light_id, filtered)
         return {"success": True, "data": result}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}

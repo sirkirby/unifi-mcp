@@ -38,6 +38,10 @@ class Light:
     state: str | None
     is_pir_motion_detected: bool | None
     is_light_on: bool | None
+    led_level: int | None
+    sensitivity: int | None
+    duration_seconds: int | None
+    status_light: bool | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -57,6 +61,10 @@ class Light:
             state=_get(obj, "state"),
             is_pir_motion_detected=_get(obj, "is_pir_motion_detected"),
             is_light_on=_get(obj, "is_light_on"),
+            led_level=_get(obj, "led_level"),
+            sensitivity=_get(obj, "sensitivity"),
+            duration_seconds=_get(obj, "duration_seconds"),
+            status_light=_get(obj, "status_light"),
         )
 
     def to_dict(self) -> dict:
@@ -68,4 +76,8 @@ class Light:
             "state": self.state,
             "is_pir_motion_detected": self.is_pir_motion_detected,
             "is_light_on": self.is_light_on,
+            "led_level": self.led_level,
+            "sensitivity": self.sensitivity,
+            "duration_seconds": self.duration_seconds,
+            "status_light": self.status_light,
         }

@@ -21,6 +21,7 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     # (server, domain, pydantic_class_name)
     ("network", "acl", "AclRule"),
     ("protect", "cameras", "Camera"),
+    ("protect", "lights", "Light"),
 ]
 
 

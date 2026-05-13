@@ -584,7 +584,7 @@ class TestProtectUpdateLightTool:
                 "proposed_changes": {"light_on": True},
             }
         )
-        result = await protect_update_light("light-001", {"light_on": True}, confirm=False)
+        result = await protect_update_light("light-001", {"is_light_on": True}, confirm=False)
         assert result["success"] is True
         assert result["requires_confirmation"] is True
 
@@ -603,7 +603,7 @@ class TestProtectUpdateLightTool:
         mock_light_manager.apply_light_settings = AsyncMock(
             return_value={"light_id": "light-001", "applied": ["light_on=True"]}
         )
-        result = await protect_update_light("light-001", {"light_on": True}, confirm=True)
+        result = await protect_update_light("light-001", {"is_light_on": True}, confirm=True)
         assert result["success"] is True
         assert "applied" in result["data"]
 
