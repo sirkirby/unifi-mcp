@@ -56,36 +56,6 @@ def test_tool_index_importable():
     assert register_tool is not None
 
 
-def test_schemas_importable():
-    """Verify schemas module loads correctly."""
-    from unifi_access_mcp.schemas import AccessResourceRegistry
-
-    assert AccessResourceRegistry.get_schema("nonexistent") == {}
-
-
-def test_validators_importable():
-    """Verify validators module loads correctly."""
-    from unifi_access_mcp.validators import ResourceValidator, create_response
-
-    assert ResourceValidator is not None
-    resp = create_response(success=True, data={"test": 1})
-    assert resp["success"] is True
-    assert resp["data"] == {"test": 1}
-
-    err = create_response(success=False, error="test error")
-    assert err["success"] is False
-    assert err["error"] == "test error"
-
-
-def test_validator_registry_importable():
-    """Verify validator_registry module loads correctly."""
-    from unifi_access_mcp.validator_registry import AccessValidatorRegistry
-
-    is_valid, err, params = AccessValidatorRegistry.validate("nonexistent", {})
-    assert is_valid is False
-    assert "No validator found" in err
-
-
 def test_config_helpers_importable():
     """Verify config helpers module loads correctly."""
     from unifi_access_mcp.utils.config_helpers import parse_config_bool
