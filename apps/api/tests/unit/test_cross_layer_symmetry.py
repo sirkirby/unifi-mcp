@@ -27,6 +27,9 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("protect", "liveviews", "Liveview"),
     ("protect", "recordings", "Recording"),
     ("protect", "recordings", "RecordingStatusList"),
+    ("protect", "events", "Event"),
+    ("protect", "events", "SmartDetection"),
+    ("protect", "events", "EventThumbnail"),
 ]
 
 

@@ -13,6 +13,11 @@ from pydantic import Field
 
 from unifi_core.confirmation import preview_response
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.models.events import (
+    from_controller as event_from_controller,
+    smart_detection_from_controller,
+    thumbnail_from_controller,
+)
 from unifi_protect_mcp.runtime import event_manager, server
 
 logger = logging.getLogger(__name__)
@@ -89,7 +94,7 @@ async def protect_list_events(
         "protect_list_events called (type=%s, camera=%s, limit=%s, compact=%s)", event_type, camera_id, limit, compact
     )
     try:
-        events = await event_manager.list_events(
+        raw_events = await event_manager.list_events(
             start=_parse_datetime(start),
             end=_parse_datetime(end),
             event_type=event_type,
@@ -97,6 +102,7 @@ async def protect_list_events(
             limit=limit,
             compact=compact,
         )
+        events = [event_from_controller(e).model_dump(exclude_none=True) for e in raw_events]
         return {"success": True, "data": {"events": events, "count": len(events)}}
     except Exception as e:
         logger.error("Error listing events: %s", e, exc_info=True)
@@ -117,8 +123,8 @@ async def protect_get_event(
     """Get a single event by ID."""
     logger.info("protect_get_event called for %s", event_id)
     try:
-        event = await event_manager.get_event(event_id)
-        return {"success": True, "data": event}
+        raw = await event_manager.get_event(event_id)
+        return {"success": True, "data": event_from_controller(raw).model_dump(exclude_none=True)}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -153,8 +159,8 @@ async def protect_get_event_thumbnail(
     """Get event thumbnail."""
     logger.info("protect_get_event_thumbnail called for %s", event_id)
     try:
-        result = await event_manager.get_event_thumbnail(event_id, width=width, height=height)
-        return {"success": True, "data": result}
+        raw = await event_manager.get_event_thumbnail(event_id, width=width, height=height)
+        return {"success": True, "data": thumbnail_from_controller(raw).model_dump(exclude_none=True)}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -217,7 +223,7 @@ async def protect_list_smart_detections(
         compact,
     )
     try:
-        detections = await event_manager.list_smart_detections(
+        raw_detections = await event_manager.list_smart_detections(
             start=_parse_datetime(start),
             end=_parse_datetime(end),
             camera_id=camera_id,
@@ -226,6 +232,7 @@ async def protect_list_smart_detections(
             limit=limit,
             compact=compact,
         )
+        detections = [smart_detection_from_controller(d).model_dump(exclude_none=True) for d in raw_detections]
         return {"success": True, "data": {"detections": detections, "count": len(detections)}}
     except Exception as e:
         logger.error("Error listing smart detections: %s", e, exc_info=True)
@@ -268,12 +275,13 @@ async def protect_recent_events(
     """Get recent events from the websocket buffer."""
     logger.info("protect_recent_events called (type=%s, camera=%s)", event_type, camera_id)
     try:
-        events = event_manager.get_recent_from_buffer(
+        raw_events = event_manager.get_recent_from_buffer(
             event_type=event_type,
             camera_id=camera_id,
             min_confidence=min_confidence,
             limit=limit,
         )
+        events = [event_from_controller(e).model_dump(exclude_none=True) for e in raw_events]
         return {
             "success": True,
             "data": {
