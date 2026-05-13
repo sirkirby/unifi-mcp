@@ -14,6 +14,11 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.ap_group import (
+    from_controller as ap_group_from_controller,
+    to_controller_create as ap_group_to_create,
+    to_controller_update as ap_group_to_update,
+)
 from unifi_network_mcp.runtime import network_manager, server
 from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
@@ -1039,11 +1044,12 @@ async def list_ap_groups() -> Dict[str, Any]:
     """List all AP groups."""
     try:
         groups = await network_manager.list_ap_groups()
+        formatted = [ap_group_from_controller(g).model_dump(exclude_none=True) for g in groups]
         return {
             "success": True,
             "site": network_manager._connection.site,
-            "count": len(groups),
-            "ap_groups": groups,
+            "count": len(formatted),
+            "ap_groups": formatted,
         }
     except Exception as e:
         logger.error("Error listing AP groups: %s", e, exc_info=True)
@@ -1068,7 +1074,7 @@ async def get_ap_group_details(
                 "success": True,
                 "site": network_manager._connection.site,
                 "group_id": group_id,
-                "details": json.loads(json.dumps(group, default=str)),
+                "details": ap_group_from_controller(group).model_dump(exclude_none=True),
             }
         return {"success": False, "error": f"AP group with ID '{group_id}' not found."}
     except Exception as e:
@@ -1097,10 +1103,15 @@ async def create_ap_group(
     ] = False,
 ) -> Dict[str, Any]:
     """Create a new AP group."""
-    # Validate the input
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("ap_group", group_data)
-    if not is_valid:
-        return {"success": False, "error": f"Invalid AP group data: {error_msg}"}
+    from unifi_core.network.models.ap_group import ApGroup
+
+    try:
+        model = ApGroup(**{k: v for k, v in group_data.items() if k in ("name", "device_macs", "wlan_group_ids")})
+    except Exception as exc:
+        return {"success": False, "error": f"Invalid AP group data: {exc}"}
+    validated_data = ap_group_to_create(model)
+    if not validated_data.get("name"):
+        return {"success": False, "error": "Invalid AP group data: 'name' is required"}
 
     if not confirm:
         return create_preview(
@@ -1160,10 +1171,10 @@ async def update_ap_group(
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Validate the update data
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("ap_group_update", update_data)
-    if not is_valid:
-        return {"success": False, "error": f"Invalid AP group update data: {error_msg}"}
+    # Translate to controller-safe mutable fields
+    validated_data = ap_group_to_update(update_data)
+    if not validated_data:
+        return {"success": False, "error": "No valid mutable fields provided for update."}
 
     # Fetch current state for preview
     current = await network_manager.get_ap_group_details(group_id)
