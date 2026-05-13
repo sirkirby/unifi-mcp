@@ -43,6 +43,7 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("access", "doors", "DoorStatus"),
     ("access", "credentials", "Credential"),
     ("access", "visitors", "Visitor"),
+    ("access", "policies", "Policy"),
 ]
 
 

@@ -10,6 +10,10 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_access_mcp.runtime import policy_manager, server
+from unifi_core.access.models.policies import (
+    from_controller as policy_from_controller,
+    to_controller_update as policy_to_controller_update,
+)
 from unifi_core.confirmation import update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 
@@ -31,7 +35,8 @@ async def access_list_policies() -> Dict[str, Any]:
     """List all access policies."""
     logger.info("access_list_policies tool called")
     try:
-        policies = await policy_manager.list_policies()
+        raw_policies = await policy_manager.list_policies()
+        policies = [policy_from_controller(p).model_dump(exclude_none=True) for p in raw_policies]
         return {"success": True, "data": {"policies": policies, "count": len(policies)}}
     except Exception as e:
         logger.error("Error listing policies: %s", e, exc_info=True)
@@ -55,7 +60,8 @@ async def access_get_policy(
     """Get detailed policy information by ID."""
     logger.info("access_get_policy tool called for %s", policy_id)
     try:
-        detail = await policy_manager.get_policy(policy_id)
+        raw = await policy_manager.get_policy(policy_id)
+        detail = policy_from_controller(raw).model_dump(exclude_none=True)
         return {"success": True, "data": detail}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
@@ -87,7 +93,7 @@ async def access_list_schedules() -> Dict[str, Any]:
     name="access_update_policy",
     description=(
         "Update an access policy's configuration. Supported fields include "
-        "name, doors, schedule_id, and user groups. "
+        "name, door_ids, schedule_id, user_group_ids, and enabled. "
         "Requires confirm=true to apply. Only available via local proxy session."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, openWorldHint=False),
@@ -103,9 +109,10 @@ async def access_update_policy(
             description=(
                 "Dictionary of fields to update. Supported keys: "
                 "name (string - policy display name), "
-                "doors (list - door UUIDs to assign), "
+                "door_ids (list[str] - door UUIDs to assign), "
                 "schedule_id (string - schedule UUID to assign), "
-                "user_groups (list - user group UUIDs)."
+                "user_group_ids (list[str] - user group UUIDs), "
+                "enabled (bool - whether the policy is active)."
             )
         ),
     ],
@@ -120,11 +127,15 @@ async def access_update_policy(
         if not changes:
             return {"success": False, "error": "No changes provided. Specify at least one field to update."}
 
+        filtered = policy_to_controller_update(changes)
+        if not filtered:
+            return {"success": False, "error": "No supported policy fields provided."}
+
         if confirm:
-            result = await policy_manager.apply_update_policy(policy_id, changes)
+            result = await policy_manager.apply_update_policy(policy_id, filtered)
             return {"success": True, "data": result}
 
-        preview_data = await policy_manager.update_policy(policy_id, changes)
+        preview_data = await policy_manager.update_policy(policy_id, filtered)
         return update_preview(
             resource_type="access_policy",
             resource_id=policy_id,
