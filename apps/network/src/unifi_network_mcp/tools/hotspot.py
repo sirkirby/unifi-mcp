@@ -10,8 +10,10 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from pydantic import ValidationError
 from unifi_core.confirmation import create_preview, preview_response
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import RevokeVoucherInput
 from unifi_core.network.models.vouchers import voucher_from_controller
 from unifi_network_mcp.runtime import hotspot_manager, server
 
@@ -200,6 +202,11 @@ async def revoke_voucher(
     ] = False,
 ) -> Dict[str, Any]:
     """Revoke a hotspot voucher."""
+    try:
+        RevokeVoucherInput(voucher_id=voucher_id)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return preview_response(
             action="revoke",

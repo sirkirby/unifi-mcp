@@ -14,8 +14,15 @@ from typing import Annotated, Any, Dict, List
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from pydantic import ValidationError
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import (
+    ConfigurePortAggregationInput,
+    ConfigurePortMirrorInput,
+    SetJumboFramesInput,
+    SetSwitchPortProfileInput,
+)
 from unifi_core.network.models.switch import (
     from_controller as pp_from_controller,
     to_controller_update as pp_to_update,
@@ -381,6 +388,11 @@ async def set_switch_port_profile(
     ] = False,
 ) -> Dict[str, Any]:
     """Sets port overrides for a switch."""
+    try:
+        SetSwitchPortProfileInput(device_mac=device_mac, port_overrides=port_overrides)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="switch_port_assignment",
@@ -461,6 +473,11 @@ async def configure_port_mirror(
     ] = False,
 ) -> Dict[str, Any]:
     """Configures port mirroring."""
+    try:
+        ConfigurePortMirrorInput(device_mac=device_mac, port_overrides=port_overrides)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="port_mirror",
@@ -506,6 +523,11 @@ async def configure_port_aggregation(
     ] = False,
 ) -> Dict[str, Any]:
     """Configures link aggregation."""
+    try:
+        ConfigurePortAggregationInput(device_mac=device_mac, port_overrides=port_overrides)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="port_aggregation",
@@ -586,6 +608,11 @@ async def set_jumbo_frames(
     ] = False,
 ) -> Dict[str, Any]:
     """Enables or disables jumbo frames on a switch."""
+    try:
+        SetJumboFramesInput(device_mac=device_mac, enabled=enabled)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     if not confirm:
         return create_preview(
             resource_type="jumbo_frames",

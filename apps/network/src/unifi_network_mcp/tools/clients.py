@@ -10,8 +10,19 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from pydantic import ValidationError
 from unifi_core.confirmation import toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import (
+    AuthorizeGuestInput,
+    BlockClientInput,
+    ForceReconnectClientInput,
+    ForgetClientInput,
+    RenameClientInput,
+    SetClientIpSettingsInput,
+    UnauthorizeGuestInput,
+    UnblockClientInput,
+)
 from unifi_core.network.models.clients import (
     blocked_client_from_controller,
     client_from_controller,
@@ -197,6 +208,11 @@ async def block_client(
 ) -> Dict[str, Any]:
     """Implementation for blocking a client."""
     try:
+        BlockClientInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+    try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
         if not client_obj:
@@ -256,6 +272,11 @@ async def unblock_client(
 ) -> Dict[str, Any]:
     """Implementation for unblocking a client."""
     try:
+        UnblockClientInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+    try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
         if not client_obj:
@@ -314,6 +335,11 @@ async def rename_client(
 ) -> Dict[str, Any]:
     """Implementation for renaming a client."""
     try:
+        RenameClientInput(mac_address=mac_address, name=name)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+    try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
         if not client_obj:
@@ -369,6 +395,11 @@ async def force_reconnect_client(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for forcing a client to reconnect."""
+    try:
+        ForceReconnectClientInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
@@ -434,6 +465,11 @@ async def forget_client(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for forgetting/removing a client from the controller."""
+    try:
+        ForgetClientInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
@@ -512,6 +548,11 @@ async def authorize_guest(
 ) -> Dict[str, Any]:
     """Implementation for authorizing a guest."""
     try:
+        AuthorizeGuestInput(mac_address=mac_address, minutes=minutes)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+    try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
         if not client_obj:
@@ -582,6 +623,11 @@ async def unauthorize_guest(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for unauthorizing a guest."""
+    try:
+        UnauthorizeGuestInput(mac_address=mac_address)
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     try:
         # Fetch client details first
         client_obj = await client_manager.get_client_details(mac_address)
@@ -672,6 +718,17 @@ async def set_client_ip_settings(
     ] = False,
 ) -> Dict[str, Any]:
     """Set fixed IP and/or local DNS record for a client."""
+    try:
+        SetClientIpSettingsInput(
+            mac_address=mac_address,
+            use_fixedip=use_fixedip,
+            fixed_ip=fixed_ip,
+            local_dns_record_enabled=local_dns_record_enabled,
+            local_dns_record=local_dns_record,
+        )
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
     # Validate that at least one setting is provided
     if all(v is None for v in [use_fixedip, fixed_ip, local_dns_record_enabled, local_dns_record]):
         return {
