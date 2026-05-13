@@ -11,6 +11,10 @@ from pydantic import Field
 
 from unifi_core.confirmation import toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.port_forwards import (
+    from_controller as pf_from_controller,
+    to_controller_update as pf_to_update,
+)
 from unifi_network_mcp.runtime import firewall_manager, server
 from unifi_network_mcp.validator_registry import UniFiValidatorRegistry  # Added for validation
 
@@ -61,23 +65,12 @@ async def list_port_forwards() -> Dict[str, Any]:  # Removed context, adjusted r
     try:
         rules = await firewall_manager.get_port_forwards()
         rules_raw = [r.raw if hasattr(r, "raw") else r for r in rules]
-        port_forward_list = [
-            {
-                "id": r.get("_id"),
-                "name": r.get("name"),
-                "enabled": r.get("enabled"),
-                "src_port": r.get("dst_port"),  # Note: UniFi uses dst_port for external
-                "dst_port": r.get("fwd_port"),  # Note: UniFi uses fwd_port for internal
-                "protocol": r.get("proto"),
-                "dest_ip": r.get("fwd"),
-            }
-            for r in rules_raw
-        ]
+        formatted = [pf_from_controller(r).model_dump(exclude_none=True) for r in rules_raw]
         return {
             "success": True,
             "site": firewall_manager._connection.site,
-            "count": len(port_forward_list),
-            "port_forwards": port_forward_list,
+            "count": len(formatted),
+            "port_forwards": formatted,
         }
     except Exception as e:
         logger.error("Error listing port forwards: %s", e, exc_info=True)
@@ -216,15 +209,7 @@ async def toggle_port_forward(
         new_state = not current_enabled
 
         logger.info("Attempting to toggle port forward '%s' (%s) to %s", rule_name, port_forward_id, new_state)
-        # Assuming toggle_port_forward directly updates the rule state.
-        # If firewall_manager.toggle_port_forward doesn't exist or works differently,
-        # we might need to fetch, modify 'enabled', and call update_port_forward.
-        # For now, assuming toggle_port_forward exists and returns success/failure.
-
-        # Let's simulate the update pattern more closely: fetch, modify, update
-        update_payload = {"enabled": new_state}
-        # Assuming firewall_manager has an update_port_forward method
-        # This requires checking/adding the update_port_forward method in the manager layer
+        update_payload = pf_to_update({"enabled": new_state})
         success = await firewall_manager.update_port_forward(port_forward_id, update_payload)
 
         if success:

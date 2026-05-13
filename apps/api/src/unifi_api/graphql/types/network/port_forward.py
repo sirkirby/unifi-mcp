@@ -41,6 +41,7 @@ class PortForward:
     fwd_protocol: str | None
     dst_port: str | None
     fwd_port: str | None
+    fwd_ip: str | None
     src: str | None
     log: bool
 
@@ -50,7 +51,7 @@ class PortForward:
             "kind": kind,
             "primary_key": "id",
             "display_columns": [
-                "name", "enabled", "fwd_protocol", "dst_port", "fwd_port",
+                "name", "enabled", "fwd_protocol", "dst_port", "fwd_port", "fwd_ip",
             ],
             "sort_default": "name:asc",
         }
@@ -61,9 +62,10 @@ class PortForward:
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
             enabled=bool(_get(obj, "enabled", False)),
-            fwd_protocol=_get(obj, "fwd_protocol") or _get(obj, "protocol"),
+            fwd_protocol=_get(obj, "fwd_protocol") or _get(obj, "proto") or _get(obj, "protocol"),
             dst_port=_get(obj, "dst_port"),
             fwd_port=_get(obj, "fwd_port"),
+            fwd_ip=_get(obj, "fwd_ip") or _get(obj, "fwd"),
             src=_get(obj, "src"),
             log=bool(_get(obj, "log", False)),
         )
