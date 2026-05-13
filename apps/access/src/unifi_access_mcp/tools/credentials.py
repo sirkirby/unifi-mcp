@@ -8,9 +8,10 @@ import logging
 from typing import Annotated, Any, Dict
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from unifi_access_mcp.runtime import credential_manager, server
+from unifi_core.access.models._actions import RevokeCredentialInput
 from unifi_core.access.models.credentials import (
     Credential,
     from_controller as credential_from_controller,
@@ -167,6 +168,12 @@ async def access_revoke_credential(
     """Revoke a credential with preview/confirm."""
     logger.info("access_revoke_credential tool called for %s (confirm=%s)", credential_id, confirm)
     try:
+        try:
+            params = RevokeCredentialInput(credential_id=credential_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        credential_id = params.credential_id
+
         if confirm:
             result = await credential_manager.apply_revoke_credential(credential_id)
             return {"success": True, "data": result}

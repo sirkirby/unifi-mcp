@@ -7,9 +7,10 @@ import logging
 from typing import Annotated, Any, Dict
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from unifi_access_mcp.runtime import server, visitor_manager
+from unifi_core.access.models._actions import DeleteVisitorInput
 from unifi_core.access.models.visitors import (
     Visitor,
     from_controller as visitor_from_controller,
@@ -157,6 +158,12 @@ async def access_delete_visitor(
     """Delete a visitor pass with preview/confirm."""
     logger.info("access_delete_visitor tool called for %s (confirm=%s)", visitor_id, confirm)
     try:
+        try:
+            params = DeleteVisitorInput(visitor_id=visitor_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        visitor_id = params.visitor_id
+
         if confirm:
             result = await visitor_manager.apply_delete_visitor(visitor_id)
             return {"success": True, "data": result}

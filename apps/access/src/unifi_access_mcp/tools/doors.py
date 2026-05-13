@@ -7,9 +7,10 @@ import logging
 from typing import Annotated, Any, Dict
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from unifi_access_mcp.runtime import door_manager, server
+from unifi_core.access.models._actions import LockDoorInput, UnlockDoorInput
 from unifi_core.access.models.doors import (
     door_from_controller,
     door_group_from_controller,
@@ -102,6 +103,13 @@ async def access_unlock_door(
     """Unlock a door with preview/confirm."""
     logger.info("access_unlock_door tool called for %s (duration=%s, confirm=%s)", door_id, duration, confirm)
     try:
+        try:
+            params = UnlockDoorInput(door_id=door_id, duration=duration)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        door_id = params.door_id
+        duration = params.duration
+
         if confirm:
             result = await door_manager.apply_unlock_door(door_id, duration=duration)
             return {"success": True, "data": result}
@@ -144,6 +152,12 @@ async def access_lock_door(
     """Lock a door with preview/confirm."""
     logger.info("access_lock_door tool called for %s (confirm=%s)", door_id, confirm)
     try:
+        try:
+            params = LockDoorInput(door_id=door_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        door_id = params.door_id
+
         if confirm:
             result = await door_manager.apply_lock_door(door_id)
             return {"success": True, "data": result}
