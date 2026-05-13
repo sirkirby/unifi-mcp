@@ -40,6 +40,7 @@ class Chime:
     is_connected: bool | None
     firmware_version: str | None
     volume: int | None
+    repeat_times: int | None
     paired_cameras: list[str]
     ring_settings: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     available_tracks: strawberry.scalars.JSON | None  # type: ignore[name-defined]
@@ -64,6 +65,7 @@ class Chime:
             is_connected=_get(obj, "is_connected"),
             firmware_version=_get(obj, "firmware_version"),
             volume=_get(obj, "volume"),
+            repeat_times=_get(obj, "repeat_times"),
             paired_cameras=_get(obj, "camera_ids") or [],
             ring_settings=_get(obj, "ring_settings") or [],
             available_tracks=_get(obj, "available_tracks") or [],

@@ -12,6 +12,10 @@ from pydantic import Field
 
 from unifi_core.confirmation import preview_response
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.models.chimes import (
+    from_controller as chime_from_controller,
+    to_controller_update as chime_to_controller_update,
+)
 from unifi_core.protect.models.lights import (
     from_controller as light_from_controller,
     to_controller_update as light_to_controller_update,
@@ -156,7 +160,8 @@ async def protect_list_chimes() -> Dict[str, Any]:
     """List all chimes."""
     logger.info("protect_list_chimes tool called")
     try:
-        chimes = await chime_manager.list_chimes()
+        raw_chimes = await chime_manager.list_chimes()
+        chimes = [chime_from_controller(raw).model_dump(exclude_none=True) for raw in raw_chimes]
         return {"success": True, "data": {"chimes": chimes, "count": len(chimes)}}
     except Exception as e:
         logger.error("Error listing chimes: %s", e, exc_info=True)
@@ -198,7 +203,11 @@ async def protect_update_chime(
         if not settings:
             return {"success": False, "error": "No settings provided. Specify at least one setting to update."}
 
-        preview_data = await chime_manager.update_chime(chime_id, settings)
+        filtered = chime_to_controller_update(settings)
+        if not filtered:
+            return {"success": False, "error": "No supported settings provided."}
+
+        preview_data = await chime_manager.update_chime(chime_id, filtered)
 
         if not confirm:
             return preview_response(
@@ -211,7 +220,7 @@ async def protect_update_chime(
             )
 
         # Apply the changes
-        result = await chime_manager.apply_chime_settings(chime_id, settings)
+        result = await chime_manager.apply_chime_settings(chime_id, filtered)
         return {"success": True, "data": result}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
