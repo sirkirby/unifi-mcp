@@ -11,6 +11,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_access_mcp.runtime import device_manager, server
+from unifi_core.access.models.devices import from_controller as access_device_from_controller
 from unifi_core.confirmation import preview_response
 from unifi_core.exceptions import UniFiNotFoundError
 
@@ -42,7 +43,8 @@ async def access_list_devices(
     """List all Access devices."""
     logger.info("access_list_devices tool called (compact=%s)", compact)
     try:
-        devices = await device_manager.list_devices(compact=compact)
+        raw_devices = await device_manager.list_devices(compact=compact)
+        devices = [access_device_from_controller(d).model_dump(exclude_none=True) for d in raw_devices]
         return {"success": True, "data": {"devices": devices, "count": len(devices)}}
     except Exception as e:
         logger.error("Error listing devices: %s", e, exc_info=True)
@@ -66,7 +68,8 @@ async def access_get_device(
     """Get detailed device information by ID."""
     logger.info("access_get_device tool called for %s", device_id)
     try:
-        detail = await device_manager.get_device(device_id)
+        raw = await device_manager.get_device(device_id)
+        detail = access_device_from_controller(raw).model_dump(exclude_none=True)
         return {"success": True, "data": detail}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
