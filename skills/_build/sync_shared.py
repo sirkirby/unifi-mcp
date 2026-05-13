@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Copy shared skill modules into each skill's scripts/ directory.
+"""Copy shared skill modules into Python-backed skill scripts directories.
 
-Ensures each skill is self-contained for plugin marketplace distribution.
+Ensures Python-backed skills are self-contained for plugin marketplace distribution.
 Source of truth: skills/_shared/mcp_client.py, skills/_shared/config.py
 
 Usage:
@@ -21,8 +21,16 @@ PLUGINS_DIR = REPO_ROOT / "plugins"
 SHARED_FILES = ["mcp_client.py", "config.py"]
 
 
+def has_python_consumer_scripts(scripts_dir: Path) -> bool:
+    """Return True when a scripts dir contains Python scripts beyond synced helpers."""
+    for path in scripts_dir.glob("*.py"):
+        if path.name not in SHARED_FILES:
+            return True
+    return False
+
+
 def find_skill_script_dirs() -> list[Path]:
-    """Find all skill scripts/ directories that should receive shared files."""
+    """Find Python-backed skill scripts/ directories that should receive shared files."""
     dirs = []
     for plugin_dir in PLUGINS_DIR.iterdir():
         if not plugin_dir.is_dir():
@@ -32,7 +40,7 @@ def find_skill_script_dirs() -> list[Path]:
             continue
         for skill_dir in skills_dir.iterdir():
             scripts_dir = skill_dir / "scripts"
-            if scripts_dir.is_dir():
+            if scripts_dir.is_dir() and has_python_consumer_scripts(scripts_dir):
                 dirs.append(scripts_dir)
     return dirs
 
@@ -41,7 +49,7 @@ def sync(check_only: bool = False) -> bool:
     """Sync shared files to all skill scripts/ directories."""
     target_dirs = find_skill_script_dirs()
     if not target_dirs:
-        print("No skill scripts/ directories found. Nothing to sync.")
+        print("No Python-backed skill scripts/ directories found. Nothing to sync.")
         return True
 
     all_in_sync = True
