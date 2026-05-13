@@ -8,10 +8,11 @@ import logging
 from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import preview_response
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.models._actions import TriggerChimeInput
 from unifi_core.protect.models.chimes import (
     from_controller as chime_from_controller,
     to_controller_update as chime_to_controller_update,
@@ -260,6 +261,10 @@ async def protect_trigger_chime(
     """Trigger a chime to play its tone."""
     logger.info("protect_trigger_chime tool called for %s (volume=%s, repeat=%s)", chime_id, volume, repeat_times)
     try:
+        try:
+            params = TriggerChimeInput(chime_id=chime_id, volume=volume, repeat_times=repeat_times)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         result = await chime_manager.trigger_chime(
             chime_id=chime_id,
             volume=volume,

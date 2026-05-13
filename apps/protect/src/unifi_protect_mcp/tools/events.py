@@ -9,10 +9,11 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import preview_response
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.models._actions import AcknowledgeEventInput
 from unifi_core.protect.models.events import (
     from_controller as event_from_controller,
     smart_detection_from_controller,
@@ -358,6 +359,10 @@ async def protect_acknowledge_event(
     """Acknowledge an event with preview/confirm."""
     logger.info("protect_acknowledge_event called for %s (confirm=%s)", event_id, confirm)
     try:
+        try:
+            params = AcknowledgeEventInput(event_id=event_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         preview_data = await event_manager.acknowledge_event(event_id)
 
         if not confirm:
