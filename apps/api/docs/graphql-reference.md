@@ -435,6 +435,8 @@ type Credential {
   status: String
   expiry: String
   lastUsed: String
+  token: String
+  pinCode: String
 }
 
 """Paginated page of UniFi Access credentials."""
@@ -1557,6 +1559,8 @@ type Visitor {
   validUntil: String
   status: String
   credentialCount: Int
+  email: String
+  phone: String
 }
 
 """Paginated page of UniFi Access visitors."""

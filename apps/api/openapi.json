@@ -949,6 +949,17 @@
             ],
             "title": "Last Used"
           },
+          "pin_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pin Code"
+          },
           "status": {
             "anyOf": [
               {
@@ -959,6 +970,17 @@
               }
             ],
             "title": "Status"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
           },
           "type": {
             "anyOf": [
