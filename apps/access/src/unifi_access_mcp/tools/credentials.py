@@ -11,6 +11,11 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_access_mcp.runtime import credential_manager, server
+from unifi_core.access.models.credentials import (
+    Credential,
+    from_controller as credential_from_controller,
+    to_controller_create as credential_to_controller_create,
+)
 from unifi_core.confirmation import create_preview, preview_response
 from unifi_core.exceptions import UniFiNotFoundError
 
@@ -31,7 +36,11 @@ async def access_list_credentials() -> Dict[str, Any]:
     """List all credentials."""
     logger.info("access_list_credentials tool called")
     try:
-        credentials = await credential_manager.list_credentials()
+        raw_list = await credential_manager.list_credentials()
+        credentials = [
+            credential_from_controller(raw).model_dump(exclude_none=True)
+            for raw in raw_list
+        ]
         return {"success": True, "data": {"credentials": credentials, "count": len(credentials)}}
     except Exception as e:
         logger.error("Error listing credentials: %s", e, exc_info=True)
@@ -55,8 +64,9 @@ async def access_get_credential(
     """Get detailed credential information by ID."""
     logger.info("access_get_credential tool called for %s", credential_id)
     try:
-        detail = await credential_manager.get_credential(credential_id)
-        return {"success": True, "data": detail}
+        raw = await credential_manager.get_credential(credential_id)
+        shaped = credential_from_controller(raw).model_dump(exclude_none=True)
+        return {"success": True, "data": shaped}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -103,11 +113,26 @@ async def access_create_credential(
         if not credential_data:
             return {"success": False, "error": "No credential data provided."}
 
+        # Shape and validate inputs via the canonical Credential model
+        try:
+            model = Credential(
+                type=credential_type,
+                user_id=credential_data.get("user_id"),
+                token=credential_data.get("token"),
+                pin_code=credential_data.get("pin_code"),
+            )
+        except Exception as e:
+            return {"success": False, "error": f"Invalid credential input: {e}"}
+
+        payload = credential_to_controller_create(model)
+        cred_type = payload["credential_type"]
+        cred_data = payload["data"]
+
         if confirm:
-            result = await credential_manager.apply_create_credential(credential_type, credential_data)
+            result = await credential_manager.apply_create_credential(cred_type, cred_data)
             return {"success": True, "data": result}
 
-        preview_data = await credential_manager.create_credential(credential_type, credential_data)
+        preview_data = await credential_manager.create_credential(cred_type, cred_data)
         return create_preview(
             resource_type="access_credential",
             resource_data=preview_data["proposed_changes"],

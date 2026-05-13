@@ -38,6 +38,8 @@ class Credential:
     status: str | None
     expiry: str | None
     last_used: str | None
+    token: str | None
+    pin_code: str | None
 
     # Context for relationship edges — NOT in SDL, NOT in to_dict().
     _controller_id: strawberry.Private[str | None] = None
@@ -59,6 +61,8 @@ class Credential:
             status=_get(obj, "status"),
             expiry=_get(obj, "expiry"),
             last_used=_get(obj, "last_used"),
+            token=_get(obj, "token"),
+            pin_code=_get(obj, "pin_code"),
         )
 
     def to_dict(self) -> dict:
