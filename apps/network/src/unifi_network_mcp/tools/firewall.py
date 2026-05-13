@@ -17,7 +17,6 @@ from unifi_core.network.models.firewall import (
     firewall_zone_from_controller,
 )
 from unifi_network_mcp.runtime import firewall_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry  # Added
 
 logger = logging.getLogger(__name__)
 
@@ -344,13 +343,38 @@ async def create_firewall_policy(
     # mixed-case input before validation so users can pass natural forms
     # like "IPv4" or lowercase state names.
     policy_data = _normalize_v2_policy_casing(policy_data)
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate_and_apply_defaults(
-        "firewall_policy_v2_create", policy_data
-    )
 
-    if not is_valid:
-        logger.warning("Invalid firewall policy data: %s", error_msg)
-        return {"success": False, "error": "Validation Error: %s" % error_msg}
+    # Validate required fields and apply schema defaults directly.
+    _required = ("name", "action", "source", "destination")
+    _missing = [f for f in _required if f not in policy_data]
+    if _missing:
+        err = "Missing required fields: %s" % ", ".join(_missing)
+        logger.warning("Invalid firewall policy data: %s", err)
+        return {"success": False, "error": "Validation Error: %s" % err}
+
+    # Reject unknown top-level keys (mirrors additionalProperties: False in the schema).
+    _allowed_keys = frozenset({
+        "name", "action", "enabled", "index", "protocol", "ip_version",
+        "logging", "connection_state_type", "connection_states",
+        "create_allow_respond", "match_ip_sec", "match_opposite_protocol",
+        "icmp_typename", "icmp_v6_typename", "schedule", "source", "destination",
+        "description",
+    })
+    _unknown = sorted(set(policy_data.keys()) - _allowed_keys)
+    if _unknown:
+        err = "Additional properties not allowed: %s" % ", ".join(_unknown)
+        logger.warning("Invalid firewall policy data: %s", err)
+        return {"success": False, "error": "Validation Error: %s" % err}
+
+    # Apply the same defaults the legacy schema validator provided.
+    validated_data: Dict[str, Any] = {
+        "enabled": True,
+        "protocol": "all",
+        "ip_version": "BOTH",
+        "logging": False,
+        "connection_state_type": "ALL",
+        **policy_data,
+    }
 
     # Validate zone targeting requirements (matching_target_type, ips, network_ids)
     targeting_error = _validate_zone_targeting(validated_data)

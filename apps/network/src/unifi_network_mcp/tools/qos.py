@@ -11,12 +11,12 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models._actions import QosRuleSimpleInput
 from unifi_core.network.models.qos import (
     from_controller as qos_from_controller,
     to_controller_update as qos_to_update,
 )
 from unifi_network_mcp.runtime import qos_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry  # Added
 
 logger = logging.getLogger(__name__)
 
@@ -458,28 +458,29 @@ async def create_simple_qos_rule(
     """
 
     # --- Step 1: validate high-level schema --------------------------------
-    is_valid, error_msg, validated = UniFiValidatorRegistry.validate("qos_rule_simple", rule)
-    if not is_valid or validated is None:
-        return {"success": False, "error": error_msg or "Validation failed"}
+    from pydantic import ValidationError
 
-    r = validated  # alias for brevity
+    try:
+        r = QosRuleSimpleInput(**rule)
+    except ValidationError as exc:
+        return {"success": False, "error": exc.errors()[0]["msg"]}
 
     # --- Step 2: translate into controller payload -------------------------
     payload: Dict[str, Any] = {
-        "name": r["name"],
-        "interface": r["interface"],
-        "direction": r["direction"],
-        "bandwidth_limit_kbps": r["limit_kbps"],
-        "enabled": r.get("enabled", True),
+        "name": r.name,
+        "interface": r.interface,
+        "direction": r.direction,
+        "bandwidth_limit_kbps": r.limit_kbps,
+        "enabled": r.enabled,
     }
 
-    if "dscp_value" in r:
-        payload["dscp_value"] = r["dscp_value"]
+    if r.dscp_value is not None:
+        payload["dscp_value"] = r.dscp_value
 
-    target = r.get("target")
+    target = r.target
     if target:
-        t_type = target["type"].lower()
-        value = target["value"]
+        t_type = target.type.lower()
+        value = target.value
         if t_type == "ip":
             payload["target_ip_address"] = value
         elif t_type == "subnet":
