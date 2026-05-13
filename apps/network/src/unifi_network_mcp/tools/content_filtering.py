@@ -19,6 +19,10 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.content_filter import (
+    from_controller as cf_from_controller,
+    to_controller_update as cf_to_update,
+)
 from unifi_network_mcp.runtime import content_filter_manager, server
 from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
@@ -50,23 +54,7 @@ async def list_content_filters() -> Dict[str, Any]:
     """
     try:
         filters = await content_filter_manager.get_content_filters()
-        formatted = [
-            {
-                "id": f.get("_id", f.get("id")),
-                "name": f.get("name"),
-                "enabled": f.get("enabled"),
-                "categories": f.get("categories", []),
-                "category_count": len(f.get("categories", [])),
-                "client_mac_count": len(f.get("client_macs", [])),
-                "network_ids": f.get("network_ids", []),
-                "network_id_count": len(f.get("network_ids", [])),
-                "safe_search": f.get("safe_search", []),
-                "allow_list_count": len(f.get("allow_list", [])),
-                "block_list_count": len(f.get("block_list", [])),
-                "schedule_mode": f.get("schedule", {}).get("mode"),  # read-only summary, not updateable via API
-            }
-            for f in filters
-        ]
+        formatted = [cf_from_controller(f).model_dump(exclude_none=True) for f in filters]
         return {
             "success": True,
             "site": content_filter_manager._connection.site,
@@ -148,9 +136,7 @@ async def update_content_filter(
     if not filter_data:
         return {"success": False, "error": "filter_data cannot be empty"}
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("content_filter_update", filter_data)
-    if not is_valid:
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
+    validated_data = cf_to_update(filter_data)
     if not validated_data:
         return {"success": False, "error": "Update data is effectively empty or invalid."}
 
