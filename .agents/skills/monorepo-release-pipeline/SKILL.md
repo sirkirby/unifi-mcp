@@ -67,6 +67,22 @@ git log --oneline network/v$(git tag -l 'network/v*' | sort -V | tail -1)..HEAD 
 | Plugin-only changes (manifest/config updates) | Patch release for cache invalidation (e.g., `network/v0.14.13` → `network/v0.14.14`) |
 | Worker (`~/Repos/unifi-mcp-worker`) | Tag in that repo (see Procedure F) |
 
+### Plugin-only Release and Cache Invalidation
+
+When only the plugin manifest (e.g., `plugins/*/plugin.json`) changes with no code changes, a patch release must still be cut — not as code update, but to invalidate the marketplace cache and force existing users to pick up the new manifest.
+
+**The mechanism:** Plugin users cache the manifest JSON locally. Existing deployed users remain pinned to their cached version until the server publishes a **new tagged release**. A main-only merge (no tag) is invisible to existing users — they see no update available.
+
+**When this arises:** Security policy updates, feature flag toggles, or capability declaration changes that don't touch code.
+
+**Example:**
+```bash
+# manifests/plugin.json was updated (policy change); no code changes
+git tag network/v0.14.14  # patch bump despite no code changes
+git push origin network/v0.14.14
+# All existing deployed instances will now see v0.14.14 as available and pick up the new manifest
+```
+
 ### Shared package rule
 
 Any change to `packages/unifi-mcp-shared/` underpins all server apps. Tag `shared` first, then all server apps — even if their own code didn't change — so the next build picks up the shared bump.
@@ -96,7 +112,7 @@ Understanding the difference between library and app package versioning is essen
 
 ### Library packages (unifi-core, unifi-mcp-shared, relay)
 
-These packages use `dynamic = ["version"]` in `pyproject.toml` with hatch-vcs. Version is derived from the git tag **at build time** — no `_version.py` is ever committed to the repo. When a library tag is pushed:
+These packages use `dynamic = [\"version\"]` in `pyproject.toml` with hatch-vcs. Version is derived from the git tag **at build time** — no `_version.py` is ever committed to the repo. When a library tag is pushed:
 
 - The publish workflow builds and publishes the tagged commit as-is
 - `bump-plugin-versions.yml` runs and outputs: `No version changes to commit`
@@ -165,21 +181,68 @@ Package Map. Never share or widen the `--match` pattern across packages.
 
 ### Verification before tagging
 
+Before pushing a tag, verify the version would resolve correctly by running the
+scoped git describe command explicitly:
+
 ```bash
+# For network package, verify the --match pattern is scoped
 cd apps/network
+git describe --dirty --tags --long --match network/v*
+# Expected: network/v0.14.13-0-g<hash> (or similar with no sibling tags)
+
+# Test the actual version that would be reported at build time
 pip install -e ".[dev]"
 python -c "import importlib.metadata; print(importlib.metadata.version('unifi-mcp-network'))"
+# Expected: exactly matches the tag version, e.g. 0.14.13
 ```
 
-The reported version must match the tag you're about to push. A result like
-`0.0.post1.dev3` or a version from a sibling package means the glob is still wrong.
+If the version does NOT match what you're about to tag, the `--match` pattern is
+still contaminated by sibling tags. Example failure modes:
+
+```bash
+# WRONG — picks up protect/v0.3.5 because --match is too broad
+git describe --tags --long --match v*
+# network/v0.14.13-125-g... (125 commits past a wrong tag)
+
+# CORRECT — scoped to network/ prefix only
+git describe --tags --long --match network/v*
+# network/v0.14.13-0-g...
+```
 
 **Gotcha — tag resolution is at build time, not install time.** hatch-vcs reads
 tags when the package is built (during CI), not when it is installed. The tag must
 be reachable on the exact commit being built. If CI triggers before the tag propagates
 to GitHub, the version will be wrong even if the tag exists locally.
 
-## Procedure D: Dependency-Ordered Tag Pushing
+## Procedure D: Manifest Bumper — args[2] vs args[0] Correction
+
+The manifest bumper workflow (`bump-plugin-versions.yml`) rewrites version fields in
+`plugin.json` and `server.json` files after a successful publish. A past bug (PR #227)
+corrupted the bumper to target `args[0]` (the flag name) instead of `args[2]` (the
+version pin value).
+
+### Correct bumper configuration
+
+In `bump-plugin-versions.yml`, the version replacement must target the third positional
+argument — the version pin field, not the flag name:
+
+```yaml
+# WRONG — corrupts the flag name
+- run: python scripts/bump_version.py ${{ ... }} --json-path '$.version' --index 0
+
+# CORRECT — targets the version pin value
+- run: python scripts/bump_version.py ${{ ... }} --json-path '$.version' --index 2
+```
+
+The bumper script reads the manifest JSON, extracts the version bump from the publish
+output, and replaces it at the specified index. Index 2 is the version string itself;
+index 0 would corrupt the flag or field name.
+
+**Verification:** After a release workflow completes and the bumper runs, check the
+manifest commit in GitHub. The `plugin.json` and `server.json` should have updated
+version strings (e.g., `"version": "0.14.14"`), NOT corrupted field names.
+
+## Procedure E: Dependency-Ordered Tag Pushing
 
 The dependency graph:
 
@@ -230,7 +293,7 @@ npm release flow using OIDC via GitHub Actions. Apply the same ordering principl
 if the worker depends on a Python package version, confirm PyPI is updated before
 pushing the worker tag.
 
-## Procedure E: generate_release_notes.py Path Configuration
+## Procedure F: generate_release_notes.py Path Configuration
 
 GitHub's built-in `--generate-notes` option includes every PR merged between the
 previous tag and the current tag in the entire repo — regardless of which files
@@ -277,7 +340,7 @@ Each app server entry should include:
 2. Shared dependency directories (`packages/unifi-core/`, `packages/unifi-mcp-shared/`)
 3. Its own publish/test/docker workflows as Release Infrastructure
 
-## Procedure I: Release Validation
+## Procedure G: Release Validation
 
 After pushing a tag, verify it resolved correctly before closing the work.
 
@@ -313,11 +376,13 @@ version. Symptom: `pip install unifi-mcp-network==0.14.13` installs a package th
 prints `0.3.5` from `importlib.metadata`. Fix: tighten the `--match` pattern in
 `raw-options.git_describe_command` in `pyproject.toml` and rebuild.
 
-**PR merge is NOT the release trigger — the tag push is.** `hatch-vcs` reads git tags at build time to generate `_version.py`. Merging a PR does NOT trigger a release. If the tag is never pushed, PyPI stays on the old version with no error — the build succeeds but installs the previous release. The tag push IS the release trigger. (Session 3: `core/v0.1.2` was never tagged; PyPI stayed at 0.1.1 until the tag was pushed manually.) Always run Procedure I after tagging.
+**PR merge is NOT the release trigger — the tag push is.** `hatch-vcs` reads git tags at build time to generate `_version.py`. Merging a PR does NOT trigger a release. If the tag is never pushed, PyPI stays on the old version with no error — the build succeeds but installs the previous release. The tag push IS the release trigger. (Session 3: `core/v0.1.2` was never tagged; PyPI stayed at 0.1.1 until the tag was pushed manually.) Always run Procedure G after tagging.
 
-**Silent version freeze.** If a tag is missing, `hatch-vcs` falls back to `fallback_version = "0.0.0"` or the last matching tag. There is no error at merge time. The failure surfaces only when a user installs and notices the wrong version. Always run Procedure I after tagging.
+**Silent version freeze.** If a tag is missing, `hatch-vcs` falls back to `fallback_version = "0.0.0"` or the last matching tag. There is no error at merge time. The failure surfaces only when a user installs and notices the wrong version. Always run Procedure G after tagging.
 
 **Missing tag causes broken downstream install.** If `unifi-core` code is merged but
 `core/vX.Y.Z` is never pushed, downstream packages requesting `unifi-core>=X.Y.Z`
 will fail to install — pip resolver error, not a code error. Check PyPI before
 debugging code. The fix is to push the missing tag and wait for the publish workflow.
+
+**Main-only merges are invisible to existing users.** Cache invalidation for plugin manifests requires a tagged release. A main-only merge updates the repo but does not trigger a publish workflow or invalidate any user caches. Existing users stay on their cached version indefinitely until the next tagged release. If a manifest or policy change is urgent, cut a patch release immediately (see Procedure A: Plugin-only Release).

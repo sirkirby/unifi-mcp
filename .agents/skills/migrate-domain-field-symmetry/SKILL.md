@@ -7,11 +7,8 @@ description: |
   field parity gaps, creating models/<domain>.py with DomainBase + submodels,
   implementing field validation, and ensuring field symmetry compliance. Also enforces the critical
   ResourceValidator safety constraint: shared validator defaults are forbidden
-  (blast-radius anti-pattern). Reference implementation: acl_manager.py + unifi_core.network.models.acl
-  (relocated to packages/unifi-core during the Phase 0 schema bootstrap; PR
-  #140 introduced the pattern). Active rollout: 26 network domains remaining
-  as of May 2026 (tracked in issue #137). Protect and Access bootstraps run
-  in separate Phase 1 and Phase 2 workstreams.
+  (blast-radius anti-pattern). Reference implementation: acl_manager.py +
+  models/acl.py. Active rollout: 7 domains remaining as of April 2026.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -19,12 +16,12 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 
 # Migrating a UniFi Domain to the Field-Symmetry Model
 
-The field-symmetry rule (AGENTS.md, issue #137) requires that every field name
+The field-symmetry rule (AGENTS.md) requires that every field name
 a `list_*` tool exposes in its output must be accepted under the same name by
 the matching `create_*` / `update_*` tool. Violating this causes silent drops
 (callers believe a constraint was applied; it wasn't) or spurious validation
-errors. The ACL domain was the pilot (PR #140); 26 network domains remain
-as of May 2026 (Protect and Access bootstraps tracked separately under Phase 1 and Phase 2).
+errors. The ACL domain was the pilot; 7 network-app domains remain
+as of April 2026.
 
 ## Prerequisites
 
@@ -68,7 +65,7 @@ matching create/update tools. You want a punch list of mismatches.
 Model files live at:
 `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py`
 
-The reference implementation is `packages/unifi-core/src/unifi_core/network/models/acl.py` (PR #140). Use this structure:
+The reference implementation is `models/acl.py`. Use this structure:
 
 ```python
 from pydantic import BaseModel
@@ -190,9 +187,7 @@ Create a test file to validate field symmetry for this domain.
 
 ## Gotcha 1 — ResourceValidator Blast Radius (NEVER put defaults in shared validators)
 
-**This is the most critical rule in the entire migration.** PR #146 (community
-contributor) was blocked because it injected default values into shared
-validator logic used by ALL domain update calls.
+**This is the most critical rule in the entire migration.** Community contributions have been blocked because they injected default values into shared validator logic used by ALL domain update calls.
 
 **Why this destroys update semantics:** If shared validation sets
 `schedule = Schedule()` as a default, then every call to
@@ -245,8 +240,8 @@ your new model handles.
 
 | File | Purpose |
 |------|---------|
-| `packages/unifi-core/src/unifi_core/network/models/acl.py` | Pilot model (PR #140) |
+| `apps/network/src/unifi_network_mcp/models/acl.py` | Pilot model |
 | `apps/network/src/unifi_network_mcp/managers/acl_manager.py` | Pilot manager wiring |
 | `apps/api/tests/unit/test_cross_layer_symmetry.py` | MCP↔API drift gate (REGISTERED_PAIRS) |
 | `packages/unifi-mcp-shared/src/unifi_mcp_shared/validators.py` | Shared validator patterns |
-| `AGENTS.md` | Governance rule (issue #137) |
+| `AGENTS.md` | Governance rule (field-symmetry domain rollout) |

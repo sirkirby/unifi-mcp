@@ -11,6 +11,17 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .agents/myco-run.cjs hook pre-tool-use --symbiont codex",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

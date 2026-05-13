@@ -1,0 +1,9 @@
+[project]
+id = "proj_924c23d88ee34933408e8c3e07f6682e"
+name = "unifi-mcp"
+
+[grove]
+id = "grove_65b606b9665228ac5f1812d645cdf6fe"
+slug = "default"
+name = "Default"
+binding_id = "gbind_f51a2a3089500e75e4ee63a6efa60954"

@@ -24,7 +24,9 @@
 // @opencode-ai/plugin or any other package — that would break this guarantee.
 
 import { readFileSync, appendFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -53,6 +55,12 @@ const SESSION_IDLE_TAIL_LIMIT_RETRY = 60;
 
 /** Max size of resume context injection to keep resumed sessions lean. */
 const RESUME_CONTEXT_MAX_CHARS = 4000;
+
+const REQUEST_CONTEXT_HEADERS = {
+  projectRoot: "x-myco-project-root",
+  projectId: "x-myco-project-id",
+  sessionId: "x-myco-session-id",
+} as const;
 
 /** Heading prefix for compaction context — makes Myco's contribution recognizable in the compacted summary. */
 const COMPACTION_HEADING = "## Myco — Project Context (preserved across compaction)\n\n";
@@ -143,11 +151,11 @@ export function collectAssistantSummaryFromMessages(messages: SessionMessage[]):
 // ---------------------------------------------------------------------------
 
 /**
- * Port cache for `.myco/daemon.json`. Read once on first access; refreshed on
+ * Port cache for the Myco daemon state file. Read once on first access; refreshed on
  * the next call that follows a failed HTTP request (handles daemon restarts
  * mid-session). `undefined` = never loaded, `null` = loaded but absent.
  */
-let cachedDaemonPort: number | null | undefined = undefined;
+let cachedDaemonPort: { statePath: string; port: number | null } | undefined = undefined;
 
 /**
  * Active opencode sessions tracked by this plugin instance. Populated on
@@ -167,10 +175,72 @@ const resumeInjectedSessions = new Set<string>();
 /** Parent batch of the current turn, or null between turns. Non-null => a turn is in progress. */
 let currentParentBatchId: number | null = null;
 
-/** Read the Myco daemon port from .myco/daemon.json in the project directory. */
-function readDaemonPortFromDisk(directory: string): number | null {
+function resolveMycoHome(): string {
+  const configured = process.env.MYCO_HOME?.trim();
+  if (!configured) return join(homedir(), ".myco");
+  if (configured === "~") return homedir();
+  if (configured.startsWith("~/")) return join(homedir(), configured.slice(2));
+  return configured;
+}
+
+function projectUsesGrove(directory: string): boolean {
   try {
-    const raw = readFileSync(join(directory, ".myco", "daemon.json"), "utf-8");
+    const raw = readFileSync(join(directory, ".myco", "project.toml"), "utf-8");
+    return /\[grove\][^\[]*\bid\s*=/.test(raw);
+  } catch {
+    return false;
+  }
+}
+
+function readTomlString(raw: string, section: string, key: string): string | null {
+  let currentSection: string | null = null;
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const header = /^\[([^\]]+)\]$/.exec(trimmed);
+    if (header) {
+      currentSection = header[1];
+      continue;
+    }
+    if (currentSection !== section) continue;
+    const match = /^([A-Za-z0-9_-]+)\s*=\s*["']([^"']*)["']/.exec(trimmed);
+    if (match?.[1] === key) return match[2];
+  }
+  return null;
+}
+
+function buildRequestContextHeaders(directory: string): Record<string, string> {
+  try {
+    const raw = readFileSync(join(directory, ".myco", "project.toml"), "utf-8");
+    const projectId = readTomlString(raw, "project", "id");
+    if (!projectId) return {};
+    return {
+      [REQUEST_CONTEXT_HEADERS.projectRoot]: resolve(directory),
+      [REQUEST_CONTEXT_HEADERS.projectId]: projectId,
+      ...(process.env.MYCO_SESSION_ID ? { [REQUEST_CONTEXT_HEADERS.sessionId]: process.env.MYCO_SESSION_ID } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function withRequestContextHeaders(directory: string, init?: RequestInit): RequestInit {
+  const headers = new Headers(init?.headers);
+  for (const [key, value] of Object.entries(buildRequestContextHeaders(directory))) {
+    if (!headers.has(key)) headers.set(key, value);
+  }
+  return { ...init, headers };
+}
+
+function resolveDaemonStatePath(directory: string): string {
+  return projectUsesGrove(directory)
+    ? join(resolveMycoHome(), "service", "daemon.json")
+    : join(directory, ".myco", "daemon.json");
+}
+
+/** Read the Myco daemon port from project-local or global daemon state. */
+function readDaemonPortFromDisk(statePath: string): number | null {
+  try {
+    const raw = readFileSync(statePath, "utf-8");
     const info = JSON.parse(raw) as { port?: number };
     return typeof info.port === "number" ? info.port : null;
   } catch {
@@ -180,14 +250,18 @@ function readDaemonPortFromDisk(directory: string): number | null {
 
 /** Get the cached daemon port, loading from disk on first access. */
 function getDaemonPort(directory: string): number | null {
-  if (cachedDaemonPort === undefined) cachedDaemonPort = readDaemonPortFromDisk(directory);
-  return cachedDaemonPort;
+  const statePath = resolveDaemonStatePath(directory);
+  if (!cachedDaemonPort || cachedDaemonPort.statePath !== statePath) {
+    cachedDaemonPort = { statePath, port: readDaemonPortFromDisk(statePath) };
+  }
+  return cachedDaemonPort.port;
 }
 
 /** Force-refresh the daemon port from disk — used after a fetch failure in case the daemon restarted. */
 function refreshDaemonPort(directory: string): number | null {
-  cachedDaemonPort = readDaemonPortFromDisk(directory);
-  return cachedDaemonPort;
+  const statePath = resolveDaemonStatePath(directory);
+  cachedDaemonPort = { statePath, port: readDaemonPortFromDisk(statePath) };
+  return cachedDaemonPort.port;
 }
 
 /** Fetch with a short timeout. Returns the Response on success, null on failure. */
@@ -216,14 +290,15 @@ async function fetchFromDaemon(
 ): Promise<Response | null> {
   const port = getDaemonPort(directory);
   if (!port) return null;
+  const requestInit = withRequestContextHeaders(directory, init);
 
-  const first = await fetchWithTimeout(`http://localhost:${port}${path}`, init);
+  const first = await fetchWithTimeout(`http://localhost:${port}${path}`, requestInit);
   if (first) return first;
 
   // Retry once with a refreshed port — the daemon may have restarted.
   const freshPort = refreshDaemonPort(directory);
   if (!freshPort || freshPort === port) return null;
-  return fetchWithTimeout(`http://localhost:${freshPort}${path}`, init);
+  return fetchWithTimeout(`http://localhost:${freshPort}${path}`, requestInit);
 }
 
 /**
@@ -343,6 +418,25 @@ async function postEventWithBuffer(
 }
 // </myco:shared-helpers>
 
+/**
+ * Cheap best-effort branch detection so opencode session registrations carry
+ * the same branch hint hook-based symbionts already supply. Failures (no Git,
+ * stale repo, timeout) return undefined — the daemon handles authoritative
+ * provenance capture asynchronously regardless.
+ */
+function detectGitBranch(directory: string): string | undefined {
+  try {
+    const out = execFileSync("git", ["-C", directory, "rev-parse", "--abbrev-ref", "HEAD"], {
+      encoding: "utf-8",
+      timeout: 1000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    return out && out !== "HEAD" ? out : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Register an opencode session with the daemon. */
 async function mycoRegisterSession(
   directory: string,
@@ -353,6 +447,7 @@ async function mycoRegisterSession(
     session_id: sessionId,
     agent: "opencode",
     parent_session_id: parentSessionId,
+    branch: detectGitBranch(directory),
     started_at: new Date().toISOString(),
   });
 }

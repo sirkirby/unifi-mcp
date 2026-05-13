@@ -246,6 +246,57 @@ the harness as follows:
 7. **Document the tier classification in the PR description** — reviewers need to know the
    blast-radius classification to sign off on the smoke evidence.
 
+## Procedure F: Probe Script Workflow and Image-Level Docker Smoke
+
+Live hardware smoke catches API contract mismatches but requires real hardware access. Two
+additional regression layers run without hardware and catch regressions in the CI pipeline.
+
+**Probe-script layer** (`scripts/probe_*.py` utilities):
+
+Smaller-scope smoke scripts run against development builds without requiring full live
+hardware setup. These probe scripts verify:
+- Tool registration (manifest entries are syntactically valid)
+- Schema validation (schemas load and validators register)
+- Manager instantiation (DI/bootstrap sequence succeeds)
+- Tool function signatures (decorators and parameters match manifest)
+
+Run probe scripts in any PR that touches tool registration or schema changes:
+```bash
+python scripts/probe_tools.py --server network
+python scripts/probe_schemas.py
+```
+
+Probe failures are non-fatal for local development but become CI gates to catch early
+regressions before a full hardware run.
+
+**Image-level Docker smoke** (Phase 3+ requirement):
+
+The release build pipeline runs image-level smoke tests on generated Docker images before
+they're pushed to GHCR. This tests:
+- All three app servers start cleanly inside their respective images
+- All tools are discoverable in each image's tools_manifest.json
+- Basic connectivity to a mock controller (localhost loopback) succeeds
+
+Image-level smoke does not execute tool logic (no live hardware), but it catches
+import errors, missing dependencies, manifest corruption, and startup failures that
+only appear in the final release image.
+
+This layer lives in CI/CD pipeline (GitHub Actions), not in developer workflows.
+Local equivalents can be tested with:
+```bash
+docker build -t unifi-network:dev -f Dockerfile.network . && \
+  docker run --rm unifi-network:dev python -c "from unifi_network_mcp import *; print('OK')"
+```
+
+**Four-layer regression model:**
+1. **Unit/fixture layer** — mock data, schema validation, bootstrap (fast, pre-commit)
+2. **Probe-script layer** — tool registration, manifest, schema instantiation (minutes, pre-push)
+3. **Live smoke layer** — API contract verification on real hardware (manual gate, code review)
+4. **Image-level layer** — Docker build, startup, manifest integrity (release gate, CI pipeline)
+
+Each layer adds cost but catches distinct classes of regressions. The first three run
+in developer workflows; the fourth is automated in the release pipeline.
+
 ## Cross-Cutting Gotchas
 
 - **Mock + golden fixtures are insufficient by design.** Live smoke is the only mechanism

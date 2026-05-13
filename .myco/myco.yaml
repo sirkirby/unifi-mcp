@@ -3,27 +3,54 @@ config_version: 9
 embedding:
   provider: ollama
   model: bge-m3:latest
-  run_in_deep_sleep: true
-daemon:
-  port: 28221
-  log_level: info
-  log_retention_days: 30
-  stale_session_threshold_ms: 3600000
-hub:
-  url: http://127.0.0.1:21000
 capture:
   transcript_paths: []
   plan_dirs:
     - docs/superpowers/plans/
     - docs/superpowers/specs/
-  ignore_plan_dirs_in_git: false
+    - docs/plans
+  ignore_plan_dirs_in_git: true
   artifact_extensions:
     - .md
   buffer_max_events: 500
+release_provenance:
+  enabled: true
+  production_refs:
+    - refs/tags/network/v*
+    - refs/tags/protect/v*
+    - refs/tags/access/v*
+    - refs/tags/core/v*
+    - refs/tags/shared/v*
+    - refs/tags/relay/v*
+    - refs/tags/api/v*
+  integration_refs:
+    - origin/main
+  reconcile_interval_minutes: 15
+  production_debug_include_unknown: true
+  github:
+    repo: sirkirby/unifi-mcp
+    token_env: GITHUB_TOKEN
+    max_lookups_per_run: 20
+  package_map:
+    - path_glob: packages/unifi-core/
+      tag_pattern: refs/tags/core/v*
+    - path_glob: packages/unifi-mcp-relay/
+      tag_pattern: refs/tags/relay/v*
+    - path_glob: packages/unifi-mcp-shared/
+      tag_pattern: refs/tags/shared/v*
+    - path_glob: apps/network/
+      tag_pattern: refs/tags/network/v*
+    - path_glob: apps/protect/
+      tag_pattern: refs/tags/protect/v*
+    - path_glob: apps/access/
+      tag_pattern: refs/tags/access/v*
+    - path_glob: apps/api/
+      tag_pattern: refs/tags/api/v*
 agent:
   summary_batch_interval: 10
   scheduled_tasks_enabled: true
   event_tasks_enabled: true
+  cold_project_threshold_days: 14
   provider:
     type: anthropic
   harness: claude-sdk
@@ -37,6 +64,9 @@ agent:
           default: claude-sonnet-4-6
           high: claude-opus-4-6
       harness: claude-sdk
+      phases:
+        validate:
+          maxTurns: 25
       schedule:
         enabled: true
     skill-evolve:
@@ -50,16 +80,17 @@ agent:
       harness: claude-sdk
       schedule:
         enabled: true
-backup:
-  dir: ~/myco_backups/unifi-mcp
-maintenance:
-  auto_optimize: true
-  auto_optimize_interval_hours: 24
-update:
-  channel: stable
-team:
-  enabled: false
-  interval_minutes: 15
+    canopy-describe:
+      provider:
+        type: lmstudio
+        base_url: http://10.29.13.49:1234
+        model: openai/gpt-oss-20b
+        reasoning_map:
+          low: openai/gpt-oss-20b
+          default: openai/gpt-oss-20b
+      harness: openai-agents
+      schedule:
+        enabled: true
 skills:
   confidence_threshold: 0.7
   usage_stale_days: 30

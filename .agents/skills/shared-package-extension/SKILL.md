@@ -224,3 +224,27 @@ before committing.
 callables, name the parameters descriptively (`get_tools_fn`, `permission_checker`) and
 add a docstring. Future contributors reading the shared package won't have the app-server
 context that makes the parameter's purpose obvious.
+
+**Backwards-coupling enforcement gotcha.** The import direction must stay strict:
+app servers can import from shared, shared can import from core, but never the reverse.
+A single `from unifi_network_mcp` in shared breaks all three servers silently at import
+time. No test catches this until the import is actually exercised. Always grep for app
+imports in `packages/unifi-mcp-shared/` and `packages/unifi-core/` before committing.
+
+**PyPI availability race in CI.** When publishing a new version of `unifi-core` to PyPI,
+downstream apps that have already bumped their `pyproject.toml` to the new version pin
+may fail in CI before PyPI reflects the new version (5–10 second delay is typical). If
+you see CI failures claiming the version doesn't exist on PyPI, fetch the package directly
+to confirm availability:
+```bash
+pip index versions unifi-core | head -5
+```
+Re-run CI after waiting 30 seconds if the version appears in local pip but not in the
+build environment yet.
+
+**Diagnostics direct-import pattern.** When debugging shared-package behavior from an
+app server, resist the urge to import diagnostics modules or helper functions directly
+from unifi-mcp-shared for inline inspection. Instead, write the diagnostic logic in the
+app server's namespace and import the shared module as a black box. Direct imports of
+shared internals from diagnostic code count the same as regular imports for cycle-checking
+purposes and can accidentally introduce a reverse dependency.

@@ -1,6 +1,6 @@
 ---
 name: myco:add-tool-category
-description: |
+description: >
   Use this skill whenever adding a new UniFi resource type as a supported tool category
   — creating a manager, tool layer, schemas, tests, and wiring everything into the
   manifest and CI. Activates for any PR or task that introduces a new manager class
@@ -26,6 +26,7 @@ A "tool category" is a new UniFi resource type — DNS records, DHCP leases, ala
 
 - Understand which UniFi package owns the resource: `unifi-network-mcp` vs. `unifi-protect-mcp` vs. `unifi-access-mcp`. Directory structure and naming conventions differ by package.
 - Know whether the resource's GET-by-ID endpoint returns 405 (see Step 2).
+- Understand key API endpoint patterns: V2 vs V1, response shape normalization, 405 workarounds, and resource-specific required fields (see Cross-Cutting Gotchas).
 - Review `implement-update-tool-fetch-merge-put` skill before writing any update method.
 - Have a live controller available for final validation output in the PR description.
 - Understand `UniFiValidatorRegistry.validate()` usage patterns (covered in Step 3).
@@ -73,7 +74,9 @@ from .managers.dns_manager import get_dns_manager
 
 **Idempotency guards:** For state-dependent operations (arm/disarm, enable/disable) add a pre-flight check that returns a clear message instead of hitting the API when the state is already what the caller requested. This prevents controller 400 errors. Reference: `managers/alarm_manager.py` (PR #133) — `already_armed` / `already_disarmed` guards.
 
-## Step 2 — Check for 405 Endpoints
+## Step 2 — Check for 405 Endpoints and Normalize V2 Response Shapes
+
+### 2A: 405 Method Not Allowed on GET-by-ID
 
 Some UniFi GET-by-ID endpoints return HTTP 405. **Do NOT call a get-by-ID endpoint for these types.** Instead, use `list()` + filter by `_id`.
 
@@ -91,14 +94,21 @@ def get_by_id(self, resource_id: str) -> dict | None:
 
 If you're unsure, test the endpoint directly. If it returns 405, use the list+filter pattern. See `acl_manager.py` and `dns_manager.py` for reference.
 
-**V2 API response shape:** On V2 endpoints, some responses wrap the payload in a list even for a single-object fetch. Always check:
+### 2B: V2 API Response Shape — List Wrapping on Single-Resource Fetches
+
+V2 endpoints sometimes wrap single-resource responses in a **one-element list**, not a plain dict. This is distinct from the list endpoint behavior. A `get_by_id` method that doesn't handle this will silently return `None` for valid IDs.
 
 ```python
+# Pattern: check for list first, then dict
 response = self.client.get(f"/v2/api/site/{{site}}/resource/{id}")
 if isinstance(response, list):
     return response[0] if response else None
 return response
 ```
+
+**Branch order matters:** Always check `isinstance(response, list)` before checking `isinstance(response, dict)`. The list branch must come first, or a future edit might accidentally reintroduce the bug.
+
+Three production bugs shared this root cause: `get_acl_rule_by_id`, `get_client_group_by_id`, and `get_oon_policy_by_id` (fixed in commit `30f6421`).
 
 ## Step 3 — Define Schemas and Register the Validator
 
@@ -324,9 +334,9 @@ Test the full tool invocation path: schema validation, preview rendering, confir
 
 **This step is easy to miss and causes CI failure.**
 
-`test_scaffold.py` maintains a hardcoded list of registered tool categories. Adding a new category without registering it here causes the scaffold test to fail with a confusing error unrelated to your new code.
+Your package has a `test_scaffold.py` that maintains a hardcoded list of registered tool categories. Adding a new category without registering it here causes the scaffold test to fail with a confusing error unrelated to your new code.
 
-**File:** `apps/network/tests/test_scaffold.py` (and analogous files for protect/access packages)
+**File:** `apps/{package}/tests/test_scaffold.py` (where {package} is the resource package: network, protect, or access)
 
 Find the category list and add your new category:
 
@@ -373,8 +383,18 @@ Manager class: `{Resource}Manager` (PascalCase). Factory function: `get_{resourc
 
 **`test_scaffold.py` registration** — absent from most verbal golden-path descriptions but mandatory. Causes CI failure if skipped.
 
-**405 on GET-by-ID** — test the endpoint before implementing. DNS records, AP groups, content filtering, and ACL rules all return 405 on individual GET. Use list+filter for these.
+**405 is not a permissions or ID problem** — On a `GET /{resource}/{id}` call, a 405 means the endpoint doesn't support the operation at all. Don't debug auth headers or ID formatting — switch to `list() + filter` immediately.
 
-**V2 list wrapping** — V2 responses can return a list even for single-object fetches. Always `isinstance(response, list)` check before returning from `get_by_id`.
+**V2 list wrapping on single-resource fetches** — V2 responses can return a list even for single-object fetches. Always check `isinstance(response, list)` before returning from `get_by_id`. The list branch must come before the dict branch.
 
 **Manifest must be committed** — `make manifest` output is not auto-generated in CI. The regenerated manifest file must be in the PR commit.
+
+**Silent creation failures exist** — The controller sometimes returns 200 on a malformed POST without creating the resource. Check for missing required fields before looking for a network or auth issue.
+
+**Zone-matrix endpoint aliasing** — `/firewall/zones` returns 404; use `/firewall/zone-matrix` instead. This is the correct endpoint for firewall zone policy matrices.
+
+**Forget-client requires `macs` array** — the `forget-sta` endpoint requires `"macs": [mac_address]`, not `"mac": mac_address`. Always pass an array even for single clients.
+
+**Firewall policy required fields** — zone-based firewall policies require `schedule: {"mode": "ALWAYS"}` on all policies (even ALLOW), and `create_allow_respond: False` on BLOCK/REJECT policies. Omitting these causes silent non-creation or controller errors.
+
+**Firmware-version field variation** — Some response fields behave differently across firmware versions. If a bug report describes unexpected field values and the reporter is on a specific firmware version, treat firmware variation as a likely cause before assuming a code bug. Request the firmware version string and a sample of the affected response payload for diagnosis.

@@ -1,6 +1,6 @@
 ---
 name: myco:community-pr-review
-description: |
+description: >-
   Use this skill when reviewing or merging any community PR in unifi-mcp — even if the user
   just says "take a look at this PR" or "can we merge this." Covers the complete quality gate
   checklist (f-string logger ban, validator registry registration, doc site update ordering),
@@ -120,7 +120,7 @@ false confidence on governance PRs.
 Scan for f-string logger calls:
 
 ```bash
-grep -rn 'logger\\.\\(debug\\|info\\|warning\\|error\\|critical\\)(f"' \\
+grep -rn 'logger\\.\\(debug\\|info\\|warning\\|error\\|critical\\)(f\"' \\
   $(git diff --name-only origin/main...HEAD)
 ```
 
@@ -283,6 +283,47 @@ accidentally zero out existing configuration. The verify step is the only reliab
 [UPDATE] set description="updated", name unchanged → read back: name="test-smoke-policy" ✓
 [DELETE] abc123 → 204 No Content ✓
 ```
+
+---
+
+## Step 1.5b — AI-Bot vs Human Contributor Handling
+
+When a bot (e.g., an AI agent) submits an unsolicited fix to a tool or feature area where in-house
+work is already in progress, apply a different standard than you would for human contributors.
+
+### AI-Bot PRs: Close in Favor of In-House Work
+
+When an AI-Bot submits a fix to an area with parallel in-house work:
+
+1. **Identify the in-house work** — check issue tracker and PR queue for active or planned work on the same feature/tool
+2. **Assess scope and completeness** — in-house work includes tests, audit, live smoke validation, and full coverage
+3. **Close the bot PR** — use the close-and-redirect pattern (Step 3, Principle #6) with a specific message:
+
+```
+Thank you for the contribution. We're already working on this area in-house 
+(see issue #NNN). Our version includes tests, live smoke validation, and 
+full audit coverage. We'll proceed with the in-house approach rather than 
+merging parallel work.
+
+The idea here was solid and might apply elsewhere — we'll keep an eye out 
+for future opportunities.
+
+Closed in favor of issue #NNN.
+```
+
+**Key distinction from human contributors:** There is no goodwill concern. A human contributor
+deserves credit and encouragement even if their PR can't be merged. A bot is a tool — its value is
+the idea, not the effort. If the idea is already covered by in-house work, there is no loss.
+
+### Human Contributors: Merge or Encourage Forward
+
+For human PRs in the same situation, treat differently:
+- **If the PR is salvageable,** use the fork-edit model (Step 2) to integrate their work
+- **If the PR is unsalvageable,** use Principle #6 (close-and-redirect) but include meaningful credit
+- Always acknowledge the effort, even if you don't merge the code
+
+The distinction: human contributors build community and relationships; bots submit code without
+building relationships. Invest in humans accordingly.
 
 ---
 
@@ -497,5 +538,6 @@ using this exact approach and a fix PR was opened the same session.
 | Validator registry (Gate 2) | Critical (silent) | Registry file + `validated_data` usage | Tool registered but reads raw params |
 | Doc site count (Gate 3) | Ordering gate | Doc site entry count | Updated after merge instead of before |
 | Shared validator defaults (Gate 4) | Hard block | `ResourceValidator.validate()` and any shared validator class | Defaults injected into shared path silently overwrite update-tool fields |
+| AI-Bot vs human (Step 1.5b) | Precedent gate | Issue tracker + PR scope | Merging bot PRs with parallel in-house work; missing credit for human contributors |
 | Live smoke tests (Step 1.5) | Validation requirement | `scripts/live_smoke.py` output | Approval without actual live controller tests; mock-only validation |
 | Mutation cycles (Step 1.5) | Field preservation blocker | Create → update → verify → delete cycle | Update tools that reconstruct objects silently zero fields |
