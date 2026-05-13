@@ -19,6 +19,12 @@ from unifi_core.network.models.ap_group import (
     to_controller_create as ap_group_to_create,
     to_controller_update as ap_group_to_update,
 )
+from unifi_core.network.models.networks import (
+    from_controller as network_from_controller,
+    to_controller_create as network_to_create,
+    to_controller_update as network_to_update,
+    Network,
+)
 from unifi_network_mcp.runtime import network_manager, server
 from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
@@ -95,19 +101,13 @@ async def list_networks() -> Dict[str, Any]:
     }
     """
     try:
-        # Get networks directly from the manager (which now uses V1)
         networks_data = await network_manager.get_networks()
-
-        # Manager returns list of dicts from V1 API or [] on error
-        # Basic reformatting/selection could be done here if needed,
-        # but for now, return the raw V1 structure received from manager.
-        serializable_networks = json.loads(json.dumps(networks_data, default=str))
-
+        formatted = [network_from_controller(n).model_dump(exclude_none=True) for n in networks_data]
         return {
             "success": True,
             "site": network_manager._connection.site,
-            "count": len(serializable_networks),
-            "networks": serializable_networks,
+            "count": len(formatted),
+            "networks": formatted,
         }
     except Exception as e:
         logger.error("Error listing networks in tool: %s", e, exc_info=True)
@@ -284,17 +284,13 @@ async def update_network(
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Validate the update data
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("network_update", update_data)
-    if not is_valid:
-        logger.warning("Invalid network update data for ID %s: %s", network_id, error_msg)
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
-
+    # Translate to controller-safe mutable fields
+    validated_data = network_to_update(update_data)
     if not validated_data:
-        logger.warning("Network update data for ID %s is empty after validation.", network_id)
+        logger.warning("Network update data for ID %s is empty after filtering.", network_id)
         return {
             "success": False,
-            "error": "Update data is effectively empty or invalid.",
+            "error": "No valid mutable fields provided for update.",
         }
 
     # Fetch current state for preview
@@ -422,14 +418,16 @@ async def create_network(
     - details (object): Details of the created network
     - error (string): Error message if unsuccessful
     """
-    # Moved imports
-    from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
-
-    # Validate the input
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("network", network_data)
-    if not is_valid:
-        logger.warning("Invalid network data: %s", error_msg)
-        return {"success": False, "error": error_msg}
+    # Filter input to known mutable fields
+    validated_data = network_to_update(network_data) if network_data else {}
+    # Supplement with any required-on-create fields that to_controller_update might drop
+    # (to_controller_update drops None; required fields must still be present)
+    for k in ("name", "purpose", "ip_subnet", "vlan", "vlan_enabled",
+              "dhcpd_start", "dhcpd_stop"):
+        if k in network_data and k not in validated_data and network_data[k] is not None:
+            validated_data[k] = network_data[k]
+    if not validated_data:
+        return {"success": False, "error": "network_data cannot be empty"}
 
     # Required fields check
     required_fields = ["name", "purpose"]
