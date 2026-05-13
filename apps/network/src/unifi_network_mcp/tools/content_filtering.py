@@ -24,7 +24,6 @@ from unifi_core.network.models.content_filter import (
     to_controller_update as cf_to_update,
 )
 from unifi_network_mcp.runtime import content_filter_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 

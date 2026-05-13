@@ -28,7 +28,6 @@ from unifi_core.network.models.switch import (
     to_controller_update as pp_to_update,
 )
 from unifi_network_mcp.runtime import server, switch_manager
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 

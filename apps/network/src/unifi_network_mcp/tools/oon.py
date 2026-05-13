@@ -20,7 +20,6 @@ from unifi_core.network.models.oon import (
     to_controller_update as oon_to_update,
 )
 from unifi_network_mcp.runtime import oon_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 

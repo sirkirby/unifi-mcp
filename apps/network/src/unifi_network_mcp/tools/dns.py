@@ -21,7 +21,6 @@ from unifi_core.network.models.dns import (
     to_controller_update as dns_to_update,
 )
 from unifi_network_mcp.runtime import dns_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 

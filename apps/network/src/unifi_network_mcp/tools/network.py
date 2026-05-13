@@ -32,7 +32,6 @@ from unifi_core.network.models.wlans import (
     to_controller_update as wlan_to_update,
 )
 from unifi_network_mcp.runtime import network_manager, server
-from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -702,13 +701,13 @@ async def update_wlan(
     """Updates specific fields of an existing WLAN (Wireless SSID).
 
     Only provided fields are updated — current values are automatically preserved.
-    Supported fields are defined in WLAN_UPDATE_SCHEMA and validated via UniFiValidatorRegistry.
+    Supported fields are defined by the WLAN pydantic model in unifi_core.network.models.wlans.
     Requires confirmation.
 
     Args:
         wlan_id (str): The unique identifier (_id) of the WLAN to update.
         update_data (Dict[str, Any]): Dictionary of fields to update. See tool description
-            and WLAN_UPDATE_SCHEMA in schemas.py for all supported fields.
+            for all supported fields.
         confirm (bool): Must be set to `True` to execute. Defaults to `False`.
 
     Returns:
