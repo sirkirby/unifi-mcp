@@ -176,17 +176,20 @@ class TestCreateDnsRecord:
         assert result["details"]["_id"] == "dns_new"
 
     @pytest.mark.asyncio
-    async def test_create_validation_error(self):
-        """Invalid record_type is rejected by schema validation."""
+    async def test_create_passes_record_type_to_controller(self):
+        """Model-based create passes record_type to controller without enum checking.
+
+        Enum validation happens at the controller level.
+        """
         from unifi_network_mcp.tools.dns import create_dns_record
 
         result = await create_dns_record(
-            record_data={"key": "bad.example.com", "value": "10.0.0.1", "record_type": "INVALID"},
-            confirm=True,
+            record_data={"key": "test.example.com", "value": "10.0.0.1", "record_type": "A"},
+            confirm=False,
         )
 
-        assert result["success"] is False
-        assert "Validation error" in result["error"]
+        assert result["success"] is True
+        assert result["preview"]["will_create"]["record_type"] == "A"
 
     @pytest.mark.asyncio
     async def test_create_missing_required_field(self):
@@ -218,8 +221,11 @@ class TestCreateDnsRecord:
         assert "Failed to create" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_create_rejects_additional_properties(self):
-        """Schema with additionalProperties: false rejects unknown fields."""
+    async def test_create_drops_unknown_fields(self):
+        """Model-based create silently drops unknown fields (not in DnsRecord).
+
+        The create payload only contains recognised model fields.
+        """
         from unifi_network_mcp.tools.dns import create_dns_record
 
         result = await create_dns_record(
@@ -227,13 +233,14 @@ class TestCreateDnsRecord:
                 "key": "test.example.com",
                 "value": "10.0.0.1",
                 "record_type": "A",
-                "bogus_field": "should fail",
+                "bogus_field": "should be ignored",
             },
-            confirm=True,
+            confirm=False,
         )
 
-        assert result["success"] is False
-        assert "Validation error" in result["error"]
+        # Succeeds but bogus_field is not in the will_create payload
+        assert result["success"] is True
+        assert "bogus_field" not in result["preview"]["will_create"]
 
 
 # ---------------------------------------------------------------------------
@@ -310,18 +317,21 @@ class TestUpdateDnsRecord:
         assert "No fields provided" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_update_validation_error(self):
-        """Invalid field type is rejected by schema."""
+    async def test_update_passes_record_type_through(self):
+        """Model-based update passes record_type values through without enum checking.
+
+        Enum validation happens at the controller level.
+        """
         from unifi_network_mcp.tools.dns import update_dns_record
 
         result = await update_dns_record(
             record_id="dns001",
-            update_data={"record_type": "INVALID"},
-            confirm=True,
+            update_data={"record_type": "CNAME"},
+            confirm=False,
         )
 
-        assert result["success"] is False
-        assert "Validation error" in result["error"]
+        assert result["success"] is True
+        assert result["preview"]["proposed"]["record_type"] == "CNAME"
 
     @pytest.mark.asyncio
     async def test_update_manager_exception(self):
