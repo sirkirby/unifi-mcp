@@ -20,6 +20,7 @@ from unifi_core.protect.models.lights import (
     from_controller as light_from_controller,
     to_controller_update as light_to_controller_update,
 )
+from unifi_core.protect.models.sensors import from_controller as sensor_from_controller
 from unifi_protect_mcp.runtime import chime_manager, light_manager, sensor_manager, server
 
 logger = logging.getLogger(__name__)
@@ -135,7 +136,8 @@ async def protect_list_sensors() -> Dict[str, Any]:
     """List all sensors."""
     logger.info("protect_list_sensors tool called")
     try:
-        sensors = await sensor_manager.list_sensors()
+        raw_sensors = await sensor_manager.list_sensors()
+        sensors = [sensor_from_controller(raw).model_dump(exclude_none=True) for raw in raw_sensors]
         return {"success": True, "data": {"sensors": sensors, "count": len(sensors)}}
     except Exception as e:
         logger.error("Error listing sensors: %s", e, exc_info=True)
