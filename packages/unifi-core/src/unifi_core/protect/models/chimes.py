@@ -19,8 +19,8 @@ class Chime(BaseModel):
     is_connected: Optional[bool] = Field(default=None, description="Whether the chime is connected", json_schema_extra={"mutable": False})
     firmware_version: Optional[str] = Field(default=None, description="Firmware version", json_schema_extra={"mutable": False})
     paired_cameras: List[str] = Field(default_factory=list, description="Camera IDs this chime rings for", json_schema_extra={"mutable": False})
-    ring_settings: Optional[Dict[str, Any]] = Field(default=None, description="Per-camera ring tone configuration (JSON)", json_schema_extra={"mutable": False})
-    available_tracks: Optional[List[Dict[str, Any]]] = Field(default=None, description="Available chime tones (JSON list)", json_schema_extra={"mutable": False})
+    ring_settings: Optional[Any] = Field(default=None, description="Per-camera ring tone configuration (controller returns dict or list)", json_schema_extra={"mutable": False})
+    available_tracks: Optional[Any] = Field(default=None, description="Available chime tones (list of dicts)", json_schema_extra={"mutable": False})
 
     # Mutable
     name: Optional[str] = Field(default=None, description="Display name")

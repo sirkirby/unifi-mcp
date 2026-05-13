@@ -96,10 +96,15 @@ class TestCameraModel:
         with pytest.raises(Exception):
             Camera(speaker_volume=150)
 
-    def test_ir_led_mode_literal_rejects_unknown(self) -> None:
-        with pytest.raises(Exception):
-            Camera(ir_led_mode="bogus")
+    def test_ir_led_mode_accepts_any_string(self) -> None:
+        # ir_led_mode is Optional[str] (not Literal) — controller emits values
+        # beyond the documented set (e.g., "normal"); pydantic must not reject.
+        assert Camera(ir_led_mode="auto").ir_led_mode == "auto"
+        assert Camera(ir_led_mode="autoFilterOnly").ir_led_mode == "autoFilterOnly"
+        assert Camera(ir_led_mode="anything").ir_led_mode == "anything"
 
-    def test_hdr_mode_literal_rejects_unknown(self) -> None:
-        with pytest.raises(Exception):
-            Camera(hdr_mode="bogus")
+    def test_hdr_mode_accepts_any_string(self) -> None:
+        # hdr_mode is Optional[str] (not Literal) — controllers return "normal"
+        # in addition to auto/off/always.
+        assert Camera(hdr_mode="auto").hdr_mode == "auto"
+        assert Camera(hdr_mode="normal").hdr_mode == "normal"
