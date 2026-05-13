@@ -15,6 +15,10 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.network.models.oon import (
+    from_controller as oon_from_controller,
+    to_controller_update as oon_to_update,
+)
 from unifi_network_mcp.runtime import oon_manager, server
 from unifi_network_mcp.validator_registry import UniFiValidatorRegistry
 
@@ -40,31 +44,7 @@ async def list_oon_policies() -> Dict[str, Any]:
     """
     try:
         policies = await oon_manager.get_oon_policies()
-        formatted = []
-        for p in policies:
-            secure = p.get("secure", {})
-            internet = secure.get("internet", {}) if secure.get("enabled") else {}
-            schedule = internet.get("schedule", {})
-
-            summary = {
-                "id": p.get("id", p.get("_id")),
-                "name": p.get("name"),
-                "enabled": p.get("enabled"),
-                "target_type": p.get("target_type"),
-                "target_count": len(p.get("targets", [])),
-                "secure_enabled": secure.get("enabled", False),
-                "secure_mode": internet.get("mode") if secure.get("enabled") else None,
-                "schedule_mode": schedule.get("mode") if schedule else None,
-                "qos_enabled": p.get("qos", {}).get("enabled", False),
-                "route_enabled": p.get("route", {}).get("enabled", False),
-            }
-
-            if schedule.get("mode") in ("EVERY_DAY", "EVERY_WEEK"):
-                summary["schedule_start"] = schedule.get("time_range_start")
-                summary["schedule_end"] = schedule.get("time_range_end")
-
-            formatted.append(summary)
-
+        formatted = [oon_from_controller(p).model_dump(exclude_none=True) for p in policies]
         return {
             "success": True,
             "site": oon_manager._connection.site,
@@ -231,11 +211,9 @@ async def update_oon_policy(
     if not policy_data:
         return {"success": False, "error": "policy_data cannot be empty"}
 
-    is_valid, error_msg, validated_data = UniFiValidatorRegistry.validate("oon_policy_update", policy_data)
-    if not is_valid:
-        return {"success": False, "error": f"Invalid update data: {error_msg}"}
+    validated_data = oon_to_update(policy_data)
     if not validated_data:
-        return {"success": False, "error": "Update data is effectively empty or invalid."}
+        return {"success": False, "error": "No valid mutable fields provided for update."}
 
     if not confirm:
         return update_preview(
@@ -308,8 +286,13 @@ async def toggle_oon_policy(
         )
 
     try:
-        new_state = await oon_manager.toggle_oon_policy(policy_id)
-        if new_state is not None:
+        # Fetch current state to determine new state
+        policy = await oon_manager.get_oon_policy_by_id(policy_id)
+        current = bool(policy.get("enabled", False)) if policy else False
+        new_state = not current
+        update_payload = oon_to_update({"enabled": new_state})
+        merged = await oon_manager.update_oon_policy(policy_id, update_payload)
+        if merged is not None:
             state_str = "enabled" if new_state else "disabled"
             return {
                 "success": True,

@@ -43,7 +43,14 @@ class OonPolicy:
     id: strawberry.ID | None
     name: str | None
     enabled: bool
-    applies_to: strawberry.scalars.JSON  # type: ignore[name-defined]
+    target_type: str | None
+    targets: list[Any] | None
+    applies_to: list[Any] | None
+    secure: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    qos: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    qos_enabled: bool | None
+    route: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    route_enabled: bool | None
     restriction_level: str | None
 
     @classmethod
@@ -57,11 +64,21 @@ class OonPolicy:
 
     @classmethod
     def from_manager_output(cls, obj: Any) -> "OonPolicy":
+        qos_block = _get(obj, "qos") or {}
+        route_block = _get(obj, "route") or {}
+        targets = _get(obj, "targets") or _get(obj, "applies_to") or []
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
             enabled=bool(_get(obj, "enabled", False)),
-            applies_to=_get(obj, "targets") or _get(obj, "applies_to") or [],
+            target_type=_get(obj, "target_type"),
+            targets=targets,
+            applies_to=targets,
+            secure=_get(obj, "secure"),
+            qos=qos_block if qos_block else None,
+            qos_enabled=qos_block.get("enabled") if isinstance(qos_block, dict) else None,
+            route=route_block if route_block else None,
+            route_enabled=route_block.get("enabled") if isinstance(route_block, dict) else None,
             restriction_level=_get(obj, "restriction_level"),
         )
 
