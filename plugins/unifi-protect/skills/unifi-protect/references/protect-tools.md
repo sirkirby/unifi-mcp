@@ -1,4 +1,4 @@
-# Protect Server Tool Reference (39 tools)
+# Protect Server Tool Reference (40 tools)
 
 Complete reference for `protect_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Protect controls physical security hardware.
 
@@ -11,6 +11,7 @@ Complete reference for `protect_*` tools. All read tools are always available. A
 - [Liveviews](#liveviews)
 - [System](#system)
 - [Alarm Manager](#alarm-manager)
+- [Known Faces](#known-faces)
 - [Common Scenarios](#common-scenarios)
 - [Important Limitations](#important-limitations)
 
@@ -182,6 +183,24 @@ Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles c
 - Both `protect_alarm_arm` and `protect_alarm_disarm` are idempotent — calling them when the system is already in the target state is a no-op (returns `already_armed` / `already_disarmed`)
 - To switch arm profiles while the system is armed, you must **disarm first** — the API does not allow switching profiles mid-arm
 - There's typically an activation delay (e.g. 60 seconds) configured per profile — the system enters a pending state (`willBeArmedAt`) before fully arming
+
+---
+
+## Known Faces
+
+Lists assigned UniFi Protect Known Faces / named face recognition groups. Read-only; returns metadata and controller image references only.
+
+<!-- AUTO:tools:recognition -->
+1 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `protect_list_known_faces` | Read | List assigned UniFi Protect Known Faces / named face recognition groups. |
+<!-- /AUTO:tools:recognition -->
+
+**Tips:**
+- Use `protect_list_known_faces` to discover configured face labels and last-seen timestamps.
+- Image fields are controller references only; the tool does not fetch or return image bytes.
 
 ---
 
