@@ -1987,6 +1987,7 @@ name = "unifi-core"
 source = { editable = "packages/unifi-core" }
 dependencies = [
     { name = "aiohttp" },
+    { name = "pydantic" },
     { name = "pyyaml" },
 ]
 
@@ -2013,6 +2014,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.13.4" },
     { name = "aiounifi", marker = "extra == 'network'", specifier = ">=88" },
     { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.1.1" },
+    { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=6.0.0" },
 ]
