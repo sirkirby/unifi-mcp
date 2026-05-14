@@ -1,5 +1,5 @@
 {
-  "count": 40,
+  "count": 43,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -8,6 +8,7 @@
     "protect_alarm_get_status": "unifi_protect_mcp.tools.alarm",
     "protect_alarm_list_profiles": "unifi_protect_mcp.tools.alarm",
     "protect_create_liveview": "unifi_protect_mcp.tools.liveviews",
+    "protect_delete_known_face": "unifi_protect_mcp.tools.recognition",
     "protect_delete_liveview": "unifi_protect_mcp.tools.liveviews",
     "protect_delete_recording": "unifi_protect_mcp.tools.recordings",
     "protect_export_clip": "unifi_protect_mcp.tools.recordings",
@@ -31,6 +32,7 @@
     "protect_list_sensors": "unifi_protect_mcp.tools.devices",
     "protect_list_smart_detections": "unifi_protect_mcp.tools.events",
     "protect_list_viewers": "unifi_protect_mcp.tools.system",
+    "protect_merge_known_faces": "unifi_protect_mcp.tools.recognition",
     "protect_ptz_move": "unifi_protect_mcp.tools.cameras",
     "protect_ptz_preset": "unifi_protect_mcp.tools.cameras",
     "protect_ptz_zoom": "unifi_protect_mcp.tools.cameras",
@@ -41,6 +43,7 @@
     "protect_trigger_chime": "unifi_protect_mcp.tools.devices",
     "protect_update_camera_settings": "unifi_protect_mcp.tools.cameras",
     "protect_update_chime": "unifi_protect_mcp.tools.devices",
+    "protect_update_known_face": "unifi_protect_mcp.tools.recognition",
     "protect_update_light": "unifi_protect_mcp.tools.devices"
   },
   "note": "Auto-generated with full schemas from tool decorators. Do not edit manually.",
@@ -180,6 +183,35 @@
           "required": [
             "name",
             "camera_ids"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Delete or remove a UniFi Protect face recognition group. This is destructive. Requires confirm=True to apply; otherwise returns a preview of the exact group.",
+      "name": "protect_delete_known_face",
+      "permission_action": "delete",
+      "permission_category": "recognition",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, deletes the group. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "face_id": {
+              "description": "Face group UUID from protect_list_known_faces.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "face_id"
           ],
           "type": "object"
         }
@@ -752,6 +784,41 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "description": "Merge one UniFi Protect face group into another. The target group survives and the source group is folded into it. Requires confirm=True to apply; otherwise returns a preview.",
+      "name": "protect_merge_known_faces",
+      "permission_action": "update",
+      "permission_category": "recognition",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, executes the merge. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "source_face_id": {
+              "description": "Face group UUID to fold into the target group.",
+              "type": "string"
+            },
+            "target_face_id": {
+              "description": "Face group UUID that survives the merge.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "source_face_id",
+            "target_face_id"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Moves a PTZ camera using normalized pan/tilt speeds. Requires confirm=True to execute. Use protect_ptz_zoom for zoom movement. Only works on PTZ-capable cameras.",
       "name": "protect_ptz_move",
       "permission_action": "update",
@@ -1060,6 +1127,75 @@
           "required": [
             "chime_id",
             "settings"
+          ],
+          "type": "object"
+        }
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Update UniFi Protect Known Face metadata. Pass only the fields you want to change; current values are automatically preserved. Supported fields: name, description, is_notification_enabled. Requires confirm=True to apply; otherwise returns a preview.",
+      "name": "protect_update_known_face",
+      "permission_action": "update",
+      "permission_category": "recognition",
+      "schema": {
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "confirm": {
+              "description": "When true, applies the update. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "face_id": {
+              "description": "Face group UUID from protect_list_known_faces.",
+              "type": "string"
+            },
+            "fields": {
+              "additionalProperties": false,
+              "description": "Partial update fields. Supported keys: name, description, is_notification_enabled. Read-only fields such as id, image paths, detection counts, timestamps, type, tags, and metadata are rejected.",
+              "properties": {
+                "description": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "is_notification_enabled": {
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "name": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "type": "object"
+            }
+          },
+          "required": [
+            "face_id",
+            "fields"
           ],
           "type": "object"
         }

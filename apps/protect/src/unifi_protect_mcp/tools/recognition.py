@@ -4,8 +4,11 @@ import logging
 from typing import Annotated, Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
+from unifi_core.confirmation import preview_response, update_preview
+from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.models._actions import DeleteKnownFaceInput, MergeKnownFacesInput
 from unifi_core.protect.models.recognition import from_controller
 from unifi_protect_mcp.runtime import recognition_manager, server
 
@@ -91,3 +94,191 @@ async def protect_list_known_faces(
     except Exception as e:
         logger.error("Error listing known faces: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list known faces: {e}"}
+
+
+@server.tool(
+    name="protect_update_known_face",
+    description=(
+        "Update UniFi Protect Known Face metadata. Pass only the fields you want to change; "
+        "current values are automatically preserved. Supported fields: name, description, "
+        "is_notification_enabled. Requires confirm=True to apply; otherwise returns a preview."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "face_id": {
+                "type": "string",
+                "description": "Face group UUID from protect_list_known_faces.",
+            },
+            "fields": {
+                "type": "object",
+                "description": (
+                    "Partial update fields. Supported keys: name, description, is_notification_enabled. "
+                    "Read-only fields such as id, image paths, detection counts, timestamps, type, tags, "
+                    "and metadata are rejected."
+                ),
+                "properties": {
+                    "name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "description": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "is_notification_enabled": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
+                },
+                "additionalProperties": False,
+            },
+            "confirm": {
+                "type": "boolean",
+                "description": "When true, applies the update. When false (default), returns a preview.",
+            },
+        },
+        "required": ["face_id", "fields"],
+        "additionalProperties": False,
+    },
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+    permission_category="recognition",
+    permission_action="update",
+)
+async def protect_update_known_face(
+    face_id: Annotated[str, Field(description="Face group UUID from protect_list_known_faces.")],
+    fields: Annotated[
+        Dict[str, Any],
+        Field(
+            description=(
+                "Partial update fields. Supported keys: name, description, is_notification_enabled. "
+                "Read-only fields such as id, image paths, detection counts, timestamps, type, tags, "
+                "and metadata are rejected."
+            )
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the update. When false (default), returns a preview."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Update Known Face metadata with preview/confirm."""
+    logger.info("protect_update_known_face called for %s (confirm=%s)", face_id, confirm)
+    try:
+        field_data = fields.model_dump(exclude_unset=True) if hasattr(fields, "model_dump") else dict(fields)
+        if not field_data:
+            return {"success": False, "error": "No fields provided. Specify at least one field to update."}
+
+        preview_data = await recognition_manager.update_known_face(face_id, field_data)
+        if not confirm:
+            return update_preview(
+                resource_type="known_face",
+                resource_id=face_id,
+                resource_name=preview_data.get("face_name"),
+                current_state=preview_data["current_state"],
+                updates=preview_data["proposed_changes"],
+            )
+
+        result = await recognition_manager.apply_update_known_face(face_id, field_data)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error updating known face %s: %s", face_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to update known face: {e}"}
+
+
+@server.tool(
+    name="protect_merge_known_faces",
+    description=(
+        "Merge one UniFi Protect face group into another. The target group survives and the source "
+        "group is folded into it. Requires confirm=True to apply; otherwise returns a preview."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+    permission_category="recognition",
+    permission_action="update",
+)
+async def protect_merge_known_faces(
+    source_face_id: Annotated[str, Field(description="Face group UUID to fold into the target group.")],
+    target_face_id: Annotated[str, Field(description="Face group UUID that survives the merge.")],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, executes the merge. When false (default), returns a preview."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Merge one Known Face group into another with preview/confirm."""
+    logger.info(
+        "protect_merge_known_faces called (source=%s, target=%s, confirm=%s)",
+        source_face_id,
+        target_face_id,
+        confirm,
+    )
+    try:
+        try:
+            MergeKnownFacesInput(source_face_id=source_face_id, target_face_id=target_face_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+        preview_data = await recognition_manager.merge_known_faces(source_face_id, target_face_id)
+        if not confirm:
+            return preview_response(
+                action="merge",
+                resource_type="known_face",
+                resource_id=source_face_id,
+                current_state={
+                    "source": preview_data["source"],
+                    "target": preview_data["target"],
+                },
+                proposed_changes={
+                    "source_face_id": source_face_id,
+                    "target_face_id": target_face_id,
+                    "target_survives": True,
+                },
+                resource_name=preview_data["source"].get("name") or preview_data["source"].get("matched_name"),
+                warnings=preview_data["warnings"],
+            )
+
+        result = await recognition_manager.apply_merge_known_faces(source_face_id, target_face_id)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error merging known faces %s -> %s: %s", source_face_id, target_face_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to merge known faces: {e}"}
+
+
+@server.tool(
+    name="protect_delete_known_face",
+    description=(
+        "Delete or remove a UniFi Protect face recognition group. This is destructive. "
+        "Requires confirm=True to apply; otherwise returns a preview of the exact group."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    permission_category="recognition",
+    permission_action="delete",
+)
+async def protect_delete_known_face(
+    face_id: Annotated[str, Field(description="Face group UUID from protect_list_known_faces.")],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, deletes the group. When false (default), returns a preview."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Delete a Known Face group with preview/confirm."""
+    logger.info("protect_delete_known_face called for %s (confirm=%s)", face_id, confirm)
+    try:
+        try:
+            DeleteKnownFaceInput(face_id=face_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+        preview_data = await recognition_manager.delete_known_face(face_id)
+        if not confirm:
+            return preview_response(
+                action="delete",
+                resource_type="known_face",
+                resource_id=face_id,
+                current_state=preview_data["face"],
+                proposed_changes={"deleted": True},
+                resource_name=preview_data["face"].get("name") or preview_data["face"].get("matched_name"),
+                warnings=preview_data["warnings"],
+            )
+
+        result = await recognition_manager.apply_delete_known_face(face_id)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error deleting known face %s: %s", face_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to delete known face: {e}"}

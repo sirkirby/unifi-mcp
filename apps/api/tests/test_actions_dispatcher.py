@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from unifi_api.services.actions import (
     CapabilityMismatch,
     DispatchEntry,
@@ -131,9 +130,7 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
         args={},
         confirm=False,
         dispatch_table={
-            "unifi_list_clients": DispatchEntry(
-                manager_attr="client_manager", method="get_clients"
-            ),
+            "unifi_list_clients": DispatchEntry(manager_attr="client_manager", method="get_clients"),
         },
     )
 
@@ -182,9 +179,7 @@ async def test_dispatch_updates_site_when_changed() -> None:
         args={"limit": 10},
         confirm=False,
         dispatch_table={
-            "unifi_list_clients": DispatchEntry(
-                manager_attr="client_manager", method="get_clients"
-            ),
+            "unifi_list_clients": DispatchEntry(manager_attr="client_manager", method="get_clients"),
         },
     )
 
@@ -239,9 +234,7 @@ def test_dispatch_overrides_redirect_compose_tools_to_mutation() -> None:
         assert entry.manager_attr == manager_attr, (
             f"{tool_name} manager: got {entry.manager_attr!r}, want {manager_attr!r}"
         )
-        assert entry.method == method, (
-            f"{tool_name} method: got {entry.method!r}, want {method!r}"
-        )
+        assert entry.method == method, f"{tool_name} method: got {entry.method!r}, want {method!r}"
 
 
 def test_dispatch_overrides_specific_targets() -> None:
@@ -264,6 +257,9 @@ def test_dispatch_overrides_specific_targets() -> None:
     assert table["protect_reboot_camera"].method == "apply_reboot_camera"
     assert table["protect_alarm_arm"].method == "arm"
     assert table["protect_acknowledge_event"].method == "apply_acknowledge_event"
+    assert table["protect_update_known_face"].method == "apply_update_known_face"
+    assert table["protect_merge_known_faces"].method == "apply_merge_known_faces"
+    assert table["protect_delete_known_face"].method == "apply_delete_known_face"
 
     # Access preview/execute split
     assert table["access_lock_door"].method == "apply_lock_door"
@@ -320,9 +316,7 @@ async def test_dispatch_translates_acl_create_kwargs_to_controller_payload() -> 
         },
         confirm=True,
         dispatch_table={
-            "unifi_create_acl_rule": DispatchEntry(
-                manager_attr="acl_manager", method="create_acl_rule"
-            ),
+            "unifi_create_acl_rule": DispatchEntry(manager_attr="acl_manager", method="create_acl_rule"),
         },
     )
 
@@ -382,9 +376,7 @@ async def test_dispatch_translates_acl_update_kwargs_to_rule_id_plus_payload() -
         },
         confirm=True,
         dispatch_table={
-            "unifi_update_acl_rule": DispatchEntry(
-                manager_attr="acl_manager", method="update_acl_rule"
-            ),
+            "unifi_update_acl_rule": DispatchEntry(manager_attr="acl_manager", method="update_acl_rule"),
         },
     )
 
@@ -435,9 +427,7 @@ async def test_dispatch_delete_acl_passes_rule_id_unchanged() -> None:
         args={"rule_id": "r1"},
         confirm=True,
         dispatch_table={
-            "unifi_delete_acl_rule": DispatchEntry(
-                manager_attr="acl_manager", method="delete_acl_rule"
-            ),
+            "unifi_delete_acl_rule": DispatchEntry(manager_attr="acl_manager", method="delete_acl_rule"),
         },
     )
 
@@ -483,9 +473,7 @@ async def test_dispatch_translates_export_clip_iso_to_datetime() -> None:
         },
         confirm=True,
         dispatch_table={
-            "protect_export_clip": DispatchEntry(
-                manager_attr="recording_manager", method="export_clip"
-            ),
+            "protect_export_clip": DispatchEntry(manager_attr="recording_manager", method="export_clip"),
         },
     )
 
@@ -536,9 +524,7 @@ async def test_dispatch_translates_delete_recording_iso_to_datetime() -> None:
         },
         confirm=True,
         dispatch_table={
-            "protect_delete_recording": DispatchEntry(
-                manager_attr="recording_manager", method="delete_recording"
-            ),
+            "protect_delete_recording": DispatchEntry(manager_attr="recording_manager", method="delete_recording"),
         },
     )
 
@@ -589,9 +575,7 @@ async def test_dispatch_translates_block_client_mac_address_to_client_mac() -> N
         args={"mac_address": "aa:bb:cc:dd:ee:ff"},
         confirm=True,
         dispatch_table={
-            "unifi_block_client": DispatchEntry(
-                manager_attr="client_manager", method="block_client"
-            ),
+            "unifi_block_client": DispatchEntry(manager_attr="client_manager", method="block_client"),
         },
     )
 
@@ -632,9 +616,7 @@ async def test_dispatch_translates_unblock_client_mac_address_to_client_mac() ->
         args={"mac_address": "aa:bb:cc:dd:ee:ff"},
         confirm=True,
         dispatch_table={
-            "unifi_unblock_client": DispatchEntry(
-                manager_attr="client_manager", method="unblock_client"
-            ),
+            "unifi_unblock_client": DispatchEntry(manager_attr="client_manager", method="unblock_client"),
         },
     )
 
@@ -675,15 +657,11 @@ async def test_dispatch_translates_rename_client_mac_address_to_client_mac() -> 
         args={"mac_address": "aa:bb:cc:dd:ee:ff", "name": "Living Room TV"},
         confirm=True,
         dispatch_table={
-            "unifi_rename_client": DispatchEntry(
-                manager_attr="client_manager", method="rename_client"
-            ),
+            "unifi_rename_client": DispatchEntry(manager_attr="client_manager", method="rename_client"),
         },
     )
 
-    domain_manager.rename_client.assert_awaited_once_with(
-        client_mac="aa:bb:cc:dd:ee:ff", name="Living Room TV"
-    )
+    domain_manager.rename_client.assert_awaited_once_with(client_mac="aa:bb:cc:dd:ee:ff", name="Living Room TV")
 
 
 @pytest.mark.asyncio
@@ -725,9 +703,7 @@ async def test_dispatch_translates_authorize_guest_mac_address_to_client_mac() -
         },
         confirm=True,
         dispatch_table={
-            "unifi_authorize_guest": DispatchEntry(
-                manager_attr="client_manager", method="authorize_guest"
-            ),
+            "unifi_authorize_guest": DispatchEntry(manager_attr="client_manager", method="authorize_guest"),
         },
     )
 
@@ -830,9 +806,7 @@ async def test_dispatch_translates_list_clients_strips_filter_kwargs() -> None:
         args={"filter_type": "wireless", "include_offline": False, "limit": 50},
         confirm=False,
         dispatch_table={
-            "unifi_list_clients": DispatchEntry(
-                manager_attr="client_manager", method="get_clients"
-            ),
+            "unifi_list_clients": DispatchEntry(manager_attr="client_manager", method="get_clients"),
         },
     )
 
@@ -884,9 +858,7 @@ async def test_dispatch_translates_update_firewall_policy_update_data_to_updates
         },
     )
 
-    domain_manager.update_firewall_policy.assert_awaited_once_with(
-        policy_id="p1", updates={"enabled": False}
-    )
+    domain_manager.update_firewall_policy.assert_awaited_once_with(policy_id="p1", updates={"enabled": False})
 
 
 # ---------------------------------------------------------------------------
@@ -928,9 +900,7 @@ async def test_dispatch_translates_toggle_port_forward_id_to_rule_id() -> None:
         args={"port_forward_id": "pf001"},
         confirm=True,
         dispatch_table={
-            "unifi_toggle_port_forward": DispatchEntry(
-                manager_attr="firewall_manager", method="toggle_port_forward"
-            ),
+            "unifi_toggle_port_forward": DispatchEntry(manager_attr="firewall_manager", method="toggle_port_forward"),
         },
     )
 
@@ -981,9 +951,7 @@ async def test_dispatch_translates_update_device_radio_to_manager_shape() -> Non
         },
         confirm=True,
         dispatch_table={
-            "unifi_update_device_radio": DispatchEntry(
-                manager_attr="device_manager", method="update_device_radio"
-            ),
+            "unifi_update_device_radio": DispatchEntry(manager_attr="device_manager", method="update_device_radio"),
         },
     )
 
@@ -1033,9 +1001,7 @@ async def test_dispatch_translates_get_top_clients_duration_to_hours() -> None:
         args={"duration": "weekly", "limit": 5},
         confirm=False,
         dispatch_table={
-            "unifi_get_top_clients": DispatchEntry(
-                manager_attr="stats_manager", method="get_top_clients"
-            ),
+            "unifi_get_top_clients": DispatchEntry(manager_attr="stats_manager", method="get_top_clients"),
         },
     )
 

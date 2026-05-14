@@ -1,4 +1,8 @@
-"""@permissioned_tool decorator: wraps FastMCP @server.tool() with auth/policy enforcement from unifi_core.permission."""
+"""Permissioned FastMCP tool decorator.
+
+Wraps ``@server.tool()`` with auth and policy enforcement from
+``unifi_core.permission``.
+"""
 
 from __future__ import annotations
 
@@ -89,8 +93,8 @@ def create_permissioned_tool(
                 tool_name = getattr(func, "__name__", "<unknown>")
 
             description = d_kwargs.get("description", "")
-            input_schema = d_kwargs.get("input_schema")
-            output_schema = d_kwargs.get("output_schema")
+            input_schema = d_kwargs.pop("input_schema", None)
+            output_schema = d_kwargs.pop("output_schema", None)
 
             # If no explicit input_schema, try to infer from function annotations
             if input_schema is None:

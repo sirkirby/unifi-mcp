@@ -80,6 +80,8 @@ def _create_permissioned_tool_wrapper(original_tool_decorator):
         kwargs.pop("permission_category", None)
         kwargs.pop("permission_action", None)
         kwargs.pop("auth", None)
+        kwargs.pop("input_schema", None)
+        kwargs.pop("output_schema", None)
         return original_tool_decorator(*args, **kwargs)
 
     return wrapper

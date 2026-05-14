@@ -130,6 +130,145 @@ class TestRecognitionManager:
         with pytest.raises(ValueError, match="at least one"):
             await mgr.list_known_faces(group_types=[])
 
+    @pytest.mark.asyncio
+    async def test_update_known_face_preview_preserves_unmentioned_fields(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.return_value = {
+            "groups": [
+                {
+                    "id": "face-1",
+                    "name": "Current",
+                    "description": "Keep",
+                    "isNotificationEnabled": True,
+                    "detectionsCount": 12,
+                }
+            ]
+        }
+
+        result = await RecognitionManager(mock_cm).update_known_face("face-1", {"name": "Updated"})
+
+        assert result["current_state"] == {"name": "Current"}
+        assert result["proposed_changes"] == {"name": "Updated"}
+        assert "description" not in result["proposed_changes"]
+
+    @pytest.mark.asyncio
+    async def test_update_known_face_rejects_unknown_and_read_only_fields(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mgr = RecognitionManager(mock_cm)
+
+        with pytest.raises(ValueError, match="Read-only"):
+            await mgr.update_known_face("face-1", {"id": "other"})
+        with pytest.raises(ValueError, match="Unsupported"):
+            await mgr.update_known_face("face-1", {"nickname": "nope"})
+        with pytest.raises(ValueError, match="at least one"):
+            await mgr.update_known_face("face-1", {})
+
+    @pytest.mark.asyncio
+    async def test_apply_update_known_face_patches_translated_mutable_fields(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.side_effect = [
+            {
+                "groups": [
+                    {
+                        "id": "face-1",
+                        "name": "Current",
+                        "description": "Keep",
+                        "isNotificationEnabled": False,
+                    }
+                ]
+            },
+            {
+                "id": "face-1",
+                "name": "Current",
+                "description": "Keep",
+                "isNotificationEnabled": True,
+            },
+        ]
+
+        result = await RecognitionManager(mock_cm).apply_update_known_face(
+            "face-1",
+            {"is_notification_enabled": True},
+        )
+
+        assert result["updated_fields"] == ["is_notification_enabled"]
+        mock_cm.client.api_request.assert_any_await(
+            "recognition/face/groups/face-1",
+            method="patch",
+            json={"isNotificationEnabled": True},
+        )
+
+    @pytest.mark.asyncio
+    async def test_merge_known_faces_preview_fetches_source_and_target(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.side_effect = [
+            {"groups": [{"id": "source", "name": "Source", "detectionsCount": 2}]},
+            {"groups": [{"id": "target", "name": "Target", "detectionsCount": 9}]},
+        ]
+
+        result = await RecognitionManager(mock_cm).merge_known_faces("source", "target")
+
+        assert result["source"]["id"] == "source"
+        assert result["target"]["id"] == "target"
+        assert result["warnings"]
+
+    @pytest.mark.asyncio
+    async def test_merge_known_faces_rejects_same_id(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        with pytest.raises(ValueError, match="must be different"):
+            await RecognitionManager(mock_cm).merge_known_faces("face-1", "face-1")
+
+    @pytest.mark.asyncio
+    async def test_apply_merge_known_faces_posts_validated_payload(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.side_effect = [
+            {"groups": [{"id": "source", "name": "Source"}]},
+            {"groups": [{"id": "target", "name": "Target"}]},
+            None,
+        ]
+
+        result = await RecognitionManager(mock_cm).apply_merge_known_faces("source", "target")
+
+        assert result["merged"] is True
+        mock_cm.client.api_request.assert_any_await(
+            "recognition/v2/merge-group",
+            method="post",
+            json={"fromGroupIds": ["source"], "toGroupId": "target"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_delete_known_face_preview_fetches_group(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.return_value = {"groups": [{"id": "face-1", "name": "Assigned"}]}
+
+        result = await RecognitionManager(mock_cm).delete_known_face("face-1")
+
+        assert result["face"]["id"] == "face-1"
+        assert result["warnings"]
+
+    @pytest.mark.asyncio
+    async def test_apply_delete_known_face_calls_delete_endpoint(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.side_effect = [
+            {"groups": [{"id": "face-1", "name": "Assigned"}]},
+            None,
+        ]
+
+        result = await RecognitionManager(mock_cm).apply_delete_known_face("face-1")
+
+        assert result["deleted"] is True
+        mock_cm.client.api_request.assert_any_await(
+            "recognition/face/groups/face-1",
+            method="delete",
+        )
+
 
 @pytest.fixture
 def mock_recognition_manager():
@@ -214,3 +353,123 @@ class TestProtectListKnownFacesTool:
         assert result["success"] is False
         assert "Failed to list known faces" in result["error"]
         assert "connection lost" in result["error"]
+
+
+class TestProtectKnownFaceMutationTools:
+    @pytest.mark.asyncio
+    async def test_update_preview(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_update_known_face
+
+        mock_recognition_manager.update_known_face = AsyncMock(
+            return_value={
+                "face_id": "face-1",
+                "face_name": "Current",
+                "current_state": {"name": "Current"},
+                "proposed_changes": {"name": "Updated"},
+            }
+        )
+
+        result = await protect_update_known_face("face-1", {"name": "Updated"})
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["current"] == {"name": "Current"}
+        mock_recognition_manager.apply_update_known_face.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_confirm(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_update_known_face
+
+        mock_recognition_manager.update_known_face = AsyncMock(
+            return_value={
+                "face_id": "face-1",
+                "face_name": "Current",
+                "current_state": {"description": None},
+                "proposed_changes": {"description": "Doorbell"},
+            }
+        )
+        mock_recognition_manager.apply_update_known_face = AsyncMock(return_value={"face_id": "face-1"})
+
+        result = await protect_update_known_face("face-1", {"description": "Doorbell"}, confirm=True)
+
+        assert result == {"success": True, "data": {"face_id": "face-1"}}
+        mock_recognition_manager.apply_update_known_face.assert_awaited_once_with(
+            "face-1",
+            {"description": "Doorbell"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_merge_preview(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_merge_known_faces
+
+        mock_recognition_manager.merge_known_faces = AsyncMock(
+            return_value={
+                "source": {"id": "source", "name": "Source"},
+                "target": {"id": "target", "name": "Target"},
+                "warnings": ["hard to reverse"],
+            }
+        )
+
+        result = await protect_merge_known_faces("source", "target")
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["warnings"] == ["hard to reverse"]
+
+    @pytest.mark.asyncio
+    async def test_merge_confirm(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_merge_known_faces
+
+        mock_recognition_manager.merge_known_faces = AsyncMock(
+            return_value={
+                "source": {"id": "source"},
+                "target": {"id": "target"},
+                "warnings": [],
+            }
+        )
+        mock_recognition_manager.apply_merge_known_faces = AsyncMock(return_value={"merged": True})
+
+        result = await protect_merge_known_faces("source", "target", confirm=True)
+
+        assert result == {"success": True, "data": {"merged": True}}
+        mock_recognition_manager.apply_merge_known_faces.assert_awaited_once_with("source", "target")
+
+    @pytest.mark.asyncio
+    async def test_delete_preview(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_delete_known_face
+
+        mock_recognition_manager.delete_known_face = AsyncMock(
+            return_value={
+                "face": {"id": "face-1", "name": "Assigned"},
+                "warnings": ["destructive"],
+            }
+        )
+
+        result = await protect_delete_known_face("face-1")
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["warnings"] == ["destructive"]
+
+    @pytest.mark.asyncio
+    async def test_delete_confirm(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_delete_known_face
+
+        mock_recognition_manager.delete_known_face = AsyncMock(return_value={"face": {"id": "face-1"}, "warnings": []})
+        mock_recognition_manager.apply_delete_known_face = AsyncMock(return_value={"deleted": True})
+
+        result = await protect_delete_known_face("face-1", confirm=True)
+
+        assert result == {"success": True, "data": {"deleted": True}}
+        mock_recognition_manager.apply_delete_known_face.assert_awaited_once_with("face-1")
+
+    @pytest.mark.asyncio
+    async def test_merge_error_has_operation_context(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_merge_known_faces
+
+        mock_recognition_manager.merge_known_faces = AsyncMock(side_effect=RuntimeError("controller rejected"))
+
+        result = await protect_merge_known_faces("source", "target")
+
+        assert result["success"] is False
+        assert "Failed to merge known faces" in result["error"]

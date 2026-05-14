@@ -97,6 +97,9 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "protect_update_chime": ("chime_manager", "apply_chime_settings"),
     "protect_update_light": ("light_manager", "apply_light_settings"),
     "protect_acknowledge_event": ("event_manager", "apply_acknowledge_event"),
+    "protect_update_known_face": ("recognition_manager", "apply_update_known_face"),
+    "protect_merge_known_faces": ("recognition_manager", "apply_merge_known_faces"),
+    "protect_delete_known_face": ("recognition_manager", "apply_delete_known_face"),
     # =========================================================================
     # Access — preview/execute split (X + apply_X)
     # =========================================================================
@@ -151,10 +154,7 @@ def _translate_acl_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[s
     from unifi_core.network.models.acl import MUTABLE_FIELDS, to_controller_update
 
     rule_id = args["rule_id"]
-    fields = {
-        k: v for k, v in args.items()
-        if k != "rule_id" and k in MUTABLE_FIELDS and v is not None
-    }
+    fields = {k: v for k, v in args.items() if k != "rule_id" and k in MUTABLE_FIELDS and v is not None}
     return (rule_id, to_controller_update(fields)), {}
 
 
@@ -205,6 +205,7 @@ def _translate_delete_recording(args: dict[str, Any]) -> tuple[tuple[Any, ...], 
 # covers the rename; callers that pass additional kwargs (rename, authorize,
 # set_client_ip_settings) carry those through unchanged.
 
+
 def _rename_mac_address_to_client_mac(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Rename ``mac_address`` → ``client_mac`` for client manager methods.
 
@@ -226,6 +227,7 @@ def _rename_mac_address_to_client_mac(args: dict[str, Any]) -> tuple[tuple[Any, 
 # but since the dispatcher bypasses the tool body we must strip those kwargs
 # before invoking the no-arg manager method.
 
+
 def _translate_list_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Strip tool-only filter kwargs; ``get_clients()`` accepts no arguments."""
     return (), {}
@@ -235,6 +237,7 @@ def _translate_list_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict
 # Network — update_firewall_policy
 # ---------------------------------------------------------------------------
 # Tool exposes ``update_data``; manager method takes ``updates``.
+
 
 def _translate_update_firewall_policy(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Rename ``update_data`` → ``updates`` for firewall_manager.update_firewall_policy."""
@@ -249,6 +252,7 @@ def _translate_update_firewall_policy(args: dict[str, Any]) -> tuple[tuple[Any, 
 # ---------------------------------------------------------------------------
 # Tool exposes ``port_forward_id``; manager method ``toggle_port_forward``
 # takes ``rule_id``.
+
 
 def _translate_toggle_port_forward(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Rename ``port_forward_id`` → ``rule_id`` for firewall_manager.toggle_port_forward."""
@@ -268,19 +272,21 @@ def _translate_toggle_port_forward(args: dict[str, Any]) -> tuple[tuple[Any, ...
 # ``device_mac``, ``radio`` → ``radio_id``, and collects the per-field
 # kwargs into an ``updates`` dict.
 
-_RADIO_UPDATE_FIELDS = frozenset({
-    "tx_power_mode",
-    "tx_power",
-    "channel",
-    "ht",
-    "min_rssi_enabled",
-    "min_rssi",
-    "assisted_roaming_enabled",
-    "antenna_gain",
-    "vwire_enabled",
-    "sens_level_enabled",
-    "sens_level",
-})
+_RADIO_UPDATE_FIELDS = frozenset(
+    {
+        "tx_power_mode",
+        "tx_power",
+        "channel",
+        "ht",
+        "min_rssi_enabled",
+        "min_rssi",
+        "assisted_roaming_enabled",
+        "antenna_gain",
+        "vwire_enabled",
+        "sens_level_enabled",
+        "sens_level",
+    }
+)
 
 
 def _translate_update_device_radio(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:

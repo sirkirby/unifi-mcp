@@ -127,3 +127,20 @@ class AcknowledgeEventInput(BaseModel):
     __action_input__: ClassVar[bool] = True
 
     event_id: str = Field(description="Event UUID to acknowledge")
+
+
+class MergeKnownFacesInput(BaseModel):
+    """Input for ``protect_merge_known_faces``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    source_face_id: str = Field(description="Face group UUID that will be folded into the target")
+    target_face_id: str = Field(description="Face group UUID that survives the merge")
+
+
+class DeleteKnownFaceInput(BaseModel):
+    """Input for ``protect_delete_known_face``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    face_id: str = Field(description="Face group UUID to remove")

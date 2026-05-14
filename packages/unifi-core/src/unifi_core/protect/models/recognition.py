@@ -1,10 +1,10 @@
-"""Shared read models for UniFi Protect recognition groups."""
+"""Shared models for UniFi Protect recognition groups."""
 
 from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RecognitionLinks(BaseModel):
@@ -18,7 +18,7 @@ class KnownFace(BaseModel):
     """Canonical Protect Known Face / assigned face group row."""
 
     id: Optional[str] = Field(default=None, description="Face group UUID", json_schema_extra={"mutable": False})
-    name: Optional[str] = Field(default=None, description="Assigned face name", json_schema_extra={"mutable": False})
+    name: Optional[str] = Field(default=None, description="Assigned face name")
     matched_name: Optional[str] = Field(
         default=None, description="Matched display name", json_schema_extra={"mutable": False}
     )
@@ -45,15 +45,12 @@ class KnownFace(BaseModel):
     is_notification_enabled: Optional[bool] = Field(
         default=None,
         description="Whether notifications are enabled for this group",
-        json_schema_extra={"mutable": False},
     )
     is_degraded: Optional[bool] = Field(
         default=None, description="Whether Protect marks this group as degraded", json_schema_extra={"mutable": False}
     )
     tags: list[Any] = Field(default_factory=list, description="Recognition tags", json_schema_extra={"mutable": False})
-    description: Optional[str] = Field(
-        default=None, description="Optional group description", json_schema_extra={"mutable": False}
-    )
+    description: Optional[str] = Field(default=None, description="Optional group description")
     created_at: Optional[str] = Field(
         default=None, description="Creation timestamp in epoch milliseconds", json_schema_extra={"mutable": False}
     )
@@ -62,8 +59,27 @@ class KnownFace(BaseModel):
     )
 
 
-MUTABLE_FIELDS = frozenset()
-READ_ONLY_FIELDS = frozenset(KnownFace.model_fields.keys()) | frozenset(RecognitionLinks.model_fields.keys())
+class KnownFaceUpdate(BaseModel):
+    """Mutable fields accepted by Known Face update operations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, description="Assigned face name")
+    description: Optional[str] = Field(default=None, description="Optional group description")
+    is_notification_enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether notifications are enabled for this group",
+    )
+
+
+MUTABLE_FIELDS = frozenset(KnownFaceUpdate.model_fields.keys())
+READ_ONLY_FIELDS = frozenset(KnownFace.model_fields.keys()) - MUTABLE_FIELDS
+
+_TO_CONTROLLER_UPDATE = {
+    "name": "name",
+    "description": "description",
+    "is_notification_enabled": "isNotificationEnabled",
+}
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -120,3 +136,24 @@ def links_from_controller(raw: Any) -> RecognitionLinks:
     if not isinstance(raw, dict):
         raw = {}
     return RecognitionLinks(prev=raw.get("prev"), next=raw.get("next"))
+
+
+def to_controller_update(fields: dict[str, Any]) -> dict[str, Any]:
+    """Translate a partial Known Face update into Protect API field names."""
+    if not fields:
+        raise ValueError("fields must include at least one supported mutable field")
+
+    unknown = set(fields) - MUTABLE_FIELDS - READ_ONLY_FIELDS
+    if unknown:
+        raise ValueError(f"Unsupported known face fields: {sorted(unknown)}")
+
+    read_only = set(fields) & READ_ONLY_FIELDS
+    if read_only:
+        raise ValueError(f"Read-only known face fields cannot be updated: {sorted(read_only)}")
+
+    update = KnownFaceUpdate(**fields)
+    supplied = update.model_dump(exclude_unset=True)
+    if not supplied:
+        raise ValueError("fields must include at least one supported mutable field")
+
+    return {_TO_CONTROLLER_UPDATE[key]: value for key, value in supplied.items()}

@@ -1,4 +1,4 @@
-# Protect Server Tool Reference (40 tools)
+# Protect Server Tool Reference (43 tools)
 
 Complete reference for `protect_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Protect controls physical security hardware.
 
@@ -191,11 +191,14 @@ Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles c
 Lists assigned UniFi Protect Known Faces / named face recognition groups. Read-only; returns metadata and controller image references only.
 
 <!-- AUTO:tools:recognition -->
-1 tools.
+4 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
 | `protect_list_known_faces` | Read | List UniFi Protect face recognition groups, including assigned Known Faces by default and unlabeled groups when group_types includes unkn... |
+| `protect_delete_known_face` | Mutate | Delete or remove a UniFi Protect face recognition group. |
+| `protect_merge_known_faces` | Mutate | Merge one UniFi Protect face group into another. |
+| `protect_update_known_face` | Mutate | Update UniFi Protect Known Face metadata. |
 <!-- /AUTO:tools:recognition -->
 
 **Tips:**
