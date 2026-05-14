@@ -578,13 +578,17 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List assigned UniFi Protect Known Faces / named face recognition groups. Returns metadata and controller image references only; image bytes are not fetched.",
+      "description": "List UniFi Protect face recognition groups, including assigned Known Faces by default and unlabeled groups when group_types includes unknown. Returns metadata and controller image references only; image bytes are not fetched.",
       "name": "protect_list_known_faces",
       "schema": {
         "input": {
           "properties": {
+            "group_types": {
+              "description": "Optional explicit recognition group types to list. Supported values: known, interest, unknown. When set, this overrides include_interest.",
+              "type": "array"
+            },
             "include_interest": {
-              "description": "When true, include Protect groups labeled as known or interest. When false, only known groups.",
+              "description": "Backward-compatible filter used when group_types is omitted. When true, include known and interest groups. When false, only known groups.",
               "type": "boolean"
             },
             "min_confidence": {

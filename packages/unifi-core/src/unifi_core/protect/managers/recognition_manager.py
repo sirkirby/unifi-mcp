@@ -16,6 +16,27 @@ logger = logging.getLogger(__name__)
 
 _VALID_ORDER_BY = {"name", "createdAt", "firstDetectedAt", "lastDetectedAt", "detectionsCount"}
 _VALID_ORDER_DIRECTION = {"asc", "desc"}
+_VALID_GROUP_TYPES = {"known", "interest", "unknown"}
+
+
+def _build_group_labels(group_types: list[str] | None, include_interest: bool) -> str:
+    """Build Protect recognition group labels, preserving old defaults."""
+    if group_types is None:
+        selected = ["known", "interest"] if include_interest else ["known"]
+    else:
+        selected = []
+        for raw in group_types:
+            group_type = str(raw).strip().lower()
+            if not group_type:
+                continue
+            if group_type not in _VALID_GROUP_TYPES:
+                raise ValueError(f"group_types must contain only {sorted(_VALID_GROUP_TYPES)}")
+            if group_type not in selected:
+                selected.append(group_type)
+        if not selected:
+            raise ValueError("group_types must include at least one supported group type")
+
+    return ",".join(f"groupType:{group_type}" for group_type in selected)
 
 
 class RecognitionManager:
@@ -31,14 +52,17 @@ class RecognitionManager:
         page_size: int = 100,
         min_confidence: int = 30,
         include_interest: bool = True,
+        group_types: list[str] | None = None,
         order_by: str = "name",
         order_direction: Literal["asc", "desc"] = "asc",
     ) -> Dict[str, Any]:
-        """Return assigned/named face recognition groups.
+        """Return Protect face recognition groups.
 
         Uses the same private endpoint shape as the Protect UI's Known Faces
-        view. The response intentionally includes image reference paths only;
-        it never fetches or embeds image bytes.
+        view by default. Pass ``group_types`` to explicitly discover other
+        group types, such as unlabeled/unknown clusters. The response
+        intentionally includes image reference paths only; it never fetches
+        or embeds image bytes.
         """
         if page is not None and page < 1:
             raise ValueError("page must be greater than or equal to 1")
@@ -51,7 +75,7 @@ class RecognitionManager:
         if order_direction not in _VALID_ORDER_DIRECTION:
             raise ValueError("order_direction must be 'asc' or 'desc'")
 
-        labels = "groupType:known,groupType:interest" if include_interest else "groupType:known"
+        labels = _build_group_labels(group_types, include_interest)
         params: dict[str, Any] = {
             "labels": labels,
             "minConfidence": min_confidence,

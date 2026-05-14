@@ -1,7 +1,7 @@
 """Recognition tools for UniFi Protect MCP server."""
 
 import logging
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field
@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 @server.tool(
     name="protect_list_known_faces",
     description=(
-        "List assigned UniFi Protect Known Faces / named face recognition groups. "
+        "List UniFi Protect face recognition groups, including assigned Known Faces "
+        "by default and unlabeled groups when group_types includes unknown. "
         "Returns metadata and controller image references only; image bytes are not fetched."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
@@ -37,9 +38,21 @@ async def protect_list_known_faces(
     include_interest: Annotated[
         bool,
         Field(
-            description="When true, include Protect groups labeled as known or interest. When false, only known groups."
+            description=(
+                "Backward-compatible filter used when group_types is omitted. "
+                "When true, include known and interest groups. When false, only known groups."
+            )
         ),
     ] = True,
+    group_types: Annotated[
+        Optional[List[str]],
+        Field(
+            description=(
+                "Optional explicit recognition group types to list. Supported values: known, interest, unknown. "
+                "When set, this overrides include_interest."
+            )
+        ),
+    ] = None,
     order_by: Annotated[
         str,
         Field(description="Sort field: name, createdAt, firstDetectedAt, lastDetectedAt, or detectionsCount."),
@@ -62,6 +75,7 @@ async def protect_list_known_faces(
             page_size=page_size,
             min_confidence=min_confidence,
             include_interest=include_interest,
+            group_types=group_types,
             order_by=order_by,
             order_direction=order_direction,  # type: ignore[arg-type]
         )

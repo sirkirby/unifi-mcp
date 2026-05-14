@@ -38,7 +38,7 @@ async def test_protect_known_faces_list(tmp_path, monkeypatch):
         app,
         key,
         f'''{{
-        protect {{ knownFaces(controller: "{cid}", limit: 10) {{
+        protect {{ knownFaces(controller: "{cid}", limit: 10, groupTypes: ["unknown"]) {{
             items {{ id name matchedName detectionsCount lastDetectedAt }}
         }} }}
     }}''',

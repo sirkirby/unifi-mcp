@@ -232,12 +232,14 @@ async def _fetch_known_faces(
     controller: str,
     min_confidence: int,
     include_interest: bool,
+    group_types: list[str] | None,
     order_by: str,
     order_direction: str,
 ) -> list:
+    group_types_key = ",".join(group_types) if group_types else ""
     key = (
         f"protect/known-faces/{controller}/{min_confidence}/"
-        f"{include_interest}/{order_by}/{order_direction}"
+        f"{include_interest}/{group_types_key}/{order_by}/{order_direction}"
     )
 
     async def _do() -> list:
@@ -252,6 +254,7 @@ async def _fetch_known_faces(
                 page_size=1000,
                 min_confidence=min_confidence,
                 include_interest=include_interest,
+                group_types=group_types,
                 order_by=order_by,
                 order_direction=order_direction,
             )
@@ -764,6 +767,7 @@ class ProtectQuery:
         cursor: str | None = None,
         min_confidence: int = 30,
         include_interest: bool = True,
+        group_types: list[str] | None = None,
         order_by: str = "name",
         order_direction: str = "asc",
     ) -> KnownFacePage:
@@ -773,6 +777,7 @@ class ProtectQuery:
             str(controller),
             min_confidence,
             include_interest,
+            group_types,
             order_by,
             order_direction,
         )

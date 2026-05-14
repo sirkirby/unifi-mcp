@@ -1694,6 +1694,7 @@ No native ``protect_get_liveview`` tool — filter from LIST.
 - `cursor` (query)
 - `min_confidence` (query)
 - `include_interest` (query)
+- `group_types` (query)
 - `order_by` (query)
 - `order_direction` (query)
 - `controller` (query)

@@ -195,7 +195,7 @@ Lists assigned UniFi Protect Known Faces / named face recognition groups. Read-o
 
 | Tool | Type | Description |
 |------|------|-------------|
-| `protect_list_known_faces` | Read | List assigned UniFi Protect Known Faces / named face recognition groups. |
+| `protect_list_known_faces` | Read | List UniFi Protect face recognition groups, including assigned Known Faces by default and unlabeled groups when group_types includes unkn... |
 <!-- /AUTO:tools:recognition -->
 
 **Tips:**

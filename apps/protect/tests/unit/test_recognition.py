@@ -76,6 +76,44 @@ class TestRecognitionManager:
         assert params["labels"] == "groupType:known"
 
     @pytest.mark.asyncio
+    async def test_list_known_faces_unknown_group_type(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.return_value = {
+            "groups": [
+                {
+                    "id": "face-427",
+                    "name": None,
+                    "matchedName": None,
+                    "type": "face",
+                    "detectionsCount": 14,
+                    "metadata": {},
+                }
+            ],
+            "links": {"prev": None, "next": None},
+        }
+
+        result = await RecognitionManager(mock_cm).list_known_faces(group_types=["unknown"])
+
+        face = result["faces"][0]
+        assert face["id"] == "face-427"
+        assert "name" not in face
+        assert "matched_name" not in face
+        params = mock_cm.client.api_request.await_args.kwargs["params"]
+        assert params["labels"] == "groupType:unknown"
+
+    @pytest.mark.asyncio
+    async def test_list_known_faces_mixed_group_types(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.return_value = {"groups": [], "links": {}}
+
+        await RecognitionManager(mock_cm).list_known_faces(group_types=["known", "unknown", "known"])
+
+        params = mock_cm.client.api_request.await_args.kwargs["params"]
+        assert params["labels"] == "groupType:known,groupType:unknown"
+
+    @pytest.mark.asyncio
     async def test_list_known_faces_validates_bounds(self, mock_cm):
         from unifi_core.protect.managers.recognition_manager import RecognitionManager
 
@@ -87,6 +125,10 @@ class TestRecognitionManager:
             await mgr.list_known_faces(min_confidence=101)
         with pytest.raises(ValueError, match="order_direction"):
             await mgr.list_known_faces(order_direction="sideways")  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="group_types"):
+            await mgr.list_known_faces(group_types=["person"])  # type: ignore[list-item]
+        with pytest.raises(ValueError, match="at least one"):
+            await mgr.list_known_faces(group_types=[])
 
 
 @pytest.fixture
@@ -119,6 +161,33 @@ class TestProtectListKnownFacesTool:
             page_size=25,
             min_confidence=40,
             include_interest=True,
+            group_types=None,
+            order_by="name",
+            order_direction="asc",
+        )
+
+    @pytest.mark.asyncio
+    async def test_unknown_group_types(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_list_known_faces
+
+        mock_recognition_manager.list_known_faces = AsyncMock(
+            return_value={
+                "faces": [{"id": "face-427", "type": "face", "detections_count": 14}],
+                "count": 1,
+                "links": {},
+            }
+        )
+
+        result = await protect_list_known_faces(group_types=["unknown"])
+
+        assert result["success"] is True
+        assert result["data"]["faces"][0]["id"] == "face-427"
+        mock_recognition_manager.list_known_faces.assert_awaited_once_with(
+            page=None,
+            page_size=100,
+            min_confidence=30,
+            include_interest=True,
+            group_types=["unknown"],
             order_by="name",
             order_direction="asc",
         )

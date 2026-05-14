@@ -1,11 +1,10 @@
 """Protect resource endpoints — happy paths, capability mismatch, 404."""
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -193,6 +192,44 @@ async def test_list_known_faces_happy_path(tmp_path, monkeypatch) -> None:
     assert {item["matched_name"] for item in body["items"]} == {"Person 1", "Person 2"}
     assert body["next_cursor"] is not None
     assert body["render_hint"]["kind"] == "list"
+
+
+@pytest.mark.asyncio
+async def test_list_known_faces_group_types_filter(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    calls: list[dict] = []
+
+    async def fake_list(self, *a, **kw):
+        calls.append(kw)
+        return {
+            "faces": [
+                {
+                    "id": "face-427",
+                    "type": "face",
+                    "detections_count": 14,
+                    "metadata": {},
+                }
+            ],
+            "count": 1,
+            "links": {},
+        }
+
+    from unifi_core.protect.managers.recognition_manager import RecognitionManager
+    monkeypatch.setattr(RecognitionManager, "list_known_faces", fake_list)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/known-faces?controller={cid}&group_types=unknown",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["items"][0]["id"] == "face-427"
+    assert calls[0]["group_types"] == ["unknown"]
 
 
 @pytest.mark.asyncio

@@ -1282,7 +1282,7 @@ type ProtectQuery {
   snapshot(controller: ID!, id: ID!, width: Int = null, height: Int = null): Snapshot
 
   """List assigned Protect Known Faces / named face recognition groups."""
-  knownFaces(controller: ID!, limit: Int! = 50, cursor: String = null, minConfidence: Int! = 30, includeInterest: Boolean! = true, orderBy: String! = "name", orderDirection: String! = "asc"): KnownFacePage!
+  knownFaces(controller: ID!, limit: Int! = 50, cursor: String = null, minConfidence: Int! = 30, includeInterest: Boolean! = true, groupTypes: [String!] = null, orderBy: String! = "name", orderDirection: String! = "asc"): KnownFacePage!
 
   """List paired Protect chimes (paginated)."""
   chimes(controller: ID!, limit: Int! = 50, cursor: String = null): ChimePage!

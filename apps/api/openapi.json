@@ -11692,6 +11692,27 @@
             }
           },
           {
+            "description": "Explicit recognition group types to list. Supported values: known, interest, unknown. When set, this overrides include_interest.",
+            "in": "query",
+            "name": "group_types",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Explicit recognition group types to list. Supported values: known, interest, unknown. When set, this overrides include_interest.",
+              "title": "Group Types"
+            }
+          },
+          {
             "in": "query",
             "name": "order_by",
             "required": false,

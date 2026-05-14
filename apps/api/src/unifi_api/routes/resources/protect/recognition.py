@@ -46,6 +46,13 @@ async def list_known_faces(
     cursor: str | None = Query(None),
     min_confidence: int = Query(30, ge=0, le=100),
     include_interest: bool = Query(True),
+    group_types: list[str] | None = Query(
+        None,
+        description=(
+            "Explicit recognition group types to list. Supported values: known, interest, unknown. "
+            "When set, this overrides include_interest."
+        ),
+    ),
     order_by: str = Query("name"),
     order_direction: str = Query("asc"),
 ) -> dict:
@@ -64,6 +71,7 @@ async def list_known_faces(
             page_size=1000,
             min_confidence=min_confidence,
             include_interest=include_interest,
+            group_types=group_types,
             order_by=order_by,
             order_direction=order_direction,
         )
