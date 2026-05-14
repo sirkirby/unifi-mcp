@@ -27,7 +27,17 @@ Then run the interactive setup to configure your controller connection:
 /unifi-protect:setup
 ```
 
-This walks you through entering your controller host, credentials, and permission preferences — then writes everything to `.claude/settings.json` so it persists across sessions. If you already have the Network plugin configured on the same controller, the setup will detect and reuse those credentials. Restart Claude Code after setup to connect.
+This walks you through entering your controller host, credentials, and permission preferences — then writes everything to `.claude/settings.local.json` so it persists across sessions. If you already have the Network plugin configured on the same controller, the setup will detect and reuse those credentials. Restart Claude Code after setup to connect.
+
+### Codex
+
+Register the marketplace, then install `unifi-protect` from Codex's `/plugins` UI:
+
+```bash
+codex plugin marketplace add sirkirby/unifi-mcp
+```
+
+After installing, ask Codex to use the UniFi Protect setup skill. The setup flow registers the MCP server with `codex mcp add`, stores your controller environment values in Codex's MCP configuration, and prompts you to restart Codex.
 
 ### PyPI / Docker
 

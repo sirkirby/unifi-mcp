@@ -63,6 +63,20 @@ Repeat for Protect or Access if needed:
 
 Each plugin's `/setup` command walks you through connecting to your controller and configuring permissions.
 
+### Codex
+
+Register the UniFi MCP marketplace, then install the plugins from Codex's `/plugins` UI:
+
+```bash
+codex plugin marketplace add sirkirby/unifi-mcp
+```
+
+Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `unifi-network`, `unifi-protect`, or `unifi-access`. After installing, ask Codex to run the plugin's setup skill, for example:
+
+> Use the UniFi Network setup skill to configure this for Codex.
+
+The setup skill registers the MCP server with `codex mcp add`, stores the selected environment values in Codex's MCP configuration, and keeps the same preview-before-confirm safety model as Claude Code.
+
 ### Other MCP clients
 
 Run the servers directly:
@@ -191,9 +205,9 @@ packages/
   unifi-mcp-shared/ # Shared MCP patterns (permissions, tools, diagnostics, config)
   unifi-mcp-relay/  # Cloud relay sidecar (bridges local servers to Cloudflare Worker)
 plugins/
-  unifi-network/    # Claude Code plugin: MCP server + agent skills + setup
-  unifi-protect/    # Claude Code plugin: MCP server + agent skills + setup
-  unifi-access/     # Claude Code plugin: MCP server + setup
+  unifi-network/    # Claude Code/Codex plugin: MCP server + agent skills + setup
+  unifi-protect/    # Claude Code/Codex plugin: MCP server + agent skills + setup
+  unifi-access/     # Claude Code/Codex plugin: MCP server + setup
 skills/
   _shared/          # Shared utilities for skill scripts (MCP client, config)
 docs/               # Ecosystem-level documentation

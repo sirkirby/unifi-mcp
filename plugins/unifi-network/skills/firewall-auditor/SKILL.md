@@ -71,7 +71,8 @@ The `fix` block is optional but include it whenever the benchmark reference show
 Pipe the findings through the scoring CLI. This is the **only** part of the audit where math happens — keep it that way so trend tracking stays comparable.
 
 ```bash
-echo '{"findings": [...]}' | "${CLAUDE_PLUGIN_ROOT}/skills/firewall-auditor/scripts/unifi-firewall-score"
+# Resolve scripts/unifi-firewall-score relative to this skill directory.
+echo '{"findings": [...]}' | "<firewall-auditor-skill-dir>/scripts/unifi-firewall-score"
 ```
 
 The CLI returns:
@@ -94,10 +95,10 @@ Do not compute the score yourself. The CLI is stable across versions; your arith
 
 ### 4. Append to history
 
-Maintain a single audit history file at `${UNIFI_SKILLS_STATE_DIR:-$HOME/.claude/unifi-skills}/audit-history.json`. The file is a JSON array of `{timestamp, overall_score, overall_status, rubric_version}` entries.
+Maintain a single audit history file at `${UNIFI_SKILLS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/unifi-mcp/skills}/audit-history.json`. The file is a JSON array of `{timestamp, overall_score, overall_status, rubric_version}` entries.
 
 ```bash
-STATE_DIR="${UNIFI_SKILLS_STATE_DIR:-$HOME/.claude/unifi-skills}"
+STATE_DIR="${UNIFI_SKILLS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/unifi-mcp/skills}"
 mkdir -p "$STATE_DIR"
 HIST="$STATE_DIR/audit-history.json"
 [ -f "$HIST" ] || echo "[]" > "$HIST"

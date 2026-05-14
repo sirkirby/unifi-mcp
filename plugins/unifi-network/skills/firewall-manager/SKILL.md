@@ -44,7 +44,7 @@ Gather state via three parallel tool calls:
 Combine the results into one JSON document and write it to disk:
 
 ```bash
-STATE_DIR="${UNIFI_SKILLS_STATE_DIR:-$HOME/.claude/unifi-skills}/firewall-snapshots"
+STATE_DIR="${UNIFI_SKILLS_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/unifi-mcp/skills}/firewall-snapshots"
 mkdir -p "$STATE_DIR"
 SNAPSHOT="$STATE_DIR/firewall_$(date -u +%Y%m%dT%H%M%SZ).json"
 # Write the combined JSON ($SNAPSHOT_JSON below is what you composed from the three tool results):

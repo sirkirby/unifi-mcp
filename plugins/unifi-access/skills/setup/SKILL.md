@@ -1,114 +1,114 @@
 ---
 name: setup
-description: Configure the UniFi Access MCP server — set controller host, credentials, and permissions
+description: Configure the UniFi Access MCP server for Claude Code or Codex — set controller host, credentials, API key, and permissions
 allowed-tools: Read, Bash, AskUserQuestion
 ---
 
 # Set Up UniFi Access MCP Server
 
-Walk the user through configuring their UniFi Access controller connection. **Ask each question one at a time using AskUserQuestion. Wait for the answer before proceeding.**
+Walk the user through configuring their UniFi Access controller connection. Ask one question at a time and wait for the answer before continuing.
+
+## Interaction Rules
+
+Use the client target that matches the current agent runtime:
+- Claude Code: `claude`
+- Codex: `codex`
+
+If the runtime is unclear, ask which client to configure. For questions, use the platform's blocking question tool when available (`AskUserQuestion` in Claude Code, `request_user_input` in Codex). If no blocking question tool is available, ask in chat with numbered options and wait for the user's reply.
+
+On macOS and Linux, resolve setup scripts relative to this skill file:
+- `../../scripts/check-prereqs.sh`
+- `../../scripts/set-env.sh`
+
+When the host exposes a plugin-root variable such as `CLAUDE_PLUGIN_ROOT`, using `$CLAUDE_PLUGIN_ROOT/scripts/...` is also valid. Do not assume the current shell directory is the plugin root.
+
+On Windows with Claude Code, use `../../scripts/set-env.ps1` for the final Claude settings write. On Windows with Codex, call `codex mcp add` directly with the same env variables if Bash is unavailable.
 
 ## Step 0: Check Prerequisites
 
-Before asking the user for any credentials, run the prereq check so the most common silent failures (missing `uvx`, malformed existing settings) are caught up front:
+Before asking for credentials, run:
 
-**macOS / Linux:**
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/check-prereqs.sh "unifi-access"
+bash <path-to-plugin>/scripts/check-prereqs.sh --target <claude|codex> "unifi-access"
 ```
 
-**Windows:** PowerShell setups can skip this step — `uvx` availability is checked when the MCP server first launches. Just remind the user to install `uv` if it's missing.
-
-If the script exits non-zero, **stop and report the error to the user**. Do not proceed to credentials. The script's output already explains what to fix.
+If the script exits non-zero, stop and report the error. Do not proceed to credentials.
 
 ## Step 1: Controller Host
 
-Ask: "What is your UniFi controller's IP address or hostname?" (e.g., 192.168.1.1)
+Ask: "What is your UniFi controller's IP address or hostname?" Example: `192.168.1.1`.
 
-If the user already has Network or Protect configured (check `.claude/settings.local.json` for existing `UNIFI_*` env vars), ask: "Is Access on the same controller?" If yes, use the same host.
+If another UniFi MCP server is already configured, ask whether Access is on the same controller. For Claude, existing values may be in `.claude/settings.local.json`. For Codex, existing values may be visible through `codex mcp list` and `codex mcp get <server>`.
 
 ## Step 2: Authentication
 
-Access uses dual authentication — explain this to the user:
+Access supports two auth paths:
+- API key for read-oriented Access API calls
+- Local proxy session with username and password for mutations and broader tool coverage
 
-"UniFi Access has two auth paths:
-- **API key** (port 12445) — for read-only operations (listing doors, events, devices)
-- **Username + password** (port 443) — required for mutations (lock/unlock, credentials, visitors)
+Ask whether the user wants API key only, username/password only, or both. Recommend both when they want full Access management.
 
-You can configure one or both."
+For username/password, ask for:
+1. Username, using a local admin account, not a Ubiquiti SSO account
+2. Password
 
-Ask: "Which auth paths do you want to set up?"
+For API key, ask for the key and include `UNIFI_ACCESS_API_KEY`.
 
-Options:
-- "API key only" — read-only access to Access data
-- "Username and password only" — full access including mutations
-- "Both" — recommended for full flexibility
+At least one auth path is required.
 
-## Step 3: Collect Credentials
+## Step 3: Optional Settings
 
-Based on their choice, ask for API key and/or username+password (one question at a time).
+Ask whether to use defaults or customize:
+- Defaults: controller port `443`, Access API port `12445`, SSL verification `false`, lazy tool loading
+- Customize: ask for controller port, API port, SSL verification, and tool registration mode
 
 ## Step 4: Permission Configuration
 
-Ask: "Do you want to enable any write permissions? By default, ALL mutations are disabled for Access (door lock/unlock, credentials, visitors)."
+Ask whether to enable write permissions. By default, Access mutations are disabled for credentials, visitors, policies, and door controls.
 
 Options:
-- "Read-only for now" — can view doors, events, users but not control anything
-- "Enable door control" — lock/unlock doors
-- "Enable credential management" — create/revoke NFC, PIN, mobile credentials
-- "Enable visitor management" — create/delete visitor passes
-- "Enable all" — door control + credentials + visitors + device reboot
-- "Custom" — ask which categories to enable
+- Read-only for now
+- Enable visitor and credential management
+- Enable door operations
+- Enable all Access write permissions except delete operations
+- Custom categories
+
+Collect any selected policy variables. Use the existing `UNIFI_POLICY_ACCESS_<CATEGORY>_<ACTION>=true` format.
 
 ## Step 5: Write Configuration
 
-Use the appropriate script for the user's platform to write all collected values to `.claude/settings.local.json`. Check the platform from your environment info. On **Windows** use `set-env.ps1`, on **macOS/Linux** use `set-env.sh`:
+On macOS/Linux, run the target-aware setup script with only values the user provided or selected:
 
-**macOS / Linux:**
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/set-env.sh \
+bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex> \
   UNIFI_ACCESS_HOST=<host> \
   UNIFI_ACCESS_API_KEY=<api-key> \
   UNIFI_ACCESS_USERNAME=<username> \
   UNIFI_ACCESS_PASSWORD=<password>
 ```
 
-**Windows:**
-```powershell
-powershell -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/set-env.ps1" UNIFI_ACCESS_HOST=<host> UNIFI_ACCESS_API_KEY=<api-key> UNIFI_ACCESS_USERNAME=<username> UNIFI_ACCESS_PASSWORD=<password>
-```
+Add optional values and policy variables to the same command, for example:
 
-If the host and credentials are the same as existing shared `UNIFI_*` vars, use the shared prefix instead to avoid duplication.
-
-If permissions were enabled, also pass those:
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/set-env.sh \
-  UNIFI_POLICY_ACCESS_DOORS_UPDATE=true \
-  UNIFI_POLICY_ACCESS_CREDENTIALS_CREATE=true \
+bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex> \
+  UNIFI_ACCESS_HOST=<host> \
+  UNIFI_ACCESS_API_KEY=<api-key> \
+  UNIFI_ACCESS_USERNAME=<username> \
+  UNIFI_ACCESS_PASSWORD=<password> \
+  UNIFI_ACCESS_API_PORT=12445 \
   UNIFI_POLICY_ACCESS_VISITORS_CREATE=true
 ```
 
-Permission variables by option:
-- **Door control:** `UNIFI_POLICY_ACCESS_DOORS_UPDATE=true`
-- **Credential management:** `UNIFI_POLICY_ACCESS_CREDENTIALS_CREATE=true`, `UNIFI_POLICY_ACCESS_CREDENTIALS_DELETE=true`
-- **Visitor management:** `UNIFI_POLICY_ACCESS_VISITORS_CREATE=true`, `UNIFI_POLICY_ACCESS_VISITORS_DELETE=true`
-- **Enable all:** all of the above + `UNIFI_POLICY_ACCESS_DEVICES_UPDATE=true`, `UNIFI_POLICY_ACCESS_POLICIES_UPDATE=true`
+The script handles the client-specific write:
+- Claude target: merges env vars into `.claude/settings.local.json`
+- Codex target: replaces the `unifi-access` MCP server via `codex mcp add --env ... -- uvx ...`
 
-## Step 6: Verify and Restart
+## Step 6: Final Message
 
-Tell the user:
+For Claude Code, tell the user:
 
-"Configuration saved to `.claude/settings.local.json`. Restart Claude Code (or run `/reload-plugins`) to connect the MCP server.
+"Configuration saved to `.claude/settings.local.json`. Restart Claude Code or run `/reload-plugins`, then confirm the plugin is enabled with `/plugin`."
 
-**After restart, run `/mcp` to verify.** You should see `unifi-access` listed as connected, with a tool count next to it.
+For Codex, tell the user:
 
-If it's missing or shows 0 tools, the server failed to start. Diagnose in this order:
-
-1. `/plugin` — confirm the plugin shows **enabled** (not just installed). If only installed, enable it and re-run `/reload-plugins`.
-2. `which uvx` — if it returns nothing, install `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`), restart your shell, then restart Claude Code.
-3. `claude --debug` (in a fresh shell) — surfaces MCP server startup errors. Look for `unifi-access` in the output and report any error to the maintainer.
-4. Verify the credentials by running the same `uvx unifi-access-mcp` command manually with the same env vars to see if it can reach your controller.
-
-Once `/mcp` shows the server connected, the UniFi Access tools will be available."
-
-Show a summary table of what was configured, noting which auth paths are active and what permissions are enabled.
+"Codex MCP server `unifi-access` configured. Restart Codex so the updated MCP server is loaded."

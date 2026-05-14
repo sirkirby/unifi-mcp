@@ -1,0 +1,41 @@
+{
+  "name": "unifi-access",
+  "version": "0.2.9",
+  "description": "UniFi Access MCP server — manage door locks, credentials, visitors, and access policies",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "homepage": "https://github.com/sirkirby/unifi-mcp",
+  "repository": "https://github.com/sirkirby/unifi-mcp",
+  "license": "MIT",
+  "keywords": [
+    "unifi",
+    "access",
+    "doors",
+    "credentials",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "UniFi Access",
+    "shortDescription": "Manage UniFi Access doors, credentials, visitors, and policies",
+    "longDescription": "Use UniFi Access MCP tools and skills in Codex to inspect doors, credentials, visitors, and access events, then apply safe preview-before-confirm mutations against a UniFi Access controller.",
+    "developerName": "sirkirby",
+    "category": "Engineering",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/sirkirby/unifi-mcp",
+    "defaultPrompt": [
+      "Set up UniFi Access MCP for Codex",
+      "Show door access events today",
+      "Audit expiring access credentials"
+    ],
+    "brandColor": "#006FFF",
+    "screenshots": []
+  }
+}

@@ -1,121 +1,105 @@
 ---
 name: setup
-description: Configure the UniFi Network MCP server — set controller host, credentials, and permissions
+description: Configure the UniFi Network MCP server for Claude Code or Codex — set controller host, credentials, and permissions
 allowed-tools: Read, Bash, AskUserQuestion
 ---
 
 # Set Up UniFi Network MCP Server
 
-Walk the user through configuring their UniFi Network controller connection. **Ask each question one at a time using AskUserQuestion. Wait for the answer before proceeding.**
+Walk the user through configuring their UniFi Network controller connection. Ask one question at a time and wait for the answer before continuing.
+
+## Interaction Rules
+
+Use the client target that matches the current agent runtime:
+- Claude Code: `claude`
+- Codex: `codex`
+
+If the runtime is unclear, ask which client to configure. For questions, use the platform's blocking question tool when available (`AskUserQuestion` in Claude Code, `request_user_input` in Codex). If no blocking question tool is available, ask in chat with numbered options and wait for the user's reply.
+
+On macOS and Linux, resolve setup scripts relative to this skill file:
+- `../../scripts/check-prereqs.sh`
+- `../../scripts/set-env.sh`
+
+When the host exposes a plugin-root variable such as `CLAUDE_PLUGIN_ROOT`, using `$CLAUDE_PLUGIN_ROOT/scripts/...` is also valid. Do not assume the current shell directory is the plugin root.
+
+On Windows with Claude Code, use `../../scripts/set-env.ps1` for the final Claude settings write. On Windows with Codex, call `codex mcp add` directly with the same env variables if Bash is unavailable.
 
 ## Step 0: Check Prerequisites
 
-Before asking the user for any credentials, run the prereq check so the most common silent failures (missing `uvx`, malformed existing settings) are caught up front:
+Before asking for credentials, run:
 
-**macOS / Linux:**
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/check-prereqs.sh "unifi-network"
+bash <path-to-plugin>/scripts/check-prereqs.sh --target <claude|codex> "unifi-network"
 ```
 
-**Windows:** PowerShell setups can skip this step — `uvx` availability is checked when the MCP server first launches. Just remind the user to install `uv` if it's missing.
-
-If the script exits non-zero, **stop and report the error to the user**. Do not proceed to credentials. The script's output already explains what to fix (install `uv`, repair `.claude/settings.local.json`, etc.).
+If the script exits non-zero, stop and report the error. Do not proceed to credentials.
 
 ## Step 1: Controller Host
 
-Ask: "What is your UniFi controller's IP address or hostname?" (e.g., 192.168.1.1)
+Ask: "What is your UniFi controller's IP address or hostname?" Example: `192.168.1.1`.
 
 ## Step 2: Credentials
 
 Ask for:
-1. Username (local admin account — **not** a Ubiquiti SSO account)
+1. Username, using a local admin account, not a Ubiquiti SSO account
 2. Password
 
-Username and password are **required**. These must be local admin credentials on the UniFi controller.
+Username and password are required.
 
-### Optional: API Key
+### Optional API Key
 
-After collecting credentials, mention:
+After collecting username and password, explain that UniFi API key support is experimental and limited to read-only operations and a subset of tools. Ask whether to configure an API key too.
 
-"UniFi also supports API keys, but API key auth is **experimental** — it's limited to read-only operations and a subset of tools. Ubiquiti is still expanding API key support. Would you also like to configure an API key?"
+If yes, ask for the API key and include `UNIFI_NETWORK_API_KEY`. If no, skip it.
 
-If yes, ask for the API key string and include it as `UNIFI_NETWORK_API_KEY` in the configuration. If no, skip it.
+## Step 3: Optional Settings
 
-## Step 4: Optional Settings
+Ask whether to use defaults or customize:
+- Defaults: port `443`, site `default`, SSL verification `false`, lazy tool loading
+- Customize: ask for port, site, SSL verification, and tool registration mode
 
-Ask: "Any additional settings to configure?"
+## Step 4: Permission Configuration
 
-Options:
-- "Use defaults" — port 443, site 'default', SSL verification off, lazy tool loading
-- "Customize" — ask about each: port, site name, SSL verification, tool registration mode
+Ask whether to enable write permissions:
+- Read-only for now
+- Enable common write permissions: firewall, port forwards, QoS, traffic routes, VPN clients
+- Enable all write permissions except delete operations
+- Custom categories
 
-## Step 5: Permission Configuration
+Collect any selected policy variables. Use the existing `UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>=true` format.
 
-Ask: "Do you want to enable any write permissions? By default, the server is read-only for high-risk categories."
+## Step 5: Write Configuration
 
-Options:
-- "Read-only for now" — skip, can be configured later
-- "Enable common write permissions" — enable firewall, port forwards, QoS, traffic routes, VPN clients
-- "Enable all write permissions" — enable everything except delete operations
-- "Custom" — ask which categories to enable
+On macOS/Linux, run the target-aware setup script with only values the user provided or selected:
 
-## Step 6: Write Configuration
-
-Use the appropriate script for the user's platform to write all collected values to `.claude/settings.local.json`. The script handles creating the file, merging into existing env vars, and masking sensitive values in output.
-
-Check the platform from your environment info. On **Windows** use `set-env.ps1`, on **macOS/Linux** use `set-env.sh`:
-
-**macOS / Linux:**
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/set-env.sh \
+bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex> \
   UNIFI_NETWORK_HOST=<host> \
   UNIFI_NETWORK_USERNAME=<username> \
   UNIFI_NETWORK_PASSWORD=<password>
 ```
 
-**Windows:**
-```powershell
-powershell -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/set-env.ps1" UNIFI_NETWORK_HOST=<host> UNIFI_NETWORK_USERNAME=<username> UNIFI_NETWORK_PASSWORD=<password>
-```
+Add optional values and policy variables to the same command, for example:
 
-Only pass variables the user provided values for. Use the `UNIFI_NETWORK_` prefix so it doesn't conflict with other server plugins.
-
-If permissions were enabled, also pass those (same script, separate call):
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/set-env.sh \
-  UNIFI_POLICY_NETWORK_FIREWALL_POLICIES_CREATE=true \
-  UNIFI_POLICY_NETWORK_FIREWALL_POLICIES_UPDATE=true \
-  UNIFI_POLICY_NETWORK_PORT_FORWARDS_CREATE=true \
-  UNIFI_POLICY_NETWORK_PORT_FORWARDS_UPDATE=true
+bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex> \
+  UNIFI_NETWORK_HOST=<host> \
+  UNIFI_NETWORK_USERNAME=<username> \
+  UNIFI_NETWORK_PASSWORD=<password> \
+  UNIFI_NETWORK_API_KEY=<api-key> \
+  UNIFI_POLICY_NETWORK_FIREWALL_UPDATE=true
 ```
 
-Common permission variables for "enable all write":
-- `UNIFI_POLICY_NETWORK_NETWORKS_CREATE=true`, `UNIFI_POLICY_NETWORK_NETWORKS_UPDATE=true`
-- `UNIFI_POLICY_NETWORK_WLANS_CREATE=true`, `UNIFI_POLICY_NETWORK_WLANS_UPDATE=true`
-- `UNIFI_POLICY_NETWORK_DEVICES_UPDATE=true`
-- `UNIFI_POLICY_NETWORK_CLIENTS_UPDATE=true`
-- `UNIFI_POLICY_NETWORK_FIREWALL_POLICIES_CREATE=true`, `UNIFI_POLICY_NETWORK_FIREWALL_POLICIES_UPDATE=true`
-- `UNIFI_POLICY_NETWORK_PORT_FORWARDS_CREATE=true`, `UNIFI_POLICY_NETWORK_PORT_FORWARDS_UPDATE=true`
-- `UNIFI_POLICY_NETWORK_TRAFFIC_ROUTES_UPDATE=true`
-- `UNIFI_POLICY_NETWORK_QOS_RULES_CREATE=true`, `UNIFI_POLICY_NETWORK_QOS_RULES_UPDATE=true`
-- `UNIFI_POLICY_NETWORK_VPN_CLIENTS_UPDATE=true`
-- `UNIFI_POLICY_NETWORK_ROUTES_CREATE=true`, `UNIFI_POLICY_NETWORK_ROUTES_UPDATE=true`
+The script handles the client-specific write:
+- Claude target: merges env vars into `.claude/settings.local.json`
+- Codex target: replaces the `unifi-network` MCP server via `codex mcp add --env ... -- uvx ...`
 
-## Step 7: Verify and Restart
+## Step 6: Final Message
 
-Tell the user:
+For Claude Code, tell the user:
 
-"Configuration saved to `.claude/settings.local.json`. Restart Claude Code (or run `/reload-plugins`) to connect the MCP server.
+"Configuration saved to `.claude/settings.local.json`. Restart Claude Code or run `/reload-plugins`, then confirm the plugin is enabled with `/plugin`."
 
-**After restart, run `/mcp` to verify.** You should see `unifi-network` listed as connected, with a tool count next to it.
+For Codex, tell the user:
 
-If it's missing or shows 0 tools, the server failed to start. Diagnose in this order:
-
-1. `/plugin` — confirm the plugin shows **enabled** (not just installed). If only installed, enable it and re-run `/reload-plugins`.
-2. `which uvx` — if it returns nothing, install `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`), restart your shell, then restart Claude Code.
-3. `claude --debug` (in a fresh shell) — surfaces MCP server startup errors. Look for `unifi-network` in the output and report any error to the maintainer.
-4. Verify the credentials by running the same `uvx unifi-network-mcp` command manually with the same env vars to see if it can reach your controller.
-
-Once `/mcp` shows the server connected, the UniFi tools (`unifi_execute`, `unifi_tool_index`, etc.) will be available."
-
-Show a summary table of what was configured.
+"Codex MCP server `unifi-network` configured. Restart Codex so the updated MCP server is loaded."

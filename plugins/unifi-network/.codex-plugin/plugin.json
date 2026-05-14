@@ -1,0 +1,41 @@
+{
+  "name": "unifi-network",
+  "version": "0.17.1",
+  "description": "UniFi Network MCP server — manage network devices, clients, firewall, VPN, and more",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "homepage": "https://github.com/sirkirby/unifi-mcp",
+  "repository": "https://github.com/sirkirby/unifi-mcp",
+  "license": "MIT",
+  "keywords": [
+    "unifi",
+    "network",
+    "firewall",
+    "wifi",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "UniFi Network",
+    "shortDescription": "Manage UniFi Network devices, clients, firewall, VPN, and WiFi",
+    "longDescription": "Use UniFi Network MCP tools and skills in Codex to inspect clients and devices, audit health, manage firewall and routing changes, and apply safe preview-before-confirm mutations against a UniFi Network Controller.",
+    "developerName": "sirkirby",
+    "category": "Engineering",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/sirkirby/unifi-mcp",
+    "defaultPrompt": [
+      "Set up UniFi Network MCP for Codex",
+      "Show my UniFi Network health",
+      "Audit my UniFi firewall rules"
+    ],
+    "brandColor": "#006FFF",
+    "screenshots": []
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "unifi-protect",
+  "version": "0.3.10",
+  "description": "UniFi Protect MCP server — manage security cameras, NVR, recordings, and smart detections",
+  "author": {
+    "name": "sirkirby",
+    "url": "https://github.com/sirkirby"
+  },
+  "homepage": "https://github.com/sirkirby/unifi-mcp",
+  "repository": "https://github.com/sirkirby/unifi-mcp",
+  "license": "MIT",
+  "keywords": [
+    "unifi",
+    "protect",
+    "cameras",
+    "nvr",
+    "security",
+    "mcp"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "UniFi Protect",
+    "shortDescription": "Manage UniFi Protect cameras, events, recordings, and detections",
+    "longDescription": "Use UniFi Protect MCP tools and skills in Codex to inspect cameras and events, summarize security activity, review recordings, and apply safe preview-before-confirm device mutations against a UniFi Protect controller.",
+    "developerName": "sirkirby",
+    "category": "Engineering",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/sirkirby/unifi-mcp",
+    "defaultPrompt": [
+      "Set up UniFi Protect MCP for Codex",
+      "Show recent Protect events",
+      "Summarize camera activity today"
+    ],
+    "brandColor": "#006FFF",
+    "screenshots": []
+  }
+}

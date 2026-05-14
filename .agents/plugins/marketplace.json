@@ -1,0 +1,44 @@
+{
+  "name": "unifi-plugins",
+  "interface": {
+    "displayName": "UniFi MCP"
+  },
+  "plugins": [
+    {
+      "name": "unifi-network",
+      "source": {
+        "source": "local",
+        "path": "./plugins/unifi-network"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    },
+    {
+      "name": "unifi-protect",
+      "source": {
+        "source": "local",
+        "path": "./plugins/unifi-protect"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    },
+    {
+      "name": "unifi-access",
+      "source": {
+        "source": "local",
+        "path": "./plugins/unifi-access"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    }
+  ]
+}

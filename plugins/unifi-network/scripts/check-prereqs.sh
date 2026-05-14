@@ -1,21 +1,57 @@
 #!/bin/bash
 # Pre-flight check for unifi-* plugin setup.
-# Verifies uvx is installed and any existing settings file is valid JSON.
-# Run this BEFORE asking the user for credentials so silent failures get caught early.
-# Bash 3.2 compatible (works on stock macOS /bin/bash).
+# Verifies uvx and client-specific setup prerequisites before credentials are collected.
+# Bash 3.2 compatible for stock macOS.
 
 set -e
+
+TARGET="claude"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --target)
+      if [ $# -lt 2 ]; then
+        echo "ERROR: --target requires claude or codex" >&2
+        exit 1
+      fi
+      TARGET="$2"
+      shift 2
+      ;;
+    --target=*)
+      TARGET="${1#--target=}"
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    -*)
+      echo "ERROR: Unknown option '$1'" >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 PLUGIN_NAME="${1:-unifi plugin}"
 SETTINGS_FILE=".claude/settings.local.json"
 
+case "$TARGET" in
+  claude|codex) ;;
+  *)
+    echo "ERROR: Unsupported target '$TARGET'. Expected claude or codex." >&2
+    exit 1
+    ;;
+esac
+
 errors=0
 warnings=0
 
-echo "Checking prerequisites for $PLUGIN_NAME..."
+echo "Checking prerequisites for $PLUGIN_NAME ($TARGET)..."
 echo ""
 
-# 1. uvx — required to launch the MCP server
 if command -v uvx >/dev/null 2>&1; then
   uvx_version=$(uvx --version 2>&1 | head -1)
   echo "  [OK]   uvx found: $uvx_version"
@@ -34,45 +70,52 @@ else
   errors=$((errors + 1))
 fi
 
-# 2. existing settings.local.json must be valid JSON before we touch it
-if [ -f "$SETTINGS_FILE" ]; then
-  if command -v python3 >/dev/null 2>&1; then
-    if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$SETTINGS_FILE" 2>/dev/null; then
-      echo "  [OK]   $SETTINGS_FILE is valid JSON"
+if [ "$TARGET" = "claude" ]; then
+  if [ -f "$SETTINGS_FILE" ]; then
+    if command -v python3 >/dev/null 2>&1; then
+      if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$SETTINGS_FILE" 2>/dev/null; then
+        echo "  [OK]   $SETTINGS_FILE is valid JSON"
+      else
+        echo "  [FAIL] $SETTINGS_FILE exists but is not valid JSON"
+        echo "         Fix or move it aside before continuing — setup will not"
+        echo "         clobber a malformed settings file."
+        errors=$((errors + 1))
+      fi
     else
-      echo "  [FAIL] $SETTINGS_FILE exists but is not valid JSON"
-      echo "         Fix or move it aside before continuing — setup will not"
-      echo "         clobber a malformed settings file."
-      errors=$((errors + 1))
+      echo "  [WARN] python3 not available — cannot validate $SETTINGS_FILE"
+      warnings=$((warnings + 1))
     fi
   else
-    echo "  [WARN] python3 not available — cannot validate $SETTINGS_FILE"
-    warnings=$((warnings + 1))
+    echo "  [OK]   $SETTINGS_FILE does not exist yet (will be created)"
   fi
 else
-  echo "  [OK]   $SETTINGS_FILE does not exist yet (will be created)"
+  if command -v codex >/dev/null 2>&1; then
+    codex_version=$(codex --version 2>&1 | head -1)
+    echo "  [OK]   codex found: $codex_version"
+    if codex mcp list >/dev/null 2>&1; then
+      echo "  [OK]   codex mcp list succeeded"
+    else
+      echo "  [WARN] codex is installed, but 'codex mcp list' failed"
+      echo "         Setup may still work, but confirm Codex is authenticated."
+      warnings=$((warnings + 1))
+    fi
+  else
+    echo "  [FAIL] codex CLI not found on PATH"
+    echo "         Codex setup registers the MCP server with 'codex mcp add'."
+    echo "         Install or open Codex, then re-run setup."
+    errors=$((errors + 1))
+  fi
 fi
 
-# 3. macOS interpreter selection
-# The MCP server's outbound network capability depends on which Python
-# interpreter uvx selects. macOS only grants network access to interpreters
-# that carry the com.apple.security.network.client entitlement — system and
-# Homebrew Python builds do; uv's managed standalone Python builds do not.
-# An entitlement-less interpreter will start the server cleanly, register
-# tools, and silently fail every outbound call with errno 65.
-#
-# plugin.json passes `--python-preference system` so uvx picks an entitled
-# interpreter when one is present; this check confirms one actually is and
-# warns when uv would fall back to its managed build.
 if [ "$(uname -s)" = "Darwin" ] && command -v uv >/dev/null 2>&1; then
   selected_py=$(uv python find --python-preference system 2>/dev/null || true)
   case "$selected_py" in
     */.local/share/uv/python/*)
       echo "  [WARN] uv would fall back to its managed Python on this Mac:"
       echo "           $selected_py"
-      echo "         macOS will not grant outbound network to that interpreter,"
-      echo "         so every controller call returns 'Not connected to"
-      echo "         controller' even though the server starts cleanly."
+      echo "         macOS may not grant outbound network to that interpreter,"
+      echo "         so controller calls can return 'Not connected to controller'"
+      echo "         even though the server starts cleanly."
       echo ""
       echo "         Install a system Python so uvx can use it, e.g."
       echo "           brew install python@3.13"
@@ -91,9 +134,12 @@ if [ "$(uname -s)" = "Darwin" ] && command -v uv >/dev/null 2>&1; then
   esac
 fi
 
-# 4. plugin enablement — there's no programmatic check, just remind the user
-echo "  [INFO] Reminder: 'installed' is not the same as 'enabled'."
-echo "         After setup, run /plugin and confirm the plugin shows enabled."
+if [ "$TARGET" = "claude" ]; then
+  echo "  [INFO] Reminder: 'installed' is not the same as 'enabled'."
+  echo "         After setup, run /plugin and confirm the plugin shows enabled."
+else
+  echo "  [INFO] After setup, restart Codex so MCP server changes are loaded."
+fi
 
 echo ""
 if [ $errors -gt 0 ]; then

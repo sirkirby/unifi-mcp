@@ -50,17 +50,39 @@ jobs:
           git tag --list "v*.*.*" --sort=-version:refname | head -1 | sed 's|^v||'
         }
 
-        update_plugin_version() {
-          local plugin_json="$1"
+        update_json_version() {
+          local json_file="$1"
           local version="$2"
 
-          if [ -z "$version" ] || [ ! -f "$plugin_json" ]; then
+          if [ -z "$version" ] || [ ! -f "$json_file" ]; then
             return
           fi
 
-          current=$(python3 -c "import json; print(json.load(open('${plugin_json}'))['version'])")
+          current=$(python3 -c "import json; print(json.load(open('${json_file}')).get('version', ''))")
           if [ "$current" = "$version" ]; then
-            echo "  $plugin_json already at $version"
+            echo "  $json_file already at $version"
+            return
+          fi
+
+          python3 -c "
+        import json, sys
+        pj = sys.argv[1]
+        ver = sys.argv[2]
+        with open(pj) as f:
+            data = json.load(f)
+        data['version'] = ver
+        with open(pj, 'w') as f:
+            json.dump(data, f, indent=2)
+            f.write('\n')
+        " "$json_file" "$version"
+          echo "  $json_file: $current -> $version"
+        }
+
+        update_mcp_package_pin() {
+          local json_file="$1"
+          local version="$2"
+
+          if [ -z "$version" ] || [ ! -f "$json_file" ]; then
             return
           fi
 
@@ -70,7 +92,6 @@ jobs:
         ver = sys.argv[2]
         with open(pj) as f:
             data = json.load(f)
-        data['version'] = ver
         pkg_pin = re.compile(r'^(unifi-[a-z]+-mcp)==')
         for server in data.get('mcpServers', {}).values():
             args = server.get('args', [])
@@ -84,8 +105,22 @@ jobs:
         with open(pj, 'w') as f:
             json.dump(data, f, indent=2)
             f.write('\n')
-        " "$plugin_json" "$version"
-          echo "  $plugin_json: $current -> $version"
+        " "$json_file" "$version"
+          echo "  $json_file package pin -> $version"
+        }
+
+        update_plugin_version() {
+          local plugin_dir="$1"
+          local version="$2"
+
+          if [ -z "$version" ]; then
+            return
+          fi
+
+          update_json_version "$plugin_dir/.claude-plugin/plugin.json" "$version"
+          update_json_version "$plugin_dir/.codex-plugin/plugin.json" "$version"
+          update_mcp_package_pin "$plugin_dir/.claude-plugin/plugin.json" "$version"
+          update_mcp_package_pin "$plugin_dir/.mcp.json" "$version"
         }
 
         NETWORK_VERSION=$(get_version "network")
@@ -106,10 +141,10 @@ jobs:
         echo "  Shared:  ${SHARED_VERSION:-not tagged}"
         echo "  Relay:   ${RELAY_VERSION:-not tagged}"
 
-        # Update plugin.json versions
-        update_plugin_version "plugins/unifi-network/.claude-plugin/plugin.json" "$NETWORK_VERSION"
-        update_plugin_version "plugins/unifi-protect/.claude-plugin/plugin.json" "$PROTECT_VERSION"
-        update_plugin_version "plugins/unifi-access/.claude-plugin/plugin.json" "$ACCESS_VERSION"
+        # Update Claude/Codex plugin manifests and MCP package pins
+        update_plugin_version "plugins/unifi-network" "$NETWORK_VERSION"
+        update_plugin_version "plugins/unifi-protect" "$PROTECT_VERSION"
+        update_plugin_version "plugins/unifi-access" "$ACCESS_VERSION"
 
         # Regenerate server.json manifests for MCP Registry
         if [ -n "$NETWORK_VERSION" ]; then

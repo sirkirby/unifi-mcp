@@ -27,7 +27,17 @@ Then run the interactive setup to configure your controller connection:
 /unifi-access:setup
 ```
 
-This walks you through connecting to your Access controller, explains the dual-auth system (API key for reads, username/password for mutations), and configures permissions — then writes everything to `.claude/settings.json`. If you already have other UniFi plugins configured on the same controller, the setup will detect and reuse those credentials. Restart Claude Code after setup to connect.
+This walks you through connecting to your Access controller, explains the dual-auth system (API key for reads, username/password for mutations), and configures permissions — then writes everything to `.claude/settings.local.json`. If you already have other UniFi plugins configured on the same controller, the setup will detect and reuse those credentials. Restart Claude Code after setup to connect.
+
+### Codex
+
+Register the marketplace, then install `unifi-access` from Codex's `/plugins` UI:
+
+```bash
+codex plugin marketplace add sirkirby/unifi-mcp
+```
+
+After installing, ask Codex to use the UniFi Access setup skill. The setup flow registers the MCP server with `codex mcp add`, stores your controller environment values in Codex's MCP configuration, and prompts you to restart Codex.
 
 ### PyPI / Docker
 
