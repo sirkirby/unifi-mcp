@@ -63,7 +63,10 @@ def _stats_response(
             items_raw = list(payload) if isinstance(payload, list) else []
             cursor_obj = _decode_cursor(cursor)
             page, next_cursor = paginate(
-                items_raw, limit=limit, cursor=cursor_obj, key_fn=_ts_key,
+                items_raw,
+                limit=limit,
+                cursor=cursor_obj,
+                key_fn=_ts_key,
             )
             return {
                 "items": [type_class.from_manager_output(p).to_dict() for p in page],
@@ -85,7 +88,10 @@ def _stats_response(
         items_raw = list(payload) if isinstance(payload, list) else []
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            items_raw, limit=limit, cursor=cursor_obj, key_fn=_ts_key,
+            items_raw,
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_ts_key,
         )
         return {
             "items": [serializer.serialize(p) for p in page],
@@ -121,13 +127,20 @@ async def get_dashboard_stats(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         payload = await mgr.get_dashboard()
     return _stats_response(
-        request, payload, "unifi_get_dashboard", limit=limit, cursor=cursor,
+        request,
+        payload,
+        "unifi_get_dashboard",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -148,13 +161,20 @@ async def get_network_stats(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         payload = await mgr.get_network_stats()
     return _stats_response(
-        request, payload, "unifi_get_network_stats", limit=limit, cursor=cursor,
+        request,
+        payload,
+        "unifi_get_network_stats",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -175,13 +195,20 @@ async def get_gateway_stats(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         payload = await mgr.get_gateway_stats()
     return _stats_response(
-        request, payload, "unifi_get_gateway_stats", limit=limit, cursor=cursor,
+        request,
+        payload,
+        "unifi_get_gateway_stats",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -202,13 +229,20 @@ async def get_site_dpi_traffic(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         payload = await mgr.get_site_dpi_traffic()
     return _stats_response(
-        request, payload, "unifi_get_site_dpi_traffic", limit=limit, cursor=cursor,
+        request,
+        payload,
+        "unifi_get_site_dpi_traffic",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -230,13 +264,20 @@ async def get_client_dpi_traffic(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         payload = await mgr.get_client_dpi_traffic(mac)
     return _stats_response(
-        request, payload, "unifi_get_client_dpi_traffic", limit=limit, cursor=cursor,
+        request,
+        payload,
+        "unifi_get_client_dpi_traffic",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -261,13 +302,20 @@ async def get_dpi_stats(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         payload = await mgr.get_dpi_stats()
     return _stats_response(
-        request, payload, "unifi_get_dpi_stats", limit=limit, cursor=cursor,
+        request,
+        payload,
+        "unifi_get_dpi_stats",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -291,7 +339,10 @@ async def get_device_stats(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "stats_manager",
+                session,
+                controller.id,
+                "network",
+                "stats_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             await _maybe_set_site(cm, site_id)
@@ -299,7 +350,11 @@ async def get_device_stats(
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return _stats_response(
-        request, payload, "unifi_get_device_stats", limit=limit, cursor=cursor,
+        request,
+        payload,
+        "unifi_get_device_stats",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -323,7 +378,10 @@ async def get_client_stats(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "stats_manager",
+                session,
+                controller.id,
+                "network",
+                "stats_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             await _maybe_set_site(cm, site_id)
@@ -331,5 +389,9 @@ async def get_client_stats(
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return _stats_response(
-        request, payload, "unifi_get_client_stats", limit=limit, cursor=cursor,
+        request,
+        payload,
+        "unifi_get_client_stats",
+        limit=limit,
+        cursor=cursor,
     )

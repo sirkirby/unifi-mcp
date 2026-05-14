@@ -2,7 +2,6 @@
 
 import pytest
 from pydantic import ValidationError
-
 from unifi_core.access.models._actions import (
     DeleteVisitorInput,
     LockDoorInput,
@@ -10,7 +9,6 @@ from unifi_core.access.models._actions import (
     RevokeCredentialInput,
     UnlockDoorInput,
 )
-
 
 # ---------------------------------------------------------------------------
 # LockDoorInput

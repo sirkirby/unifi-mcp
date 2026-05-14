@@ -9,7 +9,6 @@ from unifi_api.auth.scopes import Scope
 from unifi_api.routes.admin._common import render
 from unifi_api.services.diagnostics import collect_diagnostics
 
-
 router = APIRouter()
 
 

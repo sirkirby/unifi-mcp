@@ -83,7 +83,7 @@ def _extract_env_overrides() -> dict:
     for full_key, value in os.environ.items():
         if not full_key.startswith(prefix) or full_key in skip:
             continue
-        path = full_key[len(prefix):].lower().split("_")
+        path = full_key[len(prefix) :].lower().split("_")
         if len(path) < 2:
             continue
         section, key = path[0], "_".join(path[1:])
@@ -143,8 +143,7 @@ def ensure_db_encryption_key(db_path: str) -> str:
         pass
     os.environ["UNIFI_API_DB_KEY"] = key
     logging.getLogger(__name__).info(
-        "Auto-generated UNIFI_API_DB_KEY persisted to %s. "
-        "Set UNIFI_API_DB_KEY explicitly to override.",
+        "Auto-generated UNIFI_API_DB_KEY persisted to %s. Set UNIFI_API_DB_KEY explicitly to override.",
         key_file,
     )
     return key

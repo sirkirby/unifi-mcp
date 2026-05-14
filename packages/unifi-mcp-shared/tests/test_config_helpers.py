@@ -1,7 +1,5 @@
 """Tests for the shared config_helpers module."""
 
-import pytest
-
 from unifi_core.config_helpers import parse_config_bool
 
 

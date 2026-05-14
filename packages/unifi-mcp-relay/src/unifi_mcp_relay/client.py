@@ -50,9 +50,9 @@ class RelayClient:
         """Convert relay HTTP URL to WebSocket URL with /ws path."""
         url = relay_url.rstrip("/")
         if url.startswith("https://"):
-            url = "wss://" + url[len("https://"):]
+            url = "wss://" + url[len("https://") :]
         elif url.startswith("http://"):
-            url = "ws://" + url[len("http://"):]
+            url = "ws://" + url[len("http://") :]
         else:
             raise ValueError(f"relay_url must start with http:// or https://, got: {relay_url!r}")
         return url + "/ws"
@@ -86,9 +86,7 @@ class RelayClient:
 
         if not isinstance(response, RegisteredMessage):
             await ws.close()
-            raise ConnectionError(
-                f"Registration failed: expected RegisteredMessage, got {type(response).__name__}"
-            )
+            raise ConnectionError(f"Registration failed: expected RegisteredMessage, got {type(response).__name__}")
 
         self._ws = ws
         self._location_id = response.location_id

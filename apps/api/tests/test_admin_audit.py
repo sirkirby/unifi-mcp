@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, AuditLog, Base
@@ -29,11 +28,16 @@ async def _bootstrap_app_with_admin_key(tmp_path: Path):
     sm = app.state.sessionmaker
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext
 
@@ -53,10 +57,18 @@ async def test_audit_page_shell_renders_unauth(tmp_path: Path, monkeypatch) -> N
     app, _ = await _bootstrap_app_with_admin_key(tmp_path)
     # Seed a row whose target should NOT appear in the page shell
     base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
-    await _seed_audit(app, [
-        {"ts": base, "key_id_prefix": "p1", "controller": "c1",
-         "target": "should-not-be-inlined", "outcome": "success"},
-    ])
+    await _seed_audit(
+        app,
+        [
+            {
+                "ts": base,
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "should-not-be-inlined",
+                "outcome": "success",
+            },
+        ],
+    )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/admin/audit")
         assert r.status_code == 200
@@ -71,17 +83,26 @@ async def test_audit_page_shell_renders_unauth(tmp_path: Path, monkeypatch) -> N
 
 @pytest.mark.asyncio
 async def test_audit_rows_fragment_returns_rows_and_pagination(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """Seed 60 rows, fetch page 1 (50), then page 2 (10) via cursor."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app_with_admin_key(tmp_path)
     base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
-    await _seed_audit(app, [
-        {"ts": base + timedelta(seconds=i * 10), "key_id_prefix": "p1",
-         "controller": "c1", "target": f"t{i:02d}", "outcome": "success"}
-        for i in range(60)
-    ])
+    await _seed_audit(
+        app,
+        [
+            {
+                "ts": base + timedelta(seconds=i * 10),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": f"t{i:02d}",
+                "outcome": "success",
+            }
+            for i in range(60)
+        ],
+    )
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         # Page 1: 50 rows + Load more button with a cursor
@@ -99,7 +120,8 @@ async def test_audit_rows_fragment_returns_rows_and_pagination(
 
         # Page 2: 10 remaining rows + no Load more
         r = await c.get(
-            f"/admin/audit/_rows?limit=50&cursor={cursor}", headers=headers,
+            f"/admin/audit/_rows?limit=50&cursor={cursor}",
+            headers=headers,
         )
         assert r.status_code == 200, r.text
         body = r.text
@@ -113,14 +135,26 @@ async def test_audit_rows_filter_by_outcome(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app_with_admin_key(tmp_path)
     base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
-    await _seed_audit(app, [
-        {"ts": base, "key_id_prefix": "p1", "controller": "c1",
-         "target": "target-success-1", "outcome": "success"},
-        {"ts": base + timedelta(seconds=10), "key_id_prefix": "p1",
-         "controller": "c1", "target": "target-success-2", "outcome": "success"},
-        {"ts": base + timedelta(seconds=20), "key_id_prefix": "p1",
-         "controller": "c1", "target": "target-error-1", "outcome": "error"},
-    ])
+    await _seed_audit(
+        app,
+        [
+            {"ts": base, "key_id_prefix": "p1", "controller": "c1", "target": "target-success-1", "outcome": "success"},
+            {
+                "ts": base + timedelta(seconds=10),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "target-success-2",
+                "outcome": "success",
+            },
+            {
+                "ts": base + timedelta(seconds=20),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "target-error-1",
+                "outcome": "error",
+            },
+        ],
+    )
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/admin/audit/_rows?outcome=error", headers=headers)
@@ -136,14 +170,26 @@ async def test_audit_export_csv_returns_csv(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app_with_admin_key(tmp_path)
     base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
-    await _seed_audit(app, [
-        {"ts": base, "key_id_prefix": "p1", "controller": "c1",
-         "target": "csv-row-a", "outcome": "success"},
-        {"ts": base + timedelta(seconds=10), "key_id_prefix": "p1",
-         "controller": "c1", "target": "csv-row-b", "outcome": "success"},
-        {"ts": base + timedelta(seconds=20), "key_id_prefix": "p1",
-         "controller": "c1", "target": "csv-row-c", "outcome": "error"},
-    ])
+    await _seed_audit(
+        app,
+        [
+            {"ts": base, "key_id_prefix": "p1", "controller": "c1", "target": "csv-row-a", "outcome": "success"},
+            {
+                "ts": base + timedelta(seconds=10),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "csv-row-b",
+                "outcome": "success",
+            },
+            {
+                "ts": base + timedelta(seconds=20),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "csv-row-c",
+                "outcome": "error",
+            },
+        ],
+    )
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/admin/audit/export.csv", headers=headers)
@@ -151,9 +197,7 @@ async def test_audit_export_csv_returns_csv(tmp_path: Path, monkeypatch) -> None
         assert "text/csv" in r.headers["content-type"].lower()
         body = r.text
         lines = [ln for ln in body.splitlines() if ln.strip()]
-        assert lines[0].startswith(
-            "id,ts,key_id_prefix,controller,target,outcome,error_kind,detail"
-        )
+        assert lines[0].startswith("id,ts,key_id_prefix,controller,target,outcome,error_kind,detail")
         # 3 data rows after the header
         assert len(lines) == 1 + 3
         assert "csv-row-a" in body
@@ -163,7 +207,8 @@ async def test_audit_export_csv_returns_csv(tmp_path: Path, monkeypatch) -> None
 
 @pytest.mark.asyncio
 async def test_audit_stream_returns_event_stream_content_type(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """SSE headers-only test — stub the infinite generator with a finite version."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
@@ -174,7 +219,9 @@ async def test_audit_stream_returns_event_stream_content_type(
         yield b": keepalive\n\n"
 
     monkeypatch.setattr(
-        admin_audit_routes, "_admin_audit_event_stream", _finite_gen,
+        admin_audit_routes,
+        "_admin_audit_event_stream",
+        _finite_gen,
     )
 
     app, key = await _bootstrap_app_with_admin_key(tmp_path)

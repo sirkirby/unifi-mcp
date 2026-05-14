@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.vpn import (
     VPNCLIENT_MUTABLE_FIELDS,
     VPNCLIENT_READ_ONLY_FIELDS,

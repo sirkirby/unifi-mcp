@@ -20,7 +20,6 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Pydantic domain models
 # ---------------------------------------------------------------------------
@@ -31,11 +30,21 @@ class Door(BaseModel):
 
     id: Optional[str] = Field(default=None, description="Door UUID", json_schema_extra={"mutable": False})
     name: Optional[str] = Field(default=None, description="Display name", json_schema_extra={"mutable": False})
-    location: Optional[str] = Field(default=None, description="Location or location type", json_schema_extra={"mutable": False})
-    is_online: Optional[bool] = Field(default=None, description="Whether the door device is online", json_schema_extra={"mutable": False})
-    is_locked: Optional[bool] = Field(default=None, description="Derived lock state", json_schema_extra={"mutable": False})
-    lock_state: Optional[str] = Field(default=None, description="Raw lock state string", json_schema_extra={"mutable": False})
-    last_event: Optional[Any] = Field(default=None, description="Last event dict {name, timestamp} or None", json_schema_extra={"mutable": False})
+    location: Optional[str] = Field(
+        default=None, description="Location or location type", json_schema_extra={"mutable": False}
+    )
+    is_online: Optional[bool] = Field(
+        default=None, description="Whether the door device is online", json_schema_extra={"mutable": False}
+    )
+    is_locked: Optional[bool] = Field(
+        default=None, description="Derived lock state", json_schema_extra={"mutable": False}
+    )
+    lock_state: Optional[str] = Field(
+        default=None, description="Raw lock state string", json_schema_extra={"mutable": False}
+    )
+    last_event: Optional[Any] = Field(
+        default=None, description="Last event dict {name, timestamp} or None", json_schema_extra={"mutable": False}
+    )
 
 
 class DoorGroup(BaseModel):
@@ -43,8 +52,12 @@ class DoorGroup(BaseModel):
 
     id: Optional[str] = Field(default=None, description="Door group UUID", json_schema_extra={"mutable": False})
     name: Optional[str] = Field(default=None, description="Display name", json_schema_extra={"mutable": False})
-    door_ids: List[str] = Field(default_factory=list, description="IDs of doors in this group", json_schema_extra={"mutable": False})
-    location: Optional[str] = Field(default=None, description="Location or location type", json_schema_extra={"mutable": False})
+    door_ids: List[str] = Field(
+        default_factory=list, description="IDs of doors in this group", json_schema_extra={"mutable": False}
+    )
+    location: Optional[str] = Field(
+        default=None, description="Location or location type", json_schema_extra={"mutable": False}
+    )
 
 
 class DoorStatus(BaseModel):
@@ -52,11 +65,21 @@ class DoorStatus(BaseModel):
 
     door_id: Optional[str] = Field(default=None, description="Door UUID", json_schema_extra={"mutable": False})
     name: Optional[str] = Field(default=None, description="Display name", json_schema_extra={"mutable": False})
-    is_locked: Optional[bool] = Field(default=None, description="Derived lock state", json_schema_extra={"mutable": False})
-    lock_state: Optional[str] = Field(default=None, description="Raw lock state string", json_schema_extra={"mutable": False})
-    door_position_status: Optional[str] = Field(default=None, description="Door position (open/closed/etc.)", json_schema_extra={"mutable": False})
-    last_event_at: Optional[str] = Field(default=None, description="Timestamp of last event", json_schema_extra={"mutable": False})
-    last_event_type: Optional[str] = Field(default=None, description="Name/type of last event", json_schema_extra={"mutable": False})
+    is_locked: Optional[bool] = Field(
+        default=None, description="Derived lock state", json_schema_extra={"mutable": False}
+    )
+    lock_state: Optional[str] = Field(
+        default=None, description="Raw lock state string", json_schema_extra={"mutable": False}
+    )
+    door_position_status: Optional[str] = Field(
+        default=None, description="Door position (open/closed/etc.)", json_schema_extra={"mutable": False}
+    )
+    last_event_at: Optional[str] = Field(
+        default=None, description="Timestamp of last event", json_schema_extra={"mutable": False}
+    )
+    last_event_type: Optional[str] = Field(
+        default=None, description="Name/type of last event", json_schema_extra={"mutable": False}
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -126,11 +149,7 @@ def _door_ids_from_groups(obj: Any) -> list:
         return door_ids
     resources = _get(obj, "resources")
     if isinstance(resources, list):
-        return [
-            r.get("id") if isinstance(r, dict) else r
-            for r in resources
-            if r is not None
-        ]
+        return [r.get("id") if isinstance(r, dict) else r for r in resources if r is not None]
     return []
 
 

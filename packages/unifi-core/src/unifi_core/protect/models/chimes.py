@@ -16,25 +16,37 @@ class Chime(BaseModel):
     model: Optional[str] = Field(default=None, description="Chime model", json_schema_extra={"mutable": False})
     type: Optional[str] = Field(default=None, description="Device type", json_schema_extra={"mutable": False})
     state: Optional[str] = Field(default=None, description="Connection state", json_schema_extra={"mutable": False})
-    is_connected: Optional[bool] = Field(default=None, description="Whether the chime is connected", json_schema_extra={"mutable": False})
-    firmware_version: Optional[str] = Field(default=None, description="Firmware version", json_schema_extra={"mutable": False})
-    paired_cameras: List[str] = Field(default_factory=list, description="Camera IDs this chime rings for", json_schema_extra={"mutable": False})
-    ring_settings: Optional[Any] = Field(default=None, description="Per-camera ring tone configuration (controller returns dict or list)", json_schema_extra={"mutable": False})
-    available_tracks: Optional[Any] = Field(default=None, description="Available chime tones (list of dicts)", json_schema_extra={"mutable": False})
+    is_connected: Optional[bool] = Field(
+        default=None, description="Whether the chime is connected", json_schema_extra={"mutable": False}
+    )
+    firmware_version: Optional[str] = Field(
+        default=None, description="Firmware version", json_schema_extra={"mutable": False}
+    )
+    paired_cameras: List[str] = Field(
+        default_factory=list, description="Camera IDs this chime rings for", json_schema_extra={"mutable": False}
+    )
+    ring_settings: Optional[Any] = Field(
+        default=None,
+        description="Per-camera ring tone configuration (controller returns dict or list)",
+        json_schema_extra={"mutable": False},
+    )
+    available_tracks: Optional[Any] = Field(
+        default=None, description="Available chime tones (list of dicts)", json_schema_extra={"mutable": False}
+    )
 
     # Mutable
     name: Optional[str] = Field(default=None, description="Display name")
     volume: Optional[int] = Field(default=None, ge=0, le=100, description="Speaker volume (0-100)")
-    repeat_times: Optional[int] = Field(default=None, ge=1, le=6, description="Number of times to repeat the chime tone (1-6)")
+    repeat_times: Optional[int] = Field(
+        default=None, ge=1, le=6, description="Number of times to repeat the chime tone (1-6)"
+    )
 
 
 MUTABLE_FIELDS = frozenset(
-    name for name, info in Chime.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is not False
+    name for name, info in Chime.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is not False
 )
 READ_ONLY_FIELDS = frozenset(
-    name for name, info in Chime.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is False
+    name for name, info in Chime.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is False
 )
 
 

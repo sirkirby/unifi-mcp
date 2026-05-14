@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.qos import (
     MUTABLE_FIELDS,
-    QosRule,
     READ_ONLY_FIELDS,
+    QosRule,
     from_controller,
     to_controller_create,
     to_controller_update,
@@ -16,9 +14,17 @@ from unifi_core.network.models.qos import (
 
 class TestFieldSets:
     def test_mutable_fields_contains_expected(self) -> None:
-        for field in ("name", "enabled", "interface", "direction",
-                      "bandwidth_limit_kbps", "dscp_value",
-                      "rate_max_down", "rate_max_up", "priority"):
+        for field in (
+            "name",
+            "enabled",
+            "interface",
+            "direction",
+            "bandwidth_limit_kbps",
+            "dscp_value",
+            "rate_max_down",
+            "rate_max_up",
+            "priority",
+        ):
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
 
     def test_mutable_fields_excludes_read_only(self) -> None:

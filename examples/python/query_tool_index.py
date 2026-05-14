@@ -29,9 +29,7 @@ async def query_tool_index() -> Dict[str, Any]:
             await session.initialize()
 
             # Query the tool index with full schemas
-            result = await session.call_tool(
-                "unifi_tool_index", arguments={"include_schemas": True}
-            )
+            result = await session.call_tool("unifi_tool_index", arguments={"include_schemas": True})
             return result
 
 
@@ -48,7 +46,7 @@ async def main():
         result = await query_tool_index()
 
         # Extract tools
-        tools = result.content[0].text if hasattr(result, 'content') else result
+        tools = result.content[0].text if hasattr(result, "content") else result
         if isinstance(tools, str):
             tools = json.loads(tools)
 
@@ -90,10 +88,7 @@ async def main():
             print("\nExample Tool Detail (unifi_list_clients):")
             print("-" * 70)
 
-            example_tool = next(
-                (t for t in tool_list if t["name"] == "unifi_list_clients"),
-                tool_list[0]
-            )
+            example_tool = next((t for t in tool_list if t["name"] == "unifi_list_clients"), tool_list[0])
 
             print(json.dumps(example_tool, indent=2))
 
@@ -103,6 +98,7 @@ async def main():
     except Exception as e:
         print(f"✗ Error: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
 

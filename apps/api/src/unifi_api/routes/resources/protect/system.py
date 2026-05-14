@@ -65,7 +65,10 @@ async def get_firmware_status(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "system_manager",
+                session,
+                controller.id,
+                "protect",
+                "system_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)
@@ -111,7 +114,10 @@ async def alarm_get_status(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "alarm_manager",
+                session,
+                controller.id,
+                "protect",
+                "alarm_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)
@@ -153,7 +159,10 @@ async def alarm_list_profiles(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "alarm_manager",
+            session,
+            controller.id,
+            "protect",
+            "alarm_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
@@ -161,7 +170,10 @@ async def alarm_list_profiles(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
 
     type_registry = request.app.state.type_registry
@@ -210,7 +222,10 @@ async def get_protect_health(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "system_manager",
+                session,
+                controller.id,
+                "protect",
+                "system_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)
@@ -251,7 +266,10 @@ async def get_protect_system_info(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "system_manager",
+                session,
+                controller.id,
+                "protect",
+                "system_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)
@@ -298,7 +316,10 @@ async def list_viewers(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "system_manager",
+            session,
+            controller.id,
+            "protect",
+            "system_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
@@ -306,7 +327,10 @@ async def list_viewers(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
 
     type_registry = request.app.state.type_registry

@@ -11,6 +11,7 @@ Usage:
 Output:
     apps/{app}/server.json — MCP Registry manifest (committed to git)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -33,7 +34,12 @@ _SHARED_ENV_VARS = [
     {"name": "UNIFI_PASSWORD", "description": "Admin password", "isRequired": True, "isSecret": True},
     {"name": "UNIFI_API_KEY", "description": "API key (optional, experimental)", "isRequired": False, "isSecret": True},
     {"name": "UNIFI_PORT", "description": "Controller HTTPS port", "isRequired": False, "default": "443"},
-    {"name": "UNIFI_VERIFY_SSL", "description": "SSL certificate verification", "isRequired": False, "default": "false"},
+    {
+        "name": "UNIFI_VERIFY_SSL",
+        "description": "SSL certificate verification",
+        "isRequired": False,
+        "default": "false",
+    },
 ]
 
 # Per-app configuration

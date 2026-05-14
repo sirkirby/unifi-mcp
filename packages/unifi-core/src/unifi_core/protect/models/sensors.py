@@ -19,20 +19,28 @@ class Sensor(BaseModel):
     id: Optional[str] = Field(default=None, description="Sensor UUID", json_schema_extra={"mutable": False})
     mac: Optional[str] = Field(default=None, description="MAC address", json_schema_extra={"mutable": False})
     name: Optional[str] = Field(default=None, description="Display name", json_schema_extra={"mutable": False})
-    type: Optional[str] = Field(default=None, description="Sensor type (motion, leak, temperature, etc.)", json_schema_extra={"mutable": False})
-    battery_status: Optional[str] = Field(default=None, description="Battery state summary", json_schema_extra={"mutable": False})
-    humidity_status: Optional[str] = Field(default=None, description="Humidity reading summary", json_schema_extra={"mutable": False})
-    light_status: Optional[str] = Field(default=None, description="Ambient light reading summary", json_schema_extra={"mutable": False})
-    motion_detected_at: Optional[str] = Field(default=None, description="ISO timestamp of last motion event", json_schema_extra={"mutable": False})
+    type: Optional[str] = Field(
+        default=None, description="Sensor type (motion, leak, temperature, etc.)", json_schema_extra={"mutable": False}
+    )
+    battery_status: Optional[str] = Field(
+        default=None, description="Battery state summary", json_schema_extra={"mutable": False}
+    )
+    humidity_status: Optional[str] = Field(
+        default=None, description="Humidity reading summary", json_schema_extra={"mutable": False}
+    )
+    light_status: Optional[str] = Field(
+        default=None, description="Ambient light reading summary", json_schema_extra={"mutable": False}
+    )
+    motion_detected_at: Optional[str] = Field(
+        default=None, description="ISO timestamp of last motion event", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS = frozenset(
-    name for name, info in Sensor.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is not False
+    name for name, info in Sensor.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is not False
 )
 READ_ONLY_FIELDS = frozenset(
-    name for name, info in Sensor.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is False
+    name for name, info in Sensor.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is False
 )
 
 

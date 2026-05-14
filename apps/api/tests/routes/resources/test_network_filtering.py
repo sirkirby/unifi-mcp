@@ -4,12 +4,11 @@ Covers firewall groups/zones, QoS rules, DPI applications/categories,
 content-filters, ACL rules, and OON policies (LIST + DETAIL where applicable).
 """
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -34,17 +33,29 @@ async def _bootstrap(tmp_path, products="network"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="N", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="N",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -76,16 +87,15 @@ async def test_list_firewall_groups_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake = [
-        {"_id": "g1", "name": "internal", "group_type": "address-group",
-         "group_members": ["10.0.0.0/24"]},
-        {"_id": "g2", "name": "ports", "group_type": "port-group",
-         "group_members": ["80", "443"]},
+        {"_id": "g1", "name": "internal", "group_type": "address-group", "group_members": ["10.0.0.0/24"]},
+        {"_id": "g2", "name": "ports", "group_type": "port-group", "group_members": ["80", "443"]},
     ]
 
     async def fake_get(self):
         return fake
 
     from unifi_core.network.managers.firewall_manager import FirewallManager
+
     monkeypatch.setattr(FirewallManager, "get_firewall_groups", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -109,13 +119,13 @@ async def test_get_firewall_group_details_happy_path(tmp_path, monkeypatch) -> N
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"_id": "g7", "name": "deny", "group_type": "address-group",
-              "group_members": ["1.2.3.4"]}
+    target = {"_id": "g7", "name": "deny", "group_type": "address-group", "group_members": ["1.2.3.4"]}
 
     async def fake_get(self, gid):
         return target if gid == "g7" else None
 
     from unifi_core.network.managers.firewall_manager import FirewallManager
+
     monkeypatch.setattr(FirewallManager, "get_firewall_group_by_id", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -140,6 +150,7 @@ async def test_get_firewall_group_details_404(tmp_path, monkeypatch) -> None:
         return None
 
     from unifi_core.network.managers.firewall_manager import FirewallManager
+
     monkeypatch.setattr(FirewallManager, "get_firewall_group_by_id", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -174,16 +185,15 @@ async def test_list_firewall_zones_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake = [
-        {"_id": "z1", "name": "internal", "default_policy": "ALLOW",
-         "networks": ["n1", "n2"]},
-        {"_id": "z2", "name": "external", "default_policy": "BLOCK",
-         "networks": []},
+        {"_id": "z1", "name": "internal", "default_policy": "ALLOW", "networks": ["n1", "n2"]},
+        {"_id": "z2", "name": "external", "default_policy": "BLOCK", "networks": []},
     ]
 
     async def fake_get(self):
         return fake
 
     from unifi_core.network.managers.firewall_manager import FirewallManager
+
     monkeypatch.setattr(FirewallManager, "get_firewall_zones", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -217,6 +227,7 @@ async def test_list_qos_rules_happy_path(tmp_path, monkeypatch) -> None:
         return fake
 
     from unifi_core.network.managers.qos_manager import QosManager
+
     monkeypatch.setattr(QosManager, "get_qos_rules", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -242,6 +253,7 @@ async def test_get_qos_rule_details_happy_path(tmp_path, monkeypatch) -> None:
         return target if rule_id == "q1" else None
 
     from unifi_core.network.managers.qos_manager import QosManager
+
     monkeypatch.setattr(QosManager, "get_qos_rule_details", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -265,6 +277,7 @@ async def test_get_qos_rule_details_404(tmp_path, monkeypatch) -> None:
         return None
 
     from unifi_core.network.managers.qos_manager import QosManager
+
     monkeypatch.setattr(QosManager, "get_qos_rule_details", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -312,6 +325,7 @@ async def test_list_dpi_applications_happy_path(tmp_path, monkeypatch) -> None:
     fake_cm = _stub_connection(app, cid)
     # DPI route requires the cm to carry a UniFiAuth with an API key.
     from unifi_core.auth import UniFiAuth
+
     fake_cm.unifi_auth = UniFiAuth(api_key="test-token")
 
     wrapper = {
@@ -319,13 +333,16 @@ async def test_list_dpi_applications_happy_path(tmp_path, monkeypatch) -> None:
             {"id": 65537, "name": "WhatsApp", "categoryId": 0},
             {"id": 65538, "name": "Telegram", "categoryId": 0},
         ],
-        "totalCount": 2, "offset": 0, "limit": 100,
+        "totalCount": 2,
+        "offset": 0,
+        "limit": 100,
     }
 
     async def fake_get(self, **kwargs):
         return wrapper
 
     from unifi_core.network.managers.dpi_manager import DpiManager
+
     monkeypatch.setattr(DpiManager, "get_dpi_applications", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -342,15 +359,14 @@ async def test_list_dpi_applications_happy_path(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_dpi_applications_returns_501_when_no_api_token(
-    tmp_path, monkeypatch
-) -> None:
+async def test_list_dpi_applications_returns_501_when_no_api_token(tmp_path, monkeypatch) -> None:
     """When the controller has no API token, DPI must return 501 with a
     clear `api_key_required` hint, not a silent empty list or 500."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
     fake_cm = _stub_connection(app, cid)
     from unifi_core.auth import UniFiAuth
+
     fake_cm.unifi_auth = UniFiAuth(api_key=None)  # explicit no-token
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -371,6 +387,7 @@ async def test_list_dpi_categories_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     fake_cm = _stub_connection(app, cid)
     from unifi_core.auth import UniFiAuth
+
     fake_cm.unifi_auth = UniFiAuth(api_key="test-token")
 
     wrapper = {
@@ -378,13 +395,16 @@ async def test_list_dpi_categories_happy_path(tmp_path, monkeypatch) -> None:
             {"id": 0, "name": "Instant messengers"},
             {"id": 1, "name": "Peer-to-peer"},
         ],
-        "totalCount": 2, "offset": 0, "limit": 100,
+        "totalCount": 2,
+        "offset": 0,
+        "limit": 100,
     }
 
     async def fake_get(self, **kwargs):
         return wrapper
 
     from unifi_core.network.managers.dpi_manager import DpiManager
+
     monkeypatch.setattr(DpiManager, "get_dpi_categories", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -417,6 +437,7 @@ async def test_list_content_filters_happy_path(tmp_path, monkeypatch) -> None:
         return fake
 
     from unifi_core.network.managers.content_filter_manager import ContentFilterManager
+
     monkeypatch.setattr(ContentFilterManager, "get_content_filters", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -442,6 +463,7 @@ async def test_get_content_filter_details_happy_path(tmp_path, monkeypatch) -> N
         return target if filter_id == "cf9" else None
 
     from unifi_core.network.managers.content_filter_manager import ContentFilterManager
+
     monkeypatch.setattr(ContentFilterManager, "get_content_filter_by_id", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -488,16 +510,15 @@ async def test_list_acl_rules_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake = [
-        {"_id": "a1", "name": "block-cam", "action": "BLOCK",
-         "mac_acl_network_id": "n1", "type": "MAC"},
-        {"_id": "a2", "name": "allow-iot", "action": "ALLOW",
-         "mac_acl_network_id": "n1", "type": "MAC"},
+        {"_id": "a1", "name": "block-cam", "action": "BLOCK", "mac_acl_network_id": "n1", "type": "MAC"},
+        {"_id": "a2", "name": "allow-iot", "action": "ALLOW", "mac_acl_network_id": "n1", "type": "MAC"},
     ]
 
     async def fake_get(self, network_id=None):
         return fake
 
     from unifi_core.network.managers.acl_manager import AclManager
+
     monkeypatch.setattr(AclManager, "get_acl_rules", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -517,13 +538,13 @@ async def test_get_acl_rule_details_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"_id": "a3", "name": "deny-x", "action": "BLOCK",
-              "mac_acl_network_id": "n1", "type": "MAC"}
+    target = {"_id": "a3", "name": "deny-x", "action": "BLOCK", "mac_acl_network_id": "n1", "type": "MAC"}
 
     async def fake_get(self, rule_id):
         return target if rule_id == "a3" else None
 
     from unifi_core.network.managers.acl_manager import AclManager
+
     monkeypatch.setattr(AclManager, "get_acl_rule_by_id", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -570,8 +591,7 @@ async def test_list_oon_policies_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake = [
-        {"_id": "o1", "name": "guest-throttle", "enabled": True,
-         "targets": [{"id": "t1"}]},
+        {"_id": "o1", "name": "guest-throttle", "enabled": True, "targets": [{"id": "t1"}]},
         {"_id": "o2", "name": "iot-isolate", "enabled": False, "targets": []},
     ]
 
@@ -579,6 +599,7 @@ async def test_list_oon_policies_happy_path(tmp_path, monkeypatch) -> None:
         return fake
 
     from unifi_core.network.managers.oon_manager import OonManager
+
     monkeypatch.setattr(OonManager, "get_oon_policies", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -598,13 +619,13 @@ async def test_get_oon_policy_details_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"_id": "o5", "name": "office-policy", "enabled": True,
-              "targets": [{"id": "t1"}, {"id": "t2"}]}
+    target = {"_id": "o5", "name": "office-policy", "enabled": True, "targets": [{"id": "t1"}, {"id": "t2"}]}
 
     async def fake_get(self, policy_id):
         return target if policy_id == "o5" else None
 
     from unifi_core.network.managers.oon_manager import OonManager
+
     monkeypatch.setattr(OonManager, "get_oon_policy_by_id", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

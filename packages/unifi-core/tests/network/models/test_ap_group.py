@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.ap_group import (
-    ApGroup,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    ApGroup,
     from_controller,
     to_controller_create,
     to_controller_update,

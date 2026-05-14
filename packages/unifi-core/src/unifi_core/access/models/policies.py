@@ -25,7 +25,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -69,15 +68,11 @@ class Policy(BaseModel):
 # ---------------------------------------------------------------------------
 
 MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in Policy.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in Policy.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 READ_ONLY_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in Policy.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True) is False
+    name for name, field in Policy.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True) is False
 )
 
 
@@ -99,11 +94,7 @@ def _coalesce_door_ids(raw: Any) -> List[str]:
         return door_ids
     doors = _get(raw, "doors")
     if isinstance(doors, list):
-        return [
-            d.get("id") if isinstance(d, dict) else d
-            for d in doors
-            if d is not None
-        ]
+        return [d.get("id") if isinstance(d, dict) else d for d in doors if d is not None]
     return []
 
 
@@ -114,11 +105,7 @@ def _coalesce_user_group_ids(raw: Any) -> List[str]:
         return user_group_ids
     user_groups = _get(raw, "user_groups")
     if isinstance(user_groups, list):
-        return [
-            g.get("id") if isinstance(g, dict) else g
-            for g in user_groups
-            if g is not None
-        ]
+        return [g.get("id") if isinstance(g, dict) else g for g in user_groups if g is not None]
     return []
 
 
@@ -158,8 +145,4 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
 
     Note: boolean ``False`` is preserved (it is a valid update value).
     """
-    return {
-        k: v
-        for k, v in fields.items()
-        if k in MUTABLE_FIELDS and v is not None
-    }
+    return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}

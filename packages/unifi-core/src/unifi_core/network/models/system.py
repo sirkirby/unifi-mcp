@@ -40,7 +40,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # SnmpSettings
 # ---------------------------------------------------------------------------
@@ -117,9 +116,7 @@ class AutoBackupSettings(BaseModel):
 # ---------------------------------------------------------------------------
 
 SNMPSETTINGS_MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in SnmpSettings.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in SnmpSettings.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 SNMPSETTINGS_READ_ONLY_FIELDS: frozenset[str] = frozenset(
@@ -187,11 +184,7 @@ def snmp_to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {
-        k: v
-        for k, v in fields.items()
-        if k in SNMPSETTINGS_MUTABLE_FIELDS and v is not None
-    }
+    return {k: v for k, v in fields.items() if k in SNMPSETTINGS_MUTABLE_FIELDS and v is not None}
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +197,9 @@ def autobackup_from_controller(raw: Any) -> AutoBackupSettings:
     if not isinstance(raw, dict):
         return AutoBackupSettings()
     return AutoBackupSettings(
-        autobackup_enabled=raw.get("autobackup_enabled") if raw.get("autobackup_enabled") is not None else raw.get("enabled"),
+        autobackup_enabled=raw.get("autobackup_enabled")
+        if raw.get("autobackup_enabled") is not None
+        else raw.get("enabled"),
         autobackup_cron_expr=raw.get("autobackup_cron_expr") or raw.get("cron"),
         autobackup_days=raw.get("autobackup_days"),
         autobackup_max_files=raw.get("autobackup_max_files") or raw.get("max_backups"),
@@ -219,11 +214,7 @@ def autobackup_to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {
-        k: v
-        for k, v in fields.items()
-        if k in AUTOBACKUPSETTINGS_MUTABLE_FIELDS and v is not None
-    }
+    return {k: v for k, v in fields.items() if k in AUTOBACKUPSETTINGS_MUTABLE_FIELDS and v is not None}
 
 
 # ===========================================================================

@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
-
 from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP, _load_allowed_kwargs
 
 
@@ -186,9 +185,7 @@ def test_constructor_handles_malformed_manifest_gracefully(
     assert any("not valid JSON" in record.message for record in caplog.records)
 
 
-def test_constructor_handles_missing_tools_key(
-    tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_constructor_handles_missing_tools_key(tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture) -> None:
     weird = tmp_path / "weird.json"
     weird.write_text(json.dumps({"count": 0}), encoding="utf-8")
     with caplog.at_level("WARNING"):

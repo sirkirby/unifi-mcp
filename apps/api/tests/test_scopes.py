@@ -1,7 +1,6 @@
 """Scope check tests."""
 
 import pytest
-
 from unifi_api.auth.scopes import Scope, parse_scopes, scope_allows
 
 

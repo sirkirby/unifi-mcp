@@ -61,8 +61,12 @@ class Alarm:
     def from_manager_output(cls, record: Any) -> "Alarm":
         if not isinstance(record, dict):
             return cls(
-                id=None, key=None, msg=None, archived=False,
-                time=None, _was_dict=False,
+                id=None,
+                key=None,
+                msg=None,
+                archived=False,
+                time=None,
+                _was_dict=False,
             )
         return cls(
             id=_get(record, "_id", "id"),
@@ -101,7 +105,10 @@ class Backup:
     def from_manager_output(cls, record: Any) -> "Backup":
         if not isinstance(record, dict):
             return cls(
-                id=None, filename=None, size=None, created_at=None,
+                id=None,
+                filename=None,
+                size=None,
+                created_at=None,
                 _was_dict=False,
             )
         return cls(
@@ -138,8 +145,13 @@ class SystemInfo:
     def from_manager_output(cls, obj: Any) -> "SystemInfo":
         if not isinstance(obj, dict):
             return cls(
-                name=None, version=None, hostname=None, uptime=None,
-                num_devices=None, num_clients=None, _was_dict=False,
+                name=None,
+                version=None,
+                hostname=None,
+                uptime=None,
+                num_devices=None,
+                num_clients=None,
+                _was_dict=False,
             )
         return cls(
             name=_get(obj, "name", "controller_name"),
@@ -176,7 +188,11 @@ class NetworkHealth:
             "kind": kind,
             "primary_key": "subsystem",
             "display_columns": [
-                "subsystem", "status", "num_user", "rx_bytes", "tx_bytes",
+                "subsystem",
+                "status",
+                "num_user",
+                "rx_bytes",
+                "tx_bytes",
             ],
         }
 
@@ -184,8 +200,14 @@ class NetworkHealth:
     def from_manager_output(cls, record: Any) -> "NetworkHealth":
         if not isinstance(record, dict):
             return cls(
-                subsystem=None, status=None, num_user=None, num_guest=None,
-                num_iot=None, rx_bytes=None, tx_bytes=None, _was_dict=False,
+                subsystem=None,
+                status=None,
+                num_user=None,
+                num_guest=None,
+                num_iot=None,
+                rx_bytes=None,
+                tx_bytes=None,
+                _was_dict=False,
             )
         return cls(
             subsystem=_get(record, "subsystem"),
@@ -222,7 +244,10 @@ class SiteSettings:
     def from_manager_output(cls, obj: Any) -> "SiteSettings":
         if not isinstance(obj, dict):
             return cls(
-                site_id=None, name=None, role=None, country=None,
+                site_id=None,
+                name=None,
+                role=None,
+                country=None,
                 _was_dict=False,
             )
 
@@ -280,7 +305,10 @@ class SnmpSettings:
             obj = obj[0] if obj else {}
         if not isinstance(obj, dict):
             return cls(
-                enabled=False, community=None, port=None, version=None,
+                enabled=False,
+                community=None,
+                port=None,
+                version=None,
                 _had_payload=False,
             )
         return cls(
@@ -350,10 +378,15 @@ class AutoBackupSettings:
     def from_manager_output(cls, obj: Any) -> "AutoBackupSettings":
         if not isinstance(obj, dict):
             return cls(
-                enabled=False, schedule=None, max_count=None,
-                autobackup_enabled=None, autobackup_cron_expr=None,
-                autobackup_days=None, autobackup_max_files=None,
-                autobackup_timezone=None, autobackup_cloud_enabled=None,
+                enabled=False,
+                schedule=None,
+                max_count=None,
+                autobackup_enabled=None,
+                autobackup_cron_expr=None,
+                autobackup_days=None,
+                autobackup_max_files=None,
+                autobackup_timezone=None,
+                autobackup_cloud_enabled=None,
                 _was_dict=False,
             )
         return cls(
@@ -399,8 +432,12 @@ class TopClient:
     def from_manager_output(cls, record: Any) -> "TopClient":
         if not isinstance(record, dict):
             return cls(
-                mac=None, hostname=None, tx_bytes=None, rx_bytes=None,
-                total_bytes=None, _was_dict=False,
+                mac=None,
+                hostname=None,
+                tx_bytes=None,
+                rx_bytes=None,
+                total_bytes=None,
+                _was_dict=False,
             )
         return cls(
             mac=_get(record, "mac"),
@@ -432,7 +469,10 @@ class SpeedtestResult:
         return {
             "kind": kind,
             "display_columns": [
-                "timestamp", "download_mbps", "upload_mbps", "latency_ms",
+                "timestamp",
+                "download_mbps",
+                "upload_mbps",
+                "latency_ms",
             ],
             "sort_default": "timestamp:desc",
         }
@@ -441,8 +481,11 @@ class SpeedtestResult:
     def from_manager_output(cls, record: Any) -> "SpeedtestResult":
         if not isinstance(record, dict):
             return cls(
-                timestamp=None, download_mbps=None, upload_mbps=None,
-                latency_ms=None, _was_dict=False,
+                timestamp=None,
+                download_mbps=None,
+                upload_mbps=None,
+                latency_ms=None,
+                _was_dict=False,
             )
         return cls(
             timestamp=_get(record, "time", "timestamp"),

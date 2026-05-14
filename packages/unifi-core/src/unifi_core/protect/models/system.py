@@ -25,38 +25,82 @@ class ProtectSystemInfo(BaseModel):
     id: Optional[str] = Field(default=None, description="NVR UUID", json_schema_extra={"mutable": False})
     name: Optional[str] = Field(default=None, description="NVR display name", json_schema_extra={"mutable": False})
     model: Optional[str] = Field(default=None, description="NVR model", json_schema_extra={"mutable": False})
-    firmware_version: Optional[str] = Field(default=None, description="Protect firmware version", json_schema_extra={"mutable": False})
-    version: Optional[str] = Field(default=None, description="Protect software version", json_schema_extra={"mutable": False})
+    firmware_version: Optional[str] = Field(
+        default=None, description="Protect firmware version", json_schema_extra={"mutable": False}
+    )
+    version: Optional[str] = Field(
+        default=None, description="Protect software version", json_schema_extra={"mutable": False}
+    )
     host: Optional[str] = Field(default=None, description="NVR IP/host", json_schema_extra={"mutable": False})
     mac: Optional[str] = Field(default=None, description="NVR MAC address", json_schema_extra={"mutable": False})
-    uptime_seconds: Optional[int] = Field(default=None, description="NVR uptime in seconds", json_schema_extra={"mutable": False})
-    up_since: Optional[str] = Field(default=None, description="ISO timestamp when the NVR last started", json_schema_extra={"mutable": False})
-    is_updating: Optional[bool] = Field(default=None, description="Whether the NVR is currently updating", json_schema_extra={"mutable": False})
-    storage: Optional[Any] = Field(default=None, description="Storage stats (JSON pass-through)", json_schema_extra={"mutable": False})
-    camera_count: Optional[int] = Field(default=None, description="Number of adopted cameras", json_schema_extra={"mutable": False})
-    light_count: Optional[int] = Field(default=None, description="Number of adopted lights", json_schema_extra={"mutable": False})
-    sensor_count: Optional[int] = Field(default=None, description="Number of adopted sensors", json_schema_extra={"mutable": False})
-    viewer_count: Optional[int] = Field(default=None, description="Number of adopted viewers", json_schema_extra={"mutable": False})
-    chime_count: Optional[int] = Field(default=None, description="Number of adopted chimes", json_schema_extra={"mutable": False})
+    uptime_seconds: Optional[int] = Field(
+        default=None, description="NVR uptime in seconds", json_schema_extra={"mutable": False}
+    )
+    up_since: Optional[str] = Field(
+        default=None, description="ISO timestamp when the NVR last started", json_schema_extra={"mutable": False}
+    )
+    is_updating: Optional[bool] = Field(
+        default=None, description="Whether the NVR is currently updating", json_schema_extra={"mutable": False}
+    )
+    storage: Optional[Any] = Field(
+        default=None, description="Storage stats (JSON pass-through)", json_schema_extra={"mutable": False}
+    )
+    camera_count: Optional[int] = Field(
+        default=None, description="Number of adopted cameras", json_schema_extra={"mutable": False}
+    )
+    light_count: Optional[int] = Field(
+        default=None, description="Number of adopted lights", json_schema_extra={"mutable": False}
+    )
+    sensor_count: Optional[int] = Field(
+        default=None, description="Number of adopted sensors", json_schema_extra={"mutable": False}
+    )
+    viewer_count: Optional[int] = Field(
+        default=None, description="Number of adopted viewers", json_schema_extra={"mutable": False}
+    )
+    chime_count: Optional[int] = Field(
+        default=None, description="Number of adopted chimes", json_schema_extra={"mutable": False}
+    )
 
 
 class ProtectHealth(BaseModel):
     """NVR health snapshot (read-only)."""
 
-    cpu: Optional[Any] = Field(default=None, description="CPU health stats (JSON pass-through)", json_schema_extra={"mutable": False})
-    memory: Optional[Any] = Field(default=None, description="Memory health stats (JSON pass-through)", json_schema_extra={"mutable": False})
-    storage: Optional[Any] = Field(default=None, description="Storage health stats (JSON pass-through)", json_schema_extra={"mutable": False})
-    is_updating: Optional[bool] = Field(default=None, description="Whether the NVR is currently updating", json_schema_extra={"mutable": False})
-    uptime_seconds: Optional[int] = Field(default=None, description="NVR uptime in seconds", json_schema_extra={"mutable": False})
+    cpu: Optional[Any] = Field(
+        default=None, description="CPU health stats (JSON pass-through)", json_schema_extra={"mutable": False}
+    )
+    memory: Optional[Any] = Field(
+        default=None, description="Memory health stats (JSON pass-through)", json_schema_extra={"mutable": False}
+    )
+    storage: Optional[Any] = Field(
+        default=None, description="Storage health stats (JSON pass-through)", json_schema_extra={"mutable": False}
+    )
+    is_updating: Optional[bool] = Field(
+        default=None, description="Whether the NVR is currently updating", json_schema_extra={"mutable": False}
+    )
+    uptime_seconds: Optional[int] = Field(
+        default=None, description="NVR uptime in seconds", json_schema_extra={"mutable": False}
+    )
 
 
 class FirmwareStatus(BaseModel):
     """Firmware update status for the NVR and all adopted devices (read-only)."""
 
-    nvr: Optional[Any] = Field(default=None, description="NVR firmware info (JSON pass-through)", json_schema_extra={"mutable": False})
-    devices: Optional[Any] = Field(default=None, description="Per-device firmware info list (JSON pass-through)", json_schema_extra={"mutable": False})
-    total_devices: Optional[int] = Field(default=None, description="Total number of adopted devices", json_schema_extra={"mutable": False})
-    devices_with_updates: Optional[int] = Field(default=None, description="Number of devices with firmware updates available", json_schema_extra={"mutable": False})
+    nvr: Optional[Any] = Field(
+        default=None, description="NVR firmware info (JSON pass-through)", json_schema_extra={"mutable": False}
+    )
+    devices: Optional[Any] = Field(
+        default=None,
+        description="Per-device firmware info list (JSON pass-through)",
+        json_schema_extra={"mutable": False},
+    )
+    total_devices: Optional[int] = Field(
+        default=None, description="Total number of adopted devices", json_schema_extra={"mutable": False}
+    )
+    devices_with_updates: Optional[int] = Field(
+        default=None,
+        description="Number of devices with firmware updates available",
+        json_schema_extra={"mutable": False},
+    )
 
 
 class Viewer(BaseModel):
@@ -67,20 +111,38 @@ class Viewer(BaseModel):
     type: Optional[str] = Field(default=None, description="Viewer device type", json_schema_extra={"mutable": False})
     mac: Optional[str] = Field(default=None, description="Viewer MAC address", json_schema_extra={"mutable": False})
     host: Optional[str] = Field(default=None, description="Viewer IP/host", json_schema_extra={"mutable": False})
-    firmware_version: Optional[str] = Field(default=None, description="Viewer firmware version", json_schema_extra={"mutable": False})
-    is_connected: Optional[bool] = Field(default=None, description="Whether the viewer is connected", json_schema_extra={"mutable": False})
-    is_updating: Optional[bool] = Field(default=None, description="Whether the viewer is currently updating", json_schema_extra={"mutable": False})
-    uptime_seconds: Optional[int] = Field(default=None, description="Viewer uptime in seconds", json_schema_extra={"mutable": False})
-    state: Optional[str] = Field(default=None, description="Viewer connection state", json_schema_extra={"mutable": False})
-    software_version: Optional[str] = Field(default=None, description="Viewer software version", json_schema_extra={"mutable": False})
-    liveview_id: Optional[str] = Field(default=None, description="UUID of the liveview assigned to this viewer", json_schema_extra={"mutable": False})
+    firmware_version: Optional[str] = Field(
+        default=None, description="Viewer firmware version", json_schema_extra={"mutable": False}
+    )
+    is_connected: Optional[bool] = Field(
+        default=None, description="Whether the viewer is connected", json_schema_extra={"mutable": False}
+    )
+    is_updating: Optional[bool] = Field(
+        default=None, description="Whether the viewer is currently updating", json_schema_extra={"mutable": False}
+    )
+    uptime_seconds: Optional[int] = Field(
+        default=None, description="Viewer uptime in seconds", json_schema_extra={"mutable": False}
+    )
+    state: Optional[str] = Field(
+        default=None, description="Viewer connection state", json_schema_extra={"mutable": False}
+    )
+    software_version: Optional[str] = Field(
+        default=None, description="Viewer software version", json_schema_extra={"mutable": False}
+    )
+    liveview_id: Optional[str] = Field(
+        default=None, description="UUID of the liveview assigned to this viewer", json_schema_extra={"mutable": False}
+    )
 
 
 class ViewerList(BaseModel):
     """Wrapper shape returned by ``protect_list_viewers`` (read-only)."""
 
-    viewers: Optional[Any] = Field(default=None, description="List of viewer dicts (JSON pass-through)", json_schema_extra={"mutable": False})
-    count: Optional[int] = Field(default=None, description="Number of viewers in the list", json_schema_extra={"mutable": False})
+    viewers: Optional[Any] = Field(
+        default=None, description="List of viewer dicts (JSON pass-through)", json_schema_extra={"mutable": False}
+    )
+    count: Optional[int] = Field(
+        default=None, description="Number of viewers in the list", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS: frozenset = frozenset()

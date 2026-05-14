@@ -1,13 +1,12 @@
 """Auth middleware: bearer token resolution + scope enforcement."""
 
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-import uuid
 
 import pytest
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.auth.cache import ArgonVerifyCache
 from unifi_api.auth.middleware import require_scope

@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, AuditLog, Base
@@ -28,11 +27,16 @@ async def _bootstrap_app(tmp_path: Path, scopes: str = "admin"):
     sm = app.state.sessionmaker
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes=scopes,
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes=scopes,
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext
 
@@ -45,13 +49,15 @@ async def test_prune_endpoint_returns_counts(tmp_path: Path, monkeypatch) -> Non
     old_ts = datetime.now(timezone.utc) - timedelta(days=100)
     async with sm() as session:
         for i in range(2):
-            session.add(AuditLog(
-                ts=old_ts,
-                key_id_prefix="p1",
-                controller="c1",
-                target=f"t{i}",
-                outcome="ok",
-            ))
+            session.add(
+                AuditLog(
+                    ts=old_ts,
+                    key_id_prefix="p1",
+                    controller="c1",
+                    target=f"t{i}",
+                    outcome="ok",
+                )
+            )
         await session.commit()
 
     headers = {"Authorization": f"Bearer {key}"}

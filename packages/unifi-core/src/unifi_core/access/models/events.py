@@ -21,24 +21,50 @@ class Event(BaseModel):
     """Canonical Access event model (read-only)."""
 
     id: Optional[str] = Field(default=None, description="Event UUID", json_schema_extra={"mutable": False})
-    type: Optional[str] = Field(default=None, description="Event type (door_open, access_denied, etc.)", json_schema_extra={"mutable": False})
-    timestamp: Optional[str] = Field(default=None, description="ISO 8601 timestamp when the event occurred", json_schema_extra={"mutable": False})
-    door_id: Optional[str] = Field(default=None, description="Door UUID associated with the event", json_schema_extra={"mutable": False})
-    user_id: Optional[str] = Field(default=None, description="User UUID associated with the event", json_schema_extra={"mutable": False})
-    credential_id: Optional[str] = Field(default=None, description="Credential UUID used in the event", json_schema_extra={"mutable": False})
-    result: Optional[str] = Field(default=None, description="Event result (granted, denied, etc.)", json_schema_extra={"mutable": False})
+    type: Optional[str] = Field(
+        default=None, description="Event type (door_open, access_denied, etc.)", json_schema_extra={"mutable": False}
+    )
+    timestamp: Optional[str] = Field(
+        default=None, description="ISO 8601 timestamp when the event occurred", json_schema_extra={"mutable": False}
+    )
+    door_id: Optional[str] = Field(
+        default=None, description="Door UUID associated with the event", json_schema_extra={"mutable": False}
+    )
+    user_id: Optional[str] = Field(
+        default=None, description="User UUID associated with the event", json_schema_extra={"mutable": False}
+    )
+    credential_id: Optional[str] = Field(
+        default=None, description="Credential UUID used in the event", json_schema_extra={"mutable": False}
+    )
+    result: Optional[str] = Field(
+        default=None, description="Event result (granted, denied, etc.)", json_schema_extra={"mutable": False}
+    )
 
 
 class ActivitySummary(BaseModel):
     """Canonical Access activity histogram summary model (read-only)."""
 
-    period_start: Optional[str] = Field(default=None, description="ISO 8601 start of the summary period", json_schema_extra={"mutable": False})
-    period_end: Optional[str] = Field(default=None, description="ISO 8601 end of the summary period", json_schema_extra={"mutable": False})
-    total_events: Optional[int] = Field(default=None, description="Total event count in the period", json_schema_extra={"mutable": False})
-    granted_count: Optional[int] = Field(default=None, description="Count of granted access events", json_schema_extra={"mutable": False})
-    denied_count: Optional[int] = Field(default=None, description="Count of denied access events", json_schema_extra={"mutable": False})
-    top_users: Optional[Any] = Field(default=None, description="Top users by event count (JSON pass-through)", json_schema_extra={"mutable": False})
-    buckets: Optional[Any] = Field(default=None, description="Histogram buckets (JSON pass-through)", json_schema_extra={"mutable": False})
+    period_start: Optional[str] = Field(
+        default=None, description="ISO 8601 start of the summary period", json_schema_extra={"mutable": False}
+    )
+    period_end: Optional[str] = Field(
+        default=None, description="ISO 8601 end of the summary period", json_schema_extra={"mutable": False}
+    )
+    total_events: Optional[int] = Field(
+        default=None, description="Total event count in the period", json_schema_extra={"mutable": False}
+    )
+    granted_count: Optional[int] = Field(
+        default=None, description="Count of granted access events", json_schema_extra={"mutable": False}
+    )
+    denied_count: Optional[int] = Field(
+        default=None, description="Count of denied access events", json_schema_extra={"mutable": False}
+    )
+    top_users: Optional[Any] = Field(
+        default=None, description="Top users by event count (JSON pass-through)", json_schema_extra={"mutable": False}
+    )
+    buckets: Optional[Any] = Field(
+        default=None, description="Histogram buckets (JSON pass-through)", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS: frozenset[str] = frozenset()

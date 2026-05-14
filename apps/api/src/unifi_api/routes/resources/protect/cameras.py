@@ -62,7 +62,10 @@ async def list_cameras(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "camera_manager",
+            session,
+            controller.id,
+            "protect",
+            "camera_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
@@ -76,7 +79,10 @@ async def list_cameras(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_cameras), limit=limit, cursor=cursor_obj, key_fn=_camera_key,
+        list(all_cameras),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_camera_key,
     )
 
     type_class = request.app.state.type_registry.lookup("protect", "cameras")
@@ -107,7 +113,10 @@ async def get_camera(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "camera_manager",
+            session,
+            controller.id,
+            "protect",
+            "camera_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
@@ -152,7 +161,10 @@ async def get_camera_analytics(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "camera_manager",
+                session,
+                controller.id,
+                "protect",
+                "camera_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)
@@ -161,7 +173,8 @@ async def get_camera_analytics(
         raise HTTPException(status_code=404, detail=str(exc))
     if analytics is None:
         raise HTTPException(
-            status_code=404, detail=f"camera analytics for {camera_id} not found",
+            status_code=404,
+            detail=f"camera analytics for {camera_id} not found",
         )
 
     type_registry = request.app.state.type_registry
@@ -198,7 +211,10 @@ async def get_camera_streams(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "camera_manager",
+                session,
+                controller.id,
+                "protect",
+                "camera_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)
@@ -207,7 +223,8 @@ async def get_camera_streams(
         raise HTTPException(status_code=404, detail=str(exc))
     if streams is None:
         raise HTTPException(
-            status_code=404, detail=f"camera streams for {camera_id} not found",
+            status_code=404,
+            detail=f"camera streams for {camera_id} not found",
         )
 
     type_registry = request.app.state.type_registry
@@ -250,7 +267,10 @@ async def get_camera_snapshot(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "camera_manager",
+                session,
+                controller.id,
+                "protect",
+                "camera_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)
@@ -259,7 +279,8 @@ async def get_camera_snapshot(
         raise HTTPException(status_code=404, detail=str(exc))
     if snapshot is None:
         raise HTTPException(
-            status_code=404, detail=f"snapshot for {camera_id} not found",
+            status_code=404,
+            detail=f"snapshot for {camera_id} not found",
         )
 
     type_registry = request.app.state.type_registry

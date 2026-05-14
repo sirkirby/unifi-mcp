@@ -16,33 +16,77 @@ from pydantic import BaseModel, Field
 class AlarmStatus(BaseModel):
     """Canonical Protect alarm arm-state snapshot (read-only)."""
 
-    armed: Optional[bool] = Field(default=None, description="Whether the alarm system is currently armed", json_schema_extra={"mutable": False})
-    status: Optional[str] = Field(default=None, description="Raw status string from the controller", json_schema_extra={"mutable": False})
-    active_profile_id: Optional[str] = Field(default=None, description="UUID of the active arm profile", json_schema_extra={"mutable": False})
-    active_profile_name: Optional[str] = Field(default=None, description="Display name of the active arm profile", json_schema_extra={"mutable": False})
-    armed_at: Optional[str] = Field(default=None, description="ISO timestamp when the system was armed", json_schema_extra={"mutable": False})
-    will_be_armed_at: Optional[str] = Field(default=None, description="ISO timestamp when the system will become armed (activation delay)", json_schema_extra={"mutable": False})
-    breach_detected_at: Optional[str] = Field(default=None, description="ISO timestamp of the most recent breach detection", json_schema_extra={"mutable": False})
-    breach_event_count: Optional[int] = Field(default=None, description="Number of breach events since last arm", json_schema_extra={"mutable": False})
-    profile_count: Optional[int] = Field(default=None, description="Total number of configured arm profiles", json_schema_extra={"mutable": False})
+    armed: Optional[bool] = Field(
+        default=None, description="Whether the alarm system is currently armed", json_schema_extra={"mutable": False}
+    )
+    status: Optional[str] = Field(
+        default=None, description="Raw status string from the controller", json_schema_extra={"mutable": False}
+    )
+    active_profile_id: Optional[str] = Field(
+        default=None, description="UUID of the active arm profile", json_schema_extra={"mutable": False}
+    )
+    active_profile_name: Optional[str] = Field(
+        default=None, description="Display name of the active arm profile", json_schema_extra={"mutable": False}
+    )
+    armed_at: Optional[str] = Field(
+        default=None, description="ISO timestamp when the system was armed", json_schema_extra={"mutable": False}
+    )
+    will_be_armed_at: Optional[str] = Field(
+        default=None,
+        description="ISO timestamp when the system will become armed (activation delay)",
+        json_schema_extra={"mutable": False},
+    )
+    breach_detected_at: Optional[str] = Field(
+        default=None,
+        description="ISO timestamp of the most recent breach detection",
+        json_schema_extra={"mutable": False},
+    )
+    breach_event_count: Optional[int] = Field(
+        default=None, description="Number of breach events since last arm", json_schema_extra={"mutable": False}
+    )
+    profile_count: Optional[int] = Field(
+        default=None, description="Total number of configured arm profiles", json_schema_extra={"mutable": False}
+    )
 
 
 class AlarmProfile(BaseModel):
     """Canonical Protect alarm profile row (read-only)."""
 
     id: Optional[str] = Field(default=None, description="Alarm profile UUID", json_schema_extra={"mutable": False})
-    name: Optional[str] = Field(default=None, description="Alarm profile display name", json_schema_extra={"mutable": False})
-    record_everything: Optional[bool] = Field(default=None, description="Whether this profile records all cameras continuously", json_schema_extra={"mutable": False})
-    activation_delay_ms: Optional[int] = Field(default=None, description="Delay in milliseconds before the alarm activates after arming", json_schema_extra={"mutable": False})
-    schedule_count: Optional[int] = Field(default=None, description="Number of schedules associated with this profile", json_schema_extra={"mutable": False})
-    automation_count: Optional[int] = Field(default=None, description="Number of automations associated with this profile", json_schema_extra={"mutable": False})
+    name: Optional[str] = Field(
+        default=None, description="Alarm profile display name", json_schema_extra={"mutable": False}
+    )
+    record_everything: Optional[bool] = Field(
+        default=None,
+        description="Whether this profile records all cameras continuously",
+        json_schema_extra={"mutable": False},
+    )
+    activation_delay_ms: Optional[int] = Field(
+        default=None,
+        description="Delay in milliseconds before the alarm activates after arming",
+        json_schema_extra={"mutable": False},
+    )
+    schedule_count: Optional[int] = Field(
+        default=None,
+        description="Number of schedules associated with this profile",
+        json_schema_extra={"mutable": False},
+    )
+    automation_count: Optional[int] = Field(
+        default=None,
+        description="Number of automations associated with this profile",
+        json_schema_extra={"mutable": False},
+    )
 
 
 class AlarmProfileList(BaseModel):
     """Wrapper shape returned by ``protect_alarm_list_profiles`` (read-only)."""
 
-    profiles: Optional[List[Any]] = Field(default=None, description="List of alarm profile dicts", json_schema_extra={"mutable": False})
-    count: Optional[int] = Field(default=None, description="Number of profiles in the list", json_schema_extra={"mutable": False})
+    profiles: Optional[List[Any]] = Field(
+        default=None, description="List of alarm profile dicts", json_schema_extra={"mutable": False}
+    )
+    count: Optional[int] = Field(
+        default=None, description="Number of profiles in the list", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS = frozenset()

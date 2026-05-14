@@ -69,7 +69,10 @@ async def list_port_profiles(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "switch_manager",
+            session,
+            controller.id,
+            "network",
+            "switch_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -78,7 +81,10 @@ async def list_port_profiles(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(all_profiles), limit=limit, cursor=cursor_obj, key_fn=_profile_key,
+        list(all_profiles),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_profile_key,
     )
 
     type_registry = request.app.state.type_registry
@@ -117,7 +123,10 @@ async def get_port_profile_details(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "switch_manager",
+                session,
+                controller.id,
+                "network",
+                "switch_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:
@@ -173,7 +182,10 @@ async def list_switch_ports(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "switch_manager",
+            session,
+            controller.id,
+            "network",
+            "switch_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -185,7 +197,10 @@ async def list_switch_ports(
     items_raw = wrapper.get("port_overrides", []) if isinstance(wrapper, dict) else []
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items_raw), limit=limit, cursor=cursor_obj, key_fn=_port_idx_key,
+        list(items_raw),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_port_idx_key,
     )
 
     type_registry = request.app.state.type_registry
@@ -247,7 +262,10 @@ async def list_port_stats(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "switch_manager",
+            session,
+            controller.id,
+            "network",
+            "switch_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -259,7 +277,10 @@ async def list_port_stats(
     items_raw = wrapper.get("port_table", []) if isinstance(wrapper, dict) else []
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items_raw), limit=limit, cursor=cursor_obj, key_fn=_port_idx_key,
+        list(items_raw),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_port_idx_key,
     )
 
     type_registry = request.app.state.type_registry
@@ -299,7 +320,10 @@ async def get_switch_capabilities(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "switch_manager",
+            session,
+            controller.id,
+            "network",
+            "switch_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:

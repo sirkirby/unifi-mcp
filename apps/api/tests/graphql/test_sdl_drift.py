@@ -13,11 +13,7 @@ from pathlib import Path
 
 from unifi_api.graphql.schema import schema
 
-
-SDL_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "src" / "unifi_api" / "graphql" / "schema.graphql"
-)
+SDL_PATH = Path(__file__).resolve().parents[2] / "src" / "unifi_api" / "graphql" / "schema.graphql"
 
 
 def test_sdl_artifact_matches_schema() -> None:

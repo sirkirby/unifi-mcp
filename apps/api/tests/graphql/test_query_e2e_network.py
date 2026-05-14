@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -41,21 +40,31 @@ async def _bootstrap(tmp_path: Path):
     material = generate_key()
     cid = str(uuid.uuid4())
     cipher = ColumnCipher(derive_key("k"))
-    cred_blob = cipher.encrypt(json.dumps(
-        {"username": "u", "password": "p", "api_token": None}
-    ).encode("utf-8"))
+    cred_blob = cipher.encrypt(json.dumps({"username": "u", "password": "p", "api_token": None}).encode("utf-8"))
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="c", base_url="https://c", product_kinds="network",
-            credentials_blob=cred_blob, verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="c",
+                base_url="https://c",
+                product_kinds="network",
+                credentials_blob=cred_blob,
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -144,8 +153,7 @@ async def test_e2e_clients_flat_list(tmp_path: Path, monkeypatch) -> None:
 
     headers = {"Authorization": f"Bearer {key}"}
     query = (
-        f'{{ network {{ clients(controller: "{cid}", limit: 10) '
-        f'{{ items {{ mac hostname status }} nextCursor }} }} }}'
+        f'{{ network {{ clients(controller: "{cid}", limit: 10) {{ items {{ mac hostname status }} nextCursor }} }} }}'
     )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/v1/graphql", headers=headers, json={"query": query})
@@ -253,19 +261,13 @@ async def test_e2e_clients_pagination(tmp_path: Path, monkeypatch) -> None:
 
     # 5 clients with monotonically increasing last_seen so paginate() (descending)
     # produces a deterministic ordering across pages.
-    fixture_clients = [
-        {"mac": f"aa:{i:02x}", "hostname": f"c{i}", "last_seen": 1000 + i}
-        for i in range(5)
-    ]
+    fixture_clients = [{"mac": f"aa:{i:02x}", "hostname": f"c{i}", "last_seen": 1000 + i} for i in range(5)]
     _stub_managers(monkeypatch, clients=fixture_clients)
 
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         # Page 1: limit=2, cursor=null
-        q1 = (
-            f'{{ network {{ clients(controller: "{cid}", limit: 2) '
-            f'{{ items {{ mac }} nextCursor }} }} }}'
-        )
+        q1 = f'{{ network {{ clients(controller: "{cid}", limit: 2) {{ items {{ mac }} nextCursor }} }} }}'
         r1 = await c.post("/v1/graphql", headers=headers, json={"query": q1})
         body1 = r1.json()
         assert body1.get("errors") is None, body1
@@ -277,7 +279,7 @@ async def test_e2e_clients_pagination(tmp_path: Path, monkeypatch) -> None:
         # Page 2: limit=2, cursor=<page 1's nextCursor>
         q2 = (
             f'{{ network {{ clients(controller: "{cid}", limit: 2, cursor: "{next_cursor}") '
-            f'{{ items {{ mac }} nextCursor }} }} }}'
+            f"{{ items {{ mac }} nextCursor }} }} }}"
         )
         r2 = await c.post("/v1/graphql", headers=headers, json={"query": q2})
         body2 = r2.json()
@@ -302,19 +304,21 @@ async def test_e2e_auth_scope(tmp_path: Path, monkeypatch) -> None:
     sm = app.state.sessionmaker
     read_material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=read_material.prefix,
-            hash=hash_key(read_material.plaintext), scopes="read",
-            name="r", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=read_material.prefix,
+                hash=hash_key(read_material.plaintext),
+                scopes="read",
+                name="r",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
 
     _stub_managers(monkeypatch, clients=[{"mac": "aa:01", "hostname": "alpha"}])
 
-    query = (
-        f'{{ network {{ clients(controller: "{cid}", limit: 1) '
-        f'{{ items {{ mac }} }} }} }}'
-    )
+    query = f'{{ network {{ clients(controller: "{cid}", limit: 1) {{ items {{ mac }} }} }} }}'
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         # Read-scope key works for read fields
         r_read = await c.post(

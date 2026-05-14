@@ -40,7 +40,6 @@ from unifi_api.graphql.types.access.system import AccessHealth, AccessSystemInfo
 from unifi_api.graphql.types.access.users import User
 from unifi_api.graphql.types.access.visitors import Visitor
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -119,10 +118,15 @@ async def _fetch_doors(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "door_manager",
+                session,
+                controller,
+                "access",
+                "door_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return list(await mgr.list_doors())
 
@@ -135,10 +139,15 @@ async def _fetch_door_groups(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "door_manager",
+                session,
+                controller,
+                "access",
+                "door_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return list(await mgr.list_door_groups())
 
@@ -146,17 +155,24 @@ async def _fetch_door_groups(ctx: GraphQLContext, controller: str) -> list:
 
 
 async def _fetch_door_status(
-    ctx: GraphQLContext, controller: str, door_id: str,
+    ctx: GraphQLContext,
+    controller: str,
+    door_id: str,
 ) -> Any:
     key = f"access/door-status/{controller}/{door_id}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "door_manager",
+                session,
+                controller,
+                "access",
+                "door_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return await mgr.get_door_status(door_id)
 
@@ -169,10 +185,15 @@ async def _fetch_devices(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "device_manager",
+                session,
+                controller,
+                "access",
+                "device_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return list(await mgr.list_devices())
 
@@ -185,10 +206,15 @@ async def _fetch_users(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "system_manager",
+                session,
+                controller,
+                "access",
+                "system_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return list(await mgr.list_users())
 
@@ -201,10 +227,15 @@ async def _fetch_credentials(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "credential_manager",
+                session,
+                controller,
+                "access",
+                "credential_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return list(await mgr.list_credentials())
 
@@ -217,10 +248,15 @@ async def _fetch_policies(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "policy_manager",
+                session,
+                controller,
+                "access",
+                "policy_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return list(await mgr.list_policies())
 
@@ -233,10 +269,15 @@ async def _fetch_schedules(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "policy_manager",
+                session,
+                controller,
+                "access",
+                "policy_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return list(await mgr.list_schedules())
 
@@ -249,10 +290,15 @@ async def _fetch_visitors(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "visitor_manager",
+                session,
+                controller,
+                "access",
+                "visitor_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return list(await mgr.list_visitors())
 
@@ -260,17 +306,24 @@ async def _fetch_visitors(ctx: GraphQLContext, controller: str) -> list:
 
 
 async def _fetch_events(
-    ctx: GraphQLContext, controller: str, list_limit: int,
+    ctx: GraphQLContext,
+    controller: str,
+    list_limit: int,
 ) -> list:
     key = f"access/events/{controller}/{list_limit}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "event_manager",
+                session,
+                controller,
+                "access",
+                "event_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return list(await mgr.list_events(limit=list_limit))
 
@@ -288,10 +341,15 @@ async def _fetch_activity_summary(
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "event_manager",
+                session,
+                controller,
+                "access",
+                "event_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return await mgr.get_activity_summary(door_id=door_id, days=days)
 
@@ -304,10 +362,15 @@ async def _fetch_system_info(ctx: GraphQLContext, controller: str) -> Any:
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "system_manager",
+                session,
+                controller,
+                "access",
+                "system_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return await mgr.get_system_info()
 
@@ -320,10 +383,15 @@ async def _fetch_health(ctx: GraphQLContext, controller: str) -> Any:
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "access", "system_manager",
+                session,
+                controller,
+                "access",
+                "system_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "access",
+                session,
+                controller,
+                "access",
             )
             return await mgr.get_health()
 
@@ -416,7 +484,10 @@ class AccessQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         items: list[Door] = []
         for d in page:
@@ -465,7 +536,10 @@ class AccessQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return DoorGroupPage(
             items=[DoorGroup.from_manager_output(g) for g in page],
@@ -508,7 +582,10 @@ class AccessQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return AccessDevicePage(
             items=[AccessDevice.from_manager_output(d) for d in page],
@@ -552,7 +629,10 @@ class AccessQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         items: list[User] = []
         for u in page:
@@ -584,7 +664,10 @@ class AccessQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         items: list[Credential] = []
         for c in page:
@@ -635,7 +718,10 @@ class AccessQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         items: list[Policy] = []
         for p in page:
@@ -686,7 +772,10 @@ class AccessQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return SchedulePage(
             items=[Schedule.from_manager_output(s) for s in page],
@@ -713,7 +802,10 @@ class AccessQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_visitor_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_visitor_key,
         )
         return VisitorPage(
             items=[Visitor.from_manager_output(v) for v in page],
@@ -759,7 +851,10 @@ class AccessQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_event_key,
         )
         items: list[Event] = []
         for e in page:

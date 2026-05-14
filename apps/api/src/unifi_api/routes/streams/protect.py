@@ -13,7 +13,6 @@ from unifi_api.routes.resources._common import (
 )
 from unifi_api.services.stream_generator import sse_event_stream
 
-
 router = APIRouter()
 PRODUCT = "protect"
 
@@ -33,7 +32,10 @@ async def stream_protect_events(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, PRODUCT, "event_manager",
+            session,
+            controller.id,
+            PRODUCT,
+            "event_manager",
         )
     serializer = request.app.state.serializer_registry.serializer_for_tool(
         "protect_recent_events",

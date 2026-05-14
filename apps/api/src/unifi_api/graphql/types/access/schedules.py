@@ -66,9 +66,7 @@ class Schedule:
         return cls(
             id=_get(obj, "id"),
             name=_get(obj, "name"),
-            weekly_pattern=_get(obj, "weekly_pattern")
-            or _get(obj, "week_schedule")
-            or {},
+            weekly_pattern=_get(obj, "weekly_pattern") or _get(obj, "week_schedule") or {},
             enabled=_is_enabled(obj),
         )
 

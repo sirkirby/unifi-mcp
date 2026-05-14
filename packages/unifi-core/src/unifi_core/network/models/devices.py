@@ -21,7 +21,6 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Device — top-level device (mutable: name only; other mutations are actions)
 # ---------------------------------------------------------------------------
@@ -151,21 +150,15 @@ class DeviceRadio(BaseModel):
 # ---------------------------------------------------------------------------
 
 DEVICE_MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in Device.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in Device.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 DEVICE_READ_ONLY_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in Device.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True) is False
+    name for name, field in Device.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True) is False
 )
 
 DEVICERADIO_MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in DeviceRadio.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in DeviceRadio.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 DEVICERADIO_READ_ONLY_FIELDS: frozenset[str] = frozenset(
@@ -201,9 +194,15 @@ def from_controller(raw: Any) -> Device:
     """Build a Device from a controller API response dict."""
     state_raw = _get(raw, "state")
     _STATE_MAP = {
-        0: "disconnected", 1: "connected", 2: "pending", 4: "upgrading",
-        5: "provisioning", 6: "heartbeat-missed", 7: "adopting",
-        9: "adoption-error", 11: "isolated",
+        0: "disconnected",
+        1: "connected",
+        2: "pending",
+        4: "upgrading",
+        5: "provisioning",
+        6: "heartbeat-missed",
+        7: "adopting",
+        9: "adoption-error",
+        11: "isolated",
     }
     return Device(
         mac=_get(raw, "mac"),
@@ -224,11 +223,7 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {
-        k: v
-        for k, v in fields.items()
-        if k in DEVICE_MUTABLE_FIELDS and v is not None
-    }
+    return {k: v for k, v in fields.items() if k in DEVICE_MUTABLE_FIELDS and v is not None}
 
 
 # ---------------------------------------------------------------------------
@@ -260,8 +255,4 @@ def radio_to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields (radio) and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {
-        k: v
-        for k, v in fields.items()
-        if k in DEVICERADIO_MUTABLE_FIELDS and v is not None
-    }
+    return {k: v for k, v in fields.items() if k in DEVICERADIO_MUTABLE_FIELDS and v is not None}

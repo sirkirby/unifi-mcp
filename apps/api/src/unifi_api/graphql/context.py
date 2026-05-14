@@ -8,7 +8,7 @@ Resolvers reaching the same snapshot share one fetch.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Awaitable, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from strawberry.fastapi import BaseContext
 
@@ -29,9 +29,7 @@ class RequestCache:
         self._values: dict[str, Any] = {}
         self._inflight: dict[str, asyncio.Future] = {}
 
-    async def get_or_fetch(
-        self, key: str, fetch: Callable[[], Awaitable[Any]]
-    ) -> Any:
+    async def get_or_fetch(self, key: str, fetch: Callable[[], Awaitable[Any]]) -> Any:
         if key in self._values:
             return self._values[key]
         if key in self._inflight:

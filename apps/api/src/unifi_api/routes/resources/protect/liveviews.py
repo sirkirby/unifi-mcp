@@ -53,7 +53,10 @@ async def list_liveviews(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "liveview_manager",
+            session,
+            controller.id,
+            "protect",
+            "liveview_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
@@ -61,7 +64,10 @@ async def list_liveviews(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("protect_list_liveviews")
@@ -99,7 +105,10 @@ async def get_liveview(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "liveview_manager",
+                session,
+                controller.id,
+                "protect",
+                "liveview_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)

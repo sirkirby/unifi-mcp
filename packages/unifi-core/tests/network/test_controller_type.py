@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 
 import pytest
-
 from unifi_core.network.controller_type import (
     VALID_CONTROLLER_TYPES,
     resolve_controller_type,

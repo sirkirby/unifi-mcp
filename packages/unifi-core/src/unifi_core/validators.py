@@ -73,11 +73,7 @@ class ResourceValidator:
 
         result = dict(validated)
         for key, prop_schema in self.schema.get("properties", {}).items():
-            if (
-                key not in result
-                and isinstance(prop_schema, dict)
-                and "default" in prop_schema
-            ):
+            if key not in result and isinstance(prop_schema, dict) and "default" in prop_schema:
                 result[key] = prop_schema["default"]
         return True, None, result
 

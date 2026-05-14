@@ -22,15 +22,12 @@ from unifi_api.auth.scopes import Scope
 from unifi_api.db.models import ApiKey
 from unifi_api.routes.admin._common import render
 
-
 router = APIRouter()
 
 
 async def _list_keys(sm) -> list[ApiKey]:
     async with sm() as session:
-        return list(
-            (await session.execute(select(ApiKey).order_by(ApiKey.created_at.desc()))).scalars().all()
-        )
+        return list((await session.execute(select(ApiKey).order_by(ApiKey.created_at.desc()))).scalars().all())
 
 
 @router.get("/admin/keys", include_in_schema=False)

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from unifi_core.access.models.doors import (
+    MUTABLE_FIELDS,
+    READ_ONLY_FIELDS,
     Door,
     DoorGroup,
     DoorStatus,
-    MUTABLE_FIELDS,
-    READ_ONLY_FIELDS,
     door_from_controller,
     door_group_from_controller,
     door_status_from_controller,
@@ -36,24 +36,22 @@ class TestFieldSets:
             assert field in READ_ONLY_FIELDS, f"Expected {field!r} in READ_ONLY_FIELDS"
 
     def test_read_only_covers_all_model_fields(self) -> None:
-        all_fields = (
-            set(Door.model_fields)
-            | set(DoorGroup.model_fields)
-            | set(DoorStatus.model_fields)
-        )
+        all_fields = set(Door.model_fields) | set(DoorGroup.model_fields) | set(DoorStatus.model_fields)
         assert READ_ONLY_FIELDS == frozenset(all_fields)
 
 
 class TestDoorFromController:
     def test_basic_dict(self) -> None:
-        d = door_from_controller({
-            "id": "d1",
-            "name": "Front Door",
-            "location": "Lobby",
-            "is_online": True,
-            "lock_state": "locked",
-            "is_locked": True,
-        })
+        d = door_from_controller(
+            {
+                "id": "d1",
+                "name": "Front Door",
+                "location": "Lobby",
+                "is_online": True,
+                "lock_state": "locked",
+                "is_locked": True,
+            }
+        )
         assert d.id == "d1"
         assert d.name == "Front Door"
         assert d.location == "Lobby"
@@ -91,19 +89,23 @@ class TestDoorFromController:
         assert d.lock_state == "lock"
 
     def test_last_event_normalised_from_dict(self) -> None:
-        d = door_from_controller({
-            "id": "d1",
-            "last_event": {"name": "door_open", "timestamp": "2026-05-12T10:00:00Z"},
-        })
+        d = door_from_controller(
+            {
+                "id": "d1",
+                "last_event": {"name": "door_open", "timestamp": "2026-05-12T10:00:00Z"},
+            }
+        )
         assert isinstance(d.last_event, dict)
         assert d.last_event["name"] == "door_open"
         assert d.last_event["timestamp"] == "2026-05-12T10:00:00Z"
 
     def test_last_event_timestamp_falls_back_to_created_at(self) -> None:
-        d = door_from_controller({
-            "id": "d1",
-            "last_event": {"name": "door_close", "created_at": "2026-05-12T11:00:00Z"},
-        })
+        d = door_from_controller(
+            {
+                "id": "d1",
+                "last_event": {"name": "door_close", "created_at": "2026-05-12T11:00:00Z"},
+            }
+        )
         assert d.last_event["timestamp"] == "2026-05-12T11:00:00Z"
 
     def test_last_event_none_when_absent(self) -> None:
@@ -119,12 +121,14 @@ class TestDoorFromController:
 
 class TestDoorGroupFromController:
     def test_basic_dict(self) -> None:
-        g = door_group_from_controller({
-            "id": "g1",
-            "name": "All Doors",
-            "door_ids": ["d1", "d2"],
-            "location": "Building A",
-        })
+        g = door_group_from_controller(
+            {
+                "id": "g1",
+                "name": "All Doors",
+                "door_ids": ["d1", "d2"],
+                "location": "Building A",
+            }
+        )
         assert g.id == "g1"
         assert g.name == "All Doors"
         assert g.door_ids == ["d1", "d2"]
@@ -135,17 +139,21 @@ class TestDoorGroupFromController:
         assert g.door_ids == ["d1", "d2", "d3"]
 
     def test_door_ids_coalesced_from_resources(self) -> None:
-        g = door_group_from_controller({
-            "id": "g1",
-            "resources": [{"id": "d1"}, {"id": "d2"}],
-        })
+        g = door_group_from_controller(
+            {
+                "id": "g1",
+                "resources": [{"id": "d1"}, {"id": "d2"}],
+            }
+        )
         assert g.door_ids == ["d1", "d2"]
 
     def test_door_ids_resources_skips_none_entries(self) -> None:
-        g = door_group_from_controller({
-            "id": "g1",
-            "resources": [{"id": "d1"}, None, {"id": "d3"}],
-        })
+        g = door_group_from_controller(
+            {
+                "id": "g1",
+                "resources": [{"id": "d1"}, None, {"id": "d3"}],
+            }
+        )
         assert g.door_ids == ["d1", "d3"]
 
     def test_door_ids_empty_when_neither_present(self) -> None:
@@ -153,11 +161,13 @@ class TestDoorGroupFromController:
         assert g.door_ids == []
 
     def test_door_ids_takes_priority_over_resources(self) -> None:
-        g = door_group_from_controller({
-            "id": "g1",
-            "door_ids": ["d1"],
-            "resources": [{"id": "d2"}, {"id": "d3"}],
-        })
+        g = door_group_from_controller(
+            {
+                "id": "g1",
+                "door_ids": ["d1"],
+                "resources": [{"id": "d2"}, {"id": "d3"}],
+            }
+        )
         # door_ids wins
         assert g.door_ids == ["d1"]
 
@@ -173,13 +183,15 @@ class TestDoorGroupFromController:
 
 class TestDoorStatusFromController:
     def test_basic_dict(self) -> None:
-        s = door_status_from_controller({
-            "door_id": "d1",
-            "name": "Front Door",
-            "lock_state": "locked",
-            "is_locked": True,
-            "door_position_status": "closed",
-        })
+        s = door_status_from_controller(
+            {
+                "door_id": "d1",
+                "name": "Front Door",
+                "lock_state": "locked",
+                "is_locked": True,
+                "door_position_status": "closed",
+            }
+        )
         assert s.door_id == "d1"
         assert s.name == "Front Door"
         assert s.lock_state == "locked"
@@ -191,18 +203,22 @@ class TestDoorStatusFromController:
         assert s.door_id == "d2"
 
     def test_last_event_flattened_to_at_and_type(self) -> None:
-        s = door_status_from_controller({
-            "door_id": "d1",
-            "last_event": {"name": "door_open", "timestamp": "2026-05-12T10:00:00Z"},
-        })
+        s = door_status_from_controller(
+            {
+                "door_id": "d1",
+                "last_event": {"name": "door_open", "timestamp": "2026-05-12T10:00:00Z"},
+            }
+        )
         assert s.last_event_at == "2026-05-12T10:00:00Z"
         assert s.last_event_type == "door_open"
 
     def test_last_event_timestamp_falls_back_to_created_at(self) -> None:
-        s = door_status_from_controller({
-            "door_id": "d1",
-            "last_event": {"name": "door_close", "created_at": "2026-05-12T11:00:00Z"},
-        })
+        s = door_status_from_controller(
+            {
+                "door_id": "d1",
+                "last_event": {"name": "door_close", "created_at": "2026-05-12T11:00:00Z"},
+            }
+        )
         assert s.last_event_at == "2026-05-12T11:00:00Z"
 
     def test_last_event_none_when_absent(self) -> None:

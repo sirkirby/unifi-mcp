@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.logging import configure_logging
 from unifi_api.server import create_app

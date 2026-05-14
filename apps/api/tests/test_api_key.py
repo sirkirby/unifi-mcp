@@ -3,8 +3,7 @@
 import re
 
 import pytest
-
-from unifi_api.auth.api_key import ApiKeyEnv, ApiKeyMaterial, generate_key, hash_key, verify_key
+from unifi_api.auth.api_key import ApiKeyEnv, generate_key, hash_key, verify_key
 
 
 def test_generate_key_has_correct_format() -> None:

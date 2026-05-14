@@ -1,7 +1,6 @@
 """GraphQL error formatter — projects Python exceptions into extensions.code."""
 
 from graphql import GraphQLError
-
 from unifi_api.graphql.errors import format_graphql_error
 from unifi_api.services.controllers import ControllerNotFound
 

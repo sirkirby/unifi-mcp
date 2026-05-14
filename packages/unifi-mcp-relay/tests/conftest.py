@@ -1,8 +1,6 @@
 """Shared fixtures for unifi-mcp-relay tests."""
 
 import pytest
-
-from unifi_mcp_relay.config import RelayConfig
 from unifi_mcp_relay.protocol import ToolInfo
 
 

@@ -82,10 +82,7 @@ class PolicyGateChecker:
         config_key = self._resolve_category(category).upper()
         action_upper = action.upper()
         enable_var = f"UNIFI_POLICY_{self.server_prefix}_{config_key}_{action_upper}"
-        return (
-            f"{action.capitalize()} is disabled by policy for {category}. "
-            f"Set {enable_var}=true to enable."
-        )
+        return f"{action.capitalize()} is disabled by policy for {category}. Set {enable_var}=true to enable."
 
 
 def resolve_permission_mode(server_prefix: str) -> str:
@@ -109,10 +106,7 @@ def resolve_permission_mode(server_prefix: str) -> str:
     # 3. Backwards compat: UNIFI_AUTO_CONFIRM=true -> bypass
     auto_confirm = os.environ.get("UNIFI_AUTO_CONFIRM", "").strip().lower()
     if auto_confirm in _TRUTHY:
-        logger.warning(
-            "[permissions] UNIFI_AUTO_CONFIRM is deprecated. "
-            "Use UNIFI_TOOL_PERMISSION_MODE=bypass instead."
-        )
+        logger.warning("[permissions] UNIFI_AUTO_CONFIRM is deprecated. Use UNIFI_TOOL_PERMISSION_MODE=bypass instead.")
         return "bypass"
 
     # 4. Default
@@ -125,7 +119,7 @@ def check_deprecated_env_vars(server_prefix: str, logger) -> None:
     prefix_upper = server_prefix.upper()
     for key, value in os.environ.items():
         if key.startswith(old_prefix):
-            category_action = key[len(old_prefix):]
+            category_action = key[len(old_prefix) :]
             new_key = f"UNIFI_POLICY_{prefix_upper}_{category_action}"
             logger.warning(
                 "[permissions] Deprecated env var %s=%s detected. "
@@ -137,7 +131,4 @@ def check_deprecated_env_vars(server_prefix: str, logger) -> None:
             )
     # Also check UNIFI_AUTO_CONFIRM
     if os.environ.get("UNIFI_AUTO_CONFIRM"):
-        logger.warning(
-            "[permissions] UNIFI_AUTO_CONFIRM is deprecated. "
-            "Use UNIFI_TOOL_PERMISSION_MODE=bypass instead."
-        )
+        logger.warning("[permissions] UNIFI_AUTO_CONFIRM is deprecated. Use UNIFI_TOOL_PERMISSION_MODE=bypass instead.")

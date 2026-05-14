@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from unifi_mcp_relay.discovery import ServerInfo
 from unifi_mcp_relay.forwarder import ToolForwarder
 from unifi_mcp_relay.protocol import ToolInfo
@@ -100,9 +100,7 @@ async def test_forwarder_call_uses_client_request(server_infos):
 
     payload = {"success": True, "data": []}
     mock_client = AsyncMock()
-    mock_client.request = AsyncMock(
-        return_value={"content": [{"type": "text", "text": json.dumps(payload)}]}
-    )
+    mock_client.request = AsyncMock(return_value={"content": [{"type": "text", "text": json.dumps(payload)}]})
     fwd._clients["http://localhost:3000"] = mock_client
 
     result = await fwd._call("http://localhost:3000", "unifi_list_devices", {"compact": False})

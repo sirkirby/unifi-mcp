@@ -2,7 +2,6 @@
 
 import pytest
 from pydantic import ValidationError
-
 from unifi_core.protect.models._actions import (
     AcknowledgeEventInput,
     AlarmArmInput,
@@ -17,7 +16,6 @@ from unifi_core.protect.models._actions import (
     ToggleRecordingInput,
     TriggerChimeInput,
 )
-
 
 # ---------------------------------------------------------------------------
 # PtzMoveInput
@@ -321,7 +319,9 @@ class TestExportClipInput:
 
     def test_channel_index_boundary_values(self):
         for idx in (0, 1, 2):
-            m = ExportClipInput(camera_id="cam", start="2026-01-01T00:00:00Z", end="2026-01-01T01:00:00Z", channel_index=idx)
+            m = ExportClipInput(
+                camera_id="cam", start="2026-01-01T00:00:00Z", end="2026-01-01T01:00:00Z", channel_index=idx
+            )
             assert m.channel_index == idx
 
 

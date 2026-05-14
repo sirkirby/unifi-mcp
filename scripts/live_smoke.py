@@ -155,14 +155,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--phase",
         choices=[
-            "inventory", "readonly", "preview", "lifecycle", "approved", "safe",
-            "api-actions", "api-resources", "api-streams",
+            "inventory",
+            "readonly",
+            "preview",
+            "lifecycle",
+            "approved",
+            "safe",
+            "api-actions",
+            "api-resources",
+            "api-streams",
         ],
         default="safe",
         help=(
             "'safe' runs readonly, preview, and named safe lifecycles. "
             "'approved' runs explicitly approved mutations. "
-            "'api-actions' is a manual-only phase: spins up unifi-api locally, "
+            "'api-actions' is a manual-only phase: spins up unifi-api-server locally, "
             "registers the .env-configured controllers, exercises read-only tools "
             "via POST /v1/actions/{tool}, and compares to the latest MCP-direct "
             "baseline. "
@@ -182,8 +189,7 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.phase not in {"api-actions", "api-resources", "api-streams"} and not args.server:
         parser.error(
-            "--server is required unless --phase api-actions, --phase api-resources, "
-            "or --phase api-streams is used"
+            "--server is required unless --phase api-actions, --phase api-resources, or --phase api-streams is used"
         )
     return args
 
@@ -640,6 +646,8 @@ class LiveSmokeRunner:
             return self.cache.client_ip()
         if param == "camera_id":
             return self.cache.id_from(("cameras",), ("id", "_id"))
+        if param == "face_id":
+            return self.cache.id_from(("faces",), ("id", "_id", "face_id", "uuid"))
         if param == "door_id":
             return self.cache.id_from(("doors",), ("id", "_id"))
         if param == "event_id":
@@ -745,6 +753,20 @@ class LiveSmokeRunner:
                     current_name = item.get("name")
                     break
             return {"group_id": group_id, "name": current_name or f"{RUN_PREFIX}-preview"}, ""
+        if name == "protect_update_known_face":
+            face = self.protect_known_face()
+            if not face:
+                return None, "could not discover required argument face_id"
+            face_id = first_value(face, ("id", "_id", "face_id", "uuid"))
+            current_name = face.get("name") or face.get("matched_name") or f"{RUN_PREFIX}-preview"
+            return {"face_id": face_id, "fields": {"name": current_name}}, ""
+        if name == "protect_merge_known_faces":
+            source, target = self.protect_known_face_pair()
+            if not source or not target:
+                return None, "could not discover two distinct face groups"
+            source_id = first_value(source, ("id", "_id", "face_id", "uuid"))
+            target_id = first_value(target, ("id", "_id", "face_id", "uuid"))
+            return {"source_face_id": source_id, "target_face_id": target_id}, ""
         return self.args_for_tool(name, required_params(next(t for t in self.manifest["tools"] if t["name"] == name)))
 
     def visitor_args(self, stamp: str) -> dict[str, Any]:
@@ -792,6 +814,28 @@ class LiveSmokeRunner:
             return mode not in {"never", "disabled", "off"}
         value = detail.get("is_recording")
         return value if isinstance(value, bool) else None
+
+    def protect_known_face(self) -> dict[str, Any] | None:
+        for face in self.cache.items_from_tool("protect_list_known_faces", "faces") or self.cache.items("faces"):
+            if first_value(face, ("id", "_id", "face_id", "uuid")):
+                return face
+        return None
+
+    def protect_known_face_pair(self) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        faces = self.cache.items_from_tool("protect_list_known_faces", "faces") or self.cache.items("faces")
+        source: dict[str, Any] | None = None
+        source_id: Any = None
+        for face in faces:
+            face_id = first_value(face, ("id", "_id", "face_id", "uuid"))
+            if not face_id:
+                continue
+            if source is None:
+                source = face
+                source_id = face_id
+                continue
+            if face_id != source_id:
+                return source, face
+        return None, None
 
     def firewall_zone_id(self, preferred_name: str) -> str | None:
         zones = self.cache.items_from_tool("unifi_list_firewall_zones", "zones")
@@ -1262,14 +1306,14 @@ async def run_one(args: argparse.Namespace) -> int:
 ###############################################################################
 # Phase: api-actions
 #
-# Manual-only phase. Spins up the unifi-api service locally against a tmp DB,
+# Manual-only phase. Spins up the unifi-api-server service locally against a tmp DB,
 # registers each .env-configured controller via POST /v1/controllers, exercises
 # a sample of read-only tools via POST /v1/actions/{tool_name}, and compares
 # each response against the most recent MCP-direct baseline under
 # live-smoke-results/. Tears down the server and removes the tmp DB on exit.
 #
 # This phase is intentionally NOT wired into CI: it requires real controllers
-# and the unifi-api package, and is meant as a Phase 2 release-readiness gate.
+# and the unifi-api-server package, and is meant as a Phase 2 release-readiness gate.
 ###############################################################################
 
 
@@ -1367,8 +1411,14 @@ def _api_actions_controllers_from_env() -> dict[str, dict[str, Any]]:
     return payloads
 
 
-def _http_request(method: str, url: str, *, headers: dict[str, str] | None = None,
-                  body: dict[str, Any] | None = None, timeout: float = 60.0) -> tuple[int, dict[str, Any] | str]:
+def _http_request(
+    method: str,
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    body: dict[str, Any] | None = None,
+    timeout: float = 60.0,
+) -> tuple[int, dict[str, Any] | str]:
     """Tiny stdlib HTTP client. Returns (status_code, parsed_json_or_text)."""
     import urllib.error
     import urllib.request
@@ -1412,15 +1462,16 @@ def _wait_for_health(base: str, deadline_s: float = 30.0) -> bool:
 
 def _pick_free_port() -> int:
     import socket
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
 
 def _bootstrap_unifi_api(env: dict[str, str]) -> str:
-    """Run `unifi-api migrate` and return the printed admin key plaintext."""
+    """Run `unifi-api-server migrate` and return the printed admin key plaintext."""
     completed = subprocess.run(
-        ["uv", "run", "--package", "unifi-api", "unifi-api", "migrate"],
+        ["uv", "run", "--package", "unifi-api-server", "unifi-api-server", "migrate"],
         cwd=REPO_ROOT,
         env=env,
         check=True,
@@ -1435,7 +1486,7 @@ def _bootstrap_unifi_api(env: dict[str, str]) -> str:
             break
     if not plaintext:
         raise RuntimeError(
-            "unifi-api migrate did not print an admin key. stdout was:\n"
+            "unifi-api-server migrate did not print an admin key. stdout was:\n"
             + completed.stdout
             + "\nstderr was:\n"
             + completed.stderr
@@ -1474,7 +1525,7 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
     success flag). Returns non-zero when a NEW failure is observed compared to
     the MCP-direct baseline.
     """
-    print("\n=== api-actions: spinning up unifi-api locally ===", flush=True)
+    print("\n=== api-actions: spinning up unifi-api-server locally ===", flush=True)
     tmp_dir = Path(tempfile.mkdtemp(prefix="unifi-api-smoke-"))
     db_path = tmp_dir / "state.db"
     db_key = "smoke-" + datetime.now(UTC).strftime("%Y%m%d%H%M%S")
@@ -1508,13 +1559,19 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
         print(f"  tmp db: {db_path}", flush=True)
         print(f"  http port: {port}", flush=True)
         admin_key = _bootstrap_unifi_api(env)
-        print("  unifi-api migrate ok (admin key captured)", flush=True)
+        print("  unifi-api-server migrate ok (admin key captured)", flush=True)
 
         with server_log.open("wb") as log_fh:
             server_proc = subprocess.Popen(
                 [
-                    "uv", "run", "--package", "unifi-api",
-                    "unifi-api", "serve", "--port", str(port),
+                    "uv",
+                    "run",
+                    "--package",
+                    "unifi-api-server",
+                    "unifi-api-server",
+                    "serve",
+                    "--port",
+                    str(port),
                 ],
                 cwd=REPO_ROOT,
                 env=env,
@@ -1523,36 +1580,34 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             )
 
         if not _wait_for_health(base_url, deadline_s=30.0):
-            raise RuntimeError(
-                f"unifi-api did not become healthy within 30s; see {server_log}"
-            )
-        print("  unifi-api serve ok (/v1/health 200)", flush=True)
+            raise RuntimeError(f"unifi-api-server did not become healthy within 30s; see {server_log}")
+        print("  unifi-api-server serve ok (/v1/health 200)", flush=True)
 
         auth_headers = {"Authorization": f"Bearer {admin_key}"}
 
         # Step 1: register controllers from .env
         controller_payloads = _api_actions_controllers_from_env()
         if not controller_payloads:
-            raise RuntimeError(
-                "No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS}_HOST)."
-            )
+            raise RuntimeError("No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS}_HOST).")
         product_to_controller_id: dict[str, str] = {}
         for product, payload in controller_payloads.items():
             status, body = _http_request(
-                "POST", f"{base_url}/v1/controllers",
-                headers=auth_headers, body=payload,
+                "POST",
+                f"{base_url}/v1/controllers",
+                headers=auth_headers,
+                body=payload,
             )
             if status != 201 or not isinstance(body, dict) or not body.get("id"):
-                raise RuntimeError(
-                    f"failed to register {product} controller: {status} {body!r}"
-                )
+                raise RuntimeError(f"failed to register {product} controller: {status} {body!r}")
             product_to_controller_id[product] = body["id"]
-            artifact["controllers"].append({
-                "product": product,
-                "id": body["id"],
-                "name": body.get("name"),
-                "base_url": body.get("base_url"),
-            })
+            artifact["controllers"].append(
+                {
+                    "product": product,
+                    "id": body["id"],
+                    "name": body.get("name"),
+                    "base_url": body.get("base_url"),
+                }
+            )
             print(f"  registered controller: {product} -> {body['id']}", flush=True)
 
         # Step 2: exercise the sample, comparing to baselines
@@ -1577,8 +1632,11 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             t0 = time.perf_counter()
             try:
                 status, response = _http_request(
-                    "POST", f"{base_url}/v1/actions/{tool_name}",
-                    headers=auth_headers, body=body, timeout=120.0,
+                    "POST",
+                    f"{base_url}/v1/actions/{tool_name}",
+                    headers=auth_headers,
+                    body=body,
+                    timeout=120.0,
                 )
             except Exception as exc:
                 status = 0
@@ -1598,9 +1656,7 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
                 error = f"HTTP {status}: {response!r}"
 
             baseline_record = baselines.get(product, {}).get(tool_name)
-            baseline_success = (
-                baseline_record.get("success") if isinstance(baseline_record, dict) else None
-            )
+            baseline_success = baseline_record.get("success") if isinstance(baseline_record, dict) else None
             baseline_count = _baseline_count(baseline_record)
             live_count = _live_count(summary)
 
@@ -1621,23 +1677,25 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             else:
                 classification = "regression"
 
-            artifact["results"].append({
-                "product": product,
-                "tool": tool_name,
-                "controller_id": controller_id,
-                "site": site,
-                "http_status": status,
-                "success": success,
-                "error": error,
-                "duration_ms": duration_ms,
-                "shape_match": shape_match,
-                "live_count": live_count,
-                "baseline_success": baseline_success,
-                "baseline_count": baseline_count,
-                "count_delta": count_delta,
-                "classification": classification,
-                "summary": summary,
-            })
+            artifact["results"].append(
+                {
+                    "product": product,
+                    "tool": tool_name,
+                    "controller_id": controller_id,
+                    "site": site,
+                    "http_status": status,
+                    "success": success,
+                    "error": error,
+                    "duration_ms": duration_ms,
+                    "shape_match": shape_match,
+                    "live_count": live_count,
+                    "baseline_success": baseline_success,
+                    "baseline_count": baseline_count,
+                    "count_delta": count_delta,
+                    "classification": classification,
+                    "summary": summary,
+                }
+            )
 
             artifact["summary"]["tools_exercised"] += 1
             if classification == "pass":
@@ -1696,7 +1754,7 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
 ###############################################################################
 # Phase: api-resources
 #
-# Manual-only phase. Same bootstrap as api-actions (spins up unifi-api locally,
+# Manual-only phase. Same bootstrap as api-actions (spins up unifi-api-server locally,
 # registers .env-configured controllers), then exercises the GET resource
 # endpoints (clients, devices, networks, wlans, firewall rules, cameras,
 # recordings, events, doors, users, credentials). For each resource that has a
@@ -1722,14 +1780,14 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
 # - parity_collection_keys: the keys under the action's data payload that hold
 #   the item collection — we look at each in order and use the first present.
 API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str, Any] | None, tuple[str, ...]]] = [
-    ("network", "/v1/sites/{site}/clients",        {"limit": 10}, "unifi_list_clients",        {},                         ("clients", "items")),
-    ("network", "/v1/sites/{site}/devices",        {"limit": 10}, "unifi_list_devices",        {},                         ("devices", "items")),
-    ("network", "/v1/sites/{site}/networks",       {"limit": 10}, None,                         None,                       ()),
-    ("network", "/v1/sites/{site}/wlans",          {"limit": 10}, None,                         None,                       ()),
-    ("network", "/v1/sites/{site}/firewall/rules", {"limit": 10}, None,                         None,                       ()),
-    ("protect", "/v1/sites/{site}/cameras",        {"limit": 10}, "protect_list_cameras",       {},                         ("cameras", "items")),
-    ("access",  "/v1/sites/{site}/doors",          {"limit": 10}, "access_list_doors",          {},                         ("doors", "items")),
-    ("access",  "/v1/sites/{site}/users",          {"limit": 10}, "access_list_users",          {},                         ("users", "items")),
+    ("network", "/v1/sites/{site}/clients", {"limit": 10}, "unifi_list_clients", {}, ("clients", "items")),
+    ("network", "/v1/sites/{site}/devices", {"limit": 10}, "unifi_list_devices", {}, ("devices", "items")),
+    ("network", "/v1/sites/{site}/networks", {"limit": 10}, None, None, ()),
+    ("network", "/v1/sites/{site}/wlans", {"limit": 10}, None, None, ()),
+    ("network", "/v1/sites/{site}/firewall/rules", {"limit": 10}, None, None, ()),
+    ("protect", "/v1/sites/{site}/cameras", {"limit": 10}, "protect_list_cameras", {}, ("cameras", "items")),
+    ("access", "/v1/sites/{site}/doors", {"limit": 10}, "access_list_doors", {}, ("doors", "items")),
+    ("access", "/v1/sites/{site}/users", {"limit": 10}, "access_list_users", {}, ("users", "items")),
 ]
 
 
@@ -1786,7 +1844,7 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
     HTTP 5xx. Pre-existing controller-side failures (Access UNAUTHORIZED, etc.)
     are recorded but do NOT fail the run.
     """
-    print("\n=== api-resources: spinning up unifi-api locally ===", flush=True)
+    print("\n=== api-resources: spinning up unifi-api-server locally ===", flush=True)
     tmp_dir = Path(tempfile.mkdtemp(prefix="unifi-api-resources-smoke-"))
     db_path = tmp_dir / "state.db"
     db_key = "smoke-" + datetime.now(UTC).strftime("%Y%m%d%H%M%S")
@@ -1824,13 +1882,19 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
         print(f"  tmp db: {db_path}", flush=True)
         print(f"  http port: {port}", flush=True)
         admin_key = _bootstrap_unifi_api(env)
-        print("  unifi-api migrate ok (admin key captured)", flush=True)
+        print("  unifi-api-server migrate ok (admin key captured)", flush=True)
 
         with server_log.open("wb") as log_fh:
             server_proc = subprocess.Popen(
                 [
-                    "uv", "run", "--package", "unifi-api",
-                    "unifi-api", "serve", "--port", str(port),
+                    "uv",
+                    "run",
+                    "--package",
+                    "unifi-api-server",
+                    "unifi-api-server",
+                    "serve",
+                    "--port",
+                    str(port),
                 ],
                 cwd=REPO_ROOT,
                 env=env,
@@ -1839,36 +1903,34 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
             )
 
         if not _wait_for_health(base_url, deadline_s=30.0):
-            raise RuntimeError(
-                f"unifi-api did not become healthy within 30s; see {server_log}"
-            )
-        print("  unifi-api serve ok (/v1/health 200)", flush=True)
+            raise RuntimeError(f"unifi-api-server did not become healthy within 30s; see {server_log}")
+        print("  unifi-api-server serve ok (/v1/health 200)", flush=True)
 
         auth_headers = {"Authorization": f"Bearer {admin_key}"}
 
         # Step 1: register controllers from .env (same as api-actions).
         controller_payloads = _api_actions_controllers_from_env()
         if not controller_payloads:
-            raise RuntimeError(
-                "No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS}_HOST)."
-            )
+            raise RuntimeError("No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS}_HOST).")
         product_to_controller_id: dict[str, str] = {}
         for product, payload in controller_payloads.items():
             status, body = _http_request(
-                "POST", f"{base_url}/v1/controllers",
-                headers=auth_headers, body=payload,
+                "POST",
+                f"{base_url}/v1/controllers",
+                headers=auth_headers,
+                body=payload,
             )
             if status != 201 or not isinstance(body, dict) or not body.get("id"):
-                raise RuntimeError(
-                    f"failed to register {product} controller: {status} {body!r}"
-                )
+                raise RuntimeError(f"failed to register {product} controller: {status} {body!r}")
             product_to_controller_id[product] = body["id"]
-            artifact["controllers"].append({
-                "product": product,
-                "id": body["id"],
-                "name": body.get("name"),
-                "base_url": body.get("base_url"),
-            })
+            artifact["controllers"].append(
+                {
+                    "product": product,
+                    "id": body["id"],
+                    "name": body.get("name"),
+                    "base_url": body.get("base_url"),
+                }
+            )
             print(f"  registered controller: {product} -> {body['id']}", flush=True)
 
         # Step 2: exercise resource endpoints.
@@ -1878,8 +1940,7 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
             "access": "default",
         }
 
-        for (product, path_tpl, query_extras, parity_tool, parity_args,
-             parity_keys) in API_RESOURCES_SAMPLE:
+        for product, path_tpl, query_extras, parity_tool, parity_args, parity_keys in API_RESOURCES_SAMPLE:
             if product not in product_to_controller_id:
                 artifact["summary"]["skipped_no_controller"] += 1
                 print(f"  api-resources skip: {path_tpl} (no {product} controller)", flush=True)
@@ -1887,16 +1948,16 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
             controller_id = product_to_controller_id[product]
             site = site_for_product[product]
             path = path_tpl.format(site=site)
-            qs = "&".join(
-                [f"controller={controller_id}"]
-                + [f"{k}={v}" for k, v in query_extras.items()]
-            )
+            qs = "&".join([f"controller={controller_id}"] + [f"{k}={v}" for k, v in query_extras.items()])
             url = f"{base_url}{path}?{qs}"
 
             t0 = time.perf_counter()
             try:
                 status, response = _http_request(
-                    "GET", url, headers=auth_headers, timeout=120.0,
+                    "GET",
+                    url,
+                    headers=auth_headers,
+                    timeout=120.0,
                 )
             except Exception as exc:
                 status = 0
@@ -1948,8 +2009,11 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
                 }
                 try:
                     a_status, a_response = _http_request(
-                        "POST", f"{base_url}/v1/actions/{parity_tool}",
-                        headers=auth_headers, body=action_body, timeout=120.0,
+                        "POST",
+                        f"{base_url}/v1/actions/{parity_tool}",
+                        headers=auth_headers,
+                        body=action_body,
+                        timeout=120.0,
                     )
                 except Exception as exc:
                     a_status = 0
@@ -1977,34 +2041,29 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
                     parity = {
                         "tool": parity_tool,
                         "action_http_status": a_status,
-                        "action_success": (
-                            a_response.get("success")
-                            if isinstance(a_response, dict) else None
-                        ),
+                        "action_success": (a_response.get("success") if isinstance(a_response, dict) else None),
                         "note": "action endpoint failed; parity skipped",
                     }
 
-            artifact["results"].append({
-                "product": product,
-                "path": path,
-                "controller_id": controller_id,
-                "site": site,
-                "http_status": status,
-                "shape_match": shape_match,
-                "item_count": item_count,
-                "next_cursor_present": (
-                    bool(response.get("next_cursor"))
-                    if isinstance(response, dict) else False
-                ),
-                "render_hint_present": (
-                    response.get("render_hint") is not None
-                    if isinstance(response, dict) else False
-                ),
-                "duration_ms": duration_ms,
-                "classification": classification,
-                "error": error,
-                "parity": parity,
-            })
+            artifact["results"].append(
+                {
+                    "product": product,
+                    "path": path,
+                    "controller_id": controller_id,
+                    "site": site,
+                    "http_status": status,
+                    "shape_match": shape_match,
+                    "item_count": item_count,
+                    "next_cursor_present": (bool(response.get("next_cursor")) if isinstance(response, dict) else False),
+                    "render_hint_present": (
+                        response.get("render_hint") is not None if isinstance(response, dict) else False
+                    ),
+                    "duration_ms": duration_ms,
+                    "classification": classification,
+                    "error": error,
+                    "parity": parity,
+                }
+            )
 
             artifact["summary"]["endpoints_exercised"] += 1
             if classification == "pass":
@@ -2048,10 +2107,7 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
         print(f"\nReport: {path}", flush=True)
 
         # On failure preserve the server log; otherwise tear down the tmp dir.
-        failed = (
-            artifact["summary"]["shape_failures"] > 0
-            or artifact["summary"]["parity_mismatches"] > 0
-        )
+        failed = artifact["summary"]["shape_failures"] > 0 or artifact["summary"]["parity_mismatches"] > 0
         try:
             if failed:
                 kept_log = REPO_ROOT / args.report_dir / "phase3-api-resources" / f"server-log-{stamp}.txt"
@@ -2077,7 +2133,7 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
 # Phase 4B: --phase api-streams
 # ---------------------------------------------------------------------------
 # Manual-only phase. Same bootstrap as api-actions / api-resources (spins up
-# unifi-api locally, registers the .env-configured controllers), then opens an
+# unifi-api-server locally, registers the .env-configured controllers), then opens an
 # SSE client to ``GET /v1/streams/{product}/events?controller={cid}`` for each
 # (controller × product) pair and reads frames for ~35s. Pass criterion: ≥1
 # event OR ≥1 keepalive frame received within the window (the server emits a
@@ -2142,14 +2198,18 @@ def _read_sse_window(
             "status": "controller_error",
             "http": exc.code,
             "body": body[:500].decode("utf-8", "replace"),
-            "events": 0, "keepalives": 0, "first_frame_ms": None,
+            "events": 0,
+            "keepalives": 0,
+            "first_frame_ms": None,
         }
     except Exception as exc:
         return {
             "endpoint": path,
             "status": "shape_failure",
             "error": f"{type(exc).__name__}: {exc}"[:200],
-            "events": 0, "keepalives": 0, "first_frame_ms": None,
+            "events": 0,
+            "keepalives": 0,
+            "first_frame_ms": None,
         }
 
     try:
@@ -2163,7 +2223,9 @@ def _read_sse_window(
                 "status": "controller_error",
                 "http": resp.status,
                 "body": body[:500].decode("utf-8", "replace"),
-                "events": 0, "keepalives": 0, "first_frame_ms": None,
+                "events": 0,
+                "keepalives": 0,
+                "first_frame_ms": None,
             }
 
         # Reach down to the underlying file object so we can select() on its
@@ -2195,7 +2257,8 @@ def _read_sse_window(
                         "endpoint": path,
                         "status": "shape_failure",
                         "error": f"{type(exc).__name__}: {exc}"[:200],
-                        "events": events, "keepalives": keepalives,
+                        "events": events,
+                        "keepalives": keepalives,
                         "first_frame_ms": None,
                     }
                 break
@@ -2220,9 +2283,7 @@ def _read_sse_window(
             pass
 
     passed = (events + keepalives) > 0
-    first_frame_ms = (
-        int((first_frame_at - started) * 1000) if first_frame_at is not None else None
-    )
+    first_frame_ms = int((first_frame_at - started) * 1000) if first_frame_at is not None else None
     return {
         "endpoint": path,
         "status": "pass" if passed else "shape_failure",
@@ -2242,7 +2303,7 @@ def run_api_streams_phase(args: argparse.Namespace) -> int:
     failures (HTTP 4xx that are not 401/403) are recorded as ``controller_error``
     but do NOT fail the run.
     """
-    print("\n=== api-streams: spinning up unifi-api locally ===", flush=True)
+    print("\n=== api-streams: spinning up unifi-api-server locally ===", flush=True)
     tmp_dir = Path(tempfile.mkdtemp(prefix="unifi-api-streams-smoke-"))
     db_path = tmp_dir / "state.db"
     db_key = "smoke-" + datetime.now(UTC).strftime("%Y%m%d%H%M%S")
@@ -2283,13 +2344,19 @@ def run_api_streams_phase(args: argparse.Namespace) -> int:
         print(f"  tmp db: {db_path}", flush=True)
         print(f"  http port: {port}", flush=True)
         admin_key = _bootstrap_unifi_api(env)
-        print("  unifi-api migrate ok (admin key captured)", flush=True)
+        print("  unifi-api-server migrate ok (admin key captured)", flush=True)
 
         with server_log.open("wb") as log_fh:
             server_proc = subprocess.Popen(
                 [
-                    "uv", "run", "--package", "unifi-api",
-                    "unifi-api", "serve", "--port", str(port),
+                    "uv",
+                    "run",
+                    "--package",
+                    "unifi-api-server",
+                    "unifi-api-server",
+                    "serve",
+                    "--port",
+                    str(port),
                 ],
                 cwd=REPO_ROOT,
                 env=env,
@@ -2298,79 +2365,82 @@ def run_api_streams_phase(args: argparse.Namespace) -> int:
             )
 
         if not _wait_for_health(base_url, deadline_s=30.0):
-            raise RuntimeError(
-                f"unifi-api did not become healthy within 30s; see {server_log}"
-            )
-        print("  unifi-api serve ok (/v1/health 200)", flush=True)
+            raise RuntimeError(f"unifi-api-server did not become healthy within 30s; see {server_log}")
+        print("  unifi-api-server serve ok (/v1/health 200)", flush=True)
 
         auth_headers = {"Authorization": f"Bearer {admin_key}"}
 
         # Step 1: register controllers from .env (same as api-actions/resources).
         controller_payloads = _api_actions_controllers_from_env()
         if not controller_payloads:
-            raise RuntimeError(
-                "No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS}_HOST)."
-            )
+            raise RuntimeError("No controllers found in .env (expected UNIFI_{NETWORK,PROTECT,ACCESS}_HOST).")
         product_to_controller_id: dict[str, str] = {}
         for product, payload in controller_payloads.items():
             status, body = _http_request(
-                "POST", f"{base_url}/v1/controllers",
-                headers=auth_headers, body=payload,
+                "POST",
+                f"{base_url}/v1/controllers",
+                headers=auth_headers,
+                body=payload,
             )
             if status != 201 or not isinstance(body, dict) or not body.get("id"):
-                raise RuntimeError(
-                    f"failed to register {product} controller: {status} {body!r}"
-                )
+                raise RuntimeError(f"failed to register {product} controller: {status} {body!r}")
             product_to_controller_id[product] = body["id"]
-            artifact["controllers"].append({
-                "product": product,
-                "id": body["id"],
-                "name": body.get("name"),
-                "base_url": body.get("base_url"),
-            })
+            artifact["controllers"].append(
+                {
+                    "product": product,
+                    "id": body["id"],
+                    "name": body.get("name"),
+                    "base_url": body.get("base_url"),
+                }
+            )
             print(f"  registered controller: {product} -> {body['id']}", flush=True)
 
         # Step 2: exercise each (registered controller × matching product) SSE.
         for product in API_STREAMS_PRODUCTS:
             if product not in product_to_controller_id:
                 artifact["summary"]["skipped_no_controller"] += 1
-                artifact["results"].append({
-                    "product": product,
-                    "endpoint": f"/v1/streams/{product}/events",
-                    "controller_id": None,
-                    "classification": "skipped_no_controller",
-                    "events": 0,
-                    "keepalives": 0,
-                    "first_frame_ms": None,
-                    "error": f"no {product} controller registered from .env",
-                })
-                print(f"  api-streams skip: /v1/streams/{product}/events "
-                      f"(no {product} controller)", flush=True)
+                artifact["results"].append(
+                    {
+                        "product": product,
+                        "endpoint": f"/v1/streams/{product}/events",
+                        "controller_id": None,
+                        "classification": "skipped_no_controller",
+                        "events": 0,
+                        "keepalives": 0,
+                        "first_frame_ms": None,
+                        "error": f"no {product} controller registered from .env",
+                    }
+                )
+                print(f"  api-streams skip: /v1/streams/{product}/events (no {product} controller)", flush=True)
                 continue
 
             controller_id = product_to_controller_id[product]
             path = f"/v1/streams/{product}/events?controller={controller_id}"
 
-            print(f"  api-streams open: {path} (window={window_s:.0f}s)...",
-                  flush=True)
+            print(f"  api-streams open: {path} (window={window_s:.0f}s)...", flush=True)
             outcome = _read_sse_window(
-                base_url, path, auth_headers, duration_s=window_s,
+                base_url,
+                path,
+                auth_headers,
+                duration_s=window_s,
             )
             classification = outcome.get("status", "shape_failure")
 
-            artifact["results"].append({
-                "product": product,
-                "endpoint": outcome.get("endpoint", path),
-                "controller_id": controller_id,
-                "classification": classification,
-                "events": outcome.get("events", 0),
-                "keepalives": outcome.get("keepalives", 0),
-                "first_frame_ms": outcome.get("first_frame_ms"),
-                "duration_ms": outcome.get("duration_ms"),
-                "http": outcome.get("http"),
-                "body": outcome.get("body"),
-                "error": outcome.get("error"),
-            })
+            artifact["results"].append(
+                {
+                    "product": product,
+                    "endpoint": outcome.get("endpoint", path),
+                    "controller_id": controller_id,
+                    "classification": classification,
+                    "events": outcome.get("events", 0),
+                    "keepalives": outcome.get("keepalives", 0),
+                    "first_frame_ms": outcome.get("first_frame_ms"),
+                    "duration_ms": outcome.get("duration_ms"),
+                    "http": outcome.get("http"),
+                    "body": outcome.get("body"),
+                    "error": outcome.get("error"),
+                }
+            )
 
             artifact["summary"]["endpoints_exercised"] += 1
             if classification == "pass":
@@ -2410,10 +2480,7 @@ def run_api_streams_phase(args: argparse.Namespace) -> int:
         failed = artifact["summary"]["shape_failures"] > 0
         try:
             if failed:
-                kept_log = (
-                    REPO_ROOT / args.report_dir / "phase4b-api-streams"
-                    / f"server-log-{stamp}.txt"
-                )
+                kept_log = REPO_ROOT / args.report_dir / "phase4b-api-streams" / f"server-log-{stamp}.txt"
                 try:
                     if server_log.exists():
                         kept_log.parent.mkdir(parents=True, exist_ok=True)

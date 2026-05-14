@@ -25,7 +25,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -95,9 +94,7 @@ class OonPolicy(BaseModel):
 # ---------------------------------------------------------------------------
 
 MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in OonPolicy.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in OonPolicy.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 READ_ONLY_FIELDS: frozenset[str] = frozenset(
@@ -147,8 +144,7 @@ def from_controller(raw: Any) -> OonPolicy:
 def to_controller_create(model: OonPolicy) -> Dict[str, Any]:
     """Produce a controller create payload from an OonPolicy model."""
     payload: Dict[str, Any] = {}
-    for field_name in ("name", "enabled", "target_type", "targets",
-                       "secure", "qos", "route"):
+    for field_name in ("name", "enabled", "target_type", "targets", "secure", "qos", "route"):
         value = getattr(model, field_name, None)
         if value is not None:
             payload[field_name] = value
@@ -161,8 +157,4 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {
-        k: v
-        for k, v in fields.items()
-        if k in MUTABLE_FIELDS and v is not None
-    }
+    return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}

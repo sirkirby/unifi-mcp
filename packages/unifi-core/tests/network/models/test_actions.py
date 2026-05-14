@@ -2,7 +2,6 @@
 
 import pytest
 from pydantic import ValidationError
-
 from unifi_core.network.models._actions import (
     AdoptDeviceInput,
     AuthorizeGuestInput,
@@ -31,7 +30,6 @@ from unifi_core.network.models._actions import (
     UnblockClientInput,
     UpgradeDeviceInput,
 )
-
 
 # ---------------------------------------------------------------------------
 # BlockClientInput

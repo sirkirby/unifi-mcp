@@ -20,13 +20,7 @@ def test_load_env_parses_a_synthetic_dotenv(tmp_path, monkeypatch):
     import live_api_smoke
 
     env_file = tmp_path / ".env"
-    env_file.write_text(
-        "# a comment\n"
-        "\n"
-        'PLAIN=value1\n'
-        'QUOTED="value with spaces"\n'
-        "SINGLE='single'\n"
-    )
+    env_file.write_text("# a comment\n\nPLAIN=value1\nQUOTED=\"value with spaces\"\nSINGLE='single'\n")
     monkeypatch.setattr(live_api_smoke, "REPO_ROOT", tmp_path)
 
     env = live_api_smoke.load_env()

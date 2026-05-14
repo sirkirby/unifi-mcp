@@ -144,7 +144,8 @@ class Network:
 
     @strawberry.field(description="Clients on this network.")
     async def clients(
-        self, info: Info,
+        self,
+        info: Info,
     ) -> list[Annotated["Client", strawberry.lazy("unifi_api.graphql.types.network.client")]]:
         """Resolves to clients whose network_id matches this network's id."""
         from unifi_api.graphql.resolvers.network import _fetch_clients
@@ -160,10 +161,7 @@ class Network:
                 net_id = c.get("network_id")
             else:
                 raw = getattr(c, "raw", None)
-                net_id = (
-                    raw.get("network_id") if isinstance(raw, dict)
-                    else getattr(c, "network_id", None)
-                )
+                net_id = raw.get("network_id") if isinstance(raw, dict) else getattr(c, "network_id", None)
             if net_id == self.id:
                 inst = Client.from_manager_output(c)
                 inst._controller_id = self._controller_id

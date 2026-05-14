@@ -17,7 +17,6 @@ from typing import ClassVar, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Client actions
 # ---------------------------------------------------------------------------
@@ -189,9 +188,7 @@ class SetOutletStateInput(BaseModel):
     mac_address: str = Field(description="MAC address of the PDU (AA:BB:CC:DD:EE:FF)")
     outlet_index: int = Field(ge=1, description="1-based outlet index on the strip")
     relay_state: bool = Field(description="True to power on, False to power off")
-    cycle_enabled: Optional[bool] = Field(
-        default=None, description="Optional per-outlet power-cycle-on-loss toggle"
-    )
+    cycle_enabled: Optional[bool] = Field(default=None, description="Optional per-outlet power-cycle-on-loss toggle")
 
 
 class ConfigurePortAggregationInput(BaseModel):

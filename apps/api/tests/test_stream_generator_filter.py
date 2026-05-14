@@ -4,9 +4,8 @@ import asyncio
 from unittest.mock import MagicMock
 
 import pytest
-
 from unifi_api.services.stream_generator import sse_event_stream
-from unifi_api.services.streams import StreamSubscriber, SubscriberPool
+from unifi_api.services.streams import SubscriberPool
 
 
 @pytest.mark.asyncio
@@ -22,8 +21,13 @@ async def test_filter_fn_drops_replay_events_that_dont_match() -> None:
     serializer = MagicMock(serialize=lambda e: e)
 
     gen = sse_event_stream(
-        manager=mgr, pool=pool, controller_id="c1", product="protect",
-        serializer=serializer, last_event_id=None, keepalive_interval=10,
+        manager=mgr,
+        pool=pool,
+        controller_id="c1",
+        product="protect",
+        serializer=serializer,
+        last_event_id=None,
+        keepalive_interval=10,
         filter_fn=lambda e: e.get("camera_id") == "A",
     )
 
@@ -40,15 +44,22 @@ async def test_filter_fn_drops_live_events_that_dont_match() -> None:
     mgr = MagicMock()
     mgr.get_recent_from_buffer.return_value = []
     captured = {}
+
     def fake_add(cb):
         captured["cb"] = cb
         return MagicMock()
+
     mgr.add_subscriber.side_effect = fake_add
     serializer = MagicMock(serialize=lambda e: e)
 
     gen = sse_event_stream(
-        manager=mgr, pool=pool, controller_id="c1", product="protect",
-        serializer=serializer, last_event_id=None, keepalive_interval=10,
+        manager=mgr,
+        pool=pool,
+        controller_id="c1",
+        product="protect",
+        serializer=serializer,
+        last_event_id=None,
+        keepalive_interval=10,
         filter_fn=lambda e: e.get("camera_id") == "A",
     )
 
@@ -75,8 +86,13 @@ async def test_filter_fn_none_means_no_filter() -> None:
     serializer = MagicMock(serialize=lambda e: e)
 
     gen = sse_event_stream(
-        manager=mgr, pool=pool, controller_id="c1", product="network",
-        serializer=serializer, last_event_id=None, keepalive_interval=10,
+        manager=mgr,
+        pool=pool,
+        controller_id="c1",
+        product="network",
+        serializer=serializer,
+        last_event_id=None,
+        keepalive_interval=10,
         filter_fn=None,
     )
     frame = await gen.__anext__()

@@ -19,17 +19,24 @@ from tests.graphql.fixtures._helpers import (
 async def test_dns_records_list(tmp_path, monkeypatch):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(monkeypatch, {
-        ("network", "dns_manager", "list_dns_records"): [
-            {"_id": "dns-1", "key": "nas.local", "value": "10.0.0.10"},
-            {"_id": "dns-2", "key": "printer.local", "value": "10.0.0.11"},
-        ],
-    })
-    body = await graphql_query(app, key, f'''{{
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "dns_manager", "list_dns_records"): [
+                {"_id": "dns-1", "key": "nas.local", "value": "10.0.0.10"},
+                {"_id": "dns-2", "key": "printer.local", "value": "10.0.0.11"},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
         network {{ dnsRecords(controller: "{cid}", limit: 10) {{
             items {{ id }}
         }} }}
-    }}''')
+    }}''',
+    )
     assert body.get("errors") is None, body
     items = body["data"]["network"]["dnsRecords"]["items"]
     assert len(items) == 2
@@ -39,15 +46,22 @@ async def test_dns_records_list(tmp_path, monkeypatch):
 async def test_dns_record_detail(tmp_path, monkeypatch):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")
-    stub_managers(monkeypatch, {
-        ("network", "dns_manager", "list_dns_records"): [
-            {"_id": "dns-1", "key": "nas.local", "value": "10.0.0.10"},
-        ],
-    })
-    body = await graphql_query(app, key, f'''{{
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "dns_manager", "list_dns_records"): [
+                {"_id": "dns-1", "key": "nas.local", "value": "10.0.0.10"},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
         network {{ dnsRecord(controller: "{cid}", id: "dns-1") {{
             id
         }} }}
-    }}''')
+    }}''',
+    )
     assert body.get("errors") is None, body
     assert body["data"]["network"]["dnsRecord"]["id"] == "dns-1"

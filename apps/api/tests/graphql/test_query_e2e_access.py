@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -41,21 +40,31 @@ async def _bootstrap(tmp_path: Path):
     material = generate_key()
     cid = str(uuid.uuid4())
     cipher = ColumnCipher(derive_key("k"))
-    cred_blob = cipher.encrypt(json.dumps(
-        {"username": "u", "password": "p", "api_token": None}
-    ).encode("utf-8"))
+    cred_blob = cipher.encrypt(json.dumps({"username": "u", "password": "p", "api_token": None}).encode("utf-8"))
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="c", base_url="https://c", product_kinds="access",
-            credentials_blob=cred_blob, verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="c",
+                base_url="https://c",
+                product_kinds="access",
+                credentials_blob=cred_blob,
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -198,10 +207,7 @@ async def test_e2e_doors_flat_list(tmp_path: Path, monkeypatch) -> None:
     _stub_access_managers(monkeypatch, doors=fixture_doors)
 
     headers = {"Authorization": f"Bearer {key}"}
-    query = (
-        f'{{ access {{ doors(controller: "{cid}") '
-        f'{{ items {{ id name location }} nextCursor }} }} }}'
-    )
+    query = f'{{ access {{ doors(controller: "{cid}") {{ items {{ id name location }} nextCursor }} }} }}'
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/v1/graphql", headers=headers, json={"query": query})
         assert r.status_code == 200
@@ -219,7 +225,8 @@ async def test_e2e_doors_flat_list(tmp_path: Path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_e2e_door_with_policy_assignments_edge(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
@@ -240,7 +247,9 @@ async def test_e2e_door_with_policy_assignments_edge(
         },
     ]
     _stub_access_managers(
-        monkeypatch, doors=fixture_doors, policies=fixture_policies,
+        monkeypatch,
+        doors=fixture_doors,
+        policies=fixture_policies,
     )
 
     headers = {"Authorization": f"Bearer {key}"}
@@ -317,18 +326,13 @@ async def test_e2e_doors_pagination(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
 
-    fixture_doors = [
-        {"id": f"door{i:03d}", "name": f"Door {i}"} for i in range(5)
-    ]
+    fixture_doors = [{"id": f"door{i:03d}", "name": f"Door {i}"} for i in range(5)]
     _stub_access_managers(monkeypatch, doors=fixture_doors)
 
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         # Page 1: limit=2, cursor=null
-        q1 = (
-            f'{{ access {{ doors(controller: "{cid}", limit: 2) '
-            f'{{ items {{ id }} nextCursor }} }} }}'
-        )
+        q1 = f'{{ access {{ doors(controller: "{cid}", limit: 2) {{ items {{ id }} nextCursor }} }} }}'
         r1 = await c.post("/v1/graphql", headers=headers, json={"query": q1})
         body1 = r1.json()
         assert body1.get("errors") is None, body1
@@ -340,7 +344,7 @@ async def test_e2e_doors_pagination(tmp_path: Path, monkeypatch) -> None:
         # Page 2: limit=2, cursor=<page 1's nextCursor>
         q2 = (
             f'{{ access {{ doors(controller: "{cid}", limit: 2, cursor: "{next_cursor}") '
-            f'{{ items {{ id }} nextCursor }} }} }}'
+            f"{{ items {{ id }} nextCursor }} }} }}"
         )
         r2 = await c.post("/v1/graphql", headers=headers, json={"query": q2})
         body2 = r2.json()
@@ -364,21 +368,24 @@ async def test_e2e_auth_scope(tmp_path: Path, monkeypatch) -> None:
     sm = app.state.sessionmaker
     read_material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=read_material.prefix,
-            hash=hash_key(read_material.plaintext), scopes="read",
-            name="r", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=read_material.prefix,
+                hash=hash_key(read_material.plaintext),
+                scopes="read",
+                name="r",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
 
     _stub_access_managers(
-        monkeypatch, doors=[{"id": "door1", "name": "Front"}],
+        monkeypatch,
+        doors=[{"id": "door1", "name": "Front"}],
     )
 
-    query = (
-        f'{{ access {{ doors(controller: "{cid}", limit: 1) '
-        f'{{ items {{ id }} }} }} }}'
-    )
+    query = f'{{ access {{ doors(controller: "{cid}", limit: 1) {{ items {{ id }} }} }} }}'
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         # Read-scope key works for read fields
         r_read = await c.post(

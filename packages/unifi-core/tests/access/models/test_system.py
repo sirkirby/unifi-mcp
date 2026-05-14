@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.access.models.system import (
-    AccessSystemInfo,
-    AccessHealth,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
-    system_info_from_controller,
+    AccessHealth,
+    AccessSystemInfo,
     health_from_controller,
+    system_info_from_controller,
 )
 
 
@@ -76,6 +74,7 @@ class TestSystemInfoFromController:
 
     def test_from_object(self) -> None:
         """system_info_from_controller works with an attribute-bearing object."""
+
         class Obj:
             name = "UniFi Access"
             version = "1.0.0"
@@ -162,6 +161,7 @@ class TestHealthFromController:
 
     def test_from_object(self) -> None:
         """health_from_controller works with an attribute-bearing object."""
+
         class Obj:
             status = "healthy"
             num_doors = 4

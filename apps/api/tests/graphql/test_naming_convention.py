@@ -39,8 +39,9 @@ def test_naming_convention_no_collisions_in_manifest() -> None:
         _type_class, kind = tool_type
         if kind != "list" or not name.startswith("unifi_list_"):
             continue
-        stem = name[len("unifi_list_"):]
+        stem = name[len("unifi_list_") :]
         from unifi_api.graphql._naming import _to_camel
+
         list_stems_by_product[entry.product].add(_to_camel(stem))
 
     seen: dict[str, str] = {}
@@ -56,13 +57,12 @@ def test_naming_convention_no_collisions_in_manifest() -> None:
         if kind not in ("list", "detail"):
             continue
         path = tool_to_field_path(
-            name, product=entry.product,
+            name,
+            product=entry.product,
             sibling_list_stems=list_stems_by_product.get(entry.product, set()),
         )
         if not path:
             continue
         if path in seen:
-            raise AssertionError(
-                f"naming collision: {name} and {seen[path]} both map to {path}"
-            )
+            raise AssertionError(f"naming collision: {name} and {seen[path]} both map to {path}")
         seen[path] = name

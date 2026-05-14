@@ -117,8 +117,7 @@ def register_meta_tools(
                 "category": {
                     "type": "string",
                     "description": (
-                        "Filter to one category. "
-                        "Valid values are returned in the 'categories' field of every response."
+                        "Filter to one category. Valid values are returned in the 'categories' field of every response."
                     ),
                 },
                 "search": {
@@ -186,10 +185,7 @@ def register_meta_tools(
 
     register_tool(
         name=exec_name,
-        description=(
-            f"Execute a {server_label} tool ({hint}). "
-            f"Call {idx_name} first to discover tools."
-        ),
+        description=(f"Execute a {server_label} tool ({hint}). Call {idx_name} first to discover tools."),
         input_schema={
             "type": "object",
             "required": ["tool"],
@@ -275,8 +271,7 @@ def register_meta_tools(
     register_tool(
         name=batch_name,
         description=(
-            f"Execute multiple {server_label} tools in parallel. "
-            f"Returns job IDs; use {status_name} to check progress."
+            f"Execute multiple {server_label} tools in parallel. Returns job IDs; use {status_name} to check progress."
         ),
         input_schema={
             "type": "object",
@@ -370,8 +365,7 @@ def register_meta_tools(
     register_tool(
         name=status_name,
         description=(
-            f"Check status of {server_label} batch operations. "
-            f"Returns status, result (if done), or error (if failed)."
+            f"Check status of {server_label} batch operations. Returns status, result (if done), or error (if failed)."
         ),
         input_schema={
             "type": "object",

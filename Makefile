@@ -1,4 +1,4 @@
-.PHONY: help test lint format format-fix manifest generate server-manifests skill-references \
+.PHONY: help test lint format format-check format-fix manifest generate server-manifests skill-references \
        check-skill-references check-generated pre-commit ci core-test shared-test \
        relay-test docker-relay sync docker-build docker-up docker-down docker-logs
 
@@ -7,9 +7,10 @@ help:
 	@echo ""
 	@echo "  make sync           Sync uv workspace (install/update all packages)"
 	@echo "  make test           Run all tests (core + shared + all apps)"
-	@echo "  make lint           Lint all apps"
-	@echo "  make format         Format all apps"
-	@echo "  make format-fix     Auto-fix lint issues in all apps"
+	@echo "  make lint           Lint the full workspace"
+	@echo "  make format         Format the full workspace"
+	@echo "  make format-check   Check full-workspace formatting"
+	@echo "  make format-fix     Auto-fix lint issues in the full workspace"
 	@echo "  make generate       Regenerate committed generated artifacts"
 	@echo "  make manifest       Regenerate tool manifests + skill references"
 	@echo "  make check-generated  Check generated artifacts for drift"
@@ -39,21 +40,20 @@ test: core-test shared-test relay-test
 	$(MAKE) -C apps/network test
 	$(MAKE) -C apps/protect test
 	$(MAKE) -C apps/access test
+	$(MAKE) -C apps/api test
 
 lint:
-	$(MAKE) -C apps/network lint
-	$(MAKE) -C apps/protect lint
-	$(MAKE) -C apps/access lint
+	uv run ruff check .
 
 format:
-	$(MAKE) -C apps/network format
-	$(MAKE) -C apps/protect format
-	$(MAKE) -C apps/access format
+	uv run ruff format .
+
+format-check:
+	uv run ruff format --check .
 
 format-fix:
-	$(MAKE) -C apps/network format-fix
-	$(MAKE) -C apps/protect format-fix
-	$(MAKE) -C apps/access format-fix
+	uv run ruff format .
+	uv run ruff check . --fix
 
 generate: manifest
 
@@ -85,7 +85,7 @@ docker-relay:
 
 pre-commit: format generate lint test check-generated
 
-ci: lint check-generated test
+ci: format-check lint check-generated test
 
 docker-build:
 	docker compose -f docker/docker-compose.yml build

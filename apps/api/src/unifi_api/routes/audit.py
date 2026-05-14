@@ -17,7 +17,6 @@ from unifi_api.services.audit import add_audit_subscriber
 from unifi_api.services.audit_pruner import prune_audit
 from unifi_api.services.pagination import Cursor, InvalidCursor, paginate
 
-
 router = APIRouter()
 
 
@@ -84,7 +83,10 @@ async def list_audit(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(rows), limit=limit, cursor=cursor_obj, key_fn=_audit_key,
+        list(rows),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_audit_key,
     )
 
     return {
@@ -124,11 +126,7 @@ async def _audit_event_stream():
         while True:
             try:
                 row = await asyncio.wait_for(queue.get(), timeout=30.0)
-                yield (
-                    f"event: audit.row\n"
-                    f"id: {row['id']}\n"
-                    f"data: {json.dumps(row, default=str)}\n\n"
-                ).encode()
+                yield (f"event: audit.row\nid: {row['id']}\ndata: {json.dumps(row, default=str)}\n\n").encode()
             except asyncio.TimeoutError:
                 yield b": keepalive\n\n"
     finally:

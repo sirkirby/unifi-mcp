@@ -18,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unifi_api.db.models import AuditLog
 
-
 _log = logging.getLogger("unifi-api.audit")
 _audit_subscribers: list[Callable[[dict], None]] = []
 

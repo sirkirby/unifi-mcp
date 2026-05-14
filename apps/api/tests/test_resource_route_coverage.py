@@ -21,7 +21,6 @@ from unifi_api.server import create_app
 from unifi_api.services.manifest import ManifestRegistry
 from unifi_api.services.resource_routes import collect_resource_routes, is_read_tool
 
-
 # Tools whose registered route function name doesn't match the default convention
 # (tool name minus product prefix). Populated from the Task 22 audit.
 TOOL_ROUTE_OVERRIDES: dict[str, str] = {
@@ -84,7 +83,6 @@ def test_every_read_tool_has_a_resource_route(tmp_path) -> None:
         if expected_route not in route_names:
             missing.append((tool, expected_route))
 
-    assert not missing, (
-        f"{len(missing)} read tools lack a resource route:\n"
-        + "\n".join(f"  {t} (expected route fn: {r})" for t, r in missing[:30])
+    assert not missing, f"{len(missing)} read tools lack a resource route:\n" + "\n".join(
+        f"  {t} (expected route fn: {r})" for t, r in missing[:30]
     )

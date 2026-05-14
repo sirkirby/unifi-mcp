@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -182,15 +181,11 @@ class Wlan(BaseModel):
 # ---------------------------------------------------------------------------
 
 MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in Wlan.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in Wlan.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 READ_ONLY_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in Wlan.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True) is False
+    name for name, field in Wlan.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True) is False
 )
 
 
@@ -284,11 +279,7 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     ``None`` values are dropped; boolean ``False`` is preserved.
     Maps model field names to controller API field names.
     """
-    result = {
-        k: v
-        for k, v in fields.items()
-        if k in MUTABLE_FIELDS and v is not None
-    }
+    result = {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
     # Map network_id → networkconf_id
     if "network_id" in result:
         result["networkconf_id"] = result.pop("network_id")

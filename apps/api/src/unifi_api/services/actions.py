@@ -272,16 +272,14 @@ async def dispatch_action(
     entry: ToolEntry = registry.resolve(tool_name)
     if entry.product not in controller_products:
         raise CapabilityMismatch(
-            f"tool '{tool_name}' requires product '{entry.product}', "
-            f"controller supports {controller_products!r}"
+            f"tool '{tool_name}' requires product '{entry.product}', controller supports {controller_products!r}"
         )
 
     table = dispatch_table if dispatch_table is not None else _get_table()
     binding = table.get(tool_name)
     if binding is None:
         raise DispatchEntryMissing(
-            f"no dispatch entry for tool '{tool_name}' "
-            f"(no manager.method() call discovered in tool body)"
+            f"no dispatch entry for tool '{tool_name}' (no manager.method() call discovered in tool body)"
         )
 
     manager = await factory.get_domain_manager(
@@ -308,8 +306,7 @@ async def dispatch_action(
     method = getattr(manager, binding.method, None)
     if method is None or not callable(method):
         raise DispatchEntryMissing(
-            f"manager '{binding.manager_attr}' has no callable method "
-            f"'{binding.method}' for tool '{tool_name}'"
+            f"manager '{binding.manager_attr}' has no callable method '{binding.method}' for tool '{tool_name}'"
         )
 
     translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)

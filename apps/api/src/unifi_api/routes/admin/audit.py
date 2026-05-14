@@ -27,7 +27,6 @@ from unifi_api.routes.admin._common import render
 from unifi_api.services.audit import add_audit_subscriber
 from unifi_api.services.pagination import Cursor, InvalidCursor, paginate
 
-
 router = APIRouter()
 
 
@@ -103,7 +102,11 @@ async def audit_rows(
 ):
     sm = request.app.state.sessionmaker
     stmt = _build_filtered_query(
-        controller=controller, outcome=outcome, since=since, until=until, q=q,
+        controller=controller,
+        outcome=outcome,
+        since=since,
+        until=until,
+        q=q,
     )
     async with sm() as session:
         rows = (await session.execute(stmt)).scalars().all()
@@ -116,15 +119,23 @@ async def audit_rows(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(rows), limit=limit, cursor=cursor_obj, key_fn=_audit_key,
+        list(rows),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_audit_key,
     )
 
     # Carry filter values forward in the "Load more" hx-get URL.
     filter_qs = "&".join(
-        f"{k}={v}" for k, v in (
-            ("controller", controller), ("outcome", outcome),
-            ("since", since), ("until", until), ("q", q),
-        ) if v
+        f"{k}={v}"
+        for k, v in (
+            ("controller", controller),
+            ("outcome", outcome),
+            ("since", since),
+            ("until", until),
+            ("q", q),
+        )
+        if v
     )
 
     return render(
@@ -165,9 +176,7 @@ async def _admin_audit_event_stream(filter_fn):
                 # Replace any newlines/whitespace with a single space so SSE
                 # 'data:' line framing parses correctly.
                 single = " ".join(html.split())
-                yield (
-                    f"event: audit.row\nid: {row['id']}\ndata: {single}\n\n"
-                ).encode()
+                yield (f"event: audit.row\nid: {row['id']}\ndata: {single}\n\n").encode()
             except asyncio.TimeoutError:
                 yield b": keepalive\n\n"
     finally:
@@ -185,6 +194,7 @@ def _make_filter_fn(*, outcome, q):
         if q and q.lower() not in str(row.get("target", "")).lower():
             return False
         return True
+
     return _fn
 
 
@@ -224,7 +234,11 @@ async def audit_export_csv(
 ):
     sm = request.app.state.sessionmaker
     stmt = _build_filtered_query(
-        controller=controller, outcome=outcome, since=since, until=until, q=q,
+        controller=controller,
+        outcome=outcome,
+        since=since,
+        until=until,
+        q=q,
     )
     async with sm() as session:
         rows = (await session.execute(stmt)).scalars().all()
@@ -232,19 +246,34 @@ async def audit_export_csv(
     def _generate():
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([
-            "id", "ts", "key_id_prefix", "controller",
-            "target", "outcome", "error_kind", "detail",
-        ])
+        writer.writerow(
+            [
+                "id",
+                "ts",
+                "key_id_prefix",
+                "controller",
+                "target",
+                "outcome",
+                "error_kind",
+                "detail",
+            ]
+        )
         yield buf.getvalue()
         for r in rows:
             buf.seek(0)
             buf.truncate()
-            writer.writerow([
-                r.id, r.ts.isoformat(), r.key_id_prefix,
-                r.controller or "", r.target, r.outcome,
-                r.error_kind or "", r.detail or "",
-            ])
+            writer.writerow(
+                [
+                    r.id,
+                    r.ts.isoformat(),
+                    r.key_id_prefix,
+                    r.controller or "",
+                    r.target,
+                    r.outcome,
+                    r.error_kind or "",
+                    r.detail or "",
+                ]
+            )
             yield buf.getvalue()
 
     return StreamingResponse(

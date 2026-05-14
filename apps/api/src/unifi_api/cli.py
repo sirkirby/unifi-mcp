@@ -11,7 +11,6 @@ from unifi_api.config import ensure_db_encryption_key, load_config
 from unifi_api.logging import configure_logging
 from unifi_api.server import create_app
 
-
 app = typer.Typer(no_args_is_help=True, help="UniFi rich HTTP API service.")
 keys_app = typer.Typer(no_args_is_help=True, help="Manage API keys.")
 db_app = typer.Typer(no_args_is_help=True, help="Database operations.")
@@ -107,16 +106,9 @@ def migrate(
             typer.echo("")
             typer.echo(f"Also written to: {bootstrap_file}")
             typer.echo("Retrieve later with:")
-            typer.echo(
-                "  docker compose -f docker/docker-compose-api.yml exec \\"
-            )
-            typer.echo(
-                f"    unifi-api-server cat {bootstrap_file}"
-            )
-            typer.echo(
-                "Delete this file once you've saved the key in your "
-                "password manager."
-            )
+            typer.echo("  docker compose -f docker/docker-compose-api.yml exec \\")
+            typer.echo(f"    unifi-api-server cat {bootstrap_file}")
+            typer.echo("Delete this file once you've saved the key in your password manager.")
         typer.echo("=" * 60)
 
 
@@ -146,11 +138,16 @@ def keys_create(
         try:
             material = generate_key(env=ApiKeyEnv(env))
             async with sm() as session:
-                session.add(ApiKey(
-                    id=str(uuid.uuid4()), prefix=material.prefix,
-                    hash=hash_key(material.plaintext), scopes=scopes,
-                    name=name, created_at=datetime.now(timezone.utc),
-                ))
+                session.add(
+                    ApiKey(
+                        id=str(uuid.uuid4()),
+                        prefix=material.prefix,
+                        hash=hash_key(material.plaintext),
+                        scopes=scopes,
+                        name=name,
+                        created_at=datetime.now(timezone.utc),
+                    )
+                )
                 await session.commit()
             return material.plaintext
         finally:
@@ -244,7 +241,7 @@ def keys_revoke(
     if result == "already_revoked":
         typer.echo(f"key '{prefix}' was already revoked")
         return
-    typer.echo(f"revoked key '{prefix}'. Note: revocation effective within 60 seconds against running services (argon2 cache TTL).")
+    typer.echo(f"revoked key '{prefix}'. Note: revocation effective within 60 seconds against running services.")
 
 
 @db_app.command("backup")

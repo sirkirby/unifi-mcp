@@ -3,7 +3,6 @@
 import asyncio
 
 import pytest
-
 from unifi_api.graphql.context import RequestCache
 
 

@@ -93,7 +93,10 @@ async def register_tools_for_mode(
         logger.info("Tool registration mode: meta_only")
         logger.info(
             "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status",
-            tool_prefix, tool_prefix, tool_prefix, tool_prefix,
+            tool_prefix,
+            tool_prefix,
+            tool_prefix,
+            tool_prefix,
         )
         logger.info("   Use %s_execute to run any tool discovered via %s_tool_index", tool_prefix, tool_prefix)
         logger.info("   To load all tools directly: set UNIFI_TOOL_REGISTRATION_MODE=eager")
@@ -105,7 +108,11 @@ async def register_tools_for_mode(
         logger.info("Tool registration mode: lazy")
         logger.info(
             "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_load_tools",
-            tool_prefix, tool_prefix, tool_prefix, tool_prefix, tool_prefix,
+            tool_prefix,
+            tool_prefix,
+            tool_prefix,
+            tool_prefix,
+            tool_prefix,
         )
         logger.info("   Use %s_execute to run any tool - works with all clients", tool_prefix)
 

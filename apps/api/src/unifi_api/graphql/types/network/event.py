@@ -59,8 +59,14 @@ class EventLog:
     def from_manager_output(cls, record: Any) -> "EventLog":
         if not isinstance(record, dict):
             return cls(
-                id=None, key=None, msg=None, time=None,
-                mac=None, ip=None, severity=None, _was_dict=False,
+                id=None,
+                key=None,
+                msg=None,
+                time=None,
+                mac=None,
+                ip=None,
+                severity=None,
+                _was_dict=False,
             )
         return cls(
             id=_get(record, "_id", "id"),

@@ -1,7 +1,6 @@
 """Manifest lookup table tests."""
 
 import pytest
-
 from unifi_api.services.manifest import ManifestRegistry, ToolNotFound
 
 

@@ -16,7 +16,6 @@ from enum import Enum
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
-
 KEY_PATTERN = re.compile(r"^unifi_(live|test)_[A-Z2-7]{22}$")
 KEY_PREFIX_LEN = 15
 _HASHER = PasswordHasher()

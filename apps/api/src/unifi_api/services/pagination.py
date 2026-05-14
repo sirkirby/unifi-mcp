@@ -51,7 +51,6 @@ def paginate(
     sorted_items = sorted(items, key=key_fn, reverse=True)
 
     if cursor is not None:
-        cutoff = (cursor.last_ts, cursor.last_id) if cursor.last_ts is not None else (None, cursor.last_id)
         filtered = []
         for item in sorted_items:
             ts, id_ = key_fn(item)

@@ -72,9 +72,7 @@ class StrictKwargFastMCP(FastMCP):
                 unknown_str = ", ".join(sorted(unknown))
                 valid_str = ", ".join(sorted(allowed))
                 raise ToolError(
-                    f"Invalid params for '{name}': "
-                    f"unknown arguments {{{unknown_str}}}. "
-                    f"Valid arguments: [{valid_str}]."
+                    f"Invalid params for '{name}': unknown arguments {{{unknown_str}}}. Valid arguments: [{valid_str}]."
                 )
         return await super().call_tool(name, arguments)
 
@@ -96,8 +94,7 @@ def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str
         return {}
     except OSError as exc:
         logger.warning(
-            "[strict_dispatch] failed to read tools_manifest.json at %s: %s; "
-            "kwarg validation disabled",
+            "[strict_dispatch] failed to read tools_manifest.json at %s: %s; kwarg validation disabled",
             manifest_path,
             exc,
         )
@@ -107,8 +104,7 @@ def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
         logger.warning(
-            "[strict_dispatch] tools_manifest.json at %s is not valid JSON: %s; "
-            "kwarg validation disabled",
+            "[strict_dispatch] tools_manifest.json at %s is not valid JSON: %s; kwarg validation disabled",
             manifest_path,
             exc,
         )
@@ -117,8 +113,7 @@ def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str
     tools = data.get("tools") if isinstance(data, dict) else None
     if not isinstance(tools, list):
         logger.warning(
-            "[strict_dispatch] tools_manifest.json at %s missing 'tools' list; "
-            "kwarg validation disabled",
+            "[strict_dispatch] tools_manifest.json at %s missing 'tools' list; kwarg validation disabled",
             manifest_path,
         )
         return {}
@@ -132,9 +127,7 @@ def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str
         if not isinstance(name, str):
             continue
         properties = (
-            tool.get("schema", {}).get("input", {}).get("properties")
-            if isinstance(tool.get("schema"), dict)
-            else None
+            tool.get("schema", {}).get("input", {}).get("properties") if isinstance(tool.get("schema"), dict) else None
         )
         if not isinstance(properties, dict):
             skipped.append(name)
@@ -145,8 +138,7 @@ def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str
 
     if skipped:
         logger.warning(
-            "[strict_dispatch] %d tool(s) in manifest had no input schema; "
-            "treated as zero-arg: %s",
+            "[strict_dispatch] %d tool(s) in manifest had no input schema; treated as zero-arg: %s",
             len(skipped),
             sorted(skipped),
         )

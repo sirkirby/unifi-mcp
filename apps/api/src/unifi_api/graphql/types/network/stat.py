@@ -57,9 +57,7 @@ class StatPoint:
         if not isinstance(point, dict):
             return cls(ts=0, _metrics={})
         ts = _normalize_ts(point)
-        metrics = {
-            k: v for k, v in point.items() if k not in ("time", "timestamp", "ts")
-        }
+        metrics = {k: v for k, v in point.items() if k not in ("time", "timestamp", "ts")}
         return cls(ts=ts, _metrics=metrics)
 
     def to_dict(self) -> dict:

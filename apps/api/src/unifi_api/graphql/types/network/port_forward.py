@@ -51,7 +51,12 @@ class PortForward:
             "kind": kind,
             "primary_key": "id",
             "display_columns": [
-                "name", "enabled", "fwd_protocol", "dst_port", "fwd_port", "fwd_ip",
+                "name",
+                "enabled",
+                "fwd_protocol",
+                "dst_port",
+                "fwd_port",
+                "fwd_ip",
             ],
             "sort_default": "name:asc",
         }

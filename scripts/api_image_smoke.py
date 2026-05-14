@@ -63,9 +63,9 @@ def _resolve_path(path: str, params: dict[str, str]) -> str:
     for key, value in params.items():
         out = out.replace("{" + key + "}", urllib.parse.quote(value, safe=""))
     while "{" in out and "}" in out:
-        l = out.index("{")
-        r = out.index("}", l)
-        out = out[:l] + SENTINEL + out[r + 1 :]
+        left = out.index("{")
+        right = out.index("}", left)
+        out = out[:left] + SENTINEL + out[right + 1 :]
     return out
 
 
@@ -128,9 +128,7 @@ def main(argv: list[str]) -> int:
             continue  # SSE streams won't terminate cleanly via urlopen
         url = BASE + _resolve_path(path, params)
         status, body, ms = _hit(url, key)
-        rows.append(
-            {"path": path, "url": url, "status": status, "ms": ms, "body": body}
-        )
+        rows.append({"path": path, "url": url, "status": status, "ms": ms, "body": body})
 
     buckets: dict[str, list[dict]] = {}
     for r in rows:
@@ -143,8 +141,7 @@ def main(argv: list[str]) -> int:
     print()
 
     failures = [
-        r for k, rows in buckets.items() for r in rows
-        if (k.startswith(("5", "network")) and "expected" not in k)
+        r for k, rows in buckets.items() for r in rows if (k.startswith(("5", "network")) and "expected" not in k)
     ]
     if not failures:
         print("PASS — no 5xx / network failures.")

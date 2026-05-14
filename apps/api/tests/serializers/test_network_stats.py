@@ -7,7 +7,6 @@ the DPI DETAIL wrapper to ``DpiStats`` at
 
 from unifi_api.graphql.types.network.stat import DpiStats, StatPoint
 
-
 # ---- TIMESERIES (list-returning manager methods) ----
 
 

@@ -24,7 +24,6 @@ from typing import Any, Dict, Optional
 import aiohttp
 
 from unifi_core.auth import UniFiAuth
-
 from unifi_core.network.managers.connection_manager import ConnectionManager
 
 logger = logging.getLogger("unifi-network-mcp")

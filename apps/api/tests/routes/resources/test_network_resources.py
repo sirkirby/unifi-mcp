@@ -1,11 +1,10 @@
 """Network resource endpoints — happy paths, capability mismatch, pagination, 404."""
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -30,17 +29,29 @@ async def _bootstrap(tmp_path, products="network"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="N", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="N",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -78,13 +89,15 @@ async def test_list_clients_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_clients = [
-        _FakeRaw({
-            "mac": f"aa:bb:cc:dd:ee:0{i}",
-            "last_ip": f"10.0.0.{i}",
-            "hostname": f"host-{i}",
-            "is_online": True,
-            "last_seen": 1700000000 - i,
-        })
+        _FakeRaw(
+            {
+                "mac": f"aa:bb:cc:dd:ee:0{i}",
+                "last_ip": f"10.0.0.{i}",
+                "hostname": f"host-{i}",
+                "is_online": True,
+                "last_seen": 1700000000 - i,
+            }
+        )
         for i in range(5)
     ]
 
@@ -92,6 +105,7 @@ async def test_list_clients_happy_path(tmp_path, monkeypatch) -> None:
         return fake_clients
 
     from unifi_core.network.managers.client_manager import ClientManager
+
     monkeypatch.setattr(ClientManager, "get_clients", fake_get_clients)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -131,18 +145,21 @@ async def test_get_client_detail_happy_and_404(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = _FakeRaw({
-        "mac": "aa:bb:cc:dd:ee:00",
-        "last_ip": "10.0.0.0",
-        "hostname": "alpha",
-        "is_online": True,
-        "last_seen": 1700000000,
-    })
+    target = _FakeRaw(
+        {
+            "mac": "aa:bb:cc:dd:ee:00",
+            "last_ip": "10.0.0.0",
+            "hostname": "alpha",
+            "is_online": True,
+            "last_seen": 1700000000,
+        }
+    )
 
     async def fake_details(self, mac):
         return target if mac == "aa:bb:cc:dd:ee:00" else None
 
     from unifi_core.network.managers.client_manager import ClientManager
+
     monkeypatch.setattr(ClientManager, "get_client_details", fake_details)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -179,6 +196,7 @@ async def test_list_devices_happy_path(tmp_path, monkeypatch) -> None:
         return fake_devices
 
     from unifi_core.network.managers.device_manager import DeviceManager
+
     monkeypatch.setattr(DeviceManager, "get_devices", fake_get_devices)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -200,14 +218,14 @@ async def test_list_networks_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_nets = [
-        {"_id": f"n-{i}", "name": f"net-{i}", "purpose": "corporate", "vlan": 10 + i, "enabled": True}
-        for i in range(3)
+        {"_id": f"n-{i}", "name": f"net-{i}", "purpose": "corporate", "vlan": 10 + i, "enabled": True} for i in range(3)
     ]
 
     async def fake_get_networks(self, *a, **kw):
         return fake_nets
 
     from unifi_core.network.managers.network_manager import NetworkManager
+
     monkeypatch.setattr(NetworkManager, "get_networks", fake_get_networks)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -227,14 +245,14 @@ async def test_list_wlans_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_wlans = [
-        _FakeRaw({"_id": f"w-{i}", "name": f"ssid-{i}", "enabled": True, "security": "wpapsk"})
-        for i in range(2)
+        _FakeRaw({"_id": f"w-{i}", "name": f"ssid-{i}", "enabled": True, "security": "wpapsk"}) for i in range(2)
     ]
 
     async def fake_get_wlans(self, *a, **kw):
         return fake_wlans
 
     from unifi_core.network.managers.network_manager import NetworkManager
+
     monkeypatch.setattr(NetworkManager, "get_wlans", fake_get_wlans)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -263,6 +281,7 @@ async def test_list_firewall_rules_happy_path(tmp_path, monkeypatch) -> None:
         return fake_rules
 
     from unifi_core.network.managers.firewall_manager import FirewallManager
+
     monkeypatch.setattr(FirewallManager, "get_firewall_policies", fake_get_policies)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

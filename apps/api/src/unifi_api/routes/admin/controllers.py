@@ -33,7 +33,6 @@ from unifi_api.services.controllers import (
     update_controller,
 )
 
-
 router = APIRouter()
 
 
@@ -148,7 +147,8 @@ async def controllers_create(
         await session.commit()
     # Empty body — the form-slot is cleared; HX-Trigger refetches the table-body.
     return Response(
-        status_code=200, content="",
+        status_code=200,
+        content="",
         headers={"Cache-Control": "no-store", "HX-Trigger": "controllers-changed"},
     )
 
@@ -217,7 +217,8 @@ async def controllers_update(
         await request.app.state.manager_factory.invalidate_controller(cid)
         request.app.state.capability_cache.invalidate(cid)
     return Response(
-        status_code=200, content="",
+        status_code=200,
+        content="",
         headers={"Cache-Control": "no-store", "HX-Trigger": "controllers-changed"},
     )
 
@@ -238,7 +239,8 @@ async def controllers_delete(request: Request, cid: str):
     await request.app.state.manager_factory.invalidate_controller(cid)
     request.app.state.capability_cache.invalidate(cid)
     return Response(
-        status_code=200, content="",
+        status_code=200,
+        content="",
         headers={"Cache-Control": "no-store", "HX-Trigger": "controllers-changed"},
     )
 

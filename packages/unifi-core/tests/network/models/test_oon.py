@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.oon import (
     MUTABLE_FIELDS,
-    OonPolicy,
     READ_ONLY_FIELDS,
+    OonPolicy,
     from_controller,
     to_controller_create,
     to_controller_update,
@@ -147,8 +145,7 @@ class TestToControllerUpdate:
 
     def test_passes_route_enabled(self) -> None:
         result = to_controller_update({"route_enabled": False})
-        # Note: False is falsy but not None, however current implementation
-        # drops falsy values. Test that True passes through.
+        assert result["route_enabled"] is False
         result2 = to_controller_update({"route_enabled": True})
         assert result2["route_enabled"] is True
 

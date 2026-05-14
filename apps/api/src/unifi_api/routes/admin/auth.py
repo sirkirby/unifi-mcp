@@ -12,7 +12,6 @@ from fastapi import APIRouter, Form, Request
 
 from unifi_api.routes.admin._common import render
 
-
 router = APIRouter()
 
 

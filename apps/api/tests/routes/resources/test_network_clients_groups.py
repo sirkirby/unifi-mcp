@@ -1,11 +1,10 @@
 """Phase 5A PR1 Cluster 2 — clients & user groups resource routes."""
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -30,17 +29,29 @@ async def _bootstrap(tmp_path, products="network"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="N", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="N",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -72,8 +83,7 @@ async def test_list_blocked_clients_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_blocked = [
-        {"mac": f"aa:bb:cc:dd:ee:0{i}", "hostname": f"host-{i}",
-         "blocked": True, "last_seen": 1700000000 - i}
+        {"mac": f"aa:bb:cc:dd:ee:0{i}", "hostname": f"host-{i}", "blocked": True, "last_seen": 1700000000 - i}
         for i in range(3)
     ]
 
@@ -81,6 +91,7 @@ async def test_list_blocked_clients_happy_path(tmp_path, monkeypatch) -> None:
         return fake_blocked
 
     from unifi_core.network.managers.client_manager import ClientManager
+
     monkeypatch.setattr(ClientManager, "get_blocked_clients", fake_get_blocked)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -121,15 +132,13 @@ async def test_list_client_groups_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    fake_groups = [
-        {"_id": f"cg-{i}", "name": f"group-{i}", "type": "manual"}
-        for i in range(3)
-    ]
+    fake_groups = [{"_id": f"cg-{i}", "name": f"group-{i}", "type": "manual"} for i in range(3)]
 
     async def fake_list(self):
         return fake_groups
 
     from unifi_core.network.managers.client_group_manager import ClientGroupManager
+
     monkeypatch.setattr(ClientGroupManager, "get_client_groups", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -155,6 +164,7 @@ async def test_get_client_group_details_happy_path(tmp_path, monkeypatch) -> Non
         return target if group_id == "cg-1" else None
 
     from unifi_core.network.managers.client_group_manager import ClientGroupManager
+
     monkeypatch.setattr(ClientGroupManager, "get_client_group_by_id", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -178,6 +188,7 @@ async def test_get_client_group_details_404(tmp_path, monkeypatch) -> None:
         return None
 
     from unifi_core.network.managers.client_group_manager import ClientGroupManager
+
     monkeypatch.setattr(ClientGroupManager, "get_client_group_by_id", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -198,15 +209,14 @@ async def test_list_user_groups_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_groups = [
-        {"_id": f"ug-{i}", "name": f"qos-{i}",
-         "qos_rate_max_down": 1000, "qos_rate_max_up": 500}
-        for i in range(2)
+        {"_id": f"ug-{i}", "name": f"qos-{i}", "qos_rate_max_down": 1000, "qos_rate_max_up": 500} for i in range(2)
     ]
 
     async def fake_list(self):
         return fake_groups
 
     from unifi_core.network.managers.usergroup_manager import UsergroupManager
+
     monkeypatch.setattr(UsergroupManager, "get_usergroups", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -226,13 +236,13 @@ async def test_get_user_group_details_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"_id": "ug-1", "name": "premium",
-              "qos_rate_max_down": 5000, "qos_rate_max_up": 2000}
+    target = {"_id": "ug-1", "name": "premium", "qos_rate_max_down": 5000, "qos_rate_max_up": 2000}
 
     async def fake_get(self, group_id):
         return target if group_id == "ug-1" else None
 
     from unifi_core.network.managers.usergroup_manager import UsergroupManager
+
     monkeypatch.setattr(UsergroupManager, "get_usergroup_details", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -255,13 +265,19 @@ async def test_lookup_by_ip_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"mac": "aa:bb:cc:dd:ee:01", "last_ip": "10.0.0.5",
-              "hostname": "kiosk-1", "is_online": True, "last_seen": 1700000000}
+    target = {
+        "mac": "aa:bb:cc:dd:ee:01",
+        "last_ip": "10.0.0.5",
+        "hostname": "kiosk-1",
+        "is_online": True,
+        "last_seen": 1700000000,
+    }
 
     async def fake_lookup(self, ip):
         return target if ip == "10.0.0.5" else None
 
     from unifi_core.network.managers.client_manager import ClientManager
+
     monkeypatch.setattr(ClientManager, "get_client_by_ip", fake_lookup)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -302,6 +318,7 @@ async def test_lookup_by_ip_not_found(tmp_path, monkeypatch) -> None:
         return None
 
     from unifi_core.network.managers.client_manager import ClientManager
+
     monkeypatch.setattr(ClientManager, "get_client_by_ip", fake_lookup)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

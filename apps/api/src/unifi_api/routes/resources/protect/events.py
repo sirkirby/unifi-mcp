@@ -69,7 +69,10 @@ async def list_events(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "event_manager",
+            session,
+            controller.id,
+            "protect",
+            "event_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
@@ -83,7 +86,10 @@ async def list_events(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_events), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+        list(all_events),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_event_key,
     )
 
     type_class = request.app.state.type_registry.lookup("protect", "events")
@@ -114,7 +120,10 @@ async def get_event(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "event_manager",
+                session,
+                controller.id,
+                "protect",
+                "event_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)
@@ -158,7 +167,10 @@ async def get_event_thumbnail(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "event_manager",
+                session,
+                controller.id,
+                "protect",
+                "event_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)
@@ -203,7 +215,10 @@ async def list_smart_detections(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "event_manager",
+            session,
+            controller.id,
+            "protect",
+            "event_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
@@ -222,7 +237,10 @@ async def list_smart_detections(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_events), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+        list(all_events),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_event_key,
     )
 
     type_registry = request.app.state.type_registry
@@ -269,7 +287,10 @@ async def recent_events(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "event_manager",
+            session,
+            controller.id,
+            "protect",
+            "event_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)

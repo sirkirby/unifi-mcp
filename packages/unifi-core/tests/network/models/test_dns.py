@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.dns import (
-    DnsRecord,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    DnsRecord,
     from_controller,
     to_controller_create,
     to_controller_update,
@@ -86,8 +84,15 @@ class TestFromController:
         assert r.enabled is None
 
     def test_srv_fields_populated(self) -> None:
-        raw = {"_id": "r6", "key": "srv.local", "value": "target.local", "record_type": "SRV",
-               "port": 8080, "priority": 10, "weight": 20}
+        raw = {
+            "_id": "r6",
+            "key": "srv.local",
+            "value": "target.local",
+            "record_type": "SRV",
+            "port": 8080,
+            "priority": 10,
+            "weight": 20,
+        }
         r = from_controller(raw)
         assert r.port == 8080
         assert r.priority == 10
@@ -143,8 +148,16 @@ class TestToControllerUpdate:
         assert result["value"] == "1.2.3.4"
 
     def test_passes_all_mutable_fields(self) -> None:
-        fields = {"key": "x.local", "value": "1.2.3.4", "record_type": "A",
-                  "enabled": True, "ttl": 60, "port": 80, "priority": 5, "weight": 10}
+        fields = {
+            "key": "x.local",
+            "value": "1.2.3.4",
+            "record_type": "A",
+            "enabled": True,
+            "ttl": 60,
+            "port": 80,
+            "priority": 5,
+            "weight": 10,
+        }
         result = to_controller_update(fields)
         assert result == fields
 

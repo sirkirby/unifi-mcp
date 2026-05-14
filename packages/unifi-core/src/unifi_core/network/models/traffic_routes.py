@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -98,9 +97,7 @@ class TrafficRoute(BaseModel):
 # ---------------------------------------------------------------------------
 
 MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in TrafficRoute.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in TrafficRoute.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 READ_ONLY_FIELDS: frozenset[str] = frozenset(
@@ -176,14 +173,8 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Maps 'name' → 'description' for controller compatibility.
     """
     # Accept both MUTABLE_FIELDS scalar keys and the list fields for update
-    accepted = MUTABLE_FIELDS | {
-        "domains", "ip_addresses", "ip_ranges", "regions", "target_devices"
-    }
-    result = {
-        k: v
-        for k, v in fields.items()
-        if k in accepted and v is not None
-    }
+    accepted = MUTABLE_FIELDS | {"domains", "ip_addresses", "ip_ranges", "regions", "target_devices"}
+    result = {k: v for k, v in fields.items() if k in accepted and v is not None}
     # Map name → description for controller compatibility
     if "name" in result:
         result["description"] = result.pop("name")

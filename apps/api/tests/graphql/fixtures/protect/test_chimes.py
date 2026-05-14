@@ -14,17 +14,24 @@ from tests.graphql.fixtures._helpers import bootstrap, graphql_query, stub_manag
 async def test_protect_chimes_list(tmp_path, monkeypatch):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="protect")
-    stub_managers(monkeypatch, {
-        ("protect", "chime_manager", "list_chimes"): [
-            {"id": "chime1", "name": "Doorbell", "model": "G4 Doorbell", "volume": 80},
-            {"id": "chime2", "name": "Back Door", "model": "G4 Doorbell", "volume": 60},
-        ],
-    })
-    body = await graphql_query(app, key, f'''{{
+    stub_managers(
+        monkeypatch,
+        {
+            ("protect", "chime_manager", "list_chimes"): [
+                {"id": "chime1", "name": "Doorbell", "model": "G4 Doorbell", "volume": 80},
+                {"id": "chime2", "name": "Back Door", "model": "G4 Doorbell", "volume": 60},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
         protect {{ chimes(controller: "{cid}", limit: 10) {{
             items {{ id name model volume }}
         }} }}
-    }}''')
+    }}''',
+    )
     assert body.get("errors") is None, body
     items = body["data"]["protect"]["chimes"]["items"]
     assert len(items) == 2

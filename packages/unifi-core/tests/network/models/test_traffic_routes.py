@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.traffic_routes import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,

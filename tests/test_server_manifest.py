@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+# Import the shared script as a module
+import importlib.util
 import json
 from pathlib import Path
 
 import pytest
-
-# Import the shared script as a module
-import importlib.util
 
 _script_path = Path(__file__).parent.parent / "scripts" / "generate_server_manifest.py"
 _spec = importlib.util.spec_from_file_location("generate_server_manifest", _script_path)

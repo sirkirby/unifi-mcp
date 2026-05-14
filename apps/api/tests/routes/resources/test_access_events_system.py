@@ -8,19 +8,17 @@ Covers 6 endpoint families across 2 route modules:
   (product-prefixed paths to disambiguate from network/protect)
 """
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
-from unifi_core.exceptions import UniFiNotFoundError
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
+from unifi_core.exceptions import UniFiNotFoundError
 
 
 def _cfg(tmp_path):
@@ -40,17 +38,29 @@ async def _bootstrap(tmp_path, products="access"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="A", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="A",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -95,6 +105,7 @@ async def test_list_access_events_happy_path(tmp_path, monkeypatch) -> None:
         return fake_events
 
     from unifi_core.access.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "list_events", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -133,6 +144,7 @@ async def test_get_access_event_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.access.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "get_event", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -156,6 +168,7 @@ async def test_get_access_event_404_via_unifi_not_found(tmp_path, monkeypatch) -
         raise UniFiNotFoundError("event", event_id)
 
     from unifi_core.access.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "get_event", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -184,6 +197,7 @@ async def test_recent_access_events_happy_path(tmp_path, monkeypatch) -> None:
         ]
 
     from unifi_core.access.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "get_recent_from_buffer", fake_buffer)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -225,6 +239,7 @@ async def test_access_activity_summary_happy_path(tmp_path, monkeypatch) -> None
         return payload
 
     from unifi_core.access.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "get_activity_summary", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -263,6 +278,7 @@ async def test_access_health_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.access.managers.system_manager import SystemManager
+
     monkeypatch.setattr(SystemManager, "get_health", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -313,6 +329,7 @@ async def test_access_system_info_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.access.managers.system_manager import SystemManager
+
     monkeypatch.setattr(SystemManager, "get_system_info", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

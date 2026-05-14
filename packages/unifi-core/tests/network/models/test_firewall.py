@@ -2,34 +2,44 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.firewall import (
-    FirewallRule,
-    FirewallGroup,
-    FirewallZone,
-    MUTABLE_FIELDS,
-    READ_ONLY_FIELDS,
     FIREWALLGROUP_MUTABLE_FIELDS,
     FIREWALLGROUP_READ_ONLY_FIELDS,
     FIREWALLZONE_MUTABLE_FIELDS,
     FIREWALLZONE_READ_ONLY_FIELDS,
-    from_controller,
-    to_controller_create,
-    to_controller_update,
+    MUTABLE_FIELDS,
+    READ_ONLY_FIELDS,
+    FirewallGroup,
+    FirewallRule,
+    FirewallZone,
     firewall_group_from_controller,
-    to_group_create,
     firewall_zone_from_controller,
+    from_controller,
+    to_controller_update,
+    to_group_create,
 )
 
 
 class TestFirewallRuleFieldSets:
     def test_mutable_fields_contains_expected(self) -> None:
         expected = {
-            "name", "action", "enabled", "index", "protocol", "ip_version",
-            "connection_state_type", "connection_states", "create_allow_respond",
-            "match_ip_sec", "match_opposite_protocol", "icmp_typename",
-            "icmp_v6_typename", "schedule", "source", "destination", "logging",
+            "name",
+            "action",
+            "enabled",
+            "index",
+            "protocol",
+            "ip_version",
+            "connection_state_type",
+            "connection_states",
+            "create_allow_respond",
+            "match_ip_sec",
+            "match_opposite_protocol",
+            "icmp_typename",
+            "icmp_v6_typename",
+            "schedule",
+            "source",
+            "destination",
+            "logging",
         }
         for field in expected:
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
@@ -92,6 +102,7 @@ class TestFirewallRuleFromController:
     def test_handles_obj_with_raw_attr(self) -> None:
         class MockPolicy:
             raw = {"_id": "fw-4", "name": "Mock", "action": "ALLOW"}
+
         r = from_controller(MockPolicy())
         assert r.id == "fw-4"
         assert r.name == "Mock"

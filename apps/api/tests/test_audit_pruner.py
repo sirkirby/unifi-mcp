@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import select
-
 from unifi_api.db.engine import create_engine
 from unifi_api.db.models import AuditLog, Base
 from unifi_api.db.session import get_sessionmaker
@@ -70,9 +69,7 @@ async def test_prune_by_max_rows_keeps_newest(tmp_path: Path) -> None:
 
         # The 5 surviving rows must be the newest ones (offsets -4..0).
         async with sm() as session:
-            rows = (
-                await session.execute(select(AuditLog).order_by(AuditLog.ts.desc()))
-            ).scalars().all()
+            rows = (await session.execute(select(AuditLog).order_by(AuditLog.ts.desc()))).scalars().all()
         assert len(rows) == 5
         now = datetime.now(timezone.utc)
 

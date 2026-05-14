@@ -1,8 +1,8 @@
 """Client + usergroup cluster serializer unit tests (Phase 4A PR1 Cluster 2)."""
 
 from unifi_api.serializers._registry import (
-    serializer_registry_singleton,
     discover_serializers,
+    serializer_registry_singleton,
 )
 
 
@@ -76,9 +76,7 @@ def test_client_group_mutation_ack_bool() -> None:
 def test_client_group_mutation_ack_dict_passthrough() -> None:
     reg = _registry()
     s = reg.serializer_for_tool("unifi_create_client_group")
-    out = s.serialize_action(
-        {"_id": "cg9", "name": "NewGroup"}, tool_name="unifi_create_client_group"
-    )
+    out = s.serialize_action({"_id": "cg9", "name": "NewGroup"}, tool_name="unifi_create_client_group")
     assert out["success"] is True
     assert out["data"]["_id"] == "cg9"
     assert out["render_hint"]["kind"] == "detail"

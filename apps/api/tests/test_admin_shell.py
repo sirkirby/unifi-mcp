@@ -1,15 +1,11 @@
 """Phase 5B Task 14 — admin UI shell smoke."""
 
-import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
-from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
-from unifi_api.db.models import ApiKey, Base
+from unifi_api.db.models import Base
 from unifi_api.server import create_app
 
 

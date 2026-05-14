@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # VpnClient — mutable (create + update)
 # ---------------------------------------------------------------------------
@@ -101,9 +100,7 @@ class VpnServer(BaseModel):
 # ---------------------------------------------------------------------------
 
 VPNCLIENT_MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in VpnClient.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in VpnClient.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 VPNCLIENT_READ_ONLY_FIELDS: frozenset[str] = frozenset(
@@ -216,11 +213,7 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    result = {
-        k: v
-        for k, v in fields.items()
-        if k in VPNCLIENT_MUTABLE_FIELDS and v is not None
-    }
+    result = {k: v for k, v in fields.items() if k in VPNCLIENT_MUTABLE_FIELDS and v is not None}
     # Map type → vpn_type for controller compatibility
     if "type" in result:
         result["vpn_type"] = result.pop("type")

@@ -73,6 +73,7 @@ def _strawberry_type_to_pydantic(strawberry_type_obj: Any) -> Any:
 
     try:
         from strawberry.scalars import JSON
+
         if strawberry_type_obj is JSON:
             return Any
     except ImportError:
@@ -92,9 +93,7 @@ def to_pydantic_model(strawberry_type: type) -> type[BaseModel]:
 
     definition = getattr(strawberry_type, "__strawberry_definition__", None)
     if definition is None:
-        raise TypeError(
-            f"{strawberry_type.__name__} is not a Strawberry type"
-        )
+        raise TypeError(f"{strawberry_type.__name__} is not a Strawberry type")
 
     fields: dict[str, tuple[Any, Any]] = {}
     for field in definition.fields:

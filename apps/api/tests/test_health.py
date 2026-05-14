@@ -1,12 +1,11 @@
 """Health endpoint tests."""
 
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-import uuid
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, Base

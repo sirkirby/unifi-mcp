@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from aiounifi.models.api import ApiRequestV2
 
-from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
+from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.managers.connection_manager import ConnectionManager
 
 logger = logging.getLogger("unifi-network-mcp")

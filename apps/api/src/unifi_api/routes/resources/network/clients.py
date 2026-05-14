@@ -49,7 +49,10 @@ async def list_clients(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "client_manager",
+            session,
+            controller.id,
+            "network",
+            "client_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -64,7 +67,10 @@ async def list_clients(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_clients), limit=limit, cursor=cursor_obj, key_fn=_client_key,
+        list(all_clients),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_client_key,
     )
 
     type_class = request.app.state.type_registry.lookup("network", "clients")
@@ -96,7 +102,10 @@ async def get_client(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "client_manager",
+                session,
+                controller.id,
+                "network",
+                "client_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:

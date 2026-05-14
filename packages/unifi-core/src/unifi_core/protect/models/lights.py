@@ -15,24 +15,28 @@ class Light(BaseModel):
     mac: Optional[str] = Field(default=None, description="MAC address", json_schema_extra={"mutable": False})
     model: Optional[str] = Field(default=None, description="Light model", json_schema_extra={"mutable": False})
     state: Optional[str] = Field(default=None, description="Connection state", json_schema_extra={"mutable": False})
-    is_pir_motion_detected: Optional[bool] = Field(default=None, description="Whether PIR sees motion now", json_schema_extra={"mutable": False})
+    is_pir_motion_detected: Optional[bool] = Field(
+        default=None, description="Whether PIR sees motion now", json_schema_extra={"mutable": False}
+    )
 
     # Mutable
     name: Optional[str] = Field(default=None, description="Display name")
-    is_light_on: Optional[bool] = Field(default=None, description="Whether the light is currently on (writable: turns light on/off)")
+    is_light_on: Optional[bool] = Field(
+        default=None, description="Whether the light is currently on (writable: turns light on/off)"
+    )
     led_level: Optional[int] = Field(default=None, ge=1, le=6, description="LED brightness level (1-6)")
     sensitivity: Optional[int] = Field(default=None, ge=0, le=100, description="PIR motion sensitivity (0-100)")
-    duration_seconds: Optional[int] = Field(default=None, ge=15, le=900, description="How long the light stays on after motion (15-900s)")
+    duration_seconds: Optional[int] = Field(
+        default=None, ge=15, le=900, description="How long the light stays on after motion (15-900s)"
+    )
     status_light: Optional[bool] = Field(default=None, description="Whether the status indicator LED is on")
 
 
 MUTABLE_FIELDS = frozenset(
-    name for name, info in Light.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is not False
+    name for name, info in Light.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is not False
 )
 READ_ONLY_FIELDS = frozenset(
-    name for name, info in Light.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is False
+    name for name, info in Light.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is False
 )
 
 # Map model field names that differ from controller-side keys for update payloads.

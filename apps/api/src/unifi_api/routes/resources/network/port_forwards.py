@@ -55,7 +55,10 @@ async def list_port_forwards(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "firewall_manager",
+            session,
+            controller.id,
+            "network",
+            "firewall_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -64,7 +67,10 @@ async def list_port_forwards(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_list_port_forwards")
@@ -102,7 +108,10 @@ async def get_port_forward(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "firewall_manager",
+                session,
+                controller.id,
+                "network",
+                "firewall_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:
@@ -112,7 +121,8 @@ async def get_port_forward(
         raise HTTPException(status_code=404, detail=str(exc))
     if item is None:
         raise HTTPException(
-            status_code=404, detail=f"port forward {port_forward_id} not found",
+            status_code=404,
+            detail=f"port forward {port_forward_id} not found",
         )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_get_port_forward")

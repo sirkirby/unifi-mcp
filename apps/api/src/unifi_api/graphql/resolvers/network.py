@@ -25,11 +25,15 @@ from strawberry.types import Info
 
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
+from unifi_api.graphql.types.network.acl import AclRule
+from unifi_api.graphql.types.network.ap_group import ApGroup
 from unifi_api.graphql.types.network.client import (
     BlockedClient,
     Client,
     ClientLookup,
 )
+from unifi_api.graphql.types.network.client_group import ClientGroup, UserGroup
+from unifi_api.graphql.types.network.content_filter import ContentFilter
 from unifi_api.graphql.types.network.device import (
     AvailableChannel,
     Device,
@@ -40,12 +44,9 @@ from unifi_api.graphql.types.network.device import (
     RogueAp,
     SpeedtestStatus,
 )
-from unifi_api.graphql.types.network.acl import AclRule
-from unifi_api.graphql.types.network.ap_group import ApGroup
-from unifi_api.graphql.types.network.client_group import ClientGroup, UserGroup
-from unifi_api.graphql.types.network.content_filter import ContentFilter
 from unifi_api.graphql.types.network.dns import DnsRecord
 from unifi_api.graphql.types.network.dpi import DpiApplication, DpiCategory
+from unifi_api.graphql.types.network.event import EventLog
 from unifi_api.graphql.types.network.firewall import (
     FirewallGroup,
     FirewallRule,
@@ -60,7 +61,6 @@ from unifi_api.graphql.types.network.route import (
     Route,
     TrafficRoute,
 )
-from unifi_api.graphql.types.network.event import EventLog
 from unifi_api.graphql.types.network.session import (
     ClientSession,
     ClientWifiDetails,
@@ -88,7 +88,6 @@ from unifi_api.graphql.types.network.voucher import Voucher
 from unifi_api.graphql.types.network.vpn import VpnClient, VpnServer
 from unifi_api.graphql.types.network.wlan import Wlan
 
-
 # ---------------------------------------------------------------------------
 # Fetch helpers — each goes through ctx.cache.get_or_fetch so concurrent
 # resolvers in the same request share a single manager round-trip.
@@ -101,10 +100,15 @@ async def _fetch_clients(ctx: GraphQLContext, controller: str, site: str) -> lis
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "client_manager",
+                session,
+                controller,
+                "network",
+                "client_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -119,10 +123,15 @@ async def _fetch_devices(ctx: GraphQLContext, controller: str, site: str) -> lis
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "device_manager",
+                session,
+                controller,
+                "network",
+                "device_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -137,10 +146,15 @@ async def _fetch_networks(ctx: GraphQLContext, controller: str, site: str) -> li
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "network_manager",
+                session,
+                controller,
+                "network",
+                "network_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -150,17 +164,24 @@ async def _fetch_networks(ctx: GraphQLContext, controller: str, site: str) -> li
 
 
 async def _fetch_blocked_clients(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/blocked-clients/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "client_manager",
+                session,
+                controller,
+                "network",
+                "client_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -170,17 +191,25 @@ async def _fetch_blocked_clients(
 
 
 async def _fetch_client_by_ip(
-    ctx: GraphQLContext, controller: str, site: str, ip: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    ip: str,
 ) -> Any:
     key = f"network/client-by-ip/{controller}/{site}/{ip}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "client_manager",
+                session,
+                controller,
+                "network",
+                "client_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -190,17 +219,25 @@ async def _fetch_client_by_ip(
 
 
 async def _fetch_device_radio(
-    ctx: GraphQLContext, controller: str, site: str, mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    mac: str,
 ) -> Any:
     key = f"network/device-radio/{controller}/{site}/{mac}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "device_manager",
+                session,
+                controller,
+                "network",
+                "device_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -210,17 +247,25 @@ async def _fetch_device_radio(
 
 
 async def _fetch_lldp_neighbors(
-    ctx: GraphQLContext, controller: str, site: str, device_mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    device_mac: str,
 ) -> Any:
     key = f"network/lldp-neighbors/{controller}/{site}/{device_mac}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "switch_manager",
+                session,
+                controller,
+                "network",
+                "switch_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -230,17 +275,25 @@ async def _fetch_lldp_neighbors(
 
 
 async def _fetch_pdu_outlets(
-    ctx: GraphQLContext, controller: str, site: str, mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    mac: str,
 ) -> Any:
     key = f"network/pdu-outlets/{controller}/{site}/{mac}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "device_manager",
+                session,
+                controller,
+                "network",
+                "device_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -250,17 +303,25 @@ async def _fetch_pdu_outlets(
 
 
 async def _fetch_rogue_aps(
-    ctx: GraphQLContext, controller: str, site: str, within_hours: int = 24,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    within_hours: int = 24,
 ) -> list:
     key = f"network/rogue-aps/{controller}/{site}/{within_hours}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "device_manager",
+                session,
+                controller,
+                "network",
+                "device_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -270,17 +331,25 @@ async def _fetch_rogue_aps(
 
 
 async def _fetch_rf_scan_results(
-    ctx: GraphQLContext, controller: str, site: str, ap_mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    ap_mac: str,
 ) -> list:
     key = f"network/rf-scan-results/{controller}/{site}/{ap_mac}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "device_manager",
+                session,
+                controller,
+                "network",
+                "device_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -290,17 +359,24 @@ async def _fetch_rf_scan_results(
 
 
 async def _fetch_available_channels(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/available-channels/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "device_manager",
+                session,
+                controller,
+                "network",
+                "device_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -310,17 +386,25 @@ async def _fetch_available_channels(
 
 
 async def _fetch_speedtest_status(
-    ctx: GraphQLContext, controller: str, site: str, gateway_mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    gateway_mac: str,
 ) -> Any:
     key = f"network/speedtest-status/{controller}/{site}/{gateway_mac}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "device_manager",
+                session,
+                controller,
+                "network",
+                "device_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -330,17 +414,24 @@ async def _fetch_speedtest_status(
 
 
 async def _fetch_network_health(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/network-health/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "system_manager",
+                session,
+                controller,
+                "network",
+                "system_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -358,10 +449,15 @@ async def _fetch_wlans(ctx: GraphQLContext, controller: str, site: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "network_manager",
+                session,
+                controller,
+                "network",
+                "network_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -371,17 +467,24 @@ async def _fetch_wlans(ctx: GraphQLContext, controller: str, site: str) -> list:
 
 
 async def _fetch_vpn_clients(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/vpn-clients/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "vpn_manager",
+                session,
+                controller,
+                "network",
+                "vpn_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -391,17 +494,24 @@ async def _fetch_vpn_clients(
 
 
 async def _fetch_vpn_servers(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/vpn-servers/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "vpn_manager",
+                session,
+                controller,
+                "network",
+                "vpn_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -411,17 +521,24 @@ async def _fetch_vpn_servers(
 
 
 async def _fetch_dns_records(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/dns-records/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "dns_manager",
+                session,
+                controller,
+                "network",
+                "dns_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -436,10 +553,15 @@ async def _fetch_routes(ctx: GraphQLContext, controller: str, site: str) -> list
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "routing_manager",
+                session,
+                controller,
+                "network",
+                "routing_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -449,17 +571,24 @@ async def _fetch_routes(ctx: GraphQLContext, controller: str, site: str) -> list
 
 
 async def _fetch_active_routes(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/active-routes/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "routing_manager",
+                session,
+                controller,
+                "network",
+                "routing_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -469,17 +598,24 @@ async def _fetch_active_routes(
 
 
 async def _fetch_traffic_routes(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/traffic-routes/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "traffic_route_manager",
+                session,
+                controller,
+                "network",
+                "traffic_route_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -492,17 +628,24 @@ async def _fetch_traffic_routes(
 
 
 async def _fetch_firewall_policies(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/firewall-policies/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "firewall_manager",
+                session,
+                controller,
+                "network",
+                "firewall_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -512,17 +655,24 @@ async def _fetch_firewall_policies(
 
 
 async def _fetch_firewall_groups(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/firewall-groups/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "firewall_manager",
+                session,
+                controller,
+                "network",
+                "firewall_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -532,17 +682,24 @@ async def _fetch_firewall_groups(
 
 
 async def _fetch_firewall_zones(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/firewall-zones/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "firewall_manager",
+                session,
+                controller,
+                "network",
+                "firewall_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -552,17 +709,24 @@ async def _fetch_firewall_zones(
 
 
 async def _fetch_qos_rules(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/qos-rules/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "qos_manager",
+                session,
+                controller,
+                "network",
+                "qos_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -582,17 +746,24 @@ def _unwrap_dpi(result: Any) -> list:
 
 
 async def _fetch_dpi_applications(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/dpi-applications/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "dpi_manager",
+                session,
+                controller,
+                "network",
+                "dpi_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -603,17 +774,24 @@ async def _fetch_dpi_applications(
 
 
 async def _fetch_dpi_categories(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/dpi-categories/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "dpi_manager",
+                session,
+                controller,
+                "network",
+                "dpi_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -624,17 +802,24 @@ async def _fetch_dpi_categories(
 
 
 async def _fetch_content_filters(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/content-filters/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "content_filter_manager",
+                session,
+                controller,
+                "network",
+                "content_filter_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -644,17 +829,24 @@ async def _fetch_content_filters(
 
 
 async def _fetch_acl_rules(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/acl-rules/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "acl_manager",
+                session,
+                controller,
+                "network",
+                "acl_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -664,17 +856,24 @@ async def _fetch_acl_rules(
 
 
 async def _fetch_oon_policies(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/oon-policies/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "oon_manager",
+                session,
+                controller,
+                "network",
+                "oon_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -684,17 +883,24 @@ async def _fetch_oon_policies(
 
 
 async def _fetch_port_forwards(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/port-forwards/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "firewall_manager",
+                session,
+                controller,
+                "network",
+                "firewall_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -717,10 +923,15 @@ async def _stats_mgr_fetch(
     async def _do():
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "stats_manager",
+                session,
+                controller,
+                "network",
+                "stats_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -730,109 +941,186 @@ async def _stats_mgr_fetch(
 
 
 async def _fetch_dashboard_stats(
-    ctx: GraphQLContext, controller: str, site: str, duration_hours: int,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    duration_hours: int,
 ) -> list:
     key = f"network/dashboard-stats/{controller}/{site}/{duration_hours}"
     return await _stats_mgr_fetch(ctx, controller, site, key, "get_dashboard")
 
 
 async def _fetch_network_stats(
-    ctx: GraphQLContext, controller: str, site: str, duration_hours: int,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    duration_hours: int,
 ) -> list:
     key = f"network/network-stats/{controller}/{site}/{duration_hours}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_network_stats", duration_hours,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_network_stats",
+        duration_hours,
     )
 
 
 async def _fetch_gateway_stats(
-    ctx: GraphQLContext, controller: str, site: str, duration_hours: int,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    duration_hours: int,
 ) -> list:
     key = f"network/gateway-stats/{controller}/{site}/{duration_hours}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_gateway_stats", duration_hours,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_gateway_stats",
+        duration_hours,
     )
 
 
 async def _fetch_client_stats(
-    ctx: GraphQLContext, controller: str, site: str, mac: str, duration_hours: int,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    mac: str,
+    duration_hours: int,
 ) -> list:
     key = f"network/client-stats/{controller}/{site}/{mac}/{duration_hours}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_client_stats", mac, duration_hours,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_client_stats",
+        mac,
+        duration_hours,
     )
 
 
 async def _fetch_device_stats(
-    ctx: GraphQLContext, controller: str, site: str, mac: str, duration_hours: int,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    mac: str,
+    duration_hours: int,
 ) -> list:
     key = f"network/device-stats/{controller}/{site}/{mac}/{duration_hours}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_device_stats", mac, duration_hours,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_device_stats",
+        mac,
+        duration_hours,
     )
 
 
 async def _fetch_client_dpi_traffic(
-    ctx: GraphQLContext, controller: str, site: str, mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    mac: str,
 ) -> list:
     key = f"network/client-dpi-traffic/{controller}/{site}/{mac}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_client_dpi_traffic", mac,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_client_dpi_traffic",
+        mac,
     )
 
 
 async def _fetch_site_dpi_traffic(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/site-dpi-traffic/{controller}/{site}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_site_dpi_traffic",
+        ctx,
+        controller,
+        site,
+        key,
+        "get_site_dpi_traffic",
     )
 
 
 async def _fetch_dpi_stats(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> Any:
     key = f"network/dpi-stats/{controller}/{site}"
     return await _stats_mgr_fetch(ctx, controller, site, key, "get_dpi_stats")
 
 
 async def _fetch_alerts(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/alerts/{controller}/{site}"
     return await _stats_mgr_fetch(ctx, controller, site, key, "get_alerts")
 
 
 async def _fetch_anomalies(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/anomalies/{controller}/{site}"
     return await _stats_mgr_fetch(ctx, controller, site, key, "get_anomalies")
 
 
 async def _fetch_ips_events(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/ips-events/{controller}/{site}"
     return await _stats_mgr_fetch(ctx, controller, site, key, "get_ips_events")
 
 
 async def _fetch_top_clients(
-    ctx: GraphQLContext, controller: str, site: str, duration_hours: int,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    duration_hours: int,
 ) -> list:
     key = f"network/top-clients/{controller}/{site}/{duration_hours}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_top_clients", duration_hours,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_top_clients",
+        duration_hours,
     )
 
 
 async def _fetch_speedtest_results(
-    ctx: GraphQLContext, controller: str, site: str, duration_hours: int,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    duration_hours: int,
 ) -> list:
     key = f"network/speedtest-results/{controller}/{site}/{duration_hours}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_speedtest_results", duration_hours,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_speedtest_results",
+        duration_hours,
     )
 
 
@@ -846,16 +1134,30 @@ async def _fetch_client_sessions(
     mac_part = mac or "all"
     key = f"network/client-sessions/{controller}/{site}/{mac_part}/{duration_hours}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_client_sessions", mac, duration_hours,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_client_sessions",
+        mac,
+        duration_hours,
     )
 
 
 async def _fetch_client_wifi_details(
-    ctx: GraphQLContext, controller: str, site: str, mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    mac: str,
 ) -> Any:
     key = f"network/client-wifi-details/{controller}/{site}/{mac}"
     return await _stats_mgr_fetch(
-        ctx, controller, site, key, "get_client_wifi_details", mac,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_client_wifi_details",
+        mac,
     )
 
 
@@ -870,10 +1172,15 @@ async def _event_mgr_fetch(
     async def _do():
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "event_manager",
+                session,
+                controller,
+                "network",
+                "event_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -883,17 +1190,25 @@ async def _event_mgr_fetch(
 
 
 async def _fetch_event_log(
-    ctx: GraphQLContext, controller: str, site: str, fetch_limit: int,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    fetch_limit: int,
 ) -> list:
     key = f"network/event-log/{controller}/{site}/{fetch_limit}"
 
     async def _do():
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "event_manager",
+                session,
+                controller,
+                "network",
+                "event_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -903,24 +1218,33 @@ async def _fetch_event_log(
 
 
 async def _fetch_alarms(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/alarms/{controller}/{site}"
     return await _event_mgr_fetch(ctx, controller, site, key, "get_alarms")
 
 
 async def _fetch_event_types(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> Any:
     key = f"network/event-types/{controller}/{site}"
 
     async def _do():
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "event_manager",
+                session,
+                controller,
+                "network",
+                "event_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -945,10 +1269,15 @@ async def _system_mgr_fetch(
     async def _do():
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "system_manager",
+                session,
+                controller,
+                "network",
+                "system_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -958,39 +1287,58 @@ async def _system_mgr_fetch(
 
 
 async def _fetch_system_info(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> Any:
     key = f"network/system-info/{controller}/{site}"
     return await _system_mgr_fetch(ctx, controller, site, key, "get_system_info")
 
 
 async def _fetch_site_settings(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> Any:
     key = f"network/site-settings/{controller}/{site}"
     return await _system_mgr_fetch(ctx, controller, site, key, "get_site_settings")
 
 
 async def _fetch_snmp_settings(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> Any:
     key = f"network/snmp-settings/{controller}/{site}"
     return await _system_mgr_fetch(
-        ctx, controller, site, key, "get_settings", "snmp",
+        ctx,
+        controller,
+        site,
+        key,
+        "get_settings",
+        "snmp",
     )
 
 
 async def _fetch_autobackup_settings(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> Any:
     key = f"network/autobackup-settings/{controller}/{site}"
     return await _system_mgr_fetch(
-        ctx, controller, site, key, "get_autobackup_settings",
+        ctx,
+        controller,
+        site,
+        key,
+        "get_autobackup_settings",
     )
 
 
 async def _fetch_backups(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/backups/{controller}/{site}"
     return await _system_mgr_fetch(ctx, controller, site, key, "list_backups")
@@ -1007,10 +1355,15 @@ async def _hotspot_mgr_fetch(
     async def _do():
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "hotspot_manager",
+                session,
+                controller,
+                "network",
+                "hotspot_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -1020,17 +1373,24 @@ async def _hotspot_mgr_fetch(
 
 
 async def _fetch_vouchers(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/vouchers/{controller}/{site}"
 
     async def _do():
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "hotspot_manager",
+                session,
+                controller,
+                "network",
+                "hotspot_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -1040,11 +1400,19 @@ async def _fetch_vouchers(
 
 
 async def _fetch_voucher_details(
-    ctx: GraphQLContext, controller: str, site: str, voucher_id: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    voucher_id: str,
 ) -> Any:
     key = f"network/voucher-details/{controller}/{site}/{voucher_id}"
     return await _hotspot_mgr_fetch(
-        ctx, controller, site, key, "get_voucher_details", voucher_id,
+        ctx,
+        controller,
+        site,
+        key,
+        "get_voucher_details",
+        voucher_id,
     )
 
 
@@ -1052,17 +1420,24 @@ async def _fetch_voucher_details(
 
 
 async def _fetch_port_profiles(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/port-profiles/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "switch_manager",
+                session,
+                controller,
+                "network",
+                "switch_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -1072,17 +1447,25 @@ async def _fetch_port_profiles(
 
 
 async def _fetch_switch_ports(
-    ctx: GraphQLContext, controller: str, site: str, device_mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    device_mac: str,
 ) -> Any:
     key = f"network/switch-ports/{controller}/{site}/{device_mac}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "switch_manager",
+                session,
+                controller,
+                "network",
+                "switch_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -1092,17 +1475,25 @@ async def _fetch_switch_ports(
 
 
 async def _fetch_port_stats(
-    ctx: GraphQLContext, controller: str, site: str, device_mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    device_mac: str,
 ) -> Any:
     key = f"network/port-stats/{controller}/{site}/{device_mac}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "switch_manager",
+                session,
+                controller,
+                "network",
+                "switch_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -1112,17 +1503,25 @@ async def _fetch_port_stats(
 
 
 async def _fetch_switch_capabilities(
-    ctx: GraphQLContext, controller: str, site: str, device_mac: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    device_mac: str,
 ) -> Any:
     key = f"network/switch-capabilities/{controller}/{site}/{device_mac}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "switch_manager",
+                session,
+                controller,
+                "network",
+                "switch_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -1132,17 +1531,24 @@ async def _fetch_switch_capabilities(
 
 
 async def _fetch_ap_groups(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/ap-groups/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "network_manager",
+                session,
+                controller,
+                "network",
+                "network_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -1152,17 +1558,24 @@ async def _fetch_ap_groups(
 
 
 async def _fetch_client_groups(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/client-groups/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "client_group_manager",
+                session,
+                controller,
+                "network",
+                "client_group_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -1172,17 +1585,24 @@ async def _fetch_client_groups(
 
 
 async def _fetch_user_groups(
-    ctx: GraphQLContext, controller: str, site: str,
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
 ) -> list:
     key = f"network/user-groups/{controller}/{site}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "network", "usergroup_manager",
+                session,
+                controller,
+                "network",
+                "usergroup_manager",
             )
             cm = await ctx.manager_factory.get_connection_manager(
-                session, controller, "network",
+                session,
+                controller,
+                "network",
             )
             if cm.site != site:
                 await cm.set_site(site)
@@ -1457,11 +1877,7 @@ def _active_route_key(row: Any) -> tuple:
     if isinstance(raw, dict):
         pfx = raw.get("pfx") or raw.get("target_subnet") or raw.get("network")
     else:
-        pfx = (
-            getattr(raw, "pfx", None)
-            or getattr(raw, "target_subnet", None)
-            or getattr(raw, "network", None)
-        )
+        pfx = getattr(raw, "pfx", None) or getattr(raw, "target_subnet", None) or getattr(raw, "network", None)
     return (0, str(pfx or ""))
 
 
@@ -1484,12 +1900,7 @@ def _event_key(row: Any) -> tuple:
         rid = raw.get("_id") or raw.get("id") or raw.get("key") or ""
     else:
         ts = getattr(raw, "time", None) or getattr(raw, "timestamp", None)
-        rid = (
-            getattr(raw, "_id", None)
-            or getattr(raw, "id", None)
-            or getattr(raw, "key", None)
-            or ""
-        )
+        rid = getattr(raw, "_id", None) or getattr(raw, "id", None) or getattr(raw, "key", None) or ""
     return (int(ts or 0), str(rid))
 
 
@@ -1499,17 +1910,8 @@ def _backup_key(row: Any) -> tuple:
         ts = raw.get("time") or raw.get("datetime") or raw.get("timestamp")
         name = raw.get("filename") or raw.get("name") or raw.get("_id") or ""
     else:
-        ts = (
-            getattr(raw, "time", None)
-            or getattr(raw, "datetime", None)
-            or getattr(raw, "timestamp", None)
-        )
-        name = (
-            getattr(raw, "filename", None)
-            or getattr(raw, "name", None)
-            or getattr(raw, "_id", None)
-            or ""
-        )
+        ts = getattr(raw, "time", None) or getattr(raw, "datetime", None) or getattr(raw, "timestamp", None)
+        name = getattr(raw, "filename", None) or getattr(raw, "name", None) or getattr(raw, "_id", None) or ""
     return (int(ts or 0), str(name))
 
 
@@ -1520,12 +1922,7 @@ def _voucher_key(row: Any) -> tuple:
         vid = raw.get("_id") or raw.get("id") or raw.get("code") or ""
     else:
         ts = getattr(raw, "create_time", None) or getattr(raw, "created_at", None)
-        vid = (
-            getattr(raw, "_id", None)
-            or getattr(raw, "id", None)
-            or getattr(raw, "code", None)
-            or ""
-        )
+        vid = getattr(raw, "_id", None) or getattr(raw, "id", None) or getattr(raw, "code", None) or ""
     return (int(ts or 0), str(vid))
 
 
@@ -1535,11 +1932,7 @@ def _session_key(row: Any) -> tuple:
         ts = raw.get("assoc_time") or raw.get("connected_at") or raw.get("first_seen")
         mac = raw.get("mac") or ""
     else:
-        ts = (
-            getattr(raw, "assoc_time", None)
-            or getattr(raw, "connected_at", None)
-            or getattr(raw, "first_seen", None)
-        )
+        ts = getattr(raw, "assoc_time", None) or getattr(raw, "connected_at", None) or getattr(raw, "first_seen", None)
         mac = getattr(raw, "mac", None) or ""
     return (int(ts or 0), str(mac))
 
@@ -1550,11 +1943,7 @@ def _speedtest_key(row: Any) -> tuple:
         ts = raw.get("time") or raw.get("timestamp") or raw.get("ts")
         rid = raw.get("_id") or raw.get("id") or ""
     else:
-        ts = (
-            getattr(raw, "time", None)
-            or getattr(raw, "timestamp", None)
-            or getattr(raw, "ts", None)
-        )
+        ts = getattr(raw, "time", None) or getattr(raw, "timestamp", None) or getattr(raw, "ts", None)
         rid = getattr(raw, "_id", None) or getattr(raw, "id", None) or ""
     return (int(ts or 0), str(rid))
 
@@ -1599,7 +1988,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_client_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_client_key,
         )
         items = []
         for c in page:
@@ -1654,7 +2046,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_blocked_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_blocked_key,
         )
         return BlockedClientPage(
             items=[BlockedClient.from_manager_output(c) for c in page],
@@ -1699,7 +2094,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_device_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_device_key,
         )
         items = []
         for d in page:
@@ -1806,7 +2204,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_bssid_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_bssid_key,
         )
         return RogueApPage(
             items=[RogueAp.from_manager_output(r) for r in page],
@@ -1880,7 +2281,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_network_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_network_key,
         )
         items = []
         for n in page:
@@ -1955,7 +2359,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return WlanPage(
             items=[Wlan.from_manager_output(w) for w in page],
@@ -2006,7 +2413,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return VpnClientPage(
             items=[VpnClient.from_manager_output(v) for v in page],
@@ -2055,7 +2465,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return VpnServerPage(
             items=[VpnServer.from_manager_output(v) for v in page],
@@ -2106,7 +2519,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return DnsRecordPage(
             items=[DnsRecord.from_manager_output(d) for d in page],
@@ -2157,7 +2573,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return RoutePage(
             items=[Route.from_manager_output(r) for r in page],
@@ -2206,7 +2625,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_active_route_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_active_route_key,
         )
         return ActiveRoutePage(
             items=[ActiveRoute.from_manager_output(r) for r in page],
@@ -2232,7 +2654,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return TrafficRoutePage(
             items=[TrafficRoute.from_manager_output(t) for t in page],
@@ -2283,7 +2708,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return FirewallRulePage(
             items=[FirewallRule.from_manager_output(r) for r in page],
@@ -2332,7 +2760,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return FirewallGroupPage(
             items=[FirewallGroup.from_manager_output(g) for g in page],
@@ -2397,7 +2828,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return QosRulePage(
             items=[QosRule.from_manager_output(q) for q in page],
@@ -2448,7 +2882,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return DpiApplicationPage(
             items=[DpiApplication.from_manager_output(a) for a in page],
@@ -2474,7 +2911,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return DpiCategoryPage(
             items=[DpiCategory.from_manager_output(c) for c in page],
@@ -2502,7 +2942,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return ContentFilterPage(
             items=[ContentFilter.from_manager_output(f) for f in page],
@@ -2553,7 +2996,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return AclRulePage(
             items=[AclRule.from_manager_output(a) for a in page],
@@ -2604,7 +3050,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return OonPolicyPage(
             items=[OonPolicy.from_manager_output(p) for p in page],
@@ -2655,7 +3104,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return PortForwardPage(
             items=[PortForward.from_manager_output(p) for p in page],
@@ -2830,7 +3282,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_event_key,
         )
         return EventLogPage(
             items=[EventLog.from_manager_output(e) for e in page],
@@ -2856,7 +3311,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw or []), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+            list(raw or []),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_event_key,
         )
         return EventLogPage(
             items=[EventLog.from_manager_output(e) for e in page],
@@ -2882,7 +3340,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw or []), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+            list(raw or []),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_event_key,
         )
         return EventLogPage(
             items=[EventLog.from_manager_output(e) for e in page],
@@ -2908,7 +3369,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw or []), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+            list(raw or []),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_event_key,
         )
         return EventLogPage(
             items=[EventLog.from_manager_output(e) for e in page],
@@ -2934,7 +3398,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw or []), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+            list(raw or []),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_event_key,
         )
         return AlarmPage(
             items=[Alarm.from_manager_output(a) for a in page],
@@ -3042,7 +3509,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw or []), limit=limit, cursor=cursor_obj, key_fn=_backup_key,
+            list(raw or []),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_backup_key,
         )
         return BackupPage(
             items=[Backup.from_manager_output(b) for b in page],
@@ -3069,7 +3539,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw or []), limit=limit, cursor=cursor_obj, key_fn=_speedtest_key,
+            list(raw or []),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_speedtest_key,
         )
         return SpeedtestResultPage(
             items=[SpeedtestResult.from_manager_output(s) for s in page],
@@ -3112,7 +3585,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_voucher_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_voucher_key,
         )
         return VoucherPage(
             items=[Voucher.from_manager_output(v) for v in page],
@@ -3154,14 +3630,21 @@ class NetworkQuery:
     ) -> ClientSessionPage:
         ctx: GraphQLContext = info.context
         raw = await _fetch_client_sessions(
-            ctx, controller, site, mac, duration_hours,
+            ctx,
+            controller,
+            site,
+            mac,
+            duration_hours,
         )
 
         from unifi_api.services.pagination import paginate
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw or []), limit=limit, cursor=cursor_obj, key_fn=_session_key,
+            list(raw or []),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_session_key,
         )
         return ClientSessionPage(
             items=[ClientSession.from_manager_output(s) for s in page],
@@ -3206,7 +3689,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return PortProfilePage(
             items=[PortProfile.from_manager_output(p) for p in page],
@@ -3238,10 +3724,7 @@ class NetworkQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description=(
-            "Get the port-override wrapper for a switch "
-            "(name/model + per-port overrides)."
-        ),
+        description=("Get the port-override wrapper for a switch (name/model + per-port overrides)."),
     )
     async def switch_ports(
         self,
@@ -3258,10 +3741,7 @@ class NetworkQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description=(
-            "Get the per-port stats wrapper for a switch "
-            "(name/model + port_table)."
-        ),
+        description=("Get the per-port stats wrapper for a switch (name/model + port_table)."),
     )
     async def port_stats(
         self,
@@ -3314,7 +3794,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return ApGroupPage(
             items=[ApGroup.from_manager_output(g) for g in page],
@@ -3348,10 +3831,7 @@ class NetworkQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description=(
-            "List network member client groups on the given controller/site "
-            "(paginated)."
-        ),
+        description=("List network member client groups on the given controller/site (paginated)."),
     )
     async def client_groups(
         self,
@@ -3368,7 +3848,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return ClientGroupPage(
             items=[ClientGroup.from_manager_output(g) for g in page],
@@ -3400,10 +3883,7 @@ class NetworkQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description=(
-            "List QoS user groups (V1 /rest/usergroup) on the given "
-            "controller/site (paginated)."
-        ),
+        description=("List QoS user groups (V1 /rest/usergroup) on the given controller/site (paginated)."),
     )
     async def user_groups(
         self,
@@ -3420,7 +3900,10 @@ class NetworkQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return UserGroupPage(
             items=[UserGroup.from_manager_output(g) for g in page],

@@ -1,11 +1,9 @@
 """Audit log writer tests."""
 
-from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 from sqlalchemy import select
-
 from unifi_api.db.engine import create_engine
 from unifi_api.db.models import AuditLog, Base
 from unifi_api.db.session import get_sessionmaker
@@ -19,9 +17,9 @@ async def test_write_audit_inserts_row(tmp_path: Path) -> None:
         await conn.run_sync(Base.metadata.create_all)
     sm = get_sessionmaker(engine)
     async with sm() as session:
-        await write_audit(session, key_id_prefix="unifi_live_AAAA",
-                          controller="cid1", target="unifi_list_clients",
-                          outcome="success")
+        await write_audit(
+            session, key_id_prefix="unifi_live_AAAA", controller="cid1", target="unifi_list_clients", outcome="success"
+        )
         await session.commit()
     async with sm() as session:
         rows = (await session.execute(select(AuditLog))).scalars().all()
@@ -38,10 +36,15 @@ async def test_write_audit_with_error_kind(tmp_path: Path) -> None:
         await conn.run_sync(Base.metadata.create_all)
     sm = get_sessionmaker(engine)
     async with sm() as session:
-        await write_audit(session, key_id_prefix="unifi_live_AAAA",
-                          controller=None, target="POST /v1/foo",
-                          outcome="denied", error_kind="insufficient_scope",
-                          detail="needed admin")
+        await write_audit(
+            session,
+            key_id_prefix="unifi_live_AAAA",
+            controller=None,
+            target="POST /v1/foo",
+            outcome="denied",
+            error_kind="insufficient_scope",
+            detail="needed admin",
+        )
         await session.commit()
     async with sm() as session:
         row = (await session.execute(select(AuditLog))).scalar_one()

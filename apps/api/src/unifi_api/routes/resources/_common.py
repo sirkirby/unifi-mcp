@@ -16,9 +16,7 @@ from unifi_api.services.controllers import (
 
 async def resolve_controller(
     request: Request,
-    controller: str | None = Query(
-        None, description="Controller UUID; omit to use default"
-    ),
+    controller: str | None = Query(None, description="Controller UUID; omit to use default"),
 ) -> Controller:
     sm = request.app.state.sessionmaker
     async with sm() as session:

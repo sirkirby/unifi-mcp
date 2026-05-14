@@ -100,7 +100,8 @@ class Recording:
 
     @strawberry.field(description="The camera this recording came from.")
     async def camera_detail(
-        self, info: Info,
+        self,
+        info: Info,
     ) -> Annotated["Camera", strawberry.lazy("unifi_api.graphql.types.protect.cameras")] | None:
         """Resolves the parent camera for this recording.
 

@@ -1,6 +1,6 @@
 import pytest
-from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.exceptions import UniFiConnectionError
+from unifi_core.retry import RetryPolicy, retry_with_backoff
 
 
 @pytest.mark.asyncio

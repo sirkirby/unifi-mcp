@@ -37,7 +37,10 @@ async def lookup_client_by_ip(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "client_manager",
+                session,
+                controller.id,
+                "network",
+                "client_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:

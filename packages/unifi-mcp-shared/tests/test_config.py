@@ -1,10 +1,8 @@
 """Tests for the shared config module."""
 
 import logging
-from pathlib import Path
 
 import pytest
-
 from unifi_core.config import load_yaml_config, setup_logging
 
 

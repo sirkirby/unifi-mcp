@@ -1,6 +1,7 @@
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 
 def test_config_loads_required_vars():
@@ -11,6 +12,7 @@ def test_config_loads_required_vars():
     }
     with patch.dict(os.environ, env, clear=False):
         from unifi_mcp_relay.config import load_config
+
         cfg = load_config()
         assert cfg.relay_url == "https://my-worker.workers.dev"
         assert cfg.relay_token == "test-token-abc"
@@ -23,6 +25,7 @@ def test_config_missing_required_var_raises():
     }
     with patch.dict(os.environ, env, clear=True):
         from unifi_mcp_relay.config import load_config
+
         with pytest.raises(ValueError, match="UNIFI_RELAY_TOKEN"):
             load_config()
 
@@ -36,6 +39,7 @@ def test_config_parses_server_list():
     }
     with patch.dict(os.environ, env, clear=False):
         from unifi_mcp_relay.config import load_config
+
         cfg = load_config()
         assert cfg.servers == ["http://localhost:3000", "http://localhost:3001", "http://localhost:3002"]
 
@@ -48,6 +52,7 @@ def test_config_defaults():
     }
     with patch.dict(os.environ, env, clear=False):
         from unifi_mcp_relay.config import load_config
+
         cfg = load_config()
         assert cfg.servers == ["http://localhost:3000"]
         assert cfg.refresh_interval == 300
@@ -63,6 +68,7 @@ def test_config_bad_refresh_interval_names_variable():
     }
     with patch.dict(os.environ, env, clear=False):
         from unifi_mcp_relay.config import load_config
+
         with pytest.raises(ValueError, match="UNIFI_RELAY_REFRESH_INTERVAL"):
             load_config()
 
@@ -76,6 +82,7 @@ def test_config_bad_reconnect_delay_names_variable():
     }
     with patch.dict(os.environ, env, clear=False):
         from unifi_mcp_relay.config import load_config
+
         with pytest.raises(ValueError, match="UNIFI_RELAY_RECONNECT_MAX_DELAY"):
             load_config()
 
@@ -89,5 +96,6 @@ def test_config_servers_with_trailing_comma():
     }
     with patch.dict(os.environ, env, clear=False):
         from unifi_mcp_relay.config import load_config
+
         cfg = load_config()
         assert cfg.servers == ["http://localhost:3000", "http://localhost:3001"]

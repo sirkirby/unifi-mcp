@@ -12,7 +12,6 @@ from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.services.diagnostics import collect_diagnostics
 
-
 router = APIRouter()
 
 

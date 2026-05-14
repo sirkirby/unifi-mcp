@@ -20,16 +20,20 @@ from strawberry.types import ExecutionResult
 from unifi_api._version import __version__ as _api_version
 from unifi_api.auth.cache import ArgonVerifyCache
 from unifi_api.config import ApiConfig
+from unifi_api.db.crypto import ColumnCipher, derive_key
+from unifi_api.db.engine import create_engine
+from unifi_api.db.session import get_sessionmaker
 from unifi_api.graphql.context import GraphQLContext, RequestCache
 from unifi_api.graphql.errors import format_graphql_error
 from unifi_api.graphql.schema import schema as graphql_schema
 from unifi_api.graphql.type_registry_init import build_type_registry
-from unifi_api.db.crypto import ColumnCipher, derive_key
-from unifi_api.db.engine import create_engine
-from unifi_api.db.session import get_sessionmaker
 from unifi_api.logging import attach_rotating_file_handler, request_id_ctx
 from unifi_api.routes import actions as actions_routes
 from unifi_api.routes import admin_data as admin_data_routes
+from unifi_api.routes import audit as audit_routes
+from unifi_api.routes import catalog as catalog_routes
+from unifi_api.routes import controllers as controllers_routes
+from unifi_api.routes import health
 from unifi_api.routes.admin import audit as admin_audit_routes
 from unifi_api.routes.admin import auth as admin_auth_routes
 from unifi_api.routes.admin import controllers as admin_controllers_routes
@@ -37,83 +41,180 @@ from unifi_api.routes.admin import dashboard as admin_dashboard_routes
 from unifi_api.routes.admin import keys as admin_keys_routes
 from unifi_api.routes.admin import logs as admin_logs_routes
 from unifi_api.routes.admin import settings as admin_settings_routes
-from unifi_api.routes import audit as audit_routes
-from unifi_api.routes import catalog as catalog_routes
-from unifi_api.routes import controllers as controllers_routes
-from unifi_api.routes import health
+from unifi_api.routes.resources.access import (
+    credentials as access_credentials_routes,
+)
+from unifi_api.routes.resources.access import (
+    devices as access_devices_routes,
+)
+from unifi_api.routes.resources.access import (
+    doors as access_doors_routes,
+)
+from unifi_api.routes.resources.access import (
+    events as access_events_routes,
+)
+from unifi_api.routes.resources.access import (
+    policies as access_policies_routes,
+)
+from unifi_api.routes.resources.access import (
+    schedules as access_schedules_routes,
+)
+from unifi_api.routes.resources.access import (
+    system as access_system_routes,
+)
+from unifi_api.routes.resources.access import (
+    users as access_users_routes,
+)
+from unifi_api.routes.resources.access import (
+    visitors as access_visitors_routes,
+)
 from unifi_api.routes.resources.network import (
     acl as net_acl_routes,
+)
+from unifi_api.routes.resources.network import (
     ap_groups as net_ap_groups_routes,
+)
+from unifi_api.routes.resources.network import (
     blocked_clients as net_blocked_clients_routes,
+)
+from unifi_api.routes.resources.network import (
     client_groups as net_client_groups_routes,
+)
+from unifi_api.routes.resources.network import (
     clients as net_clients_routes,
+)
+from unifi_api.routes.resources.network import (
     content_filters as net_content_filters_routes,
+)
+from unifi_api.routes.resources.network import (
     devices as net_devices_routes,
+)
+from unifi_api.routes.resources.network import (
     dns as net_dns_routes,
+)
+from unifi_api.routes.resources.network import (
     dpi as net_dpi_routes,
+)
+from unifi_api.routes.resources.network import (
     events as net_events_routes,
+)
+from unifi_api.routes.resources.network import (
     firewall_groups as net_firewall_groups_routes,
+)
+from unifi_api.routes.resources.network import (
     firewall_rules as net_firewall_routes,
+)
+from unifi_api.routes.resources.network import (
     firewall_zones as net_firewall_zones_routes,
+)
+from unifi_api.routes.resources.network import (
     lldp as net_lldp_routes,
+)
+from unifi_api.routes.resources.network import (
     lookup as net_lookup_routes,
+)
+from unifi_api.routes.resources.network import (
     networks as net_networks_routes,
+)
+from unifi_api.routes.resources.network import (
     oon as net_oon_routes,
+)
+from unifi_api.routes.resources.network import (
     port_forwards as net_port_forwards_routes,
+)
+from unifi_api.routes.resources.network import (
     qos as net_qos_routes,
+)
+from unifi_api.routes.resources.network import (
     rogue_aps as net_rogue_aps_routes,
+)
+from unifi_api.routes.resources.network import (
     routes as net_routes_routes,
+)
+from unifi_api.routes.resources.network import (
     snmp as net_snmp_routes,
+)
+from unifi_api.routes.resources.network import (
     speedtest as net_speedtest_routes,
+)
+from unifi_api.routes.resources.network import (
     stats as net_stats_routes,
+)
+from unifi_api.routes.resources.network import (
     switch as net_switch_routes,
+)
+from unifi_api.routes.resources.network import (
     system as net_system_routes,
+)
+from unifi_api.routes.resources.network import (
     user_groups as net_user_groups_routes,
+)
+from unifi_api.routes.resources.network import (
     vouchers as net_vouchers_routes,
+)
+from unifi_api.routes.resources.network import (
     vpn as net_vpn_routes,
+)
+from unifi_api.routes.resources.network import (
     wireless as net_wireless_routes,
+)
+from unifi_api.routes.resources.network import (
     wlans as net_wlans_routes,
 )
 from unifi_api.routes.resources.protect import (
     cameras as protect_cameras_routes,
-    chimes as protect_chimes_routes,
-    events as protect_events_routes,
-    lights as protect_lights_routes,
-    liveviews as protect_liveviews_routes,
-    recognition as protect_recognition_routes,
-    recordings as protect_recordings_routes,
-    sensors as protect_sensors_routes,
-    system as protect_system_routes,
 )
-from unifi_api.routes.resources.access import (
-    credentials as access_credentials_routes,
-    devices as access_devices_routes,
-    doors as access_doors_routes,
-    events as access_events_routes,
-    policies as access_policies_routes,
-    schedules as access_schedules_routes,
-    system as access_system_routes,
-    users as access_users_routes,
-    visitors as access_visitors_routes,
+from unifi_api.routes.resources.protect import (
+    chimes as protect_chimes_routes,
+)
+from unifi_api.routes.resources.protect import (
+    events as protect_events_routes,
+)
+from unifi_api.routes.resources.protect import (
+    lights as protect_lights_routes,
+)
+from unifi_api.routes.resources.protect import (
+    liveviews as protect_liveviews_routes,
+)
+from unifi_api.routes.resources.protect import (
+    recognition as protect_recognition_routes,
+)
+from unifi_api.routes.resources.protect import (
+    recordings as protect_recordings_routes,
+)
+from unifi_api.routes.resources.protect import (
+    sensors as protect_sensors_routes,
+)
+from unifi_api.routes.resources.protect import (
+    system as protect_system_routes,
 )
 from unifi_api.routes.streams import (
     access as access_streams_routes,
+)
+from unifi_api.routes.streams import (
     access_per_door as access_per_door_routes,
+)
+from unifi_api.routes.streams import (
     network as net_streams_routes,
+)
+from unifi_api.routes.streams import (
     network_per_device as net_per_device_routes,
+)
+from unifi_api.routes.streams import (
     protect as protect_streams_routes,
+)
+from unifi_api.routes.streams import (
     protect_per_camera as protect_per_camera_routes,
 )
 from unifi_api.serializers._registry import discover_serializers
 from unifi_api.services.audit_pruner import prune_audit
 from unifi_api.services.capability_cache import CapabilityCache
 from unifi_api.services.controllers import list_controllers
+from unifi_api.services.log_reader import LogReader
 from unifi_api.services.managers import ManagerFactory
 from unifi_api.services.manifest import ManifestRegistry
-from unifi_api.services.log_reader import LogReader
 from unifi_api.services.settings import SettingsService
 from unifi_api.services.streams import SubscriberPool
-
 
 _streams_log = logging.getLogger("unifi-api.streams")
 
@@ -127,9 +228,7 @@ class _UnifiGraphQLRouter(GraphQLRouter):
     we just rewrite the wire-level shape here.
     """
 
-    async def process_result(
-        self, request: Request, result: ExecutionResult
-    ) -> GraphQLHTTPResponse:
+    async def process_result(self, request: Request, result: ExecutionResult) -> GraphQLHTTPResponse:
         data: GraphQLHTTPResponse = {"data": result.data}
         if result.errors:
             data["errors"] = [format_graphql_error(err) for err in result.errors]
@@ -158,14 +257,18 @@ def create_app(config: ApiConfig) -> FastAPI:
         except Exception:
             controllers = []
             _streams_log.warning(
-                "could not list controllers for eager start_listening", exc_info=True,
+                "could not list controllers for eager start_listening",
+                exc_info=True,
             )
         for controller in controllers:
             for product in [p for p in controller.product_kinds.split(",") if p]:
                 try:
                     async with sm() as session:
                         mgr = await app.state.manager_factory.get_domain_manager(
-                            session, controller.id, product, "event_manager",
+                            session,
+                            controller.id,
+                            product,
+                            "event_manager",
                         )
                     if hasattr(mgr, "start_listening"):
                         # Background-launch: aiounifi's start_websocket awaits
@@ -178,12 +281,15 @@ def create_app(config: ApiConfig) -> FastAPI:
                                 await m.start_listening()
                                 _streams_log.info(
                                     "[streams] start_listening ok for %s/%s",
-                                    c_id, p,
+                                    c_id,
+                                    p,
                                 )
                             except Exception:
                                 _streams_log.warning(
                                     "[streams] start_listening failed for %s/%s",
-                                    c_id, p, exc_info=True,
+                                    c_id,
+                                    p,
+                                    exc_info=True,
                                 )
 
                         asyncio.create_task(
@@ -193,7 +299,9 @@ def create_app(config: ApiConfig) -> FastAPI:
                 except Exception:
                     _streams_log.warning(
                         "[streams] start_listening setup failed for %s/%s",
-                        controller.id, product, exc_info=True,
+                        controller.id,
+                        product,
+                        exc_info=True,
                     )
 
         # Phase 5B: file logging (optional) + background audit pruner
@@ -203,16 +311,15 @@ def create_app(config: ApiConfig) -> FastAPI:
         if log_enabled:
             log_path_str = await settings_svc.get_str("logs.file.path", default="state/api.log")
             db_dir = Path(config.db.path).parent
-            log_path = (
-                Path(log_path_str)
-                if Path(log_path_str).is_absolute()
-                else (db_dir / log_path_str).resolve()
-            )
+            log_path = Path(log_path_str) if Path(log_path_str).is_absolute() else (db_dir / log_path_str).resolve()
             max_bytes = await settings_svc.get_int("logs.file.max_bytes", default=10 * 1024 * 1024)
             backup_count = await settings_svc.get_int("logs.file.backup_count", default=5)
             level = await settings_svc.get_str("logs.file.level", default="INFO")
             attach_rotating_file_handler(
-                path=log_path, max_bytes=max_bytes, backup_count=backup_count, level=level,
+                path=log_path,
+                max_bytes=max_bytes,
+                backup_count=backup_count,
+                level=level,
             )
             app.state.log_file_path = log_path
             app.state.log_reader = LogReader(log_path)
@@ -222,17 +329,21 @@ def create_app(config: ApiConfig) -> FastAPI:
             while True:
                 try:
                     interval_h = await settings_svc.get_int(
-                        "audit.retention.prune_interval_hours", default=6,
+                        "audit.retention.prune_interval_hours",
+                        default=6,
                     )
                     enabled = await settings_svc.get_bool(
-                        "audit.retention.enabled", default=True,
+                        "audit.retention.enabled",
+                        default=True,
                     )
                     if enabled:
                         max_age = await settings_svc.get_int(
-                            "audit.retention.max_age_days", default=90,
+                            "audit.retention.max_age_days",
+                            default=90,
                         )
                         max_rows = await settings_svc.get_int(
-                            "audit.retention.max_rows", default=1_000_000,
+                            "audit.retention.max_rows",
+                            default=1_000_000,
                         )
                         result = await prune_audit(
                             app.state.sessionmaker,
@@ -241,7 +352,8 @@ def create_app(config: ApiConfig) -> FastAPI:
                         )
                         _streams_log.info(
                             "[audit-pruner] pruned %s rows; current count %s",
-                            result["pruned"], result["current_count"],
+                            result["pruned"],
+                            result["current_count"],
                         )
                 except Exception:
                     _streams_log.warning("[audit-pruner] error", exc_info=True)
@@ -288,9 +400,7 @@ def create_app(config: ApiConfig) -> FastAPI:
             description=app.description,
             routes=app.routes,
         )
-        schema.setdefault("components", {}).setdefault("securitySchemes", {})[
-            "ApiKeyAuth"
-        ] = {
+        schema.setdefault("components", {}).setdefault("securitySchemes", {})["ApiKeyAuth"] = {
             "type": "http",
             "scheme": "bearer",
             "description": (
@@ -359,7 +469,8 @@ def create_app(config: ApiConfig) -> FastAPI:
     # must have either a serializer (mutation) or a type (read). The CI gate
     # test_every_tool_has_a_serializer enforces the same invariant.
     app.state.serializer_registry = discover_serializers(
-        manifest_tool_names, type_registry=app.state.type_registry,
+        manifest_tool_names,
+        type_registry=app.state.type_registry,
     )
 
     app.include_router(health.router, prefix="/v1")
@@ -471,6 +582,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         api_key_prefix: str | None = None
         if request.headers.get("authorization", "").lower().startswith("bearer "):
             from unifi_api.auth.middleware import _authenticate
+
             try:
                 row = await _authenticate(request)
                 api_key_id = row.id

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.protect.models.liveviews import (
-    Liveview,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    Liveview,
     from_controller,
     to_controller_create,
 )
-
 
 SAMPLE = {
     "id": "lv001",

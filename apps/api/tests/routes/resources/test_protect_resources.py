@@ -29,17 +29,29 @@ async def _bootstrap(tmp_path, products="protect"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="P", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="P",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -82,6 +94,7 @@ async def test_list_cameras_happy_path(tmp_path, monkeypatch) -> None:
         return fake_cams
 
     from unifi_core.protect.managers.camera_manager import CameraManager
+
     monkeypatch.setattr(CameraManager, "list_cameras", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -135,6 +148,7 @@ async def test_get_camera_happy_and_404(tmp_path, monkeypatch) -> None:
         raise ValueError(f"Camera not found: {camera_id}")
 
     from unifi_core.protect.managers.camera_manager import CameraManager
+
     monkeypatch.setattr(CameraManager, "get_camera", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -177,6 +191,7 @@ async def test_list_known_faces_happy_path(tmp_path, monkeypatch) -> None:
         return {"faces": fake_faces, "count": len(fake_faces), "links": {}}
 
     from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
     monkeypatch.setattr(RecognitionManager, "list_known_faces", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -218,6 +233,7 @@ async def test_list_known_faces_group_types_filter(tmp_path, monkeypatch) -> Non
         }
 
     from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
     monkeypatch.setattr(RecognitionManager, "list_known_faces", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -256,6 +272,7 @@ async def test_list_events_happy_path(tmp_path, monkeypatch) -> None:
         return fake_events
 
     from unifi_core.protect.managers.event_manager import EventManager
+
     monkeypatch.setattr(EventManager, "list_events", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -292,6 +309,7 @@ async def test_list_recordings_happy_path(tmp_path, monkeypatch) -> None:
         return fake_recordings
 
     from unifi_core.protect.managers.recording_manager import RecordingManager
+
     monkeypatch.setattr(RecordingManager, "list_recordings", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -312,14 +330,21 @@ async def test_get_recording_filter_404(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_recordings = [
-        {"id": "rec-1", "type": "clip", "camera_id": "cam-1",
-         "start": 1700000000, "end": 1700000060, "file_size": 1024},
+        {
+            "id": "rec-1",
+            "type": "clip",
+            "camera_id": "cam-1",
+            "start": 1700000000,
+            "end": 1700000060,
+            "file_size": 1024,
+        },
     ]
 
     async def fake_list(self, camera_id, *a, **kw):
         return fake_recordings
 
     from unifi_core.protect.managers.recording_manager import RecordingManager
+
     monkeypatch.setattr(RecordingManager, "list_recordings", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

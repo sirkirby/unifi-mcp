@@ -21,23 +21,41 @@ from pydantic import BaseModel, Field
 class AccessSystemInfo(BaseModel):
     """Canonical Access system info model (read-only)."""
 
-    name: Optional[str] = Field(default=None, description="Controller application name", json_schema_extra={"mutable": False})
-    version: Optional[str] = Field(default=None, description="Firmware / application version string", json_schema_extra={"mutable": False})
-    hostname: Optional[str] = Field(default=None, description="Controller hostname or IP", json_schema_extra={"mutable": False})
+    name: Optional[str] = Field(
+        default=None, description="Controller application name", json_schema_extra={"mutable": False}
+    )
+    version: Optional[str] = Field(
+        default=None, description="Firmware / application version string", json_schema_extra={"mutable": False}
+    )
+    hostname: Optional[str] = Field(
+        default=None, description="Controller hostname or IP", json_schema_extra={"mutable": False}
+    )
     uptime: Optional[int] = Field(default=None, description="Uptime in seconds", json_schema_extra={"mutable": False})
 
 
 class AccessHealth(BaseModel):
     """Canonical Access system health model (read-only)."""
 
-    status: Optional[str] = Field(default="unknown", description="Derived health status (healthy, degraded, unhealthy, unknown)", json_schema_extra={"mutable": False})
-    num_doors: Optional[int] = Field(default=None, description="Number of configured doors", json_schema_extra={"mutable": False})
-    num_devices: Optional[int] = Field(default=None, description="Number of connected devices", json_schema_extra={"mutable": False})
-    num_offline_devices: Optional[int] = Field(default=None, description="Number of offline devices", json_schema_extra={"mutable": False})
+    status: Optional[str] = Field(
+        default="unknown",
+        description="Derived health status (healthy, degraded, unhealthy, unknown)",
+        json_schema_extra={"mutable": False},
+    )
+    num_doors: Optional[int] = Field(
+        default=None, description="Number of configured doors", json_schema_extra={"mutable": False}
+    )
+    num_devices: Optional[int] = Field(
+        default=None, description="Number of connected devices", json_schema_extra={"mutable": False}
+    )
+    num_offline_devices: Optional[int] = Field(
+        default=None, description="Number of offline devices", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS: frozenset[str] = frozenset()
-READ_ONLY_FIELDS: frozenset[str] = frozenset(AccessSystemInfo.model_fields.keys()) | frozenset(AccessHealth.model_fields.keys())
+READ_ONLY_FIELDS: frozenset[str] = frozenset(AccessSystemInfo.model_fields.keys()) | frozenset(
+    AccessHealth.model_fields.keys()
+)
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:

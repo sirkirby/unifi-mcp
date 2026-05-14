@@ -1,11 +1,9 @@
 """Tests for the shared lazy_tools module."""
 
 import json
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from unifi_mcp_shared.lazy_tools import (
     LazyToolLoader,
     build_tool_module_map,

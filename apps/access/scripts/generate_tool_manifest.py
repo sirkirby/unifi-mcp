@@ -12,6 +12,7 @@ Output:
     src/unifi_access_mcp/tools_manifest.json - Static tool metadata with FULL schemas for all tools
                                                 Includes module_map for fallback lazy loading
 """
+
 from __future__ import annotations
 
 import json
@@ -123,13 +124,15 @@ def generate_manifest() -> dict[str, Any]:
 
         tools = []
         for tool_name in sorted(TOOL_MODULE_MAP.keys()):
-            tools.append({
-                "name": tool_name,
-                "description": f"Access tool: {tool_name}",
-                "schema": {
-                    "input": {"type": "object", "properties": {}},
-                },
-            })
+            tools.append(
+                {
+                    "name": tool_name,
+                    "description": f"Access tool: {tool_name}",
+                    "schema": {
+                        "input": {"type": "object", "properties": {}},
+                    },
+                }
+            )
 
         return {
             "tools": tools,
@@ -193,8 +196,8 @@ def generate_manifest() -> dict[str, Any]:
     # Log a sample tool to verify schemas are complete
     if tools:
         sample_tool = tools[0]
-        logger.info("   Sample tool: %s", sample_tool['name'])
-        logger.info("      Properties: %s", list(sample_tool['schema']['input'].get('properties', {}).keys()))
+        logger.info("   Sample tool: %s", sample_tool["name"])
+        logger.info("      Properties: %s", list(sample_tool["schema"]["input"].get("properties", {}).keys()))
 
     return manifest
 

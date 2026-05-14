@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable
 
@@ -61,8 +60,7 @@ class Serializer:
         if kind == RenderKind.LIST:
             if not isinstance(result, list):
                 raise SerializerContractError(
-                    f"tool '{tool_name}' declared kind=list but manager returned "
-                    f"{type(result).__name__}"
+                    f"tool '{tool_name}' declared kind=list but manager returned {type(result).__name__}"
                 )
             return {"success": True, "data": [self.serialize(item) for item in result], "render_hint": hint}
         if kind == RenderKind.DETAIL:
@@ -101,6 +99,7 @@ def register_serializer(
       - dict[str, {"kind": RenderKind, ...}]: per-tool kind override
     Same shape for `resources` but keys are (product, resource_path) tuples.
     """
+
     def decorator(cls: type[Serializer]) -> type[Serializer]:
         instance = cls()  # singleton instance per registered serializer class
         if tools is not None:
@@ -126,6 +125,7 @@ def register_serializer(
                     # (product, resource) bare-tuple form
                     _RESOURCE_REGISTRY[entry] = instance
         return cls
+
     return decorator
 
 

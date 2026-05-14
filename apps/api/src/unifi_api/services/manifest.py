@@ -73,9 +73,7 @@ class ManifestRegistry:
         self._entries = entries
 
     @classmethod
-    def load_from_apps(
-        cls, products: tuple[str, ...] = _PRODUCTS
-    ) -> "ManifestRegistry":
+    def load_from_apps(cls, products: tuple[str, ...] = _PRODUCTS) -> "ManifestRegistry":
         """Load manifests from each MCP app package and build a lookup table.
 
         Apps that aren't installed in the current environment (or whose

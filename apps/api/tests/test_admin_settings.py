@@ -1,12 +1,11 @@
 """Phase 5B PR3 Task 22 — /admin/settings page."""
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, AuditLog, Base
@@ -28,11 +27,16 @@ async def _bootstrap_app_with_admin_key(tmp_path: Path):
     sm = app.state.sessionmaker
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext
 
@@ -61,16 +65,20 @@ async def test_settings_save_round_trips_through_settings_service(tmp_path: Path
     app, key = await _bootstrap_app_with_admin_key(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/admin/settings/save", headers=headers, data={
-            "audit_max_age_days": "45",
-            "audit_max_rows": "500000",
-            "audit_enabled": "on",
-            "audit_prune_interval_hours": "12",
-            "logs_enabled": "",  # disabled
-            "logs_max_bytes": "5242880",
-            "logs_backup_count": "3",
-            "logs_level": "WARNING",
-        })
+        r = await c.post(
+            "/admin/settings/save",
+            headers=headers,
+            data={
+                "audit_max_age_days": "45",
+                "audit_max_rows": "500000",
+                "audit_enabled": "on",
+                "audit_prune_interval_hours": "12",
+                "logs_enabled": "",  # disabled
+                "logs_max_bytes": "5242880",
+                "logs_backup_count": "3",
+                "logs_level": "WARNING",
+            },
+        )
         assert r.status_code == 200
         assert "Saved" in r.text  # the saved indicator
         # Form re-renders with the new values
@@ -98,11 +106,15 @@ async def test_settings_prune_button_returns_counts(tmp_path: Path, monkeypatch)
     now = datetime.now(timezone.utc)
     async with sm() as session:
         for i in range(3):
-            session.add(AuditLog(
-                ts=now - timedelta(days=200),
-                key_id_prefix="p", controller=None,
-                target=f"t{i}", outcome="ok",
-            ))
+            session.add(
+                AuditLog(
+                    ts=now - timedelta(days=200),
+                    key_id_prefix="p",
+                    controller=None,
+                    target=f"t{i}",
+                    outcome="ok",
+                )
+            )
         await session.commit()
     # Pin retention so the prune actually removes rows.
     await app.state.settings_service.set_int("audit.retention.max_age_days", 30)

@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from unifi_core.protect.models.recordings import (
-    Recording,
-    RecordingStatusList,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    Recording,
+    RecordingStatusList,
     from_controller,
     status_list_from_controller,
 )

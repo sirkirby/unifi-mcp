@@ -3,7 +3,6 @@
 from pathlib import Path
 
 from typer.testing import CliRunner
-
 from unifi_api.cli import app
 
 

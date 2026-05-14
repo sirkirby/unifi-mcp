@@ -86,10 +86,9 @@ class User:
 
     @strawberry.field(description="Credentials registered for this user.")
     async def credentials(
-        self, info: Info,
-    ) -> list[
-        Annotated["Credential", strawberry.lazy("unifi_api.graphql.types.access.credentials")]
-    ]:
+        self,
+        info: Info,
+    ) -> list[Annotated["Credential", strawberry.lazy("unifi_api.graphql.types.access.credentials")]]:
         from unifi_api.graphql.resolvers.access import _fetch_credentials
         from unifi_api.graphql.types.access.credentials import Credential
 
@@ -98,10 +97,7 @@ class User:
         all_creds = await _fetch_credentials(info.context, self._controller_id)
         out: list[Credential] = []
         for c in all_creds:
-            user_id = (
-                c.get("user_id") if isinstance(c, dict)
-                else getattr(c, "user_id", None)
-            )
+            user_id = c.get("user_id") if isinstance(c, dict) else getattr(c, "user_id", None)
             if user_id == self.id:
                 inst = Credential.from_manager_output(c)
                 inst._controller_id = self._controller_id

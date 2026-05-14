@@ -67,7 +67,10 @@ async def list_access_events(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "access", "event_manager",
+            session,
+            controller.id,
+            "access",
+            "event_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "access")
         await _maybe_set_site(cm, site_id)
@@ -81,7 +84,10 @@ async def list_access_events(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_events), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+        list(all_events),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_event_key,
     )
 
     type_registry = request.app.state.type_registry
@@ -119,7 +125,10 @@ async def get_access_event(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "access", "event_manager",
+                session,
+                controller.id,
+                "access",
+                "event_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "access")
             await _maybe_set_site(cm, site_id)
@@ -170,7 +179,10 @@ async def recent_access_events(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "access", "event_manager",
+            session,
+            controller.id,
+            "access",
+            "event_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "access")
         await _maybe_set_site(cm, site_id)
@@ -220,7 +232,10 @@ async def get_access_activity_summary(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "access", "event_manager",
+                session,
+                controller.id,
+                "access",
+                "event_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "access")
             await _maybe_set_site(cm, site_id)

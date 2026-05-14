@@ -29,32 +29,22 @@ async def prune_audit(
 
     async with sessionmaker() as session:
         # Phase 1 — age-based prune
-        age_result = await session.execute(
-            delete(AuditLog).where(AuditLog.ts < cutoff)
-        )
+        age_result = await session.execute(delete(AuditLog).where(AuditLog.ts < cutoff))
         pruned += age_result.rowcount or 0
 
         # Phase 2 — row-cap prune (oldest-first)
-        current = (
-            await session.execute(select(func.count(AuditLog.id)))
-        ).scalar_one()
+        current = (await session.execute(select(func.count(AuditLog.id)))).scalar_one()
         if current > max_rows:
             excess = current - max_rows
             ids_to_delete = (
-                await session.execute(
-                    select(AuditLog.id).order_by(AuditLog.ts.asc()).limit(excess)
-                )
-            ).scalars().all()
+                (await session.execute(select(AuditLog.id).order_by(AuditLog.ts.asc()).limit(excess))).scalars().all()
+            )
             if ids_to_delete:
-                cap_result = await session.execute(
-                    delete(AuditLog).where(AuditLog.id.in_(ids_to_delete))
-                )
+                cap_result = await session.execute(delete(AuditLog).where(AuditLog.id.in_(ids_to_delete)))
                 pruned += cap_result.rowcount or 0
 
         await session.commit()
 
-        current_count = (
-            await session.execute(select(func.count(AuditLog.id)))
-        ).scalar_one()
+        current_count = (await session.execute(select(func.count(AuditLog.id)))).scalar_one()
 
     return {"pruned": pruned, "current_count": current_count}

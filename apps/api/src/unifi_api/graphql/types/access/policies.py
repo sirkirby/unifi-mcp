@@ -38,11 +38,7 @@ def _door_ids(obj: Any) -> list:
         return door_ids
     resources = _get(obj, "resources")
     if isinstance(resources, list):
-        return [
-            r.get("id") if isinstance(r, dict) else r
-            for r in resources
-            if r is not None
-        ]
+        return [r.get("id") if isinstance(r, dict) else r for r in resources if r is not None]
     return []
 
 

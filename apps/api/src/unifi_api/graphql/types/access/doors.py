@@ -68,11 +68,7 @@ def _door_ids_from_groups(obj: Any) -> list:
         return door_ids
     resources = _get(obj, "resources")
     if isinstance(resources, list):
-        return [
-            r.get("id") if isinstance(r, dict) else r
-            for r in resources
-            if r is not None
-        ]
+        return [r.get("id") if isinstance(r, dict) else r for r in resources if r is not None]
     return []
 
 
@@ -117,10 +113,9 @@ class Door:
 
     @strawberry.field(description="Policies assigned to this door.")
     async def policy_assignments(
-        self, info: Info,
-    ) -> list[
-        Annotated["Policy", strawberry.lazy("unifi_api.graphql.types.access.policies")]
-    ]:
+        self,
+        info: Info,
+    ) -> list[Annotated["Policy", strawberry.lazy("unifi_api.graphql.types.access.policies")]]:
         from unifi_api.graphql.resolvers.access import _fetch_policies
         from unifi_api.graphql.types.access.policies import Policy
 
@@ -129,21 +124,11 @@ class Door:
         all_policies = await _fetch_policies(info.context, self._controller_id)
         out: list[Policy] = []
         for p in all_policies:
-            door_ids = (
-                p.get("door_ids") if isinstance(p, dict)
-                else getattr(p, "door_ids", None)
-            )
+            door_ids = p.get("door_ids") if isinstance(p, dict) else getattr(p, "door_ids", None)
             if not isinstance(door_ids, list):
-                resources = (
-                    p.get("resources") if isinstance(p, dict)
-                    else getattr(p, "resources", None)
-                )
+                resources = p.get("resources") if isinstance(p, dict) else getattr(p, "resources", None)
                 if isinstance(resources, list):
-                    door_ids = [
-                        r.get("id") if isinstance(r, dict) else r
-                        for r in resources
-                        if r is not None
-                    ]
+                    door_ids = [r.get("id") if isinstance(r, dict) else r for r in resources if r is not None]
             if door_ids and self.id in door_ids:
                 inst = Policy.from_manager_output(p)
                 inst._controller_id = self._controller_id

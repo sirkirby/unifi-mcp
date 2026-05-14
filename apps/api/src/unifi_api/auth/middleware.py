@@ -26,9 +26,12 @@ async def _audit_denial(app, *, key_id_prefix: str, target: str, error_kind: str
     sm = app.state.sessionmaker
     async with sm() as session:
         await write_audit(
-            session, key_id_prefix=key_id_prefix,
-            controller=None, target=target,
-            outcome="denied", error_kind=error_kind,
+            session,
+            key_id_prefix=key_id_prefix,
+            controller=None,
+            target=target,
+            outcome="denied",
+            error_kind=error_kind,
         )
         await session.commit()
 
@@ -39,11 +42,15 @@ async def _authenticate(request: Request) -> ApiKey:
     if not auth_header.lower().startswith("bearer "):
         await _audit_denial(request.app, key_id_prefix="(none)", target=target, error_kind="missing_bearer")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
-    plaintext = auth_header[len("Bearer "):].strip()
+    plaintext = auth_header[len("Bearer ") :].strip()
 
     if not KEY_PATTERN.fullmatch(plaintext):
-        await _audit_denial(request.app, key_id_prefix=plaintext[:KEY_PREFIX_LEN] or "(short)",
-                            target=target, error_kind="malformed_token")
+        await _audit_denial(
+            request.app,
+            key_id_prefix=plaintext[:KEY_PREFIX_LEN] or "(short)",
+            target=target,
+            error_kind="malformed_token",
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="malformed token")
 
     cache: ArgonVerifyCache = request.app.state.argon_cache
@@ -53,13 +60,12 @@ async def _authenticate(request: Request) -> ApiKey:
     if cached is not None:
         # Cache hit — confirm not revoked
         async with sm() as session:
-            row = (await session.execute(
-                select(ApiKey).where(ApiKey.id == cached.api_key_id)
-            )).scalar_one_or_none()
+            row = (await session.execute(select(ApiKey).where(ApiKey.id == cached.api_key_id))).scalar_one_or_none()
             if row is None or row.revoked_at is not None:
                 cache.invalidate(cached.api_key_id)
-                await _audit_denial(request.app, key_id_prefix=plaintext[:KEY_PREFIX_LEN],
-                                    target=target, error_kind="unknown_token")
+                await _audit_denial(
+                    request.app, key_id_prefix=plaintext[:KEY_PREFIX_LEN], target=target, error_kind="unknown_token"
+                )
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unknown token")
             key_id_prefix_ctx.set(row.prefix)
             request.state.api_key_prefix = row.prefix
@@ -88,7 +94,8 @@ def require_scope(required: Scope) -> Callable:
         held = parse_scopes(api_key.scopes)
         if not scope_allows(held, required):
             await _audit_denial(
-                request.app, key_id_prefix=api_key.prefix,
+                request.app,
+                key_id_prefix=api_key.prefix,
                 target=f"{request.method} {request.url.path}",
                 error_kind="insufficient_scope",
             )

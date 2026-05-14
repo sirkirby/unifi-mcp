@@ -1,6 +1,7 @@
-import pytest
-import aiohttp
 from unittest.mock import AsyncMock
+
+import aiohttp
+import pytest
 from unifi_core.auth import AuthMethod, UniFiAuth
 from unifi_core.exceptions import UniFiAuthError
 

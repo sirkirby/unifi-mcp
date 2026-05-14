@@ -43,7 +43,10 @@ async def list_networks(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "network_manager",
+            session,
+            controller.id,
+            "network",
+            "network_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -58,7 +61,10 @@ async def list_networks(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_networks), limit=limit, cursor=cursor_obj, key_fn=_network_key,
+        list(all_networks),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_network_key,
     )
 
     type_class = request.app.state.type_registry.lookup("network", "networks")
@@ -90,7 +96,10 @@ async def get_network(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "network_manager",
+                session,
+                controller.id,
+                "network",
+                "network_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:

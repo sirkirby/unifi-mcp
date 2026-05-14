@@ -14,7 +14,6 @@ from unifi_api.services.audit import write_audit
 from unifi_api.services.controllers import ControllerNotFound, get_controller
 from unifi_api.services.manifest import ToolNotFound
 
-
 router = APIRouter()
 
 
@@ -76,8 +75,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 if kind in ("list", "timeseries", "event_log"):
                     if not isinstance(result, list):
                         raise SerializerContractError(
-                            f"tool '{tool_name}' declared kind={kind} but manager "
-                            f"returned {type(result).__name__}"
+                            f"tool '{tool_name}' declared kind={kind} but manager returned {type(result).__name__}"
                         )
                     data = [type_class.from_manager_output(x).to_dict() for x in result]
                 else:

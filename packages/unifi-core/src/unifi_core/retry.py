@@ -30,7 +30,7 @@ async def retry_with_backoff(operation, policy: RetryPolicy | None = None):
         except policy.retryable_exceptions as e:
             last_error = e
             if attempt < policy.max_retries:
-                delay = min(policy.base_delay * (policy.backoff_factor ** attempt), policy.max_delay)
+                delay = min(policy.base_delay * (policy.backoff_factor**attempt), policy.max_delay)
                 logger.warning(
                     "[retry] Attempt %d/%d failed: %s. Retrying in %.1fs",
                     attempt + 1,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
@@ -20,11 +20,21 @@ class Camera(BaseModel):
     model: Optional[str] = Field(default=None, description="Camera model", json_schema_extra={"mutable": False})
     type: Optional[str] = Field(default=None, description="Camera type", json_schema_extra={"mutable": False})
     state: Optional[str] = Field(default=None, description="Connection state", json_schema_extra={"mutable": False})
-    is_recording: Optional[bool] = Field(default=None, description="Whether camera is currently recording", json_schema_extra={"mutable": False})
-    is_motion_detected: Optional[bool] = Field(default=None, description="Whether motion is currently detected", json_schema_extra={"mutable": False})
-    is_smart_detected: Optional[bool] = Field(default=None, description="Whether a smart detection is active", json_schema_extra={"mutable": False})
+    is_recording: Optional[bool] = Field(
+        default=None, description="Whether camera is currently recording", json_schema_extra={"mutable": False}
+    )
+    is_motion_detected: Optional[bool] = Field(
+        default=None, description="Whether motion is currently detected", json_schema_extra={"mutable": False}
+    )
+    is_smart_detected: Optional[bool] = Field(
+        default=None, description="Whether a smart detection is active", json_schema_extra={"mutable": False}
+    )
     host: Optional[str] = Field(default=None, description="Camera IP/host", json_schema_extra={"mutable": False})
-    channels: Optional[Any] = Field(default=None, description="Channel configuration — controller returns dict or list of channel descriptors", json_schema_extra={"mutable": False})
+    channels: Optional[Any] = Field(
+        default=None,
+        description="Channel configuration — controller returns dict or list of channel descriptors",
+        json_schema_extra={"mutable": False},
+    )
 
     # Mutable (accepted by protect_update_camera_settings)
     name: Optional[str] = Field(default=None, description="Display name for the camera")
@@ -38,12 +48,10 @@ class Camera(BaseModel):
 
 
 MUTABLE_FIELDS = frozenset(
-    name for name, info in Camera.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is not False
+    name for name, info in Camera.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is not False
 )
 READ_ONLY_FIELDS = frozenset(
-    name for name, info in Camera.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is False
+    name for name, info in Camera.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is False
 )
 
 

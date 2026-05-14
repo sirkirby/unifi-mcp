@@ -26,7 +26,6 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -85,9 +84,7 @@ class Visitor(BaseModel):
 # ---------------------------------------------------------------------------
 
 MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in Visitor.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in Visitor.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 READ_ONLY_FIELDS: frozenset[str] = frozenset(

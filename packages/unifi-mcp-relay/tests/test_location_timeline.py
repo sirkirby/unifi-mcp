@@ -6,10 +6,9 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
-
+from unifi_core.event_timeline import NormalizedEvent
 from unifi_mcp_relay.location_timeline import (
     TOOL_ANNOTATIONS,
-    TOOL_DESCRIPTION,
     TOOL_INPUT_SCHEMA,
     TOOL_NAME,
     _normalize_product_events,
@@ -18,7 +17,6 @@ from unifi_mcp_relay.location_timeline import (
     handle_location_timeline,
     validate_timeline_input,
 )
-from unifi_core.event_timeline import NormalizedEvent
 
 
 class TestValidateTimelineInput:
@@ -80,15 +78,21 @@ class TestBuildTimelineSummary:
         events = [
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 1, 0, tzinfo=timezone.utc),
-                product="network", event_type="a", summary="a",
+                product="network",
+                event_type="a",
+                summary="a",
             ),
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 2, 0, tzinfo=timezone.utc),
-                product="network", event_type="b", summary="b",
+                product="network",
+                event_type="b",
+                summary="b",
             ),
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 3, 0, tzinfo=timezone.utc),
-                product="protect", event_type="c", summary="c",
+                product="protect",
+                event_type="c",
+                summary="c",
             ),
         ]
         summary = build_timeline_summary(events)
@@ -99,13 +103,19 @@ class TestBuildTimelineSummary:
         events = [
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 1, 0, tzinfo=timezone.utc),
-                product="network", event_type="a", summary="a",
-                location_id="loc_1", location_name="Home",
+                product="network",
+                event_type="a",
+                summary="a",
+                location_id="loc_1",
+                location_name="Home",
             ),
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 2, 0, tzinfo=timezone.utc),
-                product="protect", event_type="b", summary="b",
-                location_id="loc_2", location_name="Office",
+                product="protect",
+                event_type="b",
+                summary="b",
+                location_id="loc_2",
+                location_name="Office",
             ),
         ]
         summary = build_timeline_summary(events)
@@ -120,7 +130,9 @@ class TestBuildTimelineResponse:
         events = [
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 1, 0, tzinfo=timezone.utc),
-                product="network", event_type="a", summary="a",
+                product="network",
+                event_type="a",
+                summary="a",
             ),
         ]
         response = build_timeline_response(events)
@@ -282,13 +294,15 @@ class TestHandleLocationTimeline:
     @pytest.mark.asyncio
     async def test_filters_by_event_types(self):
         forwarder = AsyncMock()
-        forwarder.forward = AsyncMock(return_value={
-            "success": True,
-            "data": [
-                {"timestamp": "2026-03-24T10:00:00+00:00", "type": "client_connect", "msg": "Connected"},
-                {"timestamp": "2026-03-24T11:00:00+00:00", "type": "client_disconnect", "msg": "Disconnected"},
-            ],
-        })
+        forwarder.forward = AsyncMock(
+            return_value={
+                "success": True,
+                "data": [
+                    {"timestamp": "2026-03-24T10:00:00+00:00", "type": "client_connect", "msg": "Connected"},
+                    {"timestamp": "2026-03-24T11:00:00+00:00", "type": "client_disconnect", "msg": "Disconnected"},
+                ],
+            }
+        )
 
         result = await handle_location_timeline(
             arguments={

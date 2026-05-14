@@ -9,12 +9,11 @@ Covers 8 endpoint families:
 - visitors LIST + DETAIL            — access_list_visitors, access_get_visitor
 """
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -39,17 +38,29 @@ async def _bootstrap(tmp_path, products="access"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="A", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="A",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -89,9 +100,11 @@ async def test_get_door_status_happy_path(tmp_path, monkeypatch) -> None:
         if door_id == "door-1":
             return status
         from unifi_core.exceptions import UniFiNotFoundError
+
         raise UniFiNotFoundError("door", door_id)
 
     from unifi_core.access.managers.door_manager import DoorManager
+
     monkeypatch.setattr(DoorManager, "get_door_status", fake_status)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -113,9 +126,11 @@ async def test_get_door_status_404(tmp_path, monkeypatch) -> None:
 
     async def fake_status(self, door_id):
         from unifi_core.exceptions import UniFiNotFoundError
+
         raise UniFiNotFoundError("door", door_id)
 
     from unifi_core.access.managers.door_manager import DoorManager
+
     monkeypatch.setattr(DoorManager, "get_door_status", fake_status)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -137,15 +152,13 @@ async def test_list_door_groups_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    groups = [
-        {"id": f"grp-{i}", "name": f"Group {i}", "type": "door"}
-        for i in range(3)
-    ]
+    groups = [{"id": f"grp-{i}", "name": f"Group {i}", "type": "door"} for i in range(3)]
 
     async def fake_list(self):
         return groups
 
     from unifi_core.access.managers.door_manager import DoorManager
+
     monkeypatch.setattr(DoorManager, "list_door_groups", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -170,15 +183,13 @@ async def test_list_policies_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    policies = [
-        {"id": f"pol-{i}", "name": f"Policy {i}", "resource_type": "door"}
-        for i in range(4)
-    ]
+    policies = [{"id": f"pol-{i}", "name": f"Policy {i}", "resource_type": "door"} for i in range(4)]
 
     async def fake_list(self):
         return policies
 
     from unifi_core.access.managers.policy_manager import PolicyManager
+
     monkeypatch.setattr(PolicyManager, "list_policies", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -219,9 +230,11 @@ async def test_get_policy_happy_path(tmp_path, monkeypatch) -> None:
         if policy_id == "pol-1":
             return target
         from unifi_core.exceptions import UniFiNotFoundError
+
         raise UniFiNotFoundError("policy", policy_id)
 
     from unifi_core.access.managers.policy_manager import PolicyManager
+
     monkeypatch.setattr(PolicyManager, "get_policy", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -243,9 +256,11 @@ async def test_get_policy_404_via_unifi_not_found(tmp_path, monkeypatch) -> None
 
     async def fake_get(self, policy_id):
         from unifi_core.exceptions import UniFiNotFoundError
+
         raise UniFiNotFoundError("policy", policy_id)
 
     from unifi_core.access.managers.policy_manager import PolicyManager
+
     monkeypatch.setattr(PolicyManager, "get_policy", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -267,15 +282,13 @@ async def test_list_schedules_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    schedules = [
-        {"id": f"sch-{i}", "name": f"Sched {i}", "type": "weekly"}
-        for i in range(3)
-    ]
+    schedules = [{"id": f"sch-{i}", "name": f"Sched {i}", "type": "weekly"} for i in range(3)]
 
     async def fake_list(self):
         return schedules
 
     from unifi_core.access.managers.policy_manager import PolicyManager
+
     monkeypatch.setattr(PolicyManager, "list_schedules", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -300,15 +313,13 @@ async def test_list_access_devices_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    devices = [
-        {"id": f"dev-{i}", "name": f"Reader {i}", "device_type": "UA-Hub"}
-        for i in range(3)
-    ]
+    devices = [{"id": f"dev-{i}", "name": f"Reader {i}", "device_type": "UA-Hub"} for i in range(3)]
 
     async def fake_list(self, *a, **kw):
         return devices
 
     from unifi_core.access.managers.device_manager import DeviceManager
+
     monkeypatch.setattr(DeviceManager, "list_devices", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -334,9 +345,11 @@ async def test_get_access_device_happy_path(tmp_path, monkeypatch) -> None:
         if device_id == "dev-1":
             return target
         from unifi_core.exceptions import UniFiNotFoundError
+
         raise UniFiNotFoundError("device", device_id)
 
     from unifi_core.access.managers.device_manager import DeviceManager
+
     monkeypatch.setattr(DeviceManager, "get_device", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -358,9 +371,11 @@ async def test_get_access_device_404(tmp_path, monkeypatch) -> None:
 
     async def fake_get(self, device_id):
         from unifi_core.exceptions import UniFiNotFoundError
+
         raise UniFiNotFoundError("device", device_id)
 
     from unifi_core.access.managers.device_manager import DeviceManager
+
     monkeypatch.setattr(DeviceManager, "get_device", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -382,15 +397,13 @@ async def test_list_visitors_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    visitors = [
-        {"id": f"vis-{i}", "name": f"Visitor {i}", "status": "active"}
-        for i in range(3)
-    ]
+    visitors = [{"id": f"vis-{i}", "name": f"Visitor {i}", "status": "active"} for i in range(3)]
 
     async def fake_list(self):
         return visitors
 
     from unifi_core.access.managers.visitor_manager import VisitorManager
+
     monkeypatch.setattr(VisitorManager, "list_visitors", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -416,9 +429,11 @@ async def test_get_visitor_happy_and_404(tmp_path, monkeypatch) -> None:
         if visitor_id == "vis-1":
             return target
         from unifi_core.exceptions import UniFiNotFoundError
+
         raise UniFiNotFoundError("visitor", visitor_id)
 
     from unifi_core.access.managers.visitor_manager import VisitorManager
+
     monkeypatch.setattr(VisitorManager, "get_visitor", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

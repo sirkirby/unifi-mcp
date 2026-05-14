@@ -48,7 +48,10 @@ async def _maybe_set_site(cm, site_id: str) -> None:
 def _list_response(request, items, tool_name, *, limit, cursor):
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_event_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool(tool_name)
@@ -95,11 +98,19 @@ async def list_events_dispatch(
     products = _controller_products(controller)
     if "network" in products:
         return await _list_network_events(
-            request, site_id, controller, limit=limit, cursor=cursor,
+            request,
+            site_id,
+            controller,
+            limit=limit,
+            cursor=cursor,
         )
     if "protect" in products:
         return await _list_protect_events(
-            request, site_id, controller, limit=limit, cursor=cursor,
+            request,
+            site_id,
+            controller,
+            limit=limit,
+            cursor=cursor,
         )
     # Neither — surface a clean capability mismatch (network is the canonical
     # owner of the path; the message reflects that).
@@ -108,30 +119,50 @@ async def list_events_dispatch(
 
 
 async def _list_network_events(
-    request: Request, site_id: str, controller, *, limit: int, cursor: str | None,
+    request: Request,
+    site_id: str,
+    controller,
+    *,
+    limit: int,
+    cursor: str | None,
 ) -> dict:
     factory = request.app.state.manager_factory
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "event_manager",
+            session,
+            controller.id,
+            "network",
+            "event_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         events = await mgr.get_events(limit=max(limit, 100))
     return _list_response(
-        request, events, "unifi_list_events", limit=limit, cursor=cursor,
+        request,
+        events,
+        "unifi_list_events",
+        limit=limit,
+        cursor=cursor,
     )
 
 
 async def _list_protect_events(
-    request: Request, site_id: str, controller, *, limit: int, cursor: str | None,
+    request: Request,
+    site_id: str,
+    controller,
+    *,
+    limit: int,
+    cursor: str | None,
 ) -> dict:
     factory = request.app.state.manager_factory
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "event_manager",
+            session,
+            controller.id,
+            "protect",
+            "event_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         set_site = getattr(cm, "set_site", None)
@@ -141,7 +172,9 @@ async def _list_protect_events(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(events), limit=limit, cursor=cursor_obj,
+        list(events),
+        limit=limit,
+        cursor=cursor_obj,
         key_fn=lambda e: (
             (e.get("start") if isinstance(e, dict) else getattr(e, "raw", {}).get("start")) or 0,
             (e.get("id") if isinstance(e, dict) else getattr(e, "raw", {}).get("id")) or "",
@@ -174,13 +207,20 @@ async def get_alerts(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         events = await mgr.get_alerts()
     return _list_response(
-        request, events, "unifi_get_alerts", limit=limit, cursor=cursor,
+        request,
+        events,
+        "unifi_get_alerts",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -201,13 +241,20 @@ async def get_anomalies(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         events = await mgr.get_anomalies()
     return _list_response(
-        request, events, "unifi_get_anomalies", limit=limit, cursor=cursor,
+        request,
+        events,
+        "unifi_get_anomalies",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -228,11 +275,18 @@ async def get_ips_events(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         events = await mgr.get_ips_events()
     return _list_response(
-        request, events, "unifi_get_ips_events", limit=limit, cursor=cursor,
+        request,
+        events,
+        "unifi_get_ips_events",
+        limit=limit,
+        cursor=cursor,
     )

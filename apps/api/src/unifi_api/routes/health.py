@@ -12,7 +12,6 @@ from sqlalchemy import text
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 
-
 router = APIRouter()
 
 

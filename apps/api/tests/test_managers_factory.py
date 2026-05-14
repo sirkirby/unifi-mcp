@@ -1,12 +1,11 @@
 """Manager factory tests — caching + invalidation."""
 
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-import uuid
 
 import pytest
-
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.engine import create_engine
 from unifi_api.db.models import Base, Controller
@@ -54,14 +53,19 @@ async def _seed(tmp_path: Path, products: list[str] = ["network"]):
     cid = str(uuid.uuid4())
     creds = cipher.encrypt(json.dumps({"username": "u", "password": "p", "api_token": None}).encode())
     async with sm() as session:
-        session.add(Controller(
-            id=cid, name="N", base_url="https://10.0.0.1",
-            product_kinds=",".join(products),
-            credentials_blob=creds,
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            Controller(
+                id=cid,
+                name="N",
+                base_url="https://10.0.0.1",
+                product_kinds=",".join(products),
+                credentials_blob=creds,
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return engine, sm, cipher, cid
 
@@ -104,9 +108,7 @@ async def test_unknown_product_raises(tmp_path: Path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_factory_calls_initialize_on_construction(
-    tmp_path: Path, monkeypatch
-) -> None:
+async def test_factory_calls_initialize_on_construction(tmp_path: Path, monkeypatch) -> None:
     """ConnectionManager.initialize() must be awaited after construction.
 
     Regression guard for the Phase 2 bug where the factory built

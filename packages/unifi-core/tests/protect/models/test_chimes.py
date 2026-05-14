@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import pytest
-
 from unifi_core.protect.models.chimes import (
-    Chime,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    Chime,
     from_controller,
     to_controller_update,
 )
-
 
 SAMPLE = {
     "id": "chime001",
@@ -111,12 +109,14 @@ class TestChimeModel:
         assert to_controller_update({}) == {}
 
     def test_to_controller_update_filters_read_only_fields(self) -> None:
-        out = to_controller_update({
-            "mac": "AA:BB:CC",
-            "state": "CONNECTED",
-            "paired_cameras": ["cam001"],
-            "name": "Porch",
-        })
+        out = to_controller_update(
+            {
+                "mac": "AA:BB:CC",
+                "state": "CONNECTED",
+                "paired_cameras": ["cam001"],
+                "name": "Porch",
+            }
+        )
         assert "mac" not in out
         assert "state" not in out
         assert "paired_cameras" not in out

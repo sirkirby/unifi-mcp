@@ -8,12 +8,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 import aiohttp
-from sqlalchemy import select, update as sa_update
+from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unifi_api.db.crypto import ColumnCipher
 from unifi_api.db.models import Controller
-
 
 KNOWN_QUIRKS_BY_PRODUCT = {
     "protect": ["ptz_zoom_misclass"],
@@ -38,11 +38,13 @@ class CreateControllerPayload:
 
 
 def _serialize_creds(p: CreateControllerPayload) -> bytes:
-    return json.dumps({
-        "username": p.username,
-        "password": p.password,
-        "api_token": p.api_token,
-    }).encode("utf-8")
+    return json.dumps(
+        {
+            "username": p.username,
+            "password": p.password,
+            "api_token": p.api_token,
+        }
+    ).encode("utf-8")
 
 
 async def _clear_default_flag(session: AsyncSession) -> None:
@@ -79,9 +81,7 @@ async def list_controllers(session: AsyncSession) -> list[Controller]:
 
 
 async def get_controller(session: AsyncSession, controller_id: str) -> Controller:
-    row = (await session.execute(
-        select(Controller).where(Controller.id == controller_id)
-    )).scalar_one_or_none()
+    row = (await session.execute(select(Controller).where(Controller.id == controller_id))).scalar_one_or_none()
     if row is None:
         raise ControllerNotFound(controller_id)
     return row

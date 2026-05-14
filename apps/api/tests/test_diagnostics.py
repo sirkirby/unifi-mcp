@@ -9,7 +9,8 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_collect_diagnostics_shape_and_counts(tmp_path: Path) -> None:
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
+
     from unifi_api.db.engine import create_engine
     from unifi_api.db.models import ApiKey, AuditLog, Base, Controller
     from unifi_api.db.session import get_sessionmaker
@@ -25,21 +26,39 @@ async def test_collect_diagnostics_shape_and_counts(tmp_path: Path) -> None:
     # Seed: 2 keys, 1 controller, 3 audit rows
     async with sm() as session:
         for i in range(2):
-            session.add(ApiKey(
-                id=f"k{i}", prefix=f"p{i}", hash="h", scopes="read",
-                name=f"n{i}", created_at=datetime.now(timezone.utc),
-            ))
-        session.add(Controller(
-            id="c1", name="c", base_url="http://c", product_kinds="network",
-            credentials_blob=b"x", verify_tls=True, is_default=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ))
+            session.add(
+                ApiKey(
+                    id=f"k{i}",
+                    prefix=f"p{i}",
+                    hash="h",
+                    scopes="read",
+                    name=f"n{i}",
+                    created_at=datetime.now(timezone.utc),
+                )
+            )
+        session.add(
+            Controller(
+                id="c1",
+                name="c",
+                base_url="http://c",
+                product_kinds="network",
+                credentials_blob=b"x",
+                verify_tls=True,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         for _ in range(3):
-            session.add(AuditLog(
-                ts=datetime.now(timezone.utc),
-                key_id_prefix="p", controller=None, target="t", outcome="ok",
-            ))
+            session.add(
+                AuditLog(
+                    ts=datetime.now(timezone.utc),
+                    key_id_prefix="p",
+                    controller=None,
+                    target="t",
+                    outcome="ok",
+                )
+            )
         await session.commit()
 
     cache = CapabilityCache(ttl_seconds=300)

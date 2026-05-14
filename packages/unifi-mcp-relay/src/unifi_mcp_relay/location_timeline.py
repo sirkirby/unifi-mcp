@@ -55,10 +55,7 @@ def validate_timeline_input(
         errors.append("end_time must be after start_time")
 
     if location_id and not is_relay_mode:
-        errors.append(
-            "location_id is only meaningful in relay mode. "
-            "Omit this parameter for local connections."
-        )
+        errors.append("location_id is only meaningful in relay mode. Omit this parameter for local connections.")
 
     return errors
 
@@ -75,9 +72,7 @@ def build_timeline_summary(events: list[NormalizedEvent]) -> dict[str, Any]:
 
     by_product = Counter(e.product for e in events)
     by_type = Counter(e.event_type for e in events)
-    by_location = Counter(
-        e.location_id for e in events if e.location_id is not None
-    )
+    by_location = Counter(e.location_id for e in events if e.location_id is not None)
 
     summary: dict[str, Any] = {
         "total_events": len(events),

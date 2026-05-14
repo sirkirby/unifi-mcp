@@ -90,16 +90,9 @@ def render_openapi_reference() -> str:
                     out.append(f"- `{name}` ({where}){required}")
                 out.append("")
             response_200 = op.get("responses", {}).get("200", {})
-            response_schema = (
-                response_200.get("content", {})
-                .get("application/json", {})
-                .get("schema")
-            )
+            response_schema = response_200.get("content", {}).get("application/json", {}).get("schema")
             if response_schema:
-                schema_name = (
-                    response_schema.get("$ref", "").split("/")[-1]
-                    or response_schema.get("type", "object")
-                )
+                schema_name = response_schema.get("$ref", "").split("/")[-1] or response_schema.get("type", "object")
                 out.append(f"\n**Returns:** `{schema_name}`\n")
 
     return "\n".join(out)

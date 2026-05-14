@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.system import (
     ALARM_MUTABLE_FIELDS,
     ALARM_READ_ONLY_FIELDS,
@@ -75,10 +73,16 @@ class TestSnmpSettingsFieldSets:
 class TestAutoBackupSettingsFieldSets:
     def test_mutable_fields_contains_all_autobackup_keys(self) -> None:
         for field in (
-            "autobackup_enabled", "autobackup_cron_expr", "autobackup_days",
-            "autobackup_max_files", "autobackup_timezone", "autobackup_cloud_enabled",
+            "autobackup_enabled",
+            "autobackup_cron_expr",
+            "autobackup_days",
+            "autobackup_max_files",
+            "autobackup_timezone",
+            "autobackup_cloud_enabled",
         ):
-            assert field in AUTOBACKUPSETTINGS_MUTABLE_FIELDS, f"Expected {field!r} in AUTOBACKUPSETTINGS_MUTABLE_FIELDS"
+            assert field in AUTOBACKUPSETTINGS_MUTABLE_FIELDS, (
+                f"Expected {field!r} in AUTOBACKUPSETTINGS_MUTABLE_FIELDS"
+            )
 
     def test_all_autobackup_fields_are_mutable(self) -> None:
         assert AUTOBACKUPSETTINGS_READ_ONLY_FIELDS == frozenset()

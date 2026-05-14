@@ -1,7 +1,5 @@
 """Tests for the shared confirmation/preview utilities."""
 
-import pytest
-
 from unifi_core.confirmation import (
     create_preview,
     preview_response,

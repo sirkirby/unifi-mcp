@@ -1,11 +1,10 @@
 """Catalog endpoint tests."""
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, Base
@@ -13,21 +12,28 @@ from unifi_api.server import create_app
 
 
 async def _bootstrap_with_read_key(tmp_path):
-    app = create_app(ApiConfig(
-        http=HttpConfig(host="127.0.0.1", port=8080, cors_origins=()),
-        logging=LoggingConfig(level="WARNING"),
-        db=DbConfig(path=str(tmp_path / "state.db")),
-    ))
+    app = create_app(
+        ApiConfig(
+            http=HttpConfig(host="127.0.0.1", port=8080, cors_origins=()),
+            logging=LoggingConfig(level="WARNING"),
+            db=DbConfig(path=str(tmp_path / "state.db")),
+        )
+    )
     async with app.state.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = app.state.sessionmaker
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext
 

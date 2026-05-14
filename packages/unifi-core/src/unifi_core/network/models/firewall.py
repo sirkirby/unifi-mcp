@@ -28,7 +28,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # FirewallRule pydantic model
 # ---------------------------------------------------------------------------
@@ -125,9 +124,7 @@ class FirewallRule(BaseModel):
 # ---------------------------------------------------------------------------
 
 MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in FirewallRule.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in FirewallRule.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 READ_ONLY_FIELDS: frozenset[str] = frozenset(
@@ -168,9 +165,7 @@ class FirewallGroup(BaseModel):
 
 
 FIREWALLGROUP_MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in FirewallGroup.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in FirewallGroup.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 FIREWALLGROUP_READ_ONLY_FIELDS: frozenset[str] = frozenset(
@@ -289,11 +284,7 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {
-        k: v
-        for k, v in fields.items()
-        if k in MUTABLE_FIELDS and v is not None
-    }
+    return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
 
 
 # ---------------------------------------------------------------------------

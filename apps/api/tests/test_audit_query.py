@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, AuditLog, Base
@@ -28,11 +27,16 @@ async def _bootstrap_app(tmp_path: Path, scopes: str = "admin"):
     sm = app.state.sessionmaker
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes=scopes,
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes=scopes,
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext
 
@@ -50,14 +54,26 @@ async def test_default_returns_all_rows_newest_first(tmp_path: Path, monkeypatch
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
-    await _seed_audit(app, [
-        {"ts": base, "key_id_prefix": "p1", "controller": "c1",
-         "target": "t1", "outcome": "ok"},
-        {"ts": base + timedelta(seconds=10), "key_id_prefix": "p1", "controller": "c1",
-         "target": "t2", "outcome": "ok"},
-        {"ts": base + timedelta(seconds=20), "key_id_prefix": "p1", "controller": "c1",
-         "target": "t3", "outcome": "ok"},
-    ])
+    await _seed_audit(
+        app,
+        [
+            {"ts": base, "key_id_prefix": "p1", "controller": "c1", "target": "t1", "outcome": "ok"},
+            {
+                "ts": base + timedelta(seconds=10),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "t2",
+                "outcome": "ok",
+            },
+            {
+                "ts": base + timedelta(seconds=20),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "t3",
+                "outcome": "ok",
+            },
+        ],
+    )
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/v1/audit", headers=headers)
@@ -73,14 +89,26 @@ async def test_filter_by_outcome(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
-    await _seed_audit(app, [
-        {"ts": base, "key_id_prefix": "p1", "controller": "c1",
-         "target": "t1", "outcome": "ok"},
-        {"ts": base + timedelta(seconds=10), "key_id_prefix": "p1", "controller": "c1",
-         "target": "t2", "outcome": "ok"},
-        {"ts": base + timedelta(seconds=20), "key_id_prefix": "p1", "controller": "c1",
-         "target": "t3", "outcome": "error"},
-    ])
+    await _seed_audit(
+        app,
+        [
+            {"ts": base, "key_id_prefix": "p1", "controller": "c1", "target": "t1", "outcome": "ok"},
+            {
+                "ts": base + timedelta(seconds=10),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "t2",
+                "outcome": "ok",
+            },
+            {
+                "ts": base + timedelta(seconds=20),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": "t3",
+                "outcome": "error",
+            },
+        ],
+    )
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/v1/audit?outcome=error", headers=headers)
@@ -96,11 +124,19 @@ async def test_pagination_with_cursor(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path)
     base = datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
-    await _seed_audit(app, [
-        {"ts": base + timedelta(seconds=i * 10), "key_id_prefix": "p1",
-         "controller": "c1", "target": f"t{i}", "outcome": "ok"}
-        for i in range(5)
-    ])
+    await _seed_audit(
+        app,
+        [
+            {
+                "ts": base + timedelta(seconds=i * 10),
+                "key_id_prefix": "p1",
+                "controller": "c1",
+                "target": f"t{i}",
+                "outcome": "ok",
+            }
+            for i in range(5)
+        ],
+    )
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/v1/audit?limit=2", headers=headers)

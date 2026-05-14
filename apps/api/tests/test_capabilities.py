@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, Base
@@ -50,11 +49,16 @@ async def _bootstrap(tmp_path: Path):
     sm = app.state.sessionmaker
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext
 
@@ -71,17 +75,34 @@ async def test_capabilities_endpoint_returns_payload(tmp_path, monkeypatch) -> N
 
     async def _fake_probe(controller):
         return {
-            "id": controller.id, "name": controller.name, "base_url": controller.base_url,
-            "products": ["network"], "version": {"controller": "9.0.108", "firmware": None},
-            "v2_api": True, "sites": [], "known_quirks": [], "probed_at": "now", "probe_error": None,
+            "id": controller.id,
+            "name": controller.name,
+            "base_url": controller.base_url,
+            "products": ["network"],
+            "version": {"controller": "9.0.108", "firmware": None},
+            "v2_api": True,
+            "sites": [],
+            "known_quirks": [],
+            "probed_at": "now",
+            "probe_error": None,
         }
+
     monkeypatch.setattr(ctrl_svc, "probe_capabilities", _fake_probe)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/v1/controllers", headers=headers, json={
-            "name": "X", "base_url": "https://x", "username": "u", "password": "p",
-            "product_kinds": ["network"], "verify_tls": False, "is_default": True,
-        })
+        r = await c.post(
+            "/v1/controllers",
+            headers=headers,
+            json={
+                "name": "X",
+                "base_url": "https://x",
+                "username": "u",
+                "password": "p",
+                "product_kinds": ["network"],
+                "verify_tls": False,
+                "is_default": True,
+            },
+        )
         cid = r.json()["id"]
         r = await c.get(f"/v1/controllers/{cid}/capabilities", headers=headers)
         assert r.status_code == 200

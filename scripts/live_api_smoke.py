@@ -108,14 +108,16 @@ async def _run_assertion(
     for attempt in range(1, retry + 1):
         try:
             details = await fn() or {}
-            report.assertions.append(Assertion(
-                name=name,
-                product=product,
-                surface=surface,
-                passed=True,
-                duration_ms=int((time.time() - started) * 1000),
-                details=details,
-            ))
+            report.assertions.append(
+                Assertion(
+                    name=name,
+                    product=product,
+                    surface=surface,
+                    passed=True,
+                    duration_ms=int((time.time() - started) * 1000),
+                    details=details,
+                )
+            )
             return
         except AssertionError as e:
             last_err = f"AssertionError: {e}"
@@ -125,15 +127,17 @@ async def _run_assertion(
             last_details = {"attempt": attempt}
         if attempt < retry:
             await asyncio.sleep(min(2**attempt, 4))
-    report.assertions.append(Assertion(
-        name=name,
-        product=product,
-        surface=surface,
-        passed=False,
-        error=last_err,
-        details=last_details,
-        duration_ms=int((time.time() - started) * 1000),
-    ))
+    report.assertions.append(
+        Assertion(
+            name=name,
+            product=product,
+            surface=surface,
+            passed=False,
+            error=last_err,
+            details=last_details,
+            duration_ms=int((time.time() - started) * 1000),
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -171,8 +175,12 @@ async def run_network_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list clients (Page envelope)", "network", "rest",
-        _rest_list_clients, retry=retry,
+        report,
+        "REST list clients (Page envelope)",
+        "network",
+        "rest",
+        _rest_list_clients,
+        retry=retry,
     )
 
     # 2. REST list devices — Page envelope
@@ -190,8 +198,12 @@ async def run_network_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list devices (Page envelope)", "network", "rest",
-        _rest_list_devices, retry=retry,
+        report,
+        "REST list devices (Page envelope)",
+        "network",
+        "rest",
+        _rest_list_devices,
+        retry=retry,
     )
 
     # 3. REST list networks — Page envelope
@@ -207,8 +219,12 @@ async def run_network_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list networks (Page envelope)", "network", "rest",
-        _rest_list_networks, retry=retry,
+        report,
+        "REST list networks (Page envelope)",
+        "network",
+        "rest",
+        _rest_list_networks,
+        retry=retry,
     )
 
     # 4. REST list firewall rules — Page envelope
@@ -224,8 +240,12 @@ async def run_network_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list firewall rules (Page envelope)", "network", "rest",
-        _rest_list_firewall_rules, retry=retry,
+        report,
+        "REST list firewall rules (Page envelope)",
+        "network",
+        "rest",
+        _rest_list_firewall_rules,
+        retry=retry,
     )
 
     # 5. REST controller GET — returns controller row
@@ -238,8 +258,12 @@ async def run_network_assertions(  # noqa: C901
             return {"name": body.get("name")}
 
     await _run_assertion(
-        report, "REST get controller row", "network", "rest",
-        _rest_get_controller, retry=retry,
+        report,
+        "REST get controller row",
+        "network",
+        "rest",
+        _rest_get_controller,
+        retry=retry,
     )
 
     # 6. GraphQL clients query
@@ -254,8 +278,12 @@ async def run_network_assertions(  # noqa: C901
             return {"item_count": len(items)}
 
     await _run_assertion(
-        report, "GraphQL network.clients query", "network", "graphql",
-        _gql_clients, retry=retry,
+        report,
+        "GraphQL network.clients query",
+        "network",
+        "graphql",
+        _gql_clients,
+        retry=retry,
     )
 
     # 7. GraphQL networks query
@@ -270,17 +298,18 @@ async def run_network_assertions(  # noqa: C901
             return {"item_count": len(items)}
 
     await _run_assertion(
-        report, "GraphQL network.networks query", "network", "graphql",
-        _gql_networks, retry=retry,
+        report,
+        "GraphQL network.networks query",
+        "network",
+        "graphql",
+        _gql_networks,
+        retry=retry,
     )
 
     # 8. GraphQL deep relationship edge: clients → device
     async def _gql_clients_device_edge():
         async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
-            q = (
-                f'{{ network {{ clients(controller: "{cid}", limit: 3) '
-                f'{{ items {{ mac device {{ name }} }} }} }} }}'
-            )
+            q = f'{{ network {{ clients(controller: "{cid}", limit: 3) {{ items {{ mac device {{ name }} }} }} }} }}'
             r = await c.post("/v1/graphql", headers=headers, json={"query": q})
             assert r.status_code == 200, f"status={r.status_code}"
             body = r.json()
@@ -289,8 +318,12 @@ async def run_network_assertions(  # noqa: C901
             return {"item_count": len(items)}
 
     await _run_assertion(
-        report, "GraphQL clients→device relationship edge", "network", "graphql",
-        _gql_clients_device_edge, retry=retry,
+        report,
+        "GraphQL clients→device relationship edge",
+        "network",
+        "graphql",
+        _gql_clients_device_edge,
+        retry=retry,
     )
 
     # 9. REST pagination cursor round-trip
@@ -320,28 +353,32 @@ async def run_network_assertions(  # noqa: C901
             assert "items" in body2, "page2 missing items"
             page2_macs = [it.get("mac") for it in body2["items"]]
             # Pages must be disjoint
-            assert set(page1_macs).isdisjoint(set(page2_macs)), (
-                f"pages overlap: {page1_macs} vs {page2_macs}"
-            )
+            assert set(page1_macs).isdisjoint(set(page2_macs)), f"pages overlap: {page1_macs} vs {page2_macs}"
             return {"page1_count": len(page1_macs), "page2_count": len(page2_macs)}
 
     await _run_assertion(
-        report, "REST pagination cursor round-trip", "network", "rest",
-        _rest_pagination_cursor, retry=retry,
+        report,
+        "REST pagination cursor round-trip",
+        "network",
+        "rest",
+        _rest_pagination_cursor,
+        retry=retry,
     )
 
     # 10. Auth scope rejection — no bearer → 401/403
     async def _auth_rejection():
         async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
             r = await c.get(f"/v1/sites/default/clients?controller={cid}")
-            assert r.status_code in (401, 403), (
-                f"expected 401/403 without auth, got {r.status_code}"
-            )
+            assert r.status_code in (401, 403), f"expected 401/403 without auth, got {r.status_code}"
             return {"status_code": r.status_code}
 
     await _run_assertion(
-        report, "Auth scope rejection (no bearer)", "network", "rest",
-        _auth_rejection, retry=retry,
+        report,
+        "Auth scope rejection (no bearer)",
+        "network",
+        "rest",
+        _auth_rejection,
+        retry=retry,
     )
 
 
@@ -380,8 +417,12 @@ async def run_protect_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list cameras (Page envelope)", "protect", "rest",
-        _rest_list_cameras, retry=retry,
+        report,
+        "REST list cameras (Page envelope)",
+        "protect",
+        "rest",
+        _rest_list_cameras,
+        retry=retry,
     )
 
     # 2. REST list events — Page envelope
@@ -397,8 +438,12 @@ async def run_protect_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list events (Page envelope)", "protect", "rest",
-        _rest_list_events, retry=retry,
+        report,
+        "REST list events (Page envelope)",
+        "protect",
+        "rest",
+        _rest_list_events,
+        retry=retry,
     )
 
     # 3. REST protect health
@@ -414,8 +459,12 @@ async def run_protect_assertions(  # noqa: C901
             return {}
 
     await _run_assertion(
-        report, "REST protect/health endpoint", "protect", "rest",
-        _rest_health, retry=retry,
+        report,
+        "REST protect/health endpoint",
+        "protect",
+        "rest",
+        _rest_health,
+        retry=retry,
     )
 
     # 4. REST protect system-info
@@ -431,8 +480,12 @@ async def run_protect_assertions(  # noqa: C901
             return {}
 
     await _run_assertion(
-        report, "REST protect/system-info endpoint", "protect", "rest",
-        _rest_system_info, retry=retry,
+        report,
+        "REST protect/system-info endpoint",
+        "protect",
+        "rest",
+        _rest_system_info,
+        retry=retry,
     )
 
     # 5. REST list recordings — requires camera_id; scrape cameras list first
@@ -461,8 +514,12 @@ async def run_protect_assertions(  # noqa: C901
             return {"camera_id": camera_id, "item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list recordings (requires camera_id)", "protect", "rest",
-        _rest_list_recordings, retry=retry,
+        report,
+        "REST list recordings (requires camera_id)",
+        "protect",
+        "rest",
+        _rest_list_recordings,
+        retry=retry,
     )
 
     # 6. GraphQL cameras query
@@ -477,8 +534,12 @@ async def run_protect_assertions(  # noqa: C901
             return {"item_count": len(items)}
 
     await _run_assertion(
-        report, "GraphQL protect.cameras query", "protect", "graphql",
-        _gql_cameras, retry=retry,
+        report,
+        "GraphQL protect.cameras query",
+        "protect",
+        "graphql",
+        _gql_cameras,
+        retry=retry,
     )
 
     # 7. GraphQL events query
@@ -493,17 +554,18 @@ async def run_protect_assertions(  # noqa: C901
             return {"item_count": len(items)}
 
     await _run_assertion(
-        report, "GraphQL protect.events query", "protect", "graphql",
-        _gql_events, retry=retry,
+        report,
+        "GraphQL protect.events query",
+        "protect",
+        "graphql",
+        _gql_events,
+        retry=retry,
     )
 
     # 8. GraphQL camera→events deep edge
     async def _gql_cameras_events_edge():
         async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
-            q = (
-                f'{{ protect {{ cameras(controller: "{cid}") '
-                f'{{ items {{ id name events {{ id type }} }} }} }} }}'
-            )
+            q = f'{{ protect {{ cameras(controller: "{cid}") {{ items {{ id name events {{ id type }} }} }} }} }}'
             r = await c.post("/v1/graphql", headers=headers, json={"query": q})
             assert r.status_code == 200, f"status={r.status_code}"
             body = r.json()
@@ -512,8 +574,12 @@ async def run_protect_assertions(  # noqa: C901
             return {"camera_count": len(items)}
 
     await _run_assertion(
-        report, "GraphQL camera→events relationship edge", "protect", "graphql",
-        _gql_cameras_events_edge, retry=retry,
+        report,
+        "GraphQL camera→events relationship edge",
+        "protect",
+        "graphql",
+        _gql_cameras_events_edge,
+        retry=retry,
     )
 
     # 9. REST snapshot — scrape a camera_id first, then hit /cameras/{id}/snapshot
@@ -541,22 +607,28 @@ async def run_protect_assertions(  # noqa: C901
             return {"camera_id": camera_id, "status_code": r.status_code}
 
     await _run_assertion(
-        report, "REST camera snapshot (no 5xx)", "protect", "rest",
-        _rest_snapshot, retry=retry,
+        report,
+        "REST camera snapshot (no 5xx)",
+        "protect",
+        "rest",
+        _rest_snapshot,
+        retry=retry,
     )
 
     # 10. Auth scope rejection
     async def _auth_rejection():
         async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
             r = await c.get(f"/v1/sites/default/cameras?controller={cid}")
-            assert r.status_code in (401, 403), (
-                f"expected 401/403 without auth, got {r.status_code}"
-            )
+            assert r.status_code in (401, 403), f"expected 401/403 without auth, got {r.status_code}"
             return {"status_code": r.status_code}
 
     await _run_assertion(
-        report, "Auth scope rejection (no bearer)", "protect", "rest",
-        _auth_rejection, retry=retry,
+        report,
+        "Auth scope rejection (no bearer)",
+        "protect",
+        "rest",
+        _auth_rejection,
+        retry=retry,
     )
 
 
@@ -595,8 +667,12 @@ async def run_access_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list doors (Page envelope)", "access", "rest",
-        _rest_list_doors, retry=retry,
+        report,
+        "REST list doors (Page envelope)",
+        "access",
+        "rest",
+        _rest_list_doors,
+        retry=retry,
     )
 
     # 2. REST list access devices — Page envelope
@@ -623,8 +699,12 @@ async def run_access_assertions(  # noqa: C901
             raise
 
     await _run_assertion(
-        report, "REST list access-devices (Page envelope)", "access", "rest",
-        _rest_list_devices, retry=retry,
+        report,
+        "REST list access-devices (Page envelope)",
+        "access",
+        "rest",
+        _rest_list_devices,
+        retry=retry,
     )
 
     # 3. REST list users — Page envelope
@@ -640,8 +720,12 @@ async def run_access_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list users (Page envelope)", "access", "rest",
-        _rest_list_users, retry=retry,
+        report,
+        "REST list users (Page envelope)",
+        "access",
+        "rest",
+        _rest_list_users,
+        retry=retry,
     )
 
     # 4. REST list access events — Page envelope
@@ -657,8 +741,12 @@ async def run_access_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list access events (Page envelope)", "access", "rest",
-        _rest_list_events, retry=retry,
+        report,
+        "REST list access events (Page envelope)",
+        "access",
+        "rest",
+        _rest_list_events,
+        retry=retry,
     )
 
     # 5. REST list policies — Page envelope
@@ -674,8 +762,12 @@ async def run_access_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list policies (Page envelope)", "access", "rest",
-        _rest_list_policies, retry=retry,
+        report,
+        "REST list policies (Page envelope)",
+        "access",
+        "rest",
+        _rest_list_policies,
+        retry=retry,
     )
 
     # 6. REST list credentials — Page envelope
@@ -691,8 +783,12 @@ async def run_access_assertions(  # noqa: C901
             return {"item_count": len(body["items"])}
 
     await _run_assertion(
-        report, "REST list credentials (Page envelope)", "access", "rest",
-        _rest_list_credentials, retry=retry,
+        report,
+        "REST list credentials (Page envelope)",
+        "access",
+        "rest",
+        _rest_list_credentials,
+        retry=retry,
     )
 
     # 7. REST list schedules — Page envelope
@@ -717,8 +813,12 @@ async def run_access_assertions(  # noqa: C901
             raise
 
     await _run_assertion(
-        report, "REST list schedules (Page envelope)", "access", "rest",
-        _rest_list_schedules, retry=retry,
+        report,
+        "REST list schedules (Page envelope)",
+        "access",
+        "rest",
+        _rest_list_schedules,
+        retry=retry,
     )
 
     # 8. GraphQL doors query
@@ -733,8 +833,12 @@ async def run_access_assertions(  # noqa: C901
             return {"item_count": len(items)}
 
     await _run_assertion(
-        report, "GraphQL access.doors query", "access", "graphql",
-        _gql_doors, retry=retry,
+        report,
+        "GraphQL access.doors query",
+        "access",
+        "graphql",
+        _gql_doors,
+        retry=retry,
     )
 
     # 9. GraphQL events query
@@ -749,22 +853,28 @@ async def run_access_assertions(  # noqa: C901
             return {"item_count": len(items)}
 
     await _run_assertion(
-        report, "GraphQL access.events query", "access", "graphql",
-        _gql_events, retry=retry,
+        report,
+        "GraphQL access.events query",
+        "access",
+        "graphql",
+        _gql_events,
+        retry=retry,
     )
 
     # 10. Auth scope rejection
     async def _auth_rejection():
         async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
             r = await c.get(f"/v1/sites/default/doors?controller={cid}")
-            assert r.status_code in (401, 403), (
-                f"expected 401/403 without auth, got {r.status_code}"
-            )
+            assert r.status_code in (401, 403), f"expected 401/403 without auth, got {r.status_code}"
             return {"status_code": r.status_code}
 
     await _run_assertion(
-        report, "Auth scope rejection (no bearer)", "access", "rest",
-        _auth_rejection, retry=retry,
+        report,
+        "Auth scope rejection (no bearer)",
+        "access",
+        "rest",
+        _auth_rejection,
+        retry=retry,
     )
 
 
@@ -807,14 +917,16 @@ async def bootstrap_app_and_controllers(
     cids: dict[str, str] = {}
 
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()),
-            prefix=material.prefix,
-            hash=hash_key(material.plaintext),
-            scopes="admin",
-            name="live-smoke",
-            created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="live-smoke",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         for product in products:
             prefix = f"UNIFI_{product.upper()}"
             host = env.get(f"{prefix}_HOST")
@@ -823,24 +935,30 @@ async def bootstrap_app_and_controllers(
             user = env.get(f"{prefix}_USERNAME") or env.get(f"{prefix}_USER", "")
             pw = env.get(f"{prefix}_PASSWORD") or env.get(f"{prefix}_PASS", "")
             token = env.get(f"{prefix}_API_KEY") or env.get(f"{prefix}_API_TOKEN")
-            cred = cipher.encrypt(json.dumps({
-                "username": user,
-                "password": pw,
-                "api_token": token,
-            }).encode("utf-8"))
+            cred = cipher.encrypt(
+                json.dumps(
+                    {
+                        "username": user,
+                        "password": pw,
+                        "api_token": token,
+                    }
+                ).encode("utf-8")
+            )
             cid = str(uuid.uuid4())
             cids[product] = cid
-            session.add(Controller(
-                id=cid,
-                name=f"smoke-{product}",
-                base_url=host if host.startswith("http") else f"https://{host}",
-                product_kinds=product,
-                credentials_blob=cred,
-                verify_tls=False,
-                is_default=(product == "network"),
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
-            ))
+            session.add(
+                Controller(
+                    id=cid,
+                    name=f"smoke-{product}",
+                    base_url=host if host.startswith("http") else f"https://{host}",
+                    product_kinds=product,
+                    credentials_blob=cred,
+                    verify_tls=False,
+                    is_default=(product == "network"),
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
         await session.commit()
     return app, material.plaintext, cids
 
@@ -871,34 +989,56 @@ async def main_async(args: argparse.Namespace) -> int:
             return {"status_code": 200}
 
     await _run_assertion(
-        report, "service boots / v1 health", "core", "rest", _health, retry=args.retry,
+        report,
+        "service boots / v1 health",
+        "core",
+        "rest",
+        _health,
+        retry=args.retry,
     )
 
     if "network" in products and "network" in cids:
         await run_network_assertions(
-            report, env, app, key, cids["network"], retry=args.retry,
+            report,
+            env,
+            app,
+            key,
+            cids["network"],
+            retry=args.retry,
         )
     if "protect" in products and "protect" in cids:
         await run_protect_assertions(
-            report, env, app, key, cids["protect"], retry=args.retry,
+            report,
+            env,
+            app,
+            key,
+            cids["protect"],
+            retry=args.retry,
         )
     if "access" in products and "access" in cids:
         await run_access_assertions(
-            report, env, app, key, cids["access"], retry=args.retry,
+            report,
+            env,
+            app,
+            key,
+            cids["access"],
+            retry=args.retry,
         )
 
     report.finished_at = datetime.now(timezone.utc).isoformat()
-    args.output.write_text(json.dumps(
-        {
-            "started_at": report.started_at,
-            "finished_at": report.finished_at,
-            "total": report.total,
-            "passed": report.passed,
-            "failed": report.failed,
-            "assertions": [asdict(a) for a in report.assertions],
-        },
-        indent=2,
-    ))
+    args.output.write_text(
+        json.dumps(
+            {
+                "started_at": report.started_at,
+                "finished_at": report.finished_at,
+                "total": report.total,
+                "passed": report.passed,
+                "failed": report.failed,
+                "assertions": [asdict(a) for a in report.assertions],
+            },
+            indent=2,
+        )
+    )
 
     print(f"\nResult: {report.passed}/{report.total} passed, {report.failed} failed")
     if report.failed:

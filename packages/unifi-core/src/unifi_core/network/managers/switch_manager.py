@@ -74,11 +74,7 @@ class SwitchManager:
         api_request = ApiRequest(method="get", path=f"/rest/portconf/{profile_id}")
         response = await self._connection.request(api_request)
         data = (
-            response
-            if isinstance(response, list)
-            else response.get("data", [])
-            if isinstance(response, dict)
-            else []
+            response if isinstance(response, list) else response.get("data", []) if isinstance(response, dict) else []
         )
         if not data:
             raise UniFiNotFoundError("port_profile", profile_id)

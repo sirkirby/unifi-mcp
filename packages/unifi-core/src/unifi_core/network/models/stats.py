@@ -23,7 +23,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -115,7 +114,7 @@ def dpi_stats_from_controller(obj: Any) -> DpiStats:
 
     def _itemize(items: Any) -> List[Dict[str, Any]]:
         out: List[Dict[str, Any]] = []
-        for it in (items or []):
+        for it in items or []:
             if isinstance(it, dict):
                 out.append(it)
             else:

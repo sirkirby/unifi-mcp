@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.content_filter import (
-    ContentFilter,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    ContentFilter,
     from_controller,
     to_controller_update,
 )
@@ -15,8 +13,15 @@ from unifi_core.network.models.content_filter import (
 
 class TestFieldSets:
     def test_mutable_fields_contains_expected(self) -> None:
-        for field in ("name", "enabled", "blocked_categories", "safe_search",
-                      "client_macs", "network_ids", "schedule_mode"):
+        for field in (
+            "name",
+            "enabled",
+            "blocked_categories",
+            "safe_search",
+            "client_macs",
+            "network_ids",
+            "schedule_mode",
+        ):
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
 
     def test_mutable_fields_excludes_read_only(self) -> None:

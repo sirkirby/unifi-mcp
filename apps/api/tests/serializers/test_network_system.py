@@ -34,8 +34,11 @@ def _registry():
 
 def test_alarm_list_serializer_shape() -> None:
     sample = {
-        "_id": "al1", "key": "EVT_FW_Block", "msg": "Blocked",
-        "archived": False, "time": 1714000000,
+        "_id": "al1",
+        "key": "EVT_FW_Block",
+        "msg": "Blocked",
+        "archived": False,
+        "time": 1714000000,
     }
     item = Alarm.from_manager_output(sample).to_dict()
     assert Alarm.render_hint("list")["kind"] == "list"
@@ -84,7 +87,15 @@ def test_system_info_detail_serializer_shape() -> None:
 
 def test_network_health_list_serializer_shape() -> None:
     sample = [
-        {"subsystem": "wan", "status": "ok", "num_user": 5, "num_guest": 1, "num_iot": 2, "rx_bytes-r": 100, "tx_bytes-r": 200},
+        {
+            "subsystem": "wan",
+            "status": "ok",
+            "num_user": 5,
+            "num_guest": 1,
+            "num_iot": 2,
+            "rx_bytes-r": 100,
+            "tx_bytes-r": 200,
+        },
         {"subsystem": "wlan", "status": "ok", "num_user": 8},
     ]
     rows = [NetworkHealth.from_manager_output(r).to_dict() for r in sample]

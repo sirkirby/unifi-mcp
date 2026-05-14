@@ -19,7 +19,6 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
-
 _NONCE_SIZE = 12
 _KEY_SIZE = 32
 

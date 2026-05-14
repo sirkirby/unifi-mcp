@@ -53,7 +53,10 @@ async def list_lldp_neighbors(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "switch_manager",
+            session,
+            controller.id,
+            "network",
+            "switch_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -72,7 +75,10 @@ async def list_lldp_neighbors(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(items_raw), limit=limit, cursor=cursor_obj, key_fn=_lldp_key,
+        list(items_raw),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_lldp_key,
     )
 
     items = [_normalize_lldp_row(r) for r in page]

@@ -4,12 +4,11 @@ Covers active routes, static routes, traffic routes, DNS records, VPN clients,
 VPN servers, and AP groups (LIST + DETAIL where the manifest has details).
 """
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -34,17 +33,29 @@ async def _bootstrap(tmp_path, products="network"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="N", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="N",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -84,6 +95,7 @@ async def test_list_active_routes_happy_path(tmp_path, monkeypatch) -> None:
         return fake
 
     from unifi_core.network.managers.routing_manager import RoutingManager
+
     monkeypatch.setattr(RoutingManager, "get_active_routes", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -123,10 +135,14 @@ async def test_list_routes_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake = [
-        {"_id": f"sr-{i}", "name": f"route-{i}",
-         "static-route_network": f"10.{i}.0.0/24",
-         "static-route_nexthop": f"10.{i}.0.1",
-         "static-route_distance": 1, "enabled": True}
+        {
+            "_id": f"sr-{i}",
+            "name": f"route-{i}",
+            "static-route_network": f"10.{i}.0.0/24",
+            "static-route_nexthop": f"10.{i}.0.1",
+            "static-route_distance": 1,
+            "enabled": True,
+        }
         for i in range(2)
     ]
 
@@ -134,6 +150,7 @@ async def test_list_routes_happy_path(tmp_path, monkeypatch) -> None:
         return fake
 
     from unifi_core.network.managers.routing_manager import RoutingManager
+
     monkeypatch.setattr(RoutingManager, "get_routes", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -156,14 +173,19 @@ async def test_get_route_details_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"_id": "sr-1", "name": "office",
-              "static-route_network": "10.5.0.0/24",
-              "static-route_nexthop": "10.5.0.1", "enabled": True}
+    target = {
+        "_id": "sr-1",
+        "name": "office",
+        "static-route_network": "10.5.0.0/24",
+        "static-route_nexthop": "10.5.0.1",
+        "enabled": True,
+    }
 
     async def fake_get(self, route_id):
         return target if route_id == "sr-1" else None
 
     from unifi_core.network.managers.routing_manager import RoutingManager
+
     monkeypatch.setattr(RoutingManager, "get_route_details", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -187,6 +209,7 @@ async def test_get_route_details_404(tmp_path, monkeypatch) -> None:
         return None
 
     from unifi_core.network.managers.routing_manager import RoutingManager
+
     monkeypatch.setattr(RoutingManager, "get_route_details", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -207,18 +230,22 @@ async def test_list_traffic_routes_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake = [
-        {"_id": "tr-1", "description": "vpn-traffic",
-         "matching_target": "DOMAIN", "domains": ["example.com"],
-         "next_hop": "wg0", "enabled": True},
-        {"_id": "tr-2", "description": "iot",
-         "matching_target": "IP", "ip_addresses": ["8.8.8.8"],
-         "enabled": False},
+        {
+            "_id": "tr-1",
+            "description": "vpn-traffic",
+            "matching_target": "DOMAIN",
+            "domains": ["example.com"],
+            "next_hop": "wg0",
+            "enabled": True,
+        },
+        {"_id": "tr-2", "description": "iot", "matching_target": "IP", "ip_addresses": ["8.8.8.8"], "enabled": False},
     ]
 
     async def fake_get(self):
         return fake
 
     from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager
+
     monkeypatch.setattr(TrafficRouteManager, "get_traffic_routes", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -241,14 +268,19 @@ async def test_get_traffic_route_details_happy_path(tmp_path, monkeypatch) -> No
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"_id": "tr-1", "description": "vpn-traffic",
-              "matching_target": "DOMAIN", "domains": ["example.com"],
-              "enabled": True}
+    target = {
+        "_id": "tr-1",
+        "description": "vpn-traffic",
+        "matching_target": "DOMAIN",
+        "domains": ["example.com"],
+        "enabled": True,
+    }
 
     async def fake_get(self, route_id):
         return target if route_id == "tr-1" else None
 
     from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager
+
     monkeypatch.setattr(TrafficRouteManager, "get_traffic_route_details", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -272,8 +304,7 @@ async def test_list_dns_records_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake = [
-        {"_id": f"dns-{i}", "key": f"host-{i}.local",
-         "value": f"10.0.0.{10 + i}", "record_type": "A", "enabled": True}
+        {"_id": f"dns-{i}", "key": f"host-{i}.local", "value": f"10.0.0.{10 + i}", "record_type": "A", "enabled": True}
         for i in range(2)
     ]
 
@@ -281,6 +312,7 @@ async def test_list_dns_records_happy_path(tmp_path, monkeypatch) -> None:
         return fake
 
     from unifi_core.network.managers.dns_manager import DnsManager
+
     monkeypatch.setattr(DnsManager, "list_dns_records", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -300,13 +332,13 @@ async def test_get_dns_record_details_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"_id": "dns-1", "key": "host-1.local",
-              "value": "10.0.0.11", "record_type": "A", "enabled": True}
+    target = {"_id": "dns-1", "key": "host-1.local", "value": "10.0.0.11", "record_type": "A", "enabled": True}
 
     async def fake_get(self, record_id):
         return target if record_id == "dns-1" else None
 
     from unifi_core.network.managers.dns_manager import DnsManager
+
     monkeypatch.setattr(DnsManager, "get_dns_record", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -329,6 +361,7 @@ async def test_get_dns_record_details_404(tmp_path, monkeypatch) -> None:
         return None
 
     from unifi_core.network.managers.dns_manager import DnsManager
+
     monkeypatch.setattr(DnsManager, "get_dns_record", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -372,15 +405,14 @@ async def test_list_vpn_clients_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake = [
-        {"_id": f"vc-{i}", "name": f"client-{i}",
-         "vpn_type": "wireguard-client", "enabled": True}
-        for i in range(2)
+        {"_id": f"vc-{i}", "name": f"client-{i}", "vpn_type": "wireguard-client", "enabled": True} for i in range(2)
     ]
 
     async def fake_get(self):
         return fake
 
     from unifi_core.network.managers.vpn_manager import VpnManager
+
     monkeypatch.setattr(VpnManager, "get_vpn_clients", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -400,13 +432,13 @@ async def test_get_vpn_client_details_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"_id": "vc-1", "name": "client-1",
-              "vpn_type": "wireguard-client", "enabled": True}
+    target = {"_id": "vc-1", "name": "client-1", "vpn_type": "wireguard-client", "enabled": True}
 
     async def fake_get(self, client_id):
         return target if client_id == "vc-1" else None
 
     from unifi_core.network.managers.vpn_manager import VpnManager
+
     monkeypatch.setattr(VpnManager, "get_vpn_client_details", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -429,15 +461,14 @@ async def test_list_vpn_servers_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake = [
-        {"_id": f"vs-{i}", "name": f"server-{i}",
-         "vpn_type": "wireguard-server", "enabled": True}
-        for i in range(2)
+        {"_id": f"vs-{i}", "name": f"server-{i}", "vpn_type": "wireguard-server", "enabled": True} for i in range(2)
     ]
 
     async def fake_get(self):
         return fake
 
     from unifi_core.network.managers.vpn_manager import VpnManager
+
     monkeypatch.setattr(VpnManager, "get_vpn_servers", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -461,6 +492,7 @@ async def test_get_vpn_server_details_404(tmp_path, monkeypatch) -> None:
         return None
 
     from unifi_core.network.managers.vpn_manager import VpnManager
+
     monkeypatch.setattr(VpnManager, "get_vpn_server_details", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -480,16 +512,13 @@ async def test_list_ap_groups_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    fake = [
-        {"_id": f"apg-{i}", "name": f"group-{i}",
-         "device_macs": [f"aa:bb:cc:dd:ee:0{i}"]}
-        for i in range(2)
-    ]
+    fake = [{"_id": f"apg-{i}", "name": f"group-{i}", "device_macs": [f"aa:bb:cc:dd:ee:0{i}"]} for i in range(2)]
 
     async def fake_get(self):
         return fake
 
     from unifi_core.network.managers.network_manager import NetworkManager
+
     monkeypatch.setattr(NetworkManager, "list_ap_groups", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -509,13 +538,13 @@ async def test_get_ap_group_details_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"_id": "apg-1", "name": "lobby",
-              "device_macs": ["aa:bb:cc:dd:ee:01"]}
+    target = {"_id": "apg-1", "name": "lobby", "device_macs": ["aa:bb:cc:dd:ee:01"]}
 
     async def fake_get(self, group_id):
         return target if group_id == "apg-1" else None
 
     from unifi_core.network.managers.network_manager import NetworkManager
+
     monkeypatch.setattr(NetworkManager, "get_ap_group_details", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

@@ -33,10 +33,7 @@ def test_tail_respects_limit(tmp_path: Path) -> None:
     log = tmp_path / "app.log"
     _write_lines(
         log,
-        [
-            {"ts": f"2026-04-30T00:00:{i:02d}Z", "level": "INFO", "logger": "a", "event": f"e{i}"}
-            for i in range(10)
-        ],
+        [{"ts": f"2026-04-30T00:00:{i:02d}Z", "level": "INFO", "logger": "a", "event": f"e{i}"} for i in range(10)],
     )
 
     entries = LogReader(log).tail(limit=3)

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from unifi_mcp_relay.main import RelaySidecar
+import pytest
 from unifi_mcp_relay.config import RelayConfig
+from unifi_mcp_relay.main import RelaySidecar
 
 
 @pytest.fixture
@@ -83,5 +83,3 @@ async def test_sidecar_tool_call_handler_returns_error_string(config):
     result, error = await sidecar._handle_tool_call("unifi_list_devices", {})
     assert result is None
     assert error == "Connection refused"
-
-

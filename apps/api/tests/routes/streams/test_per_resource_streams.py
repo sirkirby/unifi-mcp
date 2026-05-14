@@ -7,14 +7,13 @@ filter that drops events not matching the path-bound resource id.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -39,17 +38,29 @@ async def _bootstrap(tmp_path, products):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="N", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="N",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -84,18 +95,14 @@ def _make_finite_stream():
                 continue
             payload = ser.serialize(evt)
             yield (
-                f"event: {product}.event\n"
-                f"id: {evt.get('id')}\n"
-                f"data: {json.dumps(payload, default=str)}\n\n"
+                f"event: {product}.event\nid: {evt.get('id')}\ndata: {json.dumps(payload, default=str)}\n\n"
             ).encode()
 
     return fake_stream
 
 
 @pytest.mark.asyncio
-async def test_stream_protect_camera_events_filters_by_camera_id(
-    tmp_path, monkeypatch
-) -> None:
+async def test_stream_protect_camera_events_filters_by_camera_id(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path, products="protect")
 
@@ -129,9 +136,7 @@ async def test_stream_protect_camera_events_filters_by_camera_id(
 
 
 @pytest.mark.asyncio
-async def test_stream_access_door_events_filters_by_door_id(
-    tmp_path, monkeypatch
-) -> None:
+async def test_stream_access_door_events_filters_by_door_id(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path, products="access")
 
@@ -165,9 +170,7 @@ async def test_stream_access_door_events_filters_by_door_id(
 
 
 @pytest.mark.asyncio
-async def test_stream_network_device_events_filters_by_mac(
-    tmp_path, monkeypatch
-) -> None:
+async def test_stream_network_device_events_filters_by_mac(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path, products="network")
 

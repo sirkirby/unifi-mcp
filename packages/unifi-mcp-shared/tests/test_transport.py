@@ -5,7 +5,6 @@ import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from unifi_mcp_shared.transport import resolve_http_config, run_transports
 
 
@@ -23,16 +22,12 @@ class TestResolveHttpConfig:
 
     def test_http_disabled_by_default(self):
         cfg = self._make_server_cfg()
-        enabled, transport, host, port = resolve_http_config(
-            cfg, default_port=3000, logger=logging.getLogger("test")
-        )
+        enabled, transport, host, port = resolve_http_config(cfg, default_port=3000, logger=logging.getLogger("test"))
         assert enabled is False
 
     def test_invalid_transport_falls_back(self):
         cfg = self._make_server_cfg(http={"enabled": True, "force": True, "transport": "bogus"})
-        enabled, transport, host, port = resolve_http_config(
-            cfg, default_port=3000, logger=logging.getLogger("test")
-        )
+        enabled, transport, host, port = resolve_http_config(cfg, default_port=3000, logger=logging.getLogger("test"))
         assert transport == "streamable-http"
 
 
@@ -158,9 +153,7 @@ class TestRunTransports:
                 logger=logging.getLogger("test"),
             )
 
-        assert stdio_completed, (
-            "stdio was cancelled when HTTP failed — the bug from #200 has regressed"
-        )
+        assert stdio_completed, "stdio was cancelled when HTTP failed — the bug from #200 has regressed"
         mock_server.run_streamable_http_async.assert_awaited_once()
 
     @pytest.mark.asyncio

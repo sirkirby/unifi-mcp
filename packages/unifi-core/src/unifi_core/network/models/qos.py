@@ -21,7 +21,6 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -95,9 +94,7 @@ class QosRule(BaseModel):
 # ---------------------------------------------------------------------------
 
 MUTABLE_FIELDS: frozenset[str] = frozenset(
-    name
-    for name, field in QosRule.model_fields.items()
-    if (field.json_schema_extra or {}).get("mutable", True)
+    name for name, field in QosRule.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
 )
 
 READ_ONLY_FIELDS: frozenset[str] = frozenset(
@@ -161,8 +158,4 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {
-        k: v
-        for k, v in fields.items()
-        if k in MUTABLE_FIELDS and v is not None
-    }
+    return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}

@@ -108,7 +108,10 @@ async def list_dpi_applications(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "dpi_manager",
+            session,
+            controller.id,
+            "network",
+            "dpi_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         _require_dpi_auth(cm, controller.id)
@@ -121,7 +124,10 @@ async def list_dpi_applications(
     items_raw = _unwrap(result)
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        items_raw, limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        items_raw,
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_list_dpi_applications")
@@ -159,7 +165,10 @@ async def list_dpi_categories(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "dpi_manager",
+            session,
+            controller.id,
+            "network",
+            "dpi_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         _require_dpi_auth(cm, controller.id)
@@ -170,7 +179,10 @@ async def list_dpi_categories(
     items_raw = _unwrap(result)
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        items_raw, limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        items_raw,
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_list_dpi_categories")

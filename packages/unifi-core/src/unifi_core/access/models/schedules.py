@@ -12,8 +12,12 @@ class Schedule(BaseModel):
 
     id: Optional[str] = Field(default=None, description="Schedule UUID", json_schema_extra={"mutable": False})
     name: Optional[str] = Field(default=None, description="Schedule display name", json_schema_extra={"mutable": False})
-    weekly_pattern: Optional[Any] = Field(default=None, description="Weekly time-block configuration (JSON)", json_schema_extra={"mutable": False})
-    enabled: Optional[bool] = Field(default=None, description="Whether the schedule is active", json_schema_extra={"mutable": False})
+    weekly_pattern: Optional[Any] = Field(
+        default=None, description="Weekly time-block configuration (JSON)", json_schema_extra={"mutable": False}
+    )
+    enabled: Optional[bool] = Field(
+        default=None, description="Whether the schedule is active", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS = frozenset()

@@ -69,14 +69,9 @@ class Route:
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
-            target_subnet=_get(obj, "static-route_network")
-            or _get(obj, "target_subnet")
-            or _get(obj, "network"),
-            gateway=_get(obj, "static-route_nexthop")
-            or _get(obj, "gateway")
-            or _get(obj, "nexthop"),
-            distance=_get(obj, "static-route_distance")
-            or _get(obj, "distance"),
+            target_subnet=_get(obj, "static-route_network") or _get(obj, "target_subnet") or _get(obj, "network"),
+            gateway=_get(obj, "static-route_nexthop") or _get(obj, "gateway") or _get(obj, "nexthop"),
+            distance=_get(obj, "static-route_distance") or _get(obj, "distance"),
             enabled=bool(_get(obj, "enabled", True)),
         )
 
@@ -110,15 +105,9 @@ class ActiveRoute:
         nh_list = _get(obj, "nh") or []
         first_nh: dict[str, Any] = nh_list[0] if isinstance(nh_list, list) and nh_list else {}
         return cls(
-            target_subnet=_get(obj, "pfx")
-            or _get(obj, "target_subnet")
-            or _get(obj, "network"),
-            gateway=first_nh.get("via")
-            or _get(obj, "gateway")
-            or _get(obj, "nexthop"),
-            interface=first_nh.get("intf")
-            or _get(obj, "interface")
-            or _get(obj, "intf"),
+            target_subnet=_get(obj, "pfx") or _get(obj, "target_subnet") or _get(obj, "network"),
+            gateway=first_nh.get("via") or _get(obj, "gateway") or _get(obj, "nexthop"),
+            interface=first_nh.get("intf") or _get(obj, "interface") or _get(obj, "intf"),
             distance=_get(obj, "metric") or _get(obj, "distance"),
         )
 
@@ -160,10 +149,7 @@ class TrafficRoute:
             kill_switch_enabled=_get(obj, "kill_switch_enabled"),
             source_targets=_summarize_targets(_get(obj, "target_devices")),
             destination_targets=_summarize_targets(
-                _get(obj, "domains")
-                or _get(obj, "ip_addresses")
-                or _get(obj, "ip_ranges")
-                or _get(obj, "regions")
+                _get(obj, "domains") or _get(obj, "ip_addresses") or _get(obj, "ip_ranges") or _get(obj, "regions")
             ),
         )
 

@@ -17,10 +17,18 @@ class AccessDevice(BaseModel):
 
     id: Optional[str] = Field(default=None, description="Device UUID", json_schema_extra={"mutable": False})
     name: Optional[str] = Field(default=None, description="Device display name", json_schema_extra={"mutable": False})
-    type: Optional[str] = Field(default=None, description="Device type (hub, reader, relay, intercom)", json_schema_extra={"mutable": False})
-    is_online: Optional[bool] = Field(default=None, description="Whether the device is currently connected", json_schema_extra={"mutable": False})
-    firmware_version: Optional[str] = Field(default=None, description="Installed firmware version string", json_schema_extra={"mutable": False})
-    location: Optional[str] = Field(default=None, description="Physical location or associated door name", json_schema_extra={"mutable": False})
+    type: Optional[str] = Field(
+        default=None, description="Device type (hub, reader, relay, intercom)", json_schema_extra={"mutable": False}
+    )
+    is_online: Optional[bool] = Field(
+        default=None, description="Whether the device is currently connected", json_schema_extra={"mutable": False}
+    )
+    firmware_version: Optional[str] = Field(
+        default=None, description="Installed firmware version string", json_schema_extra={"mutable": False}
+    )
+    location: Optional[str] = Field(
+        default=None, description="Physical location or associated door name", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS = frozenset()

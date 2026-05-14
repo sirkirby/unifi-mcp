@@ -17,58 +17,36 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-async def execute_tool(
-    session: ClientSession,
-    tool_name: str,
-    arguments: Dict[str, Any]
-) -> Dict[str, Any]:
+async def execute_tool(session: ClientSession, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     """Execute a single tool synchronously using unifi_execute."""
-    result = await session.call_tool(
-        "unifi_execute",
-        arguments={
-            "tool": tool_name,
-            "arguments": arguments
-        }
-    )
+    result = await session.call_tool("unifi_execute", arguments={"tool": tool_name, "arguments": arguments})
 
     # Extract result from response
-    content = result.content[0].text if hasattr(result, 'content') else result
+    content = result.content[0].text if hasattr(result, "content") else result
     if isinstance(content, str):
         content = json.loads(content)
 
     return content
 
 
-async def start_batch(
-    session: ClientSession,
-    operations: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+async def start_batch(session: ClientSession, operations: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Start multiple operations in parallel using unifi_batch."""
-    result = await session.call_tool(
-        "unifi_batch",
-        arguments={"operations": operations}
-    )
+    result = await session.call_tool("unifi_batch", arguments={"operations": operations})
 
     # Extract response
-    content = result.content[0].text if hasattr(result, 'content') else result
+    content = result.content[0].text if hasattr(result, "content") else result
     if isinstance(content, str):
         content = json.loads(content)
 
     return content
 
 
-async def check_batch_status(
-    session: ClientSession,
-    job_ids: List[str]
-) -> Dict[str, Any]:
+async def check_batch_status(session: ClientSession, job_ids: List[str]) -> Dict[str, Any]:
     """Check the status of multiple batch jobs."""
-    result = await session.call_tool(
-        "unifi_batch_status",
-        arguments={"jobIds": job_ids}
-    )
+    result = await session.call_tool("unifi_batch_status", arguments={"jobIds": job_ids})
 
     # Extract status from result
-    content = result.content[0].text if hasattr(result, 'content') else result
+    content = result.content[0].text if hasattr(result, "content") else result
     if isinstance(content, str):
         content = json.loads(content)
 
@@ -76,10 +54,7 @@ async def check_batch_status(
 
 
 async def wait_for_batch(
-    session: ClientSession,
-    job_ids: List[str],
-    timeout: int = 60,
-    poll_interval: float = 1.0
+    session: ClientSession, job_ids: List[str], timeout: int = 60, poll_interval: float = 1.0
 ) -> Dict[str, Any]:
     """Wait for all batch jobs to complete, polling periodically."""
     start_time = time.time()
@@ -88,10 +63,7 @@ async def wait_for_batch(
         status = await check_batch_status(session, job_ids)
 
         # Check if all jobs are complete
-        all_done = all(
-            job.get("status") in ["done", "error"]
-            for job in status.get("jobs", [])
-        )
+        all_done = all(job.get("status") in ["done", "error"] for job in status.get("jobs", []))
 
         if all_done:
             return status
@@ -124,11 +96,7 @@ async def main():
 
             try:
                 print("Calling unifi_execute with unifi_list_clients...")
-                result = await execute_tool(
-                    session,
-                    "unifi_list_clients",
-                    {"limit": 5}
-                )
+                result = await execute_tool(session, "unifi_list_clients", {"limit": 5})
                 print("Result received!")
                 print(f"  Preview: {str(result)[:100]}...")
             except Exception as e:
@@ -165,11 +133,8 @@ async def main():
                     await asyncio.sleep(0.5)
                     status = await check_batch_status(session, job_ids)
 
-                    completed = sum(
-                        1 for job in status.get("jobs", [])
-                        if job.get("status") in ["done", "error"]
-                    )
-                    print(f"  [{i+1}] Completed: {completed}/{len(job_ids)}")
+                    completed = sum(1 for job in status.get("jobs", []) if job.get("status") in ["done", "error"])
+                    print(f"  [{i + 1}] Completed: {completed}/{len(job_ids)}")
 
                     if completed == len(job_ids):
                         print()
@@ -230,5 +195,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n Fatal error: {e}")
         import traceback
+
         traceback.print_exc()
         exit(1)

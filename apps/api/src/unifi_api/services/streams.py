@@ -35,9 +35,7 @@ class SubscriberPool:
         sub = StreamSubscriber(queue=asyncio.Queue(maxsize=self._queue_maxsize))
         self._pools.setdefault(key, []).append(sub)
         if key not in self._unsubs:
-            self._unsubs[key] = manager.add_subscriber(
-                lambda evt, k=key: self._broadcast(k, evt)
-            )
+            self._unsubs[key] = manager.add_subscriber(lambda evt, k=key: self._broadcast(k, evt))
             logger.debug(f"[streams] attached manager callback for {key}")
         return sub
 

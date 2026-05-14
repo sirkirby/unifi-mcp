@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
-
 from unifi_mcp_shared.protocol import create_mcp_tool_adapter, get_protocol_version
 
 

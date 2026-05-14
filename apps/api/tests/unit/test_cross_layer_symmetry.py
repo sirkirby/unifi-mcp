@@ -13,9 +13,7 @@ from __future__ import annotations
 import importlib
 
 import pytest
-
 from _cross_layer_helpers import compare_pair
-
 
 REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     # (server, domain, pydantic_class_name)
@@ -111,7 +109,4 @@ def test_cross_layer_symmetry(server: str, domain: str, pydantic_name: str) -> N
         mutable_fields = getattr(pydantic_mod, "MUTABLE_FIELDS")
 
     errors = compare_pair(pydantic_cls, mutable_fields, strawberry_cls)
-    assert not errors, (
-        f"\nCross-layer drift in {server}/{domain}:\n  - "
-        + "\n  - ".join(errors)
-    )
+    assert not errors, f"\nCross-layer drift in {server}/{domain}:\n  - " + "\n  - ".join(errors)

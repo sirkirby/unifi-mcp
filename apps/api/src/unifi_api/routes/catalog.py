@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, Request
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 
-
 router = APIRouter()
 
 
@@ -24,14 +23,16 @@ async def get_tools(request: Request) -> dict:
             render_hint = serializer_registry.render_hint_for_tool(tool_name)
         except Exception:
             render_hint = {"kind": "empty"}
-        items.append({
-            "name": tool_name,
-            "product": entry.product,
-            "category": entry.category,
-            "manager": entry.manager,
-            "method": entry.method,
-            "render_hint": render_hint,
-        })
+        items.append(
+            {
+                "name": tool_name,
+                "product": entry.product,
+                "category": entry.category,
+                "manager": entry.manager,
+                "method": entry.method,
+                "render_hint": render_hint,
+            }
+        )
     return {"items": items}
 
 
@@ -42,10 +43,7 @@ async def get_categories(request: Request) -> dict:
     for tool_name in manifest.all_tools():
         entry = manifest.resolve(tool_name)
         counts[(entry.product, entry.category or "")] += 1
-    items = [
-        {"product": p, "category": c, "tool_count": n}
-        for (p, c), n in sorted(counts.items())
-    ]
+    items = [{"product": p, "category": c, "tool_count": n} for (p, c), n in sorted(counts.items())]
     return {"items": items}
 
 
@@ -123,11 +121,13 @@ async def get_resources(request: Request) -> dict:
 
     for product, resource in serializer_registry.all_resources():
         seen.add((product, resource))
-        items.append({
-            "product": product,
-            "resource_path": _path_for(resource),
-            "render_hint": _render_hint(product, resource),
-        })
+        items.append(
+            {
+                "product": product,
+                "resource_path": _path_for(resource),
+                "render_hint": _render_hint(product, resource),
+            }
+        )
     # Phase 6 PR2 — include type-only resources (read serializer classes have
     # been deleted for migrated products; their projection lives in type_registry).
     for product, resource in type_registry.all_resources():
@@ -145,15 +145,19 @@ async def get_resources(request: Request) -> dict:
                 rest_path = "/v1/sites/{site_id}/lookup-by-ip"
             else:
                 rest_path = _path_for(resource)
-            items.append({
-                "product": product,
-                "resource_path": rest_path,
-                "render_hint": _render_hint(product, resource),
-            })
+            items.append(
+                {
+                    "product": product,
+                    "resource_path": rest_path,
+                    "render_hint": _render_hint(product, resource),
+                }
+            )
             continue
-        items.append({
-            "product": product,
-            "resource_path": _path_for(resource),
-            "render_hint": _render_hint(product, resource),
-        })
+        items.append(
+            {
+                "product": product,
+                "resource_path": _path_for(resource),
+                "render_hint": _render_hint(product, resource),
+            }
+        )
     return {"items": items}

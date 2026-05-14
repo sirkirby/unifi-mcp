@@ -41,6 +41,4 @@ def test_openapi_artifact_matches_app() -> None:
 
     expected = SPEC_PATH.read_text(encoding="utf-8").strip()
 
-    assert actual == expected, (
-        "openapi.json is stale. Re-export per docstring above."
-    )
+    assert actual == expected, "openapi.json is stale. Re-export per docstring above."

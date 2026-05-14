@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.networks import (
     MUTABLE_FIELDS,
-    Network,
     READ_ONLY_FIELDS,
+    Network,
     from_controller,
     to_controller_create,
     to_controller_update,
@@ -178,11 +176,13 @@ class TestToControllerUpdate:
         assert result == {}
 
     def test_dhcp_fields_passthrough(self) -> None:
-        result = to_controller_update({
-            "dhcpd_start": "10.0.0.100",
-            "dhcpd_stop": "10.0.0.200",
-            "dhcpd_leasetime": 86400,
-        })
+        result = to_controller_update(
+            {
+                "dhcpd_start": "10.0.0.100",
+                "dhcpd_stop": "10.0.0.200",
+                "dhcpd_leasetime": 86400,
+            }
+        )
         assert result["dhcpd_start"] == "10.0.0.100"
         assert result["dhcpd_stop"] == "10.0.0.200"
         assert result["dhcpd_leasetime"] == 86400

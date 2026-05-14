@@ -250,9 +250,7 @@ class TestGetToolIndex:
         manifest_path = tmp_path / "tools_manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        index = get_tool_index(
-            registration_mode="lazy", manifest_path=manifest_path, category="clients"
-        )
+        index = get_tool_index(registration_mode="lazy", manifest_path=manifest_path, category="clients")
         assert index["count"] == 2
         names = {t["name"] for t in index["tools"]}
         assert names == {"unifi_list_clients", "unifi_block_client"}
@@ -268,9 +266,7 @@ class TestGetToolIndex:
         manifest_path = tmp_path / "tools_manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        index = get_tool_index(
-            registration_mode="lazy", manifest_path=manifest_path, category="Clients"
-        )
+        index = get_tool_index(registration_mode="lazy", manifest_path=manifest_path, category="Clients")
         assert index["count"] == 1
 
     # --- Search filtering ---
@@ -332,9 +328,7 @@ class TestGetToolIndex:
         manifest_path = tmp_path / "tools_manifest.json"
         manifest_path.write_text(json.dumps(manifest))
 
-        index = get_tool_index(
-            registration_mode="lazy", manifest_path=manifest_path, category="clients"
-        )
+        index = get_tool_index(registration_mode="lazy", manifest_path=manifest_path, category="clients")
         assert index["count"] == 1
         # Both categories should still be listed
         assert "clients" in index["categories"]
@@ -372,8 +366,10 @@ class TestGetToolIndex:
         manifest_path.write_text(json.dumps(manifest))
 
         index = get_tool_index(
-            registration_mode="lazy", manifest_path=manifest_path,
-            category="clients", search="block",
+            registration_mode="lazy",
+            manifest_path=manifest_path,
+            category="clients",
+            search="block",
         )
         assert index["count"] == 1
         assert index["tools"][0]["name"] == "unifi_block_client"
@@ -391,8 +387,10 @@ class TestGetToolIndex:
         manifest_path.write_text(json.dumps(manifest))
 
         index = get_tool_index(
-            registration_mode="lazy", manifest_path=manifest_path,
-            category="clients", include_schemas=True,
+            registration_mode="lazy",
+            manifest_path=manifest_path,
+            category="clients",
+            include_schemas=True,
         )
         assert index["count"] == 1
         assert "schema" in index["tools"][0]

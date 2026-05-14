@@ -6,19 +6,17 @@ intentional flat-layout exception). Lights and sensors expose LIST + DETAIL
 methods for these device families). Chimes expose LIST only.
 """
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
-from unifi_core.exceptions import UniFiNotFoundError
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
+from unifi_core.exceptions import UniFiNotFoundError
 
 
 def _cfg(tmp_path):
@@ -38,17 +36,29 @@ async def _bootstrap(tmp_path, products="protect"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="P", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="P",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -94,6 +104,7 @@ async def test_get_camera_analytics_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.protect.managers.camera_manager import CameraManager
+
     monkeypatch.setattr(CameraManager, "get_camera_analytics", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -125,6 +136,7 @@ async def test_get_camera_streams_happy_path(tmp_path, monkeypatch) -> None:
         return payload
 
     from unifi_core.protect.managers.camera_manager import CameraManager
+
     monkeypatch.setattr(CameraManager, "get_camera_streams", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -150,6 +162,7 @@ async def test_get_camera_snapshot_returns_metadata(tmp_path, monkeypatch) -> No
         return fake_jpeg
 
     from unifi_core.protect.managers.camera_manager import CameraManager
+
     monkeypatch.setattr(CameraManager, "get_snapshot", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -176,6 +189,7 @@ async def test_get_camera_analytics_404_via_unifi_not_found(tmp_path, monkeypatc
         raise UniFiNotFoundError("camera", camera_id)
 
     from unifi_core.protect.managers.camera_manager import CameraManager
+
     monkeypatch.setattr(CameraManager, "get_camera_analytics", fake)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -214,6 +228,7 @@ async def test_list_lights_happy_path(tmp_path, monkeypatch) -> None:
         return fake_lights
 
     from unifi_core.protect.managers.light_manager import LightManager
+
     monkeypatch.setattr(LightManager, "list_lights", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -266,6 +281,7 @@ async def test_get_light_filter_404(tmp_path, monkeypatch) -> None:
         return fake_lights
 
     from unifi_core.protect.managers.light_manager import LightManager
+
     monkeypatch.setattr(LightManager, "list_lights", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -311,6 +327,7 @@ async def test_list_sensors_happy_path(tmp_path, monkeypatch) -> None:
         return fake_sensors
 
     from unifi_core.protect.managers.sensor_manager import SensorManager
+
     monkeypatch.setattr(SensorManager, "list_sensors", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -346,6 +363,7 @@ async def test_get_sensor_filter_404(tmp_path, monkeypatch) -> None:
         return fake_sensors
 
     from unifi_core.protect.managers.sensor_manager import SensorManager
+
     monkeypatch.setattr(SensorManager, "list_sensors", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
@@ -394,6 +412,7 @@ async def test_list_chimes_happy_path(tmp_path, monkeypatch) -> None:
         return fake_chimes
 
     from unifi_core.protect.managers.chime_manager import ChimeManager
+
     monkeypatch.setattr(ChimeManager, "list_chimes", fake_list)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

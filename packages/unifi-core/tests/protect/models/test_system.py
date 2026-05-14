@@ -6,11 +6,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from unifi_core.protect.models.system import (
-    FirmwareStatus,
     MUTABLE_FIELDS,
+    READ_ONLY_FIELDS,
+    FirmwareStatus,
     ProtectHealth,
     ProtectSystemInfo,
-    READ_ONLY_FIELDS,
     Viewer,
     ViewerList,
     firmware_status_from_controller,

@@ -4,23 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import dataclass
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import websockets
-from unittest.mock import AsyncMock, MagicMock, patch
-from websockets.connection import State as WsState
-from websockets.frames import Close
-
-from unifi_mcp_relay.client import RelayClient, _AUTH_FAILURE_CODES
+from unifi_mcp_relay.client import RelayClient
 from unifi_mcp_relay.config import RelayConfig
 from unifi_mcp_relay.protocol import (
-    ToolCallMessage,
-    RegisteredMessage,
-    HeartbeatMessage,
     ErrorMessage,
+    HeartbeatMessage,
+    ToolCallMessage,
     ToolInfo,
 )
+from websockets.connection import State as WsState
+from websockets.frames import Close
 
 
 @pytest.fixture

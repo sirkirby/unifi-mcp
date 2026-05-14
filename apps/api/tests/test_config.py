@@ -3,20 +3,13 @@
 from pathlib import Path
 
 import pytest
-
 from unifi_api.config import ApiConfig, load_config
 
 
 def test_load_default_config_yaml(tmp_path: Path) -> None:
     yaml_path = tmp_path / "config.yaml"
     yaml_path.write_text(
-        "http:\n"
-        "  host: 0.0.0.0\n"
-        "  port: 8080\n"
-        "logging:\n"
-        "  level: INFO\n"
-        "db:\n"
-        "  path: /var/lib/unifi-api/state.db\n"
+        "http:\n  host: 0.0.0.0\n  port: 8080\nlogging:\n  level: INFO\ndb:\n  path: /var/lib/unifi-api/state.db\n"
     )
     cfg = load_config(yaml_path)
     assert cfg.http.host == "0.0.0.0"

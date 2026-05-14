@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from unifi_core.protect.models.sensors import (
-    Sensor,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    Sensor,
     from_controller,
 )
 
@@ -23,13 +23,15 @@ class TestSensorModel:
         assert len(READ_ONLY_FIELDS) == len(Sensor.model_fields)
 
     def test_from_controller_with_dict(self) -> None:
-        s = from_controller({
-            "id": "s1",
-            "name": "Garage Motion",
-            "type": "motion",
-            "battery_status": "ok",
-            "motion_detected_at": "2026-05-13T12:00:00Z",
-        })
+        s = from_controller(
+            {
+                "id": "s1",
+                "name": "Garage Motion",
+                "type": "motion",
+                "battery_status": "ok",
+                "motion_detected_at": "2026-05-13T12:00:00Z",
+            }
+        )
         assert s.id == "s1"
         assert s.name == "Garage Motion"
         assert s.motion_detected_at == "2026-05-13T12:00:00Z"

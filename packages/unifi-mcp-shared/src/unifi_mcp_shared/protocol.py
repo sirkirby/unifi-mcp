@@ -55,10 +55,7 @@ def create_mcp_tool_adapter(
     version = protocol_version or get_protocol_version()
 
     if version not in _KNOWN_VERSIONS:
-        raise ValueError(
-            f"Unsupported protocol version: '{version}'. "
-            f"Known versions: {sorted(_KNOWN_VERSIONS)}"
-        )
+        raise ValueError(f"Unsupported protocol version: '{version}'. Known versions: {sorted(_KNOWN_VERSIONS)}")
 
     if version == "v1":
         logger.debug("[protocol] Using MCP v1 adapter (passthrough)")
@@ -66,8 +63,7 @@ def create_mcp_tool_adapter(
 
     if version == "v2":
         raise ValueError(
-            "MCP protocol v2 is not yet implemented. "
-            "Set UNIFI_MCP_PROTOCOL_VERSION=v1 or remove the variable."
+            "MCP protocol v2 is not yet implemented. Set UNIFI_MCP_PROTOCOL_VERSION=v1 or remove the variable."
         )
 
     # Unreachable, but satisfies type checkers

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -33,17 +32,29 @@ async def _bootstrap(tmp_path, products="network"):
     cid = str(uuid.uuid4())
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="read",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="N", base_url="https://x", product_kinds=products,
-            credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
-            verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="read",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="N",
+                base_url="https://x",
+                product_kinds=products,
+                credentials_blob=cipher.encrypt(b'{"username":"u","password":"p","api_token":null}'),
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -91,9 +102,7 @@ async def test_stream_network_events_missing_auth(tmp_path, monkeypatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_stream_network_events_returns_sse_content_type(
-    tmp_path, monkeypatch
-) -> None:
+async def test_stream_network_events_returns_sse_content_type(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
 
@@ -115,13 +124,13 @@ async def test_stream_network_events_returns_sse_content_type(
         for evt in kwargs["manager"].get_recent_from_buffer():
             payload = ser.serialize(evt)
             import json as _json
+
             yield (
-                f"event: {kwargs['product']}.event\n"
-                f"id: {evt.get('id')}\n"
-                f"data: {_json.dumps(payload, default=str)}\n\n"
+                f"event: {kwargs['product']}.event\nid: {evt.get('id')}\ndata: {_json.dumps(payload, default=str)}\n\n"
             ).encode()
 
     from unifi_api.routes.streams import network as net_route
+
     monkeypatch.setattr(net_route, "sse_event_stream", fake_stream)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

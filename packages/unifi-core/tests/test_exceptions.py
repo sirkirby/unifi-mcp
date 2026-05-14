@@ -1,4 +1,10 @@
-from unifi_core.exceptions import UniFiError, UniFiAuthError, UniFiConnectionError, UniFiRateLimitError, UniFiPermissionError
+from unifi_core.exceptions import (
+    UniFiAuthError,
+    UniFiConnectionError,
+    UniFiError,
+    UniFiPermissionError,
+    UniFiRateLimitError,
+)
 
 
 def test_exception_hierarchy():

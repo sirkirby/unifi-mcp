@@ -4,15 +4,13 @@ from __future__ import annotations
 
 import datetime
 
-import pytest
-
 from unifi_core.access.models.events import (
-    Event,
-    ActivitySummary,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
-    event_from_controller,
+    ActivitySummary,
+    Event,
     activity_summary_from_controller,
+    event_from_controller,
 )
 
 
@@ -25,7 +23,15 @@ class TestFieldSets:
             assert field in READ_ONLY_FIELDS, f"Expected {field!r} in READ_ONLY_FIELDS"
 
     def test_read_only_covers_activity_summary_fields(self) -> None:
-        for field in ("period_start", "period_end", "total_events", "granted_count", "denied_count", "top_users", "buckets"):
+        for field in (
+            "period_start",
+            "period_end",
+            "total_events",
+            "granted_count",
+            "denied_count",
+            "top_users",
+            "buckets",
+        ):
             assert field in READ_ONLY_FIELDS, f"Expected {field!r} in READ_ONLY_FIELDS"
 
     def test_read_only_is_union_of_both_class_fields(self) -> None:
@@ -91,6 +97,7 @@ class TestEventFromController:
 
     def test_from_object(self) -> None:
         """event_from_controller works with an attribute-bearing object."""
+
         class Obj:
             id = "evt-006"
             type = "door_close"

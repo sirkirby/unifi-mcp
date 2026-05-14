@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.wlans import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -17,9 +15,17 @@ from unifi_core.network.models.wlans import (
 class TestFieldSets:
     def test_mutable_fields_contains_core_fields(self) -> None:
         for field in (
-            "name", "security", "x_passphrase", "enabled", "hide_ssid",
-            "guest_policy", "network_id", "vlan_id", "usergroup_id",
-            "ap_group_ids", "ap_group_mode",
+            "name",
+            "security",
+            "x_passphrase",
+            "enabled",
+            "hide_ssid",
+            "guest_policy",
+            "network_id",
+            "vlan_id",
+            "usergroup_id",
+            "ap_group_ids",
+            "ap_group_mode",
         ):
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
 

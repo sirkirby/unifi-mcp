@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
-
-from unifi_core.event_timeline import NormalizedEvent, merge_timelines, filter_by_area
+from unifi_core.event_timeline import NormalizedEvent, filter_by_area, merge_timelines
 
 
 class TestNormalizedEvent:
@@ -62,7 +60,10 @@ class TestMergeTimelines:
         events = [
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 2, 0, tzinfo=timezone.utc),
-                product="network", event_type="a", summary="a", raw={},
+                product="network",
+                event_type="a",
+                summary="a",
+                raw={},
             ),
         ]
         result = merge_timelines([events])
@@ -71,11 +72,17 @@ class TestMergeTimelines:
     def test_merge_sorts_by_timestamp(self):
         early = NormalizedEvent(
             timestamp=datetime(2026, 3, 24, 1, 0, tzinfo=timezone.utc),
-            product="network", event_type="a", summary="a", raw={},
+            product="network",
+            event_type="a",
+            summary="a",
+            raw={},
         )
         late = NormalizedEvent(
             timestamp=datetime(2026, 3, 24, 3, 0, tzinfo=timezone.utc),
-            product="protect", event_type="b", summary="b", raw={},
+            product="protect",
+            event_type="b",
+            summary="b",
+            raw={},
         )
         result = merge_timelines([[late], [early]])
         assert result[0].timestamp < result[1].timestamp
@@ -84,13 +91,19 @@ class TestMergeTimelines:
         events_a = [
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 1, 0, tzinfo=timezone.utc),
-                product="network", event_type="a", summary="a", raw={},
+                product="network",
+                event_type="a",
+                summary="a",
+                raw={},
             ),
         ]
         events_b = [
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 2, 0, tzinfo=timezone.utc),
-                product="protect", event_type="b", summary="b", raw={},
+                product="protect",
+                event_type="b",
+                summary="b",
+                raw={},
             ),
         ]
         result = merge_timelines([events_a, events_b])
@@ -106,8 +119,11 @@ class TestFilterByArea:
         events = [
             NormalizedEvent(
                 timestamp=datetime(2026, 3, 24, 1, 0, tzinfo=timezone.utc),
-                product="network", event_type="a", summary="Front Door AP",
-                raw={}, area_names=["Front Door AP"],
+                product="network",
+                event_type="a",
+                summary="Front Door AP",
+                raw={},
+                area_names=["Front Door AP"],
             ),
         ]
         assert filter_by_area(events, area_hint=None) == events
@@ -115,13 +131,19 @@ class TestFilterByArea:
     def test_case_insensitive_substring_match(self):
         match = NormalizedEvent(
             timestamp=datetime(2026, 3, 24, 1, 0, tzinfo=timezone.utc),
-            product="protect", event_type="motion", summary="Motion at front door",
-            raw={}, area_names=["Front Door Camera"],
+            product="protect",
+            event_type="motion",
+            summary="Motion at front door",
+            raw={},
+            area_names=["Front Door Camera"],
         )
         no_match = NormalizedEvent(
             timestamp=datetime(2026, 3, 24, 2, 0, tzinfo=timezone.utc),
-            product="network", event_type="connect", summary="Garage AP",
-            raw={}, area_names=["Garage AP"],
+            product="network",
+            event_type="connect",
+            summary="Garage AP",
+            raw={},
+            area_names=["Garage AP"],
         )
         result = filter_by_area([match, no_match], area_hint="front door")
         assert len(result) == 1

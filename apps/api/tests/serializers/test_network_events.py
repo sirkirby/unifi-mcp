@@ -35,8 +35,11 @@ def test_event_log_serializer_basic_shape() -> None:
 
 def test_event_log_severity_passthrough() -> None:
     sample = {
-        "_id": "a1", "key": "EVT_AD_Login", "msg": "x",
-        "severity": "warn", "time": 100,
+        "_id": "a1",
+        "key": "EVT_AD_Login",
+        "msg": "x",
+        "severity": "warn",
+        "time": 100,
     }
     item = EventLog.from_manager_output(sample).to_dict()
     assert item["severity"] == "warn"

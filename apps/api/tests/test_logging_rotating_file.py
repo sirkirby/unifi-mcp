@@ -1,7 +1,6 @@
 """Tests for the rotating file handler and `logger` field in JsonFormatter."""
 
 import json
-import logging
 
 from unifi_api.logging import (
     attach_rotating_file_handler,

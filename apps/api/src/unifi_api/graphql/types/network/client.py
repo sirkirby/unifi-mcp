@@ -90,7 +90,8 @@ class Client:
 
     @strawberry.field(description="The AP or switch this client connects through.")
     async def device(
-        self, info: Info,
+        self,
+        info: Info,
     ) -> Annotated["Device", strawberry.lazy("unifi_api.graphql.types.network.device")] | None:
         """Resolves to the parent AP/switch — uses the request cache to avoid N+1."""
         # Forward references to avoid circular imports.

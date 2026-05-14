@@ -26,8 +26,7 @@ def test_first_migrate_emits_admin_key(tmp_path: Path) -> None:
     r = _run_migrate(cfg_path, db_path)
     assert r.returncode == 0, f"migrate failed: stdout={r.stdout!r} stderr={r.stderr!r}"
     combined = r.stdout + r.stderr
-    assert re.search(r"unifi_(live|test)_[A-Z2-7]{22}", combined), \
-        f"expected admin key in output: {combined!r}"
+    assert re.search(r"unifi_(live|test)_[A-Z2-7]{22}", combined), f"expected admin key in output: {combined!r}"
 
 
 def test_second_migrate_does_not_emit_new_key(tmp_path: Path) -> None:
@@ -39,5 +38,6 @@ def test_second_migrate_does_not_emit_new_key(tmp_path: Path) -> None:
     r2 = _run_migrate(cfg_path, db_path)
     assert r2.returncode == 0
     combined = r2.stdout + r2.stderr
-    assert not re.search(r"unifi_(live|test)_[A-Z2-7]{22}", combined), \
+    assert not re.search(r"unifi_(live|test)_[A-Z2-7]{22}", combined), (
         f"second migrate must not emit a new admin key: {combined!r}"
+    )

@@ -5,14 +5,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from unifi_core.protect.models.alarms import (
-    AlarmStatus,
-    AlarmProfile,
-    AlarmProfileList,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
-    status_from_controller,
+    AlarmProfile,
+    AlarmProfileList,
+    AlarmStatus,
     profile_from_controller,
     profile_list_from_controller,
+    status_from_controller,
 )
 
 

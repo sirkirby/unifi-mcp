@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import text
-
 from unifi_api.db.engine import create_engine
 from unifi_api.db.session import get_sessionmaker
 

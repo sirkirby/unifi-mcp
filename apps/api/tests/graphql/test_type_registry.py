@@ -1,7 +1,6 @@
 """TypeRegistry — Phase 6 close: types-only projection registry."""
 
 import pytest
-
 from unifi_api.graphql.type_registry import (
     TypeRegistry,
     UnknownProjection,

@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.client_group import (
-    ClientGroup,
-    UserGroup,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
     USERGROUP_MUTABLE_FIELDS,
     USERGROUP_READ_ONLY_FIELDS,
+    ClientGroup,
+    UserGroup,
     from_controller,
     to_controller_update,
     usergroup_from_controller,

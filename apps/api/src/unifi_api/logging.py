@@ -21,8 +21,7 @@ key_id_prefix_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar("
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
-            "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created))
-            + f".{int(record.msecs):03d}Z",
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)) + f".{int(record.msecs):03d}Z",
             "level": record.levelname,
             "event": record.getMessage(),
         }
@@ -35,10 +34,27 @@ class JsonFormatter(logging.Formatter):
             payload["key_id_prefix"] = kpfx
         # extra= kwargs land on record.__dict__ — pull anything not in the standard set
         standard = {
-            "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
-            "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
-            "created", "msecs", "relativeCreated", "thread", "threadName",
-            "processName", "process", "taskName",
+            "name",
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "taskName",
         }
         for key, value in record.__dict__.items():
             if key not in standard and not key.startswith("_"):

@@ -3,8 +3,7 @@
 import asyncio
 
 import pytest
-
-from unifi_core.jobs import JOBS, JobStore, get_job_status, start_async_tool
+from unifi_core.jobs import JobStore, get_job_status, start_async_tool
 
 
 class TestJobStore:

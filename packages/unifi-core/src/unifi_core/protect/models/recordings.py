@@ -17,18 +17,28 @@ class Recording(BaseModel):
     """Canonical Protect recording window for a camera (read-only)."""
 
     id: Optional[str] = Field(default=None, description="Recording UUID", json_schema_extra={"mutable": False})
-    type: Optional[str] = Field(default=None, description="Recording type (timelapse, motion, etc.)", json_schema_extra={"mutable": False})
-    camera: Optional[str] = Field(default=None, description="Camera UUID this recording belongs to", json_schema_extra={"mutable": False})
+    type: Optional[str] = Field(
+        default=None, description="Recording type (timelapse, motion, etc.)", json_schema_extra={"mutable": False}
+    )
+    camera: Optional[str] = Field(
+        default=None, description="Camera UUID this recording belongs to", json_schema_extra={"mutable": False}
+    )
     start: Optional[str] = Field(default=None, description="ISO start timestamp", json_schema_extra={"mutable": False})
     end: Optional[str] = Field(default=None, description="ISO end timestamp", json_schema_extra={"mutable": False})
-    file_size: Optional[int] = Field(default=None, description="Recording size in bytes", json_schema_extra={"mutable": False})
+    file_size: Optional[int] = Field(
+        default=None, description="Recording size in bytes", json_schema_extra={"mutable": False}
+    )
 
 
 class RecordingStatusList(BaseModel):
     """Wrapper shape returned by `protect_get_recording_status` (read-only)."""
 
-    cameras: Optional[Dict[str, Any]] = Field(default=None, description="Per-camera recording status map", json_schema_extra={"mutable": False})
-    count: Optional[int] = Field(default=None, description="Number of cameras in the status map", json_schema_extra={"mutable": False})
+    cameras: Optional[Dict[str, Any]] = Field(
+        default=None, description="Per-camera recording status map", json_schema_extra={"mutable": False}
+    )
+    count: Optional[int] = Field(
+        default=None, description="Number of cameras in the status map", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS = frozenset()

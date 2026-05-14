@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from unifi_api.graphql.type_registry_init import build_type_registry
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"

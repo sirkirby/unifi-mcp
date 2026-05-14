@@ -66,6 +66,7 @@ class EventBuffer:
     def __len__(self) -> int:
         return len(self._buffer)
 
+
 # Default categories for the system-log v2 API
 _DEFAULT_CATEGORIES = [
     "CLIENT_DEVICES",
@@ -136,9 +137,7 @@ class EventManager:
             try:
                 self._ws_unsub()
             except Exception:
-                logger.debug(
-                    "[network-event-mgr] error unsubscribing", exc_info=True
-                )
+                logger.debug("[network-event-mgr] error unsubscribing", exc_info=True)
             self._ws_unsub = None
             logger.info("[network-event-mgr] websocket subscription stopped")
 
@@ -168,9 +167,7 @@ class EventManager:
                         exc_info=True,
                     )
         except Exception:
-            logger.debug(
-                "[network-event-mgr] error processing ws event", exc_info=True
-            )
+            logger.debug("[network-event-mgr] error processing ws event", exc_info=True)
 
     def _normalize_event(self, event_obj: Any) -> dict | None:
         """Convert an aiounifi Message / dict / Event into the stable shape."""
@@ -189,10 +186,7 @@ class EventManager:
             "msg": raw.get("msg"),
             "severity": raw.get("severity"),
             "time": raw.get("time"),
-            "mac": raw.get("user")
-            or raw.get("ap")
-            or raw.get("sw")
-            or raw.get("gw"),
+            "mac": raw.get("user") or raw.get("ap") or raw.get("sw") or raw.get("gw"),
             "ip": raw.get("ip"),
         }
 
@@ -200,9 +194,7 @@ class EventManager:
     # Subscriber management
     # ------------------------------------------------------------------
 
-    def add_subscriber(
-        self, cb: Callable[[dict], None]
-    ) -> Callable[[], None]:
+    def add_subscriber(self, cb: Callable[[dict], None]) -> Callable[[], None]:
         """Register *cb* to receive every event after it is buffered.
 
         Returns an unsubscribe callable.
@@ -227,9 +219,7 @@ class EventManager:
         mac: str | None = None,
         limit: int | None = None,
     ) -> list[dict]:
-        return self._buffer.get_recent(
-            event_type=event_type, mac=mac, limit=limit
-        )
+        return self._buffer.get_recent(event_type=event_type, mac=mac, limit=limit)
 
     @property
     def buffer_size(self) -> int:

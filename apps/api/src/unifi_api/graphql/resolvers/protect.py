@@ -137,6 +137,7 @@ def _ts_to_int(ts: Any) -> int:
     # ISO-8601 string — convert to epoch milliseconds
     try:
         from datetime import datetime
+
         dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
         return int(dt.timestamp() * 1000)
     except ValueError:
@@ -181,10 +182,15 @@ async def _fetch_cameras(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "camera_manager",
+                session,
+                controller,
+                "protect",
+                "camera_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return list(await mgr.list_cameras())
 
@@ -192,17 +198,24 @@ async def _fetch_cameras(ctx: GraphQLContext, controller: str) -> list:
 
 
 async def _fetch_camera_analytics(
-    ctx: GraphQLContext, controller: str, camera_id: str,
+    ctx: GraphQLContext,
+    controller: str,
+    camera_id: str,
 ) -> Any:
     key = f"protect/camera-analytics/{controller}/{camera_id}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "camera_manager",
+                session,
+                controller,
+                "protect",
+                "camera_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.get_camera_analytics(camera_id)
 
@@ -210,17 +223,24 @@ async def _fetch_camera_analytics(
 
 
 async def _fetch_camera_streams(
-    ctx: GraphQLContext, controller: str, camera_id: str,
+    ctx: GraphQLContext,
+    controller: str,
+    camera_id: str,
 ) -> Any:
     key = f"protect/camera-streams/{controller}/{camera_id}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "camera_manager",
+                session,
+                controller,
+                "protect",
+                "camera_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.get_camera_streams(camera_id)
 
@@ -245,10 +265,15 @@ async def _fetch_known_faces(
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "recognition_manager",
+                session,
+                controller,
+                "protect",
+                "recognition_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             result = await mgr.list_known_faces(
                 page_size=1000,
@@ -275,10 +300,15 @@ async def _fetch_snapshot(
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "camera_manager",
+                session,
+                controller,
+                "protect",
+                "camera_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.get_snapshot(camera_id, width=width, height=height)
 
@@ -291,10 +321,15 @@ async def _fetch_chimes(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "chime_manager",
+                session,
+                controller,
+                "protect",
+                "chime_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return list(await mgr.list_chimes())
 
@@ -307,10 +342,15 @@ async def _fetch_alarm_status(ctx: GraphQLContext, controller: str) -> Any:
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "alarm_manager",
+                session,
+                controller,
+                "protect",
+                "alarm_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.get_arm_state()
 
@@ -323,10 +363,15 @@ async def _fetch_alarm_profiles(ctx: GraphQLContext, controller: str) -> Any:
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "alarm_manager",
+                session,
+                controller,
+                "protect",
+                "alarm_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.list_arm_profiles()
 
@@ -340,18 +385,20 @@ async def _fetch_events(
     camera_id: str | None,
     list_limit: int,
 ) -> list:
-    key = (
-        f"protect/events/{controller}/{event_type or ''}/"
-        f"{camera_id or ''}/{list_limit}"
-    )
+    key = f"protect/events/{controller}/{event_type or ''}/{camera_id or ''}/{list_limit}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "event_manager",
+                session,
+                controller,
+                "protect",
+                "event_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return list(
                 await mgr.list_events(
@@ -371,20 +418,25 @@ async def _fetch_event_thumbnail(
     width: int | None,
     height: int | None,
 ) -> Any:
-    key = (
-        f"protect/event-thumbnail/{controller}/{event_id}/{width}/{height}"
-    )
+    key = f"protect/event-thumbnail/{controller}/{event_id}/{width}/{height}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "event_manager",
+                session,
+                controller,
+                "protect",
+                "event_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.get_event_thumbnail(
-                event_id, width=width, height=height,
+                event_id,
+                width=width,
+                height=height,
             )
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -399,17 +451,21 @@ async def _fetch_smart_detections(
     list_limit: int,
 ) -> list:
     key = (
-        f"protect/smart-detections/{controller}/{camera_id or ''}/"
-        f"{detection_type or ''}/{min_confidence}/{list_limit}"
+        f"protect/smart-detections/{controller}/{camera_id or ''}/{detection_type or ''}/{min_confidence}/{list_limit}"
     )
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "event_manager",
+                session,
+                controller,
+                "protect",
+                "event_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return list(
                 await mgr.list_smart_detections(
@@ -438,17 +494,24 @@ def _normalize_recordings(result: Any) -> list[dict]:
 
 
 async def _fetch_recordings(
-    ctx: GraphQLContext, controller: str, camera_id: str,
+    ctx: GraphQLContext,
+    controller: str,
+    camera_id: str,
 ) -> list[dict]:
     key = f"protect/recordings/{controller}/{camera_id}"
 
     async def _do() -> list[dict]:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "recording_manager",
+                session,
+                controller,
+                "protect",
+                "recording_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             result = await mgr.list_recordings(camera_id=camera_id)
             return _normalize_recordings(result)
@@ -457,17 +520,24 @@ async def _fetch_recordings(
 
 
 async def _fetch_recording_status(
-    ctx: GraphQLContext, controller: str, camera_id: str | None,
+    ctx: GraphQLContext,
+    controller: str,
+    camera_id: str | None,
 ) -> Any:
     key = f"protect/recording-status/{controller}/{camera_id or ''}"
 
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "recording_manager",
+                session,
+                controller,
+                "protect",
+                "recording_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.get_recording_status(camera_id=camera_id)
 
@@ -480,10 +550,15 @@ async def _fetch_lights(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "light_manager",
+                session,
+                controller,
+                "protect",
+                "light_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return list(await mgr.list_lights())
 
@@ -496,10 +571,15 @@ async def _fetch_sensors(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "sensor_manager",
+                session,
+                controller,
+                "protect",
+                "sensor_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return list(await mgr.list_sensors())
 
@@ -512,10 +592,15 @@ async def _fetch_liveviews(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "liveview_manager",
+                session,
+                controller,
+                "protect",
+                "liveview_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return list(await mgr.list_liveviews())
 
@@ -528,10 +613,15 @@ async def _fetch_system_info(ctx: GraphQLContext, controller: str) -> Any:
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "system_manager",
+                session,
+                controller,
+                "protect",
+                "system_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.get_system_info()
 
@@ -544,10 +634,15 @@ async def _fetch_health(ctx: GraphQLContext, controller: str) -> Any:
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "system_manager",
+                session,
+                controller,
+                "protect",
+                "system_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.get_health()
 
@@ -560,10 +655,15 @@ async def _fetch_firmware_status(ctx: GraphQLContext, controller: str) -> Any:
     async def _do() -> Any:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "system_manager",
+                session,
+                controller,
+                "protect",
+                "system_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return await mgr.get_firmware_status()
 
@@ -576,10 +676,15 @@ async def _fetch_viewers(ctx: GraphQLContext, controller: str) -> list:
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
             mgr = await ctx.manager_factory.get_domain_manager(
-                session, controller, "protect", "system_manager",
+                session,
+                controller,
+                "protect",
+                "system_manager",
             )
             await ctx.manager_factory.get_connection_manager(
-                session, controller, "protect",
+                session,
+                controller,
+                "protect",
             )
             return list(await mgr.list_viewers())
 
@@ -672,7 +777,10 @@ class ProtectQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         items: list[Camera] = []
         for c in page:
@@ -786,7 +894,10 @@ class ProtectQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return KnownFacePage(
             items=[KnownFace.from_manager_output(face) for face in page],
@@ -813,7 +924,10 @@ class ProtectQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return ChimePage(
             items=[Chime.from_manager_output(c) for c in page],
@@ -871,14 +985,21 @@ class ProtectQuery:
         # Mirror the REST route: pull a wider window from the manager so
         # paginate() has enough rows to cursor through.
         raw = await _fetch_events(
-            ctx, controller, event_type, camera_id, max(limit, 100),
+            ctx,
+            controller,
+            event_type,
+            camera_id,
+            max(limit, 100),
         )
 
         from unifi_api.services.pagination import paginate
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_event_key,
         )
         items: list[Event] = []
         for e in page:
@@ -926,7 +1047,11 @@ class ProtectQuery:
     ) -> EventThumbnail | None:
         ctx: GraphQLContext = info.context
         raw = await _fetch_event_thumbnail(
-            ctx, controller, event_id, width, height,
+            ctx,
+            controller,
+            event_id,
+            width,
+            height,
         )
         if raw is None:
             return None
@@ -934,10 +1059,7 @@ class ProtectQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description=(
-            "List Protect smart-detection events (paginated, most recent "
-            "first)."
-        ),
+        description=("List Protect smart-detection events (paginated, most recent first)."),
     )
     async def smart_detections(
         self,
@@ -963,7 +1085,10 @@ class ProtectQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_event_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_event_key,
         )
         return SmartDetectionPage(
             items=[SmartDetection.from_manager_output(e) for e in page],
@@ -994,7 +1119,10 @@ class ProtectQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_recording_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_recording_key,
         )
         items: list[Recording] = []
         for r in page:
@@ -1009,10 +1137,7 @@ class ProtectQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description=(
-            "Get current recording state for one or all cameras "
-            "({cameras, count})."
-        ),
+        description=("Get current recording state for one or all cameras ({cameras, count})."),
     )
     async def recording_status(
         self,
@@ -1046,7 +1171,10 @@ class ProtectQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return LightPage(
             items=[Light.from_manager_output(c) for c in page],
@@ -1071,7 +1199,10 @@ class ProtectQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         return SensorPage(
             items=[Sensor.from_manager_output(c) for c in page],
@@ -1096,7 +1227,10 @@ class ProtectQuery:
 
         cursor_obj = _decode_cursor(cursor)
         page, next_cursor = paginate(
-            list(raw), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
         )
         items: list[Liveview] = []
         for lv in page:

@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -31,11 +30,16 @@ async def _bootstrap_app_with_admin_key(tmp_path: Path):
     sm = app.state.sessionmaker
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext
 
@@ -50,25 +54,32 @@ async def _seed_controller(
     api_token: str | None = None,
 ) -> str:
     cipher = ColumnCipher(derive_key("k"))
-    cred_blob = cipher.encrypt(json.dumps(
-        {"username": username, "password": password, "api_token": api_token}
-    ).encode("utf-8"))
+    cred_blob = cipher.encrypt(
+        json.dumps({"username": username, "password": password, "api_token": api_token}).encode("utf-8")
+    )
     cid = str(uuid.uuid4())
     async with app.state.sessionmaker() as session:
-        session.add(Controller(
-            id=cid, name=name, base_url="https://10.0.0.1:443",
-            product_kinds=products, credentials_blob=cred_blob,
-            verify_tls=False, is_default=False,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            Controller(
+                id=cid,
+                name=name,
+                base_url="https://10.0.0.1:443",
+                product_kinds=products,
+                credentials_blob=cred_blob,
+                verify_tls=False,
+                is_default=False,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return cid
 
 
 @pytest.mark.asyncio
 async def test_controllers_page_shell_renders_unauth_and_table_fragment_lists_rows(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """Page route is unauth (vanilla nav can't carry the localStorage Bearer);
     the table-body fragment is admin-scoped and contains the actual rows.
@@ -101,12 +112,20 @@ async def test_controllers_create_round_trips(tmp_path: Path, monkeypatch) -> No
     app, key = await _bootstrap_app_with_admin_key(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/admin/controllers/create", headers=headers, data={
-            "name": "added-via-ui", "base_url": "https://10.1.1.1:443",
-            "username": "u", "password": "p", "api_token": "",
-            "product_kinds": ["network"],
-            "verify_tls": "on", "is_default": "on",
-        })
+        r = await c.post(
+            "/admin/controllers/create",
+            headers=headers,
+            data={
+                "name": "added-via-ui",
+                "base_url": "https://10.1.1.1:443",
+                "username": "u",
+                "password": "p",
+                "api_token": "",
+                "product_kinds": ["network"],
+                "verify_tls": "on",
+                "is_default": "on",
+            },
+        )
         assert r.status_code == 200
         # Empty body + HX-Trigger fires the table-body refetch on the client.
         assert r.text == ""
@@ -126,17 +145,28 @@ async def test_controllers_edit_with_blank_password_preserves_creds(tmp_path: Pa
     app, key = await _bootstrap_app_with_admin_key(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
     cid = await _seed_controller(
-        app, name="home", username="root", password="hunter2", api_token="tok",
+        app,
+        name="home",
+        username="root",
+        password="hunter2",
+        api_token="tok",
     )
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post(f"/admin/controllers/{cid}/update", headers=headers, data={
-            "name": "home-renamed",
-            "base_url": "https://10.0.0.1:443",
-            "username": "", "password": "", "api_token": "",
-            "product_kinds": ["network"],
-            "verify_tls": "on", "is_default": "",
-        })
+        r = await c.post(
+            f"/admin/controllers/{cid}/update",
+            headers=headers,
+            data={
+                "name": "home-renamed",
+                "base_url": "https://10.0.0.1:443",
+                "username": "",
+                "password": "",
+                "api_token": "",
+                "product_kinds": ["network"],
+                "verify_tls": "on",
+                "is_default": "",
+            },
+        )
         assert r.status_code == 200
 
     cipher = ColumnCipher(derive_key("k"))
@@ -158,6 +188,7 @@ async def test_controllers_probe_returns_fragment(tmp_path: Path, monkeypatch) -
 
     async def _stub(self, session, controller_id, product):
         return object()
+
     monkeypatch.setattr(
         "unifi_api.services.managers.ManagerFactory._construct_connection_manager",
         _stub,

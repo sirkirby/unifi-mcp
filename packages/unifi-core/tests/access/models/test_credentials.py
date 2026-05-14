@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.access.models.credentials import (
-    Credential,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    Credential,
     from_controller,
     to_controller_create,
 )

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.route import (
     ACTIVEROUTE_MUTABLE_FIELDS,
     ACTIVEROUTE_READ_ONLY_FIELDS,
@@ -15,7 +13,6 @@ from unifi_core.network.models.route import (
     active_route_from_controller,
     route_from_controller,
 )
-
 
 # ---------------------------------------------------------------------------
 # Field sets
@@ -108,7 +105,6 @@ class TestRouteFromController:
         assert route.enabled is True
 
     def test_all_fields_are_read_only(self) -> None:
-        route = Route()
         # Every field should be tagged mutable: False
         for name, field in Route.model_fields.items():
             extra = field.json_schema_extra or {}

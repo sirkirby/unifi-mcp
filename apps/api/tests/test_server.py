@@ -5,9 +5,8 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-
-from unifi_api.server import create_app
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
+from unifi_api.server import create_app
 
 
 def _cfg(tmp_path: Path) -> ApiConfig:

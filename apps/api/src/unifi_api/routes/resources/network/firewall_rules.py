@@ -43,7 +43,10 @@ async def list_firewall_rules(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "firewall_manager",
+            session,
+            controller.id,
+            "network",
+            "firewall_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -58,7 +61,10 @@ async def list_firewall_rules(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_rules), limit=limit, cursor=cursor_obj, key_fn=_rule_key,
+        list(all_rules),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_rule_key,
     )
 
     type_class = request.app.state.type_registry.lookup("network", "firewall/rules")
@@ -90,7 +96,10 @@ async def get_firewall_rule(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "firewall_manager",
+                session,
+                controller.id,
+                "network",
+                "firewall_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:

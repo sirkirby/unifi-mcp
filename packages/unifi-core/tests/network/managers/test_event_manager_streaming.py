@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from unifi_core.network.managers.event_manager import EventManager
 
 

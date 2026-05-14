@@ -40,11 +40,11 @@ def tool_to_field_path(tool_name: str, *, product: str, sibling_list_stems: set[
     (e.g., write/action tools that don't map to GraphQL Query fields).
     """
     if tool_name.startswith("unifi_list_"):
-        stem = tool_name[len("unifi_list_"):]
+        stem = tool_name[len("unifi_list_") :]
         return f"query.{product}.{_to_camel(stem)}"
 
     if tool_name.startswith("unifi_get_"):
-        stem = tool_name[len("unifi_get_"):]
+        stem = tool_name[len("unifi_get_") :]
         if stem.endswith("_details"):
             stem = stem[: -len("_details")]
             return f"query.{product}.{_to_camel(stem)}"

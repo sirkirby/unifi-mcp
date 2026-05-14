@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.switch import (
     MUTABLE_FIELDS,
-    PortProfile,
     READ_ONLY_FIELDS,
+    PortProfile,
     from_controller,
     to_controller_create,
     to_controller_update,
@@ -16,8 +14,17 @@ from unifi_core.network.models.switch import (
 
 class TestFieldSets:
     def test_mutable_fields_contains_expected(self) -> None:
-        for field in ("name", "forward", "native_networkconf_id", "tagged_networkconf_ids",
-                      "voice_networkconf_id", "isolation", "poe_mode", "stp_port_mode", "dot1x_ctrl"):
+        for field in (
+            "name",
+            "forward",
+            "native_networkconf_id",
+            "tagged_networkconf_ids",
+            "voice_networkconf_id",
+            "isolation",
+            "poe_mode",
+            "stp_port_mode",
+            "dot1x_ctrl",
+        ):
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
 
     def test_mutable_fields_excludes_read_only(self) -> None:

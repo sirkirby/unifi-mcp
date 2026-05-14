@@ -12,7 +12,10 @@ def _run_cli(*args: str, db_path: Path) -> subprocess.CompletedProcess:
     env["UNIFI_API_DB_PATH"] = str(db_path)
     return subprocess.run(
         ["uv", "run", "--package", "unifi-api-server", "unifi-api-server", *args],
-        capture_output=True, text=True, check=False, env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
     )
 
 
@@ -27,8 +30,7 @@ def _bootstrap(tmp_path: Path) -> tuple[Path, Path]:
 
 def test_keys_create_emits_plaintext_once(tmp_path: Path) -> None:
     db_path, cfg_path = _bootstrap(tmp_path)
-    r = _run_cli("keys", "create", "ci-test", "--scopes", "read,write",
-                 "--config-path", str(cfg_path), db_path=db_path)
+    r = _run_cli("keys", "create", "ci-test", "--scopes", "read,write", "--config-path", str(cfg_path), db_path=db_path)
     assert r.returncode == 0, f"create failed: {r.stderr}"
     combined = r.stdout + r.stderr
     assert re.search(r"unifi_(live|test)_[A-Z2-7]{22}", combined)
@@ -36,8 +38,7 @@ def test_keys_create_emits_plaintext_once(tmp_path: Path) -> None:
 
 def test_keys_list_shows_active_and_no_plaintext(tmp_path: Path) -> None:
     db_path, cfg_path = _bootstrap(tmp_path)
-    _run_cli("keys", "create", "k1", "--scopes", "read",
-             "--config-path", str(cfg_path), db_path=db_path)
+    _run_cli("keys", "create", "k1", "--scopes", "read", "--config-path", str(cfg_path), db_path=db_path)
     r = _run_cli("keys", "list", "--config-path", str(cfg_path), db_path=db_path)
     assert r.returncode == 0
     out = r.stdout
@@ -50,8 +51,7 @@ def test_keys_list_shows_active_and_no_plaintext(tmp_path: Path) -> None:
 
 def test_keys_revoke_marks_revoked(tmp_path: Path) -> None:
     db_path, cfg_path = _bootstrap(tmp_path)
-    create = _run_cli("keys", "create", "k1", "--scopes", "read",
-                      "--config-path", str(cfg_path), db_path=db_path)
+    create = _run_cli("keys", "create", "k1", "--scopes", "read", "--config-path", str(cfg_path), db_path=db_path)
     m = re.search(r"unifi_(live|test)_[A-Z2-7]{22}", create.stdout + create.stderr)
     assert m, "no key emitted"
     plaintext = m.group(0)
@@ -66,6 +66,5 @@ def test_keys_revoke_marks_revoked(tmp_path: Path) -> None:
 
 def test_keys_revoke_unknown_prefix_errors(tmp_path: Path) -> None:
     db_path, cfg_path = _bootstrap(tmp_path)
-    r = _run_cli("keys", "revoke", "unifi_live_NOPENOPENOPENOPE",
-                 "--config-path", str(cfg_path), db_path=db_path)
+    r = _run_cli("keys", "revoke", "unifi_live_NOPENOPENOPENOPE", "--config-path", str(cfg_path), db_path=db_path)
     assert r.returncode != 0

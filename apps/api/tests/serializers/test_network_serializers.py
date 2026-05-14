@@ -1,7 +1,8 @@
 """Network serializer unit tests — one fixture per resource."""
 
 from unifi_api.serializers._registry import (
-    serializer_registry_singleton, discover_serializers,
+    discover_serializers,
+    serializer_registry_singleton,
 )
 
 
@@ -26,8 +27,10 @@ def test_client_serializer_shape() -> None:
         "last_seen": 1700000000,
         "first_seen": 1600000000,
     }
+
     class FakeClient:
         raw = sample_raw
+
     out = Client.from_manager_output(FakeClient()).to_dict()
     assert out["mac"] == "aa:bb:cc:dd:ee:ff"
     assert out["ip"] == "10.0.0.5"
@@ -50,8 +53,10 @@ def test_device_serializer_shape() -> None:
         "uptime": 3600,
         "state": 1,
     }
+
     class FakeDevice:
         raw = sample_raw
+
     out = Device.from_manager_output(FakeDevice()).to_dict()
     assert out["mac"] == "11:22:33:44:55:66"
     assert out["name"] == "AP1"
@@ -71,6 +76,7 @@ def test_network_serializer_shape() -> None:
             "purpose": "corporate",
             "enabled": True,
         }
+
     out = Network.from_manager_output(FakeNetwork()).to_dict()
     assert out["id"] == "net1"
     assert out["name"] == "Default"
@@ -91,6 +97,7 @@ def test_firewall_rule_serializer_shape() -> None:
             "enabled": True,
             "predefined": False,
         }
+
     out = FirewallRule.from_manager_output(FakeRule()).to_dict()
     assert out["id"] == "rule1"
     assert out["name"] == "Block IoT"
@@ -109,6 +116,7 @@ def test_wlan_serializer_shape() -> None:
             "enabled": True,
             "security": "wpapsk",
         }
+
     out = Wlan.from_manager_output(FakeWlan()).to_dict()
     assert out["id"] == "wlan1"
     assert out["name"] == "MyWiFi"

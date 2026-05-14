@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import pytest
-
 from unifi_core.protect.models.cameras import (
-    Camera,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    Camera,
     from_controller,
     to_controller_update,
 )
-
 
 SAMPLE = {
     "id": "cam001",

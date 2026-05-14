@@ -53,7 +53,10 @@ async def list_policies(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "access", "policy_manager",
+            session,
+            controller.id,
+            "access",
+            "policy_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "access")
         await _maybe_set_site(cm, site_id)
@@ -61,7 +64,10 @@ async def list_policies(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("access_list_policies")
@@ -98,7 +104,10 @@ async def get_policy(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "access", "policy_manager",
+                session,
+                controller.id,
+                "access",
+                "policy_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "access")
             await _maybe_set_site(cm, site_id)

@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import datetime
 
-import pytest
-
 from unifi_core.access.models.users import (
-    User,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    User,
     from_controller,
 )
 
@@ -86,6 +84,7 @@ class TestFromController:
 
     def test_from_object(self) -> None:
         """from_controller works with an attribute-bearing object."""
+
         class Obj:
             id = "user-6"
             name = "Carol White"

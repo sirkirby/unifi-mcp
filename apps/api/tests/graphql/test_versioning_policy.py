@@ -11,14 +11,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from graphql import GraphQLObjectType, build_schema
-
 from unifi_api.graphql.schema import schema
 
-
-SDL_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "src" / "unifi_api" / "graphql" / "schema.graphql"
-)
+SDL_PATH = Path(__file__).resolve().parents[2] / "src" / "unifi_api" / "graphql" / "schema.graphql"
 
 
 def _query_field_map(s) -> dict:
@@ -42,9 +37,7 @@ def test_no_breaking_change_without_deprecated_marker() -> None:
     current_fields = _query_field_map(schema._schema)
 
     removed = set(artifact_fields) - set(current_fields)
-    breaking_removals = [
-        name for name in removed if not artifact_fields[name]
-    ]
+    breaking_removals = [name for name in removed if not artifact_fields[name]]
     assert not breaking_removals, (
         f"Breaking change(s): {breaking_removals} removed without prior "
         f"@strawberry.deprecated marker. See apps/api/docs/graphql-versioning.md."

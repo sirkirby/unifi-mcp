@@ -44,7 +44,10 @@ async def list_wlans(
     async with sm() as session:
         # WLANs live on network_manager (see managers.py builder map).
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "network_manager",
+            session,
+            controller.id,
+            "network",
+            "network_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -59,7 +62,10 @@ async def list_wlans(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_wlans), limit=limit, cursor=cursor_obj, key_fn=_wlan_key,
+        list(all_wlans),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_wlan_key,
     )
 
     type_class = request.app.state.type_registry.lookup("network", "wlans")
@@ -91,7 +97,10 @@ async def get_wlan(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "network_manager",
+                session,
+                controller.id,
+                "network",
+                "network_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:

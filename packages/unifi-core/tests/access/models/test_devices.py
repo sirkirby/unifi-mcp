@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.access.models.devices import (
-    AccessDevice,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    AccessDevice,
     from_controller,
 )
 
@@ -75,6 +73,7 @@ class TestFromController:
 
     def test_from_object(self) -> None:
         """from_controller works with an attribute-bearing object."""
+
         class Obj:
             id = "dev-4"
             name = "Side Entrance"

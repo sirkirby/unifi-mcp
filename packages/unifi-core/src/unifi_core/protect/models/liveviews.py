@@ -13,12 +13,24 @@ class Liveview(BaseModel):
     # Read-only
     id: Optional[str] = Field(default=None, description="Liveview UUID", json_schema_extra={"mutable": False})
     layout: Optional[int] = Field(default=None, description="Layout type/index", json_schema_extra={"mutable": False})
-    is_default: Optional[bool] = Field(default=None, description="Whether this is the user's default liveview", json_schema_extra={"mutable": False})
-    is_global: Optional[bool] = Field(default=None, description="Whether this liveview is shared", json_schema_extra={"mutable": False})
-    owner_id: Optional[str] = Field(default=None, description="User ID of the liveview owner", json_schema_extra={"mutable": False})
-    slots: Optional[List[Dict[str, Any]]] = Field(default=None, description="Per-slot layout configuration (JSON)", json_schema_extra={"mutable": False})
-    slot_count: Optional[int] = Field(default=None, description="Number of slots in the layout", json_schema_extra={"mutable": False})
-    camera_count: Optional[int] = Field(default=None, description="Number of cameras referenced", json_schema_extra={"mutable": False})
+    is_default: Optional[bool] = Field(
+        default=None, description="Whether this is the user's default liveview", json_schema_extra={"mutable": False}
+    )
+    is_global: Optional[bool] = Field(
+        default=None, description="Whether this liveview is shared", json_schema_extra={"mutable": False}
+    )
+    owner_id: Optional[str] = Field(
+        default=None, description="User ID of the liveview owner", json_schema_extra={"mutable": False}
+    )
+    slots: Optional[List[Dict[str, Any]]] = Field(
+        default=None, description="Per-slot layout configuration (JSON)", json_schema_extra={"mutable": False}
+    )
+    slot_count: Optional[int] = Field(
+        default=None, description="Number of slots in the layout", json_schema_extra={"mutable": False}
+    )
+    camera_count: Optional[int] = Field(
+        default=None, description="Number of cameras referenced", json_schema_extra={"mutable": False}
+    )
 
     # Mutable (inputs accepted by protect_create_liveview)
     name: Optional[str] = Field(default=None, description="Display name for the liveview")
@@ -26,12 +38,10 @@ class Liveview(BaseModel):
 
 
 MUTABLE_FIELDS = frozenset(
-    name for name, info in Liveview.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is not False
+    name for name, info in Liveview.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is not False
 )
 READ_ONLY_FIELDS = frozenset(
-    name for name, info in Liveview.model_fields.items()
-    if (info.json_schema_extra or {}).get("mutable") is False
+    name for name, info in Liveview.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is False
 )
 
 

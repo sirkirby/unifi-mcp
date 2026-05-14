@@ -16,11 +16,7 @@ def format_sse_frame(*, event: dict, product: str, serializer: Any) -> bytes:
     """Render a single SSE frame: event tag, id, json data."""
     payload = serializer.serialize(event)
     eid = event.get("id") or event.get("_buffered_at") or ""
-    return (
-        f"event: {product}.event\n"
-        f"id: {eid}\n"
-        f"data: {json.dumps(payload, default=str)}\n\n"
-    ).encode()
+    return (f"event: {product}.event\nid: {eid}\ndata: {json.dumps(payload, default=str)}\n\n").encode()
 
 
 def format_keepalive() -> bytes:

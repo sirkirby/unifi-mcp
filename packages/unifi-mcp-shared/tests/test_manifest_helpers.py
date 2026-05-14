@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 from unifi_core.manifest_helpers import get_tool_annotations
 
 
@@ -45,10 +43,12 @@ class TestGetToolAnnotations:
         assert result == {"my_tool": {"readOnlyHint": True, "openWorldHint": False}}
 
     def test_skips_tools_without_annotations(self):
-        server = _make_server({
-            "tool_a": _make_tool(annotations=_make_annotations(readOnlyHint=True)),
-            "tool_b": _make_tool(annotations=None),
-        })
+        server = _make_server(
+            {
+                "tool_a": _make_tool(annotations=_make_annotations(readOnlyHint=True)),
+                "tool_b": _make_tool(annotations=None),
+            }
+        )
         result = get_tool_annotations(server)
         assert "tool_a" in result
         assert "tool_b" not in result
@@ -98,10 +98,12 @@ class TestGetToolAnnotations:
         assert result == {}
 
     def test_multiple_tools(self):
-        server = _make_server({
-            "read_tool": _make_tool(annotations=_make_annotations(readOnlyHint=True)),
-            "write_tool": _make_tool(annotations=_make_annotations(destructiveHint=True)),
-        })
+        server = _make_server(
+            {
+                "read_tool": _make_tool(annotations=_make_annotations(readOnlyHint=True)),
+                "write_tool": _make_tool(annotations=_make_annotations(destructiveHint=True)),
+            }
+        )
         result = get_tool_annotations(server)
         assert len(result) == 2
         assert result["read_tool"] == {"readOnlyHint": True}

@@ -89,7 +89,4 @@ def filter_by_area(
         return events
 
     hint_lower = area_hint.lower()
-    return [
-        e for e in events
-        if any(hint_lower in name.lower() for name in e.area_names)
-    ]
+    return [e for e in events if any(hint_lower in name.lower() for name in e.area_names)]

@@ -53,7 +53,11 @@ class ClientSession:
             "kind": kind,
             "primary_key": "connected_at",
             "display_columns": [
-                "mac", "hostname", "ssid", "connected_at", "duration",
+                "mac",
+                "hostname",
+                "ssid",
+                "connected_at",
+                "duration",
             ],
             "sort_default": "connected_at:desc",
         }
@@ -62,8 +66,13 @@ class ClientSession:
     def from_manager_output(cls, record: Any) -> "ClientSession":
         if not isinstance(record, dict):
             return cls(
-                mac=None, hostname=None, ap=None, ssid=None,
-                connected_at=None, disconnected_at=None, duration=None,
+                mac=None,
+                hostname=None,
+                ap=None,
+                ssid=None,
+                connected_at=None,
+                disconnected_at=None,
+                duration=None,
                 _was_dict=False,
             )
         return cls(
@@ -106,8 +115,13 @@ class ClientWifiDetails:
     def from_manager_output(cls, obj: Any) -> "ClientWifiDetails":
         if obj is None:
             return cls(
-                mac=None, ssid=None, ap=None, signal=None,
-                tx_rate=None, rx_rate=None, channel=None,
+                mac=None,
+                ssid=None,
+                ap=None,
+                signal=None,
+                tx_rate=None,
+                rx_rate=None,
+                channel=None,
                 _was_none=True,
             )
         if not isinstance(obj, dict):

@@ -10,7 +10,6 @@ network/protect/access resolvers exist.
 import asyncio
 
 import pytest
-
 from unifi_api.graphql.context import RequestCache
 
 
@@ -39,7 +38,8 @@ async def test_request_cache_dedupes_within_one_query() -> None:
 
 @pytest.mark.asyncio
 async def test_deep_network_query_makes_constant_manager_calls(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ) -> None:
     """Phase 6 PR2.5 — deep query with N clients × their device makes exactly
     2 manager calls (one for clients, one for devices). The request cache
@@ -51,7 +51,6 @@ async def test_deep_network_query_makes_constant_manager_calls(
     from unittest.mock import AsyncMock, MagicMock
 
     from httpx import ASGITransport, AsyncClient
-
     from unifi_api.auth.api_key import generate_key, hash_key
     from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
     from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -72,28 +71,35 @@ async def test_deep_network_query_makes_constant_manager_calls(
     material = generate_key()
     cid = str(uuid.uuid4())
     cipher = ColumnCipher(derive_key("k"))
-    cred_blob = cipher.encrypt(json.dumps(
-        {"username": "u", "password": "p", "api_token": None}
-    ).encode("utf-8"))
+    cred_blob = cipher.encrypt(json.dumps({"username": "u", "password": "p", "api_token": None}).encode("utf-8"))
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="c", base_url="https://c", product_kinds="network",
-            credentials_blob=cred_blob, verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="c",
+                base_url="https://c",
+                product_kinds="network",
+                credentials_blob=cred_blob,
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
 
     # 10 clients all hanging off the same AP
-    fixture_clients = [
-        {"mac": f"aa:bb:cc:dd:ee:{i:02x}", "hostname": f"c{i}", "ap_mac": "ap:01"}
-        for i in range(10)
-    ]
+    fixture_clients = [{"mac": f"aa:bb:cc:dd:ee:{i:02x}", "hostname": f"c{i}", "ap_mac": "ap:01"} for i in range(10)]
     fixture_devices = [{"mac": "ap:01", "name": "AP-1", "model": "U7PRO"}]
 
     counts = {"get_clients": 0, "get_devices": 0}
@@ -156,10 +162,7 @@ async def test_deep_network_query_makes_constant_manager_calls(
         assert all(it["device"]["name"] == "AP-1" for it in items)
 
     # The keystone N+1 assertion
-    assert counts["get_clients"] == 1, (
-        f"expected 1 client snapshot fetch, got {counts['get_clients']}"
-    )
+    assert counts["get_clients"] == 1, f"expected 1 client snapshot fetch, got {counts['get_clients']}"
     assert counts["get_devices"] == 1, (
-        f"expected 1 device snapshot fetch (cache should dedupe), "
-        f"got {counts['get_devices']}"
+        f"expected 1 device snapshot fetch (cache should dedupe), got {counts['get_devices']}"
     )

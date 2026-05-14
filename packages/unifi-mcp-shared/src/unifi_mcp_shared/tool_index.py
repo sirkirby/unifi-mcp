@@ -142,8 +142,7 @@ def get_tool_index(
                 all_tools = _tools_from_registry()
         else:
             logger.warning(
-                "Tool manifest not found at %s. "
-                "Run the manifest generation script to generate it.",
+                "Tool manifest not found at %s. Run the manifest generation script to generate it.",
                 manifest_path,
             )
             all_tools = _tools_from_registry()
@@ -167,9 +166,9 @@ def get_tool_index(
     if search:
         search_lower = search.lower()
         all_tools = [
-            t for t in all_tools
-            if search_lower in t.get("name", "").lower()
-            or search_lower in t.get("description", "").lower()
+            t
+            for t in all_tools
+            if search_lower in t.get("name", "").lower() or search_lower in t.get("description", "").lower()
         ]
 
     # Strip schemas unless explicitly requested

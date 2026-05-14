@@ -266,11 +266,11 @@ async def main_async() -> None:
         # This handles permission_category/permission_action kwargs that
         # FastMCP's native .tool() decorator doesn't understand
         import unifi_network_mcp.main  # noqa: F401, E402
+        from unifi_mcp_shared.meta_tools import register_meta_tools  # noqa: E402
+        from unifi_mcp_shared.tool_loader import auto_load_tools  # noqa: E402
         from unifi_network_mcp.jobs import get_job_status, start_async_tool  # noqa: E402
         from unifi_network_mcp.runtime import connection_manager, server  # noqa: E402
         from unifi_network_mcp.tool_index import register_tool, tool_index_handler  # noqa: E402
-        from unifi_mcp_shared.meta_tools import register_meta_tools  # noqa: E402
-        from unifi_mcp_shared.tool_loader import auto_load_tools  # noqa: E402
     except ModuleNotFoundError as e:
         if str(e).startswith("No module named 'mcp'"):
             print("\nERROR: Python MCP SDK not found (module 'mcp').")

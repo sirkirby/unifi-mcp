@@ -7,11 +7,10 @@ import json
 
 import pytest
 import websockets
-from websockets.asyncio.server import serve
-
 from unifi_mcp_relay.client import RelayClient
 from unifi_mcp_relay.config import RelayConfig
 from unifi_mcp_relay.protocol import ToolInfo
+from websockets.asyncio.server import serve
 
 
 class MockWorker:

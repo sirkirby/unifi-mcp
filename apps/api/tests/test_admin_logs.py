@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, Base
@@ -30,11 +29,16 @@ async def _bootstrap_app_with_log_reader(tmp_path: Path):
     sm = app.state.sessionmaker
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
 
     # Replace the default LogReader (/dev/null) with one pointing at a real file.
@@ -65,11 +69,14 @@ async def test_logs_page_shell_renders_unauth(tmp_path: Path, monkeypatch) -> No
 async def test_logs_rows_filter_by_level(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, log_path = await _bootstrap_app_with_log_reader(tmp_path)
-    _write_log(log_path, [
-        {"ts": "2026-05-01T00:00:00.000Z", "level": "INFO", "logger": "a", "event": "hello"},
-        {"ts": "2026-05-01T00:00:01.000Z", "level": "ERROR", "logger": "a", "event": "boom"},
-        {"ts": "2026-05-01T00:00:02.000Z", "level": "INFO", "logger": "b", "event": "hi"},
-    ])
+    _write_log(
+        log_path,
+        [
+            {"ts": "2026-05-01T00:00:00.000Z", "level": "INFO", "logger": "a", "event": "hello"},
+            {"ts": "2026-05-01T00:00:01.000Z", "level": "ERROR", "logger": "a", "event": "boom"},
+            {"ts": "2026-05-01T00:00:02.000Z", "level": "INFO", "logger": "b", "event": "hi"},
+        ],
+    )
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/admin/logs/_rows?level=ERROR", headers=headers)
@@ -83,11 +90,14 @@ async def test_logs_rows_filter_by_level(tmp_path: Path, monkeypatch) -> None:
 async def test_logs_rows_filter_by_logger(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, log_path = await _bootstrap_app_with_log_reader(tmp_path)
-    _write_log(log_path, [
-        {"ts": "2026-05-01T00:00:00.000Z", "level": "INFO", "logger": "alpha", "event": "from-alpha"},
-        {"ts": "2026-05-01T00:00:01.000Z", "level": "INFO", "logger": "beta", "event": "from-beta"},
-        {"ts": "2026-05-01T00:00:02.000Z", "level": "INFO", "logger": "alpha", "event": "alpha-2"},
-    ])
+    _write_log(
+        log_path,
+        [
+            {"ts": "2026-05-01T00:00:00.000Z", "level": "INFO", "logger": "alpha", "event": "from-alpha"},
+            {"ts": "2026-05-01T00:00:01.000Z", "level": "INFO", "logger": "beta", "event": "from-beta"},
+            {"ts": "2026-05-01T00:00:02.000Z", "level": "INFO", "logger": "alpha", "event": "alpha-2"},
+        ],
+    )
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/admin/logs/_rows?logger=alpha", headers=headers)

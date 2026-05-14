@@ -8,10 +8,7 @@ from pathlib import Path
 
 from unifi_api.graphql.docgen import render_reference
 
-
-REF_PATH = (
-    Path(__file__).resolve().parents[2] / "docs" / "graphql-reference.md"
-)
+REF_PATH = Path(__file__).resolve().parents[2] / "docs" / "graphql-reference.md"
 
 
 def test_reference_md_matches_render() -> None:

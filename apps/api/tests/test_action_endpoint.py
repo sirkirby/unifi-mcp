@@ -1,14 +1,13 @@
 """Action endpoint tests (with mocked dispatcher)."""
 
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-import uuid
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from unittest.mock import AsyncMock
 from sqlalchemy import select
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -34,16 +33,29 @@ async def _bootstrap(tmp_path: Path):
     creds = cipher.encrypt(b'{"username":"u","password":"p","api_token":null}')
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="write",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="N", base_url="https://x", product_kinds="network",
-            credentials_blob=creds, verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc), updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="write",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="N",
+                base_url="https://x",
+                product_kinds="network",
+                credentials_blob=creds,
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 
@@ -65,14 +77,16 @@ async def test_action_endpoint_dispatches_and_audits(tmp_path, monkeypatch) -> N
     # what ClientManager.get_clients() actually returns: list[aiounifi.Client]).
     # The action endpoint now runs the result through ClientSerializer.
     from unifi_api.services import actions as actions_svc
+
     fake_dispatch = AsyncMock(return_value=[_FakeClient({"mac": "aa:bb", "is_online": True})])
     monkeypatch.setattr(actions_svc, "dispatch_action", fake_dispatch)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/v1/actions/unifi_list_clients",
-                         headers={"Authorization": f"Bearer {key}"},
-                         json={"site": "default", "controller": cid,
-                               "args": {"include_offline": True}, "confirm": False})
+        r = await c.post(
+            "/v1/actions/unifi_list_clients",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"include_offline": True}, "confirm": False},
+        )
 
     assert r.status_code == 200, r.text
     body = r.json()
@@ -114,6 +128,7 @@ async def test_action_endpoint_serializer_contract_error(tmp_path, monkeypatch) 
     # unifi_list_clients is declared kind=LIST; returning a dict should trip
     # SerializerContractError and surface as 500 with structured detail.
     from unifi_api.services import actions as actions_svc
+
     fake_dispatch = AsyncMock(return_value={"single": "object"})
     monkeypatch.setattr(actions_svc, "dispatch_action", fake_dispatch)
 
@@ -145,9 +160,11 @@ async def test_action_endpoint_unknown_tool(tmp_path, monkeypatch) -> None:
 
     # Don't mock dispatch_action — real one will raise ToolNotFound for fake tool name
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/v1/actions/totally_made_up_tool",
-                         headers={"Authorization": f"Bearer {key}"},
-                         json={"site": "default", "controller": cid, "args": {}, "confirm": False})
+        r = await c.post(
+            "/v1/actions/totally_made_up_tool",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {}, "confirm": False},
+        )
     assert r.status_code == 200
     body = r.json()
     assert body["success"] is False
@@ -162,12 +179,18 @@ async def test_action_endpoint_capability_mismatch(tmp_path, monkeypatch) -> Non
     # Real dispatch_action will raise CapabilityMismatch because controller is
     # network-only and the tool is protect_*
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/v1/actions/protect_list_cameras",
-                         headers={"Authorization": f"Bearer {key}"},
-                         json={"site": "default", "controller": cid, "args": {}, "confirm": False})
+        r = await c.post(
+            "/v1/actions/protect_list_cameras",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {}, "confirm": False},
+        )
     body = r.json()
     assert body["success"] is False
-    assert "support" in body["error"].lower() or "capability" in body["error"].lower() or "mismatch" in body["error"].lower()
+    assert (
+        "support" in body["error"].lower()
+        or "capability" in body["error"].lower()
+        or "mismatch" in body["error"].lower()
+    )
 
 
 @pytest.mark.asyncio
@@ -177,7 +200,9 @@ async def test_action_endpoint_unknown_controller(tmp_path, monkeypatch) -> None
 
     fake_cid = str(uuid.uuid4())
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/v1/actions/unifi_list_clients",
-                         headers={"Authorization": f"Bearer {key}"},
-                         json={"site": "default", "controller": fake_cid, "args": {}, "confirm": False})
+        r = await c.post(
+            "/v1/actions/unifi_list_clients",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": fake_cid, "args": {}, "confirm": False},
+        )
     assert r.status_code == 404

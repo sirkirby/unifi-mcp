@@ -49,7 +49,10 @@ async def _maybe_set_site(cm, site_id: str) -> None:
 def _list_response(request, items, tool_name, *, limit, cursor):
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool(tool_name)
@@ -104,13 +107,20 @@ async def list_alarms(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "event_manager",
+            session,
+            controller.id,
+            "network",
+            "event_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         items = await mgr.get_alarms()
     return _list_response(
-        request, items, "unifi_list_alarms", limit=limit, cursor=cursor,
+        request,
+        items,
+        "unifi_list_alarms",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -131,13 +141,20 @@ async def list_backups(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "system_manager",
+            session,
+            controller.id,
+            "network",
+            "system_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         items = await mgr.list_backups()
     return _list_response(
-        request, items, "unifi_list_backups", limit=limit, cursor=cursor,
+        request,
+        items,
+        "unifi_list_backups",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -158,13 +175,20 @@ async def get_top_clients(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         items = await mgr.get_top_clients()
     return _list_response(
-        request, items, "unifi_get_top_clients", limit=limit, cursor=cursor,
+        request,
+        items,
+        "unifi_get_top_clients",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -185,13 +209,20 @@ async def get_client_sessions(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         items = await mgr.get_client_sessions()
     return _list_response(
-        request, items, "unifi_get_client_sessions", limit=limit, cursor=cursor,
+        request,
+        items,
+        "unifi_get_client_sessions",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -213,13 +244,20 @@ async def get_network_health(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "system_manager",
+            session,
+            controller.id,
+            "network",
+            "system_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         items = await mgr.get_network_health()
     return _list_response(
-        request, items, "unifi_get_network_health", limit=limit, cursor=cursor,
+        request,
+        items,
+        "unifi_get_network_health",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -240,13 +278,20 @@ async def get_speedtest_results(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         items = await mgr.get_speedtest_results()
     return _list_response(
-        request, items, "unifi_get_speedtest_results", limit=limit, cursor=cursor,
+        request,
+        items,
+        "unifi_get_speedtest_results",
+        limit=limit,
+        cursor=cursor,
     )
 
 
@@ -269,7 +314,10 @@ async def get_event_types(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "event_manager",
+            session,
+            controller.id,
+            "network",
+            "event_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
@@ -294,7 +342,10 @@ async def get_autobackup_settings(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "system_manager",
+            session,
+            controller.id,
+            "network",
+            "system_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
@@ -317,7 +368,10 @@ async def get_site_settings(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "system_manager",
+            session,
+            controller.id,
+            "network",
+            "system_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
@@ -340,7 +394,10 @@ async def get_system_info(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "system_manager",
+            session,
+            controller.id,
+            "network",
+            "system_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
@@ -364,13 +421,17 @@ async def get_client_wifi_details(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "stats_manager",
+            session,
+            controller.id,
+            "network",
+            "stats_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         await _maybe_set_site(cm, site_id)
         payload = await mgr.get_client_wifi_details(mac)
     if payload is None:
         raise HTTPException(
-            status_code=404, detail=f"client {mac} wifi details not found",
+            status_code=404,
+            detail=f"client {mac} wifi details not found",
         )
     return _detail_response(request, payload, "unifi_get_client_wifi_details")

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.port_forwards import (
     MUTABLE_FIELDS,
-    PortForward,
     READ_ONLY_FIELDS,
+    PortForward,
     from_controller,
     to_controller_create,
     to_controller_update,

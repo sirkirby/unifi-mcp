@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-
 from unifi_api.db.engine import create_engine
 from unifi_api.db.models import AppSetting, Base
 from unifi_api.db.session import get_sessionmaker
@@ -21,18 +20,14 @@ async def _build_service(tmp_path: Path, seeds: list[tuple[str, str]] | None = N
     if seeds:
         async with sm() as session:
             for key, value in seeds:
-                session.add(
-                    AppSetting(key=key, value=value, updated_at=datetime.now(timezone.utc))
-                )
+                session.add(AppSetting(key=key, value=value, updated_at=datetime.now(timezone.utc)))
             await session.commit()
     return SettingsService(sm), engine
 
 
 @pytest.mark.asyncio
 async def test_get_int_returns_seeded_default(tmp_path: Path) -> None:
-    svc, engine = await _build_service(
-        tmp_path, [("audit.retention.max_age_days", "90")]
-    )
+    svc, engine = await _build_service(tmp_path, [("audit.retention.max_age_days", "90")])
     try:
         assert await svc.get_int("audit.retention.max_age_days") == 90
     finally:

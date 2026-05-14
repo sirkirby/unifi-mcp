@@ -104,10 +104,9 @@ class Event:
 
     @strawberry.field(description="The door this event references.")
     async def door(
-        self, info: Info,
-    ) -> Annotated[
-        "Door", strawberry.lazy("unifi_api.graphql.types.access.doors")
-    ] | None:
+        self,
+        info: Info,
+    ) -> Annotated["Door", strawberry.lazy("unifi_api.graphql.types.access.doors")] | None:
         from unifi_api.graphql.resolvers.access import _fetch_doors
         from unifi_api.graphql.types.access.doors import Door
 
@@ -124,10 +123,9 @@ class Event:
 
     @strawberry.field(description="The user this event references.")
     async def user(
-        self, info: Info,
-    ) -> Annotated[
-        "User", strawberry.lazy("unifi_api.graphql.types.access.users")
-    ] | None:
+        self,
+        info: Info,
+    ) -> Annotated["User", strawberry.lazy("unifi_api.graphql.types.access.users")] | None:
         from unifi_api.graphql.resolvers.access import _fetch_users
         from unifi_api.graphql.types.access.users import User
 

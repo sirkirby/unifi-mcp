@@ -9,7 +9,7 @@ This implementation uses the networkconf endpoint which is the reliable approach
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from aiounifi.models.api import ApiRequest
 

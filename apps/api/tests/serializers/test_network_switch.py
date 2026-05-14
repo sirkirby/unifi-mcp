@@ -1,8 +1,8 @@
 """Switch + device cluster serializer unit tests (Phase 4A PR1 Cluster 1)."""
 
 from unifi_api.serializers._registry import (
-    serializer_registry_singleton,
     discover_serializers,
+    serializer_registry_singleton,
 )
 
 

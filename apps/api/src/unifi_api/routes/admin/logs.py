@@ -19,7 +19,6 @@ from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.routes.admin._common import render
 
-
 router = APIRouter()
 
 
@@ -54,13 +53,17 @@ async def logs_rows(
         logger=logger or None,
         q=q or None,
     )
-    page = rows[offset:offset + limit]
+    page = rows[offset : offset + limit]
     has_more = len(rows) > offset + limit
 
     filter_qs = "&".join(
-        f"{k}={v}" for k, v in (
-            ("level", level), ("logger", logger), ("q", q),
-        ) if v
+        f"{k}={v}"
+        for k, v in (
+            ("level", level),
+            ("logger", logger),
+            ("q", q),
+        )
+        if v
     )
 
     return render(
@@ -144,6 +147,7 @@ def _make_filter_fn(*, level, logger, q):
         if q and q.lower() not in str(payload).lower():
             return False
         return True
+
     return _fn
 
 
@@ -161,7 +165,8 @@ async def logs_stream(
     log_path = request.app.state.log_file_path or Path("/dev/null")
     return StreamingResponse(
         _admin_logs_event_stream(
-            log_path, _make_filter_fn(level=level, logger=logger, q=q),
+            log_path,
+            _make_filter_fn(level=level, logger=logger, q=q),
         ),
         media_type="text/event-stream",
         headers={

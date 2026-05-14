@@ -72,7 +72,10 @@ async def list_rogue_aps(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "device_manager",
+            session,
+            controller.id,
+            "network",
+            "device_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -81,7 +84,10 @@ async def list_rogue_aps(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(rows), limit=limit, cursor=cursor_obj, key_fn=_bssid_key,
+        list(rows),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_bssid_key,
     )
 
     items = [_serialize_rogue(r, is_known=False) for r in page]
@@ -119,7 +125,10 @@ async def list_rf_scan_results(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "device_manager",
+            session,
+            controller.id,
+            "network",
+            "device_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -128,7 +137,10 @@ async def list_rf_scan_results(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(rows or []), limit=limit, cursor=cursor_obj, key_fn=_bssid_key,
+        list(rows or []),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_bssid_key,
     )
 
     type_registry = request.app.state.type_registry

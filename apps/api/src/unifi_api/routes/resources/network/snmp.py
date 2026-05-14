@@ -34,7 +34,10 @@ async def get_snmp_settings(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "system_manager",
+            session,
+            controller.id,
+            "network",
+            "system_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:

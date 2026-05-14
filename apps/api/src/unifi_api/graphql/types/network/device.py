@@ -97,7 +97,8 @@ class Device:
 
     @strawberry.field(description="Clients currently connected through this AP/switch.")
     async def port_clients(
-        self, info: Info,
+        self,
+        info: Info,
     ) -> list[Annotated["Client", strawberry.lazy("unifi_api.graphql.types.network.client")]]:
         """Resolves to clients whose ap_mac matches this device's mac."""
         from unifi_api.graphql.resolvers.network import _fetch_clients

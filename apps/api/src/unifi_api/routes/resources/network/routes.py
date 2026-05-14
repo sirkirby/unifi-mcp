@@ -58,7 +58,10 @@ async def list_active_routes(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "routing_manager",
+            session,
+            controller.id,
+            "network",
+            "routing_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -67,7 +70,10 @@ async def list_active_routes(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_list_active_routes")
@@ -108,7 +114,10 @@ async def list_routes(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "routing_manager",
+            session,
+            controller.id,
+            "network",
+            "routing_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -117,7 +126,10 @@ async def list_routes(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_list_routes")
@@ -155,7 +167,10 @@ async def get_route_details(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "routing_manager",
+                session,
+                controller.id,
+                "network",
+                "routing_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:
@@ -200,7 +215,10 @@ async def list_traffic_routes(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "traffic_route_manager",
+            session,
+            controller.id,
+            "network",
+            "traffic_route_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -209,7 +227,10 @@ async def list_traffic_routes(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_list_traffic_routes")
@@ -247,7 +268,10 @@ async def get_traffic_route_details(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "traffic_route_manager",
+                session,
+                controller.id,
+                "network",
+                "traffic_route_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:
@@ -257,7 +281,8 @@ async def get_traffic_route_details(
         raise HTTPException(status_code=404, detail=str(exc))
     if item is None:
         raise HTTPException(
-            status_code=404, detail=f"traffic route {route_id} not found",
+            status_code=404,
+            detail=f"traffic route {route_id} not found",
         )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_get_traffic_route_details")

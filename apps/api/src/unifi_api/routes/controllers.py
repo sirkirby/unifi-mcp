@@ -19,7 +19,6 @@ from unifi_api.services.controllers import (
     update_controller,
 )
 
-
 router = APIRouter()
 
 
@@ -167,6 +166,7 @@ async def capabilities_endpoint(request: Request, cid: str, refresh: bool = Fals
         except ControllerNotFound:
             raise HTTPException(status_code=404, detail="controller not found")
     from unifi_api.services.controllers import probe_capabilities
+
     payload = await probe_capabilities(controller)
     cache.put(cid, payload)
     return payload

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.access.models.policies import (
-    Policy,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    Policy,
     from_controller,
     to_controller_update,
 )

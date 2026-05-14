@@ -17,10 +17,18 @@ class User(BaseModel):
 
     id: Optional[str] = Field(default=None, description="User UUID", json_schema_extra={"mutable": False})
     name: Optional[str] = Field(default=None, description="User display name", json_schema_extra={"mutable": False})
-    employee_id: Optional[str] = Field(default=None, description="Employee / cardholder ID", json_schema_extra={"mutable": False})
-    status: Optional[str] = Field(default=None, description="Account status (active, inactive, etc.)", json_schema_extra={"mutable": False})
-    role: Optional[str] = Field(default=None, description="User role within the Access system", json_schema_extra={"mutable": False})
-    created_at: Optional[str] = Field(default=None, description="ISO 8601 timestamp when the user was created", json_schema_extra={"mutable": False})
+    employee_id: Optional[str] = Field(
+        default=None, description="Employee / cardholder ID", json_schema_extra={"mutable": False}
+    )
+    status: Optional[str] = Field(
+        default=None, description="Account status (active, inactive, etc.)", json_schema_extra={"mutable": False}
+    )
+    role: Optional[str] = Field(
+        default=None, description="User role within the Access system", json_schema_extra={"mutable": False}
+    )
+    created_at: Optional[str] = Field(
+        default=None, description="ISO 8601 timestamp when the user was created", json_schema_extra={"mutable": False}
+    )
 
 
 MUTABLE_FIELDS = frozenset()

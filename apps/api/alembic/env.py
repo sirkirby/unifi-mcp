@@ -24,7 +24,6 @@ if _SRC.exists() and str(_SRC) not in sys.path:
 from unifi_api.db.engine import create_engine  # noqa: E402
 from unifi_api.db.models import Base  # noqa: E402
 
-
 target_metadata = Base.metadata
 
 
@@ -39,10 +38,7 @@ def _resolve_db_path() -> Path:
 
 
 def run_migrations_offline() -> None:
-    raise RuntimeError(
-        "Offline migration mode is not supported; the async engine requires "
-        "a live connection."
-    )
+    raise RuntimeError("Offline migration mode is not supported; the async engine requires a live connection.")
 
 
 async def run_migrations_online() -> None:

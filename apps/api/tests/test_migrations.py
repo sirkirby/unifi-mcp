@@ -23,9 +23,10 @@ def test_migration_up_creates_tables(tmp_path: Path) -> None:
     result = _run_alembic("-x", f"db_path={db_path}", "upgrade", "head", db_path=db_path)
     assert result.returncode == 0, f"alembic upgrade failed: {result.stderr}"
 
-    from unifi_api.db.engine import create_engine
-    from sqlalchemy import text
     import asyncio
+
+    from sqlalchemy import text
+    from unifi_api.db.engine import create_engine
 
     async def _check():
         engine = create_engine(db_path)

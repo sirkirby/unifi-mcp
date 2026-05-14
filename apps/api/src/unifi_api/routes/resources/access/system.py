@@ -42,7 +42,10 @@ async def get_access_health(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "access", "system_manager",
+                session,
+                controller.id,
+                "access",
+                "system_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "access")
             await _maybe_set_site(cm, site_id)
@@ -83,7 +86,10 @@ async def get_access_system_info(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "access", "system_manager",
+                session,
+                controller.id,
+                "access",
+                "system_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "access")
             await _maybe_set_site(cm, site_id)

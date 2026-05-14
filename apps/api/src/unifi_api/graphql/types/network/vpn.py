@@ -94,8 +94,7 @@ class VpnClient:
             type=_get(obj, "vpn_type") or _get(obj, "purpose"),
             enabled=bool(_get(obj, "enabled", False)),
             server_address=_vpn_server_address(obj),
-            last_handshake=_get(obj, "wireguard_client_last_handshake")
-            or _get(obj, "last_handshake"),
+            last_handshake=_get(obj, "wireguard_client_last_handshake") or _get(obj, "last_handshake"),
         )
 
     def to_dict(self) -> dict:

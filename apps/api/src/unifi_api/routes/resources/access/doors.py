@@ -62,7 +62,10 @@ async def list_doors(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "access", "door_manager",
+            session,
+            controller.id,
+            "access",
+            "door_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "access")
         await _maybe_set_site(cm, site_id)
@@ -76,7 +79,10 @@ async def list_doors(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_doors), limit=limit, cursor=cursor_obj, key_fn=_door_key,
+        list(all_doors),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_door_key,
     )
 
     type_class = request.app.state.type_registry.lookup("access", "doors")
@@ -107,7 +113,10 @@ async def get_door(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "access", "door_manager",
+            session,
+            controller.id,
+            "access",
+            "door_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "access")
         await _maybe_set_site(cm, site_id)
@@ -147,7 +156,10 @@ async def get_door_status(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "access", "door_manager",
+                session,
+                controller.id,
+                "access",
+                "door_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "access")
             await _maybe_set_site(cm, site_id)
@@ -191,7 +203,10 @@ async def list_door_groups(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "access", "door_manager",
+            session,
+            controller.id,
+            "access",
+            "door_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "access")
         await _maybe_set_site(cm, site_id)
@@ -205,7 +220,10 @@ async def list_door_groups(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_groups), limit=limit, cursor=cursor_obj, key_fn=_door_key,
+        list(all_groups),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_door_key,
     )
 
     type_registry = request.app.state.type_registry

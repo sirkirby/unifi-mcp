@@ -51,21 +51,31 @@ async def bootstrap(tmp_path: Path, *, product: str = "network") -> tuple[Any, s
     material = generate_key()
     cid = str(uuid.uuid4())
     cipher = ColumnCipher(derive_key("k"))
-    cred_blob = cipher.encrypt(json.dumps(
-        {"username": "u", "password": "p", "api_token": None}
-    ).encode("utf-8"))
+    cred_blob = cipher.encrypt(json.dumps({"username": "u", "password": "p", "api_token": None}).encode("utf-8"))
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
-        session.add(Controller(
-            id=cid, name="c", base_url="https://c", product_kinds=product,
-            credentials_blob=cred_blob, verify_tls=False, is_default=True,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+        session.add(
+            Controller(
+                id=cid,
+                name="c",
+                base_url="https://c",
+                product_kinds=product,
+                credentials_blob=cred_blob,
+                verify_tls=False,
+                is_default=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, cid
 

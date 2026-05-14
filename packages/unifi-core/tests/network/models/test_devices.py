@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from unifi_core.network.models.devices import (
     DEVICE_MUTABLE_FIELDS,
     DEVICE_READ_ONLY_FIELDS,
@@ -41,9 +39,17 @@ class TestDeviceFieldSets:
 class TestDeviceRadioFieldSets:
     def test_mutable_fields_contains_update_schema_fields(self) -> None:
         for field in (
-            "tx_power_mode", "tx_power", "channel", "ht",
-            "min_rssi_enabled", "min_rssi", "assisted_roaming_enabled",
-            "antenna_gain", "vwire_enabled", "sens_level_enabled", "sens_level",
+            "tx_power_mode",
+            "tx_power",
+            "channel",
+            "ht",
+            "min_rssi_enabled",
+            "min_rssi",
+            "assisted_roaming_enabled",
+            "antenna_gain",
+            "vwire_enabled",
+            "sens_level_enabled",
+            "sens_level",
         ):
             assert field in DEVICERADIO_MUTABLE_FIELDS, f"Expected {field!r} in DEVICERADIO_MUTABLE_FIELDS"
 

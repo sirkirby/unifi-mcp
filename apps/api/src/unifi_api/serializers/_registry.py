@@ -7,11 +7,13 @@ import pkgutil
 import sys
 from typing import Any, Iterable
 
-from unifi_api.serializers import _base
 from unifi_api.serializers._base import (
-    RenderKind, Serializer,
-    _TOOL_REGISTRY, _RESOURCE_REGISTRY,
-    _TOOL_KIND_OVERRIDES, _RESOURCE_KIND_OVERRIDES,
+    _RESOURCE_KIND_OVERRIDES,
+    _RESOURCE_REGISTRY,
+    _TOOL_KIND_OVERRIDES,
+    _TOOL_REGISTRY,
+    RenderKind,
+    Serializer,
     _reset_registries_for_tests,
 )
 
@@ -30,9 +32,7 @@ class SerializerRegistry:
     def serializer_for_resource(self, product: str, resource: str) -> Serializer:
         s = _RESOURCE_REGISTRY.get((product, resource))
         if s is None:
-            raise SerializerRegistryError(
-                f"no serializer registered for resource ({product}, {resource})"
-            )
+            raise SerializerRegistryError(f"no serializer registered for resource ({product}, {resource})")
         return s
 
     def kind_for_tool(self, tool_name: str) -> RenderKind:
@@ -77,9 +77,7 @@ class SerializerRegistry:
             type_tools = set(type_registry.all_tools())
         missing = manifest_tool_names - serializer_tools - type_tools
         if missing:
-            raise SerializerRegistryError(
-                f"missing projection for {len(missing)} tools: {sorted(missing)[:5]}..."
-            )
+            raise SerializerRegistryError(f"missing projection for {len(missing)} tools: {sorted(missing)[:5]}...")
 
 
 _singleton: SerializerRegistry | None = None
@@ -102,7 +100,6 @@ def discover_serializers(
     ``type_registry`` is consulted by ``validate_manifest`` so read tools whose
     projection is a Strawberry type (Phase 6 close) count as covered.
     """
-    pkg = importlib.import_module("unifi_api.serializers")
     for product in ("network", "protect", "access"):
         try:
             product_pkg = importlib.import_module(f"unifi_api.serializers.{product}")

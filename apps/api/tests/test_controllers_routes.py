@@ -1,12 +1,11 @@
 """Controllers HTTP routes."""
 
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-import uuid
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, Base
@@ -28,11 +27,16 @@ async def _bootstrap_app(tmp_path: Path, scopes: str = "admin"):
     sm = app.state.sessionmaker
     material = generate_key()
     async with sm() as session:
-        session.add(ApiKey(
-            id=str(uuid.uuid4()), prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes=scopes,
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=str(uuid.uuid4()),
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes=scopes,
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext
 
@@ -43,11 +47,19 @@ async def test_create_list_get_delete(tmp_path: Path, monkeypatch) -> None:
     app, key = await _bootstrap_app(tmp_path)
     headers = {"Authorization": f"Bearer {key}"}
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/v1/controllers", headers=headers, json={
-            "name": "Home", "base_url": "https://10.0.0.1",
-            "username": "root", "password": "hunter2",
-            "product_kinds": ["network"], "verify_tls": False, "is_default": True,
-        })
+        r = await c.post(
+            "/v1/controllers",
+            headers=headers,
+            json={
+                "name": "Home",
+                "base_url": "https://10.0.0.1",
+                "username": "root",
+                "password": "hunter2",
+                "product_kinds": ["network"],
+                "verify_tls": False,
+                "is_default": True,
+            },
+        )
         assert r.status_code == 201, r.text
         cid = r.json()["id"]
         r = await c.get("/v1/controllers", headers=headers)
@@ -67,9 +79,19 @@ async def test_read_scope_cannot_create(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key = await _bootstrap_app(tmp_path, scopes="read")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/v1/controllers", headers={"Authorization": f"Bearer {key}"},
-                         json={"name": "X", "base_url": "https://x", "username": "u", "password": "p",
-                               "product_kinds": ["network"], "verify_tls": True, "is_default": False})
+        r = await c.post(
+            "/v1/controllers",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "name": "X",
+                "base_url": "https://x",
+                "username": "u",
+                "password": "p",
+                "product_kinds": ["network"],
+                "verify_tls": True,
+                "is_default": False,
+            },
+        )
         assert r.status_code == 403
 
 

@@ -43,7 +43,10 @@ async def list_devices(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "device_manager",
+            session,
+            controller.id,
+            "network",
+            "device_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -58,7 +61,10 @@ async def list_devices(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_devices), limit=limit, cursor=cursor_obj, key_fn=_device_key,
+        list(all_devices),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_device_key,
     )
 
     type_class = request.app.state.type_registry.lookup("network", "devices")
@@ -90,7 +96,10 @@ async def get_device(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "device_manager",
+                session,
+                controller.id,
+                "network",
+                "device_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:
@@ -124,7 +133,10 @@ async def get_device_radio(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "device_manager",
+                session,
+                controller.id,
+                "network",
+                "device_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:
@@ -169,7 +181,10 @@ async def get_pdu_outlets(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "device_manager",
+                session,
+                controller.id,
+                "network",
+                "device_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:

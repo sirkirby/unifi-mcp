@@ -53,7 +53,7 @@ class UniFiMCPClient:
         result = await self.session.call_tool(name, arguments=arguments)
 
         # Extract content from result
-        content = result.content[0].text if hasattr(result, 'content') else result
+        content = result.content[0].text if hasattr(result, "content") else result
 
         # Try to parse as JSON
         if isinstance(content, str):
@@ -191,5 +191,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n✗ Fatal error: {e}")
         import traceback
+
         traceback.print_exc()
         exit(1)

@@ -1,7 +1,5 @@
 """Tests for the shared validators module."""
 
-import pytest
-
 from unifi_core.validators import ResourceValidator, create_response
 
 

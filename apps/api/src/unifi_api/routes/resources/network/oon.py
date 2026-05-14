@@ -54,7 +54,10 @@ async def list_oon_policies(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "network", "oon_manager",
+            session,
+            controller.id,
+            "network",
+            "oon_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "network")
         if cm.site != site_id:
@@ -63,7 +66,10 @@ async def list_oon_policies(
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
-        list(items), limit=limit, cursor=cursor_obj, key_fn=_id_key,
+        list(items),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_id_key,
     )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_list_oon_policies")
@@ -101,7 +107,10 @@ async def get_oon_policy_details(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "network", "oon_manager",
+                session,
+                controller.id,
+                "network",
+                "oon_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "network")
             if cm.site != site_id:
@@ -111,7 +120,8 @@ async def get_oon_policy_details(
         raise HTTPException(status_code=404, detail=str(exc))
     if item is None:
         raise HTTPException(
-            status_code=404, detail=f"oon policy {policy_id} not found",
+            status_code=404,
+            detail=f"oon policy {policy_id} not found",
         )
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("unifi_get_oon_policy_details")

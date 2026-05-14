@@ -1,15 +1,15 @@
 """SSE stream-generator tests."""
 
-import asyncio
 import json
 from unittest.mock import MagicMock
 
 import pytest
-
 from unifi_api.services.stream_generator import (
-    format_sse_frame, format_keepalive, sse_event_stream,
+    format_keepalive,
+    format_sse_frame,
+    sse_event_stream,
 )
-from unifi_api.services.streams import StreamSubscriber, SubscriberPool
+from unifi_api.services.streams import SubscriberPool
 
 
 def test_format_sse_frame_shape() -> None:
@@ -40,16 +40,23 @@ async def test_sse_event_stream_replays_buffer_then_tails() -> None:
         {"id": "e1", "key": "EVT_LU_Connected"},
     ]
     captured_cb = {}
+
     def fake_add_sub(cb):
         captured_cb["cb"] = cb
         return MagicMock()
+
     mgr.add_subscriber.side_effect = fake_add_sub
 
     serializer = MagicMock(serialize=lambda e: e)
 
     gen = sse_event_stream(
-        manager=mgr, pool=pool, controller_id="c1", product="network",
-        serializer=serializer, last_event_id=None, keepalive_interval=10,
+        manager=mgr,
+        pool=pool,
+        controller_id="c1",
+        product="network",
+        serializer=serializer,
+        last_event_id=None,
+        keepalive_interval=10,
     )
     # First two yields are the buffer replay (oldest-first after reverse)
     frame1 = await gen.__anext__()
@@ -72,13 +79,20 @@ async def test_sse_event_stream_skips_replay_before_last_event_id() -> None:
     mgr = MagicMock()
     # Manager returns most-recent-first; reverse → e1, e2, e3 oldest-first
     mgr.get_recent_from_buffer.return_value = [
-        {"id": "e3"}, {"id": "e2"}, {"id": "e1"},
+        {"id": "e3"},
+        {"id": "e2"},
+        {"id": "e1"},
     ]
     mgr.add_subscriber.return_value = MagicMock()
     serializer = MagicMock(serialize=lambda e: e)
     gen = sse_event_stream(
-        manager=mgr, pool=pool, controller_id="c1", product="network",
-        serializer=serializer, last_event_id="e1", keepalive_interval=10,
+        manager=mgr,
+        pool=pool,
+        controller_id="c1",
+        product="network",
+        serializer=serializer,
+        last_event_id="e1",
+        keepalive_interval=10,
     )
     frame_a = await gen.__anext__()
     frame_b = await gen.__anext__()
@@ -95,8 +109,13 @@ async def test_sse_event_stream_emits_keepalive_on_idle() -> None:
     mgr.add_subscriber.return_value = MagicMock()
     serializer = MagicMock(serialize=lambda e: e)
     gen = sse_event_stream(
-        manager=mgr, pool=pool, controller_id="c1", product="network",
-        serializer=serializer, last_event_id=None, keepalive_interval=0.05,
+        manager=mgr,
+        pool=pool,
+        controller_id="c1",
+        product="network",
+        serializer=serializer,
+        last_event_id=None,
+        keepalive_interval=0.05,
     )
     frame = await gen.__anext__()
     assert frame == b": keepalive\n\n"

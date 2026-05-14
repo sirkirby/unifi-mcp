@@ -51,7 +51,11 @@ class QosRule:
             "kind": kind,
             "primary_key": "id",
             "display_columns": [
-                "name", "enabled", "priority", "rate_max_down", "rate_max_up",
+                "name",
+                "enabled",
+                "priority",
+                "rate_max_down",
+                "rate_max_up",
             ],
             "sort_default": "name:asc",
         }

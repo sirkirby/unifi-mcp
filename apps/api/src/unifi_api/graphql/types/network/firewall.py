@@ -153,8 +153,7 @@ class FirewallZone:
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
             networks=_get(obj, "networks") or _get(obj, "network_ids") or [],
-            default_policy=_get(obj, "default_policy")
-            or _get(obj, "default_action"),
+            default_policy=_get(obj, "default_policy") or _get(obj, "default_action"),
         )
 
     def to_dict(self) -> dict:

@@ -1,4 +1,3 @@
-import pytest
 from unifi_core.detection import ControllerType
 
 

@@ -72,7 +72,10 @@ async def list_recordings(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "recording_manager",
+            session,
+            controller.id,
+            "protect",
+            "recording_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
@@ -88,7 +91,10 @@ async def list_recordings(
             raise HTTPException(status_code=400, detail="invalid cursor")
 
     page, next_cursor = paginate(
-        list(all_recordings), limit=limit, cursor=cursor_obj, key_fn=_recording_key,
+        list(all_recordings),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_recording_key,
     )
 
     type_class = request.app.state.type_registry.lookup("protect", "recordings")
@@ -119,7 +125,10 @@ async def get_recording(
     sm = request.app.state.sessionmaker
     async with sm() as session:
         mgr = await factory.get_domain_manager(
-            session, controller.id, "protect", "recording_manager",
+            session,
+            controller.id,
+            "protect",
+            "recording_manager",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
@@ -155,7 +164,8 @@ async def get_recording_status(
     site_id: str,
     controller=Depends(resolve_controller),
     camera_id: str | None = Query(
-        None, description="Optional — limit to a single camera",
+        None,
+        description="Optional — limit to a single camera",
     ),
 ) -> dict:
     """Return current recording state for one or all cameras.
@@ -170,7 +180,10 @@ async def get_recording_status(
     try:
         async with sm() as session:
             mgr = await factory.get_domain_manager(
-                session, controller.id, "protect", "recording_manager",
+                session,
+                controller.id,
+                "protect",
+                "recording_manager",
             )
             cm = await factory.get_connection_manager(session, controller.id, "protect")
             await _maybe_set_site(cm, site_id)

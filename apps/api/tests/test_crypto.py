@@ -3,7 +3,6 @@
 import os
 
 import pytest
-
 from unifi_api.db.crypto import ColumnCipher, derive_key
 
 

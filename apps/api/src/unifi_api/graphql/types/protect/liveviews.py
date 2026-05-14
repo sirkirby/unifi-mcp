@@ -111,7 +111,8 @@ class Liveview:
 
     @strawberry.field(description="Cameras included in this liveview's slots.")
     async def camera_details(
-        self, info: Info,
+        self,
+        info: Info,
     ) -> list[Annotated["Camera", strawberry.lazy("unifi_api.graphql.types.protect.cameras")]]:
         """Resolves the deduped slot ``camera_ids`` to typed Camera rows.
 

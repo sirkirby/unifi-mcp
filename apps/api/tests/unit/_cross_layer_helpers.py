@@ -77,11 +77,7 @@ def types_compatible(pydantic_annotation: Any, strawberry_annotation: Any) -> bo
     # All three pydantic shapes map to opaque structured data; Strawberry
     # represents them as the JSON scalar (arbitrary serialisable value).
     _is_any = py_inner is Any
-    _is_list_any = (
-        isinstance(py_norm, tuple)
-        and py_norm[0] == "list"
-        and (py_norm[1] is Any or py_norm[1] == Any)
-    )
+    _is_list_any = isinstance(py_norm, tuple) and py_norm[0] == "list" and (py_norm[1] is Any or py_norm[1] == Any)
     if py_norm == "dict" or _is_any or _is_list_any:
         sb_repr = repr(sb_inner)
         if "JSON" in sb_repr or sb_norm == "dict":
@@ -133,9 +129,6 @@ def compare_pair(
         py_annotation = pydantic_cls.model_fields[name].annotation
         sb_annotation = sb_fields[name]
         if not types_compatible(py_annotation, sb_annotation):
-            errors.append(
-                f"field '{name}': pydantic={py_annotation!r} incompatible with "
-                f"Strawberry={sb_annotation!r}"
-            )
+            errors.append(f"field '{name}': pydantic={py_annotation!r} incompatible with Strawberry={sb_annotation!r}")
 
     return errors

@@ -5,7 +5,6 @@ import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from unifi_mcp_shared.permissioned_tool import _infer_input_schema, create_permissioned_tool
 
 
@@ -44,7 +43,9 @@ def mock_deps():
 
     checker = MagicMock()
     checker.check = MagicMock(return_value=True)
-    checker.denial_message = MagicMock(return_value="Delete is disabled by policy for cat. Set UNIFI_POLICY_NETWORK_CAT_DELETE=true to enable.")
+    checker.denial_message = MagicMock(
+        return_value="Delete is disabled by policy for cat. Set UNIFI_POLICY_NETWORK_CAT_DELETE=true to enable."
+    )
 
     return {
         "original_tool_decorator": fake_tool_decorator,
@@ -137,7 +138,9 @@ class TestCreatePermissionedTool:
     def test_policy_gate_denial_at_call_time(self, mock_deps):
         """When policy gate denies, the wrapped function returns error dict."""
         mock_deps["policy_gate_checker"].check.return_value = False
-        mock_deps["policy_gate_checker"].denial_message.return_value = (
+        mock_deps[
+            "policy_gate_checker"
+        ].denial_message.return_value = (
             "Delete is disabled by policy for cat. Set UNIFI_POLICY_NETWORK_CAT_DELETE=true to enable."
         )
         pt = _create_pt(mock_deps)
@@ -164,9 +167,7 @@ class TestCreatePermissionedTool:
             return {"success": True}
 
         with patch("unifi_mcp_shared.permissioned_tool.resolve_permission_mode", return_value="bypass"):
-            result = asyncio.run(
-                mock_deps["mcp_registered"]["mut_tool"](name="test")
-            )
+            result = asyncio.run(mock_deps["mcp_registered"]["mut_tool"](name="test"))
 
         assert result == {"success": True}
         assert received_kwargs["confirm"] is True
@@ -184,9 +185,7 @@ class TestCreatePermissionedTool:
             return {"success": True}
 
         with patch("unifi_mcp_shared.permissioned_tool.resolve_permission_mode", return_value="bypass"):
-            result = asyncio.run(
-                mock_deps["mcp_registered"]["mut_tool"](name="test", confirm=False)
-            )
+            result = asyncio.run(mock_deps["mcp_registered"]["mut_tool"](name="test", confirm=False))
 
         assert result == {"success": True}
         assert received_kwargs["confirm"] is False  # Explicit False preserved
@@ -204,9 +203,7 @@ class TestCreatePermissionedTool:
             return {"success": True}
 
         with patch("unifi_mcp_shared.permissioned_tool.resolve_permission_mode", return_value="confirm"):
-            result = asyncio.run(
-                mock_deps["mcp_registered"]["mut_tool"](name="test")
-            )
+            result = asyncio.run(mock_deps["mcp_registered"]["mut_tool"](name="test"))
 
         assert result == {"success": True}
         assert received_kwargs["confirm"] is False
@@ -224,9 +221,7 @@ class TestCreatePermissionedTool:
             return {"success": True}
 
         with patch("unifi_mcp_shared.permissioned_tool.resolve_permission_mode", return_value="bypass"):
-            result = asyncio.run(
-                mock_deps["mcp_registered"]["read_tool"]()
-            )
+            result = asyncio.run(mock_deps["mcp_registered"]["read_tool"]())
 
         assert result == {"success": True}
         assert received_kwargs["confirm"] is False

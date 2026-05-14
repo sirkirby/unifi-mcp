@@ -9,7 +9,6 @@ from unifi_api.auth.scopes import Scope
 from unifi_api.routes.admin._common import render
 from unifi_api.services.audit_pruner import prune_audit
 
-
 router = APIRouter()
 
 
@@ -38,7 +37,9 @@ async def _read_settings(svc) -> dict:
             "max_age_days": await svc.get_int("audit.retention.max_age_days", default=_AUDIT_DEFAULTS["max_age_days"]),
             "max_rows": await svc.get_int("audit.retention.max_rows", default=_AUDIT_DEFAULTS["max_rows"]),
             "enabled": await svc.get_bool("audit.retention.enabled", default=_AUDIT_DEFAULTS["enabled"]),
-            "prune_interval_hours": await svc.get_int("audit.retention.prune_interval_hours", default=_AUDIT_DEFAULTS["prune_interval_hours"]),
+            "prune_interval_hours": await svc.get_int(
+                "audit.retention.prune_interval_hours", default=_AUDIT_DEFAULTS["prune_interval_hours"]
+            ),
         },
         "logs": {
             "enabled": await svc.get_bool("logs.file.enabled", default=_LOGS_DEFAULTS["enabled"]),

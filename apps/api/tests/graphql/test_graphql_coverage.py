@@ -15,7 +15,6 @@ from unifi_api.graphql.schema import schema as graphql_schema
 from unifi_api.graphql.type_registry_init import build_type_registry
 from unifi_api.services.manifest import ManifestRegistry
 
-
 # PR4 close: ALL THREE PRODUCTS now covered. The allowlist is empty —
 # every read tool in the manifest must map to a GraphQL Query field.
 # Phase 6 close-out invariant: this set stays empty forever.
@@ -107,15 +106,11 @@ def test_every_read_tool_has_graphql_field() -> None:
             # canonical map.
             stem = tool_name.replace("unifi_list_", "").replace("unifi_get_", "")
             stem = stem.replace("_details", "")  # DETAIL convention
-            stem_camel = stem.split("_")[0] + "".join(
-                p.capitalize() for p in stem.split("_")[1:]
-            )
+            stem_camel = stem.split("_")[0] + "".join(p.capitalize() for p in stem.split("_")[1:])
             if not any(stem_camel.lower() in fld.lower() for fld in fields):
                 missing.append(f"{product}/{tool_name}")
 
-    assert not missing, (
-        f"Read tools without a GraphQL Query field:\n  " + "\n  ".join(missing)
-    )
+    assert not missing, "Read tools without a GraphQL Query field:\n  " + "\n  ".join(missing)
 
 
 def test_smoke_health_field_present() -> None:

@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
-
 from unifi_api.auth.api_key import generate_key, hash_key
 from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.models import ApiKey, Base
@@ -31,18 +30,24 @@ async def _bootstrap_app_with_admin_key(tmp_path: Path):
     material = generate_key()
     key_id = str(uuid.uuid4())
     async with sm() as session:
-        session.add(ApiKey(
-            id=key_id, prefix=material.prefix,
-            hash=hash_key(material.plaintext), scopes="admin",
-            name="t", created_at=datetime.now(timezone.utc),
-        ))
+        session.add(
+            ApiKey(
+                id=key_id,
+                prefix=material.prefix,
+                hash=hash_key(material.plaintext),
+                scopes="admin",
+                name="t",
+                created_at=datetime.now(timezone.utc),
+            )
+        )
         await session.commit()
     return app, material.plaintext, material.prefix, key_id
 
 
 @pytest.mark.asyncio
 async def test_keys_page_shell_renders_unauth_and_table_fragment_lists_rows(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     """Page route is unauth (vanilla nav can't carry the localStorage Bearer);
     the table-body fragment is admin-scoped and contains the actual rows."""
