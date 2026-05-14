@@ -5,7 +5,7 @@
     "email": "unifi@privatly.net"
   },
   "metadata": {
-    "description": "UniFi MCP plugins — manage Ubiquiti UniFi infrastructure from Claude Code"
+    "description": "UniFi MCP plugins — manage Ubiquiti UniFi infrastructure from Claude Code, Codex, and OpenClaw"
   },
   "plugins": [
     {

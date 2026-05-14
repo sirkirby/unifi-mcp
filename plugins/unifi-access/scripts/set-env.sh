@@ -1,10 +1,11 @@
 #!/bin/bash
 # Configure UniFi MCP client environment.
 # Usage:
-#   set-env.sh [--target claude|codex] [--dry-run] KEY1=VALUE1 KEY2=VALUE2 ...
+#   set-env.sh [--target claude|codex|openclaw] [--dry-run] KEY1=VALUE1 KEY2=VALUE2 ...
 #
 # Claude target: merges environment variables into .claude/settings.local.json.
 # Codex target: registers/replaces the MCP server with `codex mcp add --env`.
+# OpenClaw target: registers/replaces the MCP server with `openclaw mcp set`.
 #
 # Bash 3.2 compatible for stock macOS.
 
@@ -17,7 +18,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --target)
       if [ $# -lt 2 ]; then
-        echo "ERROR: --target requires claude or codex" >&2
+        echo "ERROR: --target requires claude, codex, or openclaw" >&2
         exit 1
       fi
       TARGET="$2"
@@ -46,14 +47,14 @@ while [ $# -gt 0 ]; do
 done
 
 if [ $# -eq 0 ]; then
-  echo "Usage: set-env.sh [--target claude|codex] [--dry-run] KEY1=VALUE1 KEY2=VALUE2 ..." >&2
+  echo "Usage: set-env.sh [--target claude|codex|openclaw] [--dry-run] KEY1=VALUE1 KEY2=VALUE2 ..." >&2
   exit 1
 fi
 
 case "$TARGET" in
-  claude|codex) ;;
+  claude|codex|openclaw) ;;
   *)
-    echo "ERROR: Unsupported target '$TARGET'. Expected claude or codex." >&2
+    echo "ERROR: Unsupported target '$TARGET'. Expected claude, codex, or openclaw." >&2
     exit 1
     ;;
 esac
@@ -212,7 +213,71 @@ write_codex_config() {
   echo "Restart Codex so the updated MCP server configuration is loaded."
 }
 
+build_openclaw_json() {
+  package_pin="$1"
+  shift
+
+  python3 - "$package_pin" "$@" <<'PY'
+import json
+import sys
+
+package_pin = sys.argv[1]
+env = {}
+for item in sys.argv[2:]:
+    key, value = item.split("=", 1)
+    env[key] = value
+
+print(
+    json.dumps(
+        {
+            "command": "uvx",
+            "args": ["--python-preference", "system", package_pin],
+            "env": env,
+        },
+        separators=(",", ":"),
+    )
+)
+PY
+}
+
+write_openclaw_config() {
+  package_pin="$(detect_package_pin)"
+
+  if [ "$DRY_RUN" = "true" ]; then
+    echo "Would replace OpenClaw MCP server '$PLUGIN_NAME' with:"
+    printf '  openclaw mcp set %q ' "$PLUGIN_NAME"
+    printf "'{\"command\":\"uvx\",\"args\":[\"--python-preference\",\"system\",\"%s\"],\"env\":{...}}'" "$package_pin"
+    echo ""
+    echo ""
+    echo "Environment values:"
+    print_values "$@"
+    return
+  fi
+
+  if ! command -v openclaw >/dev/null 2>&1; then
+    echo "ERROR: openclaw CLI not found on PATH. Install OpenClaw, then re-run setup." >&2
+    exit 1
+  fi
+
+  if ! command -v uvx >/dev/null 2>&1; then
+    echo "ERROR: uvx not found on PATH. Install uv, then re-run setup." >&2
+    exit 1
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ERROR: python3 not found on PATH. It is required to build the OpenClaw MCP JSON config safely." >&2
+    exit 1
+  fi
+
+  mcp_json="$(build_openclaw_json "$package_pin" "$@")"
+  openclaw mcp set "$PLUGIN_NAME" "$mcp_json"
+  echo ""
+  echo "Configured OpenClaw MCP server '$PLUGIN_NAME' with $package_pin."
+  echo "Restart the OpenClaw Gateway so the updated MCP server configuration is loaded."
+}
+
 case "$TARGET" in
   claude) write_claude_settings "$@" ;;
   codex) write_codex_config "$@" ;;
+  openclaw) write_openclaw_config "$@" ;;
 esac

@@ -52,7 +52,7 @@ Install via the plugin marketplace — includes the MCP server, an agent skill, 
 ```
 /plugin marketplace add sirkirby/unifi-mcp
 /plugin install unifi-network@unifi-plugins
-/unifi-network:setup
+/unifi-network:unifi-network-setup
 ```
 
 Repeat for Protect or Access if needed:
@@ -61,7 +61,7 @@ Repeat for Protect or Access if needed:
 /plugin install unifi-access@unifi-plugins
 ```
 
-Each plugin's `/setup` command walks you through connecting to your controller and configuring permissions.
+Each plugin's setup command walks you through connecting to your controller and configuring permissions.
 
 ### Codex
 
@@ -73,9 +73,34 @@ codex plugin marketplace add sirkirby/unifi-mcp
 
 Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `unifi-network`, `unifi-protect`, or `unifi-access`. After installing, ask Codex to run the plugin's setup skill, for example:
 
-> Use the UniFi Network setup skill to configure this for Codex.
+> Use the `unifi-network-setup` skill to configure this for Codex.
 
 The setup skill registers the MCP server with `codex mcp add`, stores the selected environment values in Codex's MCP configuration, and keeps the same preview-before-confirm safety model as Claude Code.
+
+### OpenClaw
+
+OpenClaw can install the same UniFi plugin bundles from the marketplace and map their skills plus MCP server definitions into embedded Pi sessions:
+
+```bash
+openclaw plugins install unifi-network --marketplace https://github.com/sirkirby/unifi-mcp
+openclaw gateway restart
+```
+
+Then run the matching setup skill from OpenClaw (`unifi-network-setup`, `unifi-protect-setup`, or `unifi-access-setup`), or configure the server directly:
+
+```bash
+openclaw mcp set unifi-network '{
+  "command": "uvx",
+  "args": ["--python-preference", "system", "unifi-network-mcp@latest"],
+  "env": {
+    "UNIFI_NETWORK_HOST": "192.168.1.1",
+    "UNIFI_NETWORK_USERNAME": "admin",
+    "UNIFI_NETWORK_PASSWORD": "your-password"
+  }
+}'
+```
+
+Repeat with `unifi-protect` or `unifi-access` as needed. Restart the OpenClaw Gateway after changing MCP server configuration.
 
 ### Other MCP clients
 
@@ -205,9 +230,9 @@ packages/
   unifi-mcp-shared/ # Shared MCP patterns (permissions, tools, diagnostics, config)
   unifi-mcp-relay/  # Cloud relay sidecar (bridges local servers to Cloudflare Worker)
 plugins/
-  unifi-network/    # Claude Code/Codex plugin: MCP server + agent skills + setup
-  unifi-protect/    # Claude Code/Codex plugin: MCP server + agent skills + setup
-  unifi-access/     # Claude Code/Codex plugin: MCP server + setup
+  unifi-network/    # Claude Code/Codex/OpenClaw plugin: MCP server + agent skills + setup
+  unifi-protect/    # Claude Code/Codex/OpenClaw plugin: MCP server + agent skills + setup
+  unifi-access/     # Claude Code/Codex/OpenClaw plugin: MCP server + setup
 skills/
   _shared/          # Shared utilities for skill scripts (MCP client, config)
 docs/               # Ecosystem-level documentation

@@ -18,7 +18,7 @@ There are no helper scripts in this skill — only references and tools. You dri
 
 ## Required MCP Server
 
-This skill requires the `unifi-network` MCP server. Verify with `unifi_tool_index`. If it's unavailable, direct the user to `/setup`.
+This skill requires the `unifi-network` MCP server. Verify with `unifi_tool_index`. If it's unavailable, direct the user to the `unifi-network-setup` skill.
 
 ---
 
@@ -26,7 +26,7 @@ This skill requires the `unifi-network` MCP server. Verify with `unifi_tool_inde
 
 Before doing anything else:
 
-- Confirm `UNIFI_NETWORK_HOST` (or `UNIFI_HOST`) is set. If not: *"UNIFI_NETWORK_HOST is not configured. Please run `/setup` before using this skill."*
+- Confirm `UNIFI_NETWORK_HOST` (or `UNIFI_HOST`) is set. If not: *"UNIFI_NETWORK_HOST is not configured. Please run the `unifi-network-setup` skill before using this skill."*
 - Verify the server responds by calling `unifi_tool_index`.
 
 ---
@@ -205,7 +205,7 @@ For a comprehensive scored audit, use the **firewall-auditor** skill instead.
 
 ## 8. Manual fallback
 
-When you cannot reach the MCP server (network issue, server crash), there is no fallback that mutates the controller — there's nothing to mutate against. Tell the user the server is unreachable and direct them to `/setup` for diagnosis.
+When you cannot reach the MCP server (network issue, server crash), there is no fallback that mutates the controller — there's nothing to mutate against. Tell the user the server is unreachable and direct them to the `unifi-network-setup` skill for diagnosis.
 
 The "manual procedure" sections of older versions of this skill assumed a separate HTTP transport that no longer exists. Removed for simplicity.
 

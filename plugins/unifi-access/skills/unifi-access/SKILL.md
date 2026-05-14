@@ -63,7 +63,7 @@ Access has two independent auth paths:
 
 Either can work independently. For full functionality, configure both. If mutations fail with auth errors, the user needs username+password (API key alone is not enough for write operations).
 
-To configure, run `/unifi-access:setup` or set env vars manually:
+To configure, run `/unifi-access:unifi-access-setup` or set env vars manually:
 ```
 UNIFI_ACCESS_HOST=192.168.1.1
 UNIFI_ACCESS_API_KEY=your-api-key

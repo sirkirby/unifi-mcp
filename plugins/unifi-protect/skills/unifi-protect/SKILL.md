@@ -67,7 +67,7 @@ All tools return: `{"success": true, "data": ...}`, `{"success": false, "error":
 
 Username and password are **required** (local admin credentials, not Ubiquiti SSO). API key support exists but is **experimental** — limited to read-only operations and a subset of tools.
 
-To configure, run `/unifi-protect:setup` or set env vars manually:
+To configure, run `/unifi-protect:unifi-protect-setup` or set env vars manually:
 ```
 UNIFI_PROTECT_HOST=192.168.1.1
 UNIFI_PROTECT_USERNAME=admin

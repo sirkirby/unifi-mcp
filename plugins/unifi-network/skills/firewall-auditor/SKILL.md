@@ -18,7 +18,7 @@ There is no Python script doing the audit for you. There is no HTTP sidecar. You
 
 ## Required MCP Server
 
-This skill requires the `unifi-network` MCP server. If `unifi_tool_index` is unavailable, stop and direct the user to `/setup`.
+This skill requires the `unifi-network` MCP server. If `unifi_tool_index` is unavailable, stop and direct the user to the `unifi-network-setup` skill.
 
 ---
 

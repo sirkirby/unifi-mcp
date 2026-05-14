@@ -11,7 +11,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --target)
       if [ $# -lt 2 ]; then
-        echo "ERROR: --target requires claude or codex" >&2
+        echo "ERROR: --target requires claude, codex, or openclaw" >&2
         exit 1
       fi
       TARGET="$2"
@@ -39,9 +39,9 @@ PLUGIN_NAME="${1:-unifi plugin}"
 SETTINGS_FILE=".claude/settings.local.json"
 
 case "$TARGET" in
-  claude|codex) ;;
+  claude|codex|openclaw) ;;
   *)
-    echo "ERROR: Unsupported target '$TARGET'. Expected claude or codex." >&2
+    echo "ERROR: Unsupported target '$TARGET'. Expected claude, codex, or openclaw." >&2
     exit 1
     ;;
 esac
@@ -88,7 +88,7 @@ if [ "$TARGET" = "claude" ]; then
   else
     echo "  [OK]   $SETTINGS_FILE does not exist yet (will be created)"
   fi
-else
+elif [ "$TARGET" = "codex" ]; then
   if command -v codex >/dev/null 2>&1; then
     codex_version=$(codex --version 2>&1 | head -1)
     echo "  [OK]   codex found: $codex_version"
@@ -103,6 +103,32 @@ else
     echo "  [FAIL] codex CLI not found on PATH"
     echo "         Codex setup registers the MCP server with 'codex mcp add'."
     echo "         Install or open Codex, then re-run setup."
+    errors=$((errors + 1))
+  fi
+else
+  if command -v openclaw >/dev/null 2>&1; then
+    openclaw_version=$(openclaw --version 2>&1 | head -1)
+    echo "  [OK]   openclaw found: $openclaw_version"
+    if openclaw mcp list >/dev/null 2>&1; then
+      echo "  [OK]   openclaw mcp list succeeded"
+    else
+      echo "  [WARN] openclaw is installed, but 'openclaw mcp list' failed"
+      echo "         Setup may still work, but confirm OpenClaw config is valid."
+      warnings=$((warnings + 1))
+    fi
+  else
+    echo "  [FAIL] openclaw CLI not found on PATH"
+    echo "         OpenClaw setup registers the MCP server with 'openclaw mcp set'."
+    echo "         Install OpenClaw, then re-run setup."
+    errors=$((errors + 1))
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    python_version=$(python3 --version 2>&1 | head -1)
+    echo "  [OK]   python3 found: $python_version"
+  else
+    echo "  [FAIL] python3 not found on PATH"
+    echo "         OpenClaw setup uses python3 to build MCP JSON without shell-escaping bugs."
     errors=$((errors + 1))
   fi
 fi
@@ -137,8 +163,10 @@ fi
 if [ "$TARGET" = "claude" ]; then
   echo "  [INFO] Reminder: 'installed' is not the same as 'enabled'."
   echo "         After setup, run /plugin and confirm the plugin shows enabled."
-else
+elif [ "$TARGET" = "codex" ]; then
   echo "  [INFO] After setup, restart Codex so MCP server changes are loaded."
+else
+  echo "  [INFO] After setup, restart the OpenClaw Gateway so MCP server changes are loaded."
 fi
 
 echo ""

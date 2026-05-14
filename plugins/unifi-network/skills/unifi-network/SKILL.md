@@ -69,7 +69,7 @@ Additional enriched fields: `upgradable` (bool), `connection_network` (VLAN name
 
 Username and password are **required** (local admin credentials, not Ubiquiti SSO). API key support exists but is **experimental** — limited to read-only operations and a subset of tools.
 
-To configure, run `/unifi-network:setup` or set env vars manually:
+To configure, run `/unifi-network:unifi-network-setup` or set env vars manually:
 ```
 UNIFI_NETWORK_HOST=192.168.1.1
 UNIFI_NETWORK_USERNAME=admin

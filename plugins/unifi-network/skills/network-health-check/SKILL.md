@@ -10,7 +10,7 @@ description: Run a UniFi network health check — diagnose device status, connec
 Before running a health check, verify the MCP server is configured:
 
 - Check that `UNIFI_NETWORK_HOST` is set in the environment.
-- If it is not set or the connection fails, stop and direct the user to `/setup` to configure the UniFi Network MCP server.
+- If it is not set or the connection fails, stop and direct the user to the `unifi-network-setup` skill to configure the UniFi Network MCP server.
 - Use `unifi_tool_index` to confirm available tools. If no UniFi tools are listed, the server is not connected.
 
 ## Health Check Procedure

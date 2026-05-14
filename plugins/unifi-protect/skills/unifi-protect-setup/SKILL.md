@@ -1,6 +1,6 @@
 ---
-name: setup
-description: Configure the UniFi Protect MCP server for Claude Code or Codex — set NVR host, credentials, and permissions
+name: unifi-protect-setup
+description: Configure the UniFi Protect MCP server for Claude Code, Codex, or OpenClaw — set NVR host, credentials, and permissions
 allowed-tools: Read, Bash, AskUserQuestion
 ---
 
@@ -13,6 +13,7 @@ Walk the user through configuring their UniFi Protect NVR connection. Ask one qu
 Use the client target that matches the current agent runtime:
 - Claude Code: `claude`
 - Codex: `codex`
+- OpenClaw: `openclaw`
 
 If the runtime is unclear, ask which client to configure. For questions, use the platform's blocking question tool when available (`AskUserQuestion` in Claude Code, `request_user_input` in Codex). If no blocking question tool is available, ask in chat with numbered options and wait for the user's reply.
 
@@ -22,14 +23,14 @@ On macOS and Linux, resolve setup scripts relative to this skill file:
 
 When the host exposes a plugin-root variable such as `CLAUDE_PLUGIN_ROOT`, using `$CLAUDE_PLUGIN_ROOT/scripts/...` is also valid. Do not assume the current shell directory is the plugin root.
 
-On Windows with Claude Code, use `../../scripts/set-env.ps1` for the final Claude settings write. On Windows with Codex, call `codex mcp add` directly with the same env variables if Bash is unavailable.
+On Windows with Claude Code, use `../../scripts/set-env.ps1` for the final Claude settings write. On Windows with Codex, call `codex mcp add` directly with the same env variables if Bash is unavailable. On Windows with OpenClaw, call `openclaw mcp set` directly with a JSON object containing `command`, `args`, and `env` if Bash is unavailable.
 
 ## Step 0: Check Prerequisites
 
 Before asking for credentials, run:
 
 ```bash
-bash <path-to-plugin>/scripts/check-prereqs.sh --target <claude|codex> "unifi-protect"
+bash <path-to-plugin>/scripts/check-prereqs.sh --target <claude|codex|openclaw> "unifi-protect"
 ```
 
 If the script exits non-zero, stop and report the error. Do not proceed to credentials.
@@ -38,7 +39,7 @@ If the script exits non-zero, stop and report the error. Do not proceed to crede
 
 Ask: "What is your UniFi controller's IP address or hostname?" Example: `192.168.1.1`.
 
-If another UniFi MCP server is already configured, ask whether Protect is on the same controller. For Claude, existing values may be in `.claude/settings.local.json`. For Codex, existing values may be visible through `codex mcp list` and `codex mcp get <server>`.
+If another UniFi MCP server is already configured, ask whether Protect is on the same controller. For Claude, existing values may be in `.claude/settings.local.json`. For Codex, existing values may be visible through `codex mcp list` and `codex mcp get <server>`. For OpenClaw, existing values may be visible through `openclaw mcp list` and `openclaw mcp show <server>`.
 
 ## Step 2: Credentials
 
@@ -73,7 +74,7 @@ Collect any selected policy variables. Use the existing `UNIFI_POLICY_PROTECT_<C
 On macOS/Linux, run the target-aware setup script with only values the user provided or selected:
 
 ```bash
-bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex> \
+bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_PROTECT_HOST=<host> \
   UNIFI_PROTECT_USERNAME=<username> \
   UNIFI_PROTECT_PASSWORD=<password>
@@ -82,7 +83,7 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex> \
 Add optional values and policy variables to the same command, for example:
 
 ```bash
-bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex> \
+bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_PROTECT_HOST=<host> \
   UNIFI_PROTECT_USERNAME=<username> \
   UNIFI_PROTECT_PASSWORD=<password> \
@@ -93,6 +94,7 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex> \
 The script handles the client-specific write:
 - Claude target: merges env vars into `.claude/settings.local.json`
 - Codex target: replaces the `unifi-protect` MCP server via `codex mcp add --env ... -- uvx ...`
+- OpenClaw target: replaces the `unifi-protect` MCP server via `openclaw mcp set ...`
 
 ## Step 5: Final Message
 
@@ -103,3 +105,7 @@ For Claude Code, tell the user:
 For Codex, tell the user:
 
 "Codex MCP server `unifi-protect` configured. Restart Codex so the updated MCP server is loaded."
+
+For OpenClaw, tell the user:
+
+"OpenClaw MCP server `unifi-protect` configured. Restart the OpenClaw Gateway so the updated MCP server is loaded."

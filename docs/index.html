@@ -115,6 +115,7 @@
       <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z"/><path d="M9 12l2 2 4-4"/></svg>Gemini CLI</span>
       <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h12"/></svg>opencode</span>
       <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c5-8 15-8 20 0M2 12c5 8 15 8 20 0"/><circle cx="12" cy="12" r="3"/></svg>Codex CLI</span>
+      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v10H4z"/><path d="M8 19h8M12 15v4"/><path d="M8 9h8M8 12h5"/></svg>OpenClaw</span>
       <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg>n8n / Zapier</span>
       <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Custom agents</span>
     </div>
@@ -539,6 +540,10 @@
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1l6 3v4c0 4-3 6.5-6 7-3-.5-6-3-6-7V4l6-3z"/></svg>
           Claude Code
         </button>
+        <button role="tab" id="tab-openclaw" aria-selected="false" aria-controls="panel-openclaw" onclick="switchTab('openclaw')">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="8"/><path d="M5 14h6M8 11v3"/><path d="M5 6h6M5 8.5h4"/></svg>
+          OpenClaw
+        </button>
         <button role="tab" id="tab-uvx" aria-selected="false" aria-controls="panel-uvx" onclick="switchTab('uvx')">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12v8H2z"/><path d="M5 7l2 1-2 1M9 9h2"/></svg>
           uvx
@@ -566,7 +571,16 @@
 <span class="k">/plugin</span> install <span class="s">unifi-network@unifi-plugins</span>
 
 <span class="c"># 3. Run the guided setup</span>
-<span class="k">/unifi-network:setup</span></code></pre>
+<span class="k">/unifi-network:unifi-network-setup</span></code></pre>
+      </div>
+      <div role="tabpanel" id="panel-openclaw" class="install-panel" hidden>
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code><span class="c"># Install the same UniFi bundle marketplace in OpenClaw</span>
+openclaw plugins install <span class="s">unifi-network</span> --marketplace <span class="s">https://github.com/sirkirby/unifi-mcp</span>
+openclaw gateway restart
+
+<span class="c"># The unifi-network-setup skill can configure this, or register MCP directly:</span>
+openclaw mcp set <span class="s">unifi-network</span> <span class="v">'{"command":"uvx","args":["--python-preference","system","unifi-network-mcp@latest"],"env":{"UNIFI_NETWORK_HOST":"192.168.1.1","UNIFI_NETWORK_USERNAME":"admin","UNIFI_NETWORK_PASSWORD":"your-password"}}'</span></code></pre>
       </div>
       <div role="tabpanel" id="panel-uvx" class="install-panel" hidden>
         <button class="copy-btn" onclick="copyCode(this)">Copy</button>

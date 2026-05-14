@@ -1,6 +1,6 @@
 #!/bin/bash
 # Smoke test the plugin setup scripts (check-prereqs.sh, set-env.sh) for all
-# three Claude Code plugins.
+# three UniFi MCP plugin bundles.
 #
 # Run with the system bash to specifically pin macOS bash 3.2 compatibility:
 #   /bin/bash scripts/smoke-plugin-setup.sh
@@ -187,6 +187,54 @@ ec=$?
 set -e
 assert "bad input exits non-zero" "$ec" "1"
 assert_contains "bad input names the offending arg" "$out" "notakeyvalue"
+
+# 3f. OpenClaw dry-run emits the expected registry command without leaking secrets
+rm -rf "$work" && mkdir "$work" && cd "$work"
+set +e
+out=$(/bin/bash "$SETENV" --target openclaw --dry-run \
+  UNIFI_NETWORK_HOST=10.0.0.1 \
+  UNIFI_NETWORK_USERNAME=admin \
+  UNIFI_NETWORK_PASSWORD=hunter2secret 2>&1)
+ec=$?
+set -e
+assert "openclaw dry-run exits 0" "$ec" "0"
+assert_contains "openclaw dry-run uses mcp set" "$out" "openclaw mcp set unifi-network"
+assert_contains "openclaw dry-run uses uvx command" "$out" '"command":"uvx"'
+assert_contains "openclaw dry-run masks password" "$out" "hu***et"
+assert_not_contains "openclaw dry-run hides raw password" "$out" "hunter2secret"
+
+# 3g. OpenClaw target writes valid MCP JSON through the CLI
+rm -rf "$work" && mkdir -p "$work/bin" && cd "$work"
+cat > "$work/bin/uvx" <<'SH'
+#!/bin/sh
+echo "uvx 0.0.0"
+SH
+cat > "$work/bin/openclaw" <<'SH'
+#!/bin/sh
+if [ "$1" = "mcp" ] && [ "$2" = "set" ]; then
+  printf '%s\n' "$3" > "$OPENCLAW_CAPTURE_NAME"
+  printf '%s\n' "$4" > "$OPENCLAW_CAPTURE_JSON"
+  exit 0
+fi
+echo "openclaw 0.0.0"
+SH
+chmod +x "$work/bin/uvx" "$work/bin/openclaw"
+set +e
+out=$(PATH="$work/bin:$PATH" OPENCLAW_CAPTURE_NAME="$work/name.txt" OPENCLAW_CAPTURE_JSON="$work/mcp.json" /bin/bash "$SETENV" --target openclaw \
+  UNIFI_NETWORK_HOST=10.0.0.1 \
+  UNIFI_NETWORK_USERNAME=admin \
+  UNIFI_NETWORK_PASSWORD=hunter2secret 2>&1)
+ec=$?
+set -e
+assert "openclaw write exits 0" "$ec" "0"
+got_name=$(cat "$work/name.txt")
+assert "openclaw write targets plugin name" "$got_name" "unifi-network"
+assert_file_valid_json "openclaw write produces valid MCP JSON" "$work/mcp.json"
+got_command=$(python3 -c "import json; print(json.load(open('mcp.json'))['command'])")
+assert "openclaw JSON uses uvx command" "$got_command" "uvx"
+got_host=$(python3 -c "import json; print(json.load(open('mcp.json'))['env']['UNIFI_NETWORK_HOST'])")
+assert "openclaw JSON includes host env" "$got_host" "10.0.0.1"
+assert_not_contains "openclaw write stdout hides raw password" "$out" "hunter2secret"
 
 # --- 4. Bash version this test ran under (informational) ---
 echo ""
