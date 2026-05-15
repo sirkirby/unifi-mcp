@@ -1,4 +1,4 @@
-# Access Server Tool Reference (29 tools)
+# Access Server Tool Reference (34 tools)
 
 Complete reference for `access_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Access controls physical door locks and building entry.
 

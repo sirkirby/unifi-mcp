@@ -1,10 +1,16 @@
 """Tests for the shared permissioned_tool factory."""
 
 import asyncio
+import inspect
 import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
+from mcp.server.fastmcp import FastMCP
+from unifi_mcp_shared.output_schema import (
+    UniFiToolResponse,
+    get_unifi_tool_response_output_schema,
+)
 from unifi_mcp_shared.permissioned_tool import _infer_input_schema, create_permissioned_tool
 
 
@@ -13,6 +19,7 @@ def mock_deps():
     """Create mock dependencies for the factory."""
     registered_tools = {}
     mcp_registered = {}
+    mcp_tool_kwargs = {}
 
     def fake_register(
         name,
@@ -26,6 +33,7 @@ def mock_deps():
         registered_tools[name] = {
             "description": description,
             "input_schema": input_schema,
+            "output_schema": output_schema,
             "auth_method": auth_method,
             "permission_category": permission_category,
             "permission_action": permission_action,
@@ -37,6 +45,7 @@ def mock_deps():
         def decorator(func):
             name = kwargs.get("name") or (args[0] if args else getattr(func, "__name__", "<unknown>"))
             mcp_registered[name] = func
+            mcp_tool_kwargs[name] = kwargs.copy()
             return func
 
         return decorator
@@ -57,6 +66,7 @@ def mock_deps():
         "logger": logging.getLogger("test"),
         "registered_tools": registered_tools,
         "mcp_registered": mcp_registered,
+        "mcp_tool_kwargs": mcp_tool_kwargs,
     }
 
 
@@ -125,6 +135,66 @@ class TestCreatePermissionedTool:
 
         assert mock_deps["registered_tools"]["perm_tool"]["permission_category"] == "networks"
         assert mock_deps["registered_tools"]["perm_tool"]["permission_action"] == "update"
+
+    def test_registers_default_output_schema_for_standard_tools(self, mock_deps):
+        pt = _create_pt(mock_deps)
+
+        @pt(name="schema_tool", description="test")
+        async def schema_tool():
+            return {"success": True, "data": {"id": "abc"}}
+
+        schema = mock_deps["registered_tools"]["schema_tool"]["output_schema"]
+        assert schema == get_unifi_tool_response_output_schema()
+        assert set(schema["properties"]) >= {"success", "data", "error", "requires_confirmation", "preview"}
+
+    def test_preserves_explicit_output_schema_for_tool_index_metadata(self, mock_deps):
+        pt = _create_pt(mock_deps)
+        custom_schema = {
+            "type": "object",
+            "properties": {
+                "loaded": {"type": "array", "items": {"type": "string"}},
+                "errors": {"type": "array"},
+            },
+        }
+
+        @pt(name="custom_schema_tool", description="test", output_schema=custom_schema)
+        async def custom_schema_tool():
+            return {"loaded": ["a"], "errors": []}
+
+        assert mock_deps["registered_tools"]["custom_schema_tool"]["output_schema"] == custom_schema
+
+    def test_mcp_registration_enables_structured_output_with_response_model(self, mock_deps):
+        pt = _create_pt(mock_deps)
+
+        @pt(name="structured_schema_tool", description="test")
+        async def structured_schema_tool():
+            return {"success": True}
+
+        assert mock_deps["mcp_tool_kwargs"]["structured_schema_tool"]["structured_output"] is True
+        signature = inspect.signature(mock_deps["mcp_registered"]["structured_schema_tool"])
+        assert signature.return_annotation is UniFiToolResponse
+
+    @pytest.mark.asyncio
+    async def test_fastmcp_exposes_output_schema_and_structured_content(self, mock_deps):
+        server = FastMCP("test")
+        mock_deps = {
+            **mock_deps,
+            "original_tool_decorator": server.tool,
+        }
+        pt = _create_pt(mock_deps)
+
+        @pt(name="fastmcp_schema_tool", description="test")
+        async def fastmcp_schema_tool():
+            return {"success": True, "data": {"id": "abc"}}
+
+        tools = await server.list_tools()
+        tool = next(t for t in tools if t.name == "fastmcp_schema_tool")
+        assert tool.outputSchema == get_unifi_tool_response_output_schema()
+
+        content, structured_content = await server.call_tool("fastmcp_schema_tool", {})
+        assert content[0].type == "text"
+        assert '"success": true' in content[0].text
+        assert structured_content == {"success": True, "data": {"id": "abc"}}
 
     def test_uses_function_name_when_no_name_given(self, mock_deps):
         pt = _create_pt(mock_deps)

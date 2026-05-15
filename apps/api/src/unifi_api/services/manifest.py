@@ -45,6 +45,13 @@ from importlib.resources import files
 from typing import Any
 
 _PRODUCTS: tuple[str, ...] = ("network", "protect", "access")
+_MCP_META_TOOL_SUFFIXES = (
+    "_tool_index",
+    "_execute",
+    "_batch",
+    "_batch_status",
+    "_load_tools",
+)
 
 
 class ToolNotFound(Exception):
@@ -131,6 +138,8 @@ def _parse_manifest(data: Any, product: str) -> dict[str, ToolEntry]:
             name = tool.get("name")
             if not isinstance(name, str) or not name:
                 continue
+            if _is_mcp_meta_tool(name):
+                continue
             category = tool.get("permission_category")
             if not isinstance(category, str) or not category:
                 category = _category_from_module(module_map.get(name, ""))
@@ -164,3 +173,8 @@ def _category_from_module(module_path: str) -> str:
     if not module_path:
         return ""
     return module_path.rsplit(".", 1)[-1]
+
+
+def _is_mcp_meta_tool(name: str) -> bool:
+    """Return true for server-control MCP helpers that are not API actions."""
+    return name.endswith(_MCP_META_TOOL_SUFFIXES)

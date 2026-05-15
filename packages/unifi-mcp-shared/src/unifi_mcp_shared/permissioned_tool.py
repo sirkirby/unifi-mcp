@@ -13,6 +13,8 @@ from typing import Any, Callable
 from unifi_core.permission import _infer_input_schema
 from unifi_core.policy_gate import resolve_permission_mode
 
+from unifi_mcp_shared.output_schema import apply_unifi_tool_response_signature, get_unifi_tool_response_output_schema
+
 
 def setup_permissioned_tool(
     *,
@@ -95,6 +97,10 @@ def create_permissioned_tool(
             description = d_kwargs.get("description", "")
             input_schema = d_kwargs.pop("input_schema", None)
             output_schema = d_kwargs.pop("output_schema", None)
+            if output_schema is None:
+                output_schema = get_unifi_tool_response_output_schema()
+            if d_kwargs.get("structured_output") is None:
+                d_kwargs["structured_output"] = True
 
             # If no explicit input_schema, try to infer from function annotations
             if input_schema is None:
@@ -114,6 +120,7 @@ def create_permissioned_tool(
                     if diagnostics_enabled_fn()
                     else func
                 )
+                wrapped = apply_unifi_tool_response_signature(wrapped)
                 return original_tool_decorator(*d_args, **d_kwargs)(wrapped)
 
             # ALWAYS register in tool index (for discovery)
@@ -151,6 +158,7 @@ def create_permissioned_tool(
                 if diagnostics_enabled_fn()
                 else gated_func
             )
+            wrapped = apply_unifi_tool_response_signature(wrapped)
 
             # ALWAYS register with MCP
             return original_tool_decorator(*d_args, **d_kwargs)(wrapped)

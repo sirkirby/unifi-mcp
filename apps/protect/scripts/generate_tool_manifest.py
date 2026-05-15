@@ -37,6 +37,11 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
+class _ManifestLazyLoader:
+    async def load_tool(self, tool_name: str) -> bool:
+        return False
+
+
 def build_module_map() -> dict[str, str]:
     """Build tool-to-module mapping by scanning tool files.
 
@@ -97,6 +102,34 @@ def generate_manifest() -> dict[str, Any]:
     # This ensures @server.tool decorators call register_tool()
     logger.info("   Setting up permissioned tool decorator...")
     import unifi_protect_mcp.main  # noqa: F401 - This monkey-patches server.tool with permissioned_tool
+
+    logger.info("   Registering shared meta-tool schemas...")
+    from unifi_mcp_shared.meta_tools import register_load_tools, register_meta_tools
+    from unifi_protect_mcp.categories import TOOL_MODULE_MAP
+    from unifi_protect_mcp.jobs import get_job_status, start_async_tool
+    from unifi_protect_mcp.runtime import server
+    from unifi_protect_mcp.tool_index import register_tool, tool_index_handler
+
+    tool_decorator = getattr(server, "_original_tool", server.tool)
+    register_meta_tools(
+        server=server,
+        tool_decorator=tool_decorator,
+        tool_index_handler=tool_index_handler,
+        start_async_tool=start_async_tool,
+        get_job_status=get_job_status,
+        register_tool=register_tool,
+        prefix="protect",
+        server_label="UniFi Protect",
+    )
+    register_load_tools(
+        server=server,
+        tool_decorator=tool_decorator,
+        lazy_loader=_ManifestLazyLoader(),
+        register_tool=register_tool,
+        tool_module_map=TOOL_MODULE_MAP,
+        prefix="protect",
+        server_label="UniFi Protect",
+    )
 
     # Force eager loading of all tools to populate TOOL_REGISTRY
     # We need to import the tool loader to trigger all tool registrations

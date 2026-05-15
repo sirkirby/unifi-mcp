@@ -24,6 +24,15 @@ def test_resolves_returns_tool_entry() -> None:
     assert entry.product == "network"
 
 
+def test_skips_mcp_meta_tools_from_api_registry() -> None:
+    reg = ManifestRegistry.load_from_apps()
+    assert not reg.has("unifi_tool_index")
+    assert not reg.has("unifi_execute")
+    assert not reg.has("unifi_batch")
+    assert not reg.has("unifi_batch_status")
+    assert not reg.has("unifi_load_tools")
+
+
 def test_unknown_tool_raises() -> None:
     reg = ManifestRegistry.load_from_apps()
     with pytest.raises(ToolNotFound):
