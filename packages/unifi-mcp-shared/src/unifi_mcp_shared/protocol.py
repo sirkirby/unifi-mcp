@@ -1,9 +1,10 @@
 """MCP protocol abstraction layer.
 
-Provides a version-aware adapter for the FastMCP tool decorator, enabling
-dual-track migration when MCP SDK v2 arrives. Today this is a passthrough
-to FastMCP v1. When v2 ships, a v2 adapter can be added here without
-touching any tool modules.
+Provides a revision-aware adapter for the FastMCP tool decorator, enabling
+date-versioned MCP spec alignment without touching individual tool modules.
+Today this is a passthrough for the currently supported MCP protocol
+revision. If a future MCP revision requires SDK or registration changes, a
+revision-specific adapter can be added here.
 
 The adapter sits at Layer 1 of the decorator chain:
 
@@ -21,15 +22,52 @@ from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
-# Known protocol versions. "v2" is recognized but not yet implemented.
-_KNOWN_VERSIONS = {"v1", "v2"}
+DEFAULT_MCP_PROTOCOL_REVISION = "2025-11-25"
+
+_KNOWN_REVISIONS = frozenset({DEFAULT_MCP_PROTOCOL_REVISION})
+_LEGACY_PROTOCOL_VERSION_ALIASES = {
+    "v1": DEFAULT_MCP_PROTOCOL_REVISION,
+}
+
+
+def _normalize_protocol_revision(value: str) -> str:
+    raw_value = value.strip()
+    if raw_value in _LEGACY_PROTOCOL_VERSION_ALIASES:
+        return _LEGACY_PROTOCOL_VERSION_ALIASES[raw_value]
+
+    if raw_value.startswith("v"):
+        raise ValueError(
+            f"Unsupported MCP protocol version alias: '{raw_value}'. "
+            f"Use date-based MCP protocol revisions such as '{DEFAULT_MCP_PROTOCOL_REVISION}'."
+        )
+
+    return raw_value
+
+
+def get_protocol_revision() -> str:
+    """Read the MCP protocol revision from environment.
+
+    ``UNIFI_MCP_PROTOCOL_REVISION`` is the canonical setting. The legacy
+    ``UNIFI_MCP_PROTOCOL_VERSION=v1`` setting remains supported as a
+    compatibility alias for the current default revision.
+    """
+    configured_revision = os.environ.get("UNIFI_MCP_PROTOCOL_REVISION")
+    if configured_revision is not None:
+        return _normalize_protocol_revision(configured_revision)
+
+    legacy_version = os.environ.get("UNIFI_MCP_PROTOCOL_VERSION")
+    if legacy_version is not None:
+        return _normalize_protocol_revision(legacy_version)
+
+    return DEFAULT_MCP_PROTOCOL_REVISION
 
 
 def get_protocol_version() -> str:
-    """Read the MCP protocol version from environment.
+    """Read the deprecated legacy MCP protocol version setting.
 
-    Returns "v1" by default. Set UNIFI_MCP_PROTOCOL_VERSION=v2 to
-    switch when v2 support is added.
+    New code should use ``get_protocol_revision()``. This helper remains so
+    callers that inspect ``UNIFI_MCP_PROTOCOL_VERSION`` continue to see the
+    historical ``v1`` default.
     """
     return os.environ.get("UNIFI_MCP_PROTOCOL_VERSION", "v1").strip()
 
@@ -37,34 +75,42 @@ def get_protocol_version() -> str:
 def create_mcp_tool_adapter(
     fastmcp_tool_decorator: Callable[..., Any],
     *,
+    protocol_revision: str | None = None,
     protocol_version: str | None = None,
 ) -> Callable[..., Any]:
-    """Wrap the FastMCP tool decorator with protocol-version awareness.
+    """Wrap the FastMCP tool decorator with protocol-revision awareness.
 
     Args:
         fastmcp_tool_decorator: The raw FastMCP ``server.tool`` decorator.
-        protocol_version: Override version (default: from env var).
+        protocol_revision: Override MCP spec revision (default: from env var).
+        protocol_version: Deprecated compatibility override. ``v1`` maps to
+            the current default protocol revision.
 
     Returns:
         A decorator with the same signature as ``server.tool``.
-        In v1 mode, this is a direct passthrough (zero overhead).
+        For the current revision, this is a direct passthrough (zero overhead).
 
     Raises:
-        ValueError: If the protocol version is unknown or not yet implemented.
+        ValueError: If the protocol revision is unknown or unsupported.
     """
-    version = protocol_version or get_protocol_version()
+    if protocol_revision is not None and protocol_version is not None:
+        raise ValueError("Pass either protocol_revision or protocol_version, not both.")
 
-    if version not in _KNOWN_VERSIONS:
-        raise ValueError(f"Unsupported protocol version: '{version}'. Known versions: {sorted(_KNOWN_VERSIONS)}")
+    if protocol_revision is not None:
+        revision = _normalize_protocol_revision(protocol_revision)
+    elif protocol_version is not None:
+        revision = _normalize_protocol_revision(protocol_version)
+    else:
+        revision = get_protocol_revision()
 
-    if version == "v1":
-        logger.debug("[protocol] Using MCP v1 adapter (passthrough)")
-        return fastmcp_tool_decorator
-
-    if version == "v2":
+    if revision not in _KNOWN_REVISIONS:
         raise ValueError(
-            "MCP protocol v2 is not yet implemented. Set UNIFI_MCP_PROTOCOL_VERSION=v1 or remove the variable."
+            f"Unsupported MCP protocol revision: '{revision}'. Known revisions: {sorted(_KNOWN_REVISIONS)}"
         )
 
+    if revision == DEFAULT_MCP_PROTOCOL_REVISION:
+        logger.debug("[protocol] Using MCP %s adapter (passthrough)", revision)
+        return fastmcp_tool_decorator
+
     # Unreachable, but satisfies type checkers
-    raise ValueError(f"Unhandled protocol version: {version}")
+    raise ValueError(f"Unhandled MCP protocol revision: {revision}")

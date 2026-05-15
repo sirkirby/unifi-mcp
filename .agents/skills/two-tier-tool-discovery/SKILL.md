@@ -42,10 +42,10 @@ FastMCP maps `tools/call` arguments to Python function parameters **by name**. T
 **Wrong — registering `tool_index_handler` directly with `@tool_decorator` would silently drop all named arguments:**
 ```python
 # If this were registered directly with @tool_decorator, args would always
-# be None — no caller sends {"args": {...}}, so FastMCP never populates it.
+# be None — no caller sends {\"args\": {...}}, so FastMCP never populates it.
 async def tool_index_handler(args: dict | None = None) -> dict:
-    category = args.get("category") if args else None  # args is always None
-    search = args.get("search") if args else None       # never reached
+    category = args.get(\"category\") if args else None  # args is always None
+    search = args.get(\"search\") if args else None       # never reached
 ```
 
 **Correct — the actual pattern: a thin named-param wrapper delegates to the backend:**
@@ -58,20 +58,20 @@ async def _tool_index_wrapper(
 ) -> dict:
     args = {}
     if category is not None:
-        args["category"] = category
+        args[\"category\"] = category
     if search is not None:
-        args["search"] = search
+        args[\"search\"] = search
     if include_schemas:
-        args["include_schemas"] = include_schemas
+        args[\"include_schemas\"] = include_schemas
     return await tool_index_handler(args or None)
 
 # In tool_index.py — the backend:
 async def tool_index_handler(args: dict | None = None) -> dict:
     args = args or {}
     return get_tool_index(
-        category=args.get("category"),
-        search=args.get("search"),
-        include_schemas=bool(args.get("include_schemas", False)),
+        category=args.get(\"category\"),
+        search=args.get(\"search\"),
+        include_schemas=bool(args.get(\"include_schemas\", False)),
     )
 ```
 
@@ -82,7 +82,7 @@ This rule applies to every handler in `tool_index.py`: the FastMCP-facing functi
 1. Open `apps/*/src/*/tool_index.py` where the wrapper and handler reside.
 2. Add the new parameter to the FastMCP-registered wrapper function's signature with a sensible default (preserves backwards compatibility for callers that omit it).
 3. In the wrapper, add the new param to the `args` dict it assembles before calling `tool_index_handler`.
-4. Open each backend `tool_index_handler` — in each app's `tool_index.py` and the shared `packages/unifi-mcp-shared/src/unifi_mcp_shared/tool_index.py`. In each, add `args.get("new_param")` and thread it into the `get_tool_index()` call.
+4. Open each backend `tool_index_handler` — in each app's `tool_index.py` and the shared `packages/unifi-mcp-shared/src/unifi_mcp_shared/tool_index.py`. In each, add `args.get(\"new_param\")` and thread it into the `get_tool_index()` call.
 5. In `get_tool_index()` (shared `tool_index.py`), implement the actual filtering/shaping logic.
 6. Update the `register_tool()` call's `input_schema` in the app's `tool_index.py` to document the new parameter for schema-aware callers.
 7. Start the local server and call `tool_index` with and without the new parameter to confirm correct behavior in both modes.
@@ -134,15 +134,32 @@ Every parameter added to the local tool discovery layer must be mirrored in the 
 
 `plugins/*/skills/*/SKILL.md` files are **agent-readable invocation manifests**. Agents read these at runtime to learn what parameters a tool accepts. A stale manifest causes agents to call `tool_index` with wrong or missing parameters — treat this with the same urgency as a code bug, not as documentation.
 
+The manifest location varies by runtime environment:
+
+- **Local monorepo development**: `.agents/plugins/*/skills/*/SKILL.md`
+- **OpenClaw distributed agent**: `~/.codex-plugin/myco/skills/*/SKILL.md` (OpenClaw globally-unique skill directories)
+- **Claude desktop plugin**: `.agents/plugins/*/skills/*/SKILL.md` (mirrored from monorepo)
+- **Codespark / other runtimes**: `~/.agents/plugins/*/skills/*/SKILL.md` (XDG-compliant home paths)
+
+When `tool_index` parameters change, all four paths must be synchronized to ensure all runtimes reflect the new behavior.
+
 ### Steps
 
-1. After any parameter change to `tool_index`, find all SKILL.md files that reference it:
+1. After any parameter change to `tool_index`, find all SKILL.md files that reference it across all runtime paths:
    ```bash
-   grep -rl "tool_index" plugins/*/skills/*/SKILL.md
+   # Local monorepo
+   grep -rl \"tool_index\" .agents/plugins/*/skills/*/SKILL.md
+
+   # OpenClaw
+   grep -rl \"tool_index\" ~/.codex-plugin/myco/skills/*/SKILL.md 2>/dev/null || true
+
+   # XDG home paths
+   grep -rl \"tool_index\" ~/.agents/plugins/*/skills/*/SKILL.md 2>/dev/null || true
    ```
 2. For each matching SKILL.md, update the parameter list and invocation examples to match the new handler signature.
 3. If a SKILL.md describes the output shape, update that section too if tier behavior changed.
 4. Include SKILL.md updates in the **same PR** as the code change — they are runtime artifacts, not documentation that can lag behind.
+5. After merge, verify that OpenClaw and XDG-path deploys are triggered (see `bump-plugin-versions.yml`).
 
 In PR #145, 7 SKILL.md files across `plugins/unifi-network/skills/*/`, `plugins/unifi-protect/skills/*/`, and `plugins/unifi-access/skills/*/` were swept as part of the handler change. Missing even one leaves a stranded manifest that will mislead future agents.
 
@@ -158,6 +175,22 @@ Adding optional parameters to the tool discovery layer is a **minor** semver bum
 4. The Worker npm package is published separately via OIDC trusted publishing, triggered by a version tag on the Worker repo. Coordinate release order:
    - Publish shared package (PyPI) first
    - Update Worker dependency, tag the Worker release, CI publishes to npm
+
+### Plugin Version Sync via `bump-plugin-versions.yml`
+
+The monorepo CI uses `bump-plugin-versions.yml` to synchronize SKILL.md manifests across all four runtime environments (monorepo, OpenClaw, Claude desktop, XDG paths). When `tool_index` parameter or behavior changes:
+
+1. Ensure all SKILL.md files updated in Procedure D include the new parameter documentation.
+2. Merge the PR to `main`.
+3. The CI job `bump-plugin-versions.yml` automatically:
+   - Detects changed SKILL.md files in the merged commit
+   - Increments the manifest version field
+   - Pushes updates to OpenClaw registry and XDG-path caches
+   - Triggers Claude plugin regeneration if needed
+4. Monitor the CI job to confirm all manifest types (monorepo, OpenClaw, Claude, XDG) received the update.
+5. If a manifest type fails to sync, manually trigger `bump-plugin-versions.yml` with the failed type as input.
+
+This ensures agents across all runtimes see the same tool discovery behavior.
 
 ## Cross-Cutting Gotchas
 

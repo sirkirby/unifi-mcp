@@ -78,7 +78,8 @@ async def run_transports(
     port: int,
     http_transport: str,
     logger: logging.Logger,
-    protocol_version: str = "v1",
+    protocol_revision: str = "2025-11-25",
+    protocol_version: str | None = None,
 ) -> None:
     """Run stdio (always) and optionally HTTP, with stdio as the primary.
 
@@ -96,9 +97,9 @@ async def run_transports(
     ``SystemExit`` raised by uvicorn on port-bind failures is caught inside
     ``run_http`` so it does not propagate.
     """
-    # Future: when MCP SDK v2 changes the transport API, branch here:
-    # if protocol_version == "v2":
-    #     return await _run_transports_v2(server, ...)
+    # Future: if a date-versioned MCP revision changes the transport API,
+    # branch here on protocol_revision. protocol_version remains accepted as a
+    # deprecated compatibility keyword for older callers.
 
     async def run_stdio() -> None:
         logger.info("Starting FastMCP stdio server ...")

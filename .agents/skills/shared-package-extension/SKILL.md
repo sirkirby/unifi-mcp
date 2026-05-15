@@ -6,7 +6,7 @@ description: |
   protocol changes, or bumping workspace dependency versions across the monorepo.
   Covers four recurring procedures: (1) DI-only rule for shared-package entrypoints
   to avoid circular-import blast radius across all three app servers; (2) the
-  "connectivity primitive or MCP layer?" scope gate for placing new capability in
+  \"connectivity primitive or MCP layer?\" scope gate for placing new capability in
   the right package; (3) manual relay protocol sync to discovery.py and protocol.py
   when shared-package protocol changes, because those files do not import from the
   shared package and won't pick up changes automatically; (4) lockstep pyproject.toml
@@ -56,7 +56,7 @@ def register_meta_tools(
     get_tools_fn,        # injected by the calling app server
     get_server_info_fn,  # injected by the calling app server
 ):
-    """Register meta tools. App-specific behavior provided via DI parameters."""
+    \"\"\"Register meta tools. App-specific behavior provided via DI parameters.\"\"\"
     ...
 ```
 
@@ -83,16 +83,16 @@ from unifi_network_mcp.config import get_config  # ← circular; breaks all thre
    parameters or `typing.Protocol` types defined in the shared package.
 2. Verify no app imports slipped in:
    ```bash
-   grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp" \
+   grep -r \"from unifi_network_mcp\\|from unifi_protect_mcp\\|from unifi_access_mcp\" \\
        packages/unifi-mcp-shared/
    ```
    Any hit is a bug — replace with an injected parameter.
 3. Wire the injection at each app-server call site.
 4. Confirm no circular import across all three servers:
    ```bash
-   python -c "import unifi_network_mcp"
-   python -c "import unifi_protect_mcp"
-   python -c "import unifi_access_mcp"
+   python -c \"import unifi_network_mcp\"
+   python -c \"import unifi_protect_mcp\"
+   python -c \"import unifi_access_mcp\"
    ```
 
 **Tip:** For complex injected hooks, prefer a `typing.Protocol` over a bare
@@ -103,7 +103,7 @@ rather than failing at runtime.
 
 Before adding new capability to either package, apply this decision test:
 
-> **"Is this a connectivity primitive or an MCP layer concern?"**
+> **\"Is this a connectivity primitive or an MCP layer concern?\"**
 
 | Belongs in `unifi-core` | Belongs in `unifi-mcp-shared` |
 |---|---|
@@ -120,7 +120,7 @@ Before adding new capability to either package, apply this decision test:
 2. Does the code coordinate MCP protocol concerns (permissions, tool registration,
    confirmations, config loading)? → `unifi-mcp-shared`
 3. Does the code reference MCP types (`mcp`, `FastMCP`, tool decorators)? → `unifi-mcp-shared`
-4. Still unclear? Ask: "Would this be useful in a non-MCP CLI that calls the UniFi API?"
+4. Still unclear? Ask: \"Would this be useful in a non-MCP CLI that calls the UniFi API?\"
    - Yes → `unifi-core`
    - No → `unifi-mcp-shared`
 
@@ -136,8 +136,8 @@ Arrows flow left-to-right only. No package imports from anything to its right in
 this chain. Check with:
 
 ```bash
-grep -r "from unifi_mcp_shared\|import unifi_mcp_shared" packages/unifi-core/
-grep -r "from unifi_network_mcp\|from unifi_protect_mcp\|from unifi_access_mcp" \
+grep -r \"from unifi_mcp_shared\\|import unifi_mcp_shared\" packages/unifi-core/
+grep -r \"from unifi_network_mcp\\|from unifi_protect_mcp\\|from unifi_access_mcp\" \\
     packages/unifi-mcp-shared/ packages/unifi-core/
 ```
 
@@ -172,7 +172,7 @@ client using the new protocol connects through a relay running the old one.
    verification you performed in the PR.
 
 **PR checklist trigger:** Any PR modifying the shared-package protocol must include a
-"relay sync" section confirming `discovery.py` and `protocol.py` were reviewed and
+\"relay sync\" section confirming `discovery.py` and `protocol.py` were reviewed and
 updated if necessary. Community PR reviewers: look for this section.
 
 ## Procedure D: Workspace Dependency Version Alignment
@@ -204,8 +204,8 @@ the dependency ranges embedded in the wheel metadata.
 2. Identify which downstream packages are being released because they use that new upstream code.
 3. Update only those downstream dependency ranges:
    ```toml
-   "unifi-core[protect]>=0.4,<0.5"
-   "unifi-mcp-shared>=0.5,<0.6"
+   \"unifi-core[protect]>=0.4,<0.5\"
+   \"unifi-mcp-shared>=0.5,<0.6\"
    ```
 4. From the repo root, run `uv lock --check` to validate workspace constraints resolve cleanly.
 5. Commit dependency-bound changes before creating local release tags.
@@ -225,8 +225,18 @@ review on every protocol-touching PR is the only protection.
 
 **Dependency ranges are release artifacts.** A downstream release can publish
 successfully while still installing an older upstream package if its wheel metadata
-allows only the old line. Use `rg "unifi-core|unifi-mcp-shared" apps/ packages/` to
+allows only the old line. Use `rg \"unifi-core|unifi-mcp-shared\" apps/ packages/` to
 audit ranges before tagging coordinated releases.
+
+**Tag staggering is mandatory for coordinated releases.** When releasing both
+`unifi-core` and dependent packages (e.g., `unifi-mcp-shared`, `apps/network`):
+1. Tag `unifi-core` first — CI publishes to PyPI.
+2. Wait 30 seconds for PyPI CDN sync.
+3. Update downstream dependency pins to the new `unifi-core` version.
+4. Tag downstream packages in dependency order (shared before apps).
+This prevents CI from failing on \"version not found\" errors. A batched tag push
+(tagging all at once) guarantees downstream failures because PyPI won't have the
+upstream version yet when their CI runs.
 
 **DI parameters document the contract.** When a new shared entrypoint accepts injected
 callables, name the parameters descriptively (`get_tools_fn`, `permission_checker`) and

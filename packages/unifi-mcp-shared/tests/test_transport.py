@@ -58,6 +58,20 @@ class TestRunTransports:
         mock_server.run_streamable_http_async.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_legacy_protocol_version_keyword_is_accepted(self, mock_server):
+        """The deprecated protocol_version keyword remains accepted for compatibility."""
+        await run_transports(
+            server=mock_server,
+            http_enabled=False,
+            host="0.0.0.0",
+            port=3000,
+            http_transport="streamable-http",
+            logger=logging.getLogger("test"),
+            protocol_version="v1",
+        )
+        mock_server.run_stdio_async.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_pid1_skips_stdio_runs_http_only(self, mock_server):
         """When PID is 1 (Docker container), skip stdio and run HTTP only."""
         with patch("unifi_mcp_shared.transport.os.getpid", return_value=1):
