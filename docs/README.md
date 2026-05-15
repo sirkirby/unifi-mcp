@@ -59,6 +59,12 @@ Documentation for standard MCP discovery and the UniFi meta-tool extension path:
 `*_tool_index` and `*_execute` when lazy loading or context limits make a compact
 manifest-backed catalog more practical.
 
+#### [MCP Tasks Alignment](mcp-tasks.md)
+Design note for mapping UniFi compatibility jobs to experimental MCP Tasks:
+- How `jobId` and batch status map to `taskId` and Task states
+- Why batch execution is the safest first native Tasks workflow
+- What must be implemented before advertising task capabilities
+
 #### [Permissions](permissions.md) 🔐 **SECURITY**
 Complete guide to the permission system:
 - How permissions work

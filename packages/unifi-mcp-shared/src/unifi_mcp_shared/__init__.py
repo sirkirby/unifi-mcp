@@ -20,18 +20,33 @@ from unifi_mcp_shared.lazy_tools import (
     setup_lazy_loading,
 )
 from unifi_mcp_shared.meta_tools import register_load_tools, register_meta_tools
+from unifi_mcp_shared.tasks import (
+    DEFAULT_TASK_POLL_INTERVAL_MS,
+    DEFAULT_TASK_TTL_MS,
+    MCP_MODEL_IMMEDIATE_RESPONSE_META,
+    MCP_RELATED_TASK_META,
+    create_task_result_from_job,
+    related_task_meta,
+    task_from_job_status,
+    task_to_dict,
+)
 from unifi_mcp_shared.tool_loader import auto_load_tools
 
 __all__ = [
     "JOBS",
     "JobStore",
     "LazyToolLoader",
+    "MCP_MODEL_IMMEDIATE_RESPONSE_META",
+    "MCP_RELATED_TASK_META",
     "PolicyGateChecker",
     "ResourceValidator",
+    "DEFAULT_TASK_POLL_INTERVAL_MS",
+    "DEFAULT_TASK_TTL_MS",
     "auto_load_tools",
     "build_tool_module_map",
     "create_preview",
     "create_response",
+    "create_task_result_from_job",
     "error_response",
     "get_tool_annotations",
     "get_job_status",
@@ -40,10 +55,13 @@ __all__ = [
     "preview_response",
     "register_load_tools",
     "register_meta_tools",
+    "related_task_meta",
     "setup_lazy_loading",
     "setup_logging",
     "start_async_tool",
     "success_response",
+    "task_from_job_status",
+    "task_to_dict",
     "toggle_preview",
     "update_preview",
 ]
