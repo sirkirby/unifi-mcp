@@ -7,6 +7,8 @@ from importlib.metadata import version
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from unifi_mcp_relay.discovery import LEGACY_MCP_PROTOCOL_REVISION, McpHttpClient
+from unifi_mcp_shared.protocol import DEFAULT_MCP_PROTOCOL_REVISION
 
 
 @pytest.fixture
@@ -19,10 +21,118 @@ def mock_mcp_client():
         mock_instance.request = AsyncMock(side_effect=side_effect_fn)
         mock_instance.close = AsyncMock()
         mock_instance.session_id = "session-abc-123"
+        mock_instance.protocol_version = LEGACY_MCP_PROTOCOL_REVISION
         mock_cls.return_value = mock_instance
         return mock_cls, mock_instance
 
     return make_mock
+
+
+class FakeResponse:
+    def __init__(self, payload: dict | None = None, *, headers: dict | None = None, status: int = 200) -> None:
+        self._payload = payload or {}
+        self.headers = headers or {}
+        self.status = status
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+
+    def raise_for_status(self) -> None:
+        if self.status >= 400:
+            raise RuntimeError(f"HTTP {self.status}")
+
+    async def json(self) -> dict:
+        return self._payload
+
+
+class FakeSession:
+    closed = False
+
+    def __init__(self, responses: list[FakeResponse]) -> None:
+        self._responses = list(responses)
+        self.posts: list[dict] = []
+
+    def post(self, url: str, *, json: dict, headers: dict):
+        self.posts.append({"url": url, "json": json, "headers": headers})
+        return self._responses.pop(0)
+
+
+@pytest.mark.asyncio
+async def test_http_client_sends_negotiated_protocol_version_after_initialize():
+    session = FakeSession(
+        [
+            FakeResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": {
+                        "protocolVersion": DEFAULT_MCP_PROTOCOL_REVISION,
+                        "serverInfo": {"name": "server"},
+                    },
+                },
+                headers={"mcp-session-id": "session-123"},
+            ),
+            FakeResponse(status=202),
+            FakeResponse({"jsonrpc": "2.0", "id": 2, "result": {"tools": []}}),
+        ]
+    )
+    client = McpHttpClient("http://localhost:3000")
+    client._session = session
+
+    await client.request("initialize", {"protocolVersion": DEFAULT_MCP_PROTOCOL_REVISION})
+    await client.notify("notifications/initialized")
+    await client.request("tools/list")
+
+    assert session.posts[0]["headers"].get("MCP-Protocol-Version") is None
+    assert session.posts[1]["headers"]["MCP-Protocol-Version"] == DEFAULT_MCP_PROTOCOL_REVISION
+    assert session.posts[1]["headers"]["MCP-Session-Id"] == "session-123"
+    assert session.posts[2]["headers"]["MCP-Protocol-Version"] == DEFAULT_MCP_PROTOCOL_REVISION
+    assert session.posts[2]["headers"]["MCP-Session-Id"] == "session-123"
+
+
+@pytest.mark.asyncio
+async def test_http_client_preserves_older_negotiated_protocol_version():
+    session = FakeSession(
+        [
+            FakeResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": {"protocolVersion": LEGACY_MCP_PROTOCOL_REVISION},
+                }
+            ),
+            FakeResponse({"jsonrpc": "2.0", "id": 2, "result": {"tools": []}}),
+        ]
+    )
+    client = McpHttpClient("http://localhost:3000")
+    client._session = session
+
+    await client.request("initialize", {"protocolVersion": DEFAULT_MCP_PROTOCOL_REVISION})
+    await client.request("tools/list")
+
+    assert client.protocol_version == LEGACY_MCP_PROTOCOL_REVISION
+    assert session.posts[1]["headers"]["MCP-Protocol-Version"] == LEGACY_MCP_PROTOCOL_REVISION
+
+
+@pytest.mark.asyncio
+async def test_http_client_falls_back_when_server_omits_protocol_version():
+    session = FakeSession(
+        [
+            FakeResponse({"jsonrpc": "2.0", "id": 1, "result": {"serverInfo": {"name": "old-server"}}}),
+            FakeResponse({"jsonrpc": "2.0", "id": 2, "result": {"tools": []}}),
+        ]
+    )
+    client = McpHttpClient("http://localhost:3000")
+    client._session = session
+
+    await client.request("initialize", {"protocolVersion": DEFAULT_MCP_PROTOCOL_REVISION})
+    await client.request("tools/list")
+
+    assert client.protocol_version == LEGACY_MCP_PROTOCOL_REVISION
+    assert session.posts[1]["headers"]["MCP-Protocol-Version"] == LEGACY_MCP_PROTOCOL_REVISION
 
 
 @pytest.mark.asyncio
@@ -52,6 +162,7 @@ async def test_discover_tools_lazy_mode(mock_mcp_client):
 
     def route_request(method, params=None):
         if method == "initialize":
+            assert params["protocolVersion"] == DEFAULT_MCP_PROTOCOL_REVISION
             assert params["clientInfo"]["name"] == "unifi-mcp-relay"
             assert params["clientInfo"]["title"] == "UniFi MCP Relay"
             assert params["clientInfo"]["version"] == version("unifi-mcp-relay")
@@ -100,6 +211,7 @@ async def test_discover_tools_lazy_mode(mock_mcp_client):
     assert result.name == "unifi-network-mcp"
     assert result.url == "http://localhost:3000"
     assert result.session_id == "session-abc-123"
+    assert result.protocol_version == LEGACY_MCP_PROTOCOL_REVISION
     assert len(result.tools) == 2
 
     # Verify tools are properly converted to ToolInfo with server_origin

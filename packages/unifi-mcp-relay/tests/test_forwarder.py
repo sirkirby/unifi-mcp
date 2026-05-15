@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from unifi_mcp_relay.discovery import ServerInfo
+from unifi_mcp_relay.discovery import LEGACY_MCP_PROTOCOL_REVISION, ServerInfo
 from unifi_mcp_relay.forwarder import ToolForwarder
 from unifi_mcp_relay.protocol import ToolInfo
 
@@ -17,6 +17,7 @@ def server_infos():
             name="unifi-network-mcp",
             url="http://localhost:3000",
             session_id="session-abc",
+            protocol_version="2025-11-25",
             tools=[
                 ToolInfo(name="unifi_list_devices", description="List devices", server_origin="unifi-network-mcp"),
                 ToolInfo(name="unifi_reboot_device", description="Reboot", server_origin="unifi-network-mcp"),
@@ -26,6 +27,7 @@ def server_infos():
             name="unifi-protect-mcp",
             url="http://localhost:3001",
             session_id="session-xyz",
+            protocol_version=LEGACY_MCP_PROTOCOL_REVISION,
             tools=[
                 ToolInfo(name="protect_list_cameras", description="List cameras", server_origin="unifi-protect-mcp"),
             ],
@@ -53,6 +55,12 @@ def test_forwarder_pre_sets_session_ids(server_infos):
     fwd = ToolForwarder(server_infos)
     assert fwd._clients["http://localhost:3000"]._session_id == "session-abc"
     assert fwd._clients["http://localhost:3001"]._session_id == "session-xyz"
+
+
+def test_forwarder_pre_sets_negotiated_protocol_versions(server_infos):
+    fwd = ToolForwarder(server_infos)
+    assert fwd._clients["http://localhost:3000"]._protocol_version == "2025-11-25"
+    assert fwd._clients["http://localhost:3001"]._protocol_version == LEGACY_MCP_PROTOCOL_REVISION
 
 
 async def test_forwarder_forwards_tool_call(server_infos):
@@ -108,6 +116,25 @@ async def test_forwarder_call_uses_client_request(server_infos):
     mock_client.request.assert_called_once_with(
         "tools/call", {"name": "unifi_list_devices", "arguments": {"compact": False}}
     )
+
+
+async def test_forwarder_call_prefers_structured_content(server_infos):
+    """_call returns MCP structuredContent when current protocol servers provide it."""
+    fwd = ToolForwarder(server_infos)
+
+    payload = {"success": True, "data": [{"mac": "aa:bb:cc:dd:ee:ff"}]}
+    mock_client = AsyncMock()
+    mock_client.request = AsyncMock(
+        return_value={
+            "structuredContent": payload,
+            "content": [{"type": "text", "text": ""}],
+            "isError": False,
+        }
+    )
+    fwd._clients["http://localhost:3000"] = mock_client
+
+    result = await fwd._call("http://localhost:3000", "unifi_list_devices", {"compact": False})
+    assert result == payload
 
 
 async def test_forwarder_call_returns_raw_result_when_no_text_content(server_infos):

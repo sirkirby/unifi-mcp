@@ -22,10 +22,14 @@ from importlib.metadata import PackageNotFoundError, version
 
 import aiohttp
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, mcp_icons_for_server
+from unifi_mcp_shared.protocol import DEFAULT_MCP_PROTOCOL_REVISION
 
 from unifi_mcp_relay.protocol import ToolInfo
 
 logger = logging.getLogger("unifi-mcp-relay")
+
+LEGACY_MCP_PROTOCOL_REVISION = "2025-03-26"
+SUPPORTED_MCP_PROTOCOL_REVISIONS = frozenset({DEFAULT_MCP_PROTOCOL_REVISION, LEGACY_MCP_PROTOCOL_REVISION})
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -39,6 +43,7 @@ class ServerInfo:
     name: str
     url: str
     session_id: str | None = None
+    protocol_version: str | None = None
     tools: list[ToolInfo] = field(default_factory=list)
 
 
@@ -54,20 +59,63 @@ class McpHttpClient:
     the MCP Streamable HTTP transport spec.
     """
 
-    def __init__(self, server_url: str, session_id: str | None = None) -> None:
+    def __init__(
+        self,
+        server_url: str,
+        session_id: str | None = None,
+        protocol_version: str | None = None,
+    ) -> None:
         self._base_url = server_url.rstrip("/") + "/mcp"
         self._session: aiohttp.ClientSession | None = None
         self._session_id: str | None = session_id
+        self._protocol_version: str | None = protocol_version
         self._request_id: int = 0
 
     @property
     def session_id(self) -> str | None:
         return self._session_id
 
+    @property
+    def protocol_version(self) -> str | None:
+        return self._protocol_version
+
+    def _set_negotiated_protocol_version(self, value: str | None) -> None:
+        if value is None:
+            self._protocol_version = LEGACY_MCP_PROTOCOL_REVISION
+            logger.info(
+                "[discovery] Server omitted protocolVersion during initialize; using compatibility fallback %s",
+                self._protocol_version,
+            )
+            return
+
+        if value not in SUPPORTED_MCP_PROTOCOL_REVISIONS:
+            raise RuntimeError(
+                f"Unsupported MCP protocol version negotiated by server: {value!r}. "
+                f"Supported versions: {sorted(SUPPORTED_MCP_PROTOCOL_REVISIONS)}"
+            )
+
+        self._protocol_version = value
+        if value != DEFAULT_MCP_PROTOCOL_REVISION:
+            logger.info(
+                "[discovery] Server negotiated older MCP protocol version %s; preserving compatibility",
+                value,
+            )
+
     async def _ensure_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
+
+    def _headers(self, *, include_protocol_version: bool) -> dict[str, str]:
+        headers: dict[str, str] = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
+        if self._session_id:
+            headers["MCP-Session-Id"] = self._session_id
+        if include_protocol_version and self._protocol_version:
+            headers["MCP-Protocol-Version"] = self._protocol_version
+        return headers
 
     async def request(self, method: str, params: dict | None = None) -> dict:
         """Send a JSON-RPC request to the MCP server.
@@ -94,12 +142,7 @@ class McpHttpClient:
         if params is not None:
             payload["params"] = params
 
-        headers: dict[str, str] = {
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-        }
-        if self._session_id:
-            headers["Mcp-Session-Id"] = self._session_id
+        headers = self._headers(include_protocol_version=method != "initialize")
 
         async with session.post(self._base_url, json=payload, headers=headers) as resp:
             # Capture session ID from response
@@ -128,7 +171,11 @@ class McpHttpClient:
         if "error" in data:
             raise RuntimeError(f"MCP error: {data['error']}")
 
-        return data.get("result", {})
+        result = data.get("result", {})
+        if method == "initialize":
+            self._set_negotiated_protocol_version(result.get("protocolVersion"))
+
+        return result
 
     async def notify(self, method: str, params: dict | None = None) -> None:
         """Send a JSON-RPC notification (no id, no response expected)."""
@@ -141,12 +188,7 @@ class McpHttpClient:
         if params is not None:
             payload["params"] = params
 
-        headers: dict[str, str] = {
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-        }
-        if self._session_id:
-            headers["Mcp-Session-Id"] = self._session_id
+        headers = self._headers(include_protocol_version=True)
 
         async with session.post(self._base_url, json=payload, headers=headers) as resp:
             if "mcp-session-id" in resp.headers:
@@ -244,7 +286,7 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
         init_result = await client.request(
             "initialize",
             {
-                "protocolVersion": "2025-03-26",
+                "protocolVersion": DEFAULT_MCP_PROTOCOL_REVISION,
                 "capabilities": {},
                 "clientInfo": {
                     "name": "unifi-mcp-relay",
@@ -301,6 +343,7 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
             name=server_name,
             url=server_url,
             session_id=client.session_id,
+            protocol_version=client.protocol_version,
             tools=tools,
         )
         logger.info("[discovery] Discovered %d tools from %s (%s)", len(tools), server_name, server_url)

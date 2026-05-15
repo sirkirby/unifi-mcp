@@ -25,7 +25,11 @@ class ToolForwarder:
             for tool in info.tools:
                 self._tool_to_url[tool.name] = info.url
             if info.url not in self._clients:
-                self._clients[info.url] = McpHttpClient(info.url, session_id=info.session_id)
+                self._clients[info.url] = McpHttpClient(
+                    info.url,
+                    session_id=info.session_id,
+                    protocol_version=info.protocol_version,
+                )
 
     def get_server_url(self, tool_name: str) -> str | None:
         """Return the server URL responsible for the given tool, or None if unknown."""
@@ -51,7 +55,8 @@ class ToolForwarder:
             arguments: Tool arguments dict.
 
         Returns:
-            Parsed result: JSON-decoded text from content[0] if present, else raw result dict.
+        Parsed result: structuredContent when present, JSON-decoded text
+        from content[0] if present, else raw result dict.
 
         Raises:
             RuntimeError: If no client is registered for the given server URL.
@@ -61,6 +66,9 @@ class ToolForwarder:
         if not client:
             raise RuntimeError(f"No client for {server_url}")
         result = await client.request("tools/call", {"name": tool_name, "arguments": arguments})
+        structured = result.get("structuredContent")
+        if isinstance(structured, dict):
+            return structured
         content = result.get("content", [])
         if content and content[0].get("type") == "text":
             raw_text = content[0].get("text", "")
