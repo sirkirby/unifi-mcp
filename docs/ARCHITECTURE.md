@@ -9,6 +9,7 @@ unifi-mcp/
     protect/              # UniFi Protect MCP server
     access/               # UniFi Access MCP server
     api/                  # REST + GraphQL API server
+    worker/               # Cloudflare Worker gateway + npm CLI
   packages/
     unifi-core/           # Shared UniFi controller connectivity
     unifi-mcp-shared/     # Shared MCP server patterns
@@ -17,7 +18,7 @@ unifi-mcp/
   docker/                 # Docker compose for servers and relay
 ```
 
-The workspace is managed by [uv](https://docs.astral.sh/uv/) with `pyproject.toml` at the root defining workspace members. Each app and package is an independent Python package with its own `pyproject.toml`.
+The Python workspace is managed by [uv](https://docs.astral.sh/uv/) with `pyproject.toml` at the root defining workspace members. Each Python app and package is independent with its own `pyproject.toml`. `apps/worker/` is excluded from the uv workspace and keeps its own Node/npm dependency graph.
 
 ## Package Responsibilities
 
@@ -115,6 +116,21 @@ A standalone sidecar that bridges local MCP servers to a Cloudflare Worker relay
 - `Dockerfile` -- container build
 
 The relay has **no dependency** on the MCP server packages (`unifi-core`, `unifi-mcp-shared`, or any `apps/*`). It is a pure MCP client that discovers tools via the standard MCP protocol.
+
+### apps/worker
+
+The Cloudflare Worker gateway and npm CLI used by cloud agents. The TypeScript Worker receives MCP JSON-RPC over HTTPS, routes tool calls through a Durable Object, and forwards them to connected local relay sidecars over WebSocket. The plain ESM CLI deploys and manages the Worker with Wrangler.
+
+- `bin/cli.mjs` -- npm CLI entry point
+- `src/commands/` -- install, upgrade, token rotation, location management, status, and destroy commands
+- `src/lib/` -- CLI support code for config, Wrangler, API calls, token generation, and display
+- `worker/src/` -- Cloudflare Worker and Durable Object TypeScript code
+- `worker/test/` -- Vitest tests for Worker protocol/auth behavior
+- `test/cli/` -- Node test runner coverage for CLI utilities
+- `package.json` and `package-lock.json` -- npm package for the published CLI
+- `worker/package.json` and `worker/package-lock.json` -- isolated Worker build/test dependencies
+
+The Worker intentionally remains a self-contained Node/TypeScript app. It lives in the monorepo so relay protocol changes, MCP metadata changes, and worker contract tests land in the same PR.
 
 ## Layering
 

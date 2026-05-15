@@ -11,6 +11,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 [![PyPI - Access](https://img.shields.io/pypi/v/unifi-access-mcp)](https://pypi.org/project/unifi-access-mcp/)
 [![PyPI - Relay](https://img.shields.io/pypi/v/unifi-mcp-relay)](https://pypi.org/project/unifi-mcp-relay/)
 [![PyPI - API Server](https://img.shields.io/pypi/v/unifi-api-server)](https://pypi.org/project/unifi-api-server/)
+[![npm - Worker](https://img.shields.io/npm/v/unifi-mcp-worker)](https://www.npmjs.com/package/unifi-mcp-worker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
 
@@ -27,7 +28,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | Component | Status | Package |
 |-----------|--------|---------|
 | [Relay Sidecar](packages/unifi-mcp-relay/) | Beta | [`unifi-mcp-relay`](https://pypi.org/project/unifi-mcp-relay/) |
-| [Worker Gateway](https://github.com/sirkirby/unifi-mcp-worker) | Beta | [`unifi-mcp-worker`](https://www.npmjs.com/package/unifi-mcp-worker) (CLI) |
+| [Worker Gateway](apps/worker/) | Beta | [`unifi-mcp-worker`](https://www.npmjs.com/package/unifi-mcp-worker) (CLI) |
 
 The relay bridges your local MCP servers to a Cloudflare Worker, letting cloud agents access your UniFi tools without exposing local ports. Supports multi-location with annotation-based fan-out for read-only tools. Deploy the worker with `npm install -g unifi-mcp-worker && unifi-mcp-worker install`, then see the [relay README](packages/unifi-mcp-relay/) for connecting your local servers.
 
@@ -225,6 +226,7 @@ apps/
   network/          # UniFi Network MCP server (stable, 169 tools)
   protect/          # UniFi Protect MCP server (beta, 43 tools)
   access/           # UniFi Access MCP server (beta, 29 tools)
+  worker/           # Cloudflare Worker gateway + npm CLI
 packages/
   unifi-core/       # Shared UniFi connectivity (auth, detection, retry)
   unifi-mcp-shared/ # Shared MCP patterns (permissions, tools, diagnostics, config)
@@ -238,7 +240,7 @@ skills/
 docs/               # Ecosystem-level documentation
 ```
 
-Each server in `apps/` is an independent Python package that depends on the shared packages. The shared packages ensure consistent behavior across all servers — same permission model, same confirmation flow, same lazy tool loading.
+Each Python server in `apps/` is an independent package that depends on the shared packages. `apps/worker/` is intentionally separate: it is a self-contained TypeScript/Node app for the Cloudflare Worker gateway and npm CLI. Keeping it in this repo lets relay protocol changes and worker contract tests move together.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 

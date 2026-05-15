@@ -1,7 +1,7 @@
 ---
 name: myco:monorepo-release-pipeline
 description: >-
-  Covers the full release pipeline for the unifi-mcp Python monorepo: determining release scope by analyzing changed packages, scoping hatch-vcs version tag globs per package to prevent sibling-tag contamination, pushing tags in strict dependency order (unifi-core → unifi-mcp-shared → app servers → relay), configuring scripts/generate_release_notes.py path scoping per package, wiring per-package publish workflows for OIDC trusted publishing, coordinating cross-package version bumps in pyproject.toml, understanding app vs. library versioning and writeback behavior, and validating releases post-tag. Apply this skill when cutting any release, adding a new package, bumping unifi-core, or debugging a versioning or publish-workflow failure — even if the user does not explicitly ask about tag ordering or release notes.
+  Covers the full release pipeline for the unifi-mcp monorepo: determining release scope by analyzing changed packages, scoping hatch-vcs version tag globs per Python package to prevent sibling-tag contamination, pushing tags in strict dependency order (unifi-core → unifi-mcp-shared → app servers → relay → worker when needed), configuring scripts/generate_release_notes.py path scoping per package, wiring per-package publish workflows for OIDC trusted publishing, coordinating cross-package version bumps in pyproject.toml, understanding app vs. library versioning and writeback behavior, and validating releases post-tag. Apply this skill when cutting any release, adding a new package, bumping unifi-core, or debugging a versioning or publish-workflow failure — even if the user does not explicitly ask about tag ordering or release notes.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -9,11 +9,12 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 
 # Monorepo Release Pipeline
 
-The unifi-mcp repo ships seven independently versioned Python packages: `unifi-core`
+The unifi-mcp repo ships seven independently versioned Python packages plus the
+Node/TypeScript worker app: `unifi-core`
 and `unifi-mcp-shared` live under `packages/`; `unifi-mcp-network`, `unifi-mcp-protect`,
 `unifi-mcp-access`, and `unifi-api-server` live under `apps/`; `unifi-mcp-relay` lives under `packages/`
-alongside core and shared. Each has its own PyPI identity, tag namespace, publish
-workflow, and release-notes scope. Getting the release sequence wrong leaves downstream
+alongside core and shared; `unifi-mcp-worker` lives under `apps/worker/` and publishes to npm.
+Each has its own package identity, tag namespace, publish workflow, and release-notes scope. Getting the release sequence wrong leaves downstream
 packages referencing non-existent PyPI versions or produces contaminated release notes
 that bleed across package boundaries.
 
@@ -37,6 +38,7 @@ that bleed across package boundaries.
 | `unifi-mcp-access` | `apps/access/` | `access/v*` | `release-access.yml` |
 | `unifi-api-server` | `apps/api/` | `api/v*` | `release-api.yml` |
 | `unifi-mcp-relay` | `packages/unifi-mcp-relay/` | `relay/v*` | `release-relay.yml` |
+| `unifi-mcp-worker` | `apps/worker/` | `worker/v*` | `release-worker.yml` |
 
 When adding a new package, extend this table and the release-notes path configuration
 before pushing any tag.
@@ -66,7 +68,7 @@ git log --oneline network/v$(git tag -l 'network/v*' | sort -V | tail -1)..HEAD 
 | One app only (e.g., `apps/protect/`) | `protect/v*` only |
 | Multiple apps | One tag per changed app, in dependency order |
 | Plugin-only changes (manifest/config updates) | Patch release for cache invalidation (e.g., `network/v0.14.13` → `network/v0.14.14`) |
-| Worker (`~/Repos/unifi-mcp-worker`) | Tag in that repo (see Procedure F) |
+| Worker (`apps/worker/`) | `worker/v*` |
 
 ### Plugin-only Release and Cache Invalidation
 
@@ -327,10 +329,9 @@ git push origin relay/v0.1.0
 workflows simultaneously. The network workflow may start before the core package is
 indexed on PyPI (~2–5 minutes after the core workflow completes).
 
-**Worker repo:** `unifi-mcp-worker` (at `~/Repos/unifi-mcp-worker`) has a separate
-npm release flow using OIDC via GitHub Actions. Apply the same ordering principle:
-if the worker depends on a Python package version, confirm PyPI is updated before
-pushing the worker tag.
+**Worker app:** `apps/worker` has a separate npm release flow using OIDC via GitHub Actions.
+Apply the same ordering principle: if the worker depends on a Python package version or relay
+protocol behavior, confirm the upstream PyPI release is updated before pushing the `worker/v*` tag.
 
 ## Procedure G: generate_release_notes.py Path Configuration
 

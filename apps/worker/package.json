@@ -1,0 +1,38 @@
+{
+  "name": "unifi-mcp-worker",
+  "version": "1.3.0",
+  "description": "CLI to deploy and manage the UniFi MCP Cloudflare Worker relay",
+  "type": "module",
+  "bin": {
+    "unifi-mcp-worker": "./bin/cli.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "worker/src/",
+    "worker/package.json",
+    "worker/package-lock.json",
+    "worker/wrangler.toml",
+    "worker/tsconfig.json",
+    "worker/vitest.config.ts",
+    "install.sh"
+  ],
+  "scripts": {
+    "test": "node --test test/cli/*.test.mjs",
+    "test:worker": "cd worker && npm test",
+    "test:all": "npm test && npm run test:worker"
+  },
+  "dependencies": {
+    "prompts": "^2.4.2",
+    "chalk": "^5.4.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sirkirby/unifi-mcp.git",
+    "directory": "apps/worker"
+  }
+}

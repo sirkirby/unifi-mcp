@@ -9,6 +9,9 @@ members = [
     "apps/*",
     "packages/*",
 ]
+exclude = [
+    "apps/worker",
+]
 
 [tool.ruff]
 line-length = 120

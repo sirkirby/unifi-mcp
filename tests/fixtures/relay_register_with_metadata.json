@@ -1,0 +1,29 @@
+{
+  "type": "register",
+  "protocol_version": 1,
+  "token": "test-token",
+  "location_name": "Home Lab",
+  "tools": [
+    {
+      "name": "list_devices",
+      "title": "List Devices",
+      "description": "List devices",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "site": {
+            "type": "string"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "openWorldHint": false
+      },
+      "server_origin": "unifi-network-mcp"
+    }
+  ],
+  "capabilities": [
+    "fan_out_v1"
+  ]
+}

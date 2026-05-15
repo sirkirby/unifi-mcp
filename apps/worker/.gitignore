@@ -1,0 +1,14 @@
+node_modules/
+worker/node_modules/
+dist/
+worker/.wrangler/
+.dev.vars
+worker/.dev.vars
+.env
+*.log
+
+# Myco managed (machine-specific)
+.agents/skills/myco
+.agents/skills/myco-curate
+.agents/skills/rules
+.wrangler/

@@ -42,6 +42,17 @@ ENV/
 logs/
 !apps/api/src/unifi_api/templates/admin/logs/
 
+# Node / Cloudflare Worker
+node_modules/
+apps/worker/node_modules/
+apps/worker/worker/node_modules/
+apps/worker/dist/
+apps/worker/.wrangler/
+apps/worker/worker/.wrangler/
+.dev.vars
+apps/worker/.dev.vars
+apps/worker/worker/.dev.vars
+
 # Cache
 .cache/
 

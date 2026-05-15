@@ -1,6 +1,7 @@
 .PHONY: help test lint format format-check format-fix manifest generate server-manifests skill-references \
        check-skill-references check-generated pre-commit ci core-test shared-test \
-       relay-test docker-relay sync docker-build docker-up docker-down docker-logs
+       relay-test worker-install worker-test worker-typecheck worker-check docker-relay sync \
+       docker-build docker-up docker-down docker-logs
 
 help:
 	@echo "UniFi MCP Ecosystem — Top-Level Commands"
@@ -26,6 +27,7 @@ help:
 	@echo ""
 	@echo "  make core-test      Run unifi-core tests only"
 	@echo "  make shared-test    Run unifi-mcp-shared tests only"
+	@echo "  make worker-check   Run worker CLI tests + TypeScript checks"
 
 sync:
 	uv sync --all-packages
@@ -36,7 +38,7 @@ core-test:
 shared-test:
 	uv run --package unifi-mcp-shared pytest packages/unifi-mcp-shared/tests -v
 
-test: core-test shared-test relay-test
+test: core-test shared-test relay-test worker-test
 	$(MAKE) -C apps/network test
 	$(MAKE) -C apps/protect test
 	$(MAKE) -C apps/access test
@@ -79,6 +81,19 @@ check-generated: check-skill-references
 
 relay-test:
 	uv run --package unifi-mcp-relay pytest packages/unifi-mcp-relay/tests -v
+
+worker-install:
+	npm ci --prefix apps/worker
+	npm ci --prefix apps/worker/worker
+
+worker-typecheck: worker-install
+	npm run --prefix apps/worker/worker typecheck
+
+worker-test: worker-install
+	npm run --prefix apps/worker test:all
+
+worker-check: worker-install
+	$(MAKE) -C apps/worker check
 
 docker-relay:
 	docker build -f packages/unifi-mcp-relay/Dockerfile -t unifi-mcp-relay .

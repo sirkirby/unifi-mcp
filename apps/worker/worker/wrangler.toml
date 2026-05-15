@@ -1,0 +1,14 @@
+name = "unifi-mcp-relay"
+main = "src/index.ts"
+compatibility_date = "2025-03-14"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+TOOL_REGISTRATION_MODE = "lazy"
+
+[durable_objects]
+bindings = [{ name = "RELAY", class_name = "RelayObject" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RelayObject"]

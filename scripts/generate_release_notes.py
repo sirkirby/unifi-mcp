@@ -45,6 +45,7 @@ class PackageConfig:
     install_command: str
     path_groups: tuple[PathGroup, ...]
     legacy_plain_v_tags: bool = False
+    badge_markdown: str | None = None
 
 
 @dataclass(frozen=True)
@@ -183,11 +184,29 @@ APP_CONFIGS = {
             ),
         ),
     ),
+    "worker": PackageConfig(
+        key="worker",
+        display_name="UniFi MCP Worker",
+        pypi_package="unifi-mcp-worker",
+        install_command="npm install -g unifi-mcp-worker@{version}",
+        path_groups=(
+            PathGroup("Worker", ("apps/worker/",)),
+            PathGroup(
+                "Release Infrastructure",
+                (
+                    ".github/workflows/release-worker.yml",
+                    ".github/workflows/test-worker.yml",
+                ),
+            ),
+        ),
+        badge_markdown="[![npm](https://img.shields.io/npm/v/unifi-mcp-worker)]"
+        "(https://www.npmjs.com/package/unifi-mcp-worker/v/{version})",
+    ),
 }
 
 PRIMARY_PATTERNS_BY_PACKAGE = {config.key: config.path_groups[0].patterns for config in APP_CONFIGS.values()}
 PACKAGE_KEYWORDS = tuple(APP_CONFIGS)
-PRODUCT_KEYS = ("network", "protect", "access", "relay")
+PRODUCT_KEYS = ("network", "protect", "access", "relay", "worker")
 
 
 def run_git(args: list[str]) -> str:
@@ -199,7 +218,10 @@ def run_git(args: list[str]) -> str:
 def parse_release_tag(tag: str) -> ReleaseTag:
     """Parse a package release tag such as ``network/v0.14.12``."""
 
-    match = re.match(r"^(?P<key>network|protect|access|core|shared|relay)/v(?P<version>\d+(?:\.\d+)*(?:\S*)?)$", tag)
+    match = re.match(
+        r"^(?P<key>network|protect|access|core|shared|relay|worker)/v(?P<version>\d+(?:\.\d+)*(?:\S*)?)$",
+        tag,
+    )
     if match:
         return ReleaseTag(tag=tag, package_key=match.group("key"), version=match.group("version"))
 
@@ -334,7 +356,9 @@ def render_release_notes(
         config.install_command.format(version=release_tag.version),
         "```",
         "",
-        f"[![PyPI](https://img.shields.io/pypi/v/{config.pypi_package})]"
+        config.badge_markdown.format(version=release_tag.version)
+        if config.badge_markdown
+        else f"[![PyPI](https://img.shields.io/pypi/v/{config.pypi_package})]"
         f"(https://pypi.org/project/{config.pypi_package}/{release_tag.version}/)",
         "",
         "## What's Changed",

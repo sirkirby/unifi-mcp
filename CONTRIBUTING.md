@@ -3,6 +3,7 @@
 ## Prerequisites
 
 - Python 3.13+
+- Node.js 22+ for the Cloudflare Worker app
 - [uv](https://docs.astral.sh/uv/) (package manager)
 
 ## Setup
@@ -23,6 +24,7 @@ This installs all workspace packages (apps + shared packages) in development mod
 | `apps/network/` | Network MCP server | `make test`, `make lint`, `make manifest` |
 | `apps/protect/` | Protect MCP server | `make test`, `make lint`, `make manifest` |
 | `apps/access/` | Access MCP server | `make test`, `make lint`, `make manifest` |
+| `apps/worker/` | Cloudflare Worker gateway + npm CLI | `make check` |
 | `packages/unifi-core/` | Shared connectivity | Tested via root `make core-test` |
 | `packages/unifi-mcp-shared/` | Shared MCP patterns | Tested via root `make shared-test` |
 
@@ -31,7 +33,7 @@ This installs all workspace packages (apps + shared packages) in development mod
 The root Makefile delegates to app/package Makefiles:
 
 ```bash
-make test              # Run ALL tests (core + shared + network + protect + access)
+make test              # Run ALL tests (core + shared + relay + worker + apps)
 make lint              # Lint all packages
 make format            # Format all packages
 make pre-commit        # Format + lint + test
@@ -39,6 +41,8 @@ make pre-commit        # Format + lint + test
 # Individual packages
 make core-test         # Run unifi-core tests
 make shared-test       # Run unifi-mcp-shared tests
+make relay-test        # Run unifi-mcp-relay tests
+make worker-check      # Run worker CLI tests + TypeScript checks
 make network-test      # Run network server tests
 make network-lint      # Lint network server
 make network-manifest  # Regenerate network tools manifest
@@ -183,11 +187,11 @@ Tests use `pytest-asyncio` for async support and `aioresponses` for HTTP mocking
 ## Release Process (Maintainers)
 
 1. Run `make pre-commit` from root.
-2. Determine release scope by package tag namespace (`core/v*`, `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, `api/v*`, `relay/v*`).
+2. Determine release scope by package tag namespace (`core/v*`, `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, `api/v*`, `relay/v*`, `worker/v*`).
 3. If a downstream package needs code from a newly released upstream package, update its `pyproject.toml` dependency range before tagging. For example, Protect/API releases that require new `unifi-core` models must allow the new `unifi-core` line.
 4. Run `uv lock --check` and commit any dependency-bound changes before creating local tags.
-5. Push tags in dependency order: `core` first, then `shared`, then app/API packages, then `relay`. Wait for each upstream package to appear on PyPI before pushing dependents.
-6. CI publishes to PyPI, builds Docker images where applicable, and creates GitHub Releases.
+5. Push tags in dependency order: `core` first, then `shared`, then app/API packages, then `relay`, then `worker` if the worker needs the released relay behavior. Wait for each upstream package to appear on PyPI before pushing dependents.
+6. CI publishes to PyPI or npm, builds Docker images where applicable, and creates GitHub Releases.
 
 ## Questions?
 

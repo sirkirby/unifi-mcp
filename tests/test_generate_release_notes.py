@@ -33,6 +33,12 @@ class TestParseReleaseTag:
         assert tag.package_key == "relay"
         assert tag.version == "0.1.3"
 
+    def test_worker_tag(self):
+        tag = parse_release_tag("worker/v1.3.1")
+
+        assert tag.package_key == "worker"
+        assert tag.version == "1.3.1"
+
     def test_legacy_plain_tag_maps_to_network(self):
         tag = parse_release_tag("v0.7.0")
 
@@ -108,6 +114,27 @@ class TestClassifyCommit:
 
         assert classify_commit(commit, APP_CONFIGS["network"]) is None
 
+    def test_worker_commit_matches_worker_group(self):
+        commit = CommitInfo(
+            sha="abc123",
+            subject="fix(worker): preserve tool titles",
+            files=("apps/worker/worker/src/relay-object.ts",),
+        )
+
+        classified = classify_commit(commit, APP_CONFIGS["worker"])
+
+        assert classified is not None
+        assert classified.group_title == "Worker"
+
+    def test_worker_commit_does_not_match_relay(self):
+        commit = CommitInfo(
+            sha="abc123",
+            subject="fix(worker): preserve tool titles",
+            files=("apps/worker/worker/src/relay-object.ts",),
+        )
+
+        assert classify_commit(commit, APP_CONFIGS["relay"]) is None
+
 
 class TestClassifyCommits:
     def test_splits_relevant_and_omitted(self):
@@ -173,3 +200,13 @@ class TestRendering:
 
         assert "No package-scoped code changes were detected" in notes
         assert "commits/core/v0.1.0" in notes
+
+    def test_render_worker_uses_npm_install_and_badge(self):
+        config = APP_CONFIGS["worker"]
+        release_tag = ReleaseTag(tag="worker/v1.3.1", package_key="worker", version="1.3.1")
+
+        notes = render_release_notes(release_tag, config, None, [], [])
+
+        assert "npm install -g unifi-mcp-worker@1.3.1" in notes
+        assert "https://img.shields.io/npm/v/unifi-mcp-worker" in notes
+        assert "https://www.npmjs.com/package/unifi-mcp-worker/v/1.3.1" in notes

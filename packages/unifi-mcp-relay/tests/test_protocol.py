@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 from unifi_mcp_relay.protocol import (
     PROTOCOL_VERSION,
@@ -10,6 +11,8 @@ from unifi_mcp_relay.protocol import (
     ToolResultMessage,
     parse_message,
 )
+
+FIXTURES_DIR = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
 
 
 def test_register_message_serialization():
@@ -29,6 +32,22 @@ def test_register_message_serialization():
     assert len(data["tools"]) == 1
     assert data["tools"][0]["name"] == "list_devices"
     assert data["tools"][0]["title"] == "List Devices"
+
+
+def test_register_message_matches_worker_contract_fixture():
+    tool = ToolInfo(
+        name="list_devices",
+        title="List Devices",
+        description="List devices",
+        input_schema={"type": "object", "properties": {"site": {"type": "string"}}},
+        annotations={"readOnlyHint": True, "openWorldHint": False},
+        server_origin="unifi-network-mcp",
+    )
+    msg = RegisterMessage(token="test-token", location_name="Home Lab", tools=[tool], capabilities=["fan_out_v1"])
+
+    fixture = json.loads((FIXTURES_DIR / "relay_register_with_metadata.json").read_text())
+
+    assert json.loads(msg.to_json()) == fixture
 
 
 def test_parse_registered_message():

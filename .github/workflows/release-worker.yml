@@ -1,0 +1,198 @@
+name: "UniFi MCP Worker: Release (test → npm → GitHub Release)"
+
+# Triggered on worker/v* tags. The npm package still owns the Cloudflare
+# Worker source and CLI; the monorepo only changes the tag namespace and path.
+
+on:
+  push:
+    tags:
+      - 'worker/v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-tag:
+    name: Validate release tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+    steps:
+      - name: Extract version from tag
+        id: extract
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION="${REF_NAME#worker/v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${VERSION}"
+
+  test:
+    name: Run worker checks
+    runs-on: ubuntu-latest
+    needs: validate-tag
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apps/worker/package-lock.json
+            apps/worker/worker/package-lock.json
+      - name: Set package version from tag
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+        working-directory: apps/worker
+      - name: Install CLI dependencies
+        run: npm ci --prefix apps/worker
+      - name: Install worker dependencies
+        run: npm ci --prefix apps/worker/worker
+      - name: Typecheck worker
+        run: npm run --prefix apps/worker/worker typecheck
+      - name: CLI tests
+        run: npm test --prefix apps/worker
+      - name: Worker tests
+        run: npm run --prefix apps/worker test:worker
+
+  pack:
+    name: Pack npm tarball
+    runs-on: ubuntu-latest
+    needs: [validate-tag, test]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/worker/package-lock.json
+      - name: Set package version from tag
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+        working-directory: apps/worker
+      - name: Install CLI dependencies
+        run: npm ci --prefix apps/worker
+      - name: Pack npm tarball
+        run: npm pack
+        working-directory: apps/worker
+      - name: Upload tarball for release
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-package
+          path: apps/worker/unifi-mcp-worker-*.tgz
+
+  publish-npm:
+    name: Publish to npmjs.org
+    runs-on: ubuntu-latest
+    needs: [validate-tag, test]
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: |
+            apps/worker/package-lock.json
+            apps/worker/worker/package-lock.json
+      - name: Set package version from tag
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+        working-directory: apps/worker
+      - name: Install CLI dependencies
+        run: npm ci --prefix apps/worker
+      - name: Install worker dependencies
+        run: npm ci --prefix apps/worker/worker
+      - name: Publish package
+        run: npx npm@latest publish --provenance --access public
+        working-directory: apps/worker
+      - name: Publish summary
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: |
+          echo "## Published to npmjs.org" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Version:** ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Package:** [unifi-mcp-worker](https://www.npmjs.com/package/unifi-mcp-worker)" >> "$GITHUB_STEP_SUMMARY"
+
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate-tag, pack, publish-npm]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: dist/
+      - name: Generate path-scoped release notes
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: python3 scripts/generate_release_notes.py --tag "${REF_NAME}" --output /tmp/release-notes.md
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION="${REF_NAME#worker/v}"
+          if echo "${VERSION}" | grep -qE -- '-(rc|alpha|beta|dev)'; then
+            PRERELEASE_FLAG="--prerelease"
+          else
+            PRERELEASE_FLAG=""
+          fi
+          gh release create "${REF_NAME}" \
+            --title "UniFi MCP Worker v${VERSION}" \
+            --notes-file /tmp/release-notes.md \
+            --latest=false \
+            --verify-tag \
+            ${PRERELEASE_FLAG} \
+            dist/*
+
+  sync-version:
+    name: Sync version to main
+    runs-on: ubuntu-latest
+    needs: [validate-tag, github-release]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.PUSH_TOKEN }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Update package version
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+        working-directory: apps/worker
+      - name: Commit version bump
+        env:
+          VERSION: ${{ needs.validate-tag.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/worker/package.json apps/worker/package-lock.json
+          if git diff --cached --quiet; then
+            echo "No worker version changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(worker): sync version to ${VERSION} [skip ci]"
+          git push
