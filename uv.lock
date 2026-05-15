@@ -140,16 +140,17 @@ wheels = [
 
 [[package]]
 name = "aiounifi"
-version = "88"
+version = "90"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "orjson" },
+    { name = "pyotp" },
     { name = "segno" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e2/27/1f3f5588fc64b15c66355facd3e73276644d3e3726fbfca846f65b1d81e1/aiounifi-88.tar.gz", hash = "sha256:dcad5afddaaefd8a4d694e69e8572fc900303afbfc1b8bac32e86d4b56d32376", size = 54763, upload-time = "2025-11-19T08:21:05.48Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/25/3c706bb77ad7745aaeca65f547471a6be4cde26f8d2e285a132b8b0102c3/aiounifi-90.tar.gz", hash = "sha256:c0926dca364cb07b6272df230918624e35adbbd5b0fe346c43dea4ea2d1dd406", size = 58516, upload-time = "2026-03-18T19:53:34.737Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f1/aa/a2ea6b8fd373bb12f00acba274b67c3b5db5c7e2656b0a8101888099e116/aiounifi-88-py3-none-any.whl", hash = "sha256:5336063727aab481b3c70108992d98735e62169480a7a51eb665200bca40428a", size = 49017, upload-time = "2025-11-19T08:21:04.104Z" },
+    { url = "https://files.pythonhosted.org/packages/0e/54/3c490ad3babe3c0d032974f8407ed36307803818835da6fe43398ca846df/aiounifi-90-py3-none-any.whl", hash = "sha256:7e7a996359f09bdec2998f1b5d6ab1bab734b0fdc6f1ae5a3b467058ef7ce22b", size = 50169, upload-time = "2026-03-18T19:53:33.443Z" },
 ]
 
 [[package]]
@@ -1348,6 +1349,15 @@ crypto = [
 ]
 
 [[package]]
+name = "pyotp"
+version = "2.9.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f3/b2/1d5994ba2acde054a443bd5e2d384175449c7d2b6d1a0614dbca3a63abfc/pyotp-2.9.0.tar.gz", hash = "sha256:346b6642e0dbdde3b4ff5a930b664ca82abfa116356ed48cc42c7d6590d36f63", size = 17763, upload-time = "2023-07-27T23:41:03.295Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/c0/c33c8792c3e50193ef55adb95c1c3c2786fe281123291c2dbf0eaab95a6f/pyotp-2.9.0-py3-none-any.whl", hash = "sha256:81c2e5865b8ac55e825b0358e496e1d9387c811e85bb40e71a3b29b288963612", size = 13376, upload-time = "2023-07-27T23:41:01.685Z" },
+]
+
+[[package]]
 name = "pytest"
 version = "9.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2014,8 +2024,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.13.4" },
-    { name = "aiounifi", marker = "extra == 'network'", specifier = ">=88" },
-    { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.3.0" },
+    { name = "aiounifi", marker = "extra == 'network'", specifier = ">=90" },
+    { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.1.1" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=6.0.0" },
