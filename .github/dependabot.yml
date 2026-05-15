@@ -3,8 +3,8 @@
 
 version: 2
 updates:
-  # Python dependencies (pyproject.toml)
-  - package-ecosystem: "pip"
+  # Python dependencies (uv.lock + pyproject.toml workspace)
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -78,6 +78,18 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # Keep these majors explicit: they affect the compiler/test surface or
+      # must match the Node version used by CI and the worker release workflow.
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "vitest"
+        update-types:
+          - "version-update:semver-major"
 
   # Docker base images
   - package-ecosystem: "docker"
