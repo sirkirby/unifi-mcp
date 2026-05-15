@@ -69,12 +69,17 @@ def register_meta_tools(
     status_name = f"{prefix}_batch_status"
 
     hint = domain_hint or _DEFAULT_DOMAIN_HINTS.get(prefix, "controller management")
+    idx_title = f"{server_label} Tool Index"
+    exec_title = f"{server_label} Execute Tool"
+    batch_title = f"{server_label} Batch Execute"
+    status_title = f"{server_label} Batch Status"
 
     # =========================================================================
     # DISCOVERY: {prefix}_tool_index
     # =========================================================================
     @tool_decorator(
         name=idx_name,
+        title=idx_title,
         description=(
             f"Discover available {server_label} tools. "
             f"This server manages {hint}. "
@@ -107,6 +112,7 @@ def register_meta_tools(
 
     register_tool(
         name=idx_name,
+        title=idx_title,
         description=(
             f"Discover {server_label} tools ({hint}). "
             f"Filter with category/search; use include_schemas for full parameter details."
@@ -158,6 +164,7 @@ def register_meta_tools(
     # =========================================================================
     @tool_decorator(
         name=exec_name,
+        title=exec_title,
         description=(
             f"Execute a {server_label} tool discovered via {idx_name}. "
             f"This server manages {hint}. "
@@ -185,6 +192,7 @@ def register_meta_tools(
 
     register_tool(
         name=exec_name,
+        title=exec_title,
         description=(f"Execute a {server_label} tool ({hint}). Call {idx_name} first to discover tools."),
         input_schema={
             "type": "object",
@@ -211,6 +219,7 @@ def register_meta_tools(
     # =========================================================================
     @tool_decorator(
         name=batch_name,
+        title=batch_title,
         description=(
             f"Execute multiple {server_label} tools in parallel. "
             f"WORKFLOW: Call {idx_name} first to discover tools, then batch execute them here. "
@@ -270,6 +279,7 @@ def register_meta_tools(
 
     register_tool(
         name=batch_name,
+        title=batch_title,
         description=(
             f"Execute multiple {server_label} tools in parallel. Returns job IDs; use {status_name} to check progress."
         ),
@@ -326,6 +336,7 @@ def register_meta_tools(
     # =========================================================================
     @tool_decorator(
         name=status_name,
+        title=status_title,
         description=(
             f"Check status of {server_label} operations started with {batch_name}. "
             f"Returns status ('running', 'done', 'error'), result (if done), or error (if failed). "
@@ -364,6 +375,7 @@ def register_meta_tools(
 
     register_tool(
         name=status_name,
+        title=status_title,
         description=(
             f"Check status of {server_label} batch operations. Returns status, result (if done), or error (if failed)."
         ),
@@ -429,9 +441,11 @@ def register_load_tools(
     load_name = f"{prefix}_load_tools"
     exec_name = f"{prefix}_execute"
     hint = domain_hint or _DEFAULT_DOMAIN_HINTS.get(prefix, "controller management")
+    load_title = f"{server_label} Load Tools"
 
     @tool_decorator(
         name=load_name,
+        title=load_title,
         description=(
             f"Load {server_label} tools ({hint}) for direct MCP access (advanced). "
             f"Most users should use {exec_name} instead - it works with all clients. "
@@ -483,6 +497,7 @@ def register_load_tools(
 
     register_tool(
         name=load_name,
+        title=load_title,
         description=(
             f"Load {server_label} tools ({hint}) for direct MCP access. "
             f"Advanced - most users should use {exec_name} instead."

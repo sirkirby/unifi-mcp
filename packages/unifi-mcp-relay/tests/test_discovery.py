@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+from importlib.metadata import version
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -33,6 +35,7 @@ async def test_discover_tools_lazy_mode(mock_mcp_client):
         "tools": [
             {
                 "name": "unifi_list_clients",
+                "title": "List Clients",
                 "description": "List all connected clients",
                 "schema": {"input": {"type": "object", "properties": {"compact": {"type": "boolean"}}}},
                 "annotations": {"readOnlyHint": True, "openWorldHint": False},
@@ -49,6 +52,15 @@ async def test_discover_tools_lazy_mode(mock_mcp_client):
 
     def route_request(method, params=None):
         if method == "initialize":
+            assert params["clientInfo"]["name"] == "unifi-mcp-relay"
+            assert params["clientInfo"]["title"] == "UniFi MCP Relay"
+            assert params["clientInfo"]["version"] == version("unifi-mcp-relay")
+            assert params["clientInfo"]["websiteUrl"] == "https://github.com/sirkirby/unifi-mcp"
+            assert [icon["sizes"] for icon in params["clientInfo"]["icons"]] == [["48x48"], ["96x96"], ["192x192"]]
+            assert {icon["mimeType"] for icon in params["clientInfo"]["icons"]} == {"image/png"}
+            assert base64.b64decode(
+                params["clientInfo"]["icons"][0]["src"].removeprefix("data:image/png;base64,")
+            ).startswith(b"\x89PNG\r\n\x1a\n")
             return {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {"listChanged": True}},
@@ -95,6 +107,7 @@ async def test_discover_tools_lazy_mode(mock_mcp_client):
     assert tool_names == {"unifi_list_clients", "unifi_get_device_details"}
 
     clients_tool = next(t for t in result.tools if t.name == "unifi_list_clients")
+    assert clients_tool.title == "List Clients"
     assert clients_tool.description == "List all connected clients"
     assert clients_tool.input_schema == {"type": "object", "properties": {"compact": {"type": "boolean"}}}
     assert clients_tool.annotations == {"readOnlyHint": True, "openWorldHint": False}
@@ -180,6 +193,7 @@ async def test_discover_tools_eager_mode_fallback(mock_mcp_client):
                 "tools": [
                     {
                         "name": "my_custom_tool",
+                        "title": "My Custom Tool",
                         "description": "A custom tool",
                         "inputSchema": {"type": "object", "properties": {"arg": {"type": "string"}}},
                         "annotations": {"readOnlyHint": True, "destructiveHint": False},
@@ -205,6 +219,7 @@ async def test_discover_tools_eager_mode_fallback(mock_mcp_client):
     assert len(result.tools) == 2
 
     custom_tool = next(t for t in result.tools if t.name == "my_custom_tool")
+    assert custom_tool.title == "My Custom Tool"
     assert custom_tool.annotations == {"readOnlyHint": True, "destructiveHint": False}
     assert custom_tool.server_origin == "custom-mcp-server"
 

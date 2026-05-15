@@ -192,6 +192,8 @@ def generate_manifest() -> dict[str, Any]:
                 "input": meta.input_schema,
             },
         }
+        if meta.title:
+            tool_data["title"] = meta.title
 
         # Include output schema if available
         if meta.output_schema:

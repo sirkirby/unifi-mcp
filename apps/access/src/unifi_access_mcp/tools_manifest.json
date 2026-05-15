@@ -102,7 +102,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Access Batch Execute"
     },
     {
       "annotations": {
@@ -156,7 +157,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Access Batch Status"
     },
     {
       "annotations": {
@@ -258,7 +260,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Credential"
     },
     {
       "annotations": {
@@ -373,7 +376,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Visitor"
     },
     {
       "annotations": {
@@ -471,7 +475,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Visitor"
     },
     {
       "annotations": {
@@ -503,7 +508,8 @@
           "description": "Result from the executed UniFi Access tool",
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Access Execute Tool"
     },
     {
       "annotations": {
@@ -597,7 +603,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Activity Summary"
     },
     {
       "annotations": {
@@ -690,7 +697,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Credential"
     },
     {
       "annotations": {
@@ -783,7 +791,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Device"
     },
     {
       "annotations": {
@@ -876,7 +885,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Door"
     },
     {
       "annotations": {
@@ -969,7 +979,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Door Status"
     },
     {
       "annotations": {
@@ -1062,7 +1073,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Event"
     },
     {
       "annotations": {
@@ -1147,7 +1159,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Health"
     },
     {
       "annotations": {
@@ -1240,7 +1253,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Policy"
     },
     {
       "annotations": {
@@ -1325,7 +1339,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get System Info"
     },
     {
       "annotations": {
@@ -1418,7 +1433,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Visitor"
     },
     {
       "annotations": {
@@ -1503,7 +1519,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Credentials"
     },
     {
       "annotations": {
@@ -1593,7 +1610,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Devices"
     },
     {
       "annotations": {
@@ -1678,7 +1696,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Door Groups"
     },
     {
       "annotations": {
@@ -1768,7 +1787,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Doors"
     },
     {
       "annotations": {
@@ -1878,7 +1898,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Events"
     },
     {
       "annotations": {
@@ -1963,7 +1984,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Policies"
     },
     {
       "annotations": {
@@ -2048,7 +2070,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Schedules"
     },
     {
       "annotations": {
@@ -2142,7 +2165,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Users"
     },
     {
       "annotations": {
@@ -2227,7 +2251,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Visitors"
     },
     {
       "annotations": {
@@ -2274,7 +2299,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Access Load Tools"
     },
     {
       "annotations": {
@@ -2372,7 +2398,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Lock Door"
     },
     {
       "annotations": {
@@ -2470,7 +2497,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Reboot Device"
     },
     {
       "annotations": {
@@ -2568,7 +2596,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Recent Events"
     },
     {
       "annotations": {
@@ -2666,7 +2695,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Revoke Credential"
     },
     {
       "annotations": {
@@ -2751,7 +2781,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Subscribe Events"
     },
     {
       "annotations": {
@@ -2805,7 +2836,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Access Tool Index"
     },
     {
       "annotations": {
@@ -2907,7 +2939,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Unlock Door"
     },
     {
       "annotations": {
@@ -3010,7 +3043,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Policy"
     }
   ]
 }

@@ -27,6 +27,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from unifi_core.auth import UniFiAuth
+from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, configure_mcp_server_metadata
 from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
 from unifi_protect_mcp.bootstrap import load_config, logger
 
@@ -112,9 +113,11 @@ def get_server() -> FastMCP:
     server = StrictKwargFastMCP(
         name="unifi-protect-mcp",
         debug=True,
+        website_url=PROJECT_WEBSITE_URL,
         transport_security=transport_security,
         tools_manifest_path=_TOOLS_MANIFEST_PATH,
     )
+    configure_mcp_server_metadata(server, package_name="unifi-protect-mcp", icon_family="protect")
 
     # Wrap the tool decorator to handle permission kwargs gracefully.
     # This ensures tool modules can be imported directly without errors.

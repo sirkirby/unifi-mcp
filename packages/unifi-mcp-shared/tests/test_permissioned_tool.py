@@ -23,6 +23,7 @@ def mock_deps():
 
     def fake_register(
         name,
+        title=None,
         description="",
         input_schema=None,
         output_schema=None,
@@ -31,6 +32,7 @@ def mock_deps():
         permission_action=None,
     ):
         registered_tools[name] = {
+            "title": title,
             "description": description,
             "input_schema": input_schema,
             "output_schema": output_schema,
@@ -147,6 +149,26 @@ class TestCreatePermissionedTool:
         assert schema == get_unifi_tool_response_output_schema()
         assert set(schema["properties"]) >= {"success", "data", "error", "requires_confirmation", "preview"}
 
+    def test_generates_title_metadata_from_tool_name(self, mock_deps):
+        pt = _create_pt(mock_deps)
+
+        @pt(name="unifi_list_clients", description="test")
+        async def list_clients():
+            return {"success": True}
+
+        assert mock_deps["registered_tools"]["unifi_list_clients"]["title"] == "List Clients"
+        assert mock_deps["mcp_tool_kwargs"]["unifi_list_clients"]["title"] == "List Clients"
+
+    def test_preserves_explicit_title_metadata(self, mock_deps):
+        pt = _create_pt(mock_deps)
+
+        @pt(name="unifi_tool_index", title="UniFi Tool Index", description="test")
+        async def tool_index():
+            return {"tools": []}
+
+        assert mock_deps["registered_tools"]["unifi_tool_index"]["title"] == "UniFi Tool Index"
+        assert mock_deps["mcp_tool_kwargs"]["unifi_tool_index"]["title"] == "UniFi Tool Index"
+
     def test_preserves_explicit_output_schema_for_tool_index_metadata(self, mock_deps):
         pt = _create_pt(mock_deps)
         custom_schema = {
@@ -189,6 +211,7 @@ class TestCreatePermissionedTool:
 
         tools = await server.list_tools()
         tool = next(t for t in tools if t.name == "fastmcp_schema_tool")
+        assert tool.title == "FastMCP Schema Tool"
         assert tool.outputSchema == get_unifi_tool_response_output_schema()
 
         content, structured_content = await server.call_tool("fastmcp_schema_tool", {})

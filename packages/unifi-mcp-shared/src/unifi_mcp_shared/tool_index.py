@@ -31,6 +31,7 @@ class ToolMetadata:
 
     Attributes:
         name: Tool name (e.g., "unifi_list_clients")
+        title: Human-readable display title for clients
         description: Human-readable description of what the tool does
         input_schema: JSON Schema describing the tool's input parameters
         output_schema: Optional JSON Schema describing the tool's output structure
@@ -40,6 +41,7 @@ class ToolMetadata:
 
     name: str
     description: str
+    title: str | None = None
     input_schema: Dict[str, Any] = field(default_factory=dict)
     output_schema: Dict[str, Any] | None = None
     auth_method: str = "local_only"
@@ -64,6 +66,7 @@ TOOL_REGISTRY: Dict[str, ToolMetadata] = {}
 def register_tool(
     name: str,
     description: str,
+    title: str | None = None,
     input_schema: Dict[str, Any] | None = None,
     output_schema: Dict[str, Any] | None = None,
     auth_method: str = "local_only",
@@ -76,6 +79,7 @@ def register_tool(
     Args:
         name: Tool name
         description: Tool description
+        title: Optional human-readable display title
         input_schema: JSON Schema for input parameters (defaults to empty object)
         output_schema: Optional JSON Schema for output structure
         auth_method: Auth strategy hint -- "local_only", "api_key_only", or "either"
@@ -89,6 +93,7 @@ def register_tool(
     metadata = ToolMetadata(
         name=name,
         description=description,
+        title=title,
         input_schema=input_schema,
         output_schema=output_schema,
         auth_method=auth_method,
@@ -173,7 +178,14 @@ def get_tool_index(
 
     # Strip schemas unless explicitly requested
     if not include_schemas:
-        tools_out = [{"name": t["name"], "description": t.get("description", "")} for t in all_tools]
+        tools_out = [
+            {
+                "name": t["name"],
+                **({"title": t["title"]} if t.get("title") else {}),
+                "description": t.get("description", ""),
+            }
+            for t in all_tools
+        ]
     else:
         tools_out = all_tools
 
@@ -192,6 +204,7 @@ def _tools_from_registry() -> list:
     return [
         {
             "name": meta.name,
+            **({"title": meta.title} if meta.title is not None else {}),
             "description": meta.description,
             "schema": {
                 "input": meta.input_schema,

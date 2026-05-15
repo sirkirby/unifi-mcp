@@ -144,7 +144,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Acknowledge Event"
     },
     {
       "annotations": {
@@ -240,7 +241,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Alarm Arm"
     },
     {
       "annotations": {
@@ -332,7 +334,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Alarm Disarm"
     },
     {
       "annotations": {
@@ -415,7 +418,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Alarm Get Status"
     },
     {
       "annotations": {
@@ -498,7 +502,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Alarm List Profiles"
     },
     {
       "annotations": {
@@ -568,7 +573,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Protect Batch Execute"
     },
     {
       "annotations": {
@@ -622,7 +628,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Protect Batch Status"
     },
     {
       "annotations": {
@@ -724,7 +731,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Liveview"
     },
     {
       "annotations": {
@@ -822,7 +830,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Known Face"
     },
     {
       "annotations": {
@@ -920,7 +929,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Liveview"
     },
     {
       "annotations": {
@@ -1028,7 +1038,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Recording"
     },
     {
       "annotations": {
@@ -1060,7 +1071,8 @@
           "description": "Result from the executed UniFi Protect tool",
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Protect Execute Tool"
     },
     {
       "annotations": {
@@ -1169,7 +1181,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Export Clip"
     },
     {
       "annotations": {
@@ -1260,7 +1273,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Camera"
     },
     {
       "annotations": {
@@ -1351,7 +1365,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Camera Analytics"
     },
     {
       "annotations": {
@@ -1442,7 +1457,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Camera Streams"
     },
     {
       "annotations": {
@@ -1533,7 +1549,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Event"
     },
     {
       "annotations": {
@@ -1632,7 +1649,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Event Thumbnail"
     },
     {
       "annotations": {
@@ -1715,7 +1733,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Firmware Status"
     },
     {
       "annotations": {
@@ -1798,7 +1817,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Health"
     },
     {
       "annotations": {
@@ -1886,7 +1906,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Recording Status"
     },
     {
       "annotations": {
@@ -1989,7 +2010,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Snapshot"
     },
     {
       "annotations": {
@@ -2072,7 +2094,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get System Info"
     },
     {
       "annotations": {
@@ -2155,7 +2178,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Cameras"
     },
     {
       "annotations": {
@@ -2238,7 +2262,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Chimes"
     },
     {
       "annotations": {
@@ -2346,7 +2371,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Events"
     },
     {
       "annotations": {
@@ -2458,7 +2484,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Known Faces"
     },
     {
       "annotations": {
@@ -2541,7 +2568,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Lights"
     },
     {
       "annotations": {
@@ -2624,7 +2652,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Liveviews"
     },
     {
       "annotations": {
@@ -2723,7 +2752,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Recordings"
     },
     {
       "annotations": {
@@ -2806,7 +2836,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Sensors"
     },
     {
       "annotations": {
@@ -2918,7 +2949,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Smart Detections"
     },
     {
       "annotations": {
@@ -3001,7 +3033,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Viewers"
     },
     {
       "annotations": {
@@ -3048,7 +3081,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Protect Load Tools"
     },
     {
       "annotations": {
@@ -3152,7 +3186,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Merge Known Faces"
     },
     {
       "annotations": {
@@ -3263,7 +3298,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "PTZ Move"
     },
     {
       "annotations": {
@@ -3367,7 +3403,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "PTZ Preset"
     },
     {
       "annotations": {
@@ -3474,7 +3511,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "PTZ Zoom"
     },
     {
       "annotations": {
@@ -3572,7 +3610,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Reboot Camera"
     },
     {
       "annotations": {
@@ -3672,7 +3711,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Recent Events"
     },
     {
       "annotations": {
@@ -3755,7 +3795,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Subscribe Events"
     },
     {
       "annotations": {
@@ -3857,7 +3898,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Toggle Recording"
     },
     {
       "annotations": {
@@ -3911,7 +3953,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Protect Tool Index"
     },
     {
       "annotations": {
@@ -4012,7 +4055,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Trigger Chime"
     },
     {
       "annotations": {
@@ -4114,7 +4158,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Camera Settings"
     },
     {
       "annotations": {
@@ -4216,7 +4261,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Chime"
     },
     {
       "annotations": {
@@ -4354,7 +4400,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Known Face"
     },
     {
       "annotations": {
@@ -4456,7 +4503,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Light"
     }
   ]
 }

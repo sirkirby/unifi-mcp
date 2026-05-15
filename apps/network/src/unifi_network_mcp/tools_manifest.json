@@ -271,7 +271,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Adopt Device"
     },
     {
       "annotations": {
@@ -370,7 +371,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Archive Alarm"
     },
     {
       "annotations": {
@@ -462,7 +464,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Archive All Alarms"
     },
     {
       "annotations": {
@@ -577,7 +580,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Authorize Guest"
     },
     {
       "annotations": {
@@ -647,7 +651,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Network Batch Execute"
     },
     {
       "annotations": {
@@ -701,7 +706,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Network Batch Status"
     },
     {
       "annotations": {
@@ -800,7 +806,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Block Client"
     },
     {
       "annotations": {
@@ -904,7 +911,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Configure Port Aggregation"
     },
     {
       "annotations": {
@@ -1008,7 +1016,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Configure Port Mirror"
     },
     {
       "annotations": {
@@ -1134,7 +1143,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create ACL Rule"
     },
     {
       "annotations": {
@@ -1233,7 +1243,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Ap Group"
     },
     {
       "annotations": {
@@ -1325,7 +1336,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Backup"
     },
     {
       "annotations": {
@@ -1429,7 +1441,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Client Group"
     },
     {
       "annotations": {
@@ -1528,7 +1541,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create DNS Record"
     },
     {
       "annotations": {
@@ -1637,7 +1651,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Firewall Group"
     },
     {
       "annotations": {
@@ -1736,7 +1751,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Firewall Policy"
     },
     {
       "annotations": {
@@ -1835,7 +1851,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Network"
     },
     {
       "annotations": {
@@ -1960,7 +1977,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create OON Policy"
     },
     {
       "annotations": {
@@ -2055,7 +2073,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Port Forward"
     },
     {
       "annotations": {
@@ -2183,7 +2202,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Port Profile"
     },
     {
       "annotations": {
@@ -2282,7 +2302,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create QoS Rule"
     },
     {
       "annotations": {
@@ -2399,7 +2420,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Route"
     },
     {
       "annotations": {
@@ -2498,7 +2520,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Simple Port Forward"
     },
     {
       "annotations": {
@@ -2597,7 +2620,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Simple QoS Rule"
     },
     {
       "annotations": {
@@ -2704,7 +2728,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Usergroup"
     },
     {
       "annotations": {
@@ -2824,7 +2849,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create Voucher"
     },
     {
       "annotations": {
@@ -2923,7 +2949,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Create WLAN"
     },
     {
       "annotations": {
@@ -3022,7 +3049,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete ACL Rule"
     },
     {
       "annotations": {
@@ -3121,7 +3149,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Ap Group"
     },
     {
       "annotations": {
@@ -3220,7 +3249,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Backup"
     },
     {
       "annotations": {
@@ -3319,7 +3349,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Client Group"
     },
     {
       "annotations": {
@@ -3418,7 +3449,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Content Filter"
     },
     {
       "annotations": {
@@ -3517,7 +3549,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete DNS Record"
     },
     {
       "annotations": {
@@ -3616,7 +3649,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Firewall Group"
     },
     {
       "annotations": {
@@ -3715,7 +3749,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Firewall Policy"
     },
     {
       "annotations": {
@@ -3814,7 +3849,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete OON Policy"
     },
     {
       "annotations": {
@@ -3913,7 +3949,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete Port Profile"
     },
     {
       "annotations": {
@@ -4012,7 +4049,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Delete WLAN"
     },
     {
       "annotations": {
@@ -4044,7 +4082,8 @@
           "description": "Result from the executed UniFi Network tool",
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Network Execute Tool"
     },
     {
       "annotations": {
@@ -4143,7 +4182,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Force Provision Device"
     },
     {
       "annotations": {
@@ -4242,7 +4282,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Force Reconnect Client"
     },
     {
       "annotations": {
@@ -4341,7 +4382,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Forget Client"
     },
     {
       "annotations": {
@@ -4432,7 +4474,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get ACL Rule Details"
     },
     {
       "annotations": {
@@ -4524,7 +4567,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Alerts"
     },
     {
       "annotations": {
@@ -4612,7 +4656,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Anomalies"
     },
     {
       "annotations": {
@@ -4703,7 +4748,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Ap Group Details"
     },
     {
       "annotations": {
@@ -4786,7 +4832,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Autobackup Settings"
     },
     {
       "annotations": {
@@ -4877,7 +4924,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Client Details"
     },
     {
       "annotations": {
@@ -4972,7 +5020,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Client DPI Traffic"
     },
     {
       "annotations": {
@@ -5063,7 +5112,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Client Group Details"
     },
     {
       "annotations": {
@@ -5159,7 +5209,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Client Sessions"
     },
     {
       "annotations": {
@@ -5258,7 +5309,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Client Stats"
     },
     {
       "annotations": {
@@ -5349,7 +5401,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Client Wifi Details"
     },
     {
       "annotations": {
@@ -5440,7 +5493,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Content Filter Details"
     },
     {
       "annotations": {
@@ -5523,7 +5577,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Dashboard"
     },
     {
       "annotations": {
@@ -5614,7 +5669,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Device Details"
     },
     {
       "annotations": {
@@ -5705,7 +5761,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Device Radio"
     },
     {
       "annotations": {
@@ -5804,7 +5861,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Device Stats"
     },
     {
       "annotations": {
@@ -5895,7 +5953,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get DNS Record Details"
     },
     {
       "annotations": {
@@ -5978,7 +6037,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get DPI Stats"
     },
     {
       "annotations": {
@@ -6061,7 +6121,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Event Types"
     },
     {
       "annotations": {
@@ -6152,7 +6213,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Firewall Group Details"
     },
     {
       "annotations": {
@@ -6243,7 +6305,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Firewall Policy Details"
     },
     {
       "annotations": {
@@ -6335,7 +6398,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Gateway Stats"
     },
     {
       "annotations": {
@@ -6427,7 +6491,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get IPS Events"
     },
     {
       "annotations": {
@@ -6518,7 +6583,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Lldp Neighbors"
     },
     {
       "annotations": {
@@ -6609,7 +6675,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Network Details"
     },
     {
       "annotations": {
@@ -6692,7 +6759,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Network Health"
     },
     {
       "annotations": {
@@ -6784,7 +6852,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Network Stats"
     },
     {
       "annotations": {
@@ -6875,7 +6944,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get OON Policy Details"
     },
     {
       "annotations": {
@@ -6966,7 +7036,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get PDU Outlets"
     },
     {
       "annotations": {
@@ -7057,7 +7128,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Port Forward"
     },
     {
       "annotations": {
@@ -7148,7 +7220,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Port Profile Details"
     },
     {
       "annotations": {
@@ -7239,7 +7312,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Port Stats"
     },
     {
       "annotations": {
@@ -7330,7 +7404,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get QoS Rule Details"
     },
     {
       "annotations": {
@@ -7421,7 +7496,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get RF Scan Results"
     },
     {
       "annotations": {
@@ -7512,7 +7588,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Route Details"
     },
     {
       "annotations": {
@@ -7600,7 +7677,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Site DPI Traffic"
     },
     {
       "annotations": {
@@ -7683,7 +7761,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Site Settings"
     },
     {
       "annotations": {
@@ -7766,7 +7845,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get SNMP Settings"
     },
     {
       "annotations": {
@@ -7854,7 +7934,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Speedtest Results"
     },
     {
       "annotations": {
@@ -7945,7 +8026,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Speedtest Status"
     },
     {
       "annotations": {
@@ -8036,7 +8118,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Switch Capabilities"
     },
     {
       "annotations": {
@@ -8127,7 +8210,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Switch Ports"
     },
     {
       "annotations": {
@@ -8210,7 +8294,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get System Info"
     },
     {
       "annotations": {
@@ -8302,7 +8387,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Top Clients"
     },
     {
       "annotations": {
@@ -8393,7 +8479,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Traffic Route Details"
     },
     {
       "annotations": {
@@ -8484,7 +8571,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Usergroup Details"
     },
     {
       "annotations": {
@@ -8575,7 +8663,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get Voucher Details"
     },
     {
       "annotations": {
@@ -8666,7 +8755,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get VPN Client Details"
     },
     {
       "annotations": {
@@ -8757,7 +8847,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get VPN Server Details"
     },
     {
       "annotations": {
@@ -8848,7 +8939,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Get WLAN Details"
     },
     {
       "annotations": {
@@ -8936,7 +9028,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List ACL Rules"
     },
     {
       "annotations": {
@@ -9019,7 +9112,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Active Routes"
     },
     {
       "annotations": {
@@ -9111,7 +9205,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Alarms"
     },
     {
       "annotations": {
@@ -9194,7 +9289,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Ap Groups"
     },
     {
       "annotations": {
@@ -9277,7 +9373,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Available Channels"
     },
     {
       "annotations": {
@@ -9360,7 +9457,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Backups"
     },
     {
       "annotations": {
@@ -9443,7 +9541,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Blocked Clients"
     },
     {
       "annotations": {
@@ -9526,7 +9625,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Client Groups"
     },
     {
       "annotations": {
@@ -9622,7 +9722,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Clients"
     },
     {
       "annotations": {
@@ -9705,7 +9806,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Content Filters"
     },
     {
       "annotations": {
@@ -9801,7 +9903,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Devices"
     },
     {
       "annotations": {
@@ -9884,7 +9987,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List DNS Records"
     },
     {
       "annotations": {
@@ -9980,7 +10084,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List DPI Applications"
     },
     {
       "annotations": {
@@ -10072,7 +10177,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List DPI Categories"
     },
     {
       "annotations": {
@@ -10172,7 +10278,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Events"
     },
     {
       "annotations": {
@@ -10255,7 +10362,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Firewall Groups"
     },
     {
       "annotations": {
@@ -10343,7 +10451,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Firewall Policies"
     },
     {
       "annotations": {
@@ -10426,7 +10535,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Firewall Zones"
     },
     {
       "annotations": {
@@ -10509,7 +10619,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Networks"
     },
     {
       "annotations": {
@@ -10592,7 +10703,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List OON Policies"
     },
     {
       "annotations": {
@@ -10675,7 +10787,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Port Forwards"
     },
     {
       "annotations": {
@@ -10758,7 +10871,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Port Profiles"
     },
     {
       "annotations": {
@@ -10841,7 +10955,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List QoS Rules"
     },
     {
       "annotations": {
@@ -10937,7 +11052,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Rogue Aps"
     },
     {
       "annotations": {
@@ -11020,7 +11136,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Routes"
     },
     {
       "annotations": {
@@ -11103,7 +11220,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Traffic Routes"
     },
     {
       "annotations": {
@@ -11186,7 +11304,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Usergroups"
     },
     {
       "annotations": {
@@ -11269,7 +11388,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Vouchers"
     },
     {
       "annotations": {
@@ -11352,7 +11472,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List VPN Clients"
     },
     {
       "annotations": {
@@ -11435,7 +11556,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List VPN Servers"
     },
     {
       "annotations": {
@@ -11518,7 +11640,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "List Wlans"
     },
     {
       "annotations": {
@@ -11565,7 +11688,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Network Load Tools"
     },
     {
       "annotations": {
@@ -11669,7 +11793,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Locate Device"
     },
     {
       "annotations": {
@@ -11760,7 +11885,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Lookup By IP"
     },
     {
       "annotations": {
@@ -11864,7 +11990,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Power Cycle Port"
     },
     {
       "annotations": {
@@ -11963,7 +12090,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Reboot Device"
     },
     {
       "annotations": {
@@ -12059,7 +12187,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Recent Events"
     },
     {
       "annotations": {
@@ -12163,7 +12292,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Rename Client"
     },
     {
       "annotations": {
@@ -12267,7 +12397,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Rename Device"
     },
     {
       "annotations": {
@@ -12366,7 +12497,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Revoke Voucher"
     },
     {
       "annotations": {
@@ -12481,7 +12613,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Set Client IP Settings"
     },
     {
       "annotations": {
@@ -12585,7 +12718,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Set Device Led"
     },
     {
       "annotations": {
@@ -12689,7 +12823,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Set Jumbo Frames"
     },
     {
       "annotations": {
@@ -12802,7 +12937,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Set Outlet State"
     },
     {
       "annotations": {
@@ -12901,7 +13037,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Set Site Leds"
     },
     {
       "annotations": {
@@ -13005,7 +13142,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Set Switch Port Profile"
     },
     {
       "annotations": {
@@ -13088,7 +13226,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Subscribe Events"
     },
     {
       "annotations": {
@@ -13192,7 +13331,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Toggle Device"
     },
     {
       "annotations": {
@@ -13291,7 +13431,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Toggle Firewall Policy"
     },
     {
       "annotations": {
@@ -13390,7 +13531,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Toggle OON Policy"
     },
     {
       "annotations": {
@@ -13489,7 +13631,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Toggle Port Forward"
     },
     {
       "annotations": {
@@ -13588,7 +13731,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Toggle QoS Rule Enabled"
     },
     {
       "annotations": {
@@ -13687,7 +13831,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Toggle Traffic Route"
     },
     {
       "annotations": {
@@ -13786,7 +13931,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Toggle WLAN"
     },
     {
       "annotations": {
@@ -13840,7 +13986,8 @@
           },
           "type": "object"
         }
-      }
+      },
+      "title": "UniFi Network Tool Index"
     },
     {
       "annotations": {
@@ -13939,7 +14086,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Trigger RF Scan"
     },
     {
       "annotations": {
@@ -14038,7 +14186,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Trigger Speedtest"
     },
     {
       "annotations": {
@@ -14137,7 +14286,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Unauthorize Guest"
     },
     {
       "annotations": {
@@ -14236,7 +14386,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Unblock Client"
     },
     {
       "annotations": {
@@ -14340,7 +14491,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update ACL Rule"
     },
     {
       "annotations": {
@@ -14444,7 +14596,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Ap Group"
     },
     {
       "annotations": {
@@ -14543,7 +14696,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Autobackup Settings"
     },
     {
       "annotations": {
@@ -14647,7 +14801,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Client Group"
     },
     {
       "annotations": {
@@ -14751,7 +14906,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Content Filter"
     },
     {
       "annotations": {
@@ -14899,7 +15055,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Device Radio"
     },
     {
       "annotations": {
@@ -15003,7 +15160,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update DNS Record"
     },
     {
       "annotations": {
@@ -15107,7 +15265,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Firewall Group"
     },
     {
       "annotations": {
@@ -15211,7 +15370,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Firewall Policy"
     },
     {
       "annotations": {
@@ -15315,7 +15475,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Network"
     },
     {
       "annotations": {
@@ -15419,7 +15580,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update OON Policy"
     },
     {
       "annotations": {
@@ -15523,7 +15685,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Port Forward"
     },
     {
       "annotations": {
@@ -15627,7 +15790,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Port Profile"
     },
     {
       "annotations": {
@@ -15731,7 +15895,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update QoS Rule"
     },
     {
       "annotations": {
@@ -15850,7 +16015,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Route"
     },
     {
       "annotations": {
@@ -15953,7 +16119,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update SNMP Settings"
     },
     {
       "annotations": {
@@ -16060,7 +16227,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Switch Stp"
     },
     {
       "annotations": {
@@ -16167,7 +16335,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Traffic Route"
     },
     {
       "annotations": {
@@ -16278,7 +16447,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update Usergroup"
     },
     {
       "annotations": {
@@ -16378,7 +16548,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update VPN Client State"
     },
     {
       "annotations": {
@@ -16478,7 +16649,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update VPN Server State"
     },
     {
       "annotations": {
@@ -16582,7 +16754,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Update WLAN"
     },
     {
       "annotations": {
@@ -16681,7 +16854,8 @@
           "title": "UniFiToolResponse",
           "type": "object"
         }
-      }
+      },
+      "title": "Upgrade Device"
     }
   ]
 }

@@ -17,6 +17,7 @@ class ToolInfo:
 
     name: str
     description: str
+    title: str | None = None
     input_schema: dict | None = None
     annotations: dict | None = None
     server_origin: str | None = None

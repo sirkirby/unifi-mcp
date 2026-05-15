@@ -13,6 +13,7 @@ from typing import Any, Callable
 from unifi_core.permission import _infer_input_schema
 from unifi_core.policy_gate import resolve_permission_mode
 
+from unifi_mcp_shared.metadata import tool_title_from_name
 from unifi_mcp_shared.output_schema import apply_unifi_tool_response_signature, get_unifi_tool_response_output_schema
 
 
@@ -95,6 +96,8 @@ def create_permissioned_tool(
                 tool_name = getattr(func, "__name__", "<unknown>")
 
             description = d_kwargs.get("description", "")
+            title = d_kwargs.get("title") or tool_title_from_name(str(tool_name))
+            d_kwargs["title"] = title
             input_schema = d_kwargs.pop("input_schema", None)
             output_schema = d_kwargs.pop("output_schema", None)
             if output_schema is None:
@@ -110,6 +113,7 @@ def create_permissioned_tool(
             if not category or not action:
                 register_tool_fn(
                     name=tool_name,
+                    title=title,
                     description=description,
                     input_schema=input_schema,
                     output_schema=output_schema,
@@ -126,6 +130,7 @@ def create_permissioned_tool(
             # ALWAYS register in tool index (for discovery)
             register_tool_fn(
                 name=tool_name,
+                title=title,
                 description=description,
                 input_schema=input_schema,
                 output_schema=output_schema,

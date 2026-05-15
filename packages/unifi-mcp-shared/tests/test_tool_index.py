@@ -31,12 +31,14 @@ class TestToolMetadata:
     def test_to_dict_includes_all_set_fields(self):
         meta = ToolMetadata(
             name="test",
+            title="Test Tool",
             description="desc",
             input_schema={"type": "object"},
             output_schema={"type": "object"},
             auth_method="either",
         )
         d = meta.to_dict()
+        assert d["title"] == "Test Tool"
         assert d["output_schema"] == {"type": "object"}
         assert d["auth_method"] == "either"
 
@@ -112,6 +114,11 @@ class TestRegisterTool:
         assert meta.permission_category is None
         assert meta.permission_action is None
 
+    def test_register_with_title_metadata(self):
+        register_tool(name="my_tool", title="My Tool", description="test")
+        meta = TOOL_REGISTRY["my_tool"]
+        assert meta.title == "My Tool"
+
 
 class TestGetToolIndex:
     """Tests for get_tool_index."""
@@ -150,12 +157,14 @@ class TestGetToolIndex:
     def test_tool_schema_structure(self):
         register_tool(
             name="my_tool",
+            title="My Tool",
             description="test",
             input_schema={"type": "object", "properties": {"x": {"type": "integer"}}},
             output_schema={"type": "object"},
         )
         index = get_tool_index(registration_mode="eager", include_schemas=True)
         tool = index["tools"][0]
+        assert tool["title"] == "My Tool"
         assert "input" in tool["schema"]
         assert "output" in tool["schema"]
 

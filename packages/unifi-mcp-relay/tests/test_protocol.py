@@ -15,6 +15,7 @@ from unifi_mcp_relay.protocol import (
 def test_register_message_serialization():
     tool = ToolInfo(
         name="list_devices",
+        title="List Devices",
         description="List devices",
         input_schema={"type": "object"},
         annotations={"readOnlyHint": True},
@@ -27,6 +28,7 @@ def test_register_message_serialization():
     assert data["location_name"] == "Home Lab"
     assert len(data["tools"]) == 1
     assert data["tools"][0]["name"] == "list_devices"
+    assert data["tools"][0]["title"] == "List Devices"
 
 
 def test_parse_registered_message():

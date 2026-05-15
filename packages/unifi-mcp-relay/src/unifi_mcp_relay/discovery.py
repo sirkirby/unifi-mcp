@@ -18,8 +18,10 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
+from importlib.metadata import PackageNotFoundError, version
 
 import aiohttp
+from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, mcp_icons_for_server
 
 from unifi_mcp_relay.protocol import ToolInfo
 
@@ -164,6 +166,13 @@ class McpHttpClient:
 # ---------------------------------------------------------------------------
 
 
+def _relay_version() -> str:
+    try:
+        return version("unifi-mcp-relay")
+    except PackageNotFoundError:  # pragma: no cover - package is installed in workspace tests
+        return "0.0.0"
+
+
 def _extract_annotations(tool_data: dict) -> dict | None:
     """Extract MCP ToolAnnotations from a tools/list entry (eager mode fallback)."""
     annotations = tool_data.get("annotations")
@@ -183,6 +192,7 @@ def _build_tools_from_index(index_result: dict, server_name: str) -> list[ToolIn
         tools.append(
             ToolInfo(
                 name=entry["name"],
+                title=entry.get("title"),
                 description=entry.get("description", ""),
                 input_schema=input_schema,
                 annotations=entry.get("annotations"),
@@ -199,6 +209,7 @@ def _build_tools_from_list(tools_list: list[dict], server_name: str) -> list[Too
         tools.append(
             ToolInfo(
                 name=entry["name"],
+                title=entry.get("title"),
                 description=entry.get("description", ""),
                 input_schema=entry.get("inputSchema"),
                 annotations=_extract_annotations(entry),
@@ -235,7 +246,13 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
             {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {},
-                "clientInfo": {"name": "unifi-mcp-relay", "version": "1.0.0"},
+                "clientInfo": {
+                    "name": "unifi-mcp-relay",
+                    "title": "UniFi MCP Relay",
+                    "version": _relay_version(),
+                    "websiteUrl": PROJECT_WEBSITE_URL,
+                    "icons": [icon.model_dump(exclude_none=True) for icon in mcp_icons_for_server("relay")],
+                },
             },
         )
 
