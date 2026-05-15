@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -63,6 +64,28 @@ def test_forwarder_pre_sets_negotiated_protocol_versions(server_infos):
     assert fwd._clients["http://localhost:3001"]._protocol_version == LEGACY_MCP_PROTOCOL_REVISION
 
 
+def test_forwarder_tracks_lazy_loaders():
+    fwd = ToolForwarder(
+        [
+            ServerInfo(
+                name="unifi-network-mcp",
+                url="http://localhost:3000",
+                session_id="session-abc",
+                protocol_version="2025-11-25",
+                lazy_load_tool_name="unifi_load_tools",
+                tools=[
+                    ToolInfo(name="unifi_tool_index", description="Index", server_origin="unifi-network-mcp"),
+                    ToolInfo(name="unifi_load_tools", description="Load", server_origin="unifi-network-mcp"),
+                    ToolInfo(name="unifi_list_clients", description="List clients", server_origin="unifi-network-mcp"),
+                ],
+            )
+        ]
+    )
+
+    assert fwd._lazy_load_tool_by_url["http://localhost:3000"] == "unifi_load_tools"
+    assert fwd._lazy_advertised_tools_by_url["http://localhost:3000"] == {"unifi_list_clients"}
+
+
 async def test_forwarder_forwards_tool_call(server_infos):
     fwd = ToolForwarder(server_infos)
     with patch.object(fwd, "_call", new_callable=AsyncMock) as mock_call:
@@ -116,6 +139,172 @@ async def test_forwarder_call_uses_client_request(server_infos):
     mock_client.request.assert_called_once_with(
         "tools/call", {"name": "unifi_list_devices", "arguments": {"compact": False}}
     )
+
+
+async def test_forwarder_loads_lazy_tool_before_first_direct_call():
+    fwd = ToolForwarder(
+        [
+            ServerInfo(
+                name="unifi-network-mcp",
+                url="http://localhost:3000",
+                session_id="session-abc",
+                protocol_version="2025-11-25",
+                lazy_load_tool_name="unifi_load_tools",
+                tools=[
+                    ToolInfo(name="unifi_tool_index", description="Index", server_origin="unifi-network-mcp"),
+                    ToolInfo(name="unifi_load_tools", description="Load", server_origin="unifi-network-mcp"),
+                    ToolInfo(name="unifi_list_clients", description="List clients", server_origin="unifi-network-mcp"),
+                ],
+            )
+        ]
+    )
+    mock_client = AsyncMock()
+    mock_client.request = AsyncMock(
+        side_effect=[
+            {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps({"loaded": ["unifi_list_clients"], "errors": None}),
+                    }
+                ]
+            },
+            {"content": [{"type": "text", "text": json.dumps({"success": True, "data": []})}]},
+        ]
+    )
+    fwd._clients["http://localhost:3000"] = mock_client
+
+    result = await fwd.forward("unifi_list_clients", {"compact": True})
+
+    assert result == {"success": True, "data": []}
+    assert mock_client.request.await_args_list[0].args == (
+        "tools/call",
+        {"name": "unifi_load_tools", "arguments": {"tools": ["unifi_list_clients"]}},
+    )
+    assert mock_client.request.await_args_list[1].args == (
+        "tools/call",
+        {"name": "unifi_list_clients", "arguments": {"compact": True}},
+    )
+
+
+async def test_forwarder_caches_successfully_loaded_lazy_tools():
+    fwd = ToolForwarder(
+        [
+            ServerInfo(
+                name="unifi-network-mcp",
+                url="http://localhost:3000",
+                lazy_load_tool_name="unifi_load_tools",
+                tools=[
+                    ToolInfo(name="unifi_load_tools", description="Load", server_origin="unifi-network-mcp"),
+                    ToolInfo(name="unifi_list_clients", description="List clients", server_origin="unifi-network-mcp"),
+                ],
+            )
+        ]
+    )
+    mock_client = AsyncMock()
+    mock_client.request = AsyncMock(
+        side_effect=[
+            {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps({"loaded": ["unifi_list_clients"], "errors": None}),
+                    }
+                ]
+            },
+            {"content": [{"type": "text", "text": json.dumps({"success": True, "data": [1]})}]},
+            {"content": [{"type": "text", "text": json.dumps({"success": True, "data": [2]})}]},
+        ]
+    )
+    fwd._clients["http://localhost:3000"] = mock_client
+
+    first = await fwd.forward("unifi_list_clients", {})
+    second = await fwd.forward("unifi_list_clients", {})
+
+    assert first == {"success": True, "data": [1]}
+    assert second == {"success": True, "data": [2]}
+    load_calls = [call for call in mock_client.request.await_args_list if call.args[1]["name"] == "unifi_load_tools"]
+    assert len(load_calls) == 1
+
+
+async def test_forwarder_does_not_load_eager_or_meta_tools():
+    fwd = ToolForwarder(
+        [
+            ServerInfo(
+                name="unifi-network-mcp",
+                url="http://localhost:3000",
+                lazy_load_tool_name="unifi_load_tools",
+                tools=[
+                    ToolInfo(name="unifi_tool_index", description="Index", server_origin="unifi-network-mcp"),
+                    ToolInfo(name="unifi_load_tools", description="Load", server_origin="unifi-network-mcp"),
+                    ToolInfo(name="unifi_list_clients", description="List clients", server_origin="unifi-network-mcp"),
+                ],
+            ),
+            ServerInfo(
+                name="unifi-protect-mcp",
+                url="http://localhost:3001",
+                tools=[
+                    ToolInfo(
+                        name="protect_list_cameras",
+                        description="List cameras",
+                        server_origin="unifi-protect-mcp",
+                    ),
+                ],
+            ),
+        ]
+    )
+    network_client = AsyncMock()
+    network_client.request = AsyncMock(return_value={"content": [{"type": "text", "text": json.dumps({"tools": []})}]})
+    protect_client = AsyncMock()
+    protect_client.request = AsyncMock(
+        return_value={"content": [{"type": "text", "text": json.dumps({"success": True, "data": []})}]}
+    )
+    fwd._clients["http://localhost:3000"] = network_client
+    fwd._clients["http://localhost:3001"] = protect_client
+
+    await fwd.forward("unifi_tool_index", {})
+    await fwd.forward("protect_list_cameras", {})
+
+    assert network_client.request.await_args.args[1]["name"] == "unifi_tool_index"
+    assert protect_client.request.await_args.args[1]["name"] == "protect_list_cameras"
+
+
+async def test_forwarder_reports_lazy_load_failure():
+    fwd = ToolForwarder(
+        [
+            ServerInfo(
+                name="unifi-network-mcp",
+                url="http://localhost:3000",
+                lazy_load_tool_name="unifi_load_tools",
+                tools=[
+                    ToolInfo(name="unifi_load_tools", description="Load", server_origin="unifi-network-mcp"),
+                    ToolInfo(name="unifi_list_clients", description="List clients", server_origin="unifi-network-mcp"),
+                ],
+            )
+        ]
+    )
+    mock_client = AsyncMock()
+    mock_client.request = AsyncMock(
+        return_value={
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "loaded": [],
+                            "errors": [{"tool": "unifi_list_clients", "error": "Failed to load"}],
+                        }
+                    ),
+                }
+            ]
+        }
+    )
+    fwd._clients["http://localhost:3000"] = mock_client
+
+    error = await fwd.forward_with_error("unifi_list_clients", {})
+
+    assert "Failed to load lazy tool unifi_list_clients" in error
+    assert mock_client.request.await_count == 1
 
 
 async def test_forwarder_call_prefers_structured_content(server_infos):

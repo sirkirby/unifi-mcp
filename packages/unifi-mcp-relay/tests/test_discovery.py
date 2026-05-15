@@ -190,6 +190,11 @@ async def test_discover_tools_lazy_mode(mock_mcp_client):
                         "description": "Execute a tool by name",
                         "inputSchema": {"type": "object", "properties": {"tool_name": {"type": "string"}}},
                     },
+                    {
+                        "name": "unifi_load_tools",
+                        "description": "Load lazy tools",
+                        "inputSchema": {"type": "object", "properties": {"tools": {"type": "array"}}},
+                    },
                 ]
             }
         elif method == "tools/call":
@@ -212,6 +217,7 @@ async def test_discover_tools_lazy_mode(mock_mcp_client):
     assert result.url == "http://localhost:3000"
     assert result.session_id == "session-abc-123"
     assert result.protocol_version == LEGACY_MCP_PROTOCOL_REVISION
+    assert result.lazy_load_tool_name == "unifi_load_tools"
     assert len(result.tools) == 2
 
     # Verify tools are properly converted to ToolInfo with server_origin
@@ -265,6 +271,11 @@ async def test_discover_tools_identifies_tool_index_by_suffix(mock_mcp_client):
                         "description": "Execute a tool",
                         "inputSchema": {"type": "object", "properties": {}},
                     },
+                    {
+                        "name": "protect_load_tools",
+                        "description": "Load lazy tools",
+                        "inputSchema": {"type": "object", "properties": {"tools": {"type": "array"}}},
+                    },
                 ]
             }
         elif method == "tools/call":
@@ -284,6 +295,7 @@ async def test_discover_tools_identifies_tool_index_by_suffix(mock_mcp_client):
 
     assert result is not None
     assert result.name == "unifi-protect-mcp"
+    assert result.lazy_load_tool_name == "protect_load_tools"
     assert len(result.tools) == 1
     assert result.tools[0].name == "protect_list_cameras"
     assert result.tools[0].server_origin == "unifi-protect-mcp"

@@ -44,6 +44,7 @@ class ServerInfo:
     url: str
     session_id: str | None = None
     protocol_version: str | None = None
+    lazy_load_tool_name: str | None = None
     tools: list[ToolInfo] = field(default_factory=list)
 
 
@@ -314,9 +315,14 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
 
         # Step 3: Look for a *_tool_index meta-tool (suffix match)
         tool_index_name = None
+        lazy_load_tool_name = None
         for tool in listed_tools:
-            if tool.get("name", "").endswith("_tool_index"):
-                tool_index_name = tool["name"]
+            tool_name = tool.get("name", "")
+            if tool_name.endswith("_tool_index"):
+                tool_index_name = tool_name
+            elif tool_name.endswith("_load_tools"):
+                lazy_load_tool_name = tool_name
+            if tool_index_name and lazy_load_tool_name:
                 break
 
         if tool_index_name:
@@ -344,6 +350,7 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
             url=server_url,
             session_id=client.session_id,
             protocol_version=client.protocol_version,
+            lazy_load_tool_name=lazy_load_tool_name if tool_index_name else None,
             tools=tools,
         )
         logger.info("[discovery] Discovered %d tools from %s (%s)", len(tools), server_name, server_url)

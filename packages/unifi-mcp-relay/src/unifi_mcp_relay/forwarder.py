@@ -11,6 +11,13 @@ from unifi_mcp_relay.discovery import McpHttpClient, ServerInfo
 logger = logging.getLogger("unifi-mcp-relay")
 
 
+_META_TOOL_SUFFIXES = ("_tool_index", "_load_tools", "_execute", "_batch", "_batch_status")
+
+
+def _is_meta_tool(tool_name: str) -> bool:
+    return tool_name.endswith(_META_TOOL_SUFFIXES)
+
+
 class ToolForwarder:
     """Routes tool calls to the correct local MCP server.
 
@@ -21,9 +28,18 @@ class ToolForwarder:
     def __init__(self, server_infos: list[ServerInfo]) -> None:
         self._tool_to_url: dict[str, str] = {}
         self._clients: dict[str, McpHttpClient] = {}
+        self._lazy_load_tool_by_url: dict[str, str] = {}
+        self._lazy_advertised_tools_by_url: dict[str, set[str]] = {}
+        self._loaded_lazy_tools_by_url: dict[str, set[str]] = {}
         for info in server_infos:
             for tool in info.tools:
                 self._tool_to_url[tool.name] = info.url
+            if info.lazy_load_tool_name:
+                self._lazy_load_tool_by_url[info.url] = info.lazy_load_tool_name
+                self._lazy_advertised_tools_by_url[info.url] = {
+                    tool.name for tool in info.tools if not _is_meta_tool(tool.name)
+                }
+                self._loaded_lazy_tools_by_url.setdefault(info.url, set())
             if info.url not in self._clients:
                 self._clients[info.url] = McpHttpClient(
                     info.url,
@@ -66,6 +82,10 @@ class ToolForwarder:
         if not client:
             raise RuntimeError(f"No client for {server_url}")
         result = await client.request("tools/call", {"name": tool_name, "arguments": arguments})
+        return self._parse_tool_result(result, tool_name)
+
+    def _parse_tool_result(self, result: dict, tool_name: str) -> Any:
+        """Parse a tools/call result from current or legacy MCP response shapes."""
         structured = result.get("structuredContent")
         if isinstance(structured, dict):
             return structured
@@ -78,6 +98,24 @@ class ToolForwarder:
                 logger.warning("[forwarder] Failed to parse tool response for %s: %s", tool_name, exc)
                 return result
         return result
+
+    async def _ensure_lazy_tool_loaded(self, server_url: str, tool_name: str) -> None:
+        """Load a lazy-advertised tool on the backing server before forwarding."""
+        load_tool_name = self._lazy_load_tool_by_url.get(server_url)
+        if not load_tool_name:
+            return
+        if tool_name not in self._lazy_advertised_tools_by_url.get(server_url, set()):
+            return
+        loaded_tools = self._loaded_lazy_tools_by_url.setdefault(server_url, set())
+        if tool_name in loaded_tools:
+            return
+
+        result = await self._call(server_url, load_tool_name, {"tools": [tool_name]})
+        if isinstance(result, dict) and tool_name in result.get("loaded", []):
+            loaded_tools.add(tool_name)
+            return
+
+        raise RuntimeError(f"Failed to load lazy tool {tool_name} via {load_tool_name}: {result}")
 
     async def forward(self, tool_name: str, arguments: dict) -> Any | None:
         """Forward a tool call to the correct server.
@@ -96,6 +134,7 @@ class ToolForwarder:
         if not url:
             logger.warning("[forwarder] Unknown tool: %s", tool_name)
             return None
+        await self._ensure_lazy_tool_loaded(url, tool_name)
         return await self._call(url, tool_name, arguments)
 
     async def forward_with_error(self, tool_name: str, arguments: dict) -> Any | str:
@@ -115,6 +154,7 @@ class ToolForwarder:
         if not url:
             return f"Unknown tool: {tool_name}"
         try:
+            await self._ensure_lazy_tool_loaded(url, tool_name)
             return await self._call(url, tool_name, arguments)
         except Exception as e:
             logger.exception("[forwarder] Failed to forward %s to %s", tool_name, url)
