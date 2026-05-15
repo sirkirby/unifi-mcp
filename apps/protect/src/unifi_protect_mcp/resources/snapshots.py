@@ -24,9 +24,26 @@ import json
 import logging
 from typing import Any, Dict, List
 
+from mcp.types import Annotations
+
 from unifi_protect_mcp.runtime import camera_manager, server
 
 logger = logging.getLogger(__name__)
+
+SNAPSHOT_RESOURCE_META = {
+    "io.unifi.resourceKind": "camera-snapshot",
+    "io.unifi.updateMode": "on-demand",
+    "io.unifi.protocolSubscribe": False,
+    "io.unifi.relatedTools": ["protect_get_snapshot", "protect_list_cameras"],
+}
+
+SNAPSHOT_INDEX_RESOURCE_META = {
+    "io.unifi.resourceKind": "snapshot-index",
+    "io.unifi.updateMode": "poll",
+    "io.unifi.pollIntervalMs": 10000,
+    "io.unifi.protocolSubscribe": False,
+    "io.unifi.relatedTools": ["protect_get_snapshot", "protect_list_cameras"],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -37,6 +54,7 @@ logger = logging.getLogger(__name__)
 @server.resource(
     "protect://cameras/{camera_id}/snapshot",
     name="Camera Snapshot",
+    title="Live Camera Snapshot",
     description=(
         "Live JPEG snapshot from a UniFi Protect camera. "
         "Replace {camera_id} with the camera's ID (discover IDs via "
@@ -44,6 +62,8 @@ logger = logging.getLogger(__name__)
         "protect_list_cameras tool)."
     ),
     mime_type="image/jpeg",
+    annotations=Annotations(audience=["user", "assistant"], priority=0.7),
+    meta=SNAPSHOT_RESOURCE_META,
 )
 async def camera_snapshot(camera_id: str) -> bytes:
     """Fetch a JPEG snapshot for the given camera.
@@ -78,12 +98,15 @@ async def camera_snapshot(camera_id: str) -> bytes:
 @server.resource(
     "protect://cameras/snapshots",
     name="Camera Snapshot Index",
+    title="Camera Snapshot Index",
     description=(
         "JSON index of all cameras available for snapshot capture. "
         "Each entry includes the camera ID, name, connection state, "
         "and the resource URI to fetch its snapshot."
     ),
     mime_type="application/json",
+    annotations=Annotations(audience=["assistant"], priority=0.6),
+    meta=SNAPSHOT_INDEX_RESOURCE_META,
 )
 async def camera_snapshot_index() -> str:
     """Return a JSON array of cameras with their snapshot resource URIs."""

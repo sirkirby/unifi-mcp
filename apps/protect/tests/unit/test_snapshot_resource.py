@@ -225,6 +225,49 @@ class TestSnapshotResourceRegistration:
         assert len(index_resources) == 1
         assert index_resources[0].mime_type == "application/json"
 
+    def test_snapshot_template_has_mcp_metadata(self):
+        """The snapshot template should expose MCP title, annotations, and namespaced metadata."""
+        import unifi_protect_mcp.resources.snapshots  # noqa: F401
+        from unifi_protect_mcp.runtime import server
+
+        templates = server._resource_manager.list_templates()
+        snapshot_templates = [t for t in templates if t.uri_template == "protect://cameras/{camera_id}/snapshot"]
+        assert len(snapshot_templates) == 1
+        template = snapshot_templates[0]
+
+        assert template.title == "Live Camera Snapshot"
+        assert template.annotations is not None
+        assert template.annotations.audience == ["user", "assistant"]
+        assert template.annotations.priority == 0.7
+        assert template.meta == {
+            "io.unifi.resourceKind": "camera-snapshot",
+            "io.unifi.updateMode": "on-demand",
+            "io.unifi.protocolSubscribe": False,
+            "io.unifi.relatedTools": ["protect_get_snapshot", "protect_list_cameras"],
+        }
+
+    def test_snapshot_index_has_mcp_metadata(self):
+        """The snapshot index should expose MCP title, annotations, and namespaced metadata."""
+        import unifi_protect_mcp.resources.snapshots  # noqa: F401
+        from unifi_protect_mcp.runtime import server
+
+        resources = server._resource_manager.list_resources()
+        index_resources = [r for r in resources if str(r.uri) == "protect://cameras/snapshots"]
+        assert len(index_resources) == 1
+        index = index_resources[0]
+
+        assert index.title == "Camera Snapshot Index"
+        assert index.annotations is not None
+        assert index.annotations.audience == ["assistant"]
+        assert index.annotations.priority == 0.6
+        assert index.meta == {
+            "io.unifi.resourceKind": "snapshot-index",
+            "io.unifi.updateMode": "poll",
+            "io.unifi.pollIntervalMs": 10000,
+            "io.unifi.protocolSubscribe": False,
+            "io.unifi.relatedTools": ["protect_get_snapshot", "protect_list_cameras"],
+        }
+
 
 # ---------------------------------------------------------------------------
 # protect_get_snapshot tool (include_image=True mode)

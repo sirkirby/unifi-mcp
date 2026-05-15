@@ -60,6 +60,40 @@ class TestEventStreamResource:
         assert "error" in data
         assert "buffer broken" in data["error"]
 
+    @pytest.mark.asyncio
+    async def test_registered_with_mcp_resource_metadata(self):
+        import unifi_protect_mcp.resources.events  # noqa: F401
+        from unifi_protect_mcp.runtime import server
+
+        resources = await server.list_resources()
+        stream = next(r for r in resources if str(r.uri) == "protect://events/stream")
+
+        assert stream.title == "Recent Protect Events"
+        assert stream.annotations is not None
+        assert stream.annotations.audience == ["user", "assistant"]
+        assert stream.annotations.priority == 0.8
+        assert stream.meta == {
+            "io.unifi.resourceKind": "event-buffer",
+            "io.unifi.updateMode": "poll",
+            "io.unifi.pollIntervalMs": 1000,
+            "io.unifi.protocolSubscribe": False,
+            "io.unifi.relatedTools": ["protect_recent_events", "protect_subscribe_events"],
+        }
+
+    @pytest.mark.asyncio
+    async def test_server_read_resource_returns_json_content(self, mock_event_manager):
+        import unifi_protect_mcp.resources.events  # noqa: F401
+        from unifi_protect_mcp.runtime import server
+
+        mock_event_manager.get_recent_from_buffer.return_value = [{"id": "evt-1", "type": "motion"}]
+
+        contents = await server.read_resource("protect://events/stream")
+
+        assert len(contents) == 1
+        assert contents[0].mime_type == "application/json"
+        assert json.loads(contents[0].content) == [{"id": "evt-1", "type": "motion"}]
+        assert contents[0].meta["io.unifi.resourceKind"] == "event-buffer"
+
 
 # ---------------------------------------------------------------------------
 # protect://events/stream/summary
@@ -122,3 +156,23 @@ class TestEventStreamSummaryResource:
         assert data["by_type"]["motion"] == 1
         assert data["by_type"]["unknown"] == 1
         assert data["by_camera"]["unknown"] == 2
+
+    @pytest.mark.asyncio
+    async def test_summary_registered_with_mcp_resource_metadata(self):
+        import unifi_protect_mcp.resources.events  # noqa: F401
+        from unifi_protect_mcp.runtime import server
+
+        resources = await server.list_resources()
+        summary = next(r for r in resources if str(r.uri) == "protect://events/stream/summary")
+
+        assert summary.title == "Protect Event Buffer Summary"
+        assert summary.annotations is not None
+        assert summary.annotations.audience == ["assistant"]
+        assert summary.annotations.priority == 0.5
+        assert summary.meta == {
+            "io.unifi.resourceKind": "event-summary",
+            "io.unifi.updateMode": "poll",
+            "io.unifi.pollIntervalMs": 1000,
+            "io.unifi.protocolSubscribe": False,
+            "io.unifi.relatedTools": ["protect_recent_events", "protect_subscribe_events"],
+        }

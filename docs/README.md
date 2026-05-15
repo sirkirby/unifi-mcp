@@ -65,6 +65,12 @@ Design note for mapping UniFi compatibility jobs to experimental MCP Tasks:
 - Why batch execution is the safest first native Tasks workflow
 - What must be implemented before advertising task capabilities
 
+#### [MCP Resources and Subscriptions Alignment](mcp-resources-subscriptions.md)
+Design note for mapping UniFi event buffers and snapshot surfaces to MCP resources:
+- Current Protect and Access MCP resource inventory
+- Which surfaces fit `resources/read` and resource templates
+- Why protocol resource subscriptions are not advertised until update notifications can be delivered safely
+
 #### [Permissions](permissions.md) 🔐 **SECURITY**
 Complete guide to the permission system:
 - How permissions work

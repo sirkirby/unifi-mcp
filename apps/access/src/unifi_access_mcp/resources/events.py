@@ -13,20 +13,41 @@ from __future__ import annotations
 import json
 import logging
 
+from mcp.types import Annotations
+
 from unifi_access_mcp.runtime import event_manager, server
 
 logger = logging.getLogger(__name__)
+
+EVENT_RESOURCE_META = {
+    "io.unifi.resourceKind": "event-buffer",
+    "io.unifi.updateMode": "poll",
+    "io.unifi.pollIntervalMs": 1000,
+    "io.unifi.protocolSubscribe": False,
+    "io.unifi.relatedTools": ["access_recent_events", "access_subscribe_events"],
+}
+
+EVENT_SUMMARY_RESOURCE_META = {
+    "io.unifi.resourceKind": "event-summary",
+    "io.unifi.updateMode": "poll",
+    "io.unifi.pollIntervalMs": 1000,
+    "io.unifi.protocolSubscribe": False,
+    "io.unifi.relatedTools": ["access_recent_events", "access_subscribe_events"],
+}
 
 
 @server.resource(
     "access://events/stream",
     name="Access Event Stream",
+    title="Recent Access Events",
     description=(
         "Real-time UniFi Access events from the event buffer. "
         "Returns a JSON array of recent events (newest first). "
         "Poll this resource to monitor for door opens, denials, and other events."
     ),
     mime_type="application/json",
+    annotations=Annotations(audience=["user", "assistant"], priority=0.8),
+    meta=EVENT_RESOURCE_META,
 )
 async def event_stream() -> str:
     """Return recent events from the event ring buffer as JSON."""
@@ -41,11 +62,14 @@ async def event_stream() -> str:
 @server.resource(
     "access://events/stream/summary",
     name="Access Event Stream Summary",
+    title="Access Event Buffer Summary",
     description=(
         "Summary statistics for the event buffer: total count and breakdown by "
         "event type. Lightweight alternative to reading the full event stream."
     ),
     mime_type="application/json",
+    annotations=Annotations(audience=["assistant"], priority=0.5),
+    meta=EVENT_SUMMARY_RESOURCE_META,
 )
 async def event_stream_summary() -> str:
     """Return summary statistics of the event buffer."""
