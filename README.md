@@ -244,6 +244,14 @@ Each Python server in `apps/` is an independent package that depends on the shar
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details.
 
+## Development
+
+```bash
+make sync   # Install Python workspace + worker npm dependencies
+make check  # Format check + lint + generated drift checks + tests + worker typecheck
+make build  # Build deployable artifacts, including worker typecheck
+```
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, including how to work with the monorepo, run tests, and submit PRs.

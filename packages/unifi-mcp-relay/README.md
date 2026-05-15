@@ -1,6 +1,6 @@
 # UniFi MCP Relay
 
-A sidecar process that bridges locally-hosted MCP servers to a [Cloudflare Worker relay gateway](https://github.com/sirkirby/unifi-mcp-worker), enabling cloud agents (Claude, ChatGPT connectors, n8n, etc.) to access your UniFi MCP tools without exposing local ports.
+A sidecar process that bridges locally-hosted MCP servers to the [Cloudflare Worker relay gateway](https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker), enabling cloud agents (Claude, ChatGPT connectors, n8n, etc.) to access your UniFi MCP tools without exposing local ports.
 
 ## How It Works
 

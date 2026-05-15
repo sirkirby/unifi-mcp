@@ -8,6 +8,7 @@
 | unifi-protect-mcp | Latest release (beta) |
 | unifi-access-mcp | Latest release (beta) |
 | unifi-mcp-relay | Latest release (beta) |
+| unifi-mcp-worker | Latest release (beta) |
 
 Only the latest release of each package receives security patches. We recommend always running the most recent version.
 
@@ -42,7 +43,7 @@ Reporters will be credited in the security advisory and CHANGELOG unless they re
 
 ## Security Model
 
-unifi-network-mcp is designed with a **secure-by-default** posture:
+UniFi MCP is designed with a **secure-by-default** posture:
 
 ### Local-First Authentication
 
@@ -97,7 +98,7 @@ We recommend running at least these controller versions for security and API com
 - MCP server code (`apps/network/`, `apps/protect/`, `apps/access/`)
 - Shared packages (`packages/unifi-core/`, `packages/unifi-mcp-shared/`)
 - Relay sidecar (`packages/unifi-mcp-relay/`)
-- Cloudflare Worker relay (`worker/`)
+- Cloudflare Worker relay and CLI (`apps/worker/`)
 - Claude Code plugins (`plugins/`)
 
 ### Out of Scope

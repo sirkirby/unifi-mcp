@@ -24,9 +24,9 @@ The unifi-mcp project implements a meta-tool (`tool_index`) that lets agents and
 ## Prerequisites
 
 - **One-unified-server rule**: `tool_index` is a meta-tool that describes other tools. It must remain a single canonical entry point — do not add a second discovery handler in a plugin or subsystem, as this would fragment the index and break agents.
-- **Two source repos**:
+- **Two implementation surfaces**:
   - Local server: `apps/*/src/*/tool_index.py` (backend handler with FastMCP-registered wrapper) and `packages/unifi-mcp-shared/src/unifi_mcp_shared/tool_index.py` (shared handler)
-  - Worker cloud: `~/Repos/unifi-mcp-worker` (the Worker's `tool_index` handler)
+  - Worker cloud: `apps/worker/worker/src/` (the Worker's tool index and MCP handling code)
 - **Two-layer architecture**: The discovery system uses a named-param wrapper as the FastMCP-registered function, which delegates to a backend `tool_index_handler` via an assembled `args` dict. Both layers need updating when adding a new parameter.
 
 ## Procedure A: Adding or Modifying Parameters on the Tool Discovery Layer
@@ -120,15 +120,15 @@ Every parameter added to the local tool discovery layer must be mirrored in the 
 
 ### Steps
 
-1. After the local PR is merged, open `~/Repos/unifi-mcp-worker`.
-2. Locate the Worker's `tool_index` handler (the file analogous to the app's `tool_index.py`).
+1. In the same monorepo PR, inspect `apps/worker/worker/src/` for the Worker-side tool discovery and MCP handling path.
+2. Locate the Worker's `tool_index` handler or equivalent catalog-shaping code.
 3. Add the same parameter with the same signature and default. The same named-param wrapper pattern applies — use explicit named params in the FastMCP-registered function.
 4. Implement the same logic. If the Worker delegates to the shared package, ensure the shared package is published first (see Procedure E), then update the Worker's dependency pin.
-5. Open a PR to the Worker repo. In the PR description, reference the local PR so the connection is traceable.
-6. Close any open Worker issues that tracked the parity gap.
-7. Merge the Worker PR after the local PR is live.
+5. Add or update Worker tests in `apps/worker/worker/test/`, especially contract fixtures shared with the relay when protocol shape changes.
+6. Run `make worker-check` or root `make check` before opening the PR.
+7. Reference any Worker parity issue in the monorepo PR description so the connection is traceable.
 
-**Coordination order**: local merge → shared package publish → Worker dependency update → Worker PR → Worker merge.
+**Coordination order**: shared Python code changes and Worker parity changes land together in the monorepo PR; release order is still upstream Python packages first, then `worker/v*` if the Worker depends on newly released relay behavior.
 
 ## Procedure D: Updating SKILL.md Runtime Manifests
 
@@ -172,9 +172,9 @@ Adding optional parameters to the tool discovery layer is a **minor** semver bum
 1. Bump `packages/unifi-mcp-shared/pyproject.toml` (minor: `X.Y.Z` → `X.(Y+1).0`).
 2. Publish the shared package to PyPI via CI before opening the Worker PR.
 3. Update the Worker's dependency pin to the new shared package version.
-4. The Worker npm package is published separately via OIDC trusted publishing, triggered by a version tag on the Worker repo. Coordinate release order:
+4. The Worker npm package is published separately via OIDC trusted publishing, triggered by a `worker/v*` tag in this monorepo. Coordinate release order:
    - Publish shared package (PyPI) first
-   - Update Worker dependency, tag the Worker release, CI publishes to npm
+   - Confirm any relay protocol dependency is available, then tag the Worker release so CI publishes to npm
 
 ### Plugin Version Sync via `bump-plugin-versions.yml`
 

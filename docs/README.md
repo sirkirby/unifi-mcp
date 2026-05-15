@@ -1,6 +1,6 @@
 # Documentation
 
-Complete documentation for the UniFi Network MCP Server v0.2.0.
+Complete documentation for the UniFi MCP ecosystem.
 
 ---
 
@@ -8,13 +8,16 @@ Complete documentation for the UniFi Network MCP Server v0.2.0.
 
 - **[Main README](../README.md)** - Project overview and installation
 - **[Quick Start](../QUICKSTART.md)** - Get started in 5 minutes
+- **[Architecture](ARCHITECTURE.md)** - Monorepo layout and package responsibilities
+- **[Worker Gateway](../apps/worker/)** - Cloudflare Worker gateway and npm CLI
+- **[Relay Sidecar](../packages/unifi-mcp-relay/)** - Local sidecar for cloud relay mode
 - **[Sponsor UniFi MCP](sponsor/)** - Support maintenance, AI costs, compatibility testing, and releases
 
 ---
 
-## Lazy Tool Loading ⭐ NEW!
+## Lazy Tool Loading
 
-**96% token savings with seamless UX**
+Lazy mode is the default for MCP servers and keeps initial tool context small.
 
 The server now supports three tool registration modes:
 
@@ -85,7 +88,7 @@ Complete guide to the permission system:
 ### Environment Variables
 
 ```bash
-# Tool registration mode (v0.2.0+)
+# Tool registration mode
 UNIFI_TOOL_REGISTRATION_MODE=lazy  # lazy (default), eager, meta_only
 
 # UniFi controller connection
@@ -103,7 +106,16 @@ UNIFI_MCP_HTTP_ENABLED=false
 UNIFI_MCP_DIAGNOSTICS=false
 ```
 
-Full configuration details in [config.yaml](../src/config/config.yaml).
+Full Network server defaults are in [config.yaml](../apps/network/src/unifi_network_mcp/config/config.yaml). Protect and Access keep their own defaults under `apps/protect/` and `apps/access/`.
+
+### Worker and Relay
+
+The cloud relay path has two packages:
+
+- `apps/worker/`: the TypeScript Cloudflare Worker gateway and published `unifi-mcp-worker` npm CLI
+- `packages/unifi-mcp-relay/`: the Python sidecar that connects local MCP servers to the Worker over WebSocket
+
+Use `make sync` in a source checkout to install both the Python workspace and worker npm dependencies.
 
 ---
 
@@ -152,4 +164,4 @@ See [CLAUDE.md](../CLAUDE.md) for project development guidelines.
 - **MCP Specification:** https://spec.modelcontextprotocol.io/
 - **FastMCP Documentation:** https://gofastmcp.com/
 - **UniFi Controller API:** https://ubntwiki.com/products/software/unifi-controller/api
-- **GitHub Repository:** https://github.com/sirkirby/unifi-network-mcp
+- **GitHub Repository:** https://github.com/sirkirby/unifi-mcp

@@ -322,6 +322,10 @@ git push origin network/v0.14.13 protect/v0.3.5 access/v0.2.4 api/v0.2.1
 # Step 4 — relay
 git tag relay/v0.1.0
 git push origin relay/v0.1.0
+
+# Step 5 — worker, if relay/worker behavior changed
+git tag worker/v1.3.1
+git push origin worker/v1.3.1
 ```
 
 **Never batch tags across dependency levels.** Running

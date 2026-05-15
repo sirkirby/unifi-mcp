@@ -1,12 +1,14 @@
-.PHONY: help test lint format format-check format-fix manifest generate server-manifests skill-references \
+.PHONY: help sync build check test lint format format-check format-fix manifest generate server-manifests skill-references \
        check-skill-references check-generated pre-commit ci core-test shared-test \
-       relay-test worker-install worker-test worker-typecheck worker-check docker-relay sync \
+       relay-test worker-install worker-test worker-typecheck worker-build worker-check docker-relay \
        docker-build docker-up docker-down docker-logs
 
 help:
 	@echo "UniFi MCP Ecosystem — Top-Level Commands"
 	@echo ""
 	@echo "  make sync           Sync uv workspace (install/update all packages)"
+	@echo "  make build          Build all deployable artifacts"
+	@echo "  make check          Run full lint + drift + test checks"
 	@echo "  make test           Run all tests (core + shared + all apps)"
 	@echo "  make lint           Lint the full workspace"
 	@echo "  make format         Format the full workspace"
@@ -27,10 +29,15 @@ help:
 	@echo ""
 	@echo "  make core-test      Run unifi-core tests only"
 	@echo "  make shared-test    Run unifi-mcp-shared tests only"
+	@echo "  make worker-build   Install worker deps + typecheck Worker app"
 	@echo "  make worker-check   Run worker CLI tests + TypeScript checks"
 
-sync:
+sync: worker-install
 	uv sync --all-packages
+
+build: docker-build worker-build
+
+check: format-check lint check-generated test worker-typecheck
 
 core-test:
 	uv run --package unifi-core pytest packages/unifi-core/tests -v
@@ -92,15 +99,16 @@ worker-typecheck: worker-install
 worker-test: worker-install
 	npm run --prefix apps/worker test:all
 
-worker-check: worker-install
-	$(MAKE) -C apps/worker check
+worker-build: worker-typecheck
+
+worker-check: worker-typecheck worker-test
 
 docker-relay:
 	docker build -f packages/unifi-mcp-relay/Dockerfile -t unifi-mcp-relay .
 
-pre-commit: format generate lint test check-generated
+pre-commit: format generate lint test check-generated worker-typecheck
 
-ci: format-check lint check-generated test
+ci: check
 
 docker-build:
 	docker compose -f docker/docker-compose.yml build

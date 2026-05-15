@@ -39,6 +39,46 @@ updates:
         patterns:
           - "*"
 
+  # Worker CLI dependencies
+  - package-ecosystem: "npm"
+    directory: "/apps/worker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "worker"
+    groups:
+      worker-cli:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Cloudflare Worker dependencies
+  - package-ecosystem: "npm"
+    directory: "/apps/worker/worker"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore(deps)"
+    labels:
+      - "dependencies"
+      - "javascript"
+      - "worker"
+    groups:
+      worker-runtime:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
   # Docker base images
   - package-ecosystem: "docker"
     directory: "/"

@@ -11,10 +11,10 @@
 ```bash
 git clone https://github.com/sirkirby/unifi-mcp.git
 cd unifi-mcp
-uv sync
+make sync
 ```
 
-This installs all workspace packages (apps + shared packages) in development mode.
+This installs all Python workspace packages in development mode plus the self-contained worker npm dependencies.
 
 ## Monorepo Layout
 
@@ -34,6 +34,9 @@ The root Makefile delegates to app/package Makefiles:
 
 ```bash
 make test              # Run ALL tests (core + shared + relay + worker + apps)
+make check             # Run format check + lint + generated drift checks + tests
+make build             # Build deployable artifacts, including the worker typecheck
+make sync              # Install Python workspace + worker npm dependencies
 make lint              # Lint all packages
 make format            # Format all packages
 make pre-commit        # Format + lint + test
@@ -42,6 +45,7 @@ make pre-commit        # Format + lint + test
 make core-test         # Run unifi-core tests
 make shared-test       # Run unifi-mcp-shared tests
 make relay-test        # Run unifi-mcp-relay tests
+make worker-build      # Install worker deps + typecheck the Worker app
 make worker-check      # Run worker CLI tests + TypeScript checks
 make network-test      # Run network server tests
 make network-lint      # Lint network server
