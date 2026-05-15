@@ -49,6 +49,8 @@ apps/worker/worker/node_modules/
 apps/worker/dist/
 apps/worker/.wrangler/
 apps/worker/worker/.wrangler/
+!apps/worker/src/lib/
+!apps/worker/src/lib/*.mjs
 .dev.vars
 apps/worker/.dev.vars
 apps/worker/worker/.dev.vars
