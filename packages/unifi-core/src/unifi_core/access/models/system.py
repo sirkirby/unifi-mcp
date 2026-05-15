@@ -64,6 +64,29 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
+def _string_from_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("hostname", "host", "ip", "ip_address", "address", "name"):
+            nested = _string_from_value(value.get(key))
+            if nested:
+                return nested
+        return None
+    return str(value)
+
+
+def _int_from_value(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _derive_health_status(obj: Any) -> str:
     """Derive a health status string from the raw controller output.
 
@@ -92,10 +115,10 @@ def _derive_health_status(obj: Any) -> str:
 def system_info_from_controller(raw: Any) -> AccessSystemInfo:
     """Build an AccessSystemInfo from a manager dict or object."""
     return AccessSystemInfo(
-        name=_get(raw, "name") or _get(raw, "source"),
-        version=_get(raw, "version"),
-        hostname=_get(raw, "hostname") or _get(raw, "host"),
-        uptime=_get(raw, "uptime"),
+        name=_string_from_value(_get(raw, "name") or _get(raw, "source")),
+        version=_string_from_value(_get(raw, "version")),
+        hostname=_string_from_value(_get(raw, "hostname") or _get(raw, "host")),
+        uptime=_int_from_value(_get(raw, "uptime")),
     )
 
 

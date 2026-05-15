@@ -65,6 +65,25 @@ class TestSystemInfoFromController:
         info = system_info_from_controller({"host": "192.168.1.50"})
         assert info.hostname == "192.168.1.50"
 
+    def test_nested_host_payload_is_normalized(self) -> None:
+        """Live Access proxy payloads may return a host object instead of a string."""
+        info = system_info_from_controller(
+            {
+                "name": "Access",
+                "version": 4,
+                "host": {
+                    "device_type": "UNVR",
+                    "ip": "10.29.13.23",
+                    "uptime": 83622.28,
+                },
+                "uptime": 83622.28,
+            }
+        )
+        assert info.name == "Access"
+        assert info.version == "4"
+        assert info.hostname == "10.29.13.23"
+        assert info.uptime == 83622
+
     def test_partial_dict(self) -> None:
         info = system_info_from_controller({"name": "UA", "uptime": 3600})
         assert info.name == "UA"

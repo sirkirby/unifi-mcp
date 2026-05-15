@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from unifi_mcp_relay.config import RelayConfig
-from unifi_mcp_relay.main import RelaySidecar
+from unifi_mcp_relay.main import DiscoveryNotReadyError, RelaySidecar
 
 
 @pytest.fixture
@@ -42,6 +42,53 @@ async def test_sidecar_discovers_and_builds_catalog(config):
             assert len(catalog) == 1
             assert catalog[0].name == "unifi_list_devices"
             mock_fwd_instance.open.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_sidecar_discovery_requires_all_configured_servers(config):
+    sidecar = RelaySidecar(config)
+
+    with patch("unifi_mcp_relay.main.discover_all", new_callable=AsyncMock) as mock_discover:
+        mock_discover.return_value = []
+
+        with pytest.raises(DiscoveryNotReadyError, match="0/1"):
+            await sidecar._discover_catalog()
+
+    assert sidecar._catalog == []
+    assert sidecar._forwarder is None
+
+
+@pytest.mark.asyncio
+async def test_sidecar_startup_waits_for_non_empty_catalog_before_registering(config):
+    sidecar = RelaySidecar(config)
+    from unifi_mcp_relay.discovery import ServerInfo
+    from unifi_mcp_relay.protocol import ToolInfo
+
+    mock_info = ServerInfo(
+        name="unifi-network-mcp",
+        url="http://localhost:3000",
+        tools=[ToolInfo(name="unifi_list_devices", description="List", server_origin="unifi-network-mcp")],
+    )
+
+    with (
+        patch("unifi_mcp_relay.main.discover_all", new_callable=AsyncMock) as mock_discover,
+        patch("unifi_mcp_relay.main.ToolForwarder") as MockFwd,
+        patch("unifi_mcp_relay.main.RelayClient") as MockClient,
+        patch("unifi_mcp_relay.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+    ):
+        mock_discover.side_effect = [[], [mock_info]]
+        mock_fwd_instance = AsyncMock()
+        MockFwd.return_value = mock_fwd_instance
+        mock_client = AsyncMock()
+        MockClient.return_value = mock_client
+
+        sidecar = RelaySidecar(config)
+        await sidecar.run()
+
+    mock_sleep.assert_awaited_once()
+    mock_client.run.assert_awaited_once()
+    registered_tools = mock_client.run.await_args.kwargs["tools"]
+    assert [tool.name for tool in registered_tools] == ["unifi_list_devices"]
 
 
 @pytest.mark.asyncio

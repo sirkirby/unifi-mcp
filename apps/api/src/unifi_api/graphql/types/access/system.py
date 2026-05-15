@@ -36,6 +36,29 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
+def _string_from_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("hostname", "host", "ip", "ip_address", "address", "name"):
+            nested = _string_from_value(value.get(key))
+            if nested:
+                return nested
+        return None
+    return str(value)
+
+
+def _int_from_value(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _derive_health_status(obj: Any) -> str:
     explicit = _get(obj, "status")
     if isinstance(explicit, str):
@@ -70,10 +93,10 @@ class AccessSystemInfo:
     @classmethod
     def from_manager_output(cls, obj: Any) -> "AccessSystemInfo":
         return cls(
-            name=_get(obj, "name") or _get(obj, "source"),
-            version=_get(obj, "version"),
-            hostname=_get(obj, "hostname") or _get(obj, "host"),
-            uptime=_get(obj, "uptime"),
+            name=_string_from_value(_get(obj, "name") or _get(obj, "source")),
+            version=_string_from_value(_get(obj, "version")),
+            hostname=_string_from_value(_get(obj, "hostname") or _get(obj, "host")),
+            uptime=_int_from_value(_get(obj, "uptime")),
         )
 
     def to_dict(self) -> dict:

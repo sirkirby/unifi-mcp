@@ -354,7 +354,7 @@ class ResourceCache:
                 return value
         return None
 
-    def device_mac(self, prefer: str | None = None) -> Any:
+    def device_mac(self, prefer: str | None = None, *, fallback: bool = True) -> Any:
         devices = self.items("devices")
         if prefer:
             preferred = [
@@ -369,6 +369,8 @@ class ResourceCache:
                 value = first_value(item, ("mac", "mac_address", "id", "_id"))
                 if value:
                     return value
+            if not fallback:
+                return None
         for item in devices:
             value = first_value(item, ("mac", "mac_address", "id", "_id"))
             if value:
@@ -453,6 +455,9 @@ class LiveSmokeRunner:
                     record.error = str(data["error"])
                 record.summary = summarize_payload(data)
                 self.cache.remember(tool, data)
+                if self.expected_fixture_miss(tool, record.error):
+                    record.status = "skipped"
+                    record.success = None
         except Exception as exc:
             record.duration_ms = int((time.perf_counter() - started) * 1000)
             record.status = "exception"
@@ -463,6 +468,11 @@ class LiveSmokeRunner:
         if self.args.delay:
             await asyncio.sleep(self.args.delay)
         return record
+
+    def expected_fixture_miss(self, tool: str, error: str | None) -> bool:
+        if tool == "unifi_get_pdu_outlets" and error and "not a Smart Power PDU" in error:
+            return True
+        return False
 
     def unwrap_result(self, raw: Any) -> dict[str, Any]:
         if isinstance(raw, tuple) and len(raw) > 1 and isinstance(raw[1], dict):
@@ -638,7 +648,7 @@ class LiveSmokeRunner:
             # PDU-specific tools must target a PDU; the controller rejects other
             # device categories with a clear "not a Smart Power PDU" error.
             if "pdu" in name or "outlet" in name:
-                return self.cache.device_mac("pdu")
+                return self.cache.device_mac("pdu", fallback=False)
             return self.cache.device_mac()
         if param == "ap_mac":
             return self.cache.device_mac("ap") or self.cache.device_mac("uap")

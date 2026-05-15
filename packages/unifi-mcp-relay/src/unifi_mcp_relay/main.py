@@ -18,6 +18,10 @@ from unifi_mcp_relay.protocol import ToolInfo
 logger = logging.getLogger("unifi-mcp-relay")
 
 
+class DiscoveryNotReadyError(RuntimeError):
+    """Raised when configured local MCP servers are not ready for relay registration."""
+
+
 class RelaySidecar:
     """Top-level orchestrator that wires discovery, forwarding, and the relay client together."""
 
@@ -40,25 +44,60 @@ class RelaySidecar:
         flat list of ToolInfo objects discovered across all servers.
         """
         servers: list[ServerInfo] = await discover_all(self._config.servers)
+        if len(servers) != len(self._config.servers):
+            raise DiscoveryNotReadyError(
+                f"discovered {len(servers)}/{len(self._config.servers)} configured local MCP server(s)"
+            )
 
-        # Close old forwarder before replacing
+        catalog: list[ToolInfo] = []
+        for info in servers:
+            catalog.extend(info.tools)
+        if not catalog:
+            raise DiscoveryNotReadyError("configured local MCP servers returned an empty tool catalog")
+
+        forwarder = ToolForwarder(servers)
+        await forwarder.open()
+
+        # Close old forwarder only after the replacement is ready, so a
+        # transient discovery failure cannot drop an active catalog.
         if self._forwarder is not None:
             try:
                 await self._forwarder.close()
             except Exception as exc:
                 logger.warning("[main] Error closing old forwarder: %s", exc)
 
-        forwarder = ToolForwarder(servers)
-        await forwarder.open()
         self._forwarder = forwarder
-
-        catalog: list[ToolInfo] = []
-        for info in servers:
-            catalog.extend(info.tools)
 
         self._catalog = catalog
         logger.info("[main] Built catalog with %d tools from %d server(s)", len(catalog), len(servers))
         return catalog
+
+    async def _wait_for_startup_catalog(self) -> list[ToolInfo]:
+        """Wait until all configured local servers are ready before registering with the relay."""
+        delay = min(5, max(1, self._config.reconnect_max_delay))
+        attempt = 0
+        while self._running:
+            attempt += 1
+            try:
+                return await self._discover_catalog()
+            except DiscoveryNotReadyError as exc:
+                logger.warning(
+                    "[main] Local MCP servers not ready for relay registration (attempt %d): %s; retrying in %ds",
+                    attempt,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+            except Exception as exc:
+                logger.error(
+                    "[main] Startup discovery failed before relay registration (attempt %d): %s; retrying in %ds",
+                    attempt,
+                    exc,
+                    delay,
+                    exc_info=True,
+                )
+                await asyncio.sleep(delay)
+        raise asyncio.CancelledError
 
     async def _handle_tool_call(
         self,
@@ -100,6 +139,11 @@ class RelaySidecar:
                         logger.warning("[main] Could not send catalog_update: client not connected")
                 else:
                     logger.debug("[main] Catalog unchanged after refresh")
+            except DiscoveryNotReadyError as exc:
+                logger.warning(
+                    "[main] Refresh skipped; keeping existing catalog because discovery is not ready: %s",
+                    exc,
+                )
             except Exception as exc:
                 logger.error("[main] Refresh failed: %s", exc, exc_info=True)
 
@@ -115,7 +159,7 @@ class RelaySidecar:
         self._running = True
 
         try:
-            catalog = await self._discover_catalog()
+            catalog = await self._wait_for_startup_catalog()
 
             self._refresh_task = asyncio.create_task(self._refresh_loop())
 

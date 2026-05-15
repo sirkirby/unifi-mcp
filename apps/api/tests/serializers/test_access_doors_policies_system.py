@@ -133,6 +133,19 @@ def test_access_system_info_and_health() -> None:
     assert info_out["hostname"] == "udm-pro"
     assert info_out["uptime"] == 12345
 
+    nested_host_out = AccessSystemInfo.from_manager_output(
+        {
+            "source": "access-proxy",
+            "version": 4,
+            "host": {"device_type": "UNVR", "ip": "10.29.13.23"},
+            "uptime": 83622.28,
+        }
+    ).to_dict()
+    assert nested_host_out["name"] == "access-proxy"
+    assert nested_host_out["version"] == "4"
+    assert nested_host_out["hostname"] == "10.29.13.23"
+    assert nested_host_out["uptime"] == 83622
+
     health_sample = {
         "host": "10.0.0.1",
         "is_connected": True,
