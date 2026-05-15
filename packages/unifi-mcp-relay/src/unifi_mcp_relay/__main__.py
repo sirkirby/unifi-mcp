@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import logging
 import sys
@@ -9,7 +10,16 @@ import sys
 from dotenv import load_dotenv
 
 
-def main() -> None:
+def _build_parser() -> argparse.ArgumentParser:
+    return argparse.ArgumentParser(
+        prog="unifi-mcp-relay",
+        description="Bridge local UniFi MCP servers to a configured UniFi MCP relay worker.",
+    )
+
+
+def main(argv: list[str] | None = None) -> None:
+    _build_parser().parse_args(argv)
+
     load_dotenv()
     logging.basicConfig(
         level=logging.INFO,
