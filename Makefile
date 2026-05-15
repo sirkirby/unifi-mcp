@@ -1,5 +1,5 @@
 .PHONY: help sync build check test lint format format-check format-fix manifest generate server-manifests skill-references \
-       check-skill-references check-generated pre-commit ci core-test shared-test \
+       check-skill-references check-generated pre-commit ci core-test shared-test protocol-smoke \
        relay-test worker-install worker-test worker-typecheck worker-build worker-check docker-relay \
        docker-build docker-up docker-down docker-logs
 
@@ -29,6 +29,7 @@ help:
 	@echo ""
 	@echo "  make core-test      Run unifi-core tests only"
 	@echo "  make shared-test    Run unifi-mcp-shared tests only"
+	@echo "  make protocol-smoke Run MCP protocol conformance smoke tests"
 	@echo "  make worker-build   Install worker deps + typecheck Worker app"
 	@echo "  make worker-check   Run worker CLI tests + TypeScript checks"
 
@@ -45,7 +46,7 @@ core-test:
 shared-test:
 	uv run --package unifi-mcp-shared pytest packages/unifi-mcp-shared/tests -v
 
-test: core-test shared-test relay-test worker-test
+test: core-test shared-test relay-test protocol-smoke worker-test
 	$(MAKE) -C apps/network test
 	$(MAKE) -C apps/protect test
 	$(MAKE) -C apps/access test
@@ -88,6 +89,9 @@ check-generated: check-skill-references
 
 relay-test:
 	uv run --package unifi-mcp-relay pytest packages/unifi-mcp-relay/tests -v
+
+protocol-smoke:
+	uv run --package unifi-network-mcp python scripts/smoke_mcp_metadata.py --server all --registration-mode all
 
 worker-install:
 	npm ci --prefix apps/worker
