@@ -51,6 +51,8 @@ UniFi MCP is designed with a **secure-by-default** posture:
 - Credentials never leave your network — they are not sent to any external service
 - API key authentication is supported as an experimental additive option
 - The relay sidecar connects to a Cloudflare Worker via token-scoped WebSocket — no inbound ports are exposed
+- MCP OAuth, if adopted, is scoped to the cloud relay boundary only. See
+  [MCP Relay OAuth Boundary](docs/mcp-relay-oauth.md).
 
 ### Permission System
 

@@ -71,6 +71,12 @@ Design note for mapping UniFi event buffers and snapshot surfaces to MCP resourc
 - Which surfaces fit `resources/read` and resource templates
 - Why protocol resource subscriptions are not advertised until update notifications can be delivered safely
 
+#### [MCP Relay OAuth Boundary](mcp-relay-oauth.md)
+Decision record for MCP OAuth and relay/cloud authentication:
+- Why OAuth is scoped to the Worker relay path only
+- Why local Network, Protect, and Access servers remain env/config authenticated
+- What must be true before implementing optional relay OAuth
+
 #### [Permissions](permissions.md) 🔐 **SECURITY**
 Complete guide to the permission system:
 - How permissions work
