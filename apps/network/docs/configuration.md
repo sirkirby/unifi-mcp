@@ -45,6 +45,18 @@ The server auto-detects whether your controller uses UniFi OS proxy paths (`/pro
 | `UNIFI_ENABLED_TOOLS` | — | Comma-separated tool names to register (eager mode only) |
 | `CONFIG_PATH` | — | Path to a custom config YAML file |
 
+## Tool Registration Modes
+
+Standard MCP clients discover currently registered tools with `tools/list`.
+UniFi meta-tools are compatibility extensions for lazy loading and compact
+catalog discovery. See [MCP Discovery and UniFi Meta-Tools](../../../docs/tool-index.md).
+
+| Mode | Initial `tools/list` behavior | Best fit |
+|------|-------------------------------|----------|
+| `lazy` (default) | Meta-tools plus `unifi_load_tools`; domain tools load on demand | Production LLM clients with limited context |
+| `eager` | Meta-tools plus all selected Network tools registered directly | Standard MCP clients and dev consoles |
+| `meta_only` | Core meta-tools only; use `unifi_execute` for operations | Maximum context control |
+
 ## HTTP Transport
 
 HTTP is disabled by default. The stdio transport is recommended for most use cases.

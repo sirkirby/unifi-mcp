@@ -590,7 +590,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute multiple UniFi Network tools in parallel. Returns job IDs; use unifi_batch_status to check progress.",
+      "description": "Execute multiple UniFi Network tools in parallel through the UniFi compatibility wrapper. Returns job IDs; use unifi_batch_status to check progress.",
       "name": "unifi_batch",
       "schema": {
         "input": {
@@ -4059,7 +4059,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute a UniFi Network tool (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics). Call unifi_tool_index first to discover tools.",
+      "description": "Execute a UniFi Network tool (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) by name for lazy/meta-only compatibility workflows.",
       "name": "unifi_execute",
       "schema": {
         "input": {
@@ -11650,7 +11650,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Load UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) for direct MCP access. Advanced - most users should use unifi_execute instead.",
+      "description": "Load UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) for direct MCP access. Advanced lazy-mode extension that emits notifications/tools/list_changed when tools are loaded.",
       "name": "unifi_load_tools",
       "schema": {
         "input": {
@@ -13941,7 +13941,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Discover UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics). Filter with category/search; use include_schemas for full parameter details.",
+      "description": "Discover UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) through the UniFi compatibility index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "unifi_tool_index",
       "schema": {
         "input": {

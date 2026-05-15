@@ -41,7 +41,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute multiple UniFi Access tools in parallel. Returns job IDs; use access_batch_status to check progress.",
+      "description": "Execute multiple UniFi Access tools in parallel through the UniFi compatibility wrapper. Returns job IDs; use access_batch_status to check progress.",
       "name": "access_batch",
       "schema": {
         "input": {
@@ -485,7 +485,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute a UniFi Access tool (door locks, access readers, credentials, visitors, access policies, and entry events). Call access_tool_index first to discover tools.",
+      "description": "Execute a UniFi Access tool (door locks, access readers, credentials, visitors, access policies, and entry events) by name for lazy/meta-only compatibility workflows.",
       "name": "access_execute",
       "schema": {
         "input": {
@@ -2261,7 +2261,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Load UniFi Access tools (door locks, access readers, credentials, visitors, access policies, and entry events) for direct MCP access. Advanced - most users should use access_execute instead.",
+      "description": "Load UniFi Access tools (door locks, access readers, credentials, visitors, access policies, and entry events) for direct MCP access. Advanced lazy-mode extension that emits notifications/tools/list_changed when tools are loaded.",
       "name": "access_load_tools",
       "schema": {
         "input": {
@@ -2791,7 +2791,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Discover UniFi Access tools (door locks, access readers, credentials, visitors, access policies, and entry events). Filter with category/search; use include_schemas for full parameter details.",
+      "description": "Discover UniFi Access tools (door locks, access readers, credentials, visitors, access policies, and entry events) through the UniFi compatibility index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "access_tool_index",
       "schema": {
         "input": {

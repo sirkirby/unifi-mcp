@@ -98,11 +98,15 @@ Valid values for `UNIFI_ENABLED_CATEGORIES` (eager mode):
 
 ## Tool Registration Modes
 
-| Mode | Tokens | Behavior |
-|------|--------|----------|
-| **lazy** (default) | ~200 | Meta-tools registered; others loaded on first use |
-| **eager** | ~5,000 | All tools registered immediately; supports category/tool filtering |
-| **meta_only** | ~200 | Only meta-tools; requires `protect_execute` for all operations |
+Standard MCP clients discover currently registered tools with `tools/list`.
+UniFi meta-tools are compatibility extensions for lazy loading and compact
+catalog discovery. See [MCP Discovery and UniFi Meta-Tools](../../../docs/tool-index.md).
+
+| Mode | Initial `tools/list` behavior | Best fit |
+|------|-------------------------------|----------|
+| `lazy` (default) | Meta-tools plus `protect_load_tools`; domain tools load on demand | Production LLM clients with limited context |
+| `eager` | Meta-tools plus all selected Protect tools registered directly | Standard MCP clients and dev consoles |
+| `meta_only` | Core meta-tools only; use `protect_execute` for operations | Maximum context control |
 
 ## YAML Config Reference
 

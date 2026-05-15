@@ -44,6 +44,12 @@ The relay bridges your local MCP servers to a Cloudflare Worker, letting cloud a
 
 UniFi MCP is a collection of [Model Context Protocol](https://modelcontextprotocol.io/) servers that let AI assistants and automation tools interact with Ubiquiti UniFi controllers. Each server targets a specific UniFi application (Network, Protect, Access) and exposes its functionality as MCP tools — queryable, composable, and safe by default.
 
+## MCP Discovery
+
+UniFi MCP keeps the standard MCP path primary: capable clients discover currently registered tools with `tools/list` and invoke them with `tools/call`. The default `lazy` mode keeps initial context small by exposing UniFi meta-tools first, while `eager` mode registers all selected domain tools directly for clients that prefer a full standard tool list.
+
+The `*_tool_index`, `*_execute`, `*_batch`, and `*_load_tools` surfaces are UniFi compatibility extensions for large catalogs, lazy loading, and relay workflows. See [MCP Discovery and UniFi Meta-Tools](docs/tool-index.md) for mode-by-mode behavior.
+
 ## Quick Start
 
 ### Claude Code (recommended)

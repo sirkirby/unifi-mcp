@@ -2,7 +2,7 @@
 
 The UniFi Protect MCP server exposes 43 tools, all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
-For machine-readable tool metadata, call the `protect_tool_index` meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`.
+Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `protect_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`.
 
 ## Meta-Tools
 

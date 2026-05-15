@@ -81,10 +81,11 @@ def register_meta_tools(
         name=idx_name,
         title=idx_title,
         description=(
-            f"Discover available {server_label} tools. "
+            f"Model-friendly discovery extension for {server_label} tools. "
             f"This server manages {hint}. "
-            f"CALL THIS FIRST to find the right tool for your task. "
-            f"Returns names and descriptions by default (~38K chars). "
+            "Standard MCP clients should use tools/list first; this compact index is an "
+            "optional UniFi extension for filtered discovery in lazy/meta-only workflows. "
+            f"Returns names and descriptions by default. "
             f"Use 'category' to filter by area (e.g. clients, firewall, devices), "
             f"'search' for keyword matching, or 'include_schemas' for full parameter schemas. "
             f"After finding the right tool, use {exec_name} to run it."
@@ -114,8 +115,8 @@ def register_meta_tools(
         name=idx_name,
         title=idx_title,
         description=(
-            f"Discover {server_label} tools ({hint}). "
-            f"Filter with category/search; use include_schemas for full parameter details."
+            f"Discover {server_label} tools ({hint}) through the UniFi compatibility index. "
+            "Standard MCP clients should prefer tools/list when it exposes the needed tools."
         ),
         input_schema={
             "type": "object",
@@ -168,7 +169,8 @@ def register_meta_tools(
         description=(
             f"Execute a {server_label} tool discovered via {idx_name}. "
             f"This server manages {hint}. "
-            f"WORKFLOW: Call {idx_name} first to find the right tool, then execute it here. "
+            "This is a UniFi compatibility execution wrapper for lazy/meta-only workflows; "
+            "standard MCP clients may call directly registered tools with tools/call. "
             f"For bulk/parallel operations, use {batch_name} instead."
         ),
         annotations=ToolAnnotations(
@@ -193,7 +195,7 @@ def register_meta_tools(
     register_tool(
         name=exec_name,
         title=exec_title,
-        description=(f"Execute a {server_label} tool ({hint}). Call {idx_name} first to discover tools."),
+        description=(f"Execute a {server_label} tool ({hint}) by name for lazy/meta-only compatibility workflows."),
         input_schema={
             "type": "object",
             "required": ["tool"],
@@ -221,8 +223,8 @@ def register_meta_tools(
         name=batch_name,
         title=batch_title,
         description=(
-            f"Execute multiple {server_label} tools in parallel. "
-            f"WORKFLOW: Call {idx_name} first to discover tools, then batch execute them here. "
+            f"Execute multiple {server_label} tools in parallel through a UniFi compatibility wrapper. "
+            f"Use {idx_name} to discover tool names when they are not directly registered. "
             f"Returns job IDs for each operation. Use {status_name} to check progress and get results. "
             f"For single operations, use {exec_name} instead (returns result directly)."
         ),
@@ -281,7 +283,8 @@ def register_meta_tools(
         name=batch_name,
         title=batch_title,
         description=(
-            f"Execute multiple {server_label} tools in parallel. Returns job IDs; use {status_name} to check progress."
+            f"Execute multiple {server_label} tools in parallel through the UniFi compatibility wrapper. "
+            f"Returns job IDs; use {status_name} to check progress."
         ),
         input_schema={
             "type": "object",
@@ -423,8 +426,9 @@ def register_load_tools(
 ) -> None:
     """Register load_tools for dynamic tool loading (capable clients only).
 
-    This enables direct tool access for MCP clients that support tool_list_changed notifications.
-    Most users should use {prefix}_execute instead - it works with all clients.
+    This enables direct tool access for MCP clients that support
+    notifications/tools/list_changed. Most users should use {prefix}_execute
+    instead - it works with all clients.
 
     Args:
         server: FastMCP server instance
@@ -447,10 +451,10 @@ def register_load_tools(
         name=load_name,
         title=load_title,
         description=(
-            f"Load {server_label} tools ({hint}) for direct MCP access (advanced). "
-            f"Most users should use {exec_name} instead - it works with all clients. "
-            f"This tool is for MCP clients that support tool_list_changed notifications. "
-            f"After loading, the client is notified to refresh its tool list."
+            f"Load {server_label} tools ({hint}) into the standard MCP tools/list surface. "
+            "This is an advanced UniFi extension for lazy mode clients that support "
+            "notifications/tools/list_changed. "
+            f"Clients that do not refresh tool lists should use {exec_name} instead."
         ),
         annotations=ToolAnnotations(
             readOnlyHint=False,
@@ -485,7 +489,7 @@ def register_load_tools(
         if loaded:
             try:
                 await ctx.session.send_tool_list_changed()
-                logger.info("Sent tool_list_changed notification after loading: %s", loaded)
+                logger.info("Sent notifications/tools/list_changed after loading: %s", loaded)
             except Exception as e:
                 logger.warning("Failed to send tool_list_changed notification: %s", e)
 
@@ -500,7 +504,7 @@ def register_load_tools(
         title=load_title,
         description=(
             f"Load {server_label} tools ({hint}) for direct MCP access. "
-            f"Advanced - most users should use {exec_name} instead."
+            "Advanced lazy-mode extension that emits notifications/tools/list_changed when tools are loaded."
         ),
         input_schema={
             "type": "object",

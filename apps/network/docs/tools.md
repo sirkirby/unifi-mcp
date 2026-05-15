@@ -2,7 +2,7 @@
 
 The UniFi Network MCP server exposes 169 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
-For machine-readable tool metadata, call the `unifi_tool_index` meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`.
+Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`.
 
 ## Meta-Tools
 

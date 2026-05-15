@@ -512,7 +512,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute multiple UniFi Protect tools in parallel. Returns job IDs; use protect_batch_status to check progress.",
+      "description": "Execute multiple UniFi Protect tools in parallel through the UniFi compatibility wrapper. Returns job IDs; use protect_batch_status to check progress.",
       "name": "protect_batch",
       "schema": {
         "input": {
@@ -1048,7 +1048,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute a UniFi Protect tool (security cameras, recordings, snapshots, motion events, live views, and NVR management). Call protect_tool_index first to discover tools.",
+      "description": "Execute a UniFi Protect tool (security cameras, recordings, snapshots, motion events, live views, and NVR management) by name for lazy/meta-only compatibility workflows.",
       "name": "protect_execute",
       "schema": {
         "input": {
@@ -3043,7 +3043,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Load UniFi Protect tools (security cameras, recordings, snapshots, motion events, live views, and NVR management) for direct MCP access. Advanced - most users should use protect_execute instead.",
+      "description": "Load UniFi Protect tools (security cameras, recordings, snapshots, motion events, live views, and NVR management) for direct MCP access. Advanced lazy-mode extension that emits notifications/tools/list_changed when tools are loaded.",
       "name": "protect_load_tools",
       "schema": {
         "input": {
@@ -3908,7 +3908,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Discover UniFi Protect tools (security cameras, recordings, snapshots, motion events, live views, and NVR management). Filter with category/search; use include_schemas for full parameter details.",
+      "description": "Discover UniFi Protect tools (security cameras, recordings, snapshots, motion events, live views, and NVR management) through the UniFi compatibility index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "protect_tool_index",
       "schema": {
         "input": {

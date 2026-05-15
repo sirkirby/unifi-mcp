@@ -15,17 +15,20 @@ Complete documentation for the UniFi MCP ecosystem.
 
 ---
 
-## Lazy Tool Loading
+## MCP Discovery and Lazy Tool Loading
 
-Lazy mode is the default for MCP servers and keeps initial tool context small.
+Standard MCP discovery is still `tools/list` followed by `tools/call`. The
+UniFi `*_tool_index`, `*_execute`, `*_batch`, and `*_load_tools` surfaces are
+compatibility extensions for large catalogs and lazy loading, not replacements
+for the protocol path.
 
 The server now supports three tool registration modes:
 
 | Mode | Description | Tokens | Use Case |
 |------|-------------|--------|----------|
-| **lazy** (default) | Auto-loads tools on-demand | ~225 | Production LLMs |
-| **meta_only** | Manual tool discovery | ~225 | Maximum control |
-| **eager** | All tools immediately | ~5,000 | Dev console |
+| **lazy** (default) | Meta-tools plus `*_load_tools`; domain tools load on demand | ~225 | Production LLMs |
+| **meta_only** | Meta-tools only; execute through `*_execute` | ~225 | Maximum control |
+| **eager** | All selected tools registered directly in `tools/list` | ~5,000 | Standard MCP clients and dev consoles |
 
 **Quick config:**
 ```bash
@@ -46,13 +49,15 @@ Visual guide comparing eager vs lazy vs meta-only modes:
 
 **TLDR:** Lazy mode = 96% token savings + seamless UX = best of both worlds!
 
-#### [Tool Index](tool-index.md)
-Documentation for the `unifi_tool_index` meta-tool:
-- How to query available tools
-- Schema format
-- Use cases (SDK generation, automation)
+#### [MCP Discovery and UniFi Meta-Tools](tool-index.md)
+Documentation for standard MCP discovery and the UniFi meta-tool extension path:
+- How `tools/list` maps to lazy, eager, and meta-only modes
+- How to query the compatibility tool index
+- When to use `*_execute` or `*_load_tools`
 
-**TLDR:** Call `unifi_tool_index` to get a machine-readable list of all available tools.
+**TLDR:** Use `tools/list` when your client can handle the direct tool catalog. Use
+`*_tool_index` and `*_execute` when lazy loading or context limits make a compact
+manifest-backed catalog more practical.
 
 #### [Permissions](permissions.md) 🔐 **SECURITY**
 Complete guide to the permission system:
