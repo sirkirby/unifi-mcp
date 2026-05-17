@@ -6,8 +6,9 @@ import json
 import logging
 from typing import Any
 
-from unifi_mcp_relay.discovery import McpHttpClient, ServerInfo
 from unifi_mcp_shared.meta_tools import is_meta_tool as _is_meta_tool
+
+from unifi_mcp_relay.discovery import McpHttpClient, ServerInfo
 
 logger = logging.getLogger("unifi-mcp-relay")
 

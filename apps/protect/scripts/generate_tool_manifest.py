@@ -11,7 +11,6 @@ from pathlib import Path
 
 from unifi_mcp_shared.manifest_generator import generate_and_write
 
-
 if __name__ == "__main__":
     sys.exit(
         generate_and_write(
