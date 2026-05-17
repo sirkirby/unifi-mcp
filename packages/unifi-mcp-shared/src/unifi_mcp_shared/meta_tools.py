@@ -23,6 +23,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+META_TOOL_SUFFIXES: tuple[str, ...] = (
+    "_tool_index",
+    "_execute",
+    "_batch",
+    "_batch_status",
+    "_load_tools",
+)
+
+
+def is_meta_tool(name: str) -> bool:
+    """Return True if ``name`` is one of the shared server-control meta-tools."""
+    return name.endswith(META_TOOL_SUFFIXES)
+
+
 # Default domain hints per prefix
 _DEFAULT_DOMAIN_HINTS = {
     "unifi": "WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics",

@@ -18,9 +18,9 @@ from typing import Any
 import anyio
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL
 from unifi_mcp_shared.protocol import DEFAULT_MCP_PROTOCOL_REVISION
 
-PROJECT_WEBSITE_URL = "https://github.com/sirkirby/unifi-mcp"
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRATION_MODES = ("lazy", "eager", "meta_only")
 

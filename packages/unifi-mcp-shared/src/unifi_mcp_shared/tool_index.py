@@ -20,6 +20,8 @@ from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
+_MANIFEST_CACHE: Dict[Path, Dict[str, Any]] = {}
+
 # ---------------------------------------------------------------------------
 # Tool metadata structure
 # ---------------------------------------------------------------------------
@@ -135,21 +137,11 @@ def get_tool_index(
     module_map: Dict[str, str] = {}
 
     if registration_mode == "lazy" and manifest_path is not None:
-        if manifest_path.exists():
-            try:
-                with open(manifest_path) as f:
-                    manifest = json.load(f)
-                module_map = manifest.get("module_map", {})
-                logger.debug("Loaded tool index from manifest: %d tools", manifest.get("count", 0))
-                all_tools = manifest.get("tools", [])
-            except Exception as e:
-                logger.warning("Failed to load tool manifest: %s, falling back to runtime", e)
-                all_tools = _tools_from_registry()
+        manifest = _load_manifest_cached(manifest_path)
+        if manifest is not None:
+            module_map = manifest.get("module_map", {})
+            all_tools = manifest.get("tools", [])
         else:
-            logger.warning(
-                "Tool manifest not found at %s. Run the manifest generation script to generate it.",
-                manifest_path,
-            )
             all_tools = _tools_from_registry()
     else:
         all_tools = _tools_from_registry()
@@ -197,6 +189,31 @@ def get_tool_index(
     if category or search:
         result["filtered"] = True
     return result
+
+
+def _load_manifest_cached(manifest_path: Path) -> Dict[str, Any] | None:
+    """Load and parse a tools manifest, caching the parsed result by path."""
+    cached = _MANIFEST_CACHE.get(manifest_path)
+    if cached is not None:
+        return cached
+
+    if not manifest_path.exists():
+        logger.warning(
+            "Tool manifest not found at %s. Run the manifest generation script to generate it.",
+            manifest_path,
+        )
+        return None
+
+    try:
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+    except Exception as e:
+        logger.warning("Failed to load tool manifest: %s, falling back to runtime", e)
+        return None
+
+    logger.debug("Loaded tool index from manifest: %d tools", manifest.get("count", 0))
+    _MANIFEST_CACHE[manifest_path] = manifest
+    return manifest
 
 
 def _tools_from_registry() -> list:

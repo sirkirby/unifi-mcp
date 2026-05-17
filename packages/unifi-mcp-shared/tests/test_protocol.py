@@ -9,7 +9,6 @@ from unifi_mcp_shared.protocol import (
     DEFAULT_MCP_PROTOCOL_REVISION,
     create_mcp_tool_adapter,
     get_protocol_revision,
-    get_protocol_version,
 )
 
 
@@ -37,17 +36,6 @@ class TestGetProtocolRevision:
         assert get_protocol_revision() == DEFAULT_MCP_PROTOCOL_REVISION
 
 
-class TestGetProtocolVersion:
-    """Test deprecated protocol version compatibility helper."""
-
-    def test_default_legacy_version_is_v1(self):
-        assert get_protocol_version() == "v1"
-
-    def test_reads_legacy_version_env(self, monkeypatch):
-        monkeypatch.setenv("UNIFI_MCP_PROTOCOL_VERSION", "  v1  ")
-        assert get_protocol_version() == "v1"
-
-
 class TestCreateMcpToolAdapter:
     """Test the tool decorator adapter factory."""
 
@@ -56,9 +44,9 @@ class TestCreateMcpToolAdapter:
         adapter = create_mcp_tool_adapter(mock_decorator, protocol_revision="2025-11-25")
         assert adapter is mock_decorator
 
-    def test_legacy_v1_version_alias_returns_original_decorator(self):
+    def test_legacy_v1_revision_alias_returns_original_decorator(self):
         mock_decorator = MagicMock(name="fastmcp_tool_decorator")
-        adapter = create_mcp_tool_adapter(mock_decorator, protocol_version="v1")
+        adapter = create_mcp_tool_adapter(mock_decorator, protocol_revision="v1")
         assert adapter is mock_decorator
 
     def test_unsupported_revision_raises(self):
@@ -66,19 +54,10 @@ class TestCreateMcpToolAdapter:
         with pytest.raises(ValueError, match="Unsupported MCP protocol revision"):
             create_mcp_tool_adapter(mock_decorator, protocol_revision="2026-06-18")
 
-    def test_v2_version_alias_raises(self):
+    def test_v2_revision_alias_raises(self):
         mock_decorator = MagicMock()
         with pytest.raises(ValueError, match="Use date-based MCP protocol revisions"):
-            create_mcp_tool_adapter(mock_decorator, protocol_version="v2")
-
-    def test_conflicting_revision_and_version_overrides_raise(self):
-        mock_decorator = MagicMock()
-        with pytest.raises(ValueError, match="Pass either protocol_revision or protocol_version"):
-            create_mcp_tool_adapter(
-                mock_decorator,
-                protocol_revision="2025-11-25",
-                protocol_version="v1",
-            )
+            create_mcp_tool_adapter(mock_decorator, protocol_revision="v2")
 
     def test_default_revision_uses_env(self, monkeypatch):
         monkeypatch.setenv("UNIFI_MCP_PROTOCOL_REVISION", "2025-11-25")

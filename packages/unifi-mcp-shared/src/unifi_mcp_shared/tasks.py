@@ -28,6 +28,13 @@ _JOB_STATUS_TO_TASK_STATUS: dict[str, TaskStatus] = {
     "unknown": "failed",
 }
 
+_TASK_STATUS_TO_MESSAGE: dict[TaskStatus, str] = {
+    "working": "Operation is in progress.",
+    "completed": "Operation completed.",
+    "cancelled": "Operation was cancelled.",
+    "input_required": "Operation requires additional input.",
+}
+
 
 def _timestamp_to_datetime(value: Any, *, fallback: datetime | None = None) -> datetime:
     if isinstance(value, datetime):
@@ -40,15 +47,9 @@ def _timestamp_to_datetime(value: Any, *, fallback: datetime | None = None) -> d
 
 
 def _status_message(job_status: dict[str, Any], task_status: TaskStatus) -> str:
-    if task_status == "working":
-        return "Operation is in progress."
-    if task_status == "completed":
-        return "Operation completed."
     if task_status == "failed":
         return str(job_status.get("error") or "Operation failed.")
-    if task_status == "cancelled":
-        return "Operation was cancelled."
-    return "Operation requires additional input."
+    return _TASK_STATUS_TO_MESSAGE.get(task_status, "Operation requires additional input.")
 
 
 def task_from_job_status(

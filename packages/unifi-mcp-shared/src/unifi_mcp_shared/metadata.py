@@ -35,6 +35,8 @@ _TITLE_WORDS = {
 
 _TOOL_PREFIXES = ("unifi_", "protect_", "access_")
 
+_ICON_CACHE: dict[str, tuple[Icon, ...]] = {}
+
 
 def tool_title_from_name(name: str) -> str:
     """Derive a human-readable MCP tool title from a stable programmatic name."""
@@ -47,24 +49,32 @@ def tool_title_from_name(name: str) -> str:
 
 
 def mcp_icons_for_server(family: str) -> list[Icon]:
-    """Return packaged PNG icon data URIs for an MCP server or relay client."""
+    """Return packaged PNG icon data URIs for an MCP server or relay client.
+
+    The decoded set is cached because each call would otherwise re-read and
+    base64-encode three PNGs from package resources.
+    """
     if family not in _ICON_FAMILIES:
         allowed = ", ".join(sorted(_ICON_FAMILIES))
         raise ValueError(f"Unknown MCP icon family {family!r}. Expected one of: {allowed}")
 
-    icon_dir = files("unifi_mcp_shared").joinpath("assets", "icons")
-    icons: list[Icon] = []
-    for size in _ICON_SIZES:
-        icon_path = icon_dir.joinpath(f"{family}-{size}.png")
-        encoded = base64.b64encode(icon_path.read_bytes()).decode("ascii")
-        icons.append(
-            Icon(
-                src=f"data:image/png;base64,{encoded}",
-                mimeType="image/png",
-                sizes=[f"{size}x{size}"],
+    cached = _ICON_CACHE.get(family)
+    if cached is None:
+        icon_dir = files("unifi_mcp_shared").joinpath("assets", "icons")
+        decoded: list[Icon] = []
+        for size in _ICON_SIZES:
+            icon_path = icon_dir.joinpath(f"{family}-{size}.png")
+            encoded = base64.b64encode(icon_path.read_bytes()).decode("ascii")
+            decoded.append(
+                Icon(
+                    src=f"data:image/png;base64,{encoded}",
+                    mimeType="image/png",
+                    sizes=[f"{size}x{size}"],
+                )
             )
-        )
-    return icons
+        cached = tuple(decoded)
+        _ICON_CACHE[family] = cached
+    return list(cached)
 
 
 def configure_mcp_server_metadata(

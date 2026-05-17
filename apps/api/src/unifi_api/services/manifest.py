@@ -44,14 +44,9 @@ from dataclasses import dataclass
 from importlib.resources import files
 from typing import Any
 
+from unifi_mcp_shared.meta_tools import is_meta_tool as _is_mcp_meta_tool
+
 _PRODUCTS: tuple[str, ...] = ("network", "protect", "access")
-_MCP_META_TOOL_SUFFIXES = (
-    "_tool_index",
-    "_execute",
-    "_batch",
-    "_batch_status",
-    "_load_tools",
-)
 
 
 class ToolNotFound(Exception):
@@ -173,8 +168,3 @@ def _category_from_module(module_path: str) -> str:
     if not module_path:
         return ""
     return module_path.rsplit(".", 1)[-1]
-
-
-def _is_mcp_meta_tool(name: str) -> bool:
-    """Return true for server-control MCP helpers that are not API actions."""
-    return name.endswith(_MCP_META_TOOL_SUFFIXES)

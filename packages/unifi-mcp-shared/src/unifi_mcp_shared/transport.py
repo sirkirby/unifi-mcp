@@ -78,8 +78,6 @@ async def run_transports(
     port: int,
     http_transport: str,
     logger: logging.Logger,
-    protocol_revision: str = "2025-11-25",
-    protocol_version: str | None = None,
 ) -> None:
     """Run stdio (always) and optionally HTTP, with stdio as the primary.
 
@@ -89,17 +87,9 @@ async def run_transports(
     bind error, etc.) stdio keeps serving.  When stdio exits, HTTP is
     cancelled so the process terminates cleanly.
 
-    The previous implementation used ``asyncio.wait(FIRST_COMPLETED)``, which
-    caused HTTP-died-fast to look like "transport finished" and cancelled
-    stdio — taking down the only transport Claude Code actually uses.  See
-    issue #200.
-
     ``SystemExit`` raised by uvicorn on port-bind failures is caught inside
     ``run_http`` so it does not propagate.
     """
-    # Future: if a date-versioned MCP revision changes the transport API,
-    # branch here on protocol_revision. protocol_version remains accepted as a
-    # deprecated compatibility keyword for older callers.
 
     async def run_stdio() -> None:
         logger.info("Starting FastMCP stdio server ...")

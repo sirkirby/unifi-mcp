@@ -7,15 +7,9 @@ import logging
 from typing import Any
 
 from unifi_mcp_relay.discovery import McpHttpClient, ServerInfo
+from unifi_mcp_shared.meta_tools import is_meta_tool as _is_meta_tool
 
 logger = logging.getLogger("unifi-mcp-relay")
-
-
-_META_TOOL_SUFFIXES = ("_tool_index", "_load_tools", "_execute", "_batch", "_batch_status")
-
-
-def _is_meta_tool(tool_name: str) -> bool:
-    return tool_name.endswith(_META_TOOL_SUFFIXES)
 
 
 class ToolForwarder:

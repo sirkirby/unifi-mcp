@@ -25,6 +25,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
+from unifi_core.access.models.system import _int_from_value, _string_from_value
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -34,29 +35,6 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     if isinstance(raw, dict):
         return raw.get(key, default)
     return getattr(obj, key, default)
-
-
-def _string_from_value(value: Any) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value
-    if isinstance(value, dict):
-        for key in ("hostname", "host", "ip", "ip_address", "address", "name"):
-            nested = _string_from_value(value.get(key))
-            if nested:
-                return nested
-        return None
-    return str(value)
-
-
-def _int_from_value(value: Any) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _derive_health_status(obj: Any) -> str:

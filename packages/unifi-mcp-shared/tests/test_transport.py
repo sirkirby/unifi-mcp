@@ -58,20 +58,6 @@ class TestRunTransports:
         mock_server.run_streamable_http_async.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_legacy_protocol_version_keyword_is_accepted(self, mock_server):
-        """The deprecated protocol_version keyword remains accepted for compatibility."""
-        await run_transports(
-            server=mock_server,
-            http_enabled=False,
-            host="0.0.0.0",
-            port=3000,
-            http_transport="streamable-http",
-            logger=logging.getLogger("test"),
-            protocol_version="v1",
-        )
-        mock_server.run_stdio_async.assert_awaited_once()
-
-    @pytest.mark.asyncio
     async def test_pid1_skips_stdio_runs_http_only(self, mock_server):
         """When PID is 1 (Docker container), skip stdio and run HTTP only."""
         with patch("unifi_mcp_shared.transport.os.getpid", return_value=1):
@@ -139,12 +125,10 @@ class TestRunTransports:
 
     @pytest.mark.asyncio
     async def test_http_systemexit_does_not_cancel_stdio(self, mock_server):
-        """Regression for issue #200: HTTP bind failure must not cascade to stdio.
+        """HTTP bind failure must not cascade to stdio.
 
-        Previously ``asyncio.wait(FIRST_COMPLETED)`` treated HTTP-died-fast as
-        'transport finished' and cancelled stdio — taking down the only
-        transport Claude Code talks over.  After the refactor stdio is the
-        primary control flow and HTTP failures are contained.
+        Stdio is the primary control flow; HTTP failures are contained inside
+        ``run_http`` so the only transport Claude Code talks over keeps serving.
         """
         mock_server.run_streamable_http_async.side_effect = SystemExit(1)
 
@@ -167,7 +151,7 @@ class TestRunTransports:
                 logger=logging.getLogger("test"),
             )
 
-        assert stdio_completed, "stdio was cancelled when HTTP failed — the bug from #200 has regressed"
+        assert stdio_completed, "stdio was cancelled when HTTP failed — HTTP failure cascade regressed"
         mock_server.run_streamable_http_async.assert_awaited_once()
 
     @pytest.mark.asyncio
