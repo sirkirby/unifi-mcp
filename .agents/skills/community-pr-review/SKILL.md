@@ -3,12 +3,12 @@ name: myco:community-pr-review
 description: >-
   Use this skill when reviewing or merging any community PR in unifi-mcp — even if the user
   just says "take a look at this PR" or "can we merge this." Covers the complete quality gate
-  checklist (f-string logger ban, validator registry registration, doc site update ordering),
+  checklist (f-string logger ban, Ruff lint enforcement, validator registry registration, doc site update ordering),
   the fork-edit model for trusted contributors, org-fork push limitations, the dual-subagent
   review pattern, PR body standards, technical API validation (live smoke tests, mutating
-  cycles), and the close-and-redirect pattern for unsalvageable PRs. Apply this skill before
-  approving any externally-authored PR, before running the merge command, and when auditing
-  recently merged PRs for compliance.
+  cycles), DISPATCH_ARG_TRANSLATORS registration for action tools, and the close-and-redirect 
+  pattern for unsalvageable PRs. Apply this skill before approving any externally-authored PR, 
+  before running the merge command, and when auditing recently merged PRs for compliance.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -101,7 +101,7 @@ models, changes base class hierarchy, or implements a field-symmetry sub-issue
 6. **Pattern symmetric with AGENTS.md rule?** — The implementation must align with the
    field-symmetry governance rule in `AGENTS.md`, not diverge from it.
 
-Gates 1–4 (f-string logger, validator registry, doc site, shared validator blast radius) still
+Gates 1–4 (f-string logger, Ruff lint, validator registry, doc site, shared validator blast radius) still
 apply to governance PRs for any new or modified tool/manager files — but the structural
 questions above are the primary gate.
 
@@ -113,15 +113,38 @@ false confidence on governance PRs.
 
 ---
 
-### Gate 1: F-String Logger — Hard Blocker
+### Gate 1: Lint Checks and F-String Logger — Hard Blocker
+
+**Primary targets:** All files the PR touches. F-strings specifically in `*_manager.py` files.
+
+#### 1A: Ruff Lint Enforcement
+
+Run the full lint gate that CI enforces:
+
+```bash
+make lint
+```
+
+This invokes Ruff on all modified files and fails on any violations. Do NOT merge a PR with
+lint failures. The project uses Ruff as the canonical linter; violations are hard blockers.
+
+Check the error output for the specific issues:
+- Unused imports
+- Shadowed names
+- Undefined variables
+- Format violations
+
+If the PR introduces lint errors, request fixes via fork-edit (trusted contributors) or a
+review comment (first-time contributors).
+
+#### 1B: F-String Logger — Hard Blocker
 
 **Primary target:** Every `*_manager.py` file the PR touches.
 
 Scan for f-string logger calls:
 
 ```bash
-grep -rn 'logger\\.\\(debug\\|info\\|warning\\|error\\|critical\\)(f\"' \\
-  $(git diff --name-only origin/main...HEAD)
+grep -rn 'logger\.\\(debug\\|info\\|warning\\|error\\|critical\\)(f"' $(git diff --name-only origin/main...HEAD)
 ```
 
 Replace any hits with `%s`-style lazy formatting:
@@ -145,7 +168,7 @@ be reliably caught by automated scripts. This survived a 481-call automated migr
 and was only caught by manual review. Scan manually for this pattern when logger calls span lines.
 
 **Full-payload logging promoted to INFO level:** A `logger.debug` call that dumps a full JSON
-payload is acceptable at DEBUG level but becomes a production noise and data-exposure risk if
+payload is acceptable at DEBUG level but becomes production noise and data-exposure risk if
 promoted to `logger.info`. Watch for this in manager files — it appeared at `firewall_manager.py`
 line 622 in PR #146. All full-payload log calls must use `logger.debug`.
 
@@ -233,7 +256,8 @@ sweep to confirm no lateral regressions across the ~37 tools / 15 categories.
 
 ```bash
 # Run read-only + preview smoke tests against the network server
-python scripts/live_smoke.py --server network --phase safe
+# NOTE: The API server is 'unifi-api-server' (not 'unifi-api')
+python scripts/live_smoke.py --server unifi-api-server --phase safe
 
 # Run all servers (network + protect + access)
 python scripts/live_smoke.py --server all --phase safe
@@ -521,10 +545,11 @@ using this exact approach and a fix PR was opened the same session.
 ## Quick Reference — Gate Summary
 
 | Gate | Blocker level | Where to look | Common miss |
-|------|--------------|---------------|-------------|
+|------|--------------|---------------|------------|
 | First-time CI auth (Step 0b) | Blocking | GitHub Actions tab | Manual workflow approval not triggered |
 | PR type (Gate 0) | Routing gate | PR description + linked issue | Applying feature-addition checklist to a governance/refactor PR |
-| F-string loggers (Gate 1) | Hard block | `*_manager.py` | Manager layer even when tool layer is clean; full-payload calls promoted to INFO |
+| Ruff lint (Gate 1A) | Hard block | Output of `make lint` | Lint violations not run or not fixed |
+| F-string loggers (Gate 1B) | Hard block | `*_manager.py` | Manager layer even when tool layer is clean; full-payload calls promoted to INFO |
 | Pydantic model wiring (Gate 2) | Critical (silent) | `unifi-core/models/<domain>.py` + tool `to_controller_update` call | Domain model exists but tool bypasses it with raw dict |
 | Doc site count (Gate 3) | Ordering gate | Doc site entry count | Updated after merge instead of before |
 | Shared pydantic model defaults (Gate 4) | Hard block | `<Domain>Base` model in `unifi-core` | Non-None defaults on shared base model fields silently overwrite update-tool fields |
