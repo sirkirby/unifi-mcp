@@ -74,9 +74,7 @@ DOWNSTREAM_PACKAGES: list[Downstream] = [
 
 
 def run_capture(args: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args, check=True, capture_output=True, text=True, **kwargs
-    )
+    return subprocess.run(args, check=True, capture_output=True, text=True, **kwargs)
 
 
 def build_wheel(src: Path, out_dir: Path) -> Path:
@@ -88,9 +86,7 @@ def build_wheel(src: Path, out_dir: Path) -> Path:
     return wheels[-1]
 
 
-def check_downstream(
-    pkg: Downstream, downstream_wheel: Path, find_links: Path, venv_dir: Path
-) -> tuple[bool, str]:
+def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, venv_dir: Path) -> tuple[bool, str]:
     venv.create(venv_dir, with_pip=True, clear=True, symlinks=True)
     py = venv_dir / "bin" / "python"
 
@@ -196,8 +192,7 @@ def main() -> int:
             return 1
 
         print()
-        print("All downstream wheels install and import cleanly with their "
-              "declared pins.")
+        print("All downstream wheels install and import cleanly with their declared pins.")
         return 0
 
 
