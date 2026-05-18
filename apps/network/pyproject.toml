@@ -5,7 +5,7 @@ description = "Unifi Network MCP Server"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "unifi-mcp-shared>=0.4.5,<0.5",
+    "unifi-mcp-shared>=0.5.0,<0.6",
     # Network managers in unifi-core import aiounifi; pull it in via the
     # [network] extra rather than declaring aiounifi here directly so
     # there's one source of truth.

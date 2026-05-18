@@ -5,7 +5,7 @@ description = "UniFi Protect MCP Server"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "unifi-mcp-shared>=0.4.5,<0.5",
+    "unifi-mcp-shared>=0.5.0,<0.6",
     # Protect managers in unifi-core import uiprotect; pull it in via the
     # [protect] extra rather than declaring uiprotect here directly.
     "unifi-core[protect]>=0.3.2,<0.4",

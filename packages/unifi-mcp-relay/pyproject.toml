@@ -8,7 +8,7 @@ dependencies = [
     "mcp[cli]>=1.26.0,<2",
     "aiohttp>=3.13.4",
     "python-dotenv>=1.2.2",
-    "unifi-mcp-shared>=0.4.5,<0.5",
+    "unifi-mcp-shared>=0.5.0,<0.6",
 ]
 
 [project.scripts]
