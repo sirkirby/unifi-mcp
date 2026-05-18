@@ -1,0 +1,52 @@
+name: "Check: Cross-package pin alignment"
+
+# Verifies that each downstream wheel's declared pin permits an importable
+# upstream when resolved against PyPI. Catches the failure mode where
+# workspace [tool.uv.sources] masks a stale pin in [project.dependencies]
+# (incident #283). Uses no untrusted event inputs — only repo source.
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - "apps/*/pyproject.toml"
+      - "packages/*/pyproject.toml"
+      - "scripts/check_pin_alignment.py"
+      - ".github/workflows/check-pin-alignment.yml"
+  pull_request:
+    types: [ opened, synchronize, reopened ]
+    branches: [ main, develop ]
+    paths:
+      - "apps/*/pyproject.toml"
+      - "packages/*/pyproject.toml"
+      - "scripts/check_pin_alignment.py"
+      - ".github/workflows/check-pin-alignment.yml"
+
+env:
+  # hatch-vcs fallback for branches without an upstream-package tag in ancestry.
+  SETUPTOOLS_SCM_PRETEND_VERSION: "0.0.0.dev0"
+
+permissions:
+  contents: read
+
+jobs:
+  pin-alignment:
+    name: "Pin alignment (PyPI install + smoke import)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # hatch-vcs needs full history to derive versions from tags
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Run pin-alignment check
+        run: python3 scripts/check_pin_alignment.py
