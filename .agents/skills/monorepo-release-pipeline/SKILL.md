@@ -211,12 +211,64 @@ Examples:
 2. Identify downstream packages being tagged because they use that upstream code.
 3. Update downstream dependency ranges in `apps/*/pyproject.toml` and
    `packages/unifi-mcp-relay/pyproject.toml` as needed.
-4. Run `uv lock --check` after the edits.
+4. **Verify the new pin range with the wheel-metadata check below.** `uv lock --check`
+   passes even when the pin is wrong — workspace sources override the range locally.
 5. Commit dependency-bound changes before creating local tags.
 
 If dependency bounds are stale, the release can publish successfully but install an
 older upstream package that lacks the required API surface. Treat dependency-bound
 alignment as part of the release artifact, not as optional cleanup.
+
+### Why `uv lock --check` is not a sufficient gate
+
+Every downstream `pyproject.toml` declares `[tool.uv.sources] unifi-mcp-shared = { workspace = true }`
+(and the equivalent for `unifi-core`). In workspace contexts, that source override takes
+precedence over the version range in `[project.dependencies]` — `uv sync` and `uv lock`
+always resolve to the local checkout regardless of whether the declared range still
+allows the upstream version being released. **`uv lock --check`, `pytest`, and every CI
+job in this repo pass cleanly even when the published wheel's `requires_dist` will reject
+the just-released upstream package.**
+
+The pin only takes effect when pip/uv resolves the published wheel against PyPI — i.e.,
+on a fresh `uvx <pkg>@latest` or `pip install <pkg>` on a user's machine, with no
+workspace context. That is exactly the path users hit and CI does not.
+
+Docker images built from this repo are also unaffected, because the Dockerfiles use
+`uv sync --frozen --package <pkg>` against the workspace lock and bundle the local
+shared checkout. The pin mismatch is a **PyPI-only** failure mode.
+
+### Pre-tag wheel-metadata check (the gate that actually works)
+
+Before pushing any tag whose dependency range was just edited, build the wheel and read
+its `Requires-Dist` to confirm the published artifact will permit the upstream version
+being released:
+
+```bash
+# After bumping pins, BEFORE pushing tags:
+rm -rf /tmp/wheelcheck && mkdir -p /tmp/wheelcheck
+for app in apps/network apps/protect apps/access packages/unifi-mcp-relay; do
+  echo "=== $app ==="
+  uv build --wheel "$app" --out-dir /tmp/wheelcheck/$(basename $app) 2>&1 | tail -2
+  whl=$(ls /tmp/wheelcheck/$(basename $app)/*.whl | tail -1)
+  python -m zipfile -e "$whl" /tmp/wheelcheck/extracted/$(basename $app)/
+  grep -h 'Requires-Dist.*\(unifi-mcp-shared\|unifi-core\)' \
+    /tmp/wheelcheck/extracted/$(basename $app)/*.dist-info/METADATA
+done
+```
+
+For each output line, confirm the range is `>=<new-upstream-version>` and `<<next-major>`.
+A stale `<0.5` upper bound on a release that needs shared 0.5.0+ is the canonical failure
+mode — see "PyPI pin masked by workspace source" in Cross-Cutting Gotchas.
+
+A fast supplementary grep that catches the most common shape:
+
+```bash
+# Confirm no downstream pyproject still pins below the new upstream major.minor.
+# Example: releasing shared 0.5.0 — every match below should be empty.
+grep -n "unifi-mcp-shared" apps/*/pyproject.toml packages/*/pyproject.toml \
+  | grep -v 'workspace = true' \
+  | grep -v '>=0.5'
+```
 
 ### Verification before tagging
 
@@ -430,3 +482,19 @@ will fail to install — pip resolver error, not a code error. Check PyPI before
 debugging code. The fix is to push the missing tag and wait for the publish workflow.
 
 **Main-only merges are invisible to existing users.** Cache invalidation for plugin manifests requires a tagged release. A main-only merge updates the repo but does not trigger a publish workflow or invalidate any user caches. Existing users stay on their cached version indefinitely until the next tagged release. If a manifest or policy change is urgent, cut a patch release immediately (see Procedure A: Plugin-only Release).
+
+**PyPI pin masked by workspace source — failure mode the entire CI matrix cannot detect.**
+Workspace `[tool.uv.sources]` overrides the version range in `[project.dependencies]`
+during `uv sync`/`uv lock`, so local dev, every test job, and `uv lock --check` all
+pass with a stale pin. The pin is only enforced when pip/uv resolves the published
+wheel against PyPI — i.e., on a user's machine via `uvx <pkg>@latest`. Docker images
+also bypass the failure because the Dockerfiles use `uv sync --frozen --package <pkg>`
+against the workspace lock. Symptom: fresh `uvx`/`pip install` of the freshly published
+downstream package crashes immediately with `ModuleNotFoundError` for a module that
+only exists in the just-published upstream version. Canonical occurrence: the 2026-05-17
+coordinated release (network 0.18.0 / protect 0.4.0 / access 0.3.0 / relay 0.2.0) where
+`unifi-mcp-shared>=0.4.5,<0.5` shipped alongside `from unifi_mcp_shared.metadata import …`
+even though `metadata.py` only existed in shared 0.5.0; ~24h breakage, 4 reporters,
+silently-affected user count a multiple of that, fixed by PR #284. Prevention: run the
+wheel-metadata check in Procedure D before pushing tags. Never trust `uv lock --check`
+as the gate for this class of bug.
