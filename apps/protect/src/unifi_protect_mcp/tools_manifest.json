@@ -2295,6 +2295,10 @@
               "description": "Maximum number of events to return (default 30).",
               "type": "integer"
             },
+            "metadata_fields": {
+              "description": "Per-event metadata keys to include in the response. Default empty list returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
+              "type": "array"
+            },
             "start": {
               "description": "Start time as ISO 8601 timestamp (e.g., 2026-03-17T00:00:00Z). Defaults to 24 hours ago.",
               "type": "string"
@@ -2868,6 +2872,10 @@
             "limit": {
               "description": "Maximum number of smart detection events to return (default 30).",
               "type": "integer"
+            },
+            "metadata_fields": {
+              "description": "Per-event metadata keys to include in the response. Default empty list returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
+              "type": "array"
             },
             "min_confidence": {
               "description": "Minimum confidence score (0-100) to include. Overrides the server default (50). Higher values return fewer, more certain detections.",
@@ -3634,6 +3642,10 @@
             "limit": {
               "description": "Maximum number of events to return from the buffer. Omit to return all buffered events.",
               "type": "integer"
+            },
+            "metadata_fields": {
+              "description": "Per-event metadata keys to include in the response. Default empty list returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
+              "type": "array"
             },
             "min_confidence": {
               "description": "Minimum confidence score (0-100) to include. Only applies to smart detection events.",
