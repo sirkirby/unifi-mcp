@@ -1473,6 +1473,10 @@
             "event_id": {
               "description": "Event UUID (from protect_list_events or protect_recent_events)",
               "type": "string"
+            },
+            "metadata_fields": {
+              "description": "Per-event metadata keys to include in the response. Default empty list returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
+              "type": "array"
             }
           },
           "required": [
