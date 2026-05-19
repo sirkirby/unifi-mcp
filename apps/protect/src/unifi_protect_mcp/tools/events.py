@@ -93,6 +93,18 @@ async def protect_list_events(
             description="When true, omits thumbnail_id, category, sub_category, and is_favorite fields to reduce response size (~40% smaller). Recommended for digests and summaries."
         ),
     ] = False,
+    metadata_fields: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Per-event metadata keys to include in the response. Default empty list "
+                "returns no metadata (backwards-compatible). Pass top-level metadata key "
+                "names (e.g. ['linesStatus', 'weather']) to include only those, or pass "
+                "['*'] for the full metadata dict. Top-level keys only today; dotted "
+                "paths reserved for future nested selection."
+            )
+        ),
+    ] = [],
 ) -> Dict[str, Any]:
     """List events from the NVR."""
     logger.info(
@@ -106,6 +118,7 @@ async def protect_list_events(
             camera_id=camera_id,
             limit=limit,
             compact=compact,
+            metadata_fields=metadata_fields or None,
         )
         events = [event_from_controller(e).model_dump(exclude_none=True) for e in raw_events]
         return {"success": True, "data": {"events": events, "count": len(events)}}
@@ -221,6 +234,18 @@ async def protect_list_smart_detections(
             description="When true, omits thumbnail_id, category, sub_category, and is_favorite fields to reduce response size (~40% smaller). Recommended for digests and summaries."
         ),
     ] = False,
+    metadata_fields: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Per-event metadata keys to include in the response. Default empty list "
+                "returns no metadata (backwards-compatible). Pass top-level metadata key "
+                "names (e.g. ['linesStatus', 'weather']) to include only those, or pass "
+                "['*'] for the full metadata dict. Top-level keys only today; dotted "
+                "paths reserved for future nested selection."
+            )
+        ),
+    ] = [],
 ) -> Dict[str, Any]:
     """List smart detection events."""
     logger.info(
@@ -239,6 +264,7 @@ async def protect_list_smart_detections(
             min_confidence=min_confidence,
             limit=limit,
             compact=compact,
+            metadata_fields=metadata_fields or None,
         )
         detections = [smart_detection_from_controller(d).model_dump(exclude_none=True) for d in raw_detections]
         return {"success": True, "data": {"detections": detections, "count": len(detections)}}
@@ -280,6 +306,18 @@ async def protect_recent_events(
         Optional[int],
         Field(description="Maximum number of events to return from the buffer. Omit to return all buffered events."),
     ] = None,
+    metadata_fields: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Per-event metadata keys to include in the response. Default empty list "
+                "returns no metadata (backwards-compatible). Pass top-level metadata key "
+                "names (e.g. ['linesStatus', 'weather']) to include only those, or pass "
+                "['*'] for the full metadata dict. Top-level keys only today; dotted "
+                "paths reserved for future nested selection."
+            )
+        ),
+    ] = [],
 ) -> Dict[str, Any]:
     """Get recent events from the websocket buffer."""
     logger.info("protect_recent_events called (type=%s, camera=%s)", event_type, camera_id)
@@ -290,7 +328,25 @@ async def protect_recent_events(
             min_confidence=min_confidence,
             limit=limit,
         )
-        events = [event_from_controller(e).model_dump(exclude_none=True) for e in raw_events]
+        # Buffer events are raw dicts with the full metadata payload.
+        # Apply metadata_fields filtering here without mutating the buffer.
+        effective_metadata_fields = metadata_fields or None
+        processed: list[Dict[str, Any]] = []
+        for raw in raw_events:
+            event_dict = dict(raw)  # shallow copy — don't mutate the buffer's stored event
+            # Strip internal buffer timestamp from outgoing response
+            event_dict.pop("_buffered_at", None)
+            if effective_metadata_fields is None:
+                event_dict.pop("metadata", None)
+            elif "*" in effective_metadata_fields:
+                pass  # keep full metadata as-is
+            else:
+                raw_md = event_dict.get("metadata") or {}
+                event_dict["metadata"] = {k: raw_md[k] for k in effective_metadata_fields if k in raw_md}
+                if not event_dict["metadata"]:
+                    event_dict.pop("metadata", None)
+            processed.append(event_dict)
+        events = [event_from_controller(e).model_dump(exclude_none=True) for e in processed]
         return {
             "success": True,
             "data": {

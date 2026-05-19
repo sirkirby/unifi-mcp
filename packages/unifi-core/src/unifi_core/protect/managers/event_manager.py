@@ -680,14 +680,50 @@ class EventManager:
         min_confidence: int | None = None,
         limit: int = 30,
         compact: bool = False,
+        metadata_fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """List smart detection events with optional filtering.
 
         Queries for ``smartDetectZone`` and ``smartDetectLine`` event types,
         then filters by detection type and confidence score.
+
+        When camera_id or metadata_fields is set, bypasses uiprotect's
+        get_events() and calls UniFi's events endpoint directly (same raw-API
+        path as list_events) so that metadata fields are preserved.
         """
         min_conf = min_confidence if min_confidence is not None else self._min_confidence
+        use_raw_path = bool(camera_id) or bool(metadata_fields)
 
+        if use_raw_path:
+            params: dict[str, Any] = {
+                "orderDirection": "DESC",
+                "limit": limit,
+                "withoutDescriptions": "true",
+                "types": ["smartDetectZone", "smartDetectLine"],
+            }
+            if start is not None:
+                params["start"] = int(start.timestamp() * 1000)
+            if end is not None:
+                params["end"] = int(end.timestamp() * 1000)
+            if camera_id:
+                params["cameras"] = [camera_id]
+            if detection_type:
+                params["smartDetectTypes"] = [detection_type]
+
+            raw_events = await self._cm.client.api_request_list("events", params=params)
+
+            results: list[dict[str, Any]] = []
+            for raw in raw_events:
+                score = raw.get("score", 100) or 0
+                if score < min_conf:
+                    continue
+                results.append(
+                    self._raw_event_to_dict(raw, compact=compact, metadata_fields=metadata_fields)
+                )
+            await self._apply_known_face_names(results)
+            return results
+
+        # ----- existing uiprotect path (unchanged) -----
         kwargs: dict[str, Any] = {
             "limit": limit,
             "sorting": "desc",
@@ -713,16 +749,16 @@ class EventManager:
 
         events: list[Event] = await self._cm.client.get_events(**kwargs)
 
-        results: list[dict[str, Any]] = []
+        uiprotect_results: list[dict[str, Any]] = []
         for ev in events:
             if camera_id and ev.camera_id != camera_id:
                 continue
             if ev.score < min_conf:
                 continue
-            results.append(self._event_to_dict(ev, compact=compact))
+            uiprotect_results.append(self._event_to_dict(ev, compact=compact))
 
-        await self._apply_known_face_names(results)
-        return results
+        await self._apply_known_face_names(uiprotect_results)
+        return uiprotect_results
 
     async def acknowledge_event(self, event_id: str) -> dict[str, Any]:
         """Mark an event as acknowledged/favorite on the NVR.

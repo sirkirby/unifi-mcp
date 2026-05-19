@@ -263,11 +263,23 @@ class TestEventManagerListEvents:
 
     @pytest.mark.asyncio
     async def test_list_with_camera_filter(self):
-        events = [
-            _make_event(id="evt-1", camera_id="cam-001"),
-            _make_event(id="evt-2", camera_id="cam-002"),
-        ]
-        cm = _make_connection_manager(events=events)
+        # camera_id routes to the raw-API path with server-side cameras filter;
+        # mock api_request_list to return the already-filtered raw events as
+        # UniFi would (only events from cam-001).
+        cm = _make_connection_manager()
+        cm.client.api_request_list = AsyncMock(
+            return_value=[
+                {
+                    "id": "evt-1",
+                    "type": "motion",
+                    "camera": "cam-001",
+                    "start": 1742126400000,
+                    "end": None,
+                    "score": 85,
+                    "smartDetectTypes": [],
+                }
+            ]
+        )
         mgr = EventManager(cm)
         results = await mgr.list_events(camera_id="cam-001")
         assert len(results) == 1
@@ -460,11 +472,21 @@ class TestEventManagerListSmartDetections:
 
     @pytest.mark.asyncio
     async def test_camera_filter(self):
-        events = [
-            _make_event(id="sd-1", camera_id="cam-001", score=90),
-            _make_event(id="sd-2", camera_id="cam-002", score=80),
-        ]
-        cm = _make_connection_manager(events=events)
+        # camera_id routes to the raw-API path with server-side cameras filter.
+        cm = _make_connection_manager()
+        cm.client.api_request_list = AsyncMock(
+            return_value=[
+                {
+                    "id": "sd-1",
+                    "type": "smartDetectZone",
+                    "camera": "cam-001",
+                    "start": 1742126400000,
+                    "end": None,
+                    "score": 90,
+                    "smartDetectTypes": ["vehicle"],
+                }
+            ]
+        )
         mgr = EventManager(cm)
         results = await mgr.list_smart_detections(camera_id="cam-001")
         assert len(results) == 1
