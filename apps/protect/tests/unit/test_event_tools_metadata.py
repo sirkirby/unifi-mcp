@@ -40,6 +40,34 @@ async def test_protect_list_events_empty_list_passes_none_to_manager() -> None:
 
 
 # ---------------------------------------------------------------------------
+# protect_get_event
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_protect_get_event_passes_metadata_fields_to_manager() -> None:
+    from unifi_protect_mcp.tools.events import protect_get_event
+
+    with patch("unifi_protect_mcp.tools.events.event_manager") as mgr:
+        mgr.get_event = AsyncMock(return_value={"id": "evt-1", "type": "motion"})
+        await protect_get_event(event_id="evt-1", metadata_fields=["linesStatus"])
+        mgr.get_event.assert_called_once()
+        args, kwargs = mgr.get_event.call_args
+        assert kwargs.get("metadata_fields") == ["linesStatus"]
+
+
+@pytest.mark.asyncio
+async def test_protect_get_event_empty_list_passes_none_to_manager() -> None:
+    from unifi_protect_mcp.tools.events import protect_get_event
+
+    with patch("unifi_protect_mcp.tools.events.event_manager") as mgr:
+        mgr.get_event = AsyncMock(return_value={"id": "evt-1", "type": "motion"})
+        await protect_get_event(event_id="evt-1")  # default = []
+        _, kwargs = mgr.get_event.call_args
+        assert kwargs.get("metadata_fields") is None
+
+
+# ---------------------------------------------------------------------------
 # protect_list_smart_detections
 # ---------------------------------------------------------------------------
 

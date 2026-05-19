@@ -599,11 +599,29 @@ class EventManager:
         await self._apply_known_face_names(results)
         return results
 
-    async def get_event(self, event_id: str) -> dict[str, Any]:
+    async def get_event(
+        self,
+        event_id: str,
+        metadata_fields: list[str] | None = None,
+    ) -> dict[str, Any]:
         """Get a single event by ID.
+
+        When ``metadata_fields`` is non-empty, bypasses uiprotect's Event
+        parsing and calls UniFi's ``events/<id>`` endpoint directly to
+        preserve the full metadata payload (filtered to caller-requested
+        top-level keys).
 
         Raises ``ValueError`` if the event is not found.
         """
+        if metadata_fields:
+            try:
+                raw = await self._cm.client.api_request_obj(f"events/{event_id}")
+            except Exception as exc:
+                raise UniFiNotFoundError("event", event_id) from exc
+            result = self._raw_event_to_dict(raw, metadata_fields=metadata_fields)
+            await self._apply_known_face_names([result])
+            return result
+
         try:
             event: Event = await self._cm.client.get_event(event_id)
         except Exception as exc:

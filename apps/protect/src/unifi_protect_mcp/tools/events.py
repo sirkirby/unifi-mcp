@@ -138,11 +138,23 @@ async def protect_list_events(
 )
 async def protect_get_event(
     event_id: Annotated[str, Field(description="Event UUID (from protect_list_events or protect_recent_events)")],
+    metadata_fields: Annotated[
+        list[str],
+        Field(
+            description=(
+                "Per-event metadata keys to include in the response. Default empty list "
+                "returns no metadata (backwards-compatible). Pass top-level metadata key "
+                "names (e.g. ['linesStatus', 'weather']) to include only those, or pass "
+                "['*'] for the full metadata dict. Top-level keys only today; dotted "
+                "paths reserved for future nested selection."
+            )
+        ),
+    ] = [],
 ) -> Dict[str, Any]:
     """Get a single event by ID."""
-    logger.info("protect_get_event called for %s", event_id)
+    logger.info("protect_get_event called for %s (metadata_fields=%s)", event_id, metadata_fields)
     try:
-        raw = await event_manager.get_event(event_id)
+        raw = await event_manager.get_event(event_id, metadata_fields=metadata_fields or None)
         return {"success": True, "data": event_from_controller(raw).model_dump(exclude_none=True)}
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
