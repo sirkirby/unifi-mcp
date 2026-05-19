@@ -290,7 +290,10 @@ def _validate_zone_targeting(validated_data: Dict[str, Any]) -> str | None:
         if target == "IP":
             target_type = ep.get("matching_target_type")
             if target_type == "OBJECT" and not ep.get("ip_group_id"):
-                return "%s.ip_group_id is required when matching_target is 'IP' with matching_target_type 'OBJECT'." % direction
+                return (
+                    "%s.ip_group_id is required when matching_target is 'IP' with matching_target_type 'OBJECT'."
+                    % direction
+                )
             if target_type != "OBJECT" and not ep.get("ips"):
                 return "%s.ips array is required when matching_target is 'IP'." % direction
         if target == "NETWORK" and not ep.get("network_ids"):
