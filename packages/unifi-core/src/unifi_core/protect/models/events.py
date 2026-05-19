@@ -49,6 +49,14 @@ class Event(BaseModel):
     recognized_person_confidence: Optional[int] = Field(
         default=None, description="Known Face match confidence when present", json_schema_extra={"mutable": False}
     )
+    metadata: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Per-event metadata as UniFi returned it, filtered to the caller-requested "
+            "top-level keys via metadata_fields. Omitted entirely when not requested."
+        ),
+        json_schema_extra={"mutable": False},
+    )
     detected_thumbnail_id: Optional[str] = Field(
         default=None,
         description="Detected thumbnail/crop reference ID when present",
@@ -93,6 +101,14 @@ class SmartDetection(BaseModel):
     )
     recognized_person_confidence: Optional[int] = Field(
         default=None, description="Known Face match confidence when present", json_schema_extra={"mutable": False}
+    )
+    metadata: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Per-event metadata as UniFi returned it, filtered to the caller-requested "
+            "top-level keys via metadata_fields. Omitted entirely when not requested."
+        ),
+        json_schema_extra={"mutable": False},
     )
     detected_thumbnail_id: Optional[str] = Field(
         default=None,
@@ -198,6 +214,7 @@ def from_controller(raw: Any) -> Event:
         recognized_person_id=_get(raw, "recognized_person_id"),
         recognized_person_name=_get(raw, "recognized_person_name"),
         recognized_person_confidence=_get(raw, "recognized_person_confidence"),
+        metadata=_get(raw, "metadata"),
         detected_thumbnail_id=_get_any(raw, "detected_thumbnail_id", "detectedThumbnailId"),
     )
 
@@ -223,6 +240,7 @@ def smart_detection_from_controller(raw: Any) -> SmartDetection:
         recognized_person_id=_get(raw, "recognized_person_id"),
         recognized_person_name=_get(raw, "recognized_person_name"),
         recognized_person_confidence=_get(raw, "recognized_person_confidence"),
+        metadata=_get(raw, "metadata"),
         detected_thumbnail_id=_get_any(raw, "detected_thumbnail_id", "detectedThumbnailId"),
     )
 
