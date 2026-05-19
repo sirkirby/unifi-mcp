@@ -86,6 +86,23 @@ async def test_no_camera_id_uses_existing_uiprotect_path() -> None:
     mgr._cm.client.api_request_list.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_metadata_fields_alone_triggers_raw_path() -> None:
+    """metadata_fields set without camera_id must still route to the raw API path,
+    because uiprotect's get_events drops the fields we need."""
+    mgr = _make_manager()
+    mgr._cm.client.get_events = AsyncMock(return_value=[])
+    mgr._cm.client.api_request_list = AsyncMock(return_value=[])
+
+    await mgr.list_events(limit=10, metadata_fields=["linesStatus"])
+
+    mgr._cm.client.api_request_list.assert_called_once()
+    mgr._cm.client.get_events.assert_not_called()
+    _, kwargs = mgr._cm.client.api_request_list.call_args
+    params = kwargs.get("params", {})
+    assert "cameras" not in params  # no camera filter when caller didn't ask for one
+
+
 # -- metadata_fields opt-in ------------------------------------------------
 
 
