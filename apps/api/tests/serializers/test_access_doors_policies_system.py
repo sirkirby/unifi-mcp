@@ -110,7 +110,61 @@ def test_access_device_serializer_shape() -> None:
     assert out["type"] == "UA-G2"
     assert out["is_online"] is True
     assert out["firmware_version"] == "2.10.0"
-    assert out["location"] == "Front Door"
+    # location is now a structured AccessLocation object; the proxy-path
+    # ``_door_name`` string maps to its ``name`` field.
+    assert out["location"] == {
+        "unique_id": None,
+        "name": "Front Door",
+        "up_id": None,
+        "location_type": None,
+        "full_name": None,
+        "level": None,
+    }
+
+
+def test_access_device_serializer_from_typed_core_model() -> None:
+    """The device_manager may return a typed unifi-core AccessDevice whose
+    ``location`` is an AccessLocation pydantic object (not a dict). The
+    Strawberry projection must read that object path, not just dicts."""
+    from unifi_api.graphql.types.access.devices import AccessDevice
+    from unifi_core.access.models.devices import from_controller
+
+    core = from_controller(
+        {
+            "id": "dev1",
+            "name": "Hub B",
+            "type": "UA-Hub",
+            "is_online": True,
+            "location": {
+                "unique_id": "loc-1",
+                "name": "Front Door",
+                "up_id": "loc-parent",
+                "location_type": "door",
+                "full_name": "Site - Floor 1 - Front Door",
+                "level": 3,
+            },
+        }
+    )
+    # core.location is a unifi_core AccessLocation pydantic object, not a dict.
+    out = AccessDevice.from_manager_output(core).to_dict()
+    assert out["id"] == "dev1"
+    assert out["location"] == {
+        "unique_id": "loc-1",
+        "name": "Front Door",
+        "up_id": "loc-parent",
+        "location_type": "door",
+        "full_name": "Site - Floor 1 - Front Door",
+        "level": 3,
+    }
+
+
+def test_access_device_serializer_location_none() -> None:
+    """No location and no proxy ``_door_name`` -> to_dict surfaces None (the
+    value the REST route returns to callers)."""
+    from unifi_api.graphql.types.access.devices import AccessDevice
+
+    out = AccessDevice.from_manager_output({"id": "dev1", "name": "Reader A"}).to_dict()
+    assert out["location"] is None
 
 
 def test_access_system_info_and_health() -> None:

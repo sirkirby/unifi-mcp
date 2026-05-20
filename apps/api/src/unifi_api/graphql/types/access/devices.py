@@ -41,6 +41,45 @@ def _is_online(obj: Any) -> Any:
     return None
 
 
+@strawberry.type(description="Structured location reference (door / floor / building) for an Access device.")
+class AccessLocation:
+    """Mirrors the ``unifi_core`` ``AccessLocation`` model. UNVR's Access API
+    returns ``location`` as this object, not a bare string; a bare string (the
+    pre-fix / proxy ``_door_name`` shape) maps to ``name``."""
+
+    unique_id: strawberry.ID | None
+    name: str | None
+    up_id: strawberry.ID | None
+    location_type: str | None
+    full_name: str | None
+    level: int | None
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "AccessLocation | None":
+        if obj is None:
+            return None
+        if isinstance(obj, str):
+            stripped = obj.strip()
+            if not stripped:
+                return None
+            return cls(
+                unique_id=None,
+                name=stripped,
+                up_id=None,
+                location_type=None,
+                full_name=None,
+                level=None,
+            )
+        return cls(
+            unique_id=_get(obj, "unique_id"),
+            name=_get(obj, "name"),
+            up_id=_get(obj, "up_id"),
+            location_type=_get(obj, "location_type"),
+            full_name=_get(obj, "full_name"),
+            level=_get(obj, "level"),
+        )
+
+
 @strawberry.type(description="A UniFi Access device (reader / hub / lock).")
 class AccessDevice:
     """Mirrors ``AccessDeviceSerializer.serialize`` projection byte-for-byte."""
@@ -50,7 +89,7 @@ class AccessDevice:
     type: str | None
     is_online: bool | None
     firmware_version: str | None
-    location: str | None
+    location: AccessLocation | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -68,7 +107,7 @@ class AccessDevice:
             type=_get(obj, "type") or _get(obj, "device_type"),
             is_online=_is_online(obj),
             firmware_version=_get(obj, "firmware_version") or _get(obj, "firmware"),
-            location=_get(obj, "location") or _get(obj, "_door_name"),
+            location=AccessLocation.from_manager_output(_get(obj, "location") or _get(obj, "_door_name")),
         )
 
     def to_dict(self) -> dict:

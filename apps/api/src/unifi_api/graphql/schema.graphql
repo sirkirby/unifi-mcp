@@ -5,7 +5,7 @@ type AccessDevice {
   type: String
   isOnline: Boolean
   firmwareVersion: String
-  location: String
+  location: AccessLocation
 }
 
 """Paginated page of UniFi Access devices."""
@@ -43,6 +43,18 @@ type AccessHealth {
   numDoors: Int
   numDevices: Int
   numOfflineDevices: Int
+}
+
+"""
+Structured location reference (door / floor / building) for an Access device.
+"""
+type AccessLocation {
+  uniqueId: ID
+  name: String
+  upId: ID
+  locationType: String
+  fullName: String
+  level: Int
 }
 
 """Read-only access to UniFi Access resources."""
