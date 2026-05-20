@@ -168,3 +168,43 @@ async def test_metadata_fields_unknown_key_silently_omitted() -> None:
     md = results[0]["metadata"]
     assert "linesStatus" in md
     assert "doesNotExist" not in md
+
+
+@pytest.mark.asyncio
+async def test_metadata_fields_all_absent_drops_metadata_key() -> None:
+    """When every requested key is missing from the event's metadata, the
+    'metadata' key is omitted entirely (consistent with the buffer path)."""
+    mgr = _make_manager()
+    mgr._cm.client.api_request_list = AsyncMock(return_value=[_raw_lpr_event()])
+
+    results = await mgr.list_events(
+        camera_id="cam-uuid-xyz",
+        limit=10,
+        metadata_fields=["nonexistent1", "nonexistent2"],
+    )
+
+    assert "metadata" not in results[0]
+
+
+@pytest.mark.asyncio
+async def test_metadata_fields_star_with_no_raw_metadata_drops_key() -> None:
+    """When the event has no metadata at all, even '*' omits the metadata key."""
+    mgr = _make_manager()
+    event_without_metadata = {
+        "id": "evt-empty",
+        "type": "smartDetectLine",
+        "start": 1779200000000,
+        "end": 1779200005000,
+        "score": 91,
+        "smartDetectTypes": ["vehicle"],
+        "camera": "cam-uuid-xyz",
+    }
+    mgr._cm.client.api_request_list = AsyncMock(return_value=[event_without_metadata])
+
+    results = await mgr.list_events(
+        camera_id="cam-uuid-xyz",
+        limit=10,
+        metadata_fields=["*"],
+    )
+
+    assert "metadata" not in results[0]

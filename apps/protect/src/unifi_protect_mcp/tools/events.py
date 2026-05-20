@@ -94,17 +94,17 @@ async def protect_list_events(
         ),
     ] = False,
     metadata_fields: Annotated[
-        list[str],
+        Optional[list[str]],
         Field(
             description=(
-                "Per-event metadata keys to include in the response. Default empty list "
+                "Per-event metadata keys to include in the response. Default None "
                 "returns no metadata (backwards-compatible). Pass top-level metadata key "
                 "names (e.g. ['linesStatus', 'weather']) to include only those, or pass "
                 "['*'] for the full metadata dict. Top-level keys only today; dotted "
                 "paths reserved for future nested selection."
             )
         ),
-    ] = [],
+    ] = None,
 ) -> Dict[str, Any]:
     """List events from the NVR."""
     logger.info(
@@ -139,17 +139,17 @@ async def protect_list_events(
 async def protect_get_event(
     event_id: Annotated[str, Field(description="Event UUID (from protect_list_events or protect_recent_events)")],
     metadata_fields: Annotated[
-        list[str],
+        Optional[list[str]],
         Field(
             description=(
-                "Per-event metadata keys to include in the response. Default empty list "
+                "Per-event metadata keys to include in the response. Default None "
                 "returns no metadata (backwards-compatible). Pass top-level metadata key "
                 "names (e.g. ['linesStatus', 'weather']) to include only those, or pass "
                 "['*'] for the full metadata dict. Top-level keys only today; dotted "
                 "paths reserved for future nested selection."
             )
         ),
-    ] = [],
+    ] = None,
 ) -> Dict[str, Any]:
     """Get a single event by ID."""
     logger.info("protect_get_event called for %s (metadata_fields=%s)", event_id, metadata_fields)
@@ -247,17 +247,17 @@ async def protect_list_smart_detections(
         ),
     ] = False,
     metadata_fields: Annotated[
-        list[str],
+        Optional[list[str]],
         Field(
             description=(
-                "Per-event metadata keys to include in the response. Default empty list "
+                "Per-event metadata keys to include in the response. Default None "
                 "returns no metadata (backwards-compatible). Pass top-level metadata key "
                 "names (e.g. ['linesStatus', 'weather']) to include only those, or pass "
                 "['*'] for the full metadata dict. Top-level keys only today; dotted "
                 "paths reserved for future nested selection."
             )
         ),
-    ] = [],
+    ] = None,
 ) -> Dict[str, Any]:
     """List smart detection events."""
     logger.info(
@@ -319,17 +319,17 @@ async def protect_recent_events(
         Field(description="Maximum number of events to return from the buffer. Omit to return all buffered events."),
     ] = None,
     metadata_fields: Annotated[
-        list[str],
+        Optional[list[str]],
         Field(
             description=(
-                "Per-event metadata keys to include in the response. Default empty list "
+                "Per-event metadata keys to include in the response. Default None "
                 "returns no metadata (backwards-compatible). Pass top-level metadata key "
                 "names (e.g. ['linesStatus', 'weather']) to include only those, or pass "
                 "['*'] for the full metadata dict. Top-level keys only today; dotted "
                 "paths reserved for future nested selection."
             )
         ),
-    ] = [],
+    ] = None,
 ) -> Dict[str, Any]:
     """Get recent events from the websocket buffer."""
     logger.info("protect_recent_events called (type=%s, camera=%s)", event_type, camera_id)

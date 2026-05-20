@@ -474,9 +474,12 @@ class EventManager:
         if metadata_fields:
             raw_md = _get(raw, "metadata") or {}
             if "*" in metadata_fields:
-                result["metadata"] = raw_md
+                if raw_md:
+                    result["metadata"] = raw_md
             else:
-                result["metadata"] = {k: raw_md[k] for k in metadata_fields if k in raw_md}
+                filtered = {k: raw_md[k] for k in metadata_fields if k in raw_md}
+                if filtered:
+                    result["metadata"] = filtered
 
         return result
 
