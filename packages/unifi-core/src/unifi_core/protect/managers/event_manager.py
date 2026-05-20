@@ -562,11 +562,7 @@ class EventManager:
 
             results: list[dict[str, Any]] = []
             for raw in raw_events:
-                results.append(
-                    self._raw_event_to_dict(
-                        raw, compact=compact, metadata_fields=metadata_fields
-                    )
-                )
+                results.append(self._raw_event_to_dict(raw, compact=compact, metadata_fields=metadata_fields))
             await self._apply_known_face_names(results)
             return results
 
@@ -738,9 +734,7 @@ class EventManager:
                 score = raw.get("score", 100) or 0
                 if score < min_conf:
                     continue
-                results.append(
-                    self._raw_event_to_dict(raw, compact=compact, metadata_fields=metadata_fields)
-                )
+                results.append(self._raw_event_to_dict(raw, compact=compact, metadata_fields=metadata_fields))
             await self._apply_known_face_names(results)
             return results
 
