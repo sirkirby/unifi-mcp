@@ -1475,7 +1475,7 @@
               "type": "string"
             },
             "metadata_fields": {
-              "description": "Per-event metadata keys to include in the response. Default empty list returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
+              "description": "Per-event metadata keys to include in the response. Default None returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
               "type": "array"
             }
           },
@@ -2300,7 +2300,7 @@
               "type": "integer"
             },
             "metadata_fields": {
-              "description": "Per-event metadata keys to include in the response. Default empty list returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
+              "description": "Per-event metadata keys to include in the response. Default None returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
               "type": "array"
             },
             "start": {
@@ -2878,7 +2878,7 @@
               "type": "integer"
             },
             "metadata_fields": {
-              "description": "Per-event metadata keys to include in the response. Default empty list returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
+              "description": "Per-event metadata keys to include in the response. Default None returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
               "type": "array"
             },
             "min_confidence": {
@@ -3648,7 +3648,7 @@
               "type": "integer"
             },
             "metadata_fields": {
-              "description": "Per-event metadata keys to include in the response. Default empty list returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
+              "description": "Per-event metadata keys to include in the response. Default None returns no metadata (backwards-compatible). Pass top-level metadata key names (e.g. ['linesStatus', 'weather']) to include only those, or pass ['*'] for the full metadata dict. Top-level keys only today; dotted paths reserved for future nested selection.",
               "type": "array"
             },
             "min_confidence": {
