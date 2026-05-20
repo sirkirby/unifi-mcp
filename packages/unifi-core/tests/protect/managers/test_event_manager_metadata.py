@@ -12,7 +12,6 @@ Covers PR-5:
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from unifi_core.protect.managers.event_manager import EventManager
 
 
