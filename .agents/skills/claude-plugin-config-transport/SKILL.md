@@ -8,11 +8,12 @@ description: >-
   asyncio.wait(FIRST_COMPLETED) must not be reintroduced; local development
   with claude --plugin-dir and its marketplace-cache blind spot; running
   check-prereqs.sh before plugin setup; writing Bash 3.2-compatible shell
-  scripts for plugins/; multi-target plugin support for Claude and Codex
-  targets; and issuing no-op patch releases when only plugin config or scripts
-  change. Apply even if the user doesn't explicitly mention transport races —
-  activate whenever plugin behavior, MCP tool availability, or
-  plugin-scoped shell scripts are being modified.
+  scripts for plugins/; multi-target plugin support for Claude, Codex, and
+  OpenClaw targets; atomic version sync across plugin manifests; and issuing
+  no-op patch releases when only plugin config or scripts change. Apply even
+  if the user doesn't explicitly mention transport races — activate whenever
+  plugin behavior, MCP tool availability, or plugin-scoped shell scripts are
+  being modified.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -30,8 +31,9 @@ This skill covers the full lifecycle of Claude MCP plugin integration in unifi-m
 - `plugins/unifi-protect/scripts/set-env.sh`, `plugins/unifi-protect/scripts/check-prereqs.sh`
 - `plugins/unifi-access/scripts/set-env.sh`, `plugins/unifi-access/scripts/check-prereqs.sh`
 - `packages/unifi-mcp-shared/src/unifi_mcp_shared/transport.py`
-- `.agents/plugins/marketplace.json` (multi-target plugin registry)
+- `.agents/plugins/marketplace.json` (multi-target plugin registry: Claude, Codex, OpenClaw)
 - `.codex-plugin/` (Codex-specific manifest directory, PR #246)
+- `.agents/plugins/openclaw/` (OpenClaw-specific manifest directory, PR #248)
 
 ## Prerequisites
 
@@ -40,7 +42,7 @@ Before modifying any plugin configuration or transport code:
 1. **Understand the uvx launch context.** When Claude launches a plugin via `uvx`, the plugin process is not PID 1. This distinction controls which transport path activates inside `transport.py` and whether HTTP transport will be enabled. The PID check is in `resolve_http_config()` in `transport.py`.
 2. **Know all three app directories.** Transport and HTTP config changes almost always need to be reflected in `apps/network/`, `apps/protect/`, and `apps/access/` in parallel. Partial application leaves inconsistent behavior.
 3. **Know all three plugin directories.** Script and setup changes apply to `plugins/unifi-network/`, `plugins/unifi-protect/`, and `plugins/unifi-access/`. Applying to only one or two creates inconsistent behavior that is nearly impossible for users to diagnose.
-4. **Know the multi-target plugin registry.** As of PR #246, unifi-mcp supports both Claude and Codex targets. Plugin configuration, version sync, and release procedures must account for target-specific manifests.
+4. **Know the multi-target plugin registry and all three runtimes.** As of PR #246 (Codex) and PR #248 (OpenClaw), unifi-mcp supports three plugin targets: Claude, Codex, and OpenClaw. Plugin configuration, version sync, and release procedures must account for target-specific manifests and initialization paths.
 5. **Hold the current MCP shared package version.** Plugin versions are slaved to MCP package tags; know the current tag before planning a release (see Procedure F).
 6. **Run `check-prereqs.sh` first** (see Procedure D) before activating any plugin setup change in a live environment.
 
@@ -87,7 +89,7 @@ This was the root cause of Issue #200, fixed in PR #202. The fix required change
 
 ### The current safe pattern in `transport.py`
 
-The current implementation in `packages/unifi-mcp-shared/src/unifi_mcp_shared/transport.py` uses stdio as the **primary control flow** — it runs to completion. HTTP runs as a **cancellable background task**. An HTTP failure must never cancel stdio. This pattern extends to **all transport targets** including Codex (PR #246).
+The current implementation in `packages/unifi-mcp-shared/src/unifi_mcp_shared/transport.py` uses stdio as the **primary control flow** — it runs to completion. HTTP runs as a **cancellable background task**. An HTTP failure must never cancel stdio. This pattern extends to **all transport targets** including Codex (PR #246) and OpenClaw (PR #248).
 
 ```python
 # SAFE — current implementation (run_transports function)
@@ -105,7 +107,7 @@ finally:
             pass
 ```
 
-`run_http()` catches its own `SystemExit` internally (port-bind failures from uvicorn), so a failed HTTP transport returns normally rather than propagating. Stdio lifecycle is unaffected. This design assumes the transport target (Claude, Codex) uses stdio as the primary transport and HTTP as optional.
+`run_http()` catches its own `SystemExit` internally (port-bind failures from uvicorn), so a failed HTTP transport returns normally rather than propagating. Stdio lifecycle is unaffected. This design assumes the transport target (Claude, Codex, OpenClaw) uses stdio as the primary transport and HTTP as optional.
 
 ### What NOT to do — the pre-fix anti-pattern
 
@@ -179,7 +181,7 @@ ls plugins/unifi-network/scripts/
 
 ### What it does
 
-`plugins/unifi-*/scripts/check-prereqs.sh` validates required environment variables and system state before plugin activation. It catches missing credentials and misconfigured endpoints before they produce cryptic user-facing failures. The scripts explicitly state Bash 3.2 compatibility.
+`plugins/unifi-*/scripts/check-prereqs.sh` validates required environment variables and system state before plugin activation. It catches missing credentials and misconfigured endpoints before they produce cryptic user-facing failures. The scripts explicitly state Bash 3.2 compatibility. OpenClaw plugins have identical prerequisites to Claude and Codex — the check-prereqs.sh scripts are target-agnostic.
 
 ### When to run it
 
@@ -274,9 +276,9 @@ If CI runs on Linux, add a macOS job or test locally — Linux bash is almost al
 
 Plugin versions are **strictly slaved** to MCP package release tags. The version referenced in plugin config must match a tagged MCP package version published to PyPI. There is no independent plugin version number.
 
-### Multi-target plugin registry (PR #246)
+### Multi-target plugin registry (PR #246, PR #248)
 
-As of PR #246, unifi-mcp supports **both Claude and Codex** as plugin targets. The multi-target registry lives in `.agents/plugins/marketplace.json`:
+As of PR #246 (Codex) and PR #248 (OpenClaw), unifi-mcp supports **three plugin targets: Claude, Codex, and OpenClaw**. The multi-target registry lives in `.agents/plugins/marketplace.json`:
 
 ```json
 {
@@ -293,11 +295,18 @@ As of PR #246, unifi-mcp supports **both Claude and Codex** as plugin targets. T
       {"name": "unifi-protect", "version": "1.2.3"},
       {"name": "unifi-access", "version": "1.2.3"}
     ]
+  },
+  "openclaw": {
+    "plugins": [
+      {"name": "unifi-network", "version": "1.2.3"},
+      {"name": "unifi-protect", "version": "1.2.3"},
+      {"name": "unifi-access", "version": "1.2.3"}
+    ]
   }
 }
 ```
 
-When a version bump is released, all target registries must be updated in the same commit. Codex-specific manifests are in `.codex-plugin/` and must be synchronized with the main app configs.
+When a version bump is released, **all target registries** in `.agents/plugins/marketplace.json` must be updated in the same commit. Codex-specific manifests are in `.codex-plugin/` and OpenClaw-specific manifests are in `.agents/plugins/openclaw/` — these must be synchronized with the main app configs and the root marketplace.json entry.
 
 ### When only plugin config or scripts change
 
@@ -310,13 +319,16 @@ If a PR modifies only plugin manifests or scripts (no Python code changes in `sh
    git push origin v1.2.4
    ```
 3. Wait for the release pipeline to publish the wheel to PyPI. The Python wheel is functionally identical to the prior version — the bump exists solely to create a version anchor the plugin can reference.
-4. Update the version field in **all target registries** in `.agents/plugins/marketplace.json` (both Claude and Codex).
-5. Update the version field in **all three apps'** config to `"1.2.4"`:
-   - `apps/network/src/unifi_network_mcp/config/config.yaml`
-   - `apps/protect/src/unifi_protect_mcp/config/config.yaml`
-   - `apps/access/src/unifi_access_mcp/config/config.yaml`
-6. Update Codex-specific manifests in `.codex-plugin/plugin.json` if transport-level changes were made.
-7. Do **not** update the plugin version before the PyPI step completes (PyPI ordering gate — see `monorepo-release-pipeline` skill).
+4. **Atomically update version fields** in all target registries and manifests:
+   - `.agents/plugins/marketplace.json` — all three target sections (claude, codex, openclaw) for all three plugins (network, protect, access)
+   - `.codex-plugin/plugin.json` — version field in the Codex-specific manifest
+   - `.agents/plugins/openclaw/plugin.json` — version field in the OpenClaw-specific manifest
+   - `apps/network/src/unifi_network_mcp/config/config.yaml` — version string
+   - `apps/protect/src/unifi_protect_mcp/config/config.yaml` — version string
+   - `apps/access/src/unifi_access_mcp/config/config.yaml` — version string
+
+5. **Workflow automation:** The `bump-plugin-versions.yml` CI workflow should atomically cover all three locations (marketplace.json root, .codex-plugin/plugin.json, .agents/plugins/openclaw/plugin.json) in a single workflow commit — do not bump them separately. Version skew between registry entries causes marketplace distribution inconsistencies.
+6. Do **not** update the plugin version before the PyPI step completes (PyPI ordering gate — see `monorepo-release-pipeline` skill).
 
 **Never skip the release for plugin-only changes.** Without a new tag, the plugin version field cannot advance, the config change has no anchored release identity, and existing users stay pinned to the cached old config until a tagged release forces cache invalidation.
 
@@ -329,6 +341,7 @@ If a PR modifies only plugin manifests or scripts (no Python code changes in `sh
 | `check-prereqs.sh` or `set-env.sh` change | Yes | No-op patch |
 | Plugin skill SKILL.md change | Yes | No-op patch |
 | Codex manifest or `.codex-plugin/` change | Yes | No-op patch |
+| OpenClaw manifest or `.agents/plugins/openclaw/` change | Yes | No-op patch |
 | Multi-target registry (.agents/plugins/marketplace.json) change | Yes | No-op patch |
 | README / docs only | No | — |
 
@@ -356,10 +369,14 @@ Config changes to HTTP transport behavior must be applied to all three apps (`ne
 
 A passing local test with `--plugin-dir` does not guarantee the marketplace-installed version behaves the same way. Always do a final marketplace-path test before shipping, especially after config or script changes.
 
-### OpenClaw bundle pattern — Codex-specific gotcha
+### Three-runtime transport pattern — Claude, Codex, and OpenClaw
 
-The Codex plugin uses the OpenClaw bundle pattern (decision-e7099071) where transport initialization is bundled with Codex-specific config loading. Changes to transport.py may require parallel changes to `.codex-plugin/` initialization code. Test both Claude and Codex transport paths after any transport change.
+The three plugin targets (Claude, Codex, and OpenClaw) have identical transport initialization patterns. Changes to `transport.py` apply to all three; transport-specific gotchas that were previously labeled as Codex-only (PR #246) now apply equally to OpenClaw (PR #248). When debugging transport issues, test against all three runtime targets if possible — a transport bug may surface in one target before appearing in others due to timing or initialization order differences.
+
+### Version sync atomicity — Marketplace registry must stay consistent
+
+The `.agents/plugins/marketplace.json` root registry, `.codex-plugin/plugin.json`, and `.agents/plugins/openclaw/plugin.json` must have matching version strings. If a release bumps only `.agents/plugins/marketplace.json` but forgets the target-specific manifests, the Codex and OpenClaw plugins will keep referencing the old version while the marketplace registry has advanced. This creates version skew that manifests as "tool unavailability for OpenClaw users while Codex works fine" — a confusing symptom that points to version mismatch, not transport issues. Always update all three registry locations atomically.
 
 ### Skill-dir naming collision — Manifest registration gotcha
 
-The `.agents/skills/*/` directory structure can collide with plugin name patterns if not carefully scoped. Plugin skill manifests registered in `.agents/plugins/*/skills/*/` must use fully qualified names (e.g., `unifi-mcp:skill-name`) to avoid colliding with agent-owned skills. Always verify that a new plugin skill manifest's fully qualified name does not collide with existing agent or plugin skill names (gotcha-b2b7f4d9).
+The `.agents/skills/*/` directory structure can collide with plugin name patterns if not carefully scoped. Plugin skill manifests registered in `.agents/plugins/*/skills/*/` must use fully qualified names (e.g., `unifi-mcp:skill-name`) to avoid colliding with agent-owned skills. Always verify that a new plugin skill manifest's fully qualified name does not collide with existing agent or plugin skill names. Test on all three targets (Claude, Codex, OpenClaw) — skill resolution may differ by target.

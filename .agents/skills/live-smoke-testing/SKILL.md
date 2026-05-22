@@ -9,7 +9,8 @@ description: |
   and recognizing known API contract failure patterns that mock-based CI cannot catch. Apply
   this skill even if the user doesn't explicitly ask about the harness — activate whenever a
   PR requires live smoke evidence, a new tool category needs coverage, or an API contract
-  mismatch is suspected.
+  mismatch is suspected. CRITICAL: Treat live smoke as a PRE-MERGE BLOCKING GATE when code
+  changes API response parsing (new fields, filtering logic, payload normalization).
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -56,6 +57,51 @@ Before any live run, ensure:
 
 4. **Branch context** — the harness lives in `scripts/live_smoke.py` on the main branch.
    When branching or bisecting, confirm you have the current harness code before running.
+
+## Procedure 0: PRE-MERGE BLOCKING GATE — API Response Parsing Changes
+
+**Trigger Criteria — Live Smoke is Mandatory Before Merge:**
+
+Code changes in any of these categories require a pre-merge live smoke run that must PASS
+before the PR can be merged:
+
+- **Manager response normalization logic** — changes to how API response payloads are converted
+  to domain models (e.g., field mapping, null handling, type coercion in manager classes)
+- **New API response fields** — adding handling for fields that are new to the UniFi API or
+  new to a particular controller firmware version
+- **Filtering or field selection logic** — changes to which fields are extracted from responses,
+  or conditional inclusion/exclusion of fields based on hardware or firmware state
+- **Payload shape transformation** — restructuring nested payloads, flattening, or re-nesting
+  fields for compatibility with domain models
+- **Version-dependent API contracts** — changes that assume an API endpoint behaves differently
+  across firmware versions
+
+**Why this is a blocking gate:** Mock-based CI uses golden fixtures (static JSON files) that
+cannot evolve with real hardware firmware updates. Changes to response parsing are invisible
+to unit tests — they pass against the fixed fixture forever, but fail against real hardware
+running a different API version. The 2026-05-17 Access proxy incident (#283) exemplifies
+this: unit tests passed; live hardware returned auth-wrapped-in-200 errors invisible to mocks.
+
+**Execution:**
+
+```bash
+# For the affected domain(s) (e.g., network, protect, access):
+python scripts/live_smoke.py --server <domain> --phase readonly
+python scripts/live_smoke.py --server <domain> --phase safe
+# Both must exit status 0 with no failed/exception records in artifacts
+```
+
+**Sign-off:** Include in the PR description:
+```
+**Live Smoke Evidence:**
+- ✓ network readonly: 45 tools, 0 failures
+- ✓ network safe: 12 lifecycle ops, 0 failures
+- Artifacts: [link to live-smoke-results/{server}-{timestamp}.json]
+```
+
+The PR reviewer must confirm both phases passed and inspect the artifact for correct
+payloads before approving merge. This is equivalent to a code review checkpoint — it
+verifies API contract assumptions against reality before the code lands on main.
 
 ## Procedure A: Understand Tool Classification Tiers
 

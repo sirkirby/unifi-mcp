@@ -6,9 +6,10 @@ description: >-
   checklist (f-string logger ban, Ruff lint enforcement, validator registry registration, doc site update ordering),
   the fork-edit model for trusted contributors, org-fork push limitations, the dual-subagent
   review pattern, PR body standards, technical API validation (live smoke tests, mutating
-  cycles), DISPATCH_ARG_TRANSLATORS registration for action tools, and the close-and-redirect 
-  pattern for unsalvageable PRs. Apply this skill before approving any externally-authored PR, 
-  before running the merge command, and when auditing recently merged PRs for compliance.
+  cycles), DISPATCH_ARG_TRANSLATORS registration for action tools, the unresponsive-first-time-contributor 
+  fork-edit exception for trivial fixes, and the close-and-redirect pattern for unsalvageable PRs. 
+  Apply this skill before approving any externally-authored PR, before running the merge command, 
+  and when auditing recently merged PRs for compliance.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -19,14 +20,16 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 Community PRs go through a fixed quality checklist before merge. For trusted contributors
 (level99 has 7+ merged PRs), the maintainer commits fixes directly to the contributor's fork
 branch rather than requesting round-trip revisions — this preserves attribution while eliminating
-latency. This skill documents the full workflow from first look to merge commit, including
-technical validation for PRs that touch UniFi API tool implementations.
+latency. An exception exists for first-time contributors who are historically unresponsive: when the fix is
+trivial (ruff format, simple doc change), apply fork-edit rather than request changes. This skill documents 
+the full workflow from first look to merge commit, including technical validation for PRs that touch UniFi API tool implementations.
 
 ## Prerequisites
 
 - PR is open and CI workflow state is understood (see Step 0b for first-time contributor gotcha)
 - You have push access to the contributor's fork (needed for the fork-edit model)
 - `AGENTS.md` is current — it is the canonical source for hard bans
+- For first-time contributors: check prior PR history to assess responsiveness (72+ hour silence threshold for fork-edit exception eligibility)
 - For PRs touching tool implementations or API handlers: a **live UniFi controller** must be reachable to run smoke tests
 
 ---
@@ -144,7 +147,7 @@ review comment (first-time contributors).
 Scan for f-string logger calls:
 
 ```bash
-grep -rn 'logger\.\\(debug\\|info\\|warning\\|error\\|critical\\)(f"' $(git diff --name-only origin/main...HEAD)
+grep -rn 'logger\\.\\\\(debug\\\\|info\\\\|warning\\\\|error\\\\|critical\\\\)(f\"' $(git diff --name-only origin/main...HEAD)
 ```
 
 Replace any hits with `%s`-style lazy formatting:
@@ -163,7 +166,7 @@ keep appearing. In PR #119, level99's tool layer used `%s` correctly but introdu
 calls in `device_manager.py` (14), `network_manager.py` (7), and `tools/network.py` (2). Always
 check manager files explicitly.
 
-**Implicit concatenation is invisible to grep:** Adjacent string literals (`"foo" "bar"`) cannot
+**Implicit concatenation is invisible to grep:** Adjacent string literals (`\"foo\" \"bar\"`) cannot
 be reliably caught by automated scripts. This survived a 481-call automated migration in PR #122
 and was only caught by manual review. Scan manually for this pattern when logger calls span lines.
 
@@ -228,7 +231,7 @@ class FirewallPolicyBase(BaseModel):
     schedule: dict = {"mode": "ALWAYS"}  # silently overwrites on update
 ```
 
-With this model, `update_firewall_policy({"name": "new"})` would silently inject unwanted field
+With this model, `update_firewall_policy({\"name\": \"new\"})` would silently inject unwanted field
 values — overwriting whatever the controller currently has, regardless of what the caller specified.
 
 **The rule:** Non-`None` defaults belong only in create-specific subclasses or create-specific
@@ -347,7 +350,7 @@ When you find merge blockers in Step 1, submit your GitHub review as **`request-
 as `comment`. This matters for two reasons:
 
 1. **Prevents accidental merge** — GitHub blocks merging a PR that has an unresolved
-   "request changes" review, even if CI is green.
+   \"request changes\" review, even if CI is green.
 2. **Signals mandatory work clearly** — the contributor sees their PR requires action, not just
    feedback.
 
@@ -370,7 +373,7 @@ Use the `comment` review type only when you have zero hard blockers and are leav
 ## Step 2 — Apply Fixes (Fork-Edit Model)
 
 If you found gaps in Step 1, don't request changes — fix them directly on the contributor's
-fork branch. This is the established model for trusted contributors.
+fork branch. This is the established model for trusted contributors and for unresponsive first-time contributors with trivial fixes.
 
 ```bash
 # Add the contributor's fork as a remote (one-time setup)
@@ -381,11 +384,11 @@ git fetch <contributor>
 git checkout -b review/<pr-branch> <contributor>/<pr-branch>
 
 # Make your fixes, then commit with attribution context
-git commit -m "fix: address review gaps from PR #NNN
+git commit -m \"fix: address review gaps from PR #NNN
 
 - Replace f-string loggers in device_manager.py (14 instances)
 - Register new validator in registry
-Co-authored-by: Contributor Name <email>"
+Co-authored-by: Contributor Name <email>\"
 
 # Push back to their fork
 git push <contributor> HEAD:<pr-branch>
@@ -400,11 +403,23 @@ the gap is mechanical and the fix is unambiguous.
 **Trusted contributor definition:** Level99 qualifies (7+ merged PRs). For first-time or
 low-history contributors, prefer review comments so they learn the patterns.
 
+### Unresponsive First-Time Contributor — Fork-Edit Exception
+
+When a first-time or low-history contributor is **historically unresponsive** (no response to prior comments within 72+ hours) AND the current PR fix is **trivial and mechanical** (e.g., ruff format, logger replacement, simple doc fix), apply the fork-edit model instead of requesting changes:
+
+1. **Check prior PR history** — Confirm the contributor has ignored feedback in a prior PR without a valid reason (timezone delay, notification failure, etc.)
+2. **Assess fix triviality** — Confirm the gap is mechanical and unambiguous; not a design decision or architectural choice
+3. **Apply fork-edit** — Use the fork-edit workflow above to commit fixes and push back to their branch
+
+**Trade-off:** The fork-edit approach unblocks the pipeline when a contributor is unresponsive, but it does not give the contributor an opportunity to learn the patterns. Use this exception when community momentum is more valuable than teaching opportunity.
+
+**Reference:** PR #288 established this heuristic — a first-time contributor did not respond for 72+ hours despite a ruff format request, but their fix was mechanically correct and unambiguous. Fork-edit unblocked the PR rather than leaving it stalled.
+
 ### Org Forks — Push Limitation
 
 **The fork-edit model only works for personal forks.** Org forks (e.g., `vigrai/unifi-mcp`
 from contributor fgallese in PR #133) block `git push` back to the contributor's branch even
-when "Allow edits from maintainers" is checked on the PR. That checkbox is scoped to personal
+when \"Allow edits from maintainers\" is checked on the PR. That checkbox is scoped to personal
 accounts — GitHub does not honor it for org-owned forks.
 
 Decision matrix:
@@ -444,7 +459,7 @@ For PRs that modify tools or API handlers, the PR description must include:
 ```
 
 **2. Embedded live test output** — Paste the raw terminal output (not a prose summary). Reviewers
-need actual values and shapes, not "tests passed."
+need actual values and shapes, not \"tests passed.\"
 
 ```markdown
 <details>
@@ -457,7 +472,7 @@ need actual values and shapes, not "tests passed."
 </details>
 ```
 
-Reviewers have been burned by "all tests passed" summaries that omit the one tool that returned a
+Reviewers have been burned by \"all tests passed\" summaries that omit the one tool that returned a
 malformed response. Embed the raw output and let the reviewer decide what matters.
 
 **3. Issue references** — Tag every issue using `#N` format. GitHub autolinks and auto-closes on merge:
