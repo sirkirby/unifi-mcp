@@ -1,0 +1,77 @@
+name: Feature request
+description: Suggest a new capability, integration, or improvement.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for product ideas and enhancements. For implementation questions or troubleshooting help, a GitHub Discussion is usually a better fit.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: I searched existing issues and discussions for similar requests.
+          required: true
+        - label: This request fits the project scope described in the README and CONTRIBUTING.md.
+          required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Network MCP server
+        - Protect MCP server
+        - Access MCP server
+        - Relay sidecar
+        - Cloudflare Worker / CLI
+        - API server
+        - Claude/Codex plugin packaging
+        - Documentation
+        - Cross-project / unsure
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to accomplish, and why is the current behavior insufficient?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior, API shape, tool, workflow, or documentation change you would like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or other designs have you considered?
+    validations:
+      required: false
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation notes
+      description: If you know where this should live, include files, managers, tools, APIs, or docs that may be affected.
+    validations:
+      required: false
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I am willing to help implement or test this change.
+          required: false
+  - type: checkboxes
+    id: conduct
+    attributes:
+      label: Code of conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct.
+          required: true

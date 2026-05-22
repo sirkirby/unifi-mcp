@@ -1,0 +1,108 @@
+name: Bug report
+description: Report something that is broken or behaving unexpectedly.
+title: "fix: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please do not include UniFi credentials, API keys, tokens, or private controller details.
+
+        If this is a security vulnerability, do not open a public issue. Use GitHub Security Advisories instead: https://github.com/sirkirby/unifi-mcp/security/advisories
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I am using the latest released version, or I confirmed the issue still exists on `main`.
+          required: true
+        - label: I have removed credentials, tokens, API keys, IP addresses, and other private data from the report.
+          required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - Network MCP server
+        - Protect MCP server
+        - Access MCP server
+        - Relay sidecar
+        - Cloudflare Worker / CLI
+        - API server
+        - Claude/Codex plugin packaging
+        - Documentation
+        - Unsure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Package version, git SHA, Docker image tag, or plugin version.
+      placeholder: "unifi-network-mcp 0.0.0, main@abcdef0, or ghcr.io/..."
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Python/Node versions, MCP client, install method, and UniFi application/controller versions.
+      placeholder: |
+        OS:
+        Python:
+        Node:
+        MCP client:
+        Install method:
+        UniFi application/controller:
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest reliable reproduction you can.
+      placeholder: |
+        1. Configure ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or output
+      description: Paste sanitized logs, tracebacks, tool responses, or command output.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, screenshots, suspected cause, or anything else useful.
+    validations:
+      required: false
+  - type: checkboxes
+    id: conduct
+    attributes:
+      label: Code of conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct.
+          required: true

@@ -1,0 +1,42 @@
+name: Documentation issue
+description: Report missing, confusing, or incorrect documentation.
+title: "docs: "
+labels:
+  - documentation
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+  - type: input
+    id: location
+    attributes:
+      label: Documentation location
+      description: Link or path to the affected README, docs page, plugin file, or comment.
+      placeholder: "README.md, apps/network/docs/configuration.md, ..."
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is wrong or missing?
+      description: Describe the confusing, outdated, incomplete, or incorrect content.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested change
+      description: If you know the fix, describe or paste the replacement text.
+    validations:
+      required: false
+  - type: checkboxes
+    id: conduct
+    attributes:
+      label: Code of conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct.
+          required: true

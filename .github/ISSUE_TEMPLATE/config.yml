@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/sirkirby/unifi-mcp/security/advisories
+    about: Please report suspected vulnerabilities privately through GitHub Security Advisories.
+  - name: Questions and troubleshooting
+    url: https://github.com/sirkirby/unifi-mcp/discussions
+    about: Use GitHub Discussions for setup help, configuration questions, and general troubleshooting.

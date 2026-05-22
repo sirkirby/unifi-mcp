@@ -1,5 +1,24 @@
 # Contributing
 
+Thanks for helping improve UniFi MCP. Please follow the
+[Code of Conduct](CODE_OF_CONDUCT.md) in all project spaces.
+
+## Before You Start
+
+- Search existing issues and discussions before opening a new one.
+- For substantial features, behavior changes, or new tool categories, open an
+  issue first so maintainers can confirm the direction before you invest time.
+- Use [GitHub Discussions](https://github.com/sirkirby/unifi-mcp/discussions)
+  for setup help, configuration questions, and general troubleshooting.
+- Do not include UniFi credentials, API keys, tokens, controller addresses, or
+  other private deployment details in public issues, discussions, pull requests,
+  screenshots, or logs.
+- Report suspected vulnerabilities privately through
+  [GitHub Security Advisories](https://github.com/sirkirby/unifi-mcp/security/advisories),
+  not public issues.
+
+For more support routing details, see [SUPPORT.md](SUPPORT.md).
+
 ## Prerequisites
 
 - Python 3.13+
