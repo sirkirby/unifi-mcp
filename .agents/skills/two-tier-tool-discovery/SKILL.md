@@ -42,10 +42,10 @@ FastMCP maps `tools/call` arguments to Python function parameters **by name**. T
 **Wrong — registering `tool_index_handler` directly with `@tool_decorator` would silently drop all named arguments:**
 ```python
 # If this were registered directly with @tool_decorator, args would always
-# be None — no caller sends {\"args\": {...}}, so FastMCP never populates it.
+# be None — no caller sends {\\\"args\\\": {...}}, so FastMCP never populates it.
 async def tool_index_handler(args: dict | None = None) -> dict:
-    category = args.get(\"category\") if args else None  # args is always None
-    search = args.get(\"search\") if args else None       # never reached
+    category = args.get(\\\"category\\\") if args else None  # args is always None
+    search = args.get(\\\"search\\\") if args else None       # never reached
 ```
 
 **Correct — the actual pattern: a thin named-param wrapper delegates to the backend:**
@@ -58,20 +58,20 @@ async def _tool_index_wrapper(
 ) -> dict:
     args = {}
     if category is not None:
-        args[\"category\"] = category
+        args[\\\"category\\\"] = category
     if search is not None:
-        args[\"search\"] = search
+        args[\\\"search\\\"] = search
     if include_schemas:
-        args[\"include_schemas\"] = include_schemas
+        args[\\\"include_schemas\\\"] = include_schemas
     return await tool_index_handler(args or None)
 
 # In tool_index.py — the backend:
 async def tool_index_handler(args: dict | None = None) -> dict:
     args = args or {}
     return get_tool_index(
-        category=args.get(\"category\"),
-        search=args.get(\"search\"),
-        include_schemas=bool(args.get(\"include_schemas\", False)),
+        category=args.get(\\\"category\\\"),
+        search=args.get(\\\"search\\\"),
+        include_schemas=bool(args.get(\\\"include_schemas\\\", False)),
     )
 ```
 
@@ -82,7 +82,7 @@ This rule applies to every handler in `tool_index.py`: the FastMCP-facing functi
 1. Open `apps/*/src/*/tool_index.py` where the wrapper and handler reside.
 2. Add the new parameter to the FastMCP-registered wrapper function's signature with a sensible default (preserves backwards compatibility for callers that omit it).
 3. In the wrapper, add the new param to the `args` dict it assembles before calling `tool_index_handler`.
-4. Open each backend `tool_index_handler` — in each app's `tool_index.py` and the shared `packages/unifi-mcp-shared/src/unifi_mcp_shared/tool_index.py`. In each, add `args.get(\"new_param\")` and thread it into the `get_tool_index()` call.
+4. Open each backend `tool_index_handler` — in each app's `tool_index.py` and the shared `packages/unifi-mcp-shared/src/unifi_mcp_shared/tool_index.py`. In each, add `args.get(\\\"new_param\\\")` and thread it into the `get_tool_index()` call.
 5. In `get_tool_index()` (shared `tool_index.py`), implement the actual filtering/shaping logic.
 6. Update the `register_tool()` call's `input_schema` in the app's `tool_index.py` to document the new parameter for schema-aware callers.
 7. Start the local server and call `tool_index` with and without the new parameter to confirm correct behavior in both modes.
@@ -148,13 +148,13 @@ When `tool_index` parameters change, all four paths must be synchronized to ensu
 1. After any parameter change to `tool_index`, find all SKILL.md files that reference it across all runtime paths:
    ```bash
    # Local monorepo
-   grep -rl \"tool_index\" .agents/plugins/*/skills/*/SKILL.md
+   grep -rl \\\"tool_index\\\" .agents/plugins/*/skills/*/SKILL.md
 
    # OpenClaw
-   grep -rl \"tool_index\" ~/.codex-plugin/myco/skills/*/SKILL.md 2>/dev/null || true
+   grep -rl \\\"tool_index\\\" ~/.codex-plugin/myco/skills/*/SKILL.md 2>/dev/null || true
 
    # XDG home paths
-   grep -rl \"tool_index\" ~/.agents/plugins/*/skills/*/SKILL.md 2>/dev/null || true
+   grep -rl \\\"tool_index\\\" ~/.agents/plugins/*/skills/*/SKILL.md 2>/dev/null || true
    ```
 2. For each matching SKILL.md, update the parameter list and invocation examples to match the new handler signature.
 3. If a SKILL.md describes the output shape, update that section too if tier behavior changed.
@@ -195,13 +195,76 @@ This ensures agents across all runtimes see the same tool discovery behavior.
 ## Cross-Cutting Gotchas
 
 ### The `args: dict` Wrapper Trap Is a Silent Failure
+
 If you accidentally register `tool_index_handler` directly with `@tool_decorator` (bypassing the named-param wrapper), there is no warning, no exception, and no test failure. The handler receives `None` for its `args` param and returns unfiltered results as if no parameters were passed. This is the exact problem the two-layer wrapper was introduced to solve. Always verify new or changed discovery params with a live call before merging.
 
+### tools_manifest.json Sync — Keep Python Docstrings Current
+
+After regenerating `tools_manifest.json` from live introspection, the tool descriptions it contains may lag behind actual parameter defaults in the Python source. For example, a parameter's docstring may claim `"Default empty list"` but the actual code default is `None`. When agents read `tools_manifest.json`, they trust the descriptions to match runtime behavior. Stale docstrings in the source lead to stale manifest descriptions and agents make wrong assumptions about optional parameters.
+
+**Prevention**:
+1. When adding or changing a parameter default in `tool_index.py`, immediately update the Python docstring to match.
+2. After any default change, regenerate `tools_manifest.json` via a local build or CI trigger.
+3. Inspect the regenerated manifest for stale descriptions before merging — do not assume docstring changes propagate automatically.
+
 ### The Named-Param Rule Is Codebase-Wide
+
 Every handler in `tool_index.py` — and any other FastMCP handler in the project — must use explicit named parameters if callers will pass named arguments. The `args: dict` pattern is only safe for backend functions that are not directly FastMCP-registered. If a handler appears to ignore its parameters, the registration path is the first thing to check.
 
 ### MCP Spec Issue #2211 (`max_response_bytes`)
+
 The MCP spec is actively discussing a `max_response_bytes` response-size cap. The two-tier design is already aligned: compact is the default, full is opt-in. When the standard lands, `include_schemas` may become the enforcement mechanism. No breaking change should be needed because the compact tier is already the default behavior.
 
 ### One-Unified-Server Architecture
+
 `tool_index` is the canonical tool discovery entry point. If someone proposes adding a second discovery handler in a plugin or subsystem, decline. Fragmentation breaks agents that rely on a single index and makes parity maintenance across local and Worker paths exponentially harder.
+
+### Tool Descriptions vs Pydantic Field Descriptions — Keep the Boundary
+
+Tool descriptions in `@server.tool(description=...)` should describe **what the tool does**, broadly what shape it returns, and how it relates to neighbouring tools. They MUST NOT contain per-field semantic disambiguation. Field-by-field meaning belongs on the Pydantic `Field(description=...)` of the underlying model — which is exactly what the full-schema tier of this discovery system surfaces.
+
+**Wrong** — per-field semantics bloating the tool description:
+
+```python
+@server.tool(
+    name="unifi_list_clients",
+    description=(
+        "Returns connected clients with mac, `name` (user-assigned alias "
+        "from the UniFi console), `hostname` (DHCP-reported), IP, "
+        "`status` (online/offline)… Prefer `name` over `hostname` for "
+        "human-readable labels when both are set. …"
+    ),
+)
+```
+
+**Right** — terse tool description + meaning on the Pydantic Field:
+
+```python
+# Tool layer (apps/<server>/src/.../tools/clients.py)
+@server.tool(
+    name="unifi_list_clients",
+    description=(
+        "Returns connected clients with mac, name, hostname, ip, status "
+        "(online/offline), connection type (wired/wireless), and for "
+        "wireless clients: ssid, signal_dbm, channel, radio. …"
+    ),
+)
+
+# Model layer (packages/unifi-core/src/unifi_core/<server>/models/clients.py)
+name: Optional[str] = Field(
+    default=None,
+    description="User-assigned alias set in the UniFi console (preferred for display)",
+    json_schema_extra={"mutable": False},
+)
+hostname: Optional[str] = Field(
+    default=None,
+    description="DHCP-reported hostname from the device itself",
+    json_schema_extra={"mutable": False},
+)
+```
+
+The compact discovery tier (no schemas) ships the lean tool description. Agents that need field meaning call `unifi_tool_index` with `include_schemas=true` and read the Field descriptions through the surfaced JSON schema. This is the entire point of the two-tier design: protect token budgets by default, opt into depth on demand.
+
+**Why this matters operationally**: every agent that calls `tool_index` without `include_schemas` pays for whatever text is in tool descriptions on every invocation. Per-field documentation in those strings multiplies cost without benefit — the agent that cares about field semantics will request the schema tier anyway.
+
+**Operational nuance that ISN'T a field meaning** (e.g. "merges live /stat/sta with /rest/user snapshot for active clients") *does* belong in the tool description — that information doesn't live on any individual field.
