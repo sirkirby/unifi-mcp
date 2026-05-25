@@ -1,5 +1,6 @@
-"""Tests for ClientManager.get_client_details — prefers live /stat/sta
-data over historical /rest/user snapshot, falls back when not active.
+"""Tests for ClientManager.get_client_details — merges live /stat/sta
+data with the /rest/user user-table snapshot, and tolerates a transient
+failure on either endpoint.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -37,35 +38,80 @@ def _client(mac: str, **extra):
 
 
 @pytest.mark.asyncio
-async def test_prefers_active_stat_sta(mock_connection):
-    """Active client found in /stat/sta is returned directly — no /rest/user lookup."""
+async def test_merges_active_and_user_records(mock_connection):
+    """For currently-connected clients, get_client_details merges
+    /stat/sta (live data) with /rest/user (stable user-table fields).
+    """
     mac = "aa:bb:cc:dd:ee:ff"
     live = _client(mac, last_seen=1779732658, signal=-52, uptime=3639515)
-    historical = _client(mac, last_seen=1776076601)  # stale
+    user = _client(mac, _id="user-123", noted=True, use_fixedip=True, fixed_ip="10.0.0.5")
     mock_connection.controller.clients.values.return_value = [live]
-    mock_connection.controller.clients_all.values.return_value = [historical]
+    mock_connection.controller.clients_all.values.return_value = [user]
 
     mgr = ClientManager(mock_connection)
     result = await mgr.get_client_details(mac)
 
+    # Live data wins for overlapping keys; user-table fields fill in
     assert result.raw["last_seen"] == 1779732658
     assert result.raw["signal"] == -52
-    # /rest/user collection should NOT be consulted when /stat/sta has the client
-    mock_connection.controller.clients_all.update.assert_not_called()
+    assert result.raw["_id"] == "user-123"
+    assert result.raw["noted"] is True
+    assert result.raw["use_fixedip"] is True
+    assert result.raw["fixed_ip"] == "10.0.0.5"
 
 
 @pytest.mark.asyncio
-async def test_falls_back_to_rest_user_when_inactive(mock_connection):
+async def test_returns_user_only_when_not_active(mock_connection):
+    """Offline client present only in /rest/user — returned as-is."""
     mac = "aa:bb:cc:dd:ee:ff"
-    historical = _client(mac, last_seen=1776076601)
+    user = _client(mac, _id="user-123", noted=True, last_seen=1776076601)
     mock_connection.controller.clients.values.return_value = []
-    mock_connection.controller.clients_all.values.return_value = [historical]
+    mock_connection.controller.clients_all.values.return_value = [user]
 
     mgr = ClientManager(mock_connection)
     result = await mgr.get_client_details(mac)
+    assert result.raw["_id"] == "user-123"
 
-    assert result.raw["mac"] == mac
-    mock_connection.controller.clients_all.update.assert_called()
+
+@pytest.mark.asyncio
+async def test_returns_active_only_when_no_user_record(mock_connection):
+    """Transient client present only in /stat/sta — returned as-is."""
+    mac = "aa:bb:cc:dd:ee:ff"
+    live = _client(mac, uptime=99, signal=-50)
+    mock_connection.controller.clients.values.return_value = [live]
+    mock_connection.controller.clients_all.values.return_value = []
+
+    mgr = ClientManager(mock_connection)
+    result = await mgr.get_client_details(mac)
+    assert result.raw["uptime"] == 99
+
+
+@pytest.mark.asyncio
+async def test_falls_back_to_user_when_stat_sta_raises(mock_connection):
+    """If /stat/sta fetch raises, /rest/user still resolves the lookup —
+    a transient failure on one endpoint must not break the other.
+    """
+    mac = "aa:bb:cc:dd:ee:ff"
+    user = _client(mac, _id="user-123", last_seen=1776076601)
+    mock_connection.controller.clients.update.side_effect = RuntimeError("boom")
+    mock_connection.controller.clients_all.values.return_value = [user]
+
+    mgr = ClientManager(mock_connection)
+    result = await mgr.get_client_details(mac)
+    assert result.raw["_id"] == "user-123"
+
+
+@pytest.mark.asyncio
+async def test_falls_back_to_active_when_rest_user_raises(mock_connection):
+    """And vice versa — /rest/user failure doesn't block lookup of active clients."""
+    mac = "aa:bb:cc:dd:ee:ff"
+    live = _client(mac, uptime=99, signal=-50)
+    mock_connection.controller.clients.values.return_value = [live]
+    mock_connection.controller.clients_all.update.side_effect = RuntimeError("boom")
+
+    mgr = ClientManager(mock_connection)
+    result = await mgr.get_client_details(mac)
+    assert result.raw["uptime"] == 99
 
 
 @pytest.mark.asyncio
@@ -79,13 +125,24 @@ async def test_raises_when_unknown_to_both_endpoints(mock_connection):
 
 
 @pytest.mark.asyncio
+async def test_raises_when_both_endpoints_raise(mock_connection):
+    """Both endpoints failing is an outage, not a not-found — but the
+    not-found exception is what callers expect; surface that uniformly.
+    """
+    mock_connection.controller.clients.update.side_effect = RuntimeError("boom")
+    mock_connection.controller.clients_all.update.side_effect = RuntimeError("boom")
+
+    mgr = ClientManager(mock_connection)
+    with pytest.raises(UniFiNotFoundError):
+        await mgr.get_client_details("zz:zz:zz:zz:zz:zz")
+
+
+@pytest.mark.asyncio
 async def test_active_with_raw_dict_fallback_shape(mock_connection):
     """When the active collection returns raw dicts (fallback path), still find the mac."""
     mac = "aa:bb:cc:dd:ee:ff"
     mock_connection.controller.clients.values.return_value = []
 
-    # Simulate the get_clients() fallback that hits /stat/sta directly and
-    # returns raw dicts (the existing code path when controller.clients is empty).
     async def request_returning_raw_dicts(_req):
         return [{"mac": mac, "uptime": 99}]
 
@@ -94,4 +151,5 @@ async def test_active_with_raw_dict_fallback_shape(mock_connection):
 
     mgr = ClientManager(mock_connection)
     result = await mgr.get_client_details(mac)
-    assert isinstance(result, dict) and result.get("mac") == mac
+    # Active-only result preserves raw dict shape
+    assert result.get("mac") == mac if isinstance(result, dict) else result.raw.get("mac") == mac

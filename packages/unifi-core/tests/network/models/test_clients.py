@@ -148,15 +148,16 @@ class TestIsOnlineDerivation:
     def test_uptime_non_numeric_is_ignored(self) -> None:
         assert _is_online({"_uptime_by_uap": "yes"}) is False
 
-    def test_real_stat_sta_payload_no_is_online_field(self) -> None:
-        """Fixture mirrors a real /stat/sta record from UniFi OS 5.1.12 /
-        Network 10.3.58 (UDM SE): no `is_online` field, but rich active
-        indicators. Must derive as online.
+    def test_stat_sta_shape_without_is_online_field(self) -> None:
+        """Fixture mirrors the shape of /stat/sta records from controller
+        firmwares that omit `is_online` (UniFi OS 5.x / Network 10.x):
+        rich active indicators (uptime, signal, essid) but no explicit
+        `is_online` field. Must derive as online.
         """
         raw = {
-            "mac": "bc:87:fa:2e:2d:d0",
-            "hostname": "Bose-Smart-Ultra-Soundbar",
-            "name": "Living Room Soundbar",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "hostname": "wireless-speaker",
+            "name": "Living Room Speaker",
             "uptime": 3639515,
             "_uptime_by_uap": 3639515,
             "_uptime_by_usw": 135036,
@@ -164,13 +165,13 @@ class TestIsOnlineDerivation:
             "signal": -52,
             "channel": 11,
             "radio": "ng",
-            "essid": "FarisMesh-IoT",
+            "essid": "TestMesh-IoT",
         }
         assert _is_online(raw) is True
         c = client_from_controller(raw)
         assert c.status == "online"
-        assert c.name == "Living Room Soundbar"
-        assert c.hostname == "Bose-Smart-Ultra-Soundbar"
+        assert c.name == "Living Room Speaker"
+        assert c.hostname == "wireless-speaker"
 
     def test_client_lookup_derives_online_from_uptime(self) -> None:
         lookup = client_lookup_from_controller({"mac": "aa:bb", "ip": "10.0.0.5", "uptime": 99})
@@ -179,3 +180,34 @@ class TestIsOnlineDerivation:
     def test_client_lookup_offline_when_no_indicators(self) -> None:
         lookup = client_lookup_from_controller({"mac": "aa:bb", "ip": "10.0.0.5"})
         assert lookup.is_online is False
+
+    def test_client_lookup_flat_attribute_object_with_is_online_true(self) -> None:
+        """`client_lookup_from_controller` accepts objects without a `.raw`
+        attribute — the is_online derivation must use the same access
+        semantics as peer fields (mac, ip, hostname) on the same factory.
+        """
+
+        class FlatClient:
+            mac = "aa:bb:cc:dd:ee:ff"
+            ip = "10.0.0.5"
+            hostname = "host"
+            name = "Alias"
+            is_online = True
+            last_seen = None
+
+        lookup = client_lookup_from_controller(FlatClient())
+        assert lookup.is_online is True
+        assert lookup.mac == "aa:bb:cc:dd:ee:ff"
+
+    def test_client_lookup_flat_attribute_object_with_uptime(self) -> None:
+        class FlatClient:
+            mac = "aa:bb:cc:dd:ee:ff"
+            ip = "10.0.0.5"
+            hostname = "host"
+            name = None
+            _uptime_by_uap = 99
+            is_online = None
+            last_seen = None
+
+        lookup = client_lookup_from_controller(FlatClient())
+        assert lookup.is_online is True

@@ -153,9 +153,14 @@ async def get_client_details(
             )
             shaped = client_from_controller(client_obj).model_dump(exclude_none=True)
             # Honor the "full raw client object" promise: deliver all controller-reported
-            # fields, with the typed/normalized shape fields (ISO timestamps, derived
-            # status, user alias) taking precedence over the raw epoch/missing values.
-            merged: Dict[str, Any] = {**raw, **shaped}
+            # fields. Selectively layer the typed/normalized shape on top only for fields
+            # where the shape adds value (ISO timestamps, derived status, null-safe alias).
+            # Leave raw fields like `ip`/`last_ip` distinct so the current-vs-historical
+            # distinction is preserved.
+            merged: Dict[str, Any] = dict(raw)
+            for key in ("last_seen", "first_seen", "status", "name", "hostname"):
+                if key in shaped:
+                    merged[key] = shaped[key]
             return {
                 "success": True,
                 "site": client_manager._connection.site,

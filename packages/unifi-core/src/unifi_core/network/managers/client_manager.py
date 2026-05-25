@@ -1,4 +1,5 @@
 import logging
+from types import SimpleNamespace
 from typing import Any, List, Optional
 
 from aiounifi.models.api import ApiRequest
@@ -97,26 +98,64 @@ class ClientManager:
             return raw.get("mac")
         return getattr(c, "mac", None)
 
-    async def get_client_details(self, client_mac: str) -> Client:
+    @staticmethod
+    def _raw_of(c: Any) -> dict:
+        if c is None:
+            return {}
+        if isinstance(c, dict):
+            return c
+        raw = getattr(c, "raw", None)
+        return raw if isinstance(raw, dict) else {}
+
+    async def get_client_details(self, client_mac: str) -> Any:
         """Get detailed information for a specific client by MAC address.
 
-        Prefers the live /stat/sta payload for currently-active clients
-        (richer fields and fresh timestamps), falling back to /rest/user
-        only for offline or never-active clients.
+        Returns a merged view combining /stat/sta (live data: fresh
+        timestamps, uptime, signal, traffic) with /rest/user (stable
+        user-table fields: _id, noted, fixed_ip, alias). For currently-
+        connected clients, the result has the best of both endpoints; for
+        offline clients (not in /stat/sta) it falls back to just /rest/user.
+
+        Each endpoint is queried independently so a transient failure on
+        one does not block the lookup.
 
         Raises:
-            UniFiNotFoundError: If the client does not exist on either
+            UniFiNotFoundError: If the client is not present on either
                 endpoint.
         """
-        active = await self.get_clients()
-        for c in active:
-            if self._mac_of(c) == client_mac:
-                return c
-        all_clients = await self.get_all_clients()
-        for c in all_clients:
-            if self._mac_of(c) == client_mac:
-                return c
-        raise UniFiNotFoundError("client", client_mac)
+        active_record: Optional[Any] = None
+        try:
+            active = await self.get_clients()
+            for c in active:
+                if self._mac_of(c) == client_mac:
+                    active_record = c
+                    break
+        except Exception as e:
+            logger.debug("/stat/sta fetch failed during get_client_details: %s", e)
+
+        user_record: Optional[Any] = None
+        try:
+            all_clients = await self.get_all_clients()
+            for c in all_clients:
+                if self._mac_of(c) == client_mac:
+                    user_record = c
+                    break
+        except Exception as e:
+            logger.debug("/rest/user fetch failed during get_client_details: %s", e)
+
+        if active_record is None and user_record is None:
+            raise UniFiNotFoundError("client", client_mac)
+
+        active_raw = self._raw_of(active_record)
+        user_raw = self._raw_of(user_record)
+
+        if active_raw and user_raw:
+            # /stat/sta wins for overlapping keys (live data trumps stale snapshot);
+            # /rest/user supplies stable user-table fields (_id, noted, fixed_ip,
+            # local_dns_record, usergroup_id) that /stat/sta sometimes omits.
+            merged_raw = {**user_raw, **active_raw}
+            return SimpleNamespace(mac=client_mac, raw=merged_raw)
+        return active_record if active_record is not None else user_record
 
     async def block_client(self, client_mac: str) -> bool:
         """Block a client by MAC address.

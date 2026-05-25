@@ -77,6 +77,26 @@ def _is_online(raw: dict) -> bool:
     return False
 
 
+def _is_online_from(obj: Any) -> bool:
+    """Same as ``_is_online`` but accepts dict, ``.raw``-bearing object,
+    or a flat-attribute object — matching the access semantics of ``_get``.
+    """
+    if isinstance(obj, dict):
+        return _is_online(obj)
+    raw = getattr(obj, "raw", None)
+    if isinstance(raw, dict):
+        if _is_online(raw):
+            return True
+    # Flat-attribute fallback (e.g. lightweight test stand-ins)
+    if getattr(obj, "is_online", None) is True:
+        return True
+    for key in _ACTIVE_CONNECTION_KEYS:
+        v = getattr(obj, key, None)
+        if isinstance(v, (int, float)) and v > 0:
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
@@ -274,6 +294,6 @@ def client_lookup_from_controller(obj: Any) -> ClientLookup:
         ip=_get(obj, "last_ip") or _get(obj, "ip"),
         hostname=_get(obj, "hostname") or None,
         name=_get(obj, "name") or None,
-        is_online=_is_online(obj if isinstance(obj, dict) else getattr(obj, "raw", {}) or {}),
+        is_online=_is_online_from(obj),
         last_seen=_stringify_dt(_get(obj, "last_seen")),
     )
