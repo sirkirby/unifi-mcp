@@ -167,6 +167,78 @@ class TestCreateFirewallPolicyV2Validation:
         assert result["policy_id"] == "new_002"
 
     @pytest.mark.asyncio
+    async def test_create_adds_required_schedule_default(self):
+        """UniFi requires a schedule object on create even when callers omit it."""
+        zone_data = {
+            "name": "Allow HA to Hue",
+            "action": "ALLOW",
+            "source": {"zone_id": "internal", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+        captured = {}
+
+        async def capture_create(data):
+            captured.update(data)
+            mock = MagicMock()
+            mock.raw = {**data, "_id": "new_schedule"}
+            return mock
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.create_firewall_policy = AsyncMock(side_effect=capture_create)
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is True
+        assert captured["schedule"] == {"mode": "ALWAYS"}
+
+    @pytest.mark.asyncio
+    async def test_create_adds_block_create_allow_respond_false(self):
+        """BLOCK/REJECT creates must send create_allow_respond=false."""
+        zone_data = {
+            "name": "Block Clients to Management",
+            "action": "BLOCK",
+            "source": {"zone_id": "internal", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+        captured = {}
+
+        async def capture_create(data):
+            captured.update(data)
+            mock = MagicMock()
+            mock.raw = {**data, "_id": "new_block"}
+            return mock
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.create_firewall_policy = AsyncMock(side_effect=capture_create)
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is True
+        assert captured["create_allow_respond"] is False
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_block_create_allow_respond_true(self):
+        """A BLOCK policy cannot ask UniFi to create an allow-respond rule."""
+        zone_data = {
+            "name": "Bad Block",
+            "action": "BLOCK",
+            "create_allow_respond": True,
+            "source": {"zone_id": "internal", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is False
+        assert "create_allow_respond" in result["error"]
+
+    @pytest.mark.asyncio
     async def test_v2_policy_with_uppercase_action(self):
         """Uppercase ALLOW/BLOCK/REJECT action validates against the V2 schema."""
         zone_data = {

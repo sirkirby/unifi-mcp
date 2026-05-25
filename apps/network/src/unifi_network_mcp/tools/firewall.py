@@ -392,15 +392,19 @@ async def create_firewall_policy(
         logger.warning("Invalid firewall policy data: %s", err)
         return {"success": False, "error": "Validation Error: %s" % err}
 
-    # Apply the same defaults the legacy schema validator provided.
+    # Apply controller-required V2 defaults for create only. Do not move these
+    # into shared update validation; omitted update fields must remain untouched.
     validated_data: Dict[str, Any] = {
         "enabled": True,
         "protocol": "all",
         "ip_version": "BOTH",
         "logging": False,
         "connection_state_type": "ALL",
+        "schedule": {"mode": "ALWAYS"},
         **policy_data,
     }
+    if validated_data.get("schedule") is None:
+        validated_data["schedule"] = {"mode": "ALWAYS"}
 
     # Validate zone targeting requirements (matching_target_type, ips, network_ids)
     targeting_error = _validate_zone_targeting(validated_data)
@@ -411,6 +415,13 @@ async def create_firewall_policy(
     if not isinstance(action, str) or action.upper() not in ("ALLOW", "BLOCK", "REJECT"):
         return {"success": False, "error": "Invalid action '%s'. Must be ALLOW, BLOCK, or REJECT." % action}
     validated_data["action"] = action.upper()
+    if validated_data["action"] in ("BLOCK", "REJECT"):
+        if validated_data.get("create_allow_respond") is True:
+            return {
+                "success": False,
+                "error": "create_allow_respond must be false for BLOCK/REJECT firewall policies.",
+            }
+        validated_data.setdefault("create_allow_respond", False)
 
     policy_name = validated_data.get("name", "Unnamed Policy")
 
