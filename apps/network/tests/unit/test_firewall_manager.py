@@ -275,6 +275,11 @@ class TestFirewallPolicyOrdering:
     """Ordering is managed through the official integration API, not index PUTs."""
 
     @pytest.mark.asyncio
+    async def test_ordering_requires_api_key(self, firewall_manager):
+        with pytest.raises(RuntimeError, match="requires a UniFi API key"):
+            await firewall_manager._request_integration_api("get", "/v1/sites")
+
+    @pytest.mark.asyncio
     async def test_get_policy_ordering_uses_integration_endpoint(self, firewall_manager):
         firewall_manager._request_integration_api = AsyncMock(
             side_effect=[

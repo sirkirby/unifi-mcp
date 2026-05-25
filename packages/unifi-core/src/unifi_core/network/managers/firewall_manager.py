@@ -45,23 +45,23 @@ class FirewallManager:
     ) -> Dict[str, Any]:
         """Call the official UniFi Network integration API.
 
-        Prefer API-key auth when configured. Otherwise reuse the logged-in
-        local controller session, which works for local UniFi OS controllers.
+        The integration API rejects local controller cookies for these
+        endpoints, so an API key is required.
         """
+        if self._auth is None or not self._auth.has_api_key:
+            raise RuntimeError(
+                "Firewall policy ordering requires a UniFi API key. "
+                "Create a Network API token in UniFi Control Plane -> Integrations "
+                "and set UNIFI_API_KEY or UNIFI_NETWORK_API_KEY for the MCP."
+            )
+
         base_url = f"https://{self._connection.host}:{self._connection.port}"
         url = f"{base_url}/proxy/network/integration{path}"
         timeout = aiohttp.ClientTimeout(total=10)
 
-        if self._auth is not None and self._auth.has_api_key:
-            session = await self._auth.get_api_key_session()
-            close_session = True
-        else:
-            if not await self._connection.ensure_connected():
-                raise ConnectionError("Not connected to controller")
-            if self._connection._aiohttp_session is None or self._connection._aiohttp_session.closed:
-                raise ConnectionError("Controller session is not available")
-            session = self._connection._aiohttp_session
-            close_session = False
+        # get_api_key_session() supplies the required X-API-Key header. The
+        # integration endpoints reject the local controller cookie session.
+        session = await self._auth.get_api_key_session()
 
         try:
             async with session.request(
@@ -77,8 +77,7 @@ class FirewallManager:
                     raise RuntimeError(f"Integration API returned {resp.status} for {path}: {body}")
                 return body if isinstance(body, dict) else {}
         finally:
-            if close_session:
-                await session.close()
+            await session.close()
 
     async def _get_integration_site_id(self) -> str:
         """Resolve the configured site name/key to the integration API site ID."""

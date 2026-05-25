@@ -208,6 +208,10 @@ shape:
 For reorder operations, preserve the complete current policy ID set and only
 move IDs between or within `beforeSystemDefined` and `afterSystemDefined`.
 
+These tools require a UniFi Network integration API key (`UNIFI_API_KEY` or
+`UNIFI_NETWORK_API_KEY`). Local username/password controller cookies are not
+accepted by `/proxy/network/integration/v1/sites/.../firewall/policies/ordering`.
+
 ---
 
 ## Full Worked Example — Block IoT zone to Internal zone
