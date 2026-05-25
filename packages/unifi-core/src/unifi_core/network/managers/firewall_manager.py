@@ -73,7 +73,21 @@ class FirewallManager:
                 ssl=False,
                 timeout=timeout,
             ) as resp:
-                body = await resp.json(content_type=None)
+                try:
+                    body = await resp.json(content_type=None)
+                except Exception:
+                    try:
+                        body_text = (await resp.text()).strip()
+                    except Exception as text_error:
+                        body_text = f"<failed to read response body: {text_error}>"
+                    if len(body_text) > 500:
+                        body_text = f"{body_text[:500]}..."
+                    if resp.status < 200 or resp.status >= 300:
+                        detail = body_text or "<empty body>"
+                        raise RuntimeError(f"Integration API returned {resp.status} for {path}: {detail}")
+                    detail = body_text or "<empty body>"
+                    raise RuntimeError(f"Integration API returned non-JSON response for {path}: {detail}")
+
                 if resp.status < 200 or resp.status >= 300:
                     raise RuntimeError(f"Integration API returned {resp.status} for {path}: {body}")
                 return body if isinstance(body, dict) else {}
