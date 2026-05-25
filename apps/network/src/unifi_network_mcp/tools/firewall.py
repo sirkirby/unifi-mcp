@@ -623,6 +623,139 @@ async def update_firewall_policy(
 
 
 @server.tool(
+    name="unifi_get_firewall_policy_ordering",
+    description=(
+        "Get user-defined firewall policy ordering for a source/destination firewall zone pair. "
+        "Use this instead of reading policy index when planning rule order; UniFi assigns index values."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def get_firewall_policy_ordering(
+    source_firewall_zone_id: Annotated[
+        str,
+        Field(description="Source firewall zone ID from unifi_list_firewall_zones"),
+    ],
+    destination_firewall_zone_id: Annotated[
+        str,
+        Field(description="Destination firewall zone ID from unifi_list_firewall_zones"),
+    ],
+) -> Dict[str, Any]:
+    """Get user-defined firewall policy ordering for a zone pair."""
+    try:
+        if not source_firewall_zone_id or not destination_firewall_zone_id:
+            return {"success": False, "error": "source_firewall_zone_id and destination_firewall_zone_id are required"}
+
+        ordering = await firewall_manager.get_firewall_policy_ordering(
+            source_firewall_zone_id,
+            destination_firewall_zone_id,
+        )
+        return {
+            "success": True,
+            "source_firewall_zone_id": source_firewall_zone_id,
+            "destination_firewall_zone_id": destination_firewall_zone_id,
+            "ordering": ordering.get("orderedFirewallPolicyIds", ordering),
+        }
+    except Exception as e:
+        logger.error("Error getting firewall policy ordering: %s", e, exc_info=True)
+        return {"success": False, "error": f"Failed to get firewall policy ordering: {e}"}
+
+
+@server.tool(
+    name="unifi_reorder_firewall_policies",
+    description=(
+        "Reorder user-defined firewall policies for a source/destination firewall zone pair. "
+        "Pass the complete orderedFirewallPolicyIds object with beforeSystemDefined and "
+        "afterSystemDefined arrays. Requires confirmation."
+    ),
+    permission_category="firewall_policies",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def reorder_firewall_policies(
+    source_firewall_zone_id: Annotated[
+        str,
+        Field(description="Source firewall zone ID from unifi_list_firewall_zones"),
+    ],
+    destination_firewall_zone_id: Annotated[
+        str,
+        Field(description="Destination firewall zone ID from unifi_list_firewall_zones"),
+    ],
+    ordered_firewall_policy_ids: Annotated[
+        Dict[str, list[str]],
+        Field(
+            description=(
+                "Complete ordering object: {'beforeSystemDefined': [...], 'afterSystemDefined': [...]}. "
+                "Preserve all existing policy IDs unless intentionally moving them."
+            )
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the reorder. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Reorder user-defined firewall policies for a zone pair."""
+    try:
+        if not source_firewall_zone_id or not destination_firewall_zone_id:
+            return {"success": False, "error": "source_firewall_zone_id and destination_firewall_zone_id are required"}
+
+        before = ordered_firewall_policy_ids.get("beforeSystemDefined")
+        after = ordered_firewall_policy_ids.get("afterSystemDefined")
+        if not isinstance(before, list) or not isinstance(after, list):
+            return {
+                "success": False,
+                "error": "ordered_firewall_policy_ids must include beforeSystemDefined and afterSystemDefined arrays",
+            }
+
+        current = await firewall_manager.get_firewall_policy_ordering(
+            source_firewall_zone_id,
+            destination_firewall_zone_id,
+        )
+        current_ordering = current.get("orderedFirewallPolicyIds", current)
+        requested_ids = set(before) | set(after)
+        current_ids = set(current_ordering.get("beforeSystemDefined", [])) | set(
+            current_ordering.get("afterSystemDefined", [])
+        )
+        if requested_ids != current_ids:
+            return {
+                "success": False,
+                "error": (
+                    "Reorder payload must preserve the exact current policy ID set. "
+                    "Missing: %s; unexpected: %s"
+                    % (
+                        ", ".join(sorted(current_ids - requested_ids)) or "none",
+                        ", ".join(sorted(requested_ids - current_ids)) or "none",
+                    )
+                ),
+                "current_ordering": current_ordering,
+            }
+
+        if not confirm:
+            return update_preview(
+                resource_type="firewall_policy_ordering",
+                resource_id=f"{source_firewall_zone_id}->{destination_firewall_zone_id}",
+                resource_name="Firewall policy ordering",
+                current_state=current_ordering,
+                updates={"orderedFirewallPolicyIds": ordered_firewall_policy_ids},
+            )
+
+        result = await firewall_manager.reorder_firewall_policies(
+            source_firewall_zone_id,
+            destination_firewall_zone_id,
+            ordered_firewall_policy_ids,
+        )
+        return {
+            "success": True,
+            "source_firewall_zone_id": source_firewall_zone_id,
+            "destination_firewall_zone_id": destination_firewall_zone_id,
+            "ordering": result.get("orderedFirewallPolicyIds", result),
+        }
+    except Exception as e:
+        logger.error("Error reordering firewall policies: %s", e, exc_info=True)
+        return {"success": False, "error": f"Failed to reorder firewall policies: {e}"}
+
+
+@server.tool(
     name="unifi_list_firewall_zones",
     description="List controller firewall zones (V2 API).",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),

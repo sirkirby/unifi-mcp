@@ -183,6 +183,33 @@ Time ranges that span midnight are supported.
 
 ---
 
+## Policy Ordering
+
+Zone-based firewall policy ordering is not changed by updating `index`.
+Use the dedicated ordering API through the MCP tools:
+
+```text
+unifi_get_firewall_policy_ordering
+unifi_reorder_firewall_policies
+```
+
+Ordering is scoped to a source/destination firewall zone pair and has this
+shape:
+
+```json
+{
+  "orderedFirewallPolicyIds": {
+    "beforeSystemDefined": ["<policy-id>"],
+    "afterSystemDefined": ["<policy-id>"]
+  }
+}
+```
+
+For reorder operations, preserve the complete current policy ID set and only
+move IDs between or within `beforeSystemDefined` and `afterSystemDefined`.
+
+---
+
 ## Full Worked Example — Block IoT zone to Internal zone
 
 ```json

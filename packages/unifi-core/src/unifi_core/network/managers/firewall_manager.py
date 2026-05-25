@@ -3,11 +3,13 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
+import aiohttp
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.firewall_policy import FirewallPolicy
 from aiounifi.models.port_forward import PortForward
 from aiounifi.models.traffic_route import TrafficRoute
 
+from unifi_core.auth import UniFiAuth
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
@@ -15,6 +17,7 @@ from unifi_core.network.managers.connection_manager import ConnectionManager
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_FIREWALL_POLICIES = "firewall_policies"
+CACHE_PREFIX_FIREWALL_POLICY_ORDERING = "firewall_policy_ordering"
 CACHE_PREFIX_TRAFFIC_ROUTES = "traffic_routes"
 CACHE_PREFIX_PORT_FORWARDS = "port_forwards"
 CACHE_PREFIX_FIREWALL_ZONES = "firewall_zones"
@@ -24,13 +27,93 @@ CACHE_PREFIX_FIREWALL_GROUPS = "firewall_groups"
 class FirewallManager:
     """Manages Firewall Policies, Traffic Routes, and Port Forwards on the Unifi Controller."""
 
-    def __init__(self, connection_manager: ConnectionManager):
+    def __init__(self, connection_manager: ConnectionManager, auth: UniFiAuth | None = None):
         """Initialize the Firewall Manager.
 
         Args:
             connection_manager: The shared ConnectionManager instance.
         """
         self._connection = connection_manager
+        self._auth = auth
+
+    async def _request_integration_api(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, str]] = None,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Call the official UniFi Network integration API.
+
+        Prefer API-key auth when configured. Otherwise reuse the logged-in
+        local controller session, which works for local UniFi OS controllers.
+        """
+        base_url = f"https://{self._connection.host}:{self._connection.port}"
+        url = f"{base_url}/proxy/network/integration{path}"
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        if self._auth is not None and self._auth.has_api_key:
+            session = await self._auth.get_api_key_session()
+            close_session = True
+        else:
+            if not await self._connection.ensure_connected():
+                raise ConnectionError("Not connected to controller")
+            if self._connection._aiohttp_session is None or self._connection._aiohttp_session.closed:
+                raise ConnectionError("Controller session is not available")
+            session = self._connection._aiohttp_session
+            close_session = False
+
+        try:
+            async with session.request(
+                method.upper(),
+                url,
+                params=params,
+                json=data,
+                ssl=False,
+                timeout=timeout,
+            ) as resp:
+                body = await resp.json(content_type=None)
+                if resp.status < 200 or resp.status >= 300:
+                    raise RuntimeError(f"Integration API returned {resp.status} for {path}: {body}")
+                return body if isinstance(body, dict) else {}
+        finally:
+            if close_session:
+                await session.close()
+
+    async def _get_integration_site_id(self) -> str:
+        """Resolve the configured site name/key to the integration API site ID."""
+        cache_key = f"integrations_site_id_{self._connection.site}"
+        cached = self._connection.get_cached(cache_key)
+        if isinstance(cached, str) and cached:
+            return cached
+
+        result = await self._request_integration_api("get", "/v1/sites")
+        sites = result.get("data", []) if isinstance(result, dict) else []
+        if not isinstance(sites, list) or not sites:
+            return self._connection.site
+
+        configured = self._connection.site
+        match = next(
+            (
+                s
+                for s in sites
+                if isinstance(s, dict)
+                and configured
+                in {
+                    str(s.get("id", "")),
+                    str(s.get("name", "")),
+                    str(s.get("key", "")),
+                    str(s.get("siteId", "")),
+                }
+            ),
+            None,
+        )
+        if match is None and len(sites) == 1 and isinstance(sites[0], dict):
+            match = sites[0]
+
+        site_id = str((match or {}).get("id") or configured)
+        self._connection._update_cache(cache_key, site_id)
+        return site_id
 
     async def get_firewall_policies(self, include_predefined: bool = False) -> List[FirewallPolicy]:
         """Get firewall policies.
@@ -157,6 +240,78 @@ class FirewallManager:
             return True
         except Exception as e:
             logger.error("Error updating firewall policy %s: %s", policy_id, e, exc_info=True)
+            raise
+
+    async def get_firewall_policy_ordering(
+        self,
+        source_firewall_zone_id: str,
+        destination_firewall_zone_id: str,
+    ) -> Dict[str, Any]:
+        """Return user-defined firewall policy ordering for a zone pair.
+
+        UniFi's V2 policy ``index`` is controller-assigned. Reordering is a
+        separate official API surface scoped to a source/destination zone pair.
+        """
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+
+        params = {
+            "sourceFirewallZoneId": source_firewall_zone_id,
+            "destinationFirewallZoneId": destination_firewall_zone_id,
+        }
+        cache_key = (
+            f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_"
+            f"{source_firewall_zone_id}_{destination_firewall_zone_id}_{self._connection.site}"
+        )
+        cached_data: Optional[Dict[str, Any]] = self._connection.get_cached(cache_key)
+        if cached_data is not None:
+            return cached_data
+
+        try:
+            site_id = await self._get_integration_site_id()
+            result = await self._request_integration_api(
+                "get",
+                f"/v1/sites/{site_id}/firewall/policies/ordering",
+                params=params,
+            )
+            self._connection._update_cache(cache_key, result)
+            return result
+        except Exception as e:
+            logger.error("Error getting firewall policy ordering: %s", e, exc_info=True)
+            raise
+
+    async def reorder_firewall_policies(
+        self,
+        source_firewall_zone_id: str,
+        destination_firewall_zone_id: str,
+        ordered_firewall_policy_ids: Dict[str, List[str]],
+    ) -> Dict[str, Any]:
+        """Reorder user-defined firewall policies for a zone pair."""
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+
+        params = {
+            "sourceFirewallZoneId": source_firewall_zone_id,
+            "destinationFirewallZoneId": destination_firewall_zone_id,
+        }
+        payload = {"orderedFirewallPolicyIds": ordered_firewall_policy_ids}
+
+        try:
+            site_id = await self._get_integration_site_id()
+            response = await self._request_integration_api(
+                "put",
+                f"/v1/sites/{site_id}/firewall/policies/ordering",
+                params=params,
+                data=payload,
+            )
+            self._connection._invalidate_cache(
+                f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_{source_firewall_zone_id}_{destination_firewall_zone_id}"
+            )
+            self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_True_{self._connection.site}")
+            self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_False_{self._connection.site}")
+            return response if isinstance(response, dict) else {}
+        except Exception as e:
+            logger.error("Error reordering firewall policies: %s", e, exc_info=True)
             raise
 
     async def get_traffic_routes(self) -> List[TrafficRoute]:

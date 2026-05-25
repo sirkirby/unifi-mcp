@@ -718,6 +718,102 @@ class TestUpdateFirewallPolicyV2Fields:
 
 
 # ---------------------------------------------------------------------------
+# firewall policy ordering
+# ---------------------------------------------------------------------------
+
+
+class TestFirewallPolicyOrderingTools:
+    """Tools for the dedicated UniFi policy ordering endpoint."""
+
+    ORDERING = {
+        "beforeSystemDefined": ["allow-1", "allow-2"],
+        "afterSystemDefined": ["block-1"],
+    }
+
+    @pytest.mark.asyncio
+    async def test_get_policy_ordering_success(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_ordering = AsyncMock(
+                return_value={"orderedFirewallPolicyIds": copy.deepcopy(self.ORDERING)}
+            )
+
+            from unifi_network_mcp.tools.firewall import get_firewall_policy_ordering
+
+            result = await get_firewall_policy_ordering("zone-src", "zone-dst")
+
+        assert result["success"] is True
+        assert result["ordering"] == self.ORDERING
+        mock_fm.get_firewall_policy_ordering.assert_called_once_with("zone-src", "zone-dst")
+
+    @pytest.mark.asyncio
+    async def test_reorder_preview_preserves_current_id_set(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_ordering = AsyncMock(
+                return_value={"orderedFirewallPolicyIds": copy.deepcopy(self.ORDERING)}
+            )
+
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={
+                    "beforeSystemDefined": ["allow-2", "allow-1"],
+                    "afterSystemDefined": ["block-1"],
+                },
+                confirm=False,
+            )
+
+        assert result["success"] is True
+        assert result.get("requires_confirmation") is True
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_missing_policy_id(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_ordering = AsyncMock(
+                return_value={"orderedFirewallPolicyIds": copy.deepcopy(self.ORDERING)}
+            )
+
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={
+                    "beforeSystemDefined": ["allow-1"],
+                    "afterSystemDefined": ["block-1"],
+                },
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "Missing: allow-2" in result["error"]
+        mock_fm.reorder_firewall_policies.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_confirm_calls_manager(self):
+        requested = {"beforeSystemDefined": ["allow-2", "allow-1"], "afterSystemDefined": ["block-1"]}
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_ordering = AsyncMock(
+                return_value={"orderedFirewallPolicyIds": copy.deepcopy(self.ORDERING)}
+            )
+            mock_fm.reorder_firewall_policies = AsyncMock(return_value={"orderedFirewallPolicyIds": requested})
+
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids=requested,
+                confirm=True,
+            )
+
+        assert result["success"] is True
+        assert result["ordering"] == requested
+        mock_fm.reorder_firewall_policies.assert_called_once_with("zone-src", "zone-dst", requested)
+
+
+# ---------------------------------------------------------------------------
 # delete_firewall_policy
 # ---------------------------------------------------------------------------
 

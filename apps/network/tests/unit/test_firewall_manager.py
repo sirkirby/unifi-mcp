@@ -267,6 +267,53 @@ class TestToggleFirewallPolicyPayload:
 
 
 # ---------------------------------------------------------------------------
+# firewall policy ordering — official integration API support
+# ---------------------------------------------------------------------------
+
+
+class TestFirewallPolicyOrdering:
+    """Ordering is managed through the official integration API, not index PUTs."""
+
+    @pytest.mark.asyncio
+    async def test_get_policy_ordering_uses_integration_endpoint(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+            ]
+        )
+
+        result = await firewall_manager.get_firewall_policy_ordering("zone-src", "zone-dst")
+
+        assert result["orderedFirewallPolicyIds"]["beforeSystemDefined"] == ["allow"]
+        call = firewall_manager._request_integration_api.call_args_list[1]
+        assert call.args[0] == "get"
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        assert call.kwargs["params"] == {
+            "sourceFirewallZoneId": "zone-src",
+            "destinationFirewallZoneId": "zone-dst",
+        }
+
+    @pytest.mark.asyncio
+    async def test_reorder_policy_ordering_sends_complete_payload(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+            ]
+        )
+        ordering = {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}
+
+        result = await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        assert result["orderedFirewallPolicyIds"] == ordering
+        call = firewall_manager._request_integration_api.call_args_list[1]
+        assert call.args[0] == "put"
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        assert call.kwargs["data"] == {"orderedFirewallPolicyIds": ordering}
+
+
+# ---------------------------------------------------------------------------
 # ID-lookup iteration robustness — issue #151
 #
 # `next((x for x in items if x.id == target), None)` over aiounifi item
