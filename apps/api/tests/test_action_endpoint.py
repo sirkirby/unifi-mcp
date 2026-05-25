@@ -96,6 +96,7 @@ async def test_action_endpoint_dispatches_and_audits(tmp_path, monkeypatch) -> N
             "mac": "aa:bb",
             "ip": None,
             "hostname": None,
+            "name": None,
             "is_wired": False,
             "is_guest": False,
             "status": "online",

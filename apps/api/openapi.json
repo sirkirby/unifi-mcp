@@ -313,6 +313,17 @@
               }
             ],
             "title": "Mac"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
           }
         },
         "title": "BlockedClientModel",
@@ -644,6 +655,17 @@
               }
             ],
             "title": "Mac"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
           },
           "note": {
             "anyOf": [

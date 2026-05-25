@@ -43,6 +43,7 @@ class Client:
     mac: strawberry.ID | None
     ip: str | None
     hostname: str | None
+    name: str | None
     is_wired: bool
     is_guest: bool
     status: str
@@ -73,7 +74,8 @@ class Client:
         return cls(
             mac=raw.get("mac"),
             ip=raw.get("last_ip") or raw.get("ip"),
-            hostname=raw.get("hostname") or raw.get("name"),
+            hostname=raw.get("hostname") or None,
+            name=raw.get("name") or None,
             is_wired=bool(raw.get("is_wired", False)),
             is_guest=bool(raw.get("is_guest", False)),
             status="online" if raw.get("is_online") else "offline",
@@ -120,6 +122,7 @@ class Client:
 class BlockedClient:
     mac: strawberry.ID | None
     hostname: str | None
+    name: str | None
     last_seen: str | None
     blocked: bool
 
@@ -136,7 +139,8 @@ class BlockedClient:
     def from_manager_output(cls, obj: Any) -> "BlockedClient":
         return cls(
             mac=_get(obj, "mac"),
-            hostname=_get(obj, "hostname") or _get(obj, "name"),
+            hostname=_get(obj, "hostname") or None,
+            name=_get(obj, "name") or None,
             last_seen=_iso(_get(obj, "last_seen")),
             blocked=bool(_get(obj, "blocked", True)),
         )
@@ -151,6 +155,7 @@ class ClientLookup:
     mac: strawberry.ID | None
     ip: str | None
     hostname: str | None
+    name: str | None
     is_online: bool
     last_seen: str | None
 
@@ -163,7 +168,8 @@ class ClientLookup:
         return cls(
             mac=_get(obj, "mac"),
             ip=_get(obj, "last_ip") or _get(obj, "ip"),
-            hostname=_get(obj, "hostname") or _get(obj, "name"),
+            hostname=_get(obj, "hostname") or None,
+            name=_get(obj, "name") or None,
             is_online=bool(_get(obj, "is_online", False)),
             last_seen=_iso(_get(obj, "last_seen")),
         )

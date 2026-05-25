@@ -257,6 +257,7 @@ type BackupPage {
 type BlockedClient {
   mac: ID
   hostname: String
+  name: String
   lastSeen: String
   blocked: Boolean!
 }
@@ -350,6 +351,7 @@ type Client {
   mac: ID
   ip: String
   hostname: String
+  name: String
   isWired: Boolean!
   isGuest: Boolean!
   status: String!
@@ -382,6 +384,7 @@ type ClientLookup {
   mac: ID
   ip: String
   hostname: String
+  name: String
   isOnline: Boolean!
   lastSeen: String
 }
