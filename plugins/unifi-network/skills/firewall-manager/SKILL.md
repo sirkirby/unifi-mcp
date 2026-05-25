@@ -104,6 +104,7 @@ For app-aware rules (TikTok, YouTube, Steam, BitTorrent, etc.), consult `referen
 - `unifi_reorder_firewall_policies` — reorder user-defined policies for a source/destination zone pair. Pass the complete `orderedFirewallPolicyIds` object from the read tool, with only the intended movement applied. Preview first, then confirm.
 
 Policy ordering uses UniFi's official integration API and requires an API key (`UNIFI_API_KEY` or `UNIFI_NETWORK_API_KEY`). Local username/password controller sessions can read policies and zones, but they cannot call the ordering endpoint.
+The ordering endpoint uses integration API zone UUIDs internally. The local MCP manager accepts the normal `unifi_list_firewall_zones` IDs and translates them by zone name before calling the ordering endpoint.
 
 ---
 

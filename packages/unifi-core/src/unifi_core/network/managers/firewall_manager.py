@@ -18,6 +18,7 @@ logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_FIREWALL_POLICIES = "firewall_policies"
 CACHE_PREFIX_FIREWALL_POLICY_ORDERING = "firewall_policy_ordering"
+CACHE_PREFIX_INTEGRATION_FIREWALL_ZONES = "integration_firewall_zones"
 CACHE_PREFIX_TRAFFIC_ROUTES = "traffic_routes"
 CACHE_PREFIX_PORT_FORWARDS = "port_forwards"
 CACHE_PREFIX_FIREWALL_ZONES = "firewall_zones"
@@ -113,6 +114,78 @@ class FirewallManager:
         site_id = str((match or {}).get("id") or configured)
         self._connection._update_cache(cache_key, site_id)
         return site_id
+
+    async def _get_integration_firewall_zones(self, site_id: str | None = None) -> List[Dict[str, Any]]:
+        """Return firewall zones from the official integration API."""
+        if site_id is None:
+            site_id = await self._get_integration_site_id()
+        cache_key = f"{CACHE_PREFIX_INTEGRATION_FIREWALL_ZONES}_{site_id}"
+        cached = self._connection.get_cached(cache_key)
+        if isinstance(cached, list):
+            return cached
+
+        result = await self._request_integration_api(
+            "get",
+            f"/v1/sites/{site_id}/firewall/zones",
+        )
+        zones = result.get("data", []) if isinstance(result, dict) else []
+        if not isinstance(zones, list):
+            zones = []
+        zones = [zone for zone in zones if isinstance(zone, dict)]
+        self._connection._update_cache(cache_key, zones)
+        return zones
+
+    @staticmethod
+    def _zone_match_values(zone: Dict[str, Any]) -> set[str]:
+        values: set[str] = set()
+        for key in ("id", "_id", "name", "key", "zoneKey", "zone_key"):
+            value = zone.get(key)
+            if value is not None:
+                values.add(str(value).strip().lower())
+        return values
+
+    async def _resolve_integration_firewall_zone_id(
+        self,
+        zone_id: str,
+        integration_zones: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
+        """Translate local V2 firewall zone IDs to integration API zone IDs."""
+        candidate = str(zone_id).strip()
+        if not candidate:
+            return candidate
+
+        if integration_zones is None:
+            integration_zones = await self._get_integration_firewall_zones()
+        wanted = candidate.lower()
+        direct = next((z for z in integration_zones if wanted in self._zone_match_values(z)), None)
+        if direct and direct.get("id"):
+            return str(direct["id"])
+
+        try:
+            local_zones = await self.get_firewall_zones()
+        except Exception:
+            local_zones = []
+        local = next(
+            (
+                z
+                for z in local_zones
+                if isinstance(z, dict) and wanted in self._zone_match_values(z)
+            ),
+            None,
+        )
+        if not local:
+            return candidate
+
+        local_values = self._zone_match_values(local)
+        translated = next(
+            (
+                z
+                for z in integration_zones
+                if local_values & self._zone_match_values(z) and z.get("id")
+            ),
+            None,
+        )
+        return str(translated["id"]) if translated and translated.get("id") else candidate
 
     async def get_firewall_policies(self, include_predefined: bool = False) -> List[FirewallPolicy]:
         """Get firewall policies.
@@ -254,20 +327,29 @@ class FirewallManager:
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
+        site_id = await self._get_integration_site_id()
+        integration_zones = await self._get_integration_firewall_zones(site_id)
+        source_integration_zone_id = await self._resolve_integration_firewall_zone_id(
+            source_firewall_zone_id,
+            integration_zones,
+        )
+        destination_integration_zone_id = await self._resolve_integration_firewall_zone_id(
+            destination_firewall_zone_id,
+            integration_zones,
+        )
         params = {
-            "sourceFirewallZoneId": source_firewall_zone_id,
-            "destinationFirewallZoneId": destination_firewall_zone_id,
+            "sourceFirewallZoneId": source_integration_zone_id,
+            "destinationFirewallZoneId": destination_integration_zone_id,
         }
         cache_key = (
             f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_"
-            f"{source_firewall_zone_id}_{destination_firewall_zone_id}_{self._connection.site}"
+            f"{source_integration_zone_id}_{destination_integration_zone_id}_{self._connection.site}"
         )
         cached_data: Optional[Dict[str, Any]] = self._connection.get_cached(cache_key)
         if cached_data is not None:
             return cached_data
 
         try:
-            site_id = await self._get_integration_site_id()
             result = await self._request_integration_api(
                 "get",
                 f"/v1/sites/{site_id}/firewall/policies/ordering",
@@ -289,14 +371,23 @@ class FirewallManager:
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
+        site_id = await self._get_integration_site_id()
+        integration_zones = await self._get_integration_firewall_zones(site_id)
+        source_integration_zone_id = await self._resolve_integration_firewall_zone_id(
+            source_firewall_zone_id,
+            integration_zones,
+        )
+        destination_integration_zone_id = await self._resolve_integration_firewall_zone_id(
+            destination_firewall_zone_id,
+            integration_zones,
+        )
         params = {
-            "sourceFirewallZoneId": source_firewall_zone_id,
-            "destinationFirewallZoneId": destination_firewall_zone_id,
+            "sourceFirewallZoneId": source_integration_zone_id,
+            "destinationFirewallZoneId": destination_integration_zone_id,
         }
         payload = {"orderedFirewallPolicyIds": ordered_firewall_policy_ids}
 
         try:
-            site_id = await self._get_integration_site_id()
             response = await self._request_integration_api(
                 "put",
                 f"/v1/sites/{site_id}/firewall/policies/ordering",
@@ -304,7 +395,7 @@ class FirewallManager:
                 data=payload,
             )
             self._connection._invalidate_cache(
-                f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_{source_firewall_zone_id}_{destination_firewall_zone_id}"
+                f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_{source_integration_zone_id}_{destination_integration_zone_id}"
             )
             self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_True_{self._connection.site}")
             self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_False_{self._connection.site}")

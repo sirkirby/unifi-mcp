@@ -284,6 +284,7 @@ class TestFirewallPolicyOrdering:
         firewall_manager._request_integration_api = AsyncMock(
             side_effect=[
                 {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
                 {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
             ]
         )
@@ -292,6 +293,8 @@ class TestFirewallPolicyOrdering:
 
         assert result["orderedFirewallPolicyIds"]["beforeSystemDefined"] == ["allow"]
         call = firewall_manager._request_integration_api.call_args_list[1]
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/zones"
+        call = firewall_manager._request_integration_api.call_args_list[2]
         assert call.args[0] == "get"
         assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
         assert call.kwargs["params"] == {
@@ -304,6 +307,7 @@ class TestFirewallPolicyOrdering:
         firewall_manager._request_integration_api = AsyncMock(
             side_effect=[
                 {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
                 {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
             ]
         )
@@ -313,9 +317,44 @@ class TestFirewallPolicyOrdering:
 
         assert result["orderedFirewallPolicyIds"] == ordering
         call = firewall_manager._request_integration_api.call_args_list[1]
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/zones"
+        call = firewall_manager._request_integration_api.call_args_list[2]
         assert call.args[0] == "put"
         assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
         assert call.kwargs["data"] == {"orderedFirewallPolicyIds": ordering}
+
+    @pytest.mark.asyncio
+    async def test_policy_ordering_translates_v2_zone_ids_to_integration_ids(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {
+                    "data": [
+                        {"id": "integration-internal", "name": "Internal"},
+                        {"id": "integration-external", "name": "External"},
+                    ]
+                },
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": [], "afterSystemDefined": []}},
+            ]
+        )
+
+        with patch.object(
+            firewall_manager,
+            "get_firewall_zones",
+            new_callable=AsyncMock,
+            return_value=[
+                {"_id": "v2-internal", "name": "Internal", "zone_key": "internal"},
+                {"_id": "v2-external", "name": "External", "zone_key": "external"},
+            ],
+        ):
+            await firewall_manager.get_firewall_policy_ordering("v2-internal", "v2-external")
+
+        call = firewall_manager._request_integration_api.call_args_list[2]
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        assert call.kwargs["params"] == {
+            "sourceFirewallZoneId": "integration-internal",
+            "destinationFirewallZoneId": "integration-external",
+        }
 
 
 # ---------------------------------------------------------------------------
