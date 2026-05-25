@@ -125,31 +125,38 @@ async def test_raises_when_unknown_to_both_endpoints(mock_connection):
 
 
 @pytest.mark.asyncio
-async def test_raises_when_both_endpoints_raise(mock_connection):
-    """Both endpoints failing is an outage, not a not-found — but the
-    not-found exception is what callers expect; surface that uniformly.
+async def test_reraises_underlying_error_when_both_endpoints_raise(mock_connection):
+    """Both endpoints failing is an outage, not a not-found — surface the
+    underlying connectivity error so callers see the real cause instead
+    of a misleading UniFiNotFoundError.
     """
     mock_connection.controller.clients.update.side_effect = RuntimeError("boom")
     mock_connection.controller.clients_all.update.side_effect = RuntimeError("boom")
 
     mgr = ClientManager(mock_connection)
-    with pytest.raises(UniFiNotFoundError):
+    with pytest.raises(RuntimeError, match="boom"):
         await mgr.get_client_details("zz:zz:zz:zz:zz:zz")
 
 
 @pytest.mark.asyncio
-async def test_active_with_raw_dict_fallback_shape(mock_connection):
-    """When the active collection returns raw dicts (fallback path), still find the mac."""
+async def test_returns_object_with_raw_for_dict_only_source(mock_connection):
+    """Even when only one endpoint returns the client AND that endpoint
+    returned a raw dict (the /stat/sta fallback path), get_client_details
+    normalizes the return shape to an object with .mac and .raw so
+    downstream mutation tools can rely on attribute access.
+    """
     mac = "aa:bb:cc:dd:ee:ff"
     mock_connection.controller.clients.values.return_value = []
 
     async def request_returning_raw_dicts(_req):
-        return [{"mac": mac, "uptime": 99}]
+        return [{"mac": mac, "_id": "u1", "uptime": 99}]
 
     mock_connection.request = AsyncMock(side_effect=request_returning_raw_dicts)
     mock_connection.controller.clients_all.values.return_value = []
 
     mgr = ClientManager(mock_connection)
     result = await mgr.get_client_details(mac)
-    # Active-only result preserves raw dict shape
-    assert result.get("mac") == mac if isinstance(result, dict) else result.raw.get("mac") == mac
+    # Caller contract: .mac and .raw always available, regardless of source.
+    assert result.mac == mac
+    assert result.raw["_id"] == "u1"
+    assert result.raw["uptime"] == 99

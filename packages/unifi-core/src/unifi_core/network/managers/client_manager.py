@@ -119,11 +119,21 @@ class ClientManager:
         Each endpoint is queried independently so a transient failure on
         one does not block the lookup.
 
+        Returns:
+            An object with stable ``.mac`` and ``.raw`` attributes so
+            callers (rename_client, set_client_ip_settings, etc.) can
+            uniformly access the raw payload regardless of which endpoint
+            it came from.
+
         Raises:
-            UniFiNotFoundError: If the client is not present on either
-                endpoint.
+            UniFiNotFoundError: If at least one endpoint succeeded and
+                neither contained the requested MAC.
+            Original underlying exception: If *both* endpoints failed
+                (e.g., controller offline) — re-raised so callers see an
+                accurate failure cause instead of a misleading not-found.
         """
         active_record: Optional[Any] = None
+        active_error: Optional[Exception] = None
         try:
             active = await self.get_clients()
             for c in active:
@@ -131,9 +141,11 @@ class ClientManager:
                     active_record = c
                     break
         except Exception as e:
+            active_error = e
             logger.debug("/stat/sta fetch failed during get_client_details: %s", e)
 
         user_record: Optional[Any] = None
+        user_error: Optional[Exception] = None
         try:
             all_clients = await self.get_all_clients()
             for c in all_clients:
@@ -141,9 +153,14 @@ class ClientManager:
                     user_record = c
                     break
         except Exception as e:
+            user_error = e
             logger.debug("/rest/user fetch failed during get_client_details: %s", e)
 
         if active_record is None and user_record is None:
+            if active_error is not None and user_error is not None:
+                # Both endpoints failed — surface the underlying connectivity/
+                # outage error rather than misreporting it as a not-found.
+                raise active_error
             raise UniFiNotFoundError("client", client_mac)
 
         active_raw = self._raw_of(active_record)
@@ -155,7 +172,16 @@ class ClientManager:
             # local_dns_record, usergroup_id) that /stat/sta sometimes omits.
             merged_raw = {**user_raw, **active_raw}
             return SimpleNamespace(mac=client_mac, raw=merged_raw)
-        return active_record if active_record is not None else user_record
+
+        # Single-source: normalize to the same `.mac`/`.raw` contract so all
+        # callers can rely on attribute access without runtime type checks.
+        single = active_record if active_record is not None else user_record
+        single_raw = active_raw or user_raw
+        if isinstance(single, dict):
+            return SimpleNamespace(mac=single.get("mac"), raw=single)
+        if not hasattr(single, "raw") or not isinstance(getattr(single, "raw", None), dict):
+            return SimpleNamespace(mac=self._mac_of(single), raw=single_raw)
+        return single
 
     async def block_client(self, client_mac: str) -> bool:
         """Block a client by MAC address.
