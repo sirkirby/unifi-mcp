@@ -38,6 +38,29 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
+_ACTIVE_CONNECTION_KEYS: tuple[str, ...] = (
+    "_uptime_by_uap",
+    "_uptime_by_usw",
+    "_uptime_by_ugw",
+    "uptime",
+)
+
+
+def _is_online(raw: dict) -> bool:
+    """Mirror of unifi_core.network.models.clients._is_online — derives
+    online status from a controller record, falling back to
+    active-connection indicators when ``is_online`` is omitted by the
+    controller firmware.
+    """
+    if raw.get("is_online") is True:
+        return True
+    for key in _ACTIVE_CONNECTION_KEYS:
+        v = raw.get(key)
+        if isinstance(v, (int, float)) and v > 0:
+            return True
+    return False
+
+
 @strawberry.type(description="A client device on the UniFi Network controller.")
 class Client:
     mac: strawberry.ID | None
@@ -78,7 +101,7 @@ class Client:
             name=raw.get("name") or None,
             is_wired=bool(raw.get("is_wired", False)),
             is_guest=bool(raw.get("is_guest", False)),
-            status="online" if raw.get("is_online") else "offline",
+            status="online" if _is_online(raw) else "offline",
             last_seen=_iso(raw.get("last_seen")),
             first_seen=_iso(raw.get("first_seen")),
             note=raw.get("note") or None,
@@ -170,7 +193,7 @@ class ClientLookup:
             ip=_get(obj, "last_ip") or _get(obj, "ip"),
             hostname=_get(obj, "hostname") or None,
             name=_get(obj, "name") or None,
-            is_online=bool(_get(obj, "is_online", False)),
+            is_online=_is_online(obj if isinstance(obj, dict) else getattr(obj, "raw", {}) or {}),
             last_seen=_iso(_get(obj, "last_seen")),
         )
 

@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from aiounifi.models.api import ApiRequest
 from aiounifi.models.client import Client
@@ -88,17 +88,35 @@ class ClientManager:
             logger.error("Error getting all clients: %s", e)
             raise
 
+    @staticmethod
+    def _mac_of(c: Any) -> Optional[str]:
+        if isinstance(c, dict):
+            return c.get("mac")
+        raw = getattr(c, "raw", None)
+        if isinstance(raw, dict):
+            return raw.get("mac")
+        return getattr(c, "mac", None)
+
     async def get_client_details(self, client_mac: str) -> Client:
         """Get detailed information for a specific client by MAC address.
 
+        Prefers the live /stat/sta payload for currently-active clients
+        (richer fields and fresh timestamps), falling back to /rest/user
+        only for offline or never-active clients.
+
         Raises:
-            UniFiNotFoundError: If the client does not exist.
+            UniFiNotFoundError: If the client does not exist on either
+                endpoint.
         """
+        active = await self.get_clients()
+        for c in active:
+            if self._mac_of(c) == client_mac:
+                return c
         all_clients = await self.get_all_clients()
-        client: Optional[Client] = next((c for c in all_clients if c.mac == client_mac), None)
-        if client is None:
-            raise UniFiNotFoundError("client", client_mac)
-        return client
+        for c in all_clients:
+            if self._mac_of(c) == client_mac:
+                return c
+        raise UniFiNotFoundError("client", client_mac)
 
     async def block_client(self, client_mac: str) -> bool:
         """Block a client by MAC address.

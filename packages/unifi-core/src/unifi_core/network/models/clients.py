@@ -52,6 +52,31 @@ def _stringify_dt(ts: Any) -> Optional[str]:
         return None
 
 
+_ACTIVE_CONNECTION_KEYS: tuple[str, ...] = (
+    "_uptime_by_uap",
+    "_uptime_by_usw",
+    "_uptime_by_ugw",
+    "uptime",
+)
+
+
+def _is_online(raw: dict) -> bool:
+    """Derive a client's online status from a controller record.
+
+    `is_online` is the canonical signal, but some controller firmwares
+    (e.g. UniFi OS 5.x + Network 10.x on UDM SE) omit it from /stat/sta
+    payloads. Fall back to active-connection indicators that only appear
+    when a client is currently associated.
+    """
+    if raw.get("is_online") is True:
+        return True
+    for key in _ACTIVE_CONNECTION_KEYS:
+        v = raw.get(key)
+        if isinstance(v, (int, float)) and v > 0:
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
@@ -137,7 +162,7 @@ def client_from_controller(obj: Any) -> Client:
         name=raw.get("name") or None,
         is_wired=bool(raw.get("is_wired", False)),
         is_guest=bool(raw.get("is_guest", False)),
-        status="online" if raw.get("is_online") else "offline",
+        status="online" if _is_online(raw) else "offline",
         last_seen=_stringify_dt(raw.get("last_seen")),
         first_seen=_stringify_dt(raw.get("first_seen")),
         note=raw.get("note") or None,
@@ -249,6 +274,6 @@ def client_lookup_from_controller(obj: Any) -> ClientLookup:
         ip=_get(obj, "last_ip") or _get(obj, "ip"),
         hostname=_get(obj, "hostname") or None,
         name=_get(obj, "name") or None,
-        is_online=bool(_get(obj, "is_online", False)),
+        is_online=_is_online(obj if isinstance(obj, dict) else getattr(obj, "raw", {}) or {}),
         last_seen=_stringify_dt(_get(obj, "last_seen")),
     )

@@ -21,6 +21,9 @@ class TestClientIPSettings:
         conn._update_cache = MagicMock()
         conn._invalidate_cache = MagicMock()
         conn.controller = MagicMock()
+        conn.controller.clients = MagicMock()
+        conn.controller.clients.update = AsyncMock()
+        conn.controller.clients.values = MagicMock(return_value=[])
         conn.controller.clients_all = MagicMock()
         conn.controller.clients_all.update = AsyncMock()
         conn.controller.clients_all.values = MagicMock(return_value=[])
@@ -219,12 +222,16 @@ class TestClientIPSettings:
             fixed_ip="192.168.1.100",
         )
 
-        # Should have made two requests: one to note, one to set IP
-        assert mock_connection.request.call_count == 2
-        # First call should be to note the client
-        first_call = mock_connection.request.call_args_list[0]
-        first_request = first_call[0][0]
-        assert first_request.data["noted"] is True
+        # get_client_details first probes /stat/sta (active clients) before falling
+        # back to /rest/user, so we see: GET /stat/sta, PUT note=True, PUT fixed_ip.
+        # Assert the noted request is among them rather than position-indexing.
+        write_requests = [
+            call[0][0]
+            for call in mock_connection.request.call_args_list
+            if getattr(call[0][0], "data", None) is not None
+        ]
+        assert any(r.data.get("noted") is True for r in write_requests)
+        assert any(r.data.get("use_fixedip") is True for r in write_requests)
 
     @pytest.mark.asyncio
     async def test_invalidates_cache(self, client_manager, mock_connection, mock_client):

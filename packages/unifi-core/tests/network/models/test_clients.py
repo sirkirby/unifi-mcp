@@ -12,6 +12,7 @@ from unifi_core.network.models.clients import (
     CLIENT_READ_ONLY_FIELDS,
     CLIENTLOOKUP_READ_ONLY_FIELDS,
     Client,
+    _is_online,
     blocked_client_from_controller,
     client_from_controller,
     client_lookup_from_controller,
@@ -112,3 +113,69 @@ class TestClientLookupFromController:
 
     def test_read_only_covers_name(self) -> None:
         assert "name" in CLIENTLOOKUP_READ_ONLY_FIELDS
+
+
+class TestIsOnlineDerivation:
+    """Online-status derivation must survive controller firmwares that omit
+    `is_online` from /stat/sta payloads but populate active-connection
+    indicators (`_uptime_by_*`, `uptime`).
+    """
+
+    def test_is_online_true_explicit(self) -> None:
+        assert _is_online({"is_online": True}) is True
+
+    def test_is_online_false_explicit_no_uptime(self) -> None:
+        assert _is_online({"is_online": False}) is False
+
+    def test_is_online_missing_no_uptime(self) -> None:
+        assert _is_online({}) is False
+
+    def test_uptime_by_uap_positive(self) -> None:
+        assert _is_online({"_uptime_by_uap": 42}) is True
+
+    def test_uptime_by_usw_positive(self) -> None:
+        assert _is_online({"_uptime_by_usw": 1}) is True
+
+    def test_uptime_by_ugw_positive(self) -> None:
+        assert _is_online({"_uptime_by_ugw": 1}) is True
+
+    def test_plain_uptime_positive(self) -> None:
+        assert _is_online({"uptime": 1}) is True
+
+    def test_uptime_zero_is_offline(self) -> None:
+        assert _is_online({"_uptime_by_uap": 0, "uptime": 0}) is False
+
+    def test_uptime_non_numeric_is_ignored(self) -> None:
+        assert _is_online({"_uptime_by_uap": "yes"}) is False
+
+    def test_real_stat_sta_payload_no_is_online_field(self) -> None:
+        """Fixture mirrors a real /stat/sta record from UniFi OS 5.1.12 /
+        Network 10.3.58 (UDM SE): no `is_online` field, but rich active
+        indicators. Must derive as online.
+        """
+        raw = {
+            "mac": "bc:87:fa:2e:2d:d0",
+            "hostname": "Bose-Smart-Ultra-Soundbar",
+            "name": "Living Room Soundbar",
+            "uptime": 3639515,
+            "_uptime_by_uap": 3639515,
+            "_uptime_by_usw": 135036,
+            "_uptime_by_ugw": 135036,
+            "signal": -52,
+            "channel": 11,
+            "radio": "ng",
+            "essid": "FarisMesh-IoT",
+        }
+        assert _is_online(raw) is True
+        c = client_from_controller(raw)
+        assert c.status == "online"
+        assert c.name == "Living Room Soundbar"
+        assert c.hostname == "Bose-Smart-Ultra-Soundbar"
+
+    def test_client_lookup_derives_online_from_uptime(self) -> None:
+        lookup = client_lookup_from_controller({"mac": "aa:bb", "ip": "10.0.0.5", "uptime": 99})
+        assert lookup.is_online is True
+
+    def test_client_lookup_offline_when_no_indicators(self) -> None:
+        lookup = client_lookup_from_controller({"mac": "aa:bb", "ip": "10.0.0.5"})
+        assert lookup.is_online is False

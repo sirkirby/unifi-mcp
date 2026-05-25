@@ -146,11 +146,20 @@ async def get_client_details(
     try:
         client_obj = await client_manager.get_client_details(mac_address)
         if client_obj:
-            shaped = client_from_controller(client_obj)
+            raw = (
+                client_obj.raw
+                if hasattr(client_obj, "raw") and isinstance(client_obj.raw, dict)
+                else (client_obj if isinstance(client_obj, dict) else {})
+            )
+            shaped = client_from_controller(client_obj).model_dump(exclude_none=True)
+            # Honor the "full raw client object" promise: deliver all controller-reported
+            # fields, with the typed/normalized shape fields (ISO timestamps, derived
+            # status, user alias) taking precedence over the raw epoch/missing values.
+            merged: Dict[str, Any] = {**raw, **shaped}
             return {
                 "success": True,
                 "site": client_manager._connection.site,
-                "client": shaped.model_dump(exclude_none=True),
+                "client": merged,
             }
         return {
             "success": False,
