@@ -35,12 +35,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_lookup_by_ip",
-    description=(
-        "Quick IP-to-client lookup. Returns essential fields (MAC, `hostname` from "
-        "DHCP, `name` from the user-assigned alias in the UniFi console, online "
-        "status) to minimize token usage. Prefer `name` over `hostname` for "
-        "human-readable labels when both are set."
-    ),
+    description="Quick IP-to-client lookup. Returns essential fields (hostname, name, mac, is_online, last_seen) to minimize token usage.",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def lookup_by_ip(
@@ -73,13 +68,11 @@ async def lookup_by_ip(
 @server.tool(
     name="unifi_list_clients",
     description=(
-        "Returns connected clients with MAC, `name` (user-assigned alias from the "
-        "UniFi console), `hostname` (DHCP-reported), IP, `status` (online/offline), "
-        "connection type (wired/wireless), and for wireless clients: SSID, signal "
-        "dBm, channel, radio. Prefer `name` over `hostname` for human-readable "
-        "labels when both are set. Filter by filter_type (all/wired/wireless), set "
-        "include_offline=true for historical clients. For a single client's full "
-        "raw object, use unifi_get_client_details. For IP-to-client lookup, use "
+        "Returns connected clients with mac, name, hostname, ip, status (online/offline), "
+        "connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, "
+        "channel, radio. Filter by filter_type (all/wired/wireless), set "
+        "include_offline=true for historical clients. For a single client's full raw "
+        "object, use unifi_get_client_details. For IP-to-client lookup, use "
         "unifi_lookup_by_ip."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
@@ -138,15 +131,11 @@ async def list_clients(
 @server.tool(
     name="unifi_get_client_details",
     description=(
-        "Returns the full raw client object for one client by MAC address — 90+ "
-        "controller-reported fields including IP, `hostname` (DHCP), `name` (user "
-        "alias), connection stats, DHCP info, network/WLAN associations, traffic "
-        "counters, signal/RSSI, satisfaction scores, fixed-IP settings, and "
-        "user-table state (_id, noted, usergroup_id). Merges live /stat/sta data "
-        "with the /rest/user snapshot for active clients. `status` is derived "
-        "(online when the controller reports active connection indicators even if "
-        "the raw `is_online` field is missing). For a summary of all clients, use "
-        "unifi_list_clients."
+        "Returns the full raw client object for one client by MAC address — all "
+        "controller-reported fields including connection stats, DHCP info, "
+        "network/WLAN associations, traffic counters, signal/RSSI, and fixed-IP "
+        "settings. Merges live /stat/sta data with the /rest/user snapshot for "
+        "active clients. For a summary of all clients, use unifi_list_clients."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -190,11 +179,7 @@ async def get_client_details(
 
 @server.tool(
     name="unifi_list_blocked_clients",
-    description=(
-        "Lists clients/devices currently blocked from the network. Each entry "
-        "includes MAC, `hostname` (DHCP-reported), `name` (user-assigned alias "
-        "from the UniFi console), last_seen, and blocked=true."
-    ),
+    description="Lists clients/devices currently blocked from the network. Each entry includes mac, hostname, name, last_seen, blocked.",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def list_blocked_clients() -> Dict[str, Any]:

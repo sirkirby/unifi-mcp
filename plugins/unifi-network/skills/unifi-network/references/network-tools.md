@@ -44,9 +44,9 @@ Always available, regardless of registration mode.
 
 | Tool | Type | Description |
 |------|------|-------------|
-| `unifi_get_client_details` | Read | Returns the full raw client object for one client by MAC address — 90+ controller-reported fields including IP, `hostname` (DHCP), `name`... |
+| `unifi_get_client_details` | Read | Returns the full raw client object for one client by MAC address — all controller-reported fields including connection stats, DHCP info, ... |
 | `unifi_list_blocked_clients` | Read | Lists clients/devices currently blocked from the network. |
-| `unifi_list_clients` | Read | Returns connected clients with MAC, `name` (user-assigned alias from the UniFi console), `hostname` (DHCP-reported), IP, `status` (online... |
+| `unifi_list_clients` | Read | Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clien... |
 | `unifi_lookup_by_ip` | Read | Quick IP-to-client lookup. |
 | `unifi_authorize_guest` | Mutate | Authorize a guest client to access the guest network by MAC address |
 | `unifi_block_client` | Mutate | Block a client/device from the network by MAC address |
