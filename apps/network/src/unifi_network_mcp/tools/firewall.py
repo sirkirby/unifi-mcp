@@ -746,7 +746,7 @@ async def reorder_firewall_policies(
                 resource_type="firewall_policy_ordering",
                 resource_id=f"{source_firewall_zone_id}->{destination_firewall_zone_id}",
                 resource_name="Firewall policy ordering",
-                current_state=current_ordering,
+                current_state={"orderedFirewallPolicyIds": current_ordering},
                 updates={"orderedFirewallPolicyIds": ordered_firewall_policy_ids},
             )
 

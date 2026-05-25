@@ -838,6 +838,11 @@ class TestFirewallPolicyOrderingTools:
 
         assert result["success"] is True
         assert result.get("requires_confirmation") is True
+        assert result["preview"]["current"]["orderedFirewallPolicyIds"] == self.ORDERING
+        assert result["preview"]["proposed"]["orderedFirewallPolicyIds"] == {
+            "beforeSystemDefined": ["allow-2", "allow-1"],
+            "afterSystemDefined": ["block-1"],
+        }
 
     @pytest.mark.asyncio
     async def test_reorder_rejects_missing_policy_id(self):
