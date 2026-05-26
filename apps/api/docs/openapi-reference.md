@@ -509,6 +509,19 @@ Fetch a user by listing then filtering — no native get_user method.
 
 **Returns:** `Detail_FirewallGroupModel_`
 
+### `GET /v1/sites/{site_id}/firewall/policy-ordering` — Get Firewall Policy Ordering
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `source_firewall_zone_id` (query) (required)
+- `destination_firewall_zone_id` (query) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_FirewallPolicyOrderingModel_`
+
 ### `GET /v1/sites/{site_id}/firewall/rules` — List Firewall Rules
 
 

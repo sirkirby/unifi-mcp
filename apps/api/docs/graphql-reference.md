@@ -670,6 +670,13 @@ type FirewallGroupPage {
   nextCursor: String
 }
 
+"""
+User-defined firewall policy ordering for a source/destination zone pair.
+"""
+type FirewallPolicyOrdering {
+  ordering: JSON!
+}
+
 """A firewall policy rule."""
 type FirewallRule {
   id: ID
@@ -985,6 +992,11 @@ type NetworkQuery {
 
   """List firewall zones (typically a small flat list — no pagination)."""
   firewallZones(controller: ID!, site: String! = "default"): [FirewallZone!]!
+
+  """
+  Get user-defined firewall policy ordering for a source/destination zone pair.
+  """
+  firewallPolicyOrdering(controller: ID!, sourceFirewallZoneId: String!, destinationFirewallZoneId: String!, site: String! = "default"): FirewallPolicyOrdering!
 
   """List QoS rules on the given controller/site (paginated)."""
   qosRules(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): QosRulePage!
@@ -1892,6 +1904,7 @@ Read-only access to UniFi Network resources.
 - `firewallGroups: FirewallGroupPage!`  — List firewall address/port groups (paginated).
 - `firewallPolicies: FirewallRulePage!`  — List firewall policies/rules on the given controller/site (paginated).
 - `firewallPolicy: FirewallRule`  — Look up a single firewall policy/rule by id.
+- `firewallPolicyOrdering: FirewallPolicyOrdering!`  — Get user-defined firewall policy ordering for a source/destination zone pair.
 - `firewallZones: [FirewallZone!]!`  — List firewall zones (typically a small flat list — no pagination).
 - `gatewayStats: [StatPoint!]!`  — Gateway stats timeseries.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).

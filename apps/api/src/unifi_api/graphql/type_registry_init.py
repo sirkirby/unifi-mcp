@@ -365,6 +365,7 @@ def build_type_registry() -> TypeRegistry:
     # network/firewall (rules + groups + zones)
     reg.register_type("network", "firewall/rules", NetworkFirewallRuleType)
     reg.register_type("network", "firewall/rules/{id}", NetworkFirewallRuleType)
+    reg.register_type("network", "firewall/policy-ordering", NetworkFirewallPolicyOrderingType)
     reg.register_tool_type(
         "unifi_list_firewall_policies",
         NetworkFirewallRuleType,

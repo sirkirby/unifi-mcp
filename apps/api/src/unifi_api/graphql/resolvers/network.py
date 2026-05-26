@@ -49,6 +49,7 @@ from unifi_api.graphql.types.network.dpi import DpiApplication, DpiCategory
 from unifi_api.graphql.types.network.event import EventLog
 from unifi_api.graphql.types.network.firewall import (
     FirewallGroup,
+    FirewallPolicyOrdering,
     FirewallRule,
     FirewallZone,
 )
@@ -704,6 +705,42 @@ async def _fetch_firewall_zones(
             if cm.site != site:
                 await cm.set_site(site)
             return list(await mgr.get_firewall_zones())
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_firewall_policy_ordering(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    source_firewall_zone_id: str,
+    destination_firewall_zone_id: str,
+) -> dict:
+    key = (
+        f"network/firewall-policy-ordering/{controller}/{site}/{source_firewall_zone_id}/{destination_firewall_zone_id}"
+    )
+
+    async def _do() -> dict:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "firewall_manager",
+            )
+            cm = await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "network",
+            )
+            if cm.site != site:
+                await cm.set_site(site)
+            return dict(
+                await mgr.get_firewall_policy_ordering(
+                    source_firewall_zone_id,
+                    destination_firewall_zone_id,
+                )
+            )
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -2806,6 +2843,28 @@ class NetworkQuery:
         ctx: GraphQLContext = info.context
         raw = await _fetch_firewall_zones(ctx, controller, site)
         return [FirewallZone.from_manager_output(z) for z in raw]
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Get user-defined firewall policy ordering for a source/destination zone pair.",
+    )
+    async def firewall_policy_ordering(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        source_firewall_zone_id: str,
+        destination_firewall_zone_id: str,
+        site: str = "default",
+    ) -> FirewallPolicyOrdering:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_firewall_policy_ordering(
+            ctx,
+            controller,
+            site,
+            source_firewall_zone_id,
+            destination_firewall_zone_id,
+        )
+        return FirewallPolicyOrdering.from_manager_output(raw)
 
     # ---- QoS domain ------------------------------------------------------
 
