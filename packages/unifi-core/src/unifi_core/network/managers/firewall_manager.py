@@ -180,7 +180,11 @@ class FirewallManager:
         except Exception:
             local_zones = []
         local = next(
-            (z for z in local_zones if isinstance(z, dict) and wanted in self._zone_match_values(z)),
+            (
+                z
+                for z in local_zones
+                if isinstance(z, dict) and wanted in self._zone_match_values(z)
+            ),
             None,
         )
         if not local:
@@ -188,7 +192,11 @@ class FirewallManager:
 
         local_values = self._zone_match_values(local)
         translated = next(
-            (z for z in integration_zones if local_values & self._zone_match_values(z) and z.get("id")),
+            (
+                z
+                for z in integration_zones
+                if local_values & self._zone_match_values(z) and z.get("id")
+            ),
             None,
         )
         return str(translated["id"]) if translated and translated.get("id") else candidate

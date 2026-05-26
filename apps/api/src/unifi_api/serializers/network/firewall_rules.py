@@ -27,7 +27,6 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
         "unifi_update_firewall_policy": {"kind": RenderKind.DETAIL},
         "unifi_delete_firewall_policy": {"kind": RenderKind.DETAIL},
         "unifi_toggle_firewall_policy": {"kind": RenderKind.DETAIL},
-        "unifi_reorder_firewall_policies": {"kind": RenderKind.DETAIL},
         "unifi_create_firewall_group": {"kind": RenderKind.DETAIL},
         "unifi_update_firewall_group": {"kind": RenderKind.DETAIL},
         "unifi_delete_firewall_group": {"kind": RenderKind.DETAIL},
