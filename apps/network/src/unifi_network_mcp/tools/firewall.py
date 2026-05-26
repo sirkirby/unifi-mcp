@@ -4,6 +4,7 @@ Firewall policy tools for Unifi Network MCP server.
 
 import json
 import logging
+from collections import Counter
 from typing import Annotated, Any, Dict
 
 from mcp.types import ToolAnnotations
@@ -710,6 +711,9 @@ async def reorder_firewall_policies(
         if not source_firewall_zone_id or not destination_firewall_zone_id:
             return {"success": False, "error": "source_firewall_zone_id and destination_firewall_zone_id are required"}
 
+        if not isinstance(ordered_firewall_policy_ids, dict):
+            return {"success": False, "error": "ordered_firewall_policy_ids must be an object"}
+
         before = ordered_firewall_policy_ids.get("beforeSystemDefined")
         after = ordered_firewall_policy_ids.get("afterSystemDefined")
         if not isinstance(before, list) or not isinstance(after, list):
@@ -717,25 +721,43 @@ async def reorder_firewall_policies(
                 "success": False,
                 "error": "ordered_firewall_policy_ids must include beforeSystemDefined and afterSystemDefined arrays",
             }
+        requested_order = before + after
+        if not all(isinstance(policy_id, str) and policy_id for policy_id in requested_order):
+            return {
+                "success": False,
+                "error": "ordered_firewall_policy_ids arrays must contain only non-empty policy ID strings",
+            }
+        duplicate_ids = sorted(policy_id for policy_id, count in Counter(requested_order).items() if count > 1)
+        if duplicate_ids:
+            return {
+                "success": False,
+                "error": "Reorder payload contains duplicate policy IDs: %s" % ", ".join(duplicate_ids),
+            }
 
         current = await firewall_manager.get_firewall_policy_ordering(
             source_firewall_zone_id,
             destination_firewall_zone_id,
         )
         current_ordering = current.get("orderedFirewallPolicyIds", current)
-        requested_ids = set(before) | set(after)
-        current_ids = set(current_ordering.get("beforeSystemDefined", [])) | set(
-            current_ordering.get("afterSystemDefined", [])
-        )
-        if requested_ids != current_ids:
+        if not isinstance(current_ordering, dict):
+            return {
+                "success": False,
+                "error": "Current firewall policy ordering response did not include an ordering object",
+            }
+        current_order = current_ordering.get("beforeSystemDefined", []) + current_ordering.get("afterSystemDefined", [])
+        requested_counts = Counter(requested_order)
+        current_counts = Counter(current_order)
+        if requested_counts != current_counts:
+            missing_ids = sorted((current_counts - requested_counts).elements())
+            unexpected_ids = sorted((requested_counts - current_counts).elements())
             return {
                 "success": False,
                 "error": (
                     "Reorder payload must preserve the exact current policy ID set. "
                     "Missing: %s; unexpected: %s"
                     % (
-                        ", ".join(sorted(current_ids - requested_ids)) or "none",
-                        ", ".join(sorted(requested_ids - current_ids)) or "none",
+                        ", ".join(missing_ids) or "none",
+                        ", ".join(unexpected_ids) or "none",
                     )
                 ),
                 "current_ordering": current_ordering,

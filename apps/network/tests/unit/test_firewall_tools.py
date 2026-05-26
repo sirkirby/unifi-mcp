@@ -868,6 +868,46 @@ class TestFirewallPolicyOrderingTools:
         mock_fm.reorder_firewall_policies.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_reorder_rejects_duplicate_policy_id(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={
+                    "beforeSystemDefined": ["allow-1", "allow-1"],
+                    "afterSystemDefined": ["block-1"],
+                },
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "duplicate policy IDs: allow-1" in result["error"]
+        mock_fm.get_firewall_policy_ordering.assert_not_called()
+        mock_fm.reorder_firewall_policies.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_non_string_policy_id(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={
+                    "beforeSystemDefined": ["allow-1", None],
+                    "afterSystemDefined": ["block-1"],
+                },
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "non-empty policy ID strings" in result["error"]
+        mock_fm.get_firewall_policy_ordering.assert_not_called()
+        mock_fm.reorder_firewall_policies.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_reorder_confirm_calls_manager(self):
         requested = {"beforeSystemDefined": ["allow-2", "allow-1"], "afterSystemDefined": ["block-1"]}
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
