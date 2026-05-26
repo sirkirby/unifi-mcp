@@ -405,6 +405,39 @@ class TestFirewallPolicyOrdering:
         )
 
     @pytest.mark.asyncio
+    async def test_reorder_policy_ordering_ignores_cached_ordering_for_validation(self, firewall_manager):
+        stale_ordering = {
+            "orderedFirewallPolicyIds": {
+                "beforeSystemDefined": ["stale-allow"],
+                "afterSystemDefined": ["stale-block"],
+            }
+        }
+
+        def fake_get_cached(key):
+            if key == "firewall_policy_ordering_zone-src_zone-dst_default":
+                return stale_ordering
+            return None
+
+        firewall_manager._connection.get_cached.side_effect = fake_get_cached
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+            ]
+        )
+        ordering = {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}
+
+        result = await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        assert result["orderedFirewallPolicyIds"] == ordering
+        calls = firewall_manager._request_integration_api.call_args_list
+        assert calls[2].args[0] == "get"
+        assert calls[2].args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        assert calls[3].args[0] == "put"
+
+    @pytest.mark.asyncio
     async def test_reorder_rejects_duplicate_policy_ids_before_api_call(self, firewall_manager):
         firewall_manager._request_integration_api = AsyncMock()
         ordering = {"beforeSystemDefined": ["allow", "allow"], "afterSystemDefined": ["block"]}

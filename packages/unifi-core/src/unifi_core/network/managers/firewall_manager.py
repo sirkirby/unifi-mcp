@@ -455,14 +455,14 @@ class FirewallManager:
         )
 
         try:
-            current_ordering = self._connection.get_cached(cache_key)
-            if current_ordering is None:
-                current_ordering = await self._request_integration_api(
-                    "get",
-                    f"/v1/sites/{site_id}/firewall/policies/ordering",
-                    params=params,
-                )
-                self._connection._update_cache(cache_key, current_ordering)
+            # Reorder is a live mutation; validate against fresh controller
+            # state instead of a cached read to avoid TOCTOU policy drops.
+            current_ordering = await self._request_integration_api(
+                "get",
+                f"/v1/sites/{site_id}/firewall/policies/ordering",
+                params=params,
+            )
+            self._connection._update_cache(cache_key, current_ordering)
             self._validate_firewall_policy_ordering_matches_current(
                 ordered_firewall_policy_ids,
                 current_ordering,
