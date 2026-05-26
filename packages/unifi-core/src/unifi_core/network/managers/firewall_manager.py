@@ -180,11 +180,7 @@ class FirewallManager:
         except Exception:
             local_zones = []
         local = next(
-            (
-                z
-                for z in local_zones
-                if isinstance(z, dict) and wanted in self._zone_match_values(z)
-            ),
+            (z for z in local_zones if isinstance(z, dict) and wanted in self._zone_match_values(z)),
             None,
         )
         if not local:
@@ -192,11 +188,7 @@ class FirewallManager:
 
         local_values = self._zone_match_values(local)
         translated = next(
-            (
-                z
-                for z in integration_zones
-                if local_values & self._zone_match_values(z) and z.get("id")
-            ),
+            (z for z in integration_zones if local_values & self._zone_match_values(z) and z.get("id")),
             None,
         )
         return str(translated["id"]) if translated and translated.get("id") else candidate
@@ -409,7 +401,8 @@ class FirewallManager:
                 data=payload,
             )
             self._connection._invalidate_cache(
-                f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_{source_integration_zone_id}_{destination_integration_zone_id}"
+                f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_"
+                f"{source_integration_zone_id}_{destination_integration_zone_id}_{self._connection.site}"
             )
             self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_True_{self._connection.site}")
             self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_False_{self._connection.site}")

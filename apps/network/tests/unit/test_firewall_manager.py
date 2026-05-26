@@ -396,6 +396,9 @@ class TestFirewallPolicyOrdering:
         assert call.args[0] == "put"
         assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
         assert call.kwargs["data"] == {"orderedFirewallPolicyIds": ordering}
+        firewall_manager._connection._invalidate_cache.assert_any_call(
+            "firewall_policy_ordering_zone-src_zone-dst_default"
+        )
 
     @pytest.mark.asyncio
     async def test_policy_ordering_translates_v2_zone_ids_to_integration_ids(self, firewall_manager):
