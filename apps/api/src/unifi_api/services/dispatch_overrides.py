@@ -72,6 +72,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # Firewall: tool layer pre-fetches list to find policy by id.
     "unifi_toggle_firewall_policy": ("firewall_manager", "toggle_firewall_policy"),
     "unifi_update_firewall_policy": ("firewall_manager", "update_firewall_policy"),
+    "unifi_reorder_firewall_policies": ("firewall_manager", "reorder_firewall_policies"),
     # Toggle tools: tool body needs current enabled flag to compute new state.
     "unifi_toggle_port_forward": ("firewall_manager", "toggle_port_forward"),
     "unifi_toggle_qos_rule_enabled": ("qos_manager", "update_qos_rule"),
