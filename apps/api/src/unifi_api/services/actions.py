@@ -44,6 +44,7 @@ from typing import Any, Iterable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unifi_api.services.dispatch_overrides import (
+    CONFIRM_REQUIRED_TOOLS,
     DISPATCH_ARG_TRANSLATORS,
     DISPATCH_OVERRIDES,
 )
@@ -281,6 +282,8 @@ async def dispatch_action(
         raise DispatchEntryMissing(
             f"no dispatch entry for tool '{tool_name}' (no manager.method() call discovered in tool body)"
         )
+    if tool_name in CONFIRM_REQUIRED_TOOLS and not confirm:
+        raise ValueError(f"tool '{tool_name}' requires confirm=true")
 
     manager = await factory.get_domain_manager(
         session=session,

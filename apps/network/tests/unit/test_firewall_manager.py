@@ -383,6 +383,7 @@ class TestFirewallPolicyOrdering:
                 {"data": [{"id": "site-uuid", "name": "default"}]},
                 {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
                 {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
             ]
         )
         ordering = {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}
@@ -393,12 +394,57 @@ class TestFirewallPolicyOrdering:
         call = firewall_manager._request_integration_api.call_args_list[1]
         assert call.args[1] == "/v1/sites/site-uuid/firewall/zones"
         call = firewall_manager._request_integration_api.call_args_list[2]
+        assert call.args[0] == "get"
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        call = firewall_manager._request_integration_api.call_args_list[3]
         assert call.args[0] == "put"
         assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
         assert call.kwargs["data"] == {"orderedFirewallPolicyIds": ordering}
         firewall_manager._connection._invalidate_cache.assert_any_call(
             "firewall_policy_ordering_zone-src_zone-dst_default"
         )
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_duplicate_policy_ids_before_api_call(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock()
+        ordering = {"beforeSystemDefined": ["allow", "allow"], "afterSystemDefined": ["block"]}
+
+        with pytest.raises(ValueError, match="duplicate policy IDs: allow"):
+            await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        firewall_manager._request_integration_api.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_non_string_policy_ids_before_api_call(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock()
+        ordering = {"beforeSystemDefined": ["allow", None], "afterSystemDefined": ["block"]}
+
+        with pytest.raises(ValueError, match="non-empty policy ID strings"):
+            await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        firewall_manager._request_integration_api.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_payload_that_drops_current_policy(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
+                {
+                    "orderedFirewallPolicyIds": {
+                        "beforeSystemDefined": ["allow-1", "allow-2"],
+                        "afterSystemDefined": ["block-1"],
+                    }
+                },
+            ]
+        )
+        ordering = {"beforeSystemDefined": ["allow-1"], "afterSystemDefined": ["block-1"]}
+
+        with pytest.raises(ValueError, match="Missing: allow-2; unexpected: none"):
+            await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        assert firewall_manager._request_integration_api.call_count == 3
+        assert firewall_manager._request_integration_api.call_args_list[-1].args[0] == "get"
 
     @pytest.mark.asyncio
     async def test_policy_ordering_translates_v2_zone_ids_to_integration_ids(self, firewall_manager):

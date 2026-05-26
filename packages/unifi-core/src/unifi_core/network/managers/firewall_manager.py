@@ -1,6 +1,7 @@
 import copy
 import json
 import logging
+from collections import Counter
 from typing import Any, Dict, List, Optional
 
 import aiohttp
@@ -36,6 +37,60 @@ class FirewallManager:
         """
         self._connection = connection_manager
         self._auth = auth
+
+    @staticmethod
+    def _requested_firewall_policy_ids(ordered_firewall_policy_ids: Any) -> list[str]:
+        if not isinstance(ordered_firewall_policy_ids, dict):
+            raise ValueError("ordered_firewall_policy_ids must be an object")
+
+        before = ordered_firewall_policy_ids.get("beforeSystemDefined")
+        after = ordered_firewall_policy_ids.get("afterSystemDefined")
+        if not isinstance(before, list) or not isinstance(after, list):
+            raise ValueError(
+                "ordered_firewall_policy_ids must include beforeSystemDefined and afterSystemDefined arrays"
+            )
+
+        requested_order = before + after
+        if not all(isinstance(policy_id, str) and policy_id for policy_id in requested_order):
+            raise ValueError("ordered_firewall_policy_ids arrays must contain only non-empty policy ID strings")
+
+        duplicate_ids = sorted(policy_id for policy_id, count in Counter(requested_order).items() if count > 1)
+        if duplicate_ids:
+            raise ValueError("Reorder payload contains duplicate policy IDs: %s" % ", ".join(duplicate_ids))
+
+        return requested_order
+
+    @staticmethod
+    def _validate_firewall_policy_ordering_matches_current(
+        ordered_firewall_policy_ids: Any,
+        current_ordering_response: Any,
+    ) -> None:
+        requested_order = FirewallManager._requested_firewall_policy_ids(ordered_firewall_policy_ids)
+
+        if not isinstance(current_ordering_response, dict):
+            raise RuntimeError("Current firewall policy ordering response did not include an ordering object")
+        current_ordering = current_ordering_response.get("orderedFirewallPolicyIds", current_ordering_response)
+        if not isinstance(current_ordering, dict):
+            raise RuntimeError("Current firewall policy ordering response did not include an ordering object")
+
+        before = current_ordering.get("beforeSystemDefined", [])
+        after = current_ordering.get("afterSystemDefined", [])
+        if not isinstance(before, list) or not isinstance(after, list):
+            raise RuntimeError("Current firewall policy ordering response did not include ordering arrays")
+
+        current_order = before + after
+        requested_counts = Counter(requested_order)
+        current_counts = Counter(current_order)
+        if requested_counts != current_counts:
+            missing_ids = sorted((current_counts - requested_counts).elements())
+            unexpected_ids = sorted((requested_counts - current_counts).elements())
+            raise ValueError(
+                "Reorder payload must preserve the exact current policy ID set. Missing: %s; unexpected: %s"
+                % (
+                    ", ".join(missing_ids) or "none",
+                    ", ".join(unexpected_ids) or "none",
+                )
+            )
 
     async def _request_integration_api(
         self,
@@ -374,6 +429,8 @@ class FirewallManager:
         ordered_firewall_policy_ids: Dict[str, List[str]],
     ) -> Dict[str, Any]:
         """Reorder user-defined firewall policies for a zone pair."""
+        self._requested_firewall_policy_ids(ordered_firewall_policy_ids)
+
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
@@ -392,18 +449,32 @@ class FirewallManager:
             "destinationFirewallZoneId": destination_integration_zone_id,
         }
         payload = {"orderedFirewallPolicyIds": ordered_firewall_policy_ids}
+        cache_key = (
+            f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_"
+            f"{source_integration_zone_id}_{destination_integration_zone_id}_{self._connection.site}"
+        )
 
         try:
+            current_ordering = self._connection.get_cached(cache_key)
+            if current_ordering is None:
+                current_ordering = await self._request_integration_api(
+                    "get",
+                    f"/v1/sites/{site_id}/firewall/policies/ordering",
+                    params=params,
+                )
+                self._connection._update_cache(cache_key, current_ordering)
+            self._validate_firewall_policy_ordering_matches_current(
+                ordered_firewall_policy_ids,
+                current_ordering,
+            )
+
             response = await self._request_integration_api(
                 "put",
                 f"/v1/sites/{site_id}/firewall/policies/ordering",
                 params=params,
                 data=payload,
             )
-            self._connection._invalidate_cache(
-                f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_"
-                f"{source_integration_zone_id}_{destination_integration_zone_id}_{self._connection.site}"
-            )
+            self._connection._invalidate_cache(cache_key)
             self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_True_{self._connection.site}")
             self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_False_{self._connection.site}")
             return response if isinstance(response, dict) else {}

@@ -115,6 +115,16 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
 }
 
 
+CONFIRM_REQUIRED_TOOLS: frozenset[str] = frozenset(
+    {
+        # The manager now enforces the ordering invariants, but this action is
+        # still a live reorder operation. Keep the API action path aligned with
+        # the MCP tool's explicit confirmation contract.
+        "unifi_reorder_firewall_policies",
+    }
+)
+
+
 # Format: tool_name -> callable(args_dict) -> (positional_args, keyword_args)
 #
 # The default dispatcher invokes ``manager.method(**args)``. Tools registered
