@@ -1,13 +1,16 @@
 import copy
 import json
 import logging
+from collections import Counter
 from typing import Any, Dict, List, Optional
 
+import aiohttp
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.firewall_policy import FirewallPolicy
 from aiounifi.models.port_forward import PortForward
 from aiounifi.models.traffic_route import TrafficRoute
 
+from unifi_core.auth import UniFiAuth
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
@@ -15,6 +18,8 @@ from unifi_core.network.managers.connection_manager import ConnectionManager
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_FIREWALL_POLICIES = "firewall_policies"
+CACHE_PREFIX_FIREWALL_POLICY_ORDERING = "firewall_policy_ordering"
+CACHE_PREFIX_INTEGRATION_FIREWALL_ZONES = "integration_firewall_zones"
 CACHE_PREFIX_TRAFFIC_ROUTES = "traffic_routes"
 CACHE_PREFIX_PORT_FORWARDS = "port_forwards"
 CACHE_PREFIX_FIREWALL_ZONES = "firewall_zones"
@@ -24,13 +29,224 @@ CACHE_PREFIX_FIREWALL_GROUPS = "firewall_groups"
 class FirewallManager:
     """Manages Firewall Policies, Traffic Routes, and Port Forwards on the Unifi Controller."""
 
-    def __init__(self, connection_manager: ConnectionManager):
+    def __init__(self, connection_manager: ConnectionManager, auth: UniFiAuth | None = None):
         """Initialize the Firewall Manager.
 
         Args:
             connection_manager: The shared ConnectionManager instance.
         """
         self._connection = connection_manager
+        self._auth = auth
+
+    @staticmethod
+    def _requested_firewall_policy_ids(ordered_firewall_policy_ids: Any) -> list[str]:
+        if not isinstance(ordered_firewall_policy_ids, dict):
+            raise ValueError("ordered_firewall_policy_ids must be an object")
+
+        before = ordered_firewall_policy_ids.get("beforeSystemDefined")
+        after = ordered_firewall_policy_ids.get("afterSystemDefined")
+        if not isinstance(before, list) or not isinstance(after, list):
+            raise ValueError(
+                "ordered_firewall_policy_ids must include beforeSystemDefined and afterSystemDefined arrays"
+            )
+
+        requested_order = before + after
+        if not all(isinstance(policy_id, str) and policy_id for policy_id in requested_order):
+            raise ValueError("ordered_firewall_policy_ids arrays must contain only non-empty policy ID strings")
+
+        duplicate_ids = sorted(policy_id for policy_id, count in Counter(requested_order).items() if count > 1)
+        if duplicate_ids:
+            raise ValueError("Reorder payload contains duplicate policy IDs: %s" % ", ".join(duplicate_ids))
+
+        return requested_order
+
+    @staticmethod
+    def _validate_firewall_policy_ordering_matches_current(
+        ordered_firewall_policy_ids: Any,
+        current_ordering_response: Any,
+    ) -> None:
+        requested_order = FirewallManager._requested_firewall_policy_ids(ordered_firewall_policy_ids)
+
+        if not isinstance(current_ordering_response, dict):
+            raise RuntimeError("Current firewall policy ordering response did not include an ordering object")
+        current_ordering = current_ordering_response.get("orderedFirewallPolicyIds", current_ordering_response)
+        if not isinstance(current_ordering, dict):
+            raise RuntimeError("Current firewall policy ordering response did not include an ordering object")
+
+        before = current_ordering.get("beforeSystemDefined", [])
+        after = current_ordering.get("afterSystemDefined", [])
+        if not isinstance(before, list) or not isinstance(after, list):
+            raise RuntimeError("Current firewall policy ordering response did not include ordering arrays")
+
+        current_order = before + after
+        requested_counts = Counter(requested_order)
+        current_counts = Counter(current_order)
+        if requested_counts != current_counts:
+            missing_ids = sorted((current_counts - requested_counts).elements())
+            unexpected_ids = sorted((requested_counts - current_counts).elements())
+            raise ValueError(
+                "Reorder payload must preserve the exact current policy ID set. Missing: %s; unexpected: %s"
+                % (
+                    ", ".join(missing_ids) or "none",
+                    ", ".join(unexpected_ids) or "none",
+                )
+            )
+
+    async def _request_integration_api(
+        self,
+        method: str,
+        path: str,
+        params: Optional[Dict[str, str]] = None,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Call the official UniFi Network integration API.
+
+        The integration API rejects local controller cookies for these
+        endpoints, so an API key is required.
+        """
+        if self._auth is None or not self._auth.has_api_key:
+            raise RuntimeError(
+                "Firewall policy ordering requires a UniFi API key. "
+                "Create a Network API token in UniFi Control Plane -> Integrations "
+                "and set UNIFI_API_KEY or UNIFI_NETWORK_API_KEY for the MCP."
+            )
+
+        base_url = f"https://{self._connection.host}:{self._connection.port}"
+        url = f"{base_url}/proxy/network/integration{path}"
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        # get_api_key_session() supplies the required X-API-Key header. The
+        # integration endpoints reject the local controller cookie session.
+        session = await self._auth.get_api_key_session()
+
+        try:
+            async with session.request(
+                method.upper(),
+                url,
+                params=params,
+                json=data,
+                ssl=False,
+                timeout=timeout,
+            ) as resp:
+                try:
+                    body = await resp.json(content_type=None)
+                except Exception:
+                    try:
+                        body_text = (await resp.text()).strip()
+                    except Exception as text_error:
+                        body_text = f"<failed to read response body: {text_error}>"
+                    if len(body_text) > 500:
+                        body_text = f"{body_text[:500]}..."
+                    if resp.status < 200 or resp.status >= 300:
+                        detail = body_text or "<empty body>"
+                        raise RuntimeError(f"Integration API returned {resp.status} for {path}: {detail}")
+                    detail = body_text or "<empty body>"
+                    raise RuntimeError(f"Integration API returned non-JSON response for {path}: {detail}")
+
+                if resp.status < 200 or resp.status >= 300:
+                    raise RuntimeError(f"Integration API returned {resp.status} for {path}: {body}")
+                return body if isinstance(body, dict) else {}
+        finally:
+            await session.close()
+
+    async def _get_integration_site_id(self) -> str:
+        """Resolve the configured site name/key to the integration API site ID."""
+        cache_key = f"integrations_site_id_{self._connection.site}"
+        cached = self._connection.get_cached(cache_key)
+        if isinstance(cached, str) and cached:
+            return cached
+
+        result = await self._request_integration_api("get", "/v1/sites")
+        sites = result.get("data", []) if isinstance(result, dict) else []
+        if not isinstance(sites, list) or not sites:
+            return self._connection.site
+
+        configured = self._connection.site
+        match = next(
+            (
+                s
+                for s in sites
+                if isinstance(s, dict)
+                and configured
+                in {
+                    str(s.get("id", "")),
+                    str(s.get("name", "")),
+                    str(s.get("key", "")),
+                    str(s.get("siteId", "")),
+                }
+            ),
+            None,
+        )
+        if match is None and len(sites) == 1 and isinstance(sites[0], dict):
+            match = sites[0]
+
+        site_id = str((match or {}).get("id") or configured)
+        self._connection._update_cache(cache_key, site_id)
+        return site_id
+
+    async def _get_integration_firewall_zones(self, site_id: str | None = None) -> List[Dict[str, Any]]:
+        """Return firewall zones from the official integration API."""
+        if site_id is None:
+            site_id = await self._get_integration_site_id()
+        cache_key = f"{CACHE_PREFIX_INTEGRATION_FIREWALL_ZONES}_{site_id}"
+        cached = self._connection.get_cached(cache_key)
+        if isinstance(cached, list):
+            return cached
+
+        result = await self._request_integration_api(
+            "get",
+            f"/v1/sites/{site_id}/firewall/zones",
+        )
+        zones = result.get("data", []) if isinstance(result, dict) else []
+        if not isinstance(zones, list):
+            zones = []
+        zones = [zone for zone in zones if isinstance(zone, dict)]
+        self._connection._update_cache(cache_key, zones)
+        return zones
+
+    @staticmethod
+    def _zone_match_values(zone: Dict[str, Any]) -> set[str]:
+        values: set[str] = set()
+        for key in ("id", "_id", "name", "key", "zoneKey", "zone_key"):
+            value = zone.get(key)
+            if value is not None:
+                values.add(str(value).strip().lower())
+        return values
+
+    async def _resolve_integration_firewall_zone_id(
+        self,
+        zone_id: str,
+        integration_zones: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
+        """Translate local V2 firewall zone IDs to integration API zone IDs."""
+        candidate = str(zone_id).strip()
+        if not candidate:
+            return candidate
+
+        if integration_zones is None:
+            integration_zones = await self._get_integration_firewall_zones()
+        wanted = candidate.lower()
+        direct = next((z for z in integration_zones if wanted in self._zone_match_values(z)), None)
+        if direct and direct.get("id"):
+            return str(direct["id"])
+
+        try:
+            local_zones = await self.get_firewall_zones()
+        except Exception:
+            local_zones = []
+        local = next(
+            (z for z in local_zones if isinstance(z, dict) and wanted in self._zone_match_values(z)),
+            None,
+        )
+        if not local:
+            return candidate
+
+        local_values = self._zone_match_values(local)
+        translated = next(
+            (z for z in integration_zones if local_values & self._zone_match_values(z) and z.get("id")),
+            None,
+        )
+        return str(translated["id"]) if translated and translated.get("id") else candidate
 
     async def get_firewall_policies(self, include_predefined: bool = False) -> List[FirewallPolicy]:
         """Get firewall policies.
@@ -157,6 +373,113 @@ class FirewallManager:
             return True
         except Exception as e:
             logger.error("Error updating firewall policy %s: %s", policy_id, e, exc_info=True)
+            raise
+
+    async def get_firewall_policy_ordering(
+        self,
+        source_firewall_zone_id: str,
+        destination_firewall_zone_id: str,
+    ) -> Dict[str, Any]:
+        """Return user-defined firewall policy ordering for a zone pair.
+
+        UniFi's V2 policy ``index`` is controller-assigned. Reordering is a
+        separate official API surface scoped to a source/destination zone pair.
+        """
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+
+        site_id = await self._get_integration_site_id()
+        integration_zones = await self._get_integration_firewall_zones(site_id)
+        source_integration_zone_id = await self._resolve_integration_firewall_zone_id(
+            source_firewall_zone_id,
+            integration_zones,
+        )
+        destination_integration_zone_id = await self._resolve_integration_firewall_zone_id(
+            destination_firewall_zone_id,
+            integration_zones,
+        )
+        params = {
+            "sourceFirewallZoneId": source_integration_zone_id,
+            "destinationFirewallZoneId": destination_integration_zone_id,
+        }
+        cache_key = (
+            f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_"
+            f"{source_integration_zone_id}_{destination_integration_zone_id}_{self._connection.site}"
+        )
+        cached_data: Optional[Dict[str, Any]] = self._connection.get_cached(cache_key)
+        if cached_data is not None:
+            return cached_data
+
+        try:
+            result = await self._request_integration_api(
+                "get",
+                f"/v1/sites/{site_id}/firewall/policies/ordering",
+                params=params,
+            )
+            self._connection._update_cache(cache_key, result)
+            return result
+        except Exception as e:
+            logger.error("Error getting firewall policy ordering: %s", e, exc_info=True)
+            raise
+
+    async def reorder_firewall_policies(
+        self,
+        source_firewall_zone_id: str,
+        destination_firewall_zone_id: str,
+        ordered_firewall_policy_ids: Dict[str, List[str]],
+    ) -> Dict[str, Any]:
+        """Reorder user-defined firewall policies for a zone pair."""
+        self._requested_firewall_policy_ids(ordered_firewall_policy_ids)
+
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+
+        site_id = await self._get_integration_site_id()
+        integration_zones = await self._get_integration_firewall_zones(site_id)
+        source_integration_zone_id = await self._resolve_integration_firewall_zone_id(
+            source_firewall_zone_id,
+            integration_zones,
+        )
+        destination_integration_zone_id = await self._resolve_integration_firewall_zone_id(
+            destination_firewall_zone_id,
+            integration_zones,
+        )
+        params = {
+            "sourceFirewallZoneId": source_integration_zone_id,
+            "destinationFirewallZoneId": destination_integration_zone_id,
+        }
+        payload = {"orderedFirewallPolicyIds": ordered_firewall_policy_ids}
+        cache_key = (
+            f"{CACHE_PREFIX_FIREWALL_POLICY_ORDERING}_"
+            f"{source_integration_zone_id}_{destination_integration_zone_id}_{self._connection.site}"
+        )
+
+        try:
+            # Reorder is a live mutation; validate against fresh controller
+            # state instead of a cached read to avoid TOCTOU policy drops.
+            current_ordering = await self._request_integration_api(
+                "get",
+                f"/v1/sites/{site_id}/firewall/policies/ordering",
+                params=params,
+            )
+            self._connection._update_cache(cache_key, current_ordering)
+            self._validate_firewall_policy_ordering_matches_current(
+                ordered_firewall_policy_ids,
+                current_ordering,
+            )
+
+            response = await self._request_integration_api(
+                "put",
+                f"/v1/sites/{site_id}/firewall/policies/ordering",
+                params=params,
+                data=payload,
+            )
+            self._connection._invalidate_cache(cache_key)
+            self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_True_{self._connection.site}")
+            self._connection._invalidate_cache(f"{CACHE_PREFIX_FIREWALL_POLICIES}_False_{self._connection.site}")
+            return response if isinstance(response, dict) else {}
+        except Exception as e:
+            logger.error("Error reordering firewall policies: %s", e, exc_info=True)
             raise
 
     async def get_traffic_routes(self) -> List[TrafficRoute]:

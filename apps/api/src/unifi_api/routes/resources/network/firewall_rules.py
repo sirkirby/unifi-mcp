@@ -8,7 +8,7 @@ from unifi_core.exceptions import UniFiNotFoundError
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.graphql.pydantic_export import to_pydantic_model
-from unifi_api.graphql.types.network.firewall import FirewallRule
+from unifi_api.graphql.types.network.firewall import FirewallPolicyOrdering, FirewallRule
 from unifi_api.routes.resources._common import (
     require_capability,
     resolve_controller,
@@ -123,6 +123,56 @@ async def get_firewall_rule(
 
     type_class = request.app.state.type_registry.lookup("network", "firewall/rules/{id}")
     data = type_class.from_manager_output(rule).to_dict()
+    hint = type_class.render_hint("detail")
+    return {
+        "data": data,
+        "render_hint": hint,
+    }
+
+
+@router.get(
+    "/sites/{site_id}/firewall/policy-ordering",
+    response_model=Detail[to_pydantic_model(FirewallPolicyOrdering)],
+    dependencies=[Depends(require_scope(Scope.READ))],
+    tags=["network/firewall"],
+    summary="Get firewall policy ordering for a zone pair (integration API)",
+    description=(
+        "Returns the user-defined firewall policy ordering for a source/destination "
+        "zone pair, sourced from the UniFi public integration API. Policy IDs in the "
+        "response are integration-API UUIDs scoped to the ordering tool family — use "
+        "them only with the matching reorder action; they do NOT correspond to the "
+        "policy IDs returned by /firewall/rules or other controller-API endpoints. "
+        "Requires a UniFi API key (UNIFI_API_KEY)."
+    ),
+)
+async def get_firewall_policy_ordering(
+    request: Request,
+    site_id: str,
+    source_firewall_zone_id: str = Query(...),
+    destination_firewall_zone_id: str = Query(...),
+    controller=Depends(resolve_controller),
+) -> dict:
+    require_capability(controller, "network")
+    factory = request.app.state.manager_factory
+    sm = request.app.state.sessionmaker
+    async with sm() as session:
+        mgr = await factory.get_domain_manager(
+            session,
+            controller.id,
+            "network",
+            "firewall_manager",
+        )
+        cm = await factory.get_connection_manager(session, controller.id, "network")
+        if cm.site != site_id:
+            await cm.set_site(site_id)
+        ordering = await mgr.get_firewall_policy_ordering(
+            source_firewall_zone_id,
+            destination_firewall_zone_id,
+        )
+
+    tool_type = request.app.state.type_registry.lookup_tool("unifi_get_firewall_policy_ordering")
+    type_class = tool_type[0] if tool_type else FirewallPolicyOrdering
+    data = type_class.from_manager_output(ordering).to_dict()
     hint = type_class.render_hint("detail")
     return {
         "data": data,

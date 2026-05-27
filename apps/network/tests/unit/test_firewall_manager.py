@@ -43,6 +43,8 @@ def _make_mock_connection(routes: list | None = None):
     conn = MagicMock()
     conn.ensure_connected = AsyncMock(return_value=True)
     conn.request = AsyncMock(return_value={})
+    conn.host = "127.0.0.1"
+    conn.port = 443
     conn.site = "default"
     conn.get_cached = MagicMock(return_value=None)
     conn._update_cache = MagicMock()
@@ -264,6 +266,251 @@ class TestToggleFirewallPolicyPayload:
         with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[]):
             with pytest.raises(UniFiNotFoundError):
                 await firewall_manager.toggle_firewall_policy("does-not-exist")
+
+
+# ---------------------------------------------------------------------------
+# firewall policy ordering — official integration API support
+# ---------------------------------------------------------------------------
+
+
+class TestFirewallPolicyOrdering:
+    """Ordering is managed through the official integration API, not index PUTs."""
+
+    class _ResponseContext:
+        def __init__(self, response):
+            self.response = response
+
+        async def __aenter__(self):
+            return self.response
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Response:
+        def __init__(self, status=200, json_body=None, json_error=None, text_body=""):
+            self.status = status
+            self._json_body = json_body
+            self._json_error = json_error
+            self._text_body = text_body
+
+        async def json(self, content_type=None):
+            if self._json_error is not None:
+                raise self._json_error
+            return self._json_body
+
+        async def text(self):
+            return self._text_body
+
+    class _Session:
+        def __init__(self, response):
+            self.response = response
+            self.closed = False
+
+        def request(self, *args, **kwargs):
+            return TestFirewallPolicyOrdering._ResponseContext(self.response)
+
+        async def close(self):
+            self.closed = True
+
+    @staticmethod
+    def _manager_with_integration_response(mock_connection, response):
+        from unifi_core.network.managers.firewall_manager import FirewallManager
+
+        session = TestFirewallPolicyOrdering._Session(response)
+        auth = MagicMock()
+        auth.has_api_key = True
+        auth.get_api_key_session = AsyncMock(return_value=session)
+        return FirewallManager(mock_connection, auth), session
+
+    @pytest.mark.asyncio
+    async def test_ordering_requires_api_key(self, firewall_manager):
+        with pytest.raises(RuntimeError, match="requires a UniFi API key"):
+            await firewall_manager._request_integration_api("get", "/v1/sites")
+
+    @pytest.mark.asyncio
+    async def test_integration_api_reports_non_json_error_body(self, mock_connection):
+        response = self._Response(status=502, json_error=ValueError("not json"), text_body="<html>bad gateway</html>")
+        manager, session = self._manager_with_integration_response(mock_connection, response)
+
+        with pytest.raises(RuntimeError, match="Integration API returned 502.*bad gateway"):
+            await manager._request_integration_api("get", "/v1/sites")
+
+        assert session.closed is True
+
+    @pytest.mark.asyncio
+    async def test_integration_api_reports_empty_error_body(self, mock_connection):
+        response = self._Response(status=500, json_error=ValueError("not json"), text_body="")
+        manager, _session = self._manager_with_integration_response(mock_connection, response)
+
+        with pytest.raises(RuntimeError, match="Integration API returned 500.*<empty body>"):
+            await manager._request_integration_api("get", "/v1/sites")
+
+    @pytest.mark.asyncio
+    async def test_integration_api_reports_non_json_success_body(self, mock_connection):
+        response = self._Response(status=200, json_error=ValueError("not json"), text_body="OK")
+        manager, _session = self._manager_with_integration_response(mock_connection, response)
+
+        with pytest.raises(RuntimeError, match="Integration API returned non-JSON response.*OK"):
+            await manager._request_integration_api("get", "/v1/sites")
+
+    @pytest.mark.asyncio
+    async def test_get_policy_ordering_uses_integration_endpoint(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+            ]
+        )
+
+        result = await firewall_manager.get_firewall_policy_ordering("zone-src", "zone-dst")
+
+        assert result["orderedFirewallPolicyIds"]["beforeSystemDefined"] == ["allow"]
+        call = firewall_manager._request_integration_api.call_args_list[1]
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/zones"
+        call = firewall_manager._request_integration_api.call_args_list[2]
+        assert call.args[0] == "get"
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        assert call.kwargs["params"] == {
+            "sourceFirewallZoneId": "zone-src",
+            "destinationFirewallZoneId": "zone-dst",
+        }
+
+    @pytest.mark.asyncio
+    async def test_reorder_policy_ordering_sends_complete_payload(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+            ]
+        )
+        ordering = {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}
+
+        result = await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        assert result["orderedFirewallPolicyIds"] == ordering
+        call = firewall_manager._request_integration_api.call_args_list[1]
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/zones"
+        call = firewall_manager._request_integration_api.call_args_list[2]
+        assert call.args[0] == "get"
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        call = firewall_manager._request_integration_api.call_args_list[3]
+        assert call.args[0] == "put"
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        assert call.kwargs["data"] == {"orderedFirewallPolicyIds": ordering}
+        firewall_manager._connection._invalidate_cache.assert_any_call(
+            "firewall_policy_ordering_zone-src_zone-dst_default"
+        )
+
+    @pytest.mark.asyncio
+    async def test_reorder_policy_ordering_ignores_cached_ordering_for_validation(self, firewall_manager):
+        stale_ordering = {
+            "orderedFirewallPolicyIds": {
+                "beforeSystemDefined": ["stale-allow"],
+                "afterSystemDefined": ["stale-block"],
+            }
+        }
+
+        def fake_get_cached(key):
+            if key == "firewall_policy_ordering_zone-src_zone-dst_default":
+                return stale_ordering
+            return None
+
+        firewall_manager._connection.get_cached.side_effect = fake_get_cached
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}},
+            ]
+        )
+        ordering = {"beforeSystemDefined": ["allow"], "afterSystemDefined": ["block"]}
+
+        result = await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        assert result["orderedFirewallPolicyIds"] == ordering
+        calls = firewall_manager._request_integration_api.call_args_list
+        assert calls[2].args[0] == "get"
+        assert calls[2].args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        assert calls[3].args[0] == "put"
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_duplicate_policy_ids_before_api_call(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock()
+        ordering = {"beforeSystemDefined": ["allow", "allow"], "afterSystemDefined": ["block"]}
+
+        with pytest.raises(ValueError, match="duplicate policy IDs: allow"):
+            await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        firewall_manager._request_integration_api.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_non_string_policy_ids_before_api_call(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock()
+        ordering = {"beforeSystemDefined": ["allow", None], "afterSystemDefined": ["block"]}
+
+        with pytest.raises(ValueError, match="non-empty policy ID strings"):
+            await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        firewall_manager._request_integration_api.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_payload_that_drops_current_policy(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {"data": [{"id": "zone-src", "name": "Internal"}, {"id": "zone-dst", "name": "External"}]},
+                {
+                    "orderedFirewallPolicyIds": {
+                        "beforeSystemDefined": ["allow-1", "allow-2"],
+                        "afterSystemDefined": ["block-1"],
+                    }
+                },
+            ]
+        )
+        ordering = {"beforeSystemDefined": ["allow-1"], "afterSystemDefined": ["block-1"]}
+
+        with pytest.raises(ValueError, match="Missing: allow-2; unexpected: none"):
+            await firewall_manager.reorder_firewall_policies("zone-src", "zone-dst", ordering)
+
+        assert firewall_manager._request_integration_api.call_count == 3
+        assert firewall_manager._request_integration_api.call_args_list[-1].args[0] == "get"
+
+    @pytest.mark.asyncio
+    async def test_policy_ordering_translates_v2_zone_ids_to_integration_ids(self, firewall_manager):
+        firewall_manager._request_integration_api = AsyncMock(
+            side_effect=[
+                {"data": [{"id": "site-uuid", "name": "default"}]},
+                {
+                    "data": [
+                        {"id": "integration-internal", "name": "Internal"},
+                        {"id": "integration-external", "name": "External"},
+                    ]
+                },
+                {"orderedFirewallPolicyIds": {"beforeSystemDefined": [], "afterSystemDefined": []}},
+            ]
+        )
+
+        with patch.object(
+            firewall_manager,
+            "get_firewall_zones",
+            new_callable=AsyncMock,
+            return_value=[
+                {"_id": "v2-internal", "name": "Internal", "zone_key": "internal"},
+                {"_id": "v2-external", "name": "External", "zone_key": "external"},
+            ],
+        ):
+            await firewall_manager.get_firewall_policy_ordering("v2-internal", "v2-external")
+
+        call = firewall_manager._request_integration_api.call_args_list[2]
+        assert call.args[1] == "/v1/sites/site-uuid/firewall/policies/ordering"
+        assert call.kwargs["params"] == {
+            "sourceFirewallZoneId": "integration-internal",
+            "destinationFirewallZoneId": "integration-external",
+        }
 
 
 # ---------------------------------------------------------------------------

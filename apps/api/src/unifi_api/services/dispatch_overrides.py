@@ -72,6 +72,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # Firewall: tool layer pre-fetches list to find policy by id.
     "unifi_toggle_firewall_policy": ("firewall_manager", "toggle_firewall_policy"),
     "unifi_update_firewall_policy": ("firewall_manager", "update_firewall_policy"),
+    "unifi_reorder_firewall_policies": ("firewall_manager", "reorder_firewall_policies"),
     # Toggle tools: tool body needs current enabled flag to compute new state.
     "unifi_toggle_port_forward": ("firewall_manager", "toggle_port_forward"),
     "unifi_toggle_qos_rule_enabled": ("qos_manager", "update_qos_rule"),
@@ -112,6 +113,16 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "access_create_visitor": ("visitor_manager", "apply_create_visitor"),
     "access_delete_visitor": ("visitor_manager", "apply_delete_visitor"),
 }
+
+
+CONFIRM_REQUIRED_TOOLS: frozenset[str] = frozenset(
+    {
+        # The manager now enforces the ordering invariants, but this action is
+        # still a live reorder operation. Keep the API action path aligned with
+        # the MCP tool's explicit confirmation contract.
+        "unifi_reorder_firewall_policies",
+    }
+)
 
 
 # Format: tool_name -> callable(args_dict) -> (positional_args, keyword_args)

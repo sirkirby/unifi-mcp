@@ -81,6 +81,22 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 - No monkey-patches in production code
 - **Anchor:** `apps/network/src/unifi_network_mcp/config/config.yaml`
 
+### API Surface Boundaries
+
+UniFi exposes two API surfaces with disjoint ID namespaces: the V2 controller API (session cookie auth, Mongo ObjectIDs, `snake_case` fields) and the public Integration API (`X-API-Key` auth, UUIDs, `camelCase` fields). They are **not interchangeable**.
+
+- **Tool families share an ID space.** Tools whose returned IDs and accepted IDs are mutually portable form a *family*. Cross-family ID use is prohibited.
+- **Tool descriptions MUST scope IDs** when they could be confused with another family's IDs. Standard formula: *"These IDs are scoped to the <family> tool family — do not pass them to other <resource> tools."* This applies to MCP tool descriptions, GraphQL type/query descriptions, and REST route descriptions alike.
+- **Integration API tools MUST require an API key** and fail with a clear remediation message when it is missing. The auth check belongs in the manager so every tool in the family inherits it.
+- **Silent cross-API ID translation is banned** unless the mapping is 1:1, stable, and verified against live data. Zones are grandfathered (1:1 by name, stable, unique). Policies are not (membership diverges, no bridge field, V2 has duplicate names).
+- **Bridging tools must be explicit.** If you need to cross ID namespaces, write a named bridging tool (`unifi_resolve_<resource>_id_for_<family>`) with documented failure modes. Never bury the bridge inside another tool.
+
+**Enforcement:** family scoping is currently *guidance* — descriptions + this rule. There is no runtime or type-level check. Cross-family ID misuse fails at the controller (e.g., 400 from the integration API) and surfaces as a tool error. Stronger enforcement (typed IDs, runtime regex checks, manifest family field) is on the table if and when the integration-API surface grows beyond the current single family.
+
+**Reference family (Integration API):** `unifi_get_firewall_policy_ordering` + `unifi_reorder_firewall_policies` in `apps/network/src/unifi_network_mcp/tools/firewall.py`.
+
+**Skill:** `add-integration-api-tool` (full procedure for contributors).
+
 ## Permission System
 
 Two concepts:

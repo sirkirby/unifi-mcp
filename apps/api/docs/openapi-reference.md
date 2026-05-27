@@ -509,6 +509,22 @@ Fetch a user by listing then filtering — no native get_user method.
 
 **Returns:** `Detail_FirewallGroupModel_`
 
+### `GET /v1/sites/{site_id}/firewall/policy-ordering` — Get firewall policy ordering for a zone pair (integration API)
+
+
+Returns the user-defined firewall policy ordering for a source/destination zone pair, sourced from the UniFi public integration API. Policy IDs in the response are integration-API UUIDs scoped to the ordering tool family — use them only with the matching reorder action; they do NOT correspond to the policy IDs returned by /firewall/rules or other controller-API endpoints. Requires a UniFi API key (UNIFI_API_KEY).
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `source_firewall_zone_id` (query) (required)
+- `destination_firewall_zone_id` (query) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_FirewallPolicyOrderingModel_`
+
 ### `GET /v1/sites/{site_id}/firewall/rules` — List Firewall Rules
 
 

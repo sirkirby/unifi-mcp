@@ -11,6 +11,8 @@ Phase 6 PR2 Task 22 migration target. Three read shapes that used to live in
                       re-exposed as ``members``)
 - ``FirewallZone``  — list_firewall_zones (V2 zone-matrix; the manager strips
                       the policy-count matrix before this layer sees it)
+- ``FirewallPolicyOrdering`` — get_firewall_policy_ordering
+                               (Integration API zone-pair ordering object)
 
 The mutation ack serializer (``FirewallMutationAckSerializer``) is preserved
 in the original module since it covers create/update/delete/toggle for both
@@ -155,6 +157,33 @@ class FirewallZone:
             networks=_get(obj, "networks") or _get(obj, "network_ids") or [],
             default_policy=_get(obj, "default_policy") or _get(obj, "default_action"),
         )
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@strawberry.type(
+    description=(
+        "User-defined firewall policy ordering for a source/destination zone pair. "
+        "Policy IDs in this object are UniFi integration-API UUIDs scoped to the ordering "
+        "tool family — use them only with the matching reorder mutation. They do NOT "
+        "correspond to the policy IDs returned by other controller-API firewall queries."
+    )
+)
+class FirewallPolicyOrdering:
+    ordering: strawberry.scalars.JSON  # type: ignore[name-defined]
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {
+            "kind": kind,
+            "display_columns": ["ordering"],
+        }
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "FirewallPolicyOrdering":
+        raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
+        return cls(ordering=raw.get("orderedFirewallPolicyIds", raw))
 
     def to_dict(self) -> dict:
         return asdict(self)

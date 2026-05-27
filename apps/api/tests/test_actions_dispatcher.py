@@ -248,6 +248,7 @@ def test_dispatch_overrides_specific_targets() -> None:
     assert table["unifi_toggle_wlan"].method == "toggle_wlan"
     # Toggle that needs current state
     assert table["unifi_toggle_firewall_policy"].method == "toggle_firewall_policy"
+    assert table["unifi_reorder_firewall_policies"].method == "reorder_firewall_policies"
     # Stats: list-returning method (was AST-captured as get_X_details, a dict)
     assert table["unifi_get_device_stats"].manager_attr == "stats_manager"
     assert table["unifi_get_device_stats"].method == "get_device_stats"
@@ -265,6 +266,47 @@ def test_dispatch_overrides_specific_targets() -> None:
     assert table["access_lock_door"].method == "apply_lock_door"
     assert table["access_create_credential"].method == "apply_create_credential"
     assert table["access_update_policy"].method == "apply_update_policy"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_reorder_firewall_policies_requires_confirm() -> None:
+    entry = ToolEntry(
+        name="unifi_reorder_firewall_policies",
+        product="network",
+        category="firewall",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+    factory = MagicMock()
+
+    with pytest.raises(ValueError, match="requires confirm=true"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="unifi_reorder_firewall_policies",
+            controller_id="cid",
+            controller_products=["network"],
+            site="default",
+            args={
+                "source_firewall_zone_id": "zone-src",
+                "destination_firewall_zone_id": "zone-dst",
+                "ordered_firewall_policy_ids": {
+                    "beforeSystemDefined": ["allow-1"],
+                    "afterSystemDefined": ["block-1"],
+                },
+            },
+            confirm=False,
+            dispatch_table={
+                "unifi_reorder_firewall_policies": DispatchEntry(
+                    manager_attr="firewall_manager",
+                    method="reorder_firewall_policies",
+                ),
+            },
+        )
+
+    factory.get_domain_manager.assert_not_called()
 
 
 # -----------------------------------------------------------------------------

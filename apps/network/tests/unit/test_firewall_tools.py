@@ -167,6 +167,105 @@ class TestCreateFirewallPolicyV2Validation:
         assert result["policy_id"] == "new_002"
 
     @pytest.mark.asyncio
+    async def test_create_adds_required_schedule_default(self):
+        """UniFi requires a schedule object on create even when callers omit it."""
+        zone_data = {
+            "name": "Allow HA to Hue",
+            "action": "ALLOW",
+            "source": {"zone_id": "internal", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+        captured = {}
+
+        async def capture_create(data):
+            captured.update(data)
+            mock = MagicMock()
+            mock.raw = {**data, "_id": "new_schedule"}
+            return mock
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.create_firewall_policy = AsyncMock(side_effect=capture_create)
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is True
+        assert captured["schedule"] == {"mode": "ALWAYS"}
+
+    @pytest.mark.asyncio
+    async def test_create_adds_block_create_allow_respond_false(self):
+        """BLOCK/REJECT creates must send create_allow_respond=false."""
+        zone_data = {
+            "name": "Block Clients to Management",
+            "action": "BLOCK",
+            "source": {"zone_id": "internal", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+        captured = {}
+
+        async def capture_create(data):
+            captured.update(data)
+            mock = MagicMock()
+            mock.raw = {**data, "_id": "new_block"}
+            return mock
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.create_firewall_policy = AsyncMock(side_effect=capture_create)
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is True
+        assert captured["create_allow_respond"] is False
+
+    @pytest.mark.asyncio
+    async def test_create_adds_reject_create_allow_respond_false(self):
+        """REJECT creates must also send create_allow_respond=false."""
+        zone_data = {
+            "name": "Reject from External",
+            "action": "REJECT",
+            "source": {"zone_id": "external", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+        captured = {}
+
+        async def capture_create(data):
+            captured.update(data)
+            mock = MagicMock()
+            mock.raw = {**data, "_id": "new_reject"}
+            return mock
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.create_firewall_policy = AsyncMock(side_effect=capture_create)
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is True
+        assert captured["create_allow_respond"] is False
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_block_create_allow_respond_true(self):
+        """A BLOCK policy cannot ask UniFi to create an allow-respond rule."""
+        zone_data = {
+            "name": "Bad Block",
+            "action": "BLOCK",
+            "create_allow_respond": True,
+            "source": {"zone_id": "internal", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is False
+        assert "create_allow_respond" in result["error"]
+
+    @pytest.mark.asyncio
     async def test_v2_policy_with_uppercase_action(self):
         """Uppercase ALLOW/BLOCK/REJECT action validates against the V2 schema."""
         zone_data = {
@@ -715,6 +814,166 @@ class TestUpdateFirewallPolicyV2Fields:
         assert result["success"] is False
         assert "logging" in result["error"]
         assert "did not apply" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# firewall policy ordering
+# ---------------------------------------------------------------------------
+
+
+class TestFirewallPolicyOrderingTools:
+    """Tools for the dedicated UniFi policy ordering endpoint."""
+
+    ORDERING = {
+        "beforeSystemDefined": ["allow-1", "allow-2"],
+        "afterSystemDefined": ["block-1"],
+    }
+
+    @pytest.mark.asyncio
+    async def test_get_policy_ordering_success(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_ordering = AsyncMock(
+                return_value={"orderedFirewallPolicyIds": copy.deepcopy(self.ORDERING)}
+            )
+
+            from unifi_network_mcp.tools.firewall import get_firewall_policy_ordering
+
+            result = await get_firewall_policy_ordering("zone-src", "zone-dst")
+
+        assert result["success"] is True
+        assert result["ordering"] == self.ORDERING
+        mock_fm.get_firewall_policy_ordering.assert_called_once_with("zone-src", "zone-dst")
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_payload_missing_after_key(self):
+        """A payload that omits afterSystemDefined entirely must be rejected."""
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={"beforeSystemDefined": ["allow-1"]},
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "beforeSystemDefined" in result["error"]
+        assert "afterSystemDefined" in result["error"]
+        mock_fm.get_firewall_policy_ordering.assert_not_called()
+        mock_fm.reorder_firewall_policies.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_preview_preserves_current_id_set(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_ordering = AsyncMock(
+                return_value={"orderedFirewallPolicyIds": copy.deepcopy(self.ORDERING)}
+            )
+
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={
+                    "beforeSystemDefined": ["allow-2", "allow-1"],
+                    "afterSystemDefined": ["block-1"],
+                },
+                confirm=False,
+            )
+
+        assert result["success"] is True
+        assert result.get("requires_confirmation") is True
+        assert result["preview"]["current"]["orderedFirewallPolicyIds"] == self.ORDERING
+        assert result["preview"]["proposed"]["orderedFirewallPolicyIds"] == {
+            "beforeSystemDefined": ["allow-2", "allow-1"],
+            "afterSystemDefined": ["block-1"],
+        }
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_missing_policy_id(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_ordering = AsyncMock(
+                return_value={"orderedFirewallPolicyIds": copy.deepcopy(self.ORDERING)}
+            )
+
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={
+                    "beforeSystemDefined": ["allow-1"],
+                    "afterSystemDefined": ["block-1"],
+                },
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "Missing: allow-2" in result["error"]
+        mock_fm.reorder_firewall_policies.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_duplicate_policy_id(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={
+                    "beforeSystemDefined": ["allow-1", "allow-1"],
+                    "afterSystemDefined": ["block-1"],
+                },
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "duplicate policy IDs: allow-1" in result["error"]
+        mock_fm.get_firewall_policy_ordering.assert_not_called()
+        mock_fm.reorder_firewall_policies.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_non_string_policy_id(self):
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={
+                    "beforeSystemDefined": ["allow-1", None],
+                    "afterSystemDefined": ["block-1"],
+                },
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "non-empty policy ID strings" in result["error"]
+        mock_fm.get_firewall_policy_ordering.assert_not_called()
+        mock_fm.reorder_firewall_policies.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reorder_confirm_calls_manager(self):
+        requested = {"beforeSystemDefined": ["allow-2", "allow-1"], "afterSystemDefined": ["block-1"]}
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policy_ordering = AsyncMock(
+                return_value={"orderedFirewallPolicyIds": copy.deepcopy(self.ORDERING)}
+            )
+            mock_fm.reorder_firewall_policies = AsyncMock(return_value={"orderedFirewallPolicyIds": requested})
+
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids=requested,
+                confirm=True,
+            )
+
+        assert result["success"] is True
+        assert result["ordering"] == requested
+        mock_fm.reorder_firewall_policies.assert_called_once_with("zone-src", "zone-dst", requested)
 
 
 # ---------------------------------------------------------------------------

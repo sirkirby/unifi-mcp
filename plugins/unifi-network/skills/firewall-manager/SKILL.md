@@ -100,6 +100,11 @@ For app-aware rules (TikTok, YouTube, Steam, BitTorrent, etc.), consult `referen
 - `unifi_create_firewall_policy` — V2 zone-based create. Wraps the payload in `policy_data`. Pre-resolve zone IDs (`unifi_list_firewall_zones`) and network IDs (`unifi_list_networks`) before constructing it.
 - `unifi_update_firewall_policy` — partial update via fetch-merge-put. Pass only the fields you want to change in `update_data` (e.g., `{"enabled": true}`). This is the canonical way to enable/disable a policy because it preserves all other fields.
 - `unifi_toggle_firewall_policy` — convenience wrapper for flipping `enabled`. Prefer `unifi_update_firewall_policy` with `update_data={"enabled": …}` — it's the canonical fetch-merge-put path and produces the same result with no special casing.
+- `unifi_get_firewall_policy_ordering` — read the user-defined policy ordering for a source/destination zone pair. Use this when rule placement matters; do not infer editable order from `index`.
+- `unifi_reorder_firewall_policies` — reorder user-defined policies for a source/destination zone pair. Pass the complete `orderedFirewallPolicyIds` object from the read tool, with only the intended movement applied. Preview first, then confirm.
+
+Policy ordering uses UniFi's official integration API and requires an API key (`UNIFI_API_KEY` or `UNIFI_NETWORK_API_KEY`). Local username/password controller sessions can read policies and zones, but they cannot call the ordering endpoint.
+The ordering endpoint uses integration API zone UUIDs internally. The local MCP manager accepts the normal `unifi_list_firewall_zones` IDs and translates them by zone name before calling the ordering endpoint.
 
 ---
 
@@ -214,6 +219,7 @@ The "manual procedure" sections of older versions of this skill assumed a separa
 ## 9. Tips
 
 - `unifi_create_firewall_policy` is the canonical create tool. Pre-resolve zone IDs and network IDs before constructing the V2 payload.
+- `index` is controller-assigned on zone-based policies. Do not try to move policies by updating `index`; use the dedicated ordering tools.
 - Users say "block" loosely — clarify whether they want `REJECT` (sends RST/ICMP unreachable, faster client failure) or `BLOCK` (silent discard, less informative to the client). `REJECT` is usually right for internal traffic, `BLOCK` for external-facing rules. The action comparison table is in `references/firewall-schema.md`.
 - DPI rules are bypassable by VPNs. When blocking social media or gaming, also consider blocking the VPN/Proxy DPI category. See `references/dpi-categories.md`.
 - Rule order matters for `camera-isolation` and other multi-rule templates. Confirm ordering with `unifi_list_firewall_policies` after creation.

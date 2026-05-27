@@ -5,6 +5,7 @@
 # tool: unifi_list_firewall_groups
 # tool: unifi_get_firewall_group_details
 # tool: unifi_list_firewall_zones
+# tool: unifi_get_firewall_policy_ordering
 """
 
 from __future__ import annotations
@@ -151,3 +152,36 @@ async def test_firewall_zones_list(tmp_path, monkeypatch):
     assert len(zones) == 2
     names = {z["name"] for z in zones}
     assert names == {"LAN", "WAN"}
+
+
+@pytest.mark.asyncio
+async def test_firewall_policy_ordering_detail(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network")
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "firewall_manager", "get_firewall_policy_ordering"): {
+                "orderedFirewallPolicyIds": {
+                    "beforeSystemDefined": ["allow-1"],
+                    "afterSystemDefined": ["block-1"],
+                }
+            },
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ firewallPolicyOrdering(
+            controller: "{cid}",
+            sourceFirewallZoneId: "zone-src",
+            destinationFirewallZoneId: "zone-dst"
+        ) {{
+            ordering
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    ordering = body["data"]["network"]["firewallPolicyOrdering"]["ordering"]
+    assert ordering["beforeSystemDefined"] == ["allow-1"]
