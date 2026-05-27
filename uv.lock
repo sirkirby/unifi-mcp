@@ -1395,14 +1395,14 @@ wheels = [
 
 [[package]]
 name = "pytest-asyncio"
-version = "1.3.0"
+version = "1.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pytest" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/90/2c/8af215c0f776415f3590cac4f9086ccefd6fd463befeae41cd4d3f193e5a/pytest_asyncio-1.3.0.tar.gz", hash = "sha256:d7f52f36d231b80ee124cd216ffb19369aa168fc10095013c6b014a34d3ee9e5", size = 50087, upload-time = "2025-11-10T16:07:47.256Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/43/7c/d36d04db312ecf4298932ef77e6e4a9e8ad017906e24e34f0b0c361a2473/pytest_asyncio-1.4.0.tar.gz", hash = "sha256:c6c0d2259945122819f171a32ecea2c349ead889ee28176caaf492143424be42", size = 58514, upload-time = "2026-05-26T09:56:04.083Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e5/35/f8b19922b6a25bc0880171a2f1a003eaeb93657475193ab516fd87cac9da/pytest_asyncio-1.3.0-py3-none-any.whl", hash = "sha256:611e26147c7f77640e6d0a92a38ed17c3e9848063698d5c93d5aa7aa11cebff5", size = 15075, upload-time = "2025-11-10T16:07:45.537Z" },
+    { url = "https://files.pythonhosted.org/packages/03/e2/08a497ef684b88559c9cc5f4ad53a37e7b99e727094a86d6ea32536d5d3c/pytest_asyncio-1.4.0-py3-none-any.whl", hash = "sha256:933ca923a23075a87fb7070c0ec272a6848489824d887c85c812670932835aa1", size = 16930, upload-time = "2026-05-26T09:56:02.576Z" },
 ]
 
 [[package]]
@@ -1823,17 +1823,17 @@ fastapi = [
 
 [[package]]
 name = "typer"
-version = "0.25.1"
+version = "0.26.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
-    { name = "click" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "rich" },
     { name = "shellingham" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e4/51/9aed62104cea109b820bbd6c14245af756112017d309da813ef107d42e7e/typer-0.25.1.tar.gz", hash = "sha256:9616eb8853a09ffeabab1698952f33c6f29ffdbceb4eaeecf571880e8d7664cc", size = 122276, upload-time = "2026-04-30T19:32:16.964Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/67/a5/756f2e6bc81a7dd79aa3c625dd01b74cabc4516628cace2caaec09ca6ff2/typer-0.26.2.tar.gz", hash = "sha256:9b4f19e08fcc9427a822d1ef467b1fe76737a2f65c7926bdeba2337d73569b68", size = 198991, upload-time = "2026-05-27T10:41:39.166Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/f9/2b3ff4e56e5fa7debfaf9eb135d0da96f3e9a1d5b27222223c7296336e5f/typer-0.25.1-py3-none-any.whl", hash = "sha256:75caa44ed46a03fb2dab8808753ffacdbfea88495e74c85a28c5eefcf5f39c89", size = 58409, upload-time = "2026-04-30T19:32:18.271Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/a5/6ffd702beda8798b2b82ff70805ed4a66d963557e43a5d1823ab456251a4/typer-0.26.2-py3-none-any.whl", hash = "sha256:39beff72ffbb31978a5b545f677d57edb97c6f980f433b38556deb0af25f094d", size = 123123, upload-time = "2026-05-27T10:41:40.504Z" },
 ]
 
 [[package]]
@@ -1880,7 +1880,7 @@ wheels = [
 
 [[package]]
 name = "uiprotect"
-version = "10.5.1"
+version = "10.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -1901,9 +1901,9 @@ dependencies = [
     { name = "typer" },
     { name = "yarl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b9/f7/a36aa98bdbd42d6167e7f1f0dfd9f94e4ef4f9963b0a01ffc79ee6db218f/uiprotect-10.5.1.tar.gz", hash = "sha256:5b6b9f93be3c66d8082792acf041fa524b5dc0ca2570285a0ae69f8d53b01960", size = 147152, upload-time = "2026-05-22T22:54:06.259Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0d/de/d9c29cb19a8467d1fa5ea3d7a5dcc85eb7f6bb9aa1231af46dd72941299f/uiprotect-10.6.0.tar.gz", hash = "sha256:bb34914fbf1f91537df9a39a9277deb0d556873804f3b4b35dd9db6d6b052ba4", size = 148191, upload-time = "2026-05-26T07:15:35.775Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/df/6e/92647751f67196172995702b5e45d6d0d60f139e4d86e133fed5bddc5e83/uiprotect-10.5.1-py3-none-any.whl", hash = "sha256:9dbd20b06cdafa0df33882c37b823e051c36525dd2b2b8490e20b4da7ab74380", size = 163471, upload-time = "2026-05-22T22:54:04.693Z" },
+    { url = "https://files.pythonhosted.org/packages/d1/57/bab5adaf3553f13744bc65fb64fe3f030f7a1b9c39d183b996c30681d3c9/uiprotect-10.6.0-py3-none-any.whl", hash = "sha256:cd1e3e6a4d6c30fcb239bd8849a75770c8c3743c4d351ddfe5856328bde48240", size = 164898, upload-time = "2026-05-26T07:15:33.95Z" },
 ]
 
 [[package]]
@@ -1996,7 +1996,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.49" },
-    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.316.0,<0.320.0" },
+    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.315.5,<0.320.0" },
     { name = "typer", specifier = ">=0.13.0" },
     { name = "unifi-core", extras = ["access", "network", "protect"], editable = "packages/unifi-core" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
@@ -2044,7 +2044,7 @@ requires-dist = [
     { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.1.1" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=10.5.0" },
+    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=10.6.0" },
 ]
 provides-extras = ["access", "network", "protect"]
 
