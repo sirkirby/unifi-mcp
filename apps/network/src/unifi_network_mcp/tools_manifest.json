@@ -6315,7 +6315,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get user-defined firewall policy ordering for a source/destination firewall zone pair. Use this instead of reading policy index when planning rule order; UniFi assigns index values.",
+      "description": "Get user-defined firewall policy ordering for a source/destination firewall zone pair. Returns policy IDs from the UniFi public integration API (UUIDs); these IDs are scoped to the ordering tool family \u2014 pass them ONLY to unifi_reorder_firewall_policies. They do NOT correspond to the policy IDs returned by unifi_list_firewall_policies or any other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY).",
       "name": "unifi_get_firewall_policy_ordering",
       "schema": {
         "input": {
@@ -12506,7 +12506,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Reorder user-defined firewall policies for a source/destination firewall zone pair. Pass the complete orderedFirewallPolicyIds object with beforeSystemDefined and afterSystemDefined arrays. Requires confirmation.",
+      "description": "Reorder user-defined firewall policies for a source/destination firewall zone pair. Pass the complete orderedFirewallPolicyIds object obtained from unifi_get_firewall_policy_ordering (beforeSystemDefined + afterSystemDefined arrays). These IDs are integration-API UUIDs scoped to the ordering tool family \u2014 they are NOT the policy IDs returned by unifi_list_firewall_policies. Requires confirmation and a UniFi API key (UNIFI_API_KEY).",
       "name": "unifi_reorder_firewall_policies",
       "permission_action": "update",
       "permission_category": "firewall_policies",

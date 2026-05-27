@@ -221,6 +221,33 @@ class TestCreateFirewallPolicyV2Validation:
         assert captured["create_allow_respond"] is False
 
     @pytest.mark.asyncio
+    async def test_create_adds_reject_create_allow_respond_false(self):
+        """REJECT creates must also send create_allow_respond=false."""
+        zone_data = {
+            "name": "Reject from External",
+            "action": "REJECT",
+            "source": {"zone_id": "external", "matching_target": "ANY"},
+            "destination": {"zone_id": "internal", "matching_target": "ANY"},
+        }
+        captured = {}
+
+        async def capture_create(data):
+            captured.update(data)
+            mock = MagicMock()
+            mock.raw = {**data, "_id": "new_reject"}
+            return mock
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.create_firewall_policy = AsyncMock(side_effect=capture_create)
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is True
+        assert captured["create_allow_respond"] is False
+
+    @pytest.mark.asyncio
     async def test_create_rejects_block_create_allow_respond_true(self):
         """A BLOCK policy cannot ask UniFi to create an allow-respond rule."""
         zone_data = {
@@ -816,6 +843,25 @@ class TestFirewallPolicyOrderingTools:
         assert result["success"] is True
         assert result["ordering"] == self.ORDERING
         mock_fm.get_firewall_policy_ordering.assert_called_once_with("zone-src", "zone-dst")
+
+    @pytest.mark.asyncio
+    async def test_reorder_rejects_payload_missing_after_key(self):
+        """A payload that omits afterSystemDefined entirely must be rejected."""
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            from unifi_network_mcp.tools.firewall import reorder_firewall_policies
+
+            result = await reorder_firewall_policies(
+                source_firewall_zone_id="zone-src",
+                destination_firewall_zone_id="zone-dst",
+                ordered_firewall_policy_ids={"beforeSystemDefined": ["allow-1"]},
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "beforeSystemDefined" in result["error"]
+        assert "afterSystemDefined" in result["error"]
+        mock_fm.get_firewall_policy_ordering.assert_not_called()
+        mock_fm.reorder_firewall_policies.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_reorder_preview_preserves_current_id_set(self):

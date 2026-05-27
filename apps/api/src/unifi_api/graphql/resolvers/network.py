@@ -2846,7 +2846,13 @@ class NetworkQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description="Get user-defined firewall policy ordering for a source/destination zone pair.",
+        description=(
+            "Get user-defined firewall policy ordering for a source/destination zone pair. "
+            "Returns policy IDs from the UniFi integration API (UUIDs); these IDs are scoped "
+            "to the ordering tool family and do NOT correspond to the policy IDs returned by "
+            "firewallPolicies or other controller-API firewall queries. Requires a UniFi API "
+            "key (UNIFI_API_KEY)."
+        ),
     )
     async def firewall_policy_ordering(
         self,

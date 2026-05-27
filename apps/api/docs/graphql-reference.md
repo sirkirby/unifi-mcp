@@ -671,7 +671,7 @@ type FirewallGroupPage {
 }
 
 """
-User-defined firewall policy ordering for a source/destination zone pair.
+User-defined firewall policy ordering for a source/destination zone pair. Policy IDs in this object are UniFi integration-API UUIDs scoped to the ordering tool family — use them only with the matching reorder mutation. They do NOT correspond to the policy IDs returned by other controller-API firewall queries.
 """
 type FirewallPolicyOrdering {
   ordering: JSON!
@@ -994,7 +994,7 @@ type NetworkQuery {
   firewallZones(controller: ID!, site: String! = "default"): [FirewallZone!]!
 
   """
-  Get user-defined firewall policy ordering for a source/destination zone pair.
+  Get user-defined firewall policy ordering for a source/destination zone pair. Returns policy IDs from the UniFi integration API (UUIDs); these IDs are scoped to the ordering tool family and do NOT correspond to the policy IDs returned by firewallPolicies or other controller-API firewall queries. Requires a UniFi API key (UNIFI_API_KEY).
   """
   firewallPolicyOrdering(controller: ID!, sourceFirewallZoneId: String!, destinationFirewallZoneId: String!, site: String! = "default"): FirewallPolicyOrdering!
 
@@ -1904,7 +1904,7 @@ Read-only access to UniFi Network resources.
 - `firewallGroups: FirewallGroupPage!`  — List firewall address/port groups (paginated).
 - `firewallPolicies: FirewallRulePage!`  — List firewall policies/rules on the given controller/site (paginated).
 - `firewallPolicy: FirewallRule`  — Look up a single firewall policy/rule by id.
-- `firewallPolicyOrdering: FirewallPolicyOrdering!`  — Get user-defined firewall policy ordering for a source/destination zone pair.
+- `firewallPolicyOrdering: FirewallPolicyOrdering!`  — Get user-defined firewall policy ordering for a source/destination zone pair. Returns policy IDs from the UniFi integration API (UUIDs); these IDs are scoped to the ordering tool family and do NOT correspond to the policy IDs returned by firewallPolicies or other controller-API firewall queries. Requires a UniFi API key (UNIFI_API_KEY).
 - `firewallZones: [FirewallZone!]!`  — List firewall zones (typically a small flat list — no pagination).
 - `gatewayStats: [StatPoint!]!`  — Gateway stats timeseries.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).

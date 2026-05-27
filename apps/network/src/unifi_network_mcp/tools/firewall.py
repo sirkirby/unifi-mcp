@@ -638,7 +638,10 @@ async def update_firewall_policy(
     name="unifi_get_firewall_policy_ordering",
     description=(
         "Get user-defined firewall policy ordering for a source/destination firewall zone pair. "
-        "Use this instead of reading policy index when planning rule order; UniFi assigns index values."
+        "Returns policy IDs from the UniFi public integration API (UUIDs); these IDs are scoped "
+        "to the ordering tool family — pass them ONLY to unifi_reorder_firewall_policies. They "
+        "do NOT correspond to the policy IDs returned by unifi_list_firewall_policies or any "
+        "other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY)."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -676,8 +679,11 @@ async def get_firewall_policy_ordering(
     name="unifi_reorder_firewall_policies",
     description=(
         "Reorder user-defined firewall policies for a source/destination firewall zone pair. "
-        "Pass the complete orderedFirewallPolicyIds object with beforeSystemDefined and "
-        "afterSystemDefined arrays. Requires confirmation."
+        "Pass the complete orderedFirewallPolicyIds object obtained from "
+        "unifi_get_firewall_policy_ordering (beforeSystemDefined + afterSystemDefined arrays). "
+        "These IDs are integration-API UUIDs scoped to the ordering tool family — they are NOT "
+        "the policy IDs returned by unifi_list_firewall_policies. Requires confirmation and a "
+        "UniFi API key (UNIFI_API_KEY)."
     ),
     permission_category="firewall_policies",
     permission_action="update",

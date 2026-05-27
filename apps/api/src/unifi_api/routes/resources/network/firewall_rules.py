@@ -135,6 +135,15 @@ async def get_firewall_rule(
     response_model=Detail[to_pydantic_model(FirewallPolicyOrdering)],
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/firewall"],
+    summary="Get firewall policy ordering for a zone pair (integration API)",
+    description=(
+        "Returns the user-defined firewall policy ordering for a source/destination "
+        "zone pair, sourced from the UniFi public integration API. Policy IDs in the "
+        "response are integration-API UUIDs scoped to the ordering tool family — use "
+        "them only with the matching reorder action; they do NOT correspond to the "
+        "policy IDs returned by /firewall/rules or other controller-API endpoints. "
+        "Requires a UniFi API key (UNIFI_API_KEY)."
+    ),
 )
 async def get_firewall_policy_ordering(
     request: Request,

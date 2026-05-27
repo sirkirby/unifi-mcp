@@ -162,7 +162,14 @@ class FirewallZone:
         return asdict(self)
 
 
-@strawberry.type(description="User-defined firewall policy ordering for a source/destination zone pair.")
+@strawberry.type(
+    description=(
+        "User-defined firewall policy ordering for a source/destination zone pair. "
+        "Policy IDs in this object are UniFi integration-API UUIDs scoped to the ordering "
+        "tool family — use them only with the matching reorder mutation. They do NOT "
+        "correspond to the policy IDs returned by other controller-API firewall queries."
+    )
+)
 class FirewallPolicyOrdering:
     ordering: strawberry.scalars.JSON  # type: ignore[name-defined]
 
