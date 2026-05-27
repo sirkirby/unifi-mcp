@@ -7,7 +7,7 @@ including managing LAN networks and WLANs.
 
 import json
 import logging
-from typing import Annotated, Any, Dict
+from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field
@@ -45,15 +45,38 @@ logger = logging.getLogger(__name__)
 @server.tool(
     name="unifi_list_networks",
     description=(
-        "Returns all configured networks (LAN, WAN, VLAN-only) with name, purpose, "
+        "Returns configured networks (LAN, WAN, VLAN-only) with name, purpose, "
         "IP subnet, VLAN ID, DHCP settings, and enabled state. "
         "Use to understand network topology and VLAN layout. "
+        "Filters: search (name/VLAN substring), purpose (corporate/guest/wan/vlan-only), "
+        "limit (default 25), fields (comma-separated subset). "
         "For a single network's full config, use unifi_get_network_details. "
         "For wireless SSIDs, use unifi_list_wlans."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
-async def list_networks() -> Dict[str, Any]:
+async def list_networks(
+    search: Annotated[
+        Optional[str],
+        Field(description="Filter by name (case-insensitive substring) or VLAN ID (exact match, e.g. '20')"),
+    ] = None,
+    purpose: Annotated[
+        Optional[str],
+        Field(description="Filter by purpose (corporate, guest, wan, vlan-only)"),
+    ] = None,
+    limit: Annotated[int, Field(description="Maximum number of networks to return (default 25)")] = 25,
+    fields: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "Comma-separated list of fields to return per network (default: all). "
+                "Available: _id, name, enabled, purpose, ip_subnet, vlan_enabled, vlan, "
+                "dhcpd_enabled, dhcpd_start, dhcpd_stop. "
+                "Example: fields='_id,name,vlan,purpose' returns only those fields."
+            )
+        ),
+    ] = None,
+) -> Dict[str, Any]:
     """Lists all networks configured on the UniFi Network controller for the current site using the V1 API structure.
 
     Returns:
@@ -113,12 +136,59 @@ async def list_networks() -> Dict[str, Any]:
     """
     try:
         networks_data = await network_manager.get_networks()
-        formatted = [network_from_controller(n).model_dump(exclude_none=True) for n in networks_data]
+        if purpose and purpose.strip():
+            networks_data = [n for n in networks_data if n.get("purpose") == purpose.strip().lower()]
+
+        if search and search.strip():
+            search_lower = search.strip().lower()
+            networks_data = [
+                n
+                for n in networks_data
+                if search_lower in (n.get("name") or "").lower() or search_lower == str(n.get("vlan") or "")
+            ]
+
+        total_count = len(networks_data)
+        networks_data = networks_data[:limit]
+
+        requested_fields = None
+        if fields and fields.strip():
+            requested_fields = set(f.strip() for f in fields.split(","))
+
+        formatted_networks = []
+        for network in networks_data:
+            # Source values through the typed model (validation/coercion); the list view
+            # then narrows to a curated subset and honors the optional `fields` selector.
+            shaped = network_from_controller(network)
+            full_data = {
+                "_id": shaped.id,
+                "name": shaped.name,
+                "enabled": shaped.enabled,
+                "purpose": shaped.purpose,
+                "ip_subnet": shaped.ip_subnet,
+                "vlan_enabled": shaped.vlan_enabled,
+                "vlan": shaped.vlan,
+                "dhcpd_enabled": shaped.dhcpd_enabled,
+                "dhcpd_start": shaped.dhcpd_start,
+                "dhcpd_stop": shaped.dhcpd_stop,
+            }
+
+            if requested_fields:
+                formatted = {k: v for k, v in full_data.items() if k in requested_fields}
+            else:
+                formatted = full_data
+
+            formatted_networks.append(formatted)
+
         return {
             "success": True,
             "site": network_manager._connection.site,
-            "count": len(formatted),
-            "networks": formatted,
+            "search": search,
+            "purpose_filter": purpose,
+            "fields": fields,
+            "total_count": total_count,
+            "returned_count": len(formatted_networks),
+            "limit": limit,
+            "networks": formatted_networks,
         }
     except Exception as e:
         logger.error("Error listing networks in tool: %s", e, exc_info=True)
@@ -127,11 +197,27 @@ async def list_networks() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_network_details",
-    description="Get details for a specific network by ID.",
+    description=(
+        "Get details for a specific network by ID with section-based selection.\n\n"
+        "include: comma-separated sections (default 'basic'). Sections: basic, dhcp, ipv6, vpn, all.\n"
+        "summary: when false, returns full raw data (for debugging).\n\n"
+        "Examples: include='basic' (minimal); include='basic,dhcp' (adds DHCP server config); "
+        "include='all' (all sections)."
+    ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_network_details(
     network_id: Annotated[str, Field(description="Unique identifier (_id) of the network (from unifi_list_networks)")],
+    include: Annotated[
+        str,
+        Field(
+            description=("Comma-separated sections to return (default 'basic'). Sections: basic, dhcp, ipv6, vpn, all.")
+        ),
+    ] = "basic",
+    summary: Annotated[
+        bool,
+        Field(description="When true (default), filter to selected sections. Set false for full raw data."),
+    ] = True,
 ) -> Dict[str, Any]:
     """Gets the detailed configuration of a specific network by its ID.
 
@@ -171,15 +257,78 @@ async def get_network_details(
     try:
         if not network_id:
             return {"success": False, "error": "network_id is required"}
-        # Assuming manager get_network_details returns the raw dict or None
         network = await network_manager.get_network_details(network_id)
         if network:
-            # Ensure serializable
+            if not summary:
+                return {
+                    "success": True,
+                    "site": network_manager._connection.site,
+                    "network_id": network_id,
+                    "include": "all",
+                    "summary_mode": False,
+                    "details": json.loads(json.dumps(network, default=str)),
+                }
+
+            sections = set(s.strip().lower() for s in include.split(","))
+            include_all = "all" in sections
+
+            network_data: Dict[str, Any] = {}
+
+            if include_all or "basic" in sections:
+                network_data.update(
+                    {
+                        "_id": network.get("_id"),
+                        "name": network.get("name"),
+                        "enabled": network.get("enabled"),
+                        "purpose": network.get("purpose"),
+                        "ip_subnet": network.get("ip_subnet"),
+                        "vlan_enabled": network.get("vlan_enabled"),
+                        "vlan": network.get("vlan"),
+                        "domain_name": network.get("domain_name"),
+                        "is_nat": network.get("is_nat"),
+                        "network_isolation_enabled": network.get("network_isolation_enabled"),
+                    }
+                )
+
+            if include_all or "dhcp" in sections:
+                network_data.update(
+                    {
+                        "dhcpd_enabled": network.get("dhcpd_enabled"),
+                        "dhcpd_start": network.get("dhcpd_start"),
+                        "dhcpd_stop": network.get("dhcpd_stop"),
+                        "dhcpd_leasetime": network.get("dhcpd_leasetime"),
+                        "dhcpd_dns_enabled": network.get("dhcpd_dns_enabled"),
+                        "dhcpd_gateway_enabled": network.get("dhcpd_gateway_enabled"),
+                        "dhcpd_unifi_controller": network.get("dhcpd_unifi_controller"),
+                    }
+                )
+
+            if include_all or "ipv6" in sections:
+                network_data.update(
+                    {
+                        "ipv6_interface_type": network.get("ipv6_interface_type"),
+                        "ipv6_pd_start": network.get("ipv6_pd_start"),
+                        "ipv6_pd_stop": network.get("ipv6_pd_stop"),
+                        "ipv6_ra_enabled": network.get("ipv6_ra_enabled"),
+                    }
+                )
+
+            if include_all or "vpn" in sections:
+                network_data.update(
+                    {
+                        "vpn_type": network.get("vpn_type"),
+                        "remote_site_id": network.get("remote_site_id"),
+                        "remote_site_subnets": network.get("remote_site_subnets"),
+                    }
+                )
+
             return {
                 "success": True,
                 "site": network_manager._connection.site,
                 "network_id": network_id,
-                "details": json.loads(json.dumps(network, default=str)),
+                "include": include,
+                "summary_mode": True,
+                "details": network_data,
             }
         else:
             return {
@@ -550,10 +699,23 @@ async def create_network(
 
 @server.tool(
     name="unifi_list_wlans",
-    description="List all configured Wireless LANs (WLANs) on the Unifi Network controller.",
+    description=(
+        "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\n"
+        "Filters: search (SSID name substring), enabled_only, limit (default 25)."
+    ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
-async def list_wlans() -> Dict[str, Any]:
+async def list_wlans(
+    search: Annotated[
+        Optional[str],
+        Field(description="Filter by SSID name (case-insensitive substring match)"),
+    ] = None,
+    enabled_only: Annotated[
+        bool,
+        Field(description="If true, only return enabled WLANs. Default false."),
+    ] = False,
+    limit: Annotated[int, Field(description="Maximum number of WLANs to return (default 25)")] = 25,
+) -> Dict[str, Any]:
     """Lists all WLANs (Wireless SSIDs) configured on the UniFi Network controller.
 
     Returns:
@@ -591,6 +753,19 @@ async def list_wlans() -> Dict[str, Any]:
         wlans = await network_manager.get_wlans()
         # Ensure wlans are dictionaries
         wlans_raw = [w.raw if hasattr(w, "raw") else w for w in wlans]
+
+        # Filter by enabled_only
+        if enabled_only:
+            wlans_raw = [w for w in wlans_raw if w.get("enabled", False)]
+
+        # Filter by search term (SSID name)
+        if search and search.strip():
+            search_lower = search.strip().lower()
+            wlans_raw = [w for w in wlans_raw if search_lower in (w.get("name") or "").lower()]
+
+        total_count = len(wlans_raw)
+        wlans_raw = wlans_raw[:limit]
+
         formatted_wlans = [
             {
                 "id": w.get("_id"),
@@ -605,7 +780,11 @@ async def list_wlans() -> Dict[str, Any]:
         return {
             "success": True,
             "site": network_manager._connection.site,
-            "count": len(formatted_wlans),
+            "search": search,
+            "enabled_only": enabled_only,
+            "total_count": total_count,
+            "returned_count": len(formatted_wlans),
+            "limit": limit,
             "wlans": formatted_wlans,
         }
     except Exception as e:
