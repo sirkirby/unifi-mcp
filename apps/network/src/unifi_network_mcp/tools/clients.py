@@ -32,6 +32,28 @@ from unifi_network_mcp.runtime import client_manager, server
 
 logger = logging.getLogger(__name__)
 
+_ACTIVE_CONNECTION_KEYS: tuple[str, ...] = (
+    "_uptime_by_uap",
+    "_uptime_by_usw",
+    "_uptime_by_ugw",
+    "uptime",
+)
+
+
+def _is_online(raw: dict) -> bool:
+    """Mirror of unifi_core.network.models.clients._is_online — derives
+    online status from a controller record, falling back to
+    active-connection indicators when ``is_online`` is omitted by the
+    controller firmware.
+    """
+    if raw.get("is_online") is True:
+        return True
+    for key in _ACTIVE_CONNECTION_KEYS:
+        v = raw.get(key)
+        if isinstance(v, (int, float)) and v > 0:
+            return True
+    return False
+
 
 @server.tool(
     name="unifi_lookup_by_ip",
@@ -71,7 +93,8 @@ async def lookup_by_ip(
         "Returns connected clients with mac, name, hostname, ip, status (online/offline), "
         "connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, "
         "channel, radio. Filter by filter_type (all/wired/wireless), set "
-        "include_offline=true for historical clients. For a single client's full raw "
+        "include_offline=true for historical clients. Use search to filter by "
+        "name/hostname/IP/MAC (case-insensitive). For a single client's full raw "
         "object, use unifi_get_client_details. For IP-to-client lookup, use "
         "unifi_lookup_by_ip."
     ),
@@ -85,7 +108,22 @@ async def list_clients(
         bool,
         Field(description="When true, includes offline/disconnected clients from controller history. Default false"),
     ] = False,
+    search: Annotated[
+        Optional[str],
+        Field(description="Filter by name, hostname, IP, or MAC (case-insensitive substring match)"),
+    ] = None,
     limit: Annotated[int, Field(description="Maximum number of clients to return (default 100)")] = 100,
+    fields: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "Comma-separated list of fields to return per client (default: all). "
+                "Available: mac, name, hostname, ip, connection_type, status, last_seen, _id. "
+                "Wireless-only: essid, signal_dbm, channel, radio. "
+                "Example: fields='mac,name,ip' returns only those 3 fields."
+            )
+        ),
+    ] = None,
 ) -> Dict[str, Any]:
     """Implementation for listing clients."""
     try:
@@ -101,26 +139,55 @@ async def list_clients(
         elif filter_type == "wired":
             clients_raw = [c for c in clients_raw if c.get("is_wired", False)]
 
+        # Filter by search term (name, hostname, IP, or MAC)
+        if search and search.strip():
+            search_lower = search.strip().lower()
+            clients_raw = [
+                c
+                for c in clients_raw
+                if search_lower in (c.get("name") or "").lower()
+                or search_lower in (c.get("hostname") or "").lower()
+                or search_lower in (c.get("ip") or "").lower()
+                or search_lower in (c.get("mac") or "").lower()
+            ]
+
+        total_count = len(clients_raw)
         clients_raw = clients_raw[:limit]
+
+        # Parse requested fields for selective return
+        requested_fields = None
+        if fields and fields.strip():
+            requested_fields = set(f.strip() for f in fields.split(","))
 
         formatted_clients = []
         for client in clients_raw:
             shaped = client_from_controller(client)
-            formatted = shaped.model_dump(exclude_none=True)
+            full_data = shaped.model_dump(exclude_none=True)
             # Preserve wired/wireless display fields not in the base model
-            formatted["connection_type"] = "Wired" if client.get("is_wired", False) else "Wireless"
-            formatted["_id"] = client.get("_id")
+            full_data["connection_type"] = "Wired" if client.get("is_wired", False) else "Wireless"
+            full_data["_id"] = client.get("_id")
             if not client.get("is_wired", False):
-                formatted["essid"] = client.get("essid", "Unknown")
-                formatted["signal_dbm"] = client.get("signal")
-                formatted["channel"] = client.get("channel", "Unknown")
-                formatted["radio"] = client.get("radio", "Unknown")
+                full_data["essid"] = client.get("essid", "Unknown")
+                full_data["signal_dbm"] = client.get("signal")
+                full_data["channel"] = client.get("channel", "Unknown")
+                full_data["radio"] = client.get("radio", "Unknown")
+
+            if requested_fields:
+                formatted = {k: v for k, v in full_data.items() if k in requested_fields}
+            else:
+                formatted = full_data
+
             formatted_clients.append(formatted)
 
         return {
             "success": True,
             "site": client_manager._connection.site,
-            "count": len(formatted_clients),
+            "filter_type": filter_type,
+            "search": search,
+            "fields": fields,
+            "total_count": total_count,
+            "returned_count": len(formatted_clients),
+            "limit": limit,
             "clients": formatted_clients,
         }
     except Exception as e:
@@ -131,11 +198,12 @@ async def list_clients(
 @server.tool(
     name="unifi_get_client_details",
     description=(
-        "Returns the full raw client object for one client by MAC address — all "
-        "controller-reported fields including connection stats, DHCP info, "
-        "network/WLAN associations, traffic counters, signal/RSSI, and fixed-IP "
-        "settings. Merges live /stat/sta data with the /rest/user snapshot for "
-        "active clients. For a summary of all clients, use unifi_list_clients."
+        "Returns client data for one client by MAC address. By default (summary=false) "
+        "returns the full raw client object — all controller-reported fields, with the "
+        "typed/normalized shape (ISO timestamps, derived status, null-safe name/hostname) "
+        "layered on top of the merged live /stat/sta + /rest/user data. Set summary=true to "
+        "trim to selected sections via include (basic, network, wireless, traffic, "
+        "fingerprint, all). For a summary of all clients, use unifi_list_clients."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -143,6 +211,24 @@ async def get_client_details(
     mac_address: Annotated[
         str, Field(description="Client MAC address in format AA:BB:CC:DD:EE:FF (from unifi_list_clients)")
     ],
+    include: Annotated[
+        str,
+        Field(
+            description=(
+                "Comma-separated sections to return when summary=true (default 'basic'). "
+                "Sections: basic, network, wireless, traffic, fingerprint, all."
+            )
+        ),
+    ] = "basic",
+    summary: Annotated[
+        bool,
+        Field(
+            description=(
+                "When false (default), returns the full raw client object. "
+                "When true, trims the response to the sections named in include."
+            )
+        ),
+    ] = False,
 ) -> Dict[str, Any]:
     """Implementation for getting client details."""
     try:
@@ -153,20 +239,104 @@ async def get_client_details(
                 if hasattr(client_obj, "raw") and isinstance(client_obj.raw, dict)
                 else (client_obj if isinstance(client_obj, dict) else {})
             )
-            shaped = client_from_controller(client_obj).model_dump(exclude_none=True)
-            # Honor the "full raw client object" promise: deliver all controller-reported
-            # fields. Selectively layer the typed/normalized shape on top only for fields
-            # where the shape adds value (ISO timestamps, derived status, null-safe alias).
-            # Leave raw fields like `ip`/`last_ip` distinct so the current-vs-historical
-            # distinction is preserved.
-            merged: Dict[str, Any] = dict(raw)
-            for key in ("last_seen", "first_seen", "status", "name", "hostname"):
-                if key in shaped:
-                    merged[key] = shaped[key]
+
+            if not summary:
+                shaped = client_from_controller(client_obj).model_dump(exclude_none=True)
+                # Honor the "full raw client object" promise: deliver all controller-reported
+                # fields. Selectively layer the typed/normalized shape on top only for fields
+                # where the shape adds value (ISO timestamps, derived status, null-safe alias).
+                # Leave raw fields like `ip`/`last_ip` distinct so the current-vs-historical
+                # distinction is preserved.
+                merged: Dict[str, Any] = dict(raw)
+                for key in ("last_seen", "first_seen", "status", "name", "hostname"):
+                    if key in shaped:
+                        merged[key] = shaped[key]
+                return {
+                    "success": True,
+                    "site": client_manager._connection.site,
+                    "client": merged,
+                }
+
+            # summary=true: opt-in section-trimmed view. The default path above is the
+            # full raw object; this branch only runs when the caller explicitly asks to trim.
+            sections = set(s.strip().lower() for s in include.split(","))
+            include_all = "all" in sections
+            client_data: Dict[str, Any] = {}
+
+            if include_all or "basic" in sections:
+                client_data.update(
+                    {
+                        "mac": raw.get("mac"),
+                        "name": raw.get("name") or raw.get("hostname", "Unknown"),
+                        "hostname": raw.get("hostname"),
+                        "ip": raw.get("ip"),
+                        "connection_type": "Wired" if raw.get("is_wired", False) else "Wireless",
+                        "status": "Online" if _is_online(raw) else "Offline",
+                        "last_seen": raw.get("last_seen"),
+                        "uptime": raw.get("uptime"),
+                        "first_seen": raw.get("first_seen"),
+                    }
+                )
+
+            if include_all or "network" in sections:
+                client_data.update(
+                    {
+                        "network_id": raw.get("network_id"),
+                        "network": raw.get("network"),
+                        "vlan": raw.get("vlan"),
+                        "use_fixedip": raw.get("use_fixedip", False),
+                        "fixed_ip": raw.get("fixed_ip"),
+                        "local_dns_record": raw.get("local_dns_record"),
+                    }
+                )
+
+            if (include_all or "wireless" in sections) and not raw.get("is_wired", False):
+                client_data.update(
+                    {
+                        "essid": raw.get("essid"),
+                        "bssid": raw.get("bssid"),
+                        "channel": raw.get("channel"),
+                        "radio": raw.get("radio"),
+                        "radio_proto": raw.get("radio_proto"),
+                        "signal": raw.get("signal"),
+                        "rssi": raw.get("rssi"),
+                        "noise": raw.get("noise"),
+                        "satisfaction": raw.get("satisfaction"),
+                        "ap_mac": raw.get("ap_mac"),
+                    }
+                )
+
+            if include_all or "traffic" in sections:
+                client_data.update(
+                    {
+                        "tx_bytes": raw.get("tx_bytes"),
+                        "rx_bytes": raw.get("rx_bytes"),
+                        "tx_packets": raw.get("tx_packets"),
+                        "rx_packets": raw.get("rx_packets"),
+                        "tx_rate": raw.get("tx_rate"),
+                        "rx_rate": raw.get("rx_rate"),
+                    }
+                )
+
+            if include_all or "fingerprint" in sections:
+                client_data.update(
+                    {
+                        "oui": raw.get("oui"),
+                        "os_name": raw.get("os_name"),
+                        "dev_cat": raw.get("dev_cat"),
+                        "dev_family": raw.get("dev_family"),
+                        "dev_vendor": raw.get("dev_vendor"),
+                        "dev_id": raw.get("dev_id"),
+                        "fingerprint_source": raw.get("fingerprint_source"),
+                    }
+                )
+
             return {
                 "success": True,
                 "site": client_manager._connection.site,
-                "client": merged,
+                "include": include,
+                "summary_mode": True,
+                "client": client_data,
             }
         return {
             "success": False,
