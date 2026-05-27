@@ -1801,7 +1801,7 @@ wheels = [
 
 [[package]]
 name = "strawberry-graphql"
-version = "0.315.6"
+version = "0.316.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cross-web" },
@@ -1810,9 +1810,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d5/ec/671570f74b7cb1674b2ee7cdb805c80e26a5026c1a3ec70808a981a14441/strawberry_graphql-0.315.6.tar.gz", hash = "sha256:ed05cb77c13783a6558be081158228170541cebed1a90e80541a23c138dc6fcd", size = 222925, upload-time = "2026-05-19T15:59:45.509Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/09/f189fd3c70544322eeba0398ccaa980d17857894c0a66d447aa0b5704686/strawberry_graphql-0.316.0.tar.gz", hash = "sha256:bee5ce0e20d522325bd1ed2db186c812c03c2ea7db29f997b35e7d694649820c", size = 223985, upload-time = "2026-05-19T17:06:10.443Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bf/ce/3c504374c4d1bb51e73fb36bcbb2957822f78d8d97e71787b6c4badd9602/strawberry_graphql-0.315.6-py3-none-any.whl", hash = "sha256:4a469df50a043e61620e19d130dffd92d2855e6a874de47ce93adad9ed6b2d09", size = 325235, upload-time = "2026-05-19T15:59:43.873Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/dd/b2cf54803cbd0d37e3ce73c7274bdb144ba83743bc83351b5790eb2a5fad/strawberry_graphql-0.316.0-py3-none-any.whl", hash = "sha256:222e16fbbf953f5a1fa75f62bf9a8e95f274180f928f70bec459b566053aa2cb", size = 326530, upload-time = "2026-05-19T17:06:07.844Z" },
 ]
 
 [package.optional-dependencies]
@@ -1996,10 +1996,10 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.49" },
-    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.315.5,<0.320.0" },
+    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.316.0,<0.320.0" },
     { name = "typer", specifier = ">=0.13.0" },
     { name = "unifi-core", extras = ["access", "network", "protect"], editable = "packages/unifi-core" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.48.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -2040,7 +2040,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.13.4" },
-    { name = "aiounifi", marker = "extra == 'network'", specifier = ">=91" },
+    { name = "aiounifi", marker = "extra == 'network'", specifier = ">=88" },
     { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.1.1" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
