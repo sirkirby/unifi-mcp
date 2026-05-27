@@ -140,7 +140,7 @@ wheels = [
 
 [[package]]
 name = "aiounifi"
-version = "90"
+version = "91"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -148,9 +148,9 @@ dependencies = [
     { name = "pyotp" },
     { name = "segno" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a1/25/3c706bb77ad7745aaeca65f547471a6be4cde26f8d2e285a132b8b0102c3/aiounifi-90.tar.gz", hash = "sha256:c0926dca364cb07b6272df230918624e35adbbd5b0fe346c43dea4ea2d1dd406", size = 58516, upload-time = "2026-03-18T19:53:34.737Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/64/1a/977232c87dc91b70bdd5cba4d07e7a469f8d34bbc14de6b17297c9a59db6/aiounifi-91.tar.gz", hash = "sha256:ca0750a839071ac3d001be3734b55ad1426363f09349463f6d36554a41a18f67", size = 66516, upload-time = "2026-05-25T19:40:13.457Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0e/54/3c490ad3babe3c0d032974f8407ed36307803818835da6fe43398ca846df/aiounifi-90-py3-none-any.whl", hash = "sha256:7e7a996359f09bdec2998f1b5d6ab1bab734b0fdc6f1ae5a3b467058ef7ce22b", size = 50169, upload-time = "2026-03-18T19:53:33.443Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/87/6ae7c0f7e8026eada3558bae51757bb3e2060c80735d96ef88aea34858d7/aiounifi-91-py3-none-any.whl", hash = "sha256:9685695e613b5656b30abdfffe0c4379defd6fa682d8c4d2364a47f30f0ab52d", size = 56274, upload-time = "2026-05-25T19:40:12.106Z" },
 ]
 
 [[package]]
@@ -2040,7 +2040,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.13.4" },
-    { name = "aiounifi", marker = "extra == 'network'", specifier = ">=88" },
+    { name = "aiounifi", marker = "extra == 'network'", specifier = ">=91" },
     { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.1.1" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
