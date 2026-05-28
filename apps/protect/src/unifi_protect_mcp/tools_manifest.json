@@ -1,12 +1,17 @@
 {
-  "count": 49,
+  "count": 54,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
     "protect_alarm_arm": "unifi_protect_mcp.tools.alarm",
+    "protect_alarm_create_rule": "unifi_protect_mcp.tools.alarm",
+    "protect_alarm_delete_rule": "unifi_protect_mcp.tools.alarm",
     "protect_alarm_disarm": "unifi_protect_mcp.tools.alarm",
+    "protect_alarm_get_rule": "unifi_protect_mcp.tools.alarm",
     "protect_alarm_get_status": "unifi_protect_mcp.tools.alarm",
     "protect_alarm_list_profiles": "unifi_protect_mcp.tools.alarm",
+    "protect_alarm_list_rules": "unifi_protect_mcp.tools.alarm",
+    "protect_alarm_update_rule": "unifi_protect_mcp.tools.alarm",
     "protect_create_liveview": "unifi_protect_mcp.tools.liveviews",
     "protect_delete_known_face": "unifi_protect_mcp.tools.recognition",
     "protect_delete_liveview": "unifi_protect_mcp.tools.liveviews",
@@ -248,6 +253,206 @@
     {
       "annotations": {
         "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Creates a new alarm rule via POST. Body must be a full rule payload matching the Protect automations schema: name, enable, sources (scope), conditions (triggers), actions (webhook/etc), cooldown. The server assigns the rule id and returns the created rule. Body keys may be snake_case (as returned by protect_alarm_get_rule) or camelCase (controller-native); the tool normalizes to camelCase before POSTing, so the natural read-modify-write clone flow works. ``actions`` must be a non-empty list \u2014 the controller will accept an empty actions list but the resulting rule cannot be opened in the Protect UI. Requires confirm=True to apply \u2014 otherwise returns a preview.",
+      "name": "protect_alarm_create_rule",
+      "permission_action": "create",
+      "permission_category": "alarm",
+      "schema": {
+        "input": {
+          "properties": {
+            "body": {
+              "description": "Full alarm rule payload (see Protect automations schema)",
+              "type": "object"
+            },
+            "confirm": {
+              "description": "When true, creates the rule. When false (default), returns a preview.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "body"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Alarm Create Rule"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Deletes an alarm rule (automation) by id. Requires confirm=True to apply \u2014 otherwise returns a preview showing the rule that would be deleted. Destructive \u2014 the rule and its configured webhook actions cannot be recovered through the API.",
+      "name": "protect_alarm_delete_rule",
+      "permission_action": "delete",
+      "permission_category": "alarm",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, deletes the rule. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "rule_id": {
+              "description": "Alarm rule (automation) UUID to delete",
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Alarm Delete Rule"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false,
         "readOnlyHint": false
@@ -337,6 +542,98 @@
         }
       },
       "title": "Alarm Disarm"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Fetches the full payload of a single alarm rule (automation) by id. Use the returned dict as the basis for protect_alarm_update_rule's body parameter \u2014 Protect requires the full rule body on PATCH.",
+      "name": "protect_alarm_get_rule",
+      "schema": {
+        "input": {
+          "properties": {
+            "rule_id": {
+              "description": "Alarm rule (automation) UUID from protect_alarm_list_rules",
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Alarm Get Rule"
     },
     {
       "annotations": {
@@ -505,6 +802,195 @@
         }
       },
       "title": "Alarm List Profiles"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Lists every alarm rule (automation) configured in the UniFi Protect Alarm Manager. Each rule includes id, name, enable flag, sources (camera scope), conditions (AND-list of triggers like license_plate_known or smartDetectLine), actions (webhook URLs, etc.), and cooldown. Use protect_alarm_get_rule for the full payload of a single rule needed for the read-modify-write update flow.",
+      "name": "protect_alarm_list_rules",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Alarm List Rules"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Updates an alarm rule via PATCH. Protect requires the FULL rule body \u2014 partial PATCH bodies are rejected by the controller. The expected flow is: (1) call protect_alarm_get_rule to fetch the current rule, (2) mutate the returned dict in-place, (3) pass the mutated dict back here as body. Body keys may be snake_case (as returned by get_rule) or camelCase; the tool normalizes to camelCase before PATCHing. ``actions`` must be a non-empty list. Requires confirm=True to apply \u2014 otherwise returns a preview of current vs proposed.",
+      "name": "protect_alarm_update_rule",
+      "permission_action": "update",
+      "permission_category": "alarm",
+      "schema": {
+        "input": {
+          "properties": {
+            "body": {
+              "description": "Full rule payload. Get the current rule via protect_alarm_get_rule, mutate, then pass here.",
+              "type": "object"
+            },
+            "confirm": {
+              "description": "When true, applies the update. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "rule_id": {
+              "description": "Alarm rule (automation) UUID to update",
+              "type": "string"
+            }
+          },
+          "required": [
+            "rule_id",
+            "body"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Alarm Update Rule"
     },
     {
       "annotations": {

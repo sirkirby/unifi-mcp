@@ -6,6 +6,8 @@
 # tool: protect_list_smart_detections
 # tool: protect_alarm_get_status
 # tool: protect_alarm_list_profiles
+# tool: protect_alarm_list_rules
+# tool: protect_alarm_get_rule
 """
 
 from __future__ import annotations
@@ -204,9 +206,111 @@ async def test_protect_alarm_list_profiles(tmp_path, monkeypatch):
         f'''{{
         protect {{ alarmProfiles(controller: "{cid}") {{
             count
+            profiles
         }} }}
     }}''',
     )
     assert body.get("errors") is None, body
     result = body["data"]["protect"]["alarmProfiles"]
     assert result["count"] == 2
+    assert {p["id"] for p in result["profiles"]} == {"prof1", "prof2"}
+
+
+@pytest.mark.asyncio
+async def test_protect_alarm_list_rules(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="protect")
+    stub_managers(
+        monkeypatch,
+        {
+            ("protect", "alarm_manager", "list_rules"): [
+                {"id": "rule1", "name": "Arrival", "enable": True},
+                {"id": "rule2", "name": "Departure", "enable": True},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        protect {{ alarmRules(controller: "{cid}") {{
+            count
+            rules
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    result = body["data"]["protect"]["alarmRules"]
+    assert result["count"] == 2
+    assert {r["id"] for r in result["rules"]} == {"rule1", "rule2"}
+
+
+@pytest.mark.asyncio
+async def test_protect_alarm_get_rule(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="protect")
+    stub_managers(
+        monkeypatch,
+        {
+            ("protect", "alarm_manager", "get_rule"): {
+                "id": "rule1",
+                "name": "Test Camera Vehicle Arrival",
+                "enable": True,
+                "sources": [{"device": "AABBCCDDEEFF", "type": "include"}],
+            },
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        protect {{ alarmRule(controller: "{cid}", id: "rule1") {{
+            id
+            name
+            enable
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    result = body["data"]["protect"]["alarmRule"]
+    assert result["id"] == "rule1"
+    assert result["name"] == "Test Camera Vehicle Arrival"
+    assert result["enable"] is True
+
+
+@pytest.mark.asyncio
+async def test_protect_alarm_get_rule_translates_camelcase_keys(tmp_path, monkeypatch):
+    """Manager returns raw Protect API dict with camelCase keys
+    (isCreatedBySystem, historyConditions). The GraphQL type's
+    from_manager_output must accept these alongside snake_case so the
+    fields aren't silently dropped to null.
+    """
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="protect")
+    stub_managers(
+        monkeypatch,
+        {
+            ("protect", "alarm_manager", "get_rule"): {
+                "id": "rule-builtin",
+                "name": "System-Created Rule",
+                "enable": True,
+                "isCreatedBySystem": True,
+                "historyConditions": [{"some": "history"}],
+            },
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        protect {{ alarmRule(controller: "{cid}", id: "rule-builtin") {{
+            id
+            isCreatedBySystem
+            historyConditions
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    result = body["data"]["protect"]["alarmRule"]
+    assert result["isCreatedBySystem"] is True, "camelCase isCreatedBySystem from raw API dict was dropped to None"
+    assert result["historyConditions"] == [{"some": "history"}]

@@ -89,6 +89,9 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # =========================================================================
     "protect_alarm_arm": ("alarm_manager", "arm"),
     "protect_alarm_disarm": ("alarm_manager", "disarm"),
+    # update/delete rule bodies await preview_* first; point dispatch at the mutation.
+    "protect_alarm_update_rule": ("alarm_manager", "update_rule"),
+    "protect_alarm_delete_rule": ("alarm_manager", "delete_rule"),
     "protect_ptz_move": ("camera_manager", "ptz_move"),
     "protect_ptz_preset": ("camera_manager", "ptz_goto_preset"),
     "protect_ptz_zoom": ("camera_manager", "ptz_zoom"),

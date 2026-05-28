@@ -21,10 +21,19 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
     tools={
         "protect_alarm_arm": {"kind": RenderKind.DETAIL},
         "protect_alarm_disarm": {"kind": RenderKind.DETAIL},
+        "protect_alarm_update_rule": {"kind": RenderKind.DETAIL},
+        "protect_alarm_create_rule": {"kind": RenderKind.DETAIL},
+        "protect_alarm_delete_rule": {"kind": RenderKind.DETAIL},
     },
 )
 class AlarmMutationAckSerializer(Serializer):
-    """Pass-through for arm/disarm acks. Coerces a bare bool into a dict."""
+    """Pass-through for alarm mutation acks (arm/disarm + rule CRUD).
+
+    Coerces bare bools into ``{armed: bool}`` for backwards compatibility
+    with the historical arm/disarm shapes. Rule-CRUD tools always return
+    dicts (created/updated rule body or ``{deleted, rule_id}``) so they
+    flow through identity.
+    """
 
     kind = RenderKind.DETAIL
 

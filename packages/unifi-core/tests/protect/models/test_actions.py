@@ -5,7 +5,9 @@ from pydantic import ValidationError
 from unifi_core.protect.models._actions import (
     AcknowledgeEventInput,
     AlarmArmInput,
+    AlarmCreateRuleInput,
     AlarmDisarmInput,
+    AlarmUpdateRuleInput,
     DeleteLiveviewInput,
     DeleteRecordingInput,
     ExportClipInput,
@@ -16,6 +18,77 @@ from unifi_core.protect.models._actions import (
     ToggleRecordingInput,
     TriggerChimeInput,
 )
+
+
+def _valid_rule_body(actions: list | None = None) -> dict:
+    """Minimum body shape that satisfies the create/update validators.
+
+    Real Protect bodies are richer (sources/conditions/cooldown/etc.); we
+    only need enough here to drive the actions-non-empty validator.
+    """
+    return {
+        "name": "Test",
+        "enable": False,
+        "actions": [{"type": "HTTP_REQUEST", "metadata": {"url": "https://example.test/wh"}}]
+        if actions is None
+        else actions,
+    }
+
+
+# ---------------------------------------------------------------------------
+# AlarmCreateRuleInput — empty-actions rejection (live-test learning)
+# ---------------------------------------------------------------------------
+
+
+class TestAlarmCreateRuleInput:
+    def test_action_input_flag(self) -> None:
+        assert AlarmCreateRuleInput.__action_input__ is True
+
+    def test_valid_with_actions(self) -> None:
+        m = AlarmCreateRuleInput(body=_valid_rule_body())
+        assert m.body["actions"]
+
+    def test_rejects_empty_actions_list(self) -> None:
+        """Protect accepts ``actions: []`` server-side but the resulting rule
+        cannot be opened in the Protect UI ("We're Unable to Complete Your
+        Request"). Found via live-test 2026-05-27. Reject client-side."""
+        with pytest.raises(ValidationError, match="actions"):
+            AlarmCreateRuleInput(body=_valid_rule_body(actions=[]))
+
+    def test_rejects_missing_actions_key(self) -> None:
+        body = {"name": "x", "enable": False}
+        with pytest.raises(ValidationError, match="actions"):
+            AlarmCreateRuleInput(body=body)
+
+    def test_rejects_non_list_actions(self) -> None:
+        with pytest.raises(ValidationError, match="actions"):
+            AlarmCreateRuleInput(body=_valid_rule_body(actions="not-a-list"))  # type: ignore[arg-type]
+
+
+class TestAlarmUpdateRuleInput:
+    def test_action_input_flag(self) -> None:
+        assert AlarmUpdateRuleInput.__action_input__ is True
+
+    def test_valid_with_actions(self) -> None:
+        m = AlarmUpdateRuleInput(rule_id="r-1", body=_valid_rule_body())
+        assert m.rule_id == "r-1"
+
+    def test_rejects_empty_actions_list(self) -> None:
+        """Same brick-the-UI risk as create — reject empty actions on PATCH too."""
+        with pytest.raises(ValidationError, match="actions"):
+            AlarmUpdateRuleInput(rule_id="r-1", body=_valid_rule_body(actions=[]))
+
+    def test_rejects_missing_actions_key(self) -> None:
+        with pytest.raises(ValidationError, match="actions"):
+            AlarmUpdateRuleInput(rule_id="r-1", body={"name": "x"})
+
+    def test_rejects_non_list_actions(self) -> None:
+        with pytest.raises(ValidationError, match="actions"):
+            AlarmUpdateRuleInput(
+                rule_id="r-1",
+                body=_valid_rule_body(actions="not-a-list"),  # type: ignore[arg-type]
+            )
+
 
 # ---------------------------------------------------------------------------
 # PtzMoveInput

@@ -14,7 +14,29 @@ from __future__ import annotations
 
 from typing import ClassVar, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+def _require_non_empty_actions(body: dict) -> None:
+    """Reject rule bodies that would brick the Protect UI.
+
+    Protect's controller accepts ``actions: []`` (and even a body with no
+    ``actions`` key at all) and returns a normal-looking rule on POST. But
+    the resulting rule cannot be opened in the Protect web UI -- clicking
+    it shows "We're Unable to Complete Your Request" and the rule becomes
+    only deletable via API. Found via live-test 2026-05-27. Reject here so
+    the failure mode never reaches a homelab.
+
+    ``body`` is already type-validated as ``dict`` by the calling Pydantic
+    model field, so this helper does not re-check that.
+    """
+    actions = body.get("actions")
+    if not isinstance(actions, list) or len(actions) == 0:
+        raise ValueError(
+            "body.actions must be a non-empty list. Protect accepts rules "
+            "with no actions, but the resulting rule cannot be opened in "
+            "the Protect UI."
+        )
 
 
 class PtzMoveInput(BaseModel):
@@ -79,6 +101,75 @@ class AlarmDisarmInput(BaseModel):
     """Input for ``protect_alarm_disarm`` (no parameters)."""
 
     __action_input__: ClassVar[bool] = True
+
+
+class AlarmGetRuleInput(BaseModel):
+    """Input for ``protect_alarm_get_rule``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    rule_id: str = Field(description="Alarm rule (automation) UUID")
+
+
+class AlarmUpdateRuleInput(BaseModel):
+    """Input for ``protect_alarm_update_rule``.
+
+    Protect's PATCH endpoint requires the full rule payload, so ``body``
+    is the complete rule dict (typically produced by reading via
+    ``protect_alarm_get_rule`` and mutating the returned dict).
+    """
+
+    __action_input__: ClassVar[bool] = True
+
+    rule_id: str = Field(description="Alarm rule (automation) UUID")
+    body: dict = Field(
+        description=(
+            "Full rule payload (Protect rejects partial bodies). "
+            "Read-modify-write: call protect_alarm_get_rule, mutate, pass back here."
+        )
+    )
+
+    @model_validator(mode="after")
+    def _check_actions(self) -> "AlarmUpdateRuleInput":
+        _require_non_empty_actions(self.body)
+        return self
+
+
+class AlarmCreateRuleInput(BaseModel):
+    """Input for ``protect_alarm_create_rule``.
+
+    The tool layer translates snake_case keys in ``body`` (as returned by
+    ``protect_alarm_get_rule``) to the camelCase shape the controller
+    requires on POST, so a natural read-modify-write flow works for clone-
+    style creates. Both casings of a field are accepted; the camelCase
+    value wins if both are present.
+    """
+
+    __action_input__: ClassVar[bool] = True
+
+    body: dict = Field(
+        description=(
+            "Full rule payload matching the Protect automations schema "
+            "(name, enable, sources, conditions, actions, cooldown). "
+            "Server assigns the id and returns the created rule. "
+            "``actions`` MUST be a non-empty list -- the controller accepts "
+            "an empty actions list but the resulting rule cannot be opened "
+            "in the Protect UI."
+        )
+    )
+
+    @model_validator(mode="after")
+    def _check_actions(self) -> "AlarmCreateRuleInput":
+        _require_non_empty_actions(self.body)
+        return self
+
+
+class AlarmDeleteRuleInput(BaseModel):
+    """Input for ``protect_alarm_delete_rule``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    rule_id: str = Field(description="Alarm rule (automation) UUID to delete")
 
 
 class TriggerChimeInput(BaseModel):

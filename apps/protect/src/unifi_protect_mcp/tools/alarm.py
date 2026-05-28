@@ -1,8 +1,12 @@
 """Alarm Manager tools for UniFi Protect MCP server.
 
-Provides tools to arm/disarm the UniFi Protect Alarm Manager and list
-configured arm profiles. Requires UniFi Protect 6.1+ with Alarm Manager
-profiles configured in the Protect web UI.
+Provides tools to:
+* arm/disarm the UniFi Protect Alarm Manager and list configured arm profiles
+* CRUD alarm rules (automations) — list, get, update, create, delete
+
+Requires UniFi Protect 6.1+ with Alarm Manager configured in the Protect
+web UI. The rule CRUD endpoints are private REST under
+``/proxy/protect/api/automations`` and not exposed by upstream uiprotect.
 """
 
 import logging
@@ -13,10 +17,20 @@ from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import preview_response
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.protect.models._actions import AlarmArmInput, AlarmDisarmInput
+from unifi_core.protect.models._actions import (
+    AlarmArmInput,
+    AlarmCreateRuleInput,
+    AlarmDeleteRuleInput,
+    AlarmDisarmInput,
+    AlarmGetRuleInput,
+    AlarmUpdateRuleInput,
+)
 from unifi_core.protect.models.alarms import (
     profile_from_controller,
     profile_list_from_controller,
+    rule_from_controller,
+    rule_list_from_controller,
+    rule_to_controller,
     status_from_controller,
 )
 from unifi_protect_mcp.runtime import alarm_manager, server
@@ -173,6 +187,239 @@ async def protect_alarm_disarm(
         return {"success": False, "error": f"Failed to disarm alarm: {e}"}
 
 
+@server.tool(
+    name="protect_alarm_list_rules",
+    description=(
+        "Lists every alarm rule (automation) configured in the UniFi Protect "
+        "Alarm Manager. Each rule includes id, name, enable flag, sources "
+        "(camera scope), conditions (AND-list of triggers like license_plate_known "
+        "or smartDetectLine), actions (webhook URLs, etc.), and cooldown. "
+        "Use protect_alarm_get_rule for the full payload of a single rule "
+        "needed for the read-modify-write update flow."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def protect_alarm_list_rules() -> Dict[str, Any]:
+    """List all alarm rules."""
+    logger.info("protect_alarm_list_rules tool called")
+    try:
+        raw_rules = await alarm_manager.list_rules()
+        shaped_rules = [rule_from_controller(r).model_dump(exclude_none=True) for r in raw_rules]
+        shaped_wrapper = rule_list_from_controller({"rules": shaped_rules, "count": len(shaped_rules)})
+        return {
+            "success": True,
+            "data": {
+                **shaped_wrapper.model_dump(exclude_none=True),
+                "rules": shaped_rules,
+            },
+        }
+    except Exception as e:
+        logger.error("Error listing alarm rules: %s", e, exc_info=True)
+        return {"success": False, "error": f"Failed to list alarm rules: {e}"}
+
+
+@server.tool(
+    name="protect_alarm_get_rule",
+    description=(
+        "Fetches the full payload of a single alarm rule (automation) by id. "
+        "Use the returned dict as the basis for protect_alarm_update_rule's "
+        "body parameter — Protect requires the full rule body on PATCH."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def protect_alarm_get_rule(
+    rule_id: Annotated[
+        str,
+        Field(description="Alarm rule (automation) UUID from protect_alarm_list_rules"),
+    ],
+) -> Dict[str, Any]:
+    """Get a single alarm rule."""
+    logger.info("protect_alarm_get_rule tool called (rule_id=%s)", rule_id)
+    try:
+        try:
+            AlarmGetRuleInput(rule_id=rule_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        raw = await alarm_manager.get_rule(rule_id)
+        shaped = rule_from_controller(raw)
+        return {
+            "success": True,
+            "data": shaped.model_dump(exclude_none=True),
+        }
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error getting alarm rule %s: %s", rule_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to get alarm rule: {e}"}
+
+
+@server.tool(
+    name="protect_alarm_update_rule",
+    description=(
+        "Updates an alarm rule via PATCH. Protect requires the FULL rule "
+        "body — partial PATCH bodies are rejected by the controller. The "
+        "expected flow is: (1) call protect_alarm_get_rule to fetch the "
+        "current rule, (2) mutate the returned dict in-place, (3) pass the "
+        "mutated dict back here as body. Body keys may be snake_case (as "
+        "returned by get_rule) or camelCase; the tool normalizes to "
+        "camelCase before PATCHing. ``actions`` must be a non-empty list. "
+        "Requires confirm=True to apply — otherwise returns a preview "
+        "of current vs proposed."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+    permission_category="alarm",
+    permission_action="update",
+)
+async def protect_alarm_update_rule(
+    rule_id: Annotated[str, Field(description="Alarm rule (automation) UUID to update")],
+    body: Annotated[
+        Dict[str, Any],
+        Field(
+            description=("Full rule payload. Get the current rule via protect_alarm_get_rule, mutate, then pass here.")
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the update. When false (default), returns a preview."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Update an alarm rule (full-body PATCH)."""
+    logger.info("protect_alarm_update_rule tool called (rule_id=%s, confirm=%s)", rule_id, confirm)
+    try:
+        try:
+            AlarmUpdateRuleInput(rule_id=rule_id, body=body)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        # Translate ONCE so the preview's "proposed" and the actual PATCH
+        # show identical key shape (no snake/camel drift between them).
+        translated = rule_to_controller(body)
+        if not confirm:
+            preview_data = await alarm_manager.preview_update_rule(rule_id, translated)
+            return preview_response(
+                action="update",
+                resource_type="alarm_rule",
+                resource_id=rule_id,
+                current_state=preview_data["current"],
+                proposed_changes=preview_data["proposed"],
+                resource_name=preview_data["current"].get("name") or rule_id,
+            )
+
+        result = await alarm_manager.update_rule(rule_id, translated)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError, TypeError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error updating alarm rule %s: %s", rule_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to update alarm rule: {e}"}
+
+
+@server.tool(
+    name="protect_alarm_create_rule",
+    description=(
+        "Creates a new alarm rule via POST. Body must be a full rule payload "
+        "matching the Protect automations schema: name, enable, sources "
+        "(scope), conditions (triggers), actions (webhook/etc), cooldown. "
+        "The server assigns the rule id and returns the created rule. "
+        "Body keys may be snake_case (as returned by protect_alarm_get_rule) "
+        "or camelCase (controller-native); the tool normalizes to camelCase "
+        "before POSTing, so the natural read-modify-write clone flow works. "
+        "``actions`` must be a non-empty list — the controller will accept "
+        "an empty actions list but the resulting rule cannot be opened in "
+        "the Protect UI. "
+        "Requires confirm=True to apply — otherwise returns a preview."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+    permission_category="alarm",
+    permission_action="create",
+)
+async def protect_alarm_create_rule(
+    body: Annotated[
+        Dict[str, Any],
+        Field(description="Full alarm rule payload (see Protect automations schema)"),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, creates the rule. When false (default), returns a preview."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Create a new alarm rule."""
+    logger.info("protect_alarm_create_rule tool called (confirm=%s)", confirm)
+    try:
+        try:
+            AlarmCreateRuleInput(body=body)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        # Translate ONCE so the preview's "proposed" exactly matches the
+        # body that would be POSTed on confirm (no snake/camel drift).
+        translated = rule_to_controller(body)
+        if not confirm:
+            return preview_response(
+                action="create",
+                resource_type="alarm_rule",
+                resource_id=translated.get("id") or "<server-assigned>",
+                current_state={},
+                proposed_changes=translated,
+                resource_name=translated.get("name") or "new alarm rule",
+            )
+
+        result = await alarm_manager.create_rule(translated)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError, TypeError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error creating alarm rule: %s", e, exc_info=True)
+        return {"success": False, "error": f"Failed to create alarm rule: {e}"}
+
+
+@server.tool(
+    name="protect_alarm_delete_rule",
+    description=(
+        "Deletes an alarm rule (automation) by id. Requires confirm=True to "
+        "apply — otherwise returns a preview showing the rule that would be "
+        "deleted. Destructive — the rule and its configured webhook actions "
+        "cannot be recovered through the API."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
+    permission_category="alarm",
+    permission_action="delete",
+)
+async def protect_alarm_delete_rule(
+    rule_id: Annotated[str, Field(description="Alarm rule (automation) UUID to delete")],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, deletes the rule. When false (default), returns a preview."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Delete an alarm rule."""
+    logger.info("protect_alarm_delete_rule tool called (rule_id=%s, confirm=%s)", rule_id, confirm)
+    try:
+        try:
+            AlarmDeleteRuleInput(rule_id=rule_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        if not confirm:
+            preview_data = await alarm_manager.preview_delete_rule(rule_id)
+            return preview_response(
+                action="delete",
+                resource_type="alarm_rule",
+                resource_id=rule_id,
+                current_state={"name": preview_data["current_name"]},
+                proposed_changes=preview_data["proposed_changes"],
+                resource_name=preview_data["current_name"] or rule_id,
+            )
+
+        result = await alarm_manager.delete_rule(rule_id)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error deleting alarm rule %s: %s", rule_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to delete alarm rule: {e}"}
+
+
 logger.info(
-    "Alarm tools registered: protect_alarm_list_profiles, protect_alarm_get_status, protect_alarm_arm, protect_alarm_disarm"
+    "Alarm tools registered: "
+    "protect_alarm_list_profiles, protect_alarm_get_status, protect_alarm_arm, protect_alarm_disarm, "
+    "protect_alarm_list_rules, protect_alarm_get_rule, protect_alarm_update_rule, "
+    "protect_alarm_create_rule, protect_alarm_delete_rule"
 )

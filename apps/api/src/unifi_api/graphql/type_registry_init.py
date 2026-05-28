@@ -211,6 +211,12 @@ from unifi_api.graphql.types.protect.alarms import (
     AlarmProfileList as ProtectAlarmProfileListType,
 )
 from unifi_api.graphql.types.protect.alarms import (
+    AlarmRule as ProtectAlarmRuleType,
+)
+from unifi_api.graphql.types.protect.alarms import (
+    AlarmRuleList as ProtectAlarmRuleListType,
+)
+from unifi_api.graphql.types.protect.alarms import (
     AlarmStatus as ProtectAlarmStatusType,
 )
 from unifi_api.graphql.types.protect.cameras import (
@@ -603,6 +609,16 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type(
         "protect_alarm_list_profiles",
         ProtectAlarmProfileListType,
+        "detail",
+    )
+    reg.register_tool_type(
+        "protect_alarm_list_rules",
+        ProtectAlarmRuleListType,
+        "detail",
+    )
+    reg.register_tool_type(
+        "protect_alarm_get_rule",
+        ProtectAlarmRuleType,
         "detail",
     )
 

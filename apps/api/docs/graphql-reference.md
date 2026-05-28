@@ -190,6 +190,28 @@ type AlarmProfileList {
   count: Int
 }
 
+"""
+A UniFi Protect alarm rule (Alarm Manager automation) — flat passthrough.
+"""
+type AlarmRule {
+  id: ID
+  name: String
+  enable: Boolean
+  isCreatedBySystem: Boolean
+  sources: JSON
+  conditions: JSON
+  historyConditions: JSON
+  schedules: JSON
+  actions: JSON
+  cooldown: JSON
+}
+
+"""Wrapper for protect_alarm_list_rules — {rules, count}."""
+type AlarmRuleList {
+  rules: JSON
+  count: Int
+}
+
 """UniFi Protect alarm system arm-state snapshot."""
 type AlarmStatus {
   armed: Boolean
@@ -1349,6 +1371,14 @@ type ProtectQuery {
   """List configured alarm profiles ({profiles, count})."""
   alarmProfiles(controller: ID!): AlarmProfileList
 
+  """
+  List configured alarm rules / Alarm Manager automations ({rules, count}).
+  """
+  alarmRules(controller: ID!): AlarmRuleList
+
+  """Fetch a single alarm rule (automation) by id."""
+  alarmRule(controller: ID!, id: ID!): AlarmRule
+
   """List Protect events (paginated, most recent first)."""
   events(controller: ID!, limit: Int! = 50, cursor: String = null, eventType: String = null, cameraId: String = null): EventPage!
 
@@ -1989,6 +2019,8 @@ Read-only access to UniFi Protect resources.
 **Fields:**
 
 - `alarmProfiles: AlarmProfileList`  — List configured alarm profiles ({profiles, count}).
+- `alarmRule: AlarmRule`  — Fetch a single alarm rule (automation) by id.
+- `alarmRules: AlarmRuleList`  — List configured alarm rules / Alarm Manager automations ({rules, count}).
 - `alarmStatus: AlarmStatus`  — Get the alarm system arm-state snapshot.
 - `camera: Camera`  — Look up a single Protect camera by id.
 - `cameraAnalytics: CameraAnalytics`  — Get analytics summary for a Protect camera.
