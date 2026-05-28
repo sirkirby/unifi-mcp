@@ -67,7 +67,10 @@ def _detect_legacy_fields(data: Dict[str, Any]) -> str | None:
         "Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, "
         "IPs, network IDs).\n\n"
         "Filters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, "
-        "limit (default 50), include_predefined."
+        "limit (default 50), include_predefined. By default (summary=true) returns a curated "
+        "entry per policy (id, name, enabled, action, rule_index, description + source/destination "
+        "targeting). Set summary=false for the full fw_from_controller().model_dump() shape "
+        "including protocol, schedule, logging, ip_version, index, etc."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -85,6 +88,17 @@ async def list_firewall_policies(
         Field(description="If true, only return enabled policies. Default false."),
     ] = False,
     limit: Annotated[int, Field(description="Maximum number of policies to return (default 50)")] = 50,
+    summary: Annotated[
+        bool,
+        Field(
+            description=(
+                "Controls per-policy shape. When true (default), returns a curated 6-key entry "
+                "plus narrowed source/destination targeting. When false, returns the full "
+                "fw_from_controller().model_dump() shape (protocol, schedule, logging, ip_version, "
+                "index, full source/destination dicts)."
+            )
+        ),
+    ] = True,
     include_predefined: Annotated[
         bool,
         Field(
@@ -116,10 +130,14 @@ async def list_firewall_policies(
 
         formatted_policies = []
         for p in policies_raw:
-            # Source scalar fields through the typed model (validation/coercion). `description`
-            # is not a model field, so it stays read from raw; the V2 targeting dicts (passed
-            # through by the model) are narrowed to the useful subset below.
             shaped = fw_from_controller(p)
+            if not summary:
+                # Legacy/full shape: complete model dump (protocol, schedule, logging, ip_version,
+                # index, full source/destination dicts).
+                formatted_policies.append(shaped.model_dump(exclude_none=True))
+                continue
+            # Curated shape (default): narrow to the 6 most useful keys plus targeting subset.
+            # `description` is not a model field, so it stays read from raw.
             entry = {
                 "id": shaped.id,
                 "name": shaped.name,
@@ -154,6 +172,7 @@ async def list_firewall_policies(
             "enabled_only": enabled_only,
             "total_count": total_count,
             "returned_count": len(formatted_policies),
+            "count": len(formatted_policies),  # back-compat alias for returned_count
             "limit": limit,
             "policies": formatted_policies,
         }

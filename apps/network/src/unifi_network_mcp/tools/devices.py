@@ -97,8 +97,9 @@ def get_wifi_bands(device: Dict[str, Any]) -> List[str]:
         "Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). "
         "Note: device_type=ap correctly excludes USP Smart Power strips. "
         "Use search to filter by name, IP, or MAC (case-insensitive). "
-        "Set include_details=true for compressed radio/port summaries and client counts; "
-        "use unifi_get_device_details(mac) for full raw port and radio tables."
+        "Set include_details=true for additional per-device fields: by default (summary=true) "
+        "compressed radio/port summaries; set summary=false to return the full raw tables "
+        "(radio_table, port_table, network_table, system_stats, wan1/wan2)."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -126,9 +127,20 @@ async def list_devices(
     include_details: Annotated[
         bool,
         Field(
-            description="When true, includes additional details with compressed radio/port summaries, WAN info (gateways), and client counts. Default false"
+            description="When true, includes additional per-device details (shape controlled by summary). Default false"
         ),
     ] = False,
+    summary: Annotated[
+        bool,
+        Field(
+            description=(
+                "Controls the shape of include_details (only applies when include_details=true). "
+                "When true (default), returns compressed summaries (counts, flattened uplink fields). "
+                "When false, returns the legacy raw tables (radio_table/port_table/network_table/"
+                "system_stats/wan1/wan2/poe_info)."
+            )
+        ),
+    ] = True,
 ) -> Dict[str, Any]:
     """Implementation for listing devices."""
     try:
@@ -238,56 +250,91 @@ async def list_devices(
                     "clients": device.get("num_sta", 0),
                 }
 
-                if category == "ap":
-                    # Summarize radio/vap tables - use get_device_details for full data
-                    radio_table = device.get("radio_table", [])
-                    vap_table = device.get("vap_table", [])
-                    details_to_add.update(
-                        {
-                            "radio_count": len(radio_table),
-                            "radios": [
-                                {"band": r.get("radio"), "channel": r.get("channel"), "tx_power": r.get("tx_power")}
-                                for r in radio_table
-                            ],
-                            "vap_count": len(vap_table),
-                            "wifi_bands": get_wifi_bands(device),
-                            "experience_score": device.get("satisfaction", 0),
-                            "num_clients": device.get("num_sta", 0),
-                        }
-                    )
-                elif category == "switch":
-                    # Summarize port table - use get_device_details for full port data
-                    port_table = device.get("port_table", [])
-                    ports_up = sum(1 for p in port_table if p.get("up", False))
-                    ports_poe = sum(1 for p in port_table if p.get("poe_enable", False))
-                    details_to_add.update(
-                        {
-                            "total_ports": len(port_table),
-                            "ports_up": ports_up,
-                            "ports_poe_enabled": ports_poe,
-                            "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
-                            "poe_power": device.get("poe_power"),
-                            "poe_voltage": device.get("poe_voltage"),
-                        }
-                    )
-                elif category == "gateway":
-                    # Summarize network/wan tables - use get_device_details for full data
-                    network_table = device.get("network_table", [])
-                    wan1 = device.get("wan1", {})
-                    wan2 = device.get("wan2", {})
-                    system_stats = device.get("system-stats", {})
-                    details_to_add.update(
-                        {
-                            "wan1_ip": wan1.get("ip") if wan1 else None,
-                            "wan1_up": wan1.get("up", False) if wan1 else None,
-                            "wan2_ip": wan2.get("ip") if wan2 else None,
-                            "wan2_up": wan2.get("up", False) if wan2 else None,
-                            "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
-                            "network_count": len(network_table),
-                            "cpu_usage": system_stats.get("cpu"),
-                            "mem_usage": system_stats.get("mem"),
-                        }
-                    )
+                if summary:
+                    # Compressed shape (default): summaries + counts, no raw tables.
+                    if category == "ap":
+                        radio_table = device.get("radio_table", [])
+                        vap_table = device.get("vap_table", [])
+                        details_to_add.update(
+                            {
+                                "radio_count": len(radio_table),
+                                "radios": [
+                                    {"band": r.get("radio"), "channel": r.get("channel"), "tx_power": r.get("tx_power")}
+                                    for r in radio_table
+                                ],
+                                "vap_count": len(vap_table),
+                                "wifi_bands": get_wifi_bands(device),
+                                "experience_score": device.get("satisfaction", 0),
+                                "num_clients": device.get("num_sta", 0),
+                            }
+                        )
+                    elif category == "switch":
+                        port_table = device.get("port_table", [])
+                        ports_up = sum(1 for p in port_table if p.get("up", False))
+                        ports_poe = sum(1 for p in port_table if p.get("poe_enable", False))
+                        details_to_add.update(
+                            {
+                                "total_ports": len(port_table),
+                                "ports_up": ports_up,
+                                "ports_poe_enabled": ports_poe,
+                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
+                                "poe_power": device.get("poe_power"),
+                                "poe_voltage": device.get("poe_voltage"),
+                            }
+                        )
+                    elif category == "gateway":
+                        network_table = device.get("network_table", [])
+                        wan1 = device.get("wan1", {})
+                        wan2 = device.get("wan2", {})
+                        system_stats = device.get("system-stats", {})
+                        details_to_add.update(
+                            {
+                                "wan1_ip": wan1.get("ip") if wan1 else None,
+                                "wan1_up": wan1.get("up", False) if wan1 else None,
+                                "wan2_ip": wan2.get("ip") if wan2 else None,
+                                "wan2_up": wan2.get("up", False) if wan2 else None,
+                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
+                                "network_count": len(network_table),
+                                "cpu_usage": system_stats.get("cpu"),
+                                "mem_usage": system_stats.get("mem"),
+                            }
+                        )
+                else:
+                    # Legacy raw shape (pre-PR upstream): full tables passthrough.
+                    if category == "ap":
+                        details_to_add.update(
+                            {
+                                "radio_table": device.get("radio_table", []),
+                                "vap_table": device.get("vap_table", []),
+                                "wifi_bands": get_wifi_bands(device),
+                                "experience_score": device.get("satisfaction", 0),
+                                "num_clients": device.get("num_sta", 0),
+                            }
+                        )
+                    elif category == "switch":
+                        details_to_add.update(
+                            {
+                                "ports": device.get("port_table", []),
+                                "total_ports": len(device.get("port_table", [])),
+                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
+                                "poe_info": {
+                                    "poe_current": device.get("poe_current"),
+                                    "poe_power": device.get("poe_power"),
+                                    "poe_voltage": device.get("poe_voltage"),
+                                },
+                            }
+                        )
+                    elif category == "gateway":
+                        details_to_add.update(
+                            {
+                                "wan1": device.get("wan1", {}),
+                                "wan2": device.get("wan2", {}),
+                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
+                                "network_table": device.get("network_table", []),
+                                "system_stats": device.get("system-stats", {}),
+                                "speedtest_status": device.get("speedtest-status", {}),
+                            }
+                        )
 
                 device_info.update(details_to_add)
 
@@ -301,6 +348,7 @@ async def list_devices(
             "search": search,
             "total_count": total_count,
             "returned_count": len(formatted_devices),
+            "count": len(formatted_devices),  # back-compat alias for returned_count
             "limit": limit,
             "devices": formatted_devices,
         }
@@ -312,15 +360,15 @@ async def list_devices(
 @server.tool(
     name="unifi_get_device_details",
     description=(
-        "Returns device data for one device by MAC address with section-based selection.\n\n"
-        "include: comma-separated sections (default 'basic,ports'). Sections: "
-        "basic, ports, radios, stats, uplink, lldp, all.\n"
-        "summary: when false, returns full raw data (for debugging).\n\n"
-        "Port fields:\n"
+        "Returns device data for one device by MAC address. By default (summary=false) returns the "
+        "full raw device object — all controller-reported fields including radio tables, port tables, "
+        "system stats, WAN info, firmware details. Set summary=true to trim to selected sections via "
+        "include (basic, ports, radios, stats, uplink, lldp, all).\n\n"
+        "Port fields (summary mode):\n"
         "- last_seen_mac: last MAC that sent traffic on port (may be wireless client traffic, not reliable)\n"
         "- lldp_neighbor: actual connected infrastructure device (from LLDP, reliable for switches/APs)\n\n"
-        "Examples: include='basic' (minimal); include='basic,ports' (switches); "
-        "include='basic,radios' (APs); include='all' (every section, still compressed)."
+        "Examples: <no args> (full raw); summary=true,include='basic' (minimal); "
+        "summary=true,include='basic,ports' (switches); summary=true,include='basic,radios' (APs)."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -333,15 +381,20 @@ async def get_device_details(
         str,
         Field(
             description=(
-                "Comma-separated sections to return (default 'basic,ports'). "
+                "Comma-separated sections to return when summary=true (default 'basic,ports'). "
                 "Sections: basic, ports, radios, stats, uplink, lldp, all."
             )
         ),
     ] = "basic,ports",
     summary: Annotated[
         bool,
-        Field(description="When true (default), compress large nested tables. Set false for full raw data."),
-    ] = True,
+        Field(
+            description=(
+                "When false (default), returns the full raw device object. "
+                "When true, trims to the sections named in include."
+            )
+        ),
+    ] = False,
 ) -> Dict[str, Any]:
     """Implementation for getting device details."""
     try:
@@ -358,7 +411,9 @@ async def get_device_details(
                     "device": device_raw,
                 }
 
+            known_sections = {"basic", "ports", "radios", "stats", "uplink", "lldp", "all"}
             sections = set(s.strip().lower() for s in include.split(","))
+            unknown_sections = sorted(sections - known_sections)
             include_all = "all" in sections
 
             device_data: Dict[str, Any] = {}
@@ -455,13 +510,16 @@ async def get_device_details(
                 if "lldp_table" in device_raw:
                     device_data["lldp_table"] = device_raw["lldp_table"]
 
-            return {
+            response = {
                 "success": True,
                 "site": device_manager._connection.site,
                 "include": include,
                 "summary_mode": True,
                 "device": device_data,
             }
+            if unknown_sections:
+                response["unknown_sections"] = unknown_sections
+            return response
         return {
             "success": False,
             "error": f"Device not found with MAC address: {mac_address}",

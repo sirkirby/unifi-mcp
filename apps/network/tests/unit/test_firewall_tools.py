@@ -92,6 +92,8 @@ class TestListFirewallPolicies:
         assert result["success"] is True
         assert result["total_count"] == 1
         assert result["returned_count"] == 1
+        # back-compat: legacy `count` key preserved alongside returned_count
+        assert result["count"] == result["returned_count"]
         policy = result["policies"][0]
         # Model-based shaping: id, name, action, enabled surface correctly
         assert policy["id"] == "pol_legacy_001"
@@ -157,6 +159,94 @@ class TestListFirewallPolicies:
 
         assert block_result["returned_count"] == 1
         assert block_result["policies"][0]["id"] == "pol_block"
+
+    @pytest.mark.asyncio
+    async def test_filter_composition_action_enabled_only_search(self):
+        """action + enabled_only + search compose correctly (all three must match)."""
+        # 4 policies covering the truth table of the composed filter.
+        p_match = {
+            **SAMPLE_ZONE_POLICY_RAW,
+            "_id": "p_match",
+            "name": "match-target",
+            "enabled": True,
+            "action": "ALLOW",
+        }
+        p_wrong_action = {
+            **SAMPLE_ZONE_POLICY_RAW,
+            "_id": "p_wa",
+            "name": "match-target",
+            "enabled": True,
+            "action": "BLOCK",
+        }
+        p_disabled = {
+            **SAMPLE_ZONE_POLICY_RAW,
+            "_id": "p_dis",
+            "name": "match-target",
+            "enabled": False,
+            "action": "ALLOW",
+        }
+        p_wrong_name = {**SAMPLE_ZONE_POLICY_RAW, "_id": "p_wn", "name": "no-match", "enabled": True, "action": "ALLOW"}
+        policies = [_make_policy(p) for p in (p_match, p_wrong_action, p_disabled, p_wrong_name)]
+
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=policies)
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+            result = await list_firewall_policies(
+                action="ALLOW", enabled_only=True, search="match-target", include_predefined=False
+            )
+
+        assert result["returned_count"] == 1
+        assert result["policies"][0]["id"] == "p_match"
+
+    @pytest.mark.asyncio
+    async def test_zero_items_case(self):
+        """Controller returns no policies -> total_count=0, returned_count=0, policies=[]."""
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[])
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+            result = await list_firewall_policies(include_predefined=False)
+
+        assert result["total_count"] == 0 and result["returned_count"] == 0
+        assert result["count"] == 0
+        assert result["policies"] == []
+
+    @pytest.mark.asyncio
+    async def test_summary_false_returns_full_model_dump(self):
+        """summary=False returns the legacy fw_from_controller().model_dump() shape —
+        protocol/ip_version/logging/index present, not narrowed to the curated 6 keys."""
+        mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+            curated = await list_firewall_policies(include_predefined=False)  # default summary=True
+            raw = await list_firewall_policies(summary=False, include_predefined=False)
+
+        # curated path: narrowed 6-key entry + targeting; protocol/logging absent
+        cp = curated["policies"][0]
+        assert "protocol" not in cp and "logging" not in cp and "ip_version" not in cp
+        # raw path: full model dump fields present
+        rp = raw["policies"][0]
+        assert rp.get("protocol") == "all"
+        assert rp.get("ip_version") == "BOTH"
+        assert rp.get("logging") is False
 
 
 # ---------------------------------------------------------------------------

@@ -5595,13 +5595,13 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns device data for one device by MAC address with section-based selection.\n\ninclude: comma-separated sections (default 'basic,ports'). Sections: basic, ports, radios, stats, uplink, lldp, all.\nsummary: when false, returns full raw data (for debugging).\n\nPort fields:\n- last_seen_mac: last MAC that sent traffic on port (may be wireless client traffic, not reliable)\n- lldp_neighbor: actual connected infrastructure device (from LLDP, reliable for switches/APs)\n\nExamples: include='basic' (minimal); include='basic,ports' (switches); include='basic,radios' (APs); include='all' (every section, still compressed).",
+      "description": "Returns device data for one device by MAC address. By default (summary=false) returns the full raw device object \u2014 all controller-reported fields including radio tables, port tables, system stats, WAN info, firmware details. Set summary=true to trim to selected sections via include (basic, ports, radios, stats, uplink, lldp, all).\n\nPort fields (summary mode):\n- last_seen_mac: last MAC that sent traffic on port (may be wireless client traffic, not reliable)\n- lldp_neighbor: actual connected infrastructure device (from LLDP, reliable for switches/APs)\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,ports' (switches); summary=true,include='basic,radios' (APs).",
       "name": "unifi_get_device_details",
       "schema": {
         "input": {
           "properties": {
             "include": {
-              "description": "Comma-separated sections to return (default 'basic,ports'). Sections: basic, ports, radios, stats, uplink, lldp, all.",
+              "description": "Comma-separated sections to return when summary=true (default 'basic,ports'). Sections: basic, ports, radios, stats, uplink, lldp, all.",
               "type": "string"
             },
             "mac_address": {
@@ -5609,7 +5609,7 @@
               "type": "string"
             },
             "summary": {
-              "description": "When true (default), compress large nested tables. Set false for full raw data.",
+              "description": "When false (default), returns the full raw device object. When true, trims to the sections named in include.",
               "type": "boolean"
             }
           },
@@ -6706,13 +6706,13 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get details for a specific network by ID with section-based selection.\n\ninclude: comma-separated sections (default 'basic'). Sections: basic, dhcp, ipv6, vpn, all.\nsummary: when false, returns full raw data (for debugging).\n\nExamples: include='basic' (minimal); include='basic,dhcp' (adds DHCP server config); include='all' (all sections).",
+      "description": "Get details for a specific network by ID. By default (summary=false) returns the full raw network configuration. Set summary=true to trim to selected sections via include (basic, dhcp, ipv6, vpn, all).\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'.",
       "name": "unifi_get_network_details",
       "schema": {
         "input": {
           "properties": {
             "include": {
-              "description": "Comma-separated sections to return (default 'basic'). Sections: basic, dhcp, ipv6, vpn, all.",
+              "description": "Comma-separated sections to return when summary=true (default 'basic'). Sections: basic, dhcp, ipv6, vpn, all.",
               "type": "string"
             },
             "network_id": {
@@ -6720,7 +6720,7 @@
               "type": "string"
             },
             "summary": {
-              "description": "When true (default), filter to selected sections. Set false for full raw data.",
+              "description": "When false (default), returns the full raw network object. When true, trims to the sections named in include.",
               "type": "boolean"
             }
           },
@@ -9945,7 +9945,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). Note: device_type=ap correctly excludes USP Smart Power strips. Use search to filter by name, IP, or MAC (case-insensitive). Set include_details=true for compressed radio/port summaries and client counts; use unifi_get_device_details(mac) for full raw port and radio tables.",
+      "description": "Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). Note: device_type=ap correctly excludes USP Smart Power strips. Use search to filter by name, IP, or MAC (case-insensitive). Set include_details=true for additional per-device fields: by default (summary=true) compressed radio/port summaries; set summary=false to return the full raw tables (radio_table, port_table, network_table, system_stats, wan1/wan2).",
       "name": "unifi_list_devices",
       "schema": {
         "input": {
@@ -9955,7 +9955,7 @@
               "type": "string"
             },
             "include_details": {
-              "description": "When true, includes additional details with compressed radio/port summaries, WAN info (gateways), and client counts. Default false",
+              "description": "When true, includes additional per-device details (shape controlled by summary). Default false",
               "type": "boolean"
             },
             "limit": {
@@ -9969,6 +9969,10 @@
             "status": {
               "description": "Filter by device status: 'all' (default), 'online', 'offline', 'pending', 'adopting', 'provisioning', or 'upgrading'",
               "type": "string"
+            },
+            "summary": {
+              "description": "Controls the shape of include_details (only applies when include_details=true). When true (default), returns compressed summaries (counts, flattened uplink fields). When false, returns the legacy raw tables (radio_table/port_table/network_table/system_stats/wan1/wan2/poe_info).",
+              "type": "boolean"
             }
           },
           "type": "object"
@@ -10509,7 +10513,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List firewall policies configured on the Unifi Network controller. Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, IPs, network IDs).\n\nFilters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, limit (default 50), include_predefined.",
+      "description": "List firewall policies configured on the Unifi Network controller. Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, IPs, network IDs).\n\nFilters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, limit (default 50), include_predefined. By default (summary=true) returns a curated entry per policy (id, name, enabled, action, rule_index, description + source/destination targeting). Set summary=false for the full fw_from_controller().model_dump() shape including protocol, schedule, logging, ip_version, index, etc.",
       "name": "unifi_list_firewall_policies",
       "schema": {
         "input": {
@@ -10533,6 +10537,10 @@
             "search": {
               "description": "Filter by policy name (case-insensitive substring match)",
               "type": "string"
+            },
+            "summary": {
+              "description": "Controls per-policy shape. When true (default), returns a curated 6-key entry plus narrowed source/destination targeting. When false, returns the full fw_from_controller().model_dump() shape (protocol, schedule, logging, ip_version, index, full source/destination dicts).",
+              "type": "boolean"
             }
           },
           "type": "object"

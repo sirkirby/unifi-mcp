@@ -22,6 +22,7 @@ from unifi_core.network.models._actions import (
     UnblockClientInput,
 )
 from unifi_core.network.models.clients import (
+    _is_online,
     blocked_client_from_controller,
     client_from_controller,
     client_lookup_from_controller,
@@ -31,28 +32,6 @@ from unifi_core.network.models.clients import (
 from unifi_network_mcp.runtime import client_manager, server
 
 logger = logging.getLogger(__name__)
-
-_ACTIVE_CONNECTION_KEYS: tuple[str, ...] = (
-    "_uptime_by_uap",
-    "_uptime_by_usw",
-    "_uptime_by_ugw",
-    "uptime",
-)
-
-
-def _is_online(raw: dict) -> bool:
-    """Mirror of unifi_core.network.models.clients._is_online — derives
-    online status from a controller record, falling back to
-    active-connection indicators when ``is_online`` is omitted by the
-    controller firmware.
-    """
-    if raw.get("is_online") is True:
-        return True
-    for key in _ACTIVE_CONNECTION_KEYS:
-        v = raw.get(key)
-        if isinstance(v, (int, float)) and v > 0:
-            return True
-    return False
 
 
 @server.tool(
@@ -154,10 +133,27 @@ async def list_clients(
         total_count = len(clients_raw)
         clients_raw = clients_raw[:limit]
 
-        # Parse requested fields for selective return
+        # Parse requested fields for selective return + surface unknown tokens
+        # so LLM callers can self-correct typos (e.g. fields="mac,naame").
+        known_fields = {
+            "mac",
+            "name",
+            "hostname",
+            "ip",
+            "connection_type",
+            "status",
+            "last_seen",
+            "_id",
+            "essid",
+            "signal_dbm",
+            "channel",
+            "radio",
+        }
         requested_fields = None
+        unknown_fields: list[str] = []
         if fields and fields.strip():
             requested_fields = set(f.strip() for f in fields.split(","))
+            unknown_fields = sorted(requested_fields - known_fields)
 
         formatted_clients = []
         for client in clients_raw:
@@ -179,7 +175,7 @@ async def list_clients(
 
             formatted_clients.append(formatted)
 
-        return {
+        response = {
             "success": True,
             "site": client_manager._connection.site,
             "filter_type": filter_type,
@@ -187,9 +183,13 @@ async def list_clients(
             "fields": fields,
             "total_count": total_count,
             "returned_count": len(formatted_clients),
+            "count": len(formatted_clients),  # back-compat alias for returned_count
             "limit": limit,
             "clients": formatted_clients,
         }
+        if unknown_fields:
+            response["unknown_fields"] = unknown_fields
+        return response
     except Exception as e:
         logger.error("Error listing clients: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list clients: {e}"}
@@ -259,7 +259,9 @@ async def get_client_details(
 
             # summary=true: opt-in section-trimmed view. The default path above is the
             # full raw object; this branch only runs when the caller explicitly asks to trim.
+            known_sections = {"basic", "network", "wireless", "traffic", "fingerprint", "all"}
             sections = set(s.strip().lower() for s in include.split(","))
+            unknown_sections = sorted(sections - known_sections)
             include_all = "all" in sections
             client_data: Dict[str, Any] = {}
 
@@ -331,13 +333,16 @@ async def get_client_details(
                     }
                 )
 
-            return {
+            response = {
                 "success": True,
                 "site": client_manager._connection.site,
                 "include": include,
                 "summary_mode": True,
                 "client": client_data,
             }
+            if unknown_sections:
+                response["unknown_sections"] = unknown_sections
+            return response
         return {
             "success": False,
             "error": f"Client not found with MAC address: {mac_address}",

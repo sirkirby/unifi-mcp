@@ -150,9 +150,23 @@ async def list_networks(
         total_count = len(networks_data)
         networks_data = networks_data[:limit]
 
+        known_fields = {
+            "_id",
+            "name",
+            "enabled",
+            "purpose",
+            "ip_subnet",
+            "vlan_enabled",
+            "vlan",
+            "dhcpd_enabled",
+            "dhcpd_start",
+            "dhcpd_stop",
+        }
         requested_fields = None
+        unknown_fields: list[str] = []
         if fields and fields.strip():
             requested_fields = set(f.strip() for f in fields.split(","))
+            unknown_fields = sorted(requested_fields - known_fields)
 
         formatted_networks = []
         for network in networks_data:
@@ -179,7 +193,7 @@ async def list_networks(
 
             formatted_networks.append(formatted)
 
-        return {
+        response = {
             "success": True,
             "site": network_manager._connection.site,
             "search": search,
@@ -187,9 +201,13 @@ async def list_networks(
             "fields": fields,
             "total_count": total_count,
             "returned_count": len(formatted_networks),
+            "count": len(formatted_networks),  # back-compat alias for returned_count
             "limit": limit,
             "networks": formatted_networks,
         }
+        if unknown_fields:
+            response["unknown_fields"] = unknown_fields
+        return response
     except Exception as e:
         logger.error("Error listing networks in tool: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list networks: {e}"}
@@ -198,11 +216,11 @@ async def list_networks(
 @server.tool(
     name="unifi_get_network_details",
     description=(
-        "Get details for a specific network by ID with section-based selection.\n\n"
-        "include: comma-separated sections (default 'basic'). Sections: basic, dhcp, ipv6, vpn, all.\n"
-        "summary: when false, returns full raw data (for debugging).\n\n"
-        "Examples: include='basic' (minimal); include='basic,dhcp' (adds DHCP server config); "
-        "include='all' (all sections)."
+        "Get details for a specific network by ID. By default (summary=false) returns the full raw "
+        "network configuration. Set summary=true to trim to selected sections via include "
+        "(basic, dhcp, ipv6, vpn, all).\n\n"
+        "Examples: <no args> (full raw); summary=true,include='basic' (minimal); "
+        "summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -211,13 +229,21 @@ async def get_network_details(
     include: Annotated[
         str,
         Field(
-            description=("Comma-separated sections to return (default 'basic'). Sections: basic, dhcp, ipv6, vpn, all.")
+            description=(
+                "Comma-separated sections to return when summary=true (default 'basic'). "
+                "Sections: basic, dhcp, ipv6, vpn, all."
+            )
         ),
     ] = "basic",
     summary: Annotated[
         bool,
-        Field(description="When true (default), filter to selected sections. Set false for full raw data."),
-    ] = True,
+        Field(
+            description=(
+                "When false (default), returns the full raw network object. "
+                "When true, trims to the sections named in include."
+            )
+        ),
+    ] = False,
 ) -> Dict[str, Any]:
     """Gets the detailed configuration of a specific network by its ID.
 
@@ -269,7 +295,9 @@ async def get_network_details(
                     "details": json.loads(json.dumps(network, default=str)),
                 }
 
+            known_sections = {"basic", "dhcp", "ipv6", "vpn", "all"}
             sections = set(s.strip().lower() for s in include.split(","))
+            unknown_sections = sorted(sections - known_sections)
             include_all = "all" in sections
 
             network_data: Dict[str, Any] = {}
@@ -322,7 +350,7 @@ async def get_network_details(
                     }
                 )
 
-            return {
+            response = {
                 "success": True,
                 "site": network_manager._connection.site,
                 "network_id": network_id,
@@ -330,6 +358,9 @@ async def get_network_details(
                 "summary_mode": True,
                 "details": network_data,
             }
+            if unknown_sections:
+                response["unknown_sections"] = unknown_sections
+            return response
         else:
             return {
                 "success": False,
@@ -784,6 +815,7 @@ async def list_wlans(
             "enabled_only": enabled_only,
             "total_count": total_count,
             "returned_count": len(formatted_wlans),
+            "count": len(formatted_wlans),  # back-compat alias for returned_count
             "limit": limit,
             "wlans": formatted_wlans,
         }
