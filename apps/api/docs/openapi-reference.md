@@ -1718,6 +1718,24 @@ No native ``protect_get_liveview`` tool — filter from LIST.
 
 **Returns:** `Page_KnownFaceModel_`
 
+### `GET /v1/sites/{site_id}/known-license-plates` — List Known License Plates
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `limit` (query)
+- `cursor` (query)
+- `min_confidence` (query)
+- `include_interest` (query)
+- `group_types` (query)
+- `order_by` (query)
+- `order_direction` (query)
+- `controller` (query)
+
+
+**Returns:** `Page_KnownLicensePlateModel_`
+
 
 ## protect/sensors
 

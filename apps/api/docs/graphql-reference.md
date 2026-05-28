@@ -759,6 +759,31 @@ type KnownFacePage {
   nextCursor: String
 }
 
+"""A UniFi Protect license-plate identity (vehicle recognition group)."""
+type KnownLicensePlate {
+  id: ID
+  name: String
+  matchedName: String
+  type: String
+  imagePath: String
+  enhancedPath: String
+  detectionsCount: Int
+  firstDetectedAt: String
+  lastDetectedAt: String
+  isNotificationEnabled: Boolean
+  isDegraded: Boolean
+  tags: JSON
+  description: String
+  createdAt: String
+  metadata: JSON
+}
+
+"""Paginated page of UniFi Protect license-plate identities."""
+type KnownLicensePlatePage {
+  items: [KnownLicensePlate!]!
+  nextCursor: String
+}
+
 """A UniFi Protect light (PIR-triggered floodlight)."""
 type Light {
   id: ID
@@ -1309,6 +1334,11 @@ type ProtectQuery {
 
   """List assigned Protect Known Faces / named face recognition groups."""
   knownFaces(controller: ID!, limit: Int! = 50, cursor: String = null, minConfidence: Int! = 30, includeInterest: Boolean! = true, groupTypes: [String!] = null, orderBy: String! = "name", orderDirection: String! = "asc"): KnownFacePage!
+
+  """
+  List UniFi Protect license-plate identities (vehicle recognition groups). Each entry's id is the value to use in a `license_plate_known` alarm-rule condition.
+  """
+  knownLicensePlates(controller: ID!, limit: Int! = 50, cursor: String = null, minConfidence: Int! = 30, includeInterest: Boolean! = true, groupTypes: [String!] = null, orderBy: String! = "name", orderDirection: String! = "asc"): KnownLicensePlatePage!
 
   """List paired Protect chimes (paginated)."""
   chimes(controller: ID!, limit: Int! = 50, cursor: String = null): ChimePage!
@@ -1971,6 +2001,7 @@ Read-only access to UniFi Protect resources.
 - `firmwareStatus: FirmwareStatus`  — Get firmware status for the NVR plus its devices.
 - `health: ProtectHealth`  — Get the NVR health snapshot (cpu / memory / storage).
 - `knownFaces: KnownFacePage!`  — List assigned Protect Known Faces / named face recognition groups.
+- `knownLicensePlates: KnownLicensePlatePage!`  — List UniFi Protect license-plate identities (vehicle recognition groups). Each entry's id is the value to use in a `license_plate_known` alarm-rule condition.
 - `lights: LightPage!`  — List Protect lights (PIR-triggered floodlights).
 - `liveviews: LiveviewPage!`  — List Protect liveviews (multi-camera grid layouts).
 - `recordingStatus: RecordingStatusList`  — Get current recording state for one or all cameras ({cameras, count}).

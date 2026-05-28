@@ -11,7 +11,12 @@ from typing import Any, Dict, Literal
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
-from unifi_core.protect.models.recognition import from_controller, links_from_controller, to_controller_update
+from unifi_core.protect.models.recognition import (
+    from_controller,
+    license_plate_from_controller,
+    links_from_controller,
+    to_controller_update,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +107,68 @@ class RecognitionManager:
         return {
             "faces": faces,
             "count": len(faces),
+            "links": links,
+        }
+
+    async def list_known_license_plates(
+        self,
+        *,
+        page: int | None = None,
+        page_size: int = 100,
+        min_confidence: int = 30,
+        include_interest: bool = True,
+        group_types: list[str] | None = None,
+        order_by: str = "name",
+        order_direction: Literal["asc", "desc"] = "asc",
+    ) -> Dict[str, Any]:
+        """Return Protect license-plate recognition groups.
+
+        Uses the private ``recognition/vehicle/groups`` endpoint, which mirrors
+        ``recognition/face/groups`` in shape and params. Pass ``group_types`` to
+        explicitly include other group types (e.g. unlabeled/unknown plate
+        clusters). Image bytes are never fetched — only reference paths.
+        """
+        if page is not None and page < 1:
+            raise ValueError("page must be greater than or equal to 1")
+        if page_size < 1 or page_size > 1000:
+            raise ValueError("page_size must be between 1 and 1000")
+        if min_confidence < 0 or min_confidence > 100:
+            raise ValueError("min_confidence must be between 0 and 100")
+        if order_by not in _VALID_ORDER_BY:
+            raise ValueError(f"order_by must be one of {sorted(_VALID_ORDER_BY)}")
+        if order_direction not in _VALID_ORDER_DIRECTION:
+            raise ValueError("order_direction must be 'asc' or 'desc'")
+
+        labels = _build_group_labels(group_types, include_interest)
+        params: dict[str, Any] = {
+            "labels": labels,
+            "minConfidence": min_confidence,
+            "orderBy": order_by,
+            "orderDirection": order_direction,
+            "pageSize": page_size,
+        }
+        if page is not None:
+            params["page"] = page
+
+        data = await self._cm.client.api_request("recognition/vehicle/groups", method="get", params=params)
+        if not isinstance(data, dict):
+            logger.warning("Unexpected recognition/vehicle/groups shape: %r", type(data))
+            data = {}
+
+        groups = data.get("groups")
+        if not isinstance(groups, list):
+            groups = []
+
+        plates = [
+            license_plate_from_controller(group).model_dump(exclude_none=True)
+            for group in groups
+            if isinstance(group, dict)
+        ]
+        links = links_from_controller(data.get("links")).model_dump(exclude_none=True)
+
+        return {
+            "license_plates": plates,
+            "count": len(plates),
             "links": links,
         }
 

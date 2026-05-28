@@ -1,5 +1,5 @@
 {
-  "count": 48,
+  "count": 49,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -26,6 +26,7 @@
     "protect_list_chimes": "unifi_protect_mcp.tools.devices",
     "protect_list_events": "unifi_protect_mcp.tools.events",
     "protect_list_known_faces": "unifi_protect_mcp.tools.recognition",
+    "protect_list_known_license_plates": "unifi_protect_mcp.tools.recognition",
     "protect_list_lights": "unifi_protect_mcp.tools.devices",
     "protect_list_liveviews": "unifi_protect_mcp.tools.liveviews",
     "protect_list_recordings": "unifi_protect_mcp.tools.recordings",
@@ -2494,6 +2495,119 @@
         }
       },
       "title": "List Known Faces"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "List UniFi Protect license-plate identities (vehicle recognition groups), including named/known license plates by default and unlabeled plate groups when group_types includes unknown. Each entry's `id` is the value to use in a `license_plate_known` alarm-rule condition. Returns metadata (incl. color/vehicle_type when Protect provides them) and controller image references only; image bytes are not fetched.",
+      "name": "protect_list_known_license_plates",
+      "schema": {
+        "input": {
+          "properties": {
+            "group_types": {
+              "description": "Optional explicit recognition group types to list. Supported values: known, interest, unknown. When set, this overrides include_interest.",
+              "type": "array"
+            },
+            "include_interest": {
+              "description": "Backward-compatible filter used when group_types is omitted. When true, include known and interest groups. When false, only known groups.",
+              "type": "boolean"
+            },
+            "min_confidence": {
+              "description": "Minimum recognition confidence filter used by Protect (0-100, default 30).",
+              "type": "integer"
+            },
+            "order_by": {
+              "description": "Sort field: name, createdAt, firstDetectedAt, lastDetectedAt, or detectionsCount.",
+              "type": "string"
+            },
+            "order_direction": {
+              "description": "Sort direction: asc or desc.",
+              "type": "string"
+            },
+            "page": {
+              "description": "Optional 1-based Protect recognition page number.",
+              "type": "integer"
+            },
+            "page_size": {
+              "description": "Maximum number of license-plate groups to return (default 100).",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Known License Plates"
     },
     {
       "annotations": {

@@ -48,7 +48,7 @@ from unifi_api.graphql.types.protect.events import (
 )
 from unifi_api.graphql.types.protect.lights import Light
 from unifi_api.graphql.types.protect.liveviews import Liveview
-from unifi_api.graphql.types.protect.recognition import KnownFace
+from unifi_api.graphql.types.protect.recognition import KnownFace, KnownLicensePlate
 from unifi_api.graphql.types.protect.recordings import (
     Recording,
     RecordingStatusList,
@@ -284,6 +284,47 @@ async def _fetch_known_faces(
                 order_direction=order_direction,
             )
             return list(result.get("faces", []))
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_known_license_plates(
+    ctx: GraphQLContext,
+    controller: str,
+    min_confidence: int,
+    include_interest: bool,
+    group_types: list[str] | None,
+    order_by: str,
+    order_direction: str,
+) -> list:
+    group_types_key = ",".join(group_types) if group_types else ""
+    key = (
+        f"protect/known-license-plates/{controller}/{min_confidence}/"
+        f"{include_interest}/{group_types_key}/{order_by}/{order_direction}"
+    )
+
+    async def _do() -> list:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "protect",
+                "recognition_manager",
+            )
+            await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "protect",
+            )
+            result = await mgr.list_known_license_plates(
+                page_size=1000,
+                min_confidence=min_confidence,
+                include_interest=include_interest,
+                group_types=group_types,
+                order_by=order_by,
+                order_direction=order_direction,
+            )
+            return list(result.get("license_plates", []))
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -750,6 +791,12 @@ class KnownFacePage:
     next_cursor: str | None
 
 
+@strawberry.type(description="Paginated page of UniFi Protect license-plate identities.")
+class KnownLicensePlatePage:
+    items: list[KnownLicensePlate]
+    next_cursor: str | None
+
+
 # ---------------------------------------------------------------------------
 # ProtectQuery
 # ---------------------------------------------------------------------------
@@ -901,6 +948,50 @@ class ProtectQuery:
         )
         return KnownFacePage(
             items=[KnownFace.from_manager_output(face) for face in page],
+            next_cursor=next_cursor.encode() if next_cursor else None,
+        )
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "List UniFi Protect license-plate identities (vehicle recognition groups). "
+            "Each entry's id is the value to use in a `license_plate_known` alarm-rule condition."
+        ),
+    )
+    async def known_license_plates(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        limit: int = 50,
+        cursor: str | None = None,
+        min_confidence: int = 30,
+        include_interest: bool = True,
+        group_types: list[str] | None = None,
+        order_by: str = "name",
+        order_direction: str = "asc",
+    ) -> KnownLicensePlatePage:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_known_license_plates(
+            ctx,
+            str(controller),
+            min_confidence,
+            include_interest,
+            group_types,
+            order_by,
+            order_direction,
+        )
+
+        from unifi_api.services.pagination import paginate
+
+        cursor_obj = _decode_cursor(cursor)
+        page, next_cursor = paginate(
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
+        )
+        return KnownLicensePlatePage(
+            items=[KnownLicensePlate.from_manager_output(plate) for plate in page],
             next_cursor=next_cursor.encode() if next_cursor else None,
         )
 
