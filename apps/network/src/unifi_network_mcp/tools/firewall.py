@@ -5,7 +5,7 @@ Firewall policy tools for Unifi Network MCP server.
 import json
 import logging
 from collections import Counter
-from typing import Annotated, Any, Dict
+from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field
@@ -64,12 +64,41 @@ def _detect_legacy_fields(data: Dict[str, Any]) -> str | None:
     name="unifi_list_firewall_policies",
     description=(
         "List firewall policies configured on the Unifi Network controller. "
-        "Includes zone-based targeting details (zone_id, matching_target, matching_target_type, "
-        "IPs, network IDs) when present on newer firmware."
+        "Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, "
+        "IPs, network IDs).\n\n"
+        "Filters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, "
+        "limit (default 50), include_predefined. By default (summary=true) returns a curated "
+        "entry per policy (id, name, enabled, action, rule_index, description + source/destination "
+        "targeting). Set summary=false for the full fw_from_controller().model_dump() shape "
+        "including protocol, schedule, logging, ip_version, index, etc."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def list_firewall_policies(
+    search: Annotated[
+        Optional[str],
+        Field(description="Filter by policy name (case-insensitive substring match)"),
+    ] = None,
+    action: Annotated[
+        Optional[str],
+        Field(description="Filter by action: ALLOW, BLOCK, or REJECT (V2 firmware). Case-insensitive."),
+    ] = None,
+    enabled_only: Annotated[
+        bool,
+        Field(description="If true, only return enabled policies. Default false."),
+    ] = False,
+    limit: Annotated[int, Field(description="Maximum number of policies to return (default 50)")] = 50,
+    summary: Annotated[
+        bool,
+        Field(
+            description=(
+                "Controls per-policy shape. When true (default), returns a curated 6-key entry "
+                "plus narrowed source/destination targeting. When false, returns the full "
+                "fw_from_controller().model_dump() shape (protocol, schedule, logging, ip_version, "
+                "index, full source/destination dicts)."
+            )
+        ),
+    ] = True,
     include_predefined: Annotated[
         bool,
         Field(
@@ -79,18 +108,72 @@ async def list_firewall_policies(
 ) -> Dict[str, Any]:
     """Lists firewall policies for the current UniFi site.
 
-    Returns both legacy (ruleset-based) and zone-based policy fields.
-    Zone-based fields (zone_id, matching_target, matching_target_type) are
-    included in source/destination when present in the API response.
+    Returns V2 zone-based policy fields (zone_id, matching_target, matching_target_type)
+    in source/destination. Legacy V1 ruleset support was removed in #210.
     """
     try:
         policies = await firewall_manager.get_firewall_policies(include_predefined=include_predefined)
-        formatted_policies = [fw_from_controller(p).model_dump(exclude_none=True) for p in policies]
+        policies_raw = [p.raw if hasattr(p, "raw") else p for p in policies]
+
+        if enabled_only:
+            policies_raw = [p for p in policies_raw if p.get("enabled", False)]
+
+        if action and action.strip():
+            policies_raw = [p for p in policies_raw if p.get("action") == action.strip().upper()]
+
+        if search and search.strip():
+            search_lower = search.strip().lower()
+            policies_raw = [p for p in policies_raw if search_lower in (p.get("name") or "").lower()]
+
+        total_count = len(policies_raw)
+        policies_raw = policies_raw[:limit]
+
+        formatted_policies = []
+        for p in policies_raw:
+            shaped = fw_from_controller(p)
+            if not summary:
+                # Legacy/full shape: complete model dump (protocol, schedule, logging, ip_version,
+                # index, full source/destination dicts).
+                formatted_policies.append(shaped.model_dump(exclude_none=True))
+                continue
+            # Curated shape (default): narrow to the 6 most useful keys plus targeting subset.
+            # `description` is not a model field, so it stays read from raw.
+            entry = {
+                "id": shaped.id,
+                "name": shaped.name,
+                "enabled": shaped.enabled,
+                "action": shaped.action,
+                "rule_index": shaped.index,
+                "description": p.get("description", p.get("desc", "")),
+            }
+            for direction in ("source", "destination"):
+                ep = getattr(shaped, direction)
+                if ep and isinstance(ep, dict):
+                    targeting = {
+                        "zone_id": ep.get("zone_id"),
+                        "matching_target": ep.get("matching_target"),
+                    }
+                    if ep.get("matching_target_type"):
+                        targeting["matching_target_type"] = ep["matching_target_type"]
+                    if ep.get("ips"):
+                        targeting["ips"] = ep["ips"]
+                    if ep.get("network_ids"):
+                        targeting["network_ids"] = ep["network_ids"]
+                    if ep.get("client_macs"):
+                        targeting["client_macs"] = ep["client_macs"]
+                    entry[direction] = targeting
+            formatted_policies.append(entry)
 
         return {
             "success": True,
             "site": firewall_manager._connection.site,
-            "count": len(formatted_policies),
+            "search": search,
+            "action_filter": action,
+            "enabled_only": enabled_only,
+            "total_count": total_count,
+            "returned_count": len(formatted_policies),
+            "count": len(formatted_policies),  # back-compat alias for returned_count
+            "limit": limit,
             "policies": formatted_policies,
         }
     except Exception as e:

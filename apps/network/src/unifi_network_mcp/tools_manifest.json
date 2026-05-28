@@ -4842,14 +4842,22 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns the full raw client object for one client by MAC address \u2014 all controller-reported fields including connection stats, DHCP info, network/WLAN associations, traffic counters, signal/RSSI, and fixed-IP settings. Merges live /stat/sta data with the /rest/user snapshot for active clients. For a summary of all clients, use unifi_list_clients.",
+      "description": "Returns client data for one client by MAC address. By default (summary=false) returns the full raw client object \u2014 all controller-reported fields, with the typed/normalized shape (ISO timestamps, derived status, null-safe name/hostname) layered on top of the merged live /stat/sta + /rest/user data. Set summary=true to trim to selected sections via include (basic, network, wireless, traffic, fingerprint, all). For a summary of all clients, use unifi_list_clients.",
       "name": "unifi_get_client_details",
       "schema": {
         "input": {
           "properties": {
+            "include": {
+              "description": "Comma-separated sections to return when summary=true (default 'basic'). Sections: basic, network, wireless, traffic, fingerprint, all.",
+              "type": "string"
+            },
             "mac_address": {
               "description": "Client MAC address in format AA:BB:CC:DD:EE:FF (from unifi_list_clients)",
               "type": "string"
+            },
+            "summary": {
+              "description": "When false (default), returns the full raw client object. When true, trims the response to the sections named in include.",
+              "type": "boolean"
             }
           },
           "required": [
@@ -5587,14 +5595,22 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns the full raw device object for one device by MAC address \u2014 includes radio tables, port tables, system stats, WAN info, firmware details, and all controller-reported fields. Use when you need deep inspection of a specific device. For a filtered overview of all devices, use unifi_list_devices.",
+      "description": "Returns device data for one device by MAC address. By default (summary=false) returns the full raw device object \u2014 all controller-reported fields including radio tables, port tables, system stats, WAN info, firmware details. Set summary=true to trim to selected sections via include (basic, ports, radios, stats, uplink, lldp, all).\n\nPort fields (summary mode):\n- last_seen_mac: last MAC that sent traffic on port (may be wireless client traffic, not reliable)\n- lldp_neighbor: actual connected infrastructure device (from LLDP, reliable for switches/APs)\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,ports' (switches); summary=true,include='basic,radios' (APs).",
       "name": "unifi_get_device_details",
       "schema": {
         "input": {
           "properties": {
+            "include": {
+              "description": "Comma-separated sections to return when summary=true (default 'basic,ports'). Sections: basic, ports, radios, stats, uplink, lldp, all.",
+              "type": "string"
+            },
             "mac_address": {
               "description": "Device MAC address in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)",
               "type": "string"
+            },
+            "summary": {
+              "description": "When false (default), returns the full raw device object. When true, trims to the sections named in include.",
+              "type": "boolean"
             }
           },
           "required": [
@@ -6690,14 +6706,22 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get details for a specific network by ID.",
+      "description": "Get details for a specific network by ID. By default (summary=false) returns the full raw network configuration. Set summary=true to trim to selected sections via include (basic, dhcp, ipv6, vpn, all).\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'.",
       "name": "unifi_get_network_details",
       "schema": {
         "input": {
           "properties": {
+            "include": {
+              "description": "Comma-separated sections to return when summary=true (default 'basic'). Sections: basic, dhcp, ipv6, vpn, all.",
+              "type": "string"
+            },
             "network_id": {
               "description": "Unique identifier (_id) of the network (from unifi_list_networks)",
               "type": "string"
+            },
+            "summary": {
+              "description": "When false (default), returns the full raw network object. When true, trims to the sections named in include.",
+              "type": "boolean"
             }
           },
           "required": [
@@ -9732,11 +9756,15 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, channel, radio. Filter by filter_type (all/wired/wireless), set include_offline=true for historical clients. For a single client's full raw object, use unifi_get_client_details. For IP-to-client lookup, use unifi_lookup_by_ip.",
+      "description": "Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, channel, radio. Filter by filter_type (all/wired/wireless), set include_offline=true for historical clients. Use search to filter by name/hostname/IP/MAC (case-insensitive). For a single client's full raw object, use unifi_get_client_details. For IP-to-client lookup, use unifi_lookup_by_ip.",
       "name": "unifi_list_clients",
       "schema": {
         "input": {
           "properties": {
+            "fields": {
+              "description": "Comma-separated list of fields to return per client (default: all). Available: mac, name, hostname, ip, connection_type, status, last_seen, _id. Wireless-only: essid, signal_dbm, channel, radio. Example: fields='mac,name,ip' returns only those 3 fields.",
+              "type": "string"
+            },
             "filter_type": {
               "description": "Filter clients by connection type: 'all' (default), 'wired', or 'wireless'",
               "type": "string"
@@ -9748,6 +9776,10 @@
             "limit": {
               "description": "Maximum number of clients to return (default 100)",
               "type": "integer"
+            },
+            "search": {
+              "description": "Filter by name, hostname, IP, or MAC (case-insensitive substring match)",
+              "type": "string"
             }
           },
           "type": "object"
@@ -9913,7 +9945,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). Note: device_type=ap correctly excludes USP Smart Power strips. Set include_details=true for radio tables, port tables, and client counts. For a single device's full raw object, use unifi_get_device_details.",
+      "description": "Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). Note: device_type=ap correctly excludes USP Smart Power strips. Use search to filter by name, IP, or MAC (case-insensitive). Set include_details=true for additional per-device fields: by default (summary=true) compressed radio/port summaries; set summary=false to return the full raw tables (radio_table, port_table, network_table, system_stats, wan1/wan2).",
       "name": "unifi_list_devices",
       "schema": {
         "input": {
@@ -9923,12 +9955,24 @@
               "type": "string"
             },
             "include_details": {
-              "description": "When true, includes additional details like radio tables (APs), port tables (switches), WAN info (gateways), and client counts. Default false",
+              "description": "When true, includes additional per-device details (shape controlled by summary). Default false",
               "type": "boolean"
+            },
+            "limit": {
+              "description": "Maximum number of devices to return (default: all)",
+              "type": "integer"
+            },
+            "search": {
+              "description": "Filter by name, IP, or MAC (case-insensitive substring match)",
+              "type": "string"
             },
             "status": {
               "description": "Filter by device status: 'all' (default), 'online', 'offline', 'pending', 'adopting', 'provisioning', or 'upgrading'",
               "type": "string"
+            },
+            "summary": {
+              "description": "Controls the shape of include_details (only applies when include_details=true). When true (default), returns compressed summaries (counts, flattened uplink fields). When false, returns the legacy raw tables (radio_table/port_table/network_table/system_stats/wan1/wan2/poe_info).",
+              "type": "boolean"
             }
           },
           "type": "object"
@@ -10469,13 +10513,33 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List firewall policies configured on the Unifi Network controller. Includes zone-based targeting details (zone_id, matching_target, matching_target_type, IPs, network IDs) when present on newer firmware.",
+      "description": "List firewall policies configured on the Unifi Network controller. Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, IPs, network IDs).\n\nFilters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, limit (default 50), include_predefined. By default (summary=true) returns a curated entry per policy (id, name, enabled, action, rule_index, description + source/destination targeting). Set summary=false for the full fw_from_controller().model_dump() shape including protocol, schedule, logging, ip_version, index, etc.",
       "name": "unifi_list_firewall_policies",
       "schema": {
         "input": {
           "properties": {
+            "action": {
+              "description": "Filter by action: ALLOW, BLOCK, or REJECT (V2 firmware). Case-insensitive.",
+              "type": "string"
+            },
+            "enabled_only": {
+              "description": "If true, only return enabled policies. Default false.",
+              "type": "boolean"
+            },
             "include_predefined": {
               "description": "When true, includes predefined system policies in results. Default false (user-defined only)",
+              "type": "boolean"
+            },
+            "limit": {
+              "description": "Maximum number of policies to return (default 50)",
+              "type": "integer"
+            },
+            "search": {
+              "description": "Filter by policy name (case-insensitive substring match)",
+              "type": "string"
+            },
+            "summary": {
+              "description": "Controls per-policy shape. When true (default), returns a curated 6-key entry plus narrowed source/destination targeting. When false, returns the full fw_from_controller().model_dump() shape (protocol, schedule, logging, ip_version, index, full source/destination dicts).",
               "type": "boolean"
             }
           },
@@ -10642,11 +10706,28 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns all configured networks (LAN, WAN, VLAN-only) with name, purpose, IP subnet, VLAN ID, DHCP settings, and enabled state. Use to understand network topology and VLAN layout. For a single network's full config, use unifi_get_network_details. For wireless SSIDs, use unifi_list_wlans.",
+      "description": "Returns configured networks (LAN, WAN, VLAN-only) with name, purpose, IP subnet, VLAN ID, DHCP settings, and enabled state. Use to understand network topology and VLAN layout. Filters: search (name/VLAN substring), purpose (corporate/guest/wan/vlan-only), limit (default 25), fields (comma-separated subset). For a single network's full config, use unifi_get_network_details. For wireless SSIDs, use unifi_list_wlans.",
       "name": "unifi_list_networks",
       "schema": {
         "input": {
-          "properties": {},
+          "properties": {
+            "fields": {
+              "description": "Comma-separated list of fields to return per network (default: all). Available: _id, name, enabled, purpose, ip_subnet, vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop. Example: fields='_id,name,vlan,purpose' returns only those fields.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "Maximum number of networks to return (default 25)",
+              "type": "integer"
+            },
+            "purpose": {
+              "description": "Filter by purpose (corporate, guest, wan, vlan-only)",
+              "type": "string"
+            },
+            "search": {
+              "description": "Filter by name (case-insensitive substring) or VLAN ID (exact match, e.g. '20')",
+              "type": "string"
+            }
+          },
           "type": "object"
         },
         "output": {
@@ -11663,11 +11744,24 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List all configured Wireless LANs (WLANs) on the Unifi Network controller.",
+      "description": "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\nFilters: search (SSID name substring), enabled_only, limit (default 25).",
       "name": "unifi_list_wlans",
       "schema": {
         "input": {
-          "properties": {},
+          "properties": {
+            "enabled_only": {
+              "description": "If true, only return enabled WLANs. Default false.",
+              "type": "boolean"
+            },
+            "limit": {
+              "description": "Maximum number of WLANs to return (default 25)",
+              "type": "integer"
+            },
+            "search": {
+              "description": "Filter by SSID name (case-insensitive substring match)",
+              "type": "string"
+            }
+          },
           "type": "object"
         },
         "output": {

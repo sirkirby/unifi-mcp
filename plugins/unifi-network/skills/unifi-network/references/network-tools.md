@@ -44,7 +44,7 @@ Always available, regardless of registration mode.
 
 | Tool | Type | Description |
 |------|------|-------------|
-| `unifi_get_client_details` | Read | Returns the full raw client object for one client by MAC address — all controller-reported fields including connection stats, DHCP info, ... |
+| `unifi_get_client_details` | Read | Returns client data for one client by MAC address. |
 | `unifi_list_blocked_clients` | Read | Lists clients/devices currently blocked from the network. |
 | `unifi_list_clients` | Read | Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clien... |
 | `unifi_lookup_by_ip` | Read | Quick IP-to-client lookup. |
@@ -72,7 +72,7 @@ Always available, regardless of registration mode.
 
 | Tool | Type | Description |
 |------|------|-------------|
-| `unifi_get_device_details` | Read | Returns the full raw device object for one device by MAC address — includes radio tables, port tables, system stats, WAN info, firmware d... |
+| `unifi_get_device_details` | Read | Returns device data for one device by MAC address. |
 | `unifi_get_device_radio` | Read | Get radio configuration and live statistics for an access point. |
 | `unifi_get_pdu_outlets` | Read | Return per-outlet state for a UniFi Smart Power PDU (UP6 / USP-Strip). |
 | `unifi_get_rf_scan_results` | Read | Get RF spectrum scan results for an access point. |
@@ -143,8 +143,8 @@ Always available, regardless of registration mode.
 | `unifi_get_network_details` | Read | Get details for a specific network by ID. |
 | `unifi_get_wlan_details` | Read | Get details for a specific WLAN by ID. |
 | `unifi_list_ap_groups` | Read | List all AP groups configured on the controller. |
-| `unifi_list_networks` | Read | Returns all configured networks (LAN, WAN, VLAN-only) with name, purpose, IP subnet, VLAN ID, DHCP settings, and enabled state. |
-| `unifi_list_wlans` | Read | List all configured Wireless LANs (WLANs) on the Unifi Network controller. |
+| `unifi_list_networks` | Read | Returns configured networks (LAN, WAN, VLAN-only) with name, purpose, IP subnet, VLAN ID, DHCP settings, and enabled state. |
+| `unifi_list_wlans` | Read | List configured Wireless LANs (WLANs) on the Unifi Network controller. |
 | `unifi_create_ap_group` | Mutate | Create a new AP group to control which APs broadcast which SSIDs. |
 | `unifi_create_network` | Mutate | Create a new network (LAN/VLAN) with schema validation. |
 | `unifi_create_wlan` | Mutate | Create a new Wireless LAN (WLAN/SSID) with schema validation. |

@@ -90,7 +90,10 @@ class TestListFirewallPolicies:
             result = await list_firewall_policies(include_predefined=False)
 
         assert result["success"] is True
-        assert result["count"] == 1
+        assert result["total_count"] == 1
+        assert result["returned_count"] == 1
+        # back-compat: legacy `count` key preserved alongside returned_count
+        assert result["count"] == result["returned_count"]
         policy = result["policies"][0]
         # Model-based shaping: id, name, action, enabled surface correctly
         assert policy["id"] == "pol_legacy_001"
@@ -125,6 +128,125 @@ class TestListFirewallPolicies:
         assert policy["source"]["network_ids"] == ["iot-network-id"]
         assert policy["destination"]["matching_target"] == "IP"
         assert policy["destination"]["ips"] == ["192.168.1.100"]
+
+    @pytest.mark.asyncio
+    async def test_action_filter_uppercase_v2(self):
+        """Action filter must match V2 uppercase values (ALLOW/BLOCK/REJECT) case-insensitively."""
+        allow_policy_raw = {**SAMPLE_ZONE_POLICY_RAW, "_id": "pol_allow", "action": "ALLOW"}
+        block_policy_raw = {**SAMPLE_ZONE_POLICY_RAW, "_id": "pol_block", "action": "BLOCK"}
+        reject_policy_raw = {**SAMPLE_ZONE_POLICY_RAW, "_id": "pol_reject", "action": "REJECT"}
+        policies = [_make_policy(p) for p in (allow_policy_raw, block_policy_raw, reject_policy_raw)]
+
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=policies)
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+            uppercase_result = await list_firewall_policies(action="ALLOW", include_predefined=False)
+            lowercase_result = await list_firewall_policies(action="allow", include_predefined=False)
+            block_result = await list_firewall_policies(action="block", include_predefined=False)
+
+        assert uppercase_result["success"] is True
+        assert uppercase_result["returned_count"] == 1
+        assert uppercase_result["policies"][0]["id"] == "pol_allow"
+
+        assert lowercase_result["returned_count"] == 1
+        assert lowercase_result["policies"][0]["id"] == "pol_allow"
+
+        assert block_result["returned_count"] == 1
+        assert block_result["policies"][0]["id"] == "pol_block"
+
+    @pytest.mark.asyncio
+    async def test_filter_composition_action_enabled_only_search(self):
+        """action + enabled_only + search compose correctly (all three must match)."""
+        # 4 policies covering the truth table of the composed filter.
+        p_match = {
+            **SAMPLE_ZONE_POLICY_RAW,
+            "_id": "p_match",
+            "name": "match-target",
+            "enabled": True,
+            "action": "ALLOW",
+        }
+        p_wrong_action = {
+            **SAMPLE_ZONE_POLICY_RAW,
+            "_id": "p_wa",
+            "name": "match-target",
+            "enabled": True,
+            "action": "BLOCK",
+        }
+        p_disabled = {
+            **SAMPLE_ZONE_POLICY_RAW,
+            "_id": "p_dis",
+            "name": "match-target",
+            "enabled": False,
+            "action": "ALLOW",
+        }
+        p_wrong_name = {**SAMPLE_ZONE_POLICY_RAW, "_id": "p_wn", "name": "no-match", "enabled": True, "action": "ALLOW"}
+        policies = [_make_policy(p) for p in (p_match, p_wrong_action, p_disabled, p_wrong_name)]
+
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=policies)
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+            result = await list_firewall_policies(
+                action="ALLOW", enabled_only=True, search="match-target", include_predefined=False
+            )
+
+        assert result["returned_count"] == 1
+        assert result["policies"][0]["id"] == "p_match"
+
+    @pytest.mark.asyncio
+    async def test_zero_items_case(self):
+        """Controller returns no policies -> total_count=0, returned_count=0, policies=[]."""
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[])
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+            result = await list_firewall_policies(include_predefined=False)
+
+        assert result["total_count"] == 0 and result["returned_count"] == 0
+        assert result["count"] == 0
+        assert result["policies"] == []
+
+    @pytest.mark.asyncio
+    async def test_summary_false_returns_full_model_dump(self):
+        """summary=False returns the legacy fw_from_controller().model_dump() shape —
+        protocol/ip_version/logging/index present, not narrowed to the curated 6 keys."""
+        mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+            curated = await list_firewall_policies(include_predefined=False)  # default summary=True
+            raw = await list_firewall_policies(summary=False, include_predefined=False)
+
+        # curated path: narrowed 6-key entry + targeting; protocol/logging absent
+        cp = curated["policies"][0]
+        assert "protocol" not in cp and "logging" not in cp and "ip_version" not in cp
+        # raw path: full model dump fields present
+        rp = raw["policies"][0]
+        assert rp.get("protocol") == "all"
+        assert rp.get("ip_version") == "BOTH"
+        assert rp.get("logging") is False
 
 
 # ---------------------------------------------------------------------------
@@ -1094,3 +1216,29 @@ class TestListFirewallZones:
         # Crucially: no silent empty-list-as-success.
         assert "zones" not in result or result.get("zones") in (None, [])
         assert result.get("count", 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_firewall_policies_routes_through_typed_model():
+    """Discriminator for the model-routing path: FirewallRule coerces index str->int.
+
+    A raw `p.get("index")` would keep the string "3000"; routing through
+    fw_from_controller yields int 3000. This test fails if the tool reverts to
+    reading raw dict values directly.
+    """
+    raw = {"_id": "pol_x", "name": "X", "enabled": True, "action": "ALLOW", "index": "3000"}
+    mock_policy = _make_policy(raw)
+    mock_conn = MagicMock()
+    mock_conn.site = "default"
+
+    with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+        mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+        mock_fm._connection = mock_conn
+
+        from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+        result = await list_firewall_policies(include_predefined=False)
+
+    policy = result["policies"][0]
+    assert policy["rule_index"] == 3000
+    assert isinstance(policy["rule_index"], int)  # int (model coercion), not "3000" from raw

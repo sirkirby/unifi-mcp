@@ -96,8 +96,10 @@ def get_wifi_bands(device: Dict[str, Any]) -> List[str]:
         "upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. "
         "Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). "
         "Note: device_type=ap correctly excludes USP Smart Power strips. "
-        "Set include_details=true for radio tables, port tables, and client counts. "
-        "For a single device's full raw object, use unifi_get_device_details."
+        "Use search to filter by name, IP, or MAC (case-insensitive). "
+        "Set include_details=true for additional per-device fields: by default (summary=true) "
+        "compressed radio/port summaries; set summary=false to return the full raw tables "
+        "(radio_table, port_table, network_table, system_stats, wan1/wan2)."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -114,12 +116,31 @@ async def list_devices(
             description="Filter by device status: 'all' (default), 'online', 'offline', 'pending', 'adopting', 'provisioning', or 'upgrading'"
         ),
     ] = "all",
+    search: Annotated[
+        Optional[str],
+        Field(description="Filter by name, IP, or MAC (case-insensitive substring match)"),
+    ] = None,
+    limit: Annotated[
+        Optional[int],
+        Field(description="Maximum number of devices to return (default: all)"),
+    ] = None,
     include_details: Annotated[
         bool,
         Field(
-            description="When true, includes additional details like radio tables (APs), port tables (switches), WAN info (gateways), and client counts. Default false"
+            description="When true, includes additional per-device details (shape controlled by summary). Default false"
         ),
     ] = False,
+    summary: Annotated[
+        bool,
+        Field(
+            description=(
+                "Controls the shape of include_details (only applies when include_details=true). "
+                "When true (default), returns compressed summaries (counts, flattened uplink fields). "
+                "When false, returns the legacy raw tables (radio_table/port_table/network_table/"
+                "system_stats/wan1/wan2/poe_info)."
+            )
+        ),
+    ] = True,
 ) -> Dict[str, Any]:
     """Implementation for listing devices."""
     try:
@@ -147,6 +168,22 @@ async def list_devices(
                 devices_raw = [d for d in devices_raw if d.get("state") == target_state]
             else:
                 logger.warning("Unknown status filter: %s", status)
+
+        # Filter by search term (name, IP, or MAC)
+        if search and search.strip():
+            search_lower = search.strip().lower()
+            devices_raw = [
+                d
+                for d in devices_raw
+                if search_lower in (d.get("name") or "").lower()
+                or search_lower in (d.get("ip") or "").lower()
+                or search_lower in (d.get("mac") or "").lower()
+            ]
+
+        # Capture total before applying limit
+        total_count = len(devices_raw)
+        if limit is not None:
+            devices_raw = devices_raw[:limit]
 
         formatted_devices = []
         state_map = {
@@ -213,40 +250,91 @@ async def list_devices(
                     "clients": device.get("num_sta", 0),
                 }
 
-                if category == "ap":
-                    details_to_add.update(
-                        {
-                            "radio_table": device.get("radio_table", []),
-                            "vap_table": device.get("vap_table", []),
-                            "wifi_bands": get_wifi_bands(device),
-                            "experience_score": device.get("satisfaction", 0),
-                            "num_clients": device.get("num_sta", 0),
-                        }
-                    )
-                elif category == "switch":
-                    details_to_add.update(
-                        {
-                            "ports": device.get("port_table", []),
-                            "total_ports": len(device.get("port_table", [])),
-                            "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
-                            "poe_info": {
-                                "poe_current": device.get("poe_current"),
+                if summary:
+                    # Compressed shape (default): summaries + counts, no raw tables.
+                    if category == "ap":
+                        radio_table = device.get("radio_table", [])
+                        vap_table = device.get("vap_table", [])
+                        details_to_add.update(
+                            {
+                                "radio_count": len(radio_table),
+                                "radios": [
+                                    {"band": r.get("radio"), "channel": r.get("channel"), "tx_power": r.get("tx_power")}
+                                    for r in radio_table
+                                ],
+                                "vap_count": len(vap_table),
+                                "wifi_bands": get_wifi_bands(device),
+                                "experience_score": device.get("satisfaction", 0),
+                                "num_clients": device.get("num_sta", 0),
+                            }
+                        )
+                    elif category == "switch":
+                        port_table = device.get("port_table", [])
+                        ports_up = sum(1 for p in port_table if p.get("up", False))
+                        ports_poe = sum(1 for p in port_table if p.get("poe_enable", False))
+                        details_to_add.update(
+                            {
+                                "total_ports": len(port_table),
+                                "ports_up": ports_up,
+                                "ports_poe_enabled": ports_poe,
+                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
                                 "poe_power": device.get("poe_power"),
                                 "poe_voltage": device.get("poe_voltage"),
-                            },
-                        }
-                    )
-                elif category == "gateway":
-                    details_to_add.update(
-                        {
-                            "wan1": device.get("wan1", {}),
-                            "wan2": device.get("wan2", {}),
-                            "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
-                            "network_table": device.get("network_table", []),
-                            "system_stats": device.get("system-stats", {}),
-                            "speedtest_status": device.get("speedtest-status", {}),
-                        }
-                    )
+                            }
+                        )
+                    elif category == "gateway":
+                        network_table = device.get("network_table", [])
+                        wan1 = device.get("wan1", {})
+                        wan2 = device.get("wan2", {})
+                        system_stats = device.get("system-stats", {})
+                        details_to_add.update(
+                            {
+                                "wan1_ip": wan1.get("ip") if wan1 else None,
+                                "wan1_up": wan1.get("up", False) if wan1 else None,
+                                "wan2_ip": wan2.get("ip") if wan2 else None,
+                                "wan2_up": wan2.get("up", False) if wan2 else None,
+                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
+                                "network_count": len(network_table),
+                                "cpu_usage": system_stats.get("cpu"),
+                                "mem_usage": system_stats.get("mem"),
+                            }
+                        )
+                else:
+                    # Legacy raw shape (pre-PR upstream): full tables passthrough.
+                    if category == "ap":
+                        details_to_add.update(
+                            {
+                                "radio_table": device.get("radio_table", []),
+                                "vap_table": device.get("vap_table", []),
+                                "wifi_bands": get_wifi_bands(device),
+                                "experience_score": device.get("satisfaction", 0),
+                                "num_clients": device.get("num_sta", 0),
+                            }
+                        )
+                    elif category == "switch":
+                        details_to_add.update(
+                            {
+                                "ports": device.get("port_table", []),
+                                "total_ports": len(device.get("port_table", [])),
+                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
+                                "poe_info": {
+                                    "poe_current": device.get("poe_current"),
+                                    "poe_power": device.get("poe_power"),
+                                    "poe_voltage": device.get("poe_voltage"),
+                                },
+                            }
+                        )
+                    elif category == "gateway":
+                        details_to_add.update(
+                            {
+                                "wan1": device.get("wan1", {}),
+                                "wan2": device.get("wan2", {}),
+                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
+                                "network_table": device.get("network_table", []),
+                                "system_stats": device.get("system-stats", {}),
+                                "speedtest_status": device.get("speedtest-status", {}),
+                            }
+                        )
 
                 device_info.update(details_to_add)
 
@@ -257,7 +345,11 @@ async def list_devices(
             "site": device_manager._connection.site,
             "filter_type": device_type,
             "filter_status": status,
-            "count": len(formatted_devices),
+            "search": search,
+            "total_count": total_count,
+            "returned_count": len(formatted_devices),
+            "count": len(formatted_devices),  # back-compat alias for returned_count
+            "limit": limit,
             "devices": formatted_devices,
         }
     except Exception as e:
@@ -268,10 +360,15 @@ async def list_devices(
 @server.tool(
     name="unifi_get_device_details",
     description=(
-        "Returns the full raw device object for one device by MAC address — includes "
-        "radio tables, port tables, system stats, WAN info, firmware details, and all "
-        "controller-reported fields. Use when you need deep inspection of a specific "
-        "device. For a filtered overview of all devices, use unifi_list_devices."
+        "Returns device data for one device by MAC address. By default (summary=false) returns the "
+        "full raw device object — all controller-reported fields including radio tables, port tables, "
+        "system stats, WAN info, firmware details. Set summary=true to trim to selected sections via "
+        "include (basic, ports, radios, stats, uplink, lldp, all).\n\n"
+        "Port fields (summary mode):\n"
+        "- last_seen_mac: last MAC that sent traffic on port (may be wireless client traffic, not reliable)\n"
+        "- lldp_neighbor: actual connected infrastructure device (from LLDP, reliable for switches/APs)\n\n"
+        "Examples: <no args> (full raw); summary=true,include='basic' (minimal); "
+        "summary=true,include='basic,ports' (switches); summary=true,include='basic,radios' (APs)."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -280,14 +377,152 @@ async def get_device_details(
         str,
         Field(description="Device MAC address in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)"),
     ],
+    include: Annotated[
+        str,
+        Field(
+            description=(
+                "Comma-separated sections to return when summary=true (default 'basic,ports'). "
+                "Sections: basic, ports, radios, stats, uplink, lldp, all."
+            )
+        ),
+    ] = "basic,ports",
+    summary: Annotated[
+        bool,
+        Field(
+            description=(
+                "When false (default), returns the full raw device object. "
+                "When true, trims to the sections named in include."
+            )
+        ),
+    ] = False,
 ) -> Dict[str, Any]:
     """Implementation for getting device details."""
     try:
         device = await device_manager.get_device_details(mac_address)
+        if device:
+            device_raw = device.raw if hasattr(device, "raw") else device
+
+            if not summary:
+                return {
+                    "success": True,
+                    "site": device_manager._connection.site,
+                    "include": "all",
+                    "summary_mode": False,
+                    "device": device_raw,
+                }
+
+            known_sections = {"basic", "ports", "radios", "stats", "uplink", "lldp", "all"}
+            sections = set(s.strip().lower() for s in include.split(","))
+            unknown_sections = sorted(sections - known_sections)
+            include_all = "all" in sections
+
+            device_data: Dict[str, Any] = {}
+
+            # Basic — essential device info
+            if include_all or "basic" in sections:
+                state_map = {
+                    0: "offline",
+                    1: "online",
+                    2: "pending_adoption",
+                    4: "managed_by_other/adopting",
+                    5: "provisioning",
+                    6: "upgrading",
+                    11: "error/heartbeat_missed",
+                }
+                device_state = device_raw.get("state", 0)
+                device_data.update(
+                    {
+                        "mac": device_raw.get("mac"),
+                        "name": device_raw.get("name", device_raw.get("model", "Unknown")),
+                        "model": device_raw.get("model"),
+                        "type": device_raw.get("type"),
+                        "ip": device_raw.get("ip"),
+                        "status": state_map.get(device_state, f"unknown ({device_state})"),
+                        "uptime": str(timedelta(seconds=device_raw.get("uptime", 0)))
+                        if device_raw.get("uptime")
+                        else None,
+                        "firmware": device_raw.get("version"),
+                        "adopted": device_raw.get("adopted", False),
+                    }
+                )
+
+            # Ports — compressed port table (switches)
+            if (include_all or "ports" in sections) and "port_table" in device_raw:
+                # Build LLDP lookup by local port for accurate neighbor detection
+                lldp_by_port: Dict[int, Dict[str, Any]] = {}
+                for lldp_entry in device_raw.get("lldp_table", []):
+                    local_port = lldp_entry.get("local_port_idx")
+                    if local_port is not None:
+                        lldp_by_port[local_port] = {
+                            "mac": lldp_entry.get("chassis_id"),
+                            "name": lldp_entry.get("chassis_name"),
+                            "port": lldp_entry.get("port_id"),
+                        }
+
+                device_data["port_summary"] = [
+                    {
+                        "port_idx": p.get("port_idx"),
+                        "name": p.get("name"),
+                        "up": p.get("up"),
+                        "speed": p.get("speed"),
+                        "poe_enable": p.get("poe_enable"),
+                        "poe_power": p.get("poe_power"),
+                        # last_seen_mac: last MAC that sent traffic on this port (may be wireless client traffic)
+                        "last_seen_mac": p.get("last_connection", {}).get("mac"),
+                        # lldp_neighbor: actual directly connected device (infrastructure only)
+                        "lldp_neighbor": lldp_by_port.get(p.get("port_idx")),
+                    }
+                    for p in device_raw["port_table"]
+                ]
+                device_data["port_count"] = len(device_raw["port_table"])
+
+            # Radios — compressed radio table (APs)
+            if (include_all or "radios" in sections) and "radio_table" in device_raw:
+                device_data["radio_summary"] = [
+                    {
+                        "radio": r.get("radio"),
+                        "channel": r.get("channel"),
+                        "tx_power": r.get("tx_power"),
+                    }
+                    for r in device_raw["radio_table"]
+                ]
+                device_data["radio_count"] = len(device_raw["radio_table"])
+                if "vap_table" in device_raw:
+                    device_data["vap_count"] = len(device_raw["vap_table"])
+
+            if include_all or "stats" in sections:
+                if "system-stats" in device_raw:
+                    device_data["system_stats"] = device_raw["system-stats"]
+
+            if include_all or "uplink" in sections:
+                if "uplink" in device_raw:
+                    uplink = device_raw["uplink"]
+                    device_data["uplink"] = {
+                        "type": uplink.get("type"),
+                        "uplink_mac": uplink.get("uplink_mac"),
+                        "uplink_device_name": uplink.get("uplink_device_name"),
+                        "uplink_remote_port": uplink.get("uplink_remote_port"),
+                        "speed": uplink.get("speed"),
+                        "ip": uplink.get("ip"),
+                    }
+
+            if include_all or "lldp" in sections:
+                if "lldp_table" in device_raw:
+                    device_data["lldp_table"] = device_raw["lldp_table"]
+
+            response = {
+                "success": True,
+                "site": device_manager._connection.site,
+                "include": include,
+                "summary_mode": True,
+                "device": device_data,
+            }
+            if unknown_sections:
+                response["unknown_sections"] = unknown_sections
+            return response
         return {
-            "success": True,
-            "site": device_manager._connection.site,
-            "device": device.raw if hasattr(device, "raw") else device,
+            "success": False,
+            "error": f"Device not found with MAC address: {mac_address}",
         }
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
