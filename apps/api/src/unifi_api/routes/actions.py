@@ -17,6 +17,30 @@ from unifi_api.services.manifest import ToolNotFound
 router = APIRouter()
 
 
+def _coerce_list_result(result: object, tool_name: str, kind: str) -> list:
+    """Normalize a list-kind tool's manager output to a bare list.
+
+    Most list tools return a bare list. The Protect recognition list tools
+    (``protect_list_known_faces``, ``protect_list_known_license_plates``) return
+    a dict envelope — ``{<items_key>: [...], "count": int, "links": {...}}`` —
+    because their MCP surface carries pagination links. The GraphQL and REST
+    surfaces unwrap that envelope themselves; the action path normalizes it here
+    so all three behave the same. The envelope always holds exactly one
+    list-valued key alongside scalar/dict metadata, so that single list is the
+    item payload. Anything else (wrong shape, ambiguous multi-list dict) trips
+    the same contract error as before.
+    """
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict):
+        list_values = [value for value in result.values() if isinstance(value, list)]
+        if len(list_values) == 1:
+            return list_values[0]
+    raise SerializerContractError(
+        f"tool '{tool_name}' declared kind={kind} but manager returned {type(result).__name__}"
+    )
+
+
 class ActionIn(BaseModel):
     site: str
     controller: str
@@ -73,11 +97,8 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 type_class, kind = tool_type
                 hint = type_class.render_hint(kind)
                 if kind in ("list", "timeseries", "event_log"):
-                    if not isinstance(result, list):
-                        raise SerializerContractError(
-                            f"tool '{tool_name}' declared kind={kind} but manager returned {type(result).__name__}"
-                        )
-                    data = [type_class.from_manager_output(x).to_dict() for x in result]
+                    items = _coerce_list_result(result, tool_name, kind)
+                    data = [type_class.from_manager_output(x).to_dict() for x in items]
                 else:
                     data = type_class.from_manager_output(result).to_dict()
                 shaped = {"success": True, "data": data, "render_hint": hint}

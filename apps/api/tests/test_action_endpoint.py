@@ -154,6 +154,49 @@ async def test_action_endpoint_serializer_contract_error(tmp_path, monkeypatch) 
         assert action_rows[0].error_kind == "serializer_contract"
 
 
+@pytest.mark.parametrize(
+    ("tool_name", "items_key", "item"),
+    [
+        ("protect_list_known_faces", "faces", {"id": "face-1", "name": "P", "matched_name": "Person One"}),
+        (
+            "protect_list_known_license_plates",
+            "license_plates",
+            {"id": "plate-1", "name": "Vehicle", "matched_name": "ABC1234"},
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_action_endpoint_unwraps_recognition_list_envelope(
+    tmp_path, monkeypatch, tool_name, items_key, item
+) -> None:
+    """Recognition list tools return a ``{items_key: [...], count, links}`` dict
+    envelope (not a bare list); the action path must unwrap it rather than 500
+    with a serializer contract error. Regression for issue #312."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+
+    envelope = {items_key: [item], "count": 1, "links": {}}
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=envelope))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post(
+            f"/v1/actions/{tool_name}",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {}, "confirm": False},
+        )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["success"] is True
+    assert body["render_hint"]["kind"] == "list"
+    assert isinstance(body["data"], list)
+    assert len(body["data"]) == 1
+    assert body["data"][0]["id"] == item["id"]
+    assert body["data"][0]["matched_name"] == item["matched_name"]
+
+
 @pytest.mark.asyncio
 async def test_action_endpoint_unknown_tool(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
