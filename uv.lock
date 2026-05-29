@@ -2044,7 +2044,7 @@ requires-dist = [
     { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.1.1" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=10.6.0" },
+    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=10.5.0" },
 ]
 provides-extras = ["access", "network", "protect"]
 

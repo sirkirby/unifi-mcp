@@ -25,6 +25,13 @@ jobs:
       with:
         enable-cache: true
 
+    # Fail when uv.lock has drifted from the pyproject sources (e.g. a dependency
+    # bump that updated the lock's requires-dist specifier but not the declaring
+    # pyproject, or vice versa). Catches the drift at PR time instead of letting
+    # it merge green and churn on every local `uv run`/`uv sync`.
+    - name: Check lockfile is in sync
+      run: uv lock --check
+
     - name: Install workspace
       run: uv sync --all-packages
 
