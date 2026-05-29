@@ -102,7 +102,7 @@ async def protect_list_known_faces(
         "List UniFi Protect license-plate identities (vehicle recognition groups), "
         "including named/known license plates by default and unlabeled plate groups when "
         "group_types includes unknown. Each entry's `id` is the value to use in a "
-        "`license_plate_known` alarm-rule condition. Returns metadata (incl. color/vehicle_type "
+        "`license_plate_known` alarm-rule condition. Returns metadata (incl. color/vehicleType "
         "when Protect provides them) and controller image references only; image bytes are not fetched."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),

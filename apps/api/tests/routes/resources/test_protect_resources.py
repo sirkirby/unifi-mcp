@@ -249,6 +249,86 @@ async def test_list_known_faces_group_types_filter(tmp_path, monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
+async def test_list_known_license_plates_happy_path(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    fake_plates = [
+        {
+            "id": f"plate-{i}",
+            "name": f"Vehicle {i}",
+            "matched_name": f"ABC123{i}",
+            "type": "vehicle",
+            "detections_count": i + 1,
+            "last_detected_at": str(1778700000000 + i),
+            "metadata": {"color": {"val": "black", "confidence": 80}},
+        }
+        for i in range(3)
+    ]
+
+    async def fake_list(self, *a, **kw):
+        return {"license_plates": fake_plates, "count": len(fake_plates), "links": {}}
+
+    from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+    monkeypatch.setattr(RecognitionManager, "list_known_license_plates", fake_list)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/known-license-plates?controller={cid}&limit=2",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["items"]) == 2
+    assert {item["id"] for item in body["items"]} == {"plate-1", "plate-2"}
+    assert {item["matched_name"] for item in body["items"]} == {"ABC1231", "ABC1232"}
+    assert body["next_cursor"] is not None
+    assert body["render_hint"]["kind"] == "list"
+
+
+@pytest.mark.asyncio
+async def test_list_known_license_plates_group_types_filter(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    calls: list[dict] = []
+
+    async def fake_list(self, *a, **kw):
+        calls.append(kw)
+        return {
+            "license_plates": [
+                {
+                    "id": "plate-427",
+                    "type": "vehicle",
+                    "detections_count": 14,
+                    "metadata": {},
+                }
+            ],
+            "count": 1,
+            "links": {},
+        }
+
+    from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+    monkeypatch.setattr(RecognitionManager, "list_known_license_plates", fake_list)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/known-license-plates?controller={cid}&group_types=unknown",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["items"][0]["id"] == "plate-427"
+    assert calls[0]["group_types"] == ["unknown"]
+
+
+@pytest.mark.asyncio
 async def test_list_events_happy_path(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)

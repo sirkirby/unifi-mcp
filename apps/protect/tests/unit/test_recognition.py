@@ -558,3 +558,65 @@ class TestRecognitionManagerLicensePlates:
         assert result["count"] == 0
         params = mock_cm.client.api_request.await_args.kwargs["params"]
         assert params["labels"] == "groupType:unknown"
+
+
+class TestProtectListKnownLicensePlatesTool:
+    """Tool-layer tests for the pass-through wrapping that diverges from the faces tool.
+
+    The plates tool intentionally does NOT re-serialize the manager output (the faces
+    tool double-dumps), so the tool's own wrapping (license_plates/count/links + the
+    error handler) is exercised here, separately from the manager tests above.
+    """
+
+    @pytest.mark.asyncio
+    async def test_success(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_list_known_license_plates
+
+        mock_recognition_manager.list_known_license_plates = AsyncMock(
+            return_value={
+                "license_plates": [{"id": "plate-uuid-1", "name": "Example Vehicle", "matched_name": "ABC1234"}],
+                "count": 1,
+                "links": {},
+            }
+        )
+
+        result = await protect_list_known_license_plates(page_size=25, min_confidence=40)
+
+        assert result["success"] is True
+        assert result["data"]["count"] == 1
+        assert result["data"]["license_plates"][0]["id"] == "plate-uuid-1"
+        mock_recognition_manager.list_known_license_plates.assert_awaited_once_with(
+            page=None,
+            page_size=25,
+            min_confidence=40,
+            include_interest=True,
+            group_types=None,
+            order_by="name",
+            order_direction="asc",
+        )
+
+    @pytest.mark.asyncio
+    async def test_empty(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_list_known_license_plates
+
+        mock_recognition_manager.list_known_license_plates = AsyncMock(
+            return_value={"license_plates": [], "count": 0, "links": {}}
+        )
+
+        result = await protect_list_known_license_plates()
+
+        assert result["success"] is True
+        assert result["data"]["count"] == 0
+        assert result["data"]["license_plates"] == []
+
+    @pytest.mark.asyncio
+    async def test_error(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_list_known_license_plates
+
+        mock_recognition_manager.list_known_license_plates = AsyncMock(side_effect=RuntimeError("connection lost"))
+
+        result = await protect_list_known_license_plates()
+
+        assert result["success"] is False
+        assert "Failed to list known license plates" in result["error"]
+        assert "connection lost" in result["error"]
