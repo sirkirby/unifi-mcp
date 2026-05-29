@@ -566,6 +566,34 @@ class TestRuleToController:
         assert out["isCreatedBySystem"] is False
         assert "is_created_by_system" not in out
 
+    def test_nested_both_snake_and_camel_prefers_camel(self) -> None:
+        """Nested action metadata must mirror the top-level two-pass rule:
+        an explicit camelCase value wins over its snake_case sibling
+        regardless of dict insertion order (a single-pass comprehension
+        would clobber by order)."""
+        from unifi_core.protect.models.alarms import rule_to_controller
+
+        # snake first, then camel
+        body = {"actions": [{"metadata": {"use_thumbnail": True, "useThumbnail": False}}]}
+        meta = rule_to_controller(body)["actions"][0]["metadata"]
+        assert meta["useThumbnail"] is False
+        assert "use_thumbnail" not in meta
+
+        # camel first, then snake — must still resolve to camel
+        body = {"actions": [{"metadata": {"useThumbnail": False, "use_thumbnail": True}}]}
+        meta = rule_to_controller(body)["actions"][0]["metadata"]
+        assert meta["useThumbnail"] is False
+        assert "use_thumbnail" not in meta
+
+    def test_nested_snake_only_translated(self) -> None:
+        """A lone snake_case metadata key is translated to camelCase."""
+        from unifi_core.protect.models.alarms import rule_to_controller
+
+        body = {"actions": [{"metadata": {"use_thumbnail": True}}]}
+        meta = rule_to_controller(body)["actions"][0]["metadata"]
+        assert meta["useThumbnail"] is True
+        assert "use_thumbnail" not in meta
+
     def test_unknown_fields_passthrough(self) -> None:
         """Future Protect fields we don't enumerate must round-trip untouched."""
         from unifi_core.protect.models.alarms import rule_to_controller

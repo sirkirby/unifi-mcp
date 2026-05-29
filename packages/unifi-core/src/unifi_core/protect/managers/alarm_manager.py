@@ -18,7 +18,9 @@ Arm/disarm:
 
 Rules (automations):
   - ``GET    automations``         -- list all alarm rules
-  - ``GET    automations/{id}``    -- fetch a single rule
+  - ``GET    automations/{id}``    -- 404s on this controller; there is no
+                                      per-rule GET, so ``get_rule`` fetches the
+                                      list and filters by id
   - ``POST   automations``         -- create a new rule (body = full payload)
   - ``PATCH  automations/{id}``    -- update a rule (body = full payload;
                                       Protect rejects partial bodies, so callers
@@ -341,7 +343,7 @@ class AlarmManager:
         Raises ``ValueError`` on empty id, ``UniFiNotFoundError`` if no rule
         with that id exists.
         """
-        _require_rule_id(rule_id)
+        rule_id = _require_rule_id(rule_id)
         for rule in await self.list_rules():
             if rule.get("id") == rule_id:
                 return rule
@@ -355,7 +357,7 @@ class AlarmManager:
         Callers must perform a read-modify-write: call :meth:`get_rule`
         first, mutate the returned dict, then pass it back here.
         """
-        _require_rule_id(rule_id)
+        rule_id = _require_rule_id(rule_id)
         _require_dict_body(body, "body")
         data = await self._cm.client.api_request(f"automations/{rule_id}", method="patch", json=body)
         if not isinstance(data, dict):
@@ -394,7 +396,7 @@ class AlarmManager:
         ``api_request_raw`` (which does not attempt to decode JSON) to avoid a
         spurious "Could not decode JSON" error on an otherwise-successful call.
         """
-        _require_rule_id(rule_id)
+        rule_id = _require_rule_id(rule_id)
         await self._cm.client.api_request_raw(f"automations/{rule_id}", method="delete")
         return {"deleted": True, "rule_id": rule_id}
 
@@ -404,7 +406,7 @@ class AlarmManager:
 
     async def preview_update_rule(self, rule_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
         """Return current vs. proposed rule state for an update preview."""
-        _require_rule_id(rule_id)
+        rule_id = _require_rule_id(rule_id)
         _require_dict_body(body, "body")
         current = await self.get_rule(rule_id)
         return {
@@ -415,7 +417,7 @@ class AlarmManager:
 
     async def preview_delete_rule(self, rule_id: str) -> Dict[str, Any]:
         """Return current rule + delete intent for a delete preview."""
-        _require_rule_id(rule_id)
+        rule_id = _require_rule_id(rule_id)
         current = await self.get_rule(rule_id)
         return {
             "rule_id": rule_id,
@@ -442,10 +444,16 @@ def _ms_to_iso(value: Any) -> Optional[str]:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
 
 
-def _require_rule_id(rule_id: Any) -> None:
-    """Validate ``rule_id`` is a non-empty string."""
+def _require_rule_id(rule_id: Any) -> str:
+    """Validate ``rule_id`` is a non-empty string and return it stripped.
+
+    Returning the stripped value lets callers rebind ``rule_id`` so a padded id
+    like ``" rule-001 "`` matches the controller's id during list filtering
+    instead of silently missing.
+    """
     if not isinstance(rule_id, str) or not rule_id.strip():
         raise ValueError("rule_id must be a non-empty string")
+    return rule_id.strip()
 
 
 def _require_dict_body(body: Any, name: str) -> None:

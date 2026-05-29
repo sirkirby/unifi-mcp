@@ -444,13 +444,36 @@ _ACTION_METADATA_RENAMES: dict[str, str] = {
 }
 
 
+def _metadata_to_controller(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Two-pass snake_case -> camelCase rename for action metadata.
+
+    Mirrors the top-level :func:`rule_to_controller` strategy: translate the
+    snake_case keys first, then pass through everything else so an explicit
+    camelCase sibling overrides the translated value. A single-pass
+    comprehension would let the snake_case form clobber the camelCase form (or
+    not) depending on dict insertion order — camelCase must always win.
+    """
+    out: dict[str, Any] = {}
+    # First pass: snake_case-translatable keys.
+    for key in metadata:
+        if key in _ACTION_METADATA_RENAMES:
+            out[_ACTION_METADATA_RENAMES[key]] = metadata[key]
+    # Second pass: pass through everything else; an explicit camelCase form
+    # overrides the snake_case translation above.
+    for key, value in metadata.items():
+        if key in _ACTION_METADATA_RENAMES:
+            continue
+        out[key] = value
+    return out
+
+
 def _action_to_controller(action: Any) -> Any:
     if not isinstance(action, dict):
         return action
     out: dict[str, Any] = {}
     for key, value in action.items():
         if key == "metadata" and isinstance(value, dict):
-            value = {_ACTION_METADATA_RENAMES.get(k, k): v for k, v in value.items()}
+            value = _metadata_to_controller(value)
         out[key] = value
     return out
 

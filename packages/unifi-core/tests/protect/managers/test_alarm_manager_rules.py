@@ -114,6 +114,19 @@ async def test_get_rule_filters_from_list() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_rule_strips_padded_id() -> None:
+    """A padded id (`" rule-uuid-abc "`) is stripped before list filtering so it
+    matches the controller's id instead of silently missing."""
+    mgr = _make_manager()
+    raw = [_raw_rule("r-1", "First"), _raw_rule("rule-uuid-abc", "Test Vehicle Arrival")]
+    mgr._cm.client.api_request = AsyncMock(return_value=raw)
+
+    rule = await mgr.get_rule("  rule-uuid-abc  ")
+
+    assert rule["id"] == "rule-uuid-abc"
+
+
+@pytest.mark.asyncio
 async def test_get_rule_empty_id_rejected() -> None:
     mgr = _make_manager()
     mgr._cm.client.api_request = AsyncMock()
