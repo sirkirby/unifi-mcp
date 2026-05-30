@@ -7,7 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.graphql.pydantic_export import to_pydantic_model
-from unifi_api.graphql.types.protect.recognition import KnownFace, KnownLicensePlate
+from unifi_api.graphql.types.protect.events import SmartDetection
+from unifi_api.graphql.types.protect.recognition import (
+    DetectionSearchLabels,
+    KnownFace,
+    KnownLicensePlate,
+)
 from unifi_api.routes.resources._common import (
     require_capability,
     resolve_controller,
@@ -161,3 +166,100 @@ async def list_known_license_plates(
         "next_cursor": next_cursor.encode() if next_cursor else None,
         "render_hint": hint,
     }
+
+
+def _detection_key(obj) -> tuple:
+    raw = obj if isinstance(obj, dict) else getattr(obj, "raw", {}) or {}
+    return (0, raw.get("id") or "")
+
+
+@router.get(
+    "/sites/{site_id}/detection-search",
+    response_model=Page[to_pydantic_model(SmartDetection)],
+    dependencies=[Depends(require_scope(Scope.READ))],
+    tags=["protect/recognition"],
+)
+async def search_detections(
+    request: Request,
+    site_id: str,
+    controller=Depends(resolve_controller),
+    labels: list[str] = Query(
+        ...,
+        description=(
+            "Filter labels of the form 'prefix:value' (e.g. ['vehicleType:truck', 'color:black']). "
+            "At least one is required; all are applied together. Use the detection-search-labels "
+            "endpoint to discover legal values."
+        ),
+    ),
+    search_limit: int = Query(100, ge=1, le=1000),
+    order: str = Query("desc"),
+    exclude_motion: bool = Query(True),
+    limit: int = Query(50, ge=1, le=200),
+    cursor: str | None = Query(None),
+) -> dict:
+    require_capability(controller, "protect")
+    factory = request.app.state.manager_factory
+    sm = request.app.state.sessionmaker
+    async with sm() as session:
+        mgr = await factory.get_domain_manager(
+            session,
+            controller.id,
+            "protect",
+            "event_manager",
+        )
+        await factory.get_connection_manager(session, controller.id, "protect")
+        try:
+            result = await mgr.search_detections(
+                labels=labels,
+                limit=search_limit,
+                order=order,
+                exclude_motion=exclude_motion,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    cursor_obj = _decode_cursor(cursor)
+    page, next_cursor = paginate(
+        list(result.get("detections", [])),
+        limit=limit,
+        cursor=cursor_obj,
+        key_fn=_detection_key,
+    )
+
+    type_class = request.app.state.type_registry.lookup_tool("protect_search_detections")[0]
+    items = [type_class.from_manager_output(d).to_dict() for d in page]
+    hint = type_class.render_hint("list")
+
+    return {
+        "items": items,
+        "next_cursor": next_cursor.encode() if next_cursor else None,
+        "render_hint": hint,
+    }
+
+
+@router.get(
+    "/sites/{site_id}/detection-search-labels",
+    response_model=to_pydantic_model(DetectionSearchLabels),
+    dependencies=[Depends(require_scope(Scope.READ))],
+    tags=["protect/recognition"],
+)
+async def detection_search_labels(
+    request: Request,
+    site_id: str,
+    controller=Depends(resolve_controller),
+) -> dict:
+    require_capability(controller, "protect")
+    factory = request.app.state.manager_factory
+    sm = request.app.state.sessionmaker
+    async with sm() as session:
+        mgr = await factory.get_domain_manager(
+            session,
+            controller.id,
+            "protect",
+            "event_manager",
+        )
+        await factory.get_connection_manager(session, controller.id, "protect")
+        raw = await mgr.get_detection_search_labels()
+
+    type_class = request.app.state.type_registry.lookup_tool("protect_detection_search_labels")[0]
+    return type_class.from_manager_output(raw).to_dict()

@@ -250,6 +250,9 @@ from unifi_api.graphql.types.protect.liveviews import (
     Liveview as ProtectLiveviewType,
 )
 from unifi_api.graphql.types.protect.recognition import (
+    DetectionSearchLabels as ProtectDetectionSearchLabelsType,
+)
+from unifi_api.graphql.types.protect.recognition import (
     KnownFace as ProtectKnownFaceType,
 )
 from unifi_api.graphql.types.protect.recognition import (
@@ -642,6 +645,8 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type("protect_list_known_faces", ProtectKnownFaceType, "list")
     reg.register_type("protect", "known_license_plates", ProtectKnownLicensePlateType)
     reg.register_tool_type("protect_list_known_license_plates", ProtectKnownLicensePlateType, "list")
+    reg.register_tool_type("protect_search_detections", ProtectSmartDetectionType, "list")
+    reg.register_tool_type("protect_detection_search_labels", ProtectDetectionSearchLabelsType, "detail")
 
     # protect/system (tool-keyed only) + viewers resource
     reg.register_type("protect", "viewers", ProtectViewerType)

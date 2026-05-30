@@ -53,7 +53,11 @@ from unifi_api.graphql.types.protect.events import (
 )
 from unifi_api.graphql.types.protect.lights import Light
 from unifi_api.graphql.types.protect.liveviews import Liveview
-from unifi_api.graphql.types.protect.recognition import KnownFace, KnownLicensePlate
+from unifi_api.graphql.types.protect.recognition import (
+    DetectionSearchLabels,
+    KnownFace,
+    KnownLicensePlate,
+)
 from unifi_api.graphql.types.protect.recordings import (
     Recording,
     RecordingStatusList,
@@ -634,6 +638,62 @@ async def _fetch_recording_status(
     return await ctx.cache.get_or_fetch(key, _do)
 
 
+async def _fetch_detection_search(
+    ctx: GraphQLContext,
+    controller: str,
+    labels: list[str],
+    limit: int,
+    order: str,
+    exclude_motion: bool,
+) -> list:
+    labels_key = ",".join(labels)
+    key = f"protect/detection-search/{controller}/{labels_key}/{limit}/{order}/{exclude_motion}"
+
+    async def _do() -> list:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "protect",
+                "event_manager",
+            )
+            await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "protect",
+            )
+            result = await mgr.search_detections(
+                labels=labels,
+                limit=limit,
+                order=order,
+                exclude_motion=exclude_motion,
+            )
+            return list(result.get("detections", []))
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_detection_search_labels(ctx: GraphQLContext, controller: str) -> Any:
+    key = f"protect/detection-search-labels/{controller}"
+
+    async def _do() -> Any:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "protect",
+                "event_manager",
+            )
+            await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "protect",
+            )
+            return await mgr.get_detection_search_labels()
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
 async def _fetch_lights(ctx: GraphQLContext, controller: str) -> list:
     key = f"protect/lights/{controller}"
 
@@ -1043,6 +1103,47 @@ class ProtectQuery:
             items=[KnownLicensePlate.from_manager_output(plate) for plate in page],
             next_cursor=next_cursor.encode() if next_cursor else None,
         )
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "Search detections across cameras via Protect's 'Find Anything' filter vocabulary. "
+            "Pass labels of the form 'prefix:value' (e.g. 'vehicleType:truck'); use "
+            "detectionSearchLabels to discover legal values."
+        ),
+    )
+    async def search_detections(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        labels: list[str],
+        limit: int = 100,
+        order: str = "desc",
+        exclude_motion: bool = True,
+    ) -> list[SmartDetection]:
+        ctx: GraphQLContext = info.context
+        detections = await _fetch_detection_search(
+            ctx,
+            str(controller),
+            labels,
+            limit,
+            order,
+            exclude_motion,
+        )
+        return [SmartDetection.from_manager_output(d) for d in detections]
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="The detection-search filter vocabulary ('Find Anything' label groups).",
+    )
+    async def detection_search_labels(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+    ) -> DetectionSearchLabels:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_detection_search_labels(ctx, str(controller))
+        return DetectionSearchLabels.from_manager_output(raw)
 
     # ---- Chimes ----------------------------------------------------------
 

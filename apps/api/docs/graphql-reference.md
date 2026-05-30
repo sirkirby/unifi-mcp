@@ -480,6 +480,17 @@ type CredentialPage {
   nextCursor: String
 }
 
+"""Detection-search filter vocabulary (the 'Find Anything' label groups)."""
+type DetectionSearchLabels {
+  colors: JSON
+  vehicleTypes: JSON
+  smartDetectTypes: JSON
+  eventTypes: JSON
+  groupType: JSON
+  devices: JSON
+  doorAccess: JSON
+}
+
 """A UniFi network device (AP, switch, gateway)."""
 type Device {
   mac: ID
@@ -1359,6 +1370,14 @@ type ProtectQuery {
   """
   knownLicensePlates(controller: ID!, limit: Int! = 50, cursor: String = null, minConfidence: Int! = 30, includeInterest: Boolean! = true, groupTypes: [String!] = null, orderBy: String! = "name", orderDirection: String! = "asc"): KnownLicensePlatePage!
 
+  """
+  Search detections across cameras via Protect's 'Find Anything' filter vocabulary. Pass labels of the form 'prefix:value' (e.g. 'vehicleType:truck'); use detectionSearchLabels to discover legal values.
+  """
+  searchDetections(controller: ID!, labels: [String!]!, limit: Int! = 100, order: String! = "desc", excludeMotion: Boolean! = true): [SmartDetection!]!
+
+  """The detection-search filter vocabulary ('Find Anything' label groups)."""
+  detectionSearchLabels(controller: ID!): DetectionSearchLabels!
+
   """List paired Protect chimes (paginated)."""
   chimes(controller: ID!, limit: Int! = 50, cursor: String = null): ChimePage!
 
@@ -2024,6 +2043,7 @@ Read-only access to UniFi Protect resources.
 - `cameraStreams: CameraStreams`  — Get the stream catalog (channels + RTSPS URLs) for a camera.
 - `cameras: CameraPage!`  — List cameras on the Protect controller (paginated).
 - `chimes: ChimePage!`  — List paired Protect chimes (paginated).
+- `detectionSearchLabels: DetectionSearchLabels!`  — The detection-search filter vocabulary ('Find Anything' label groups).
 - `event: Event`  — Look up a single Protect event by id.
 - `eventThumbnail: EventThumbnail`  — Get the thumbnail for a Protect event.
 - `events: EventPage!`  — List Protect events (paginated, most recent first).
@@ -2035,6 +2055,7 @@ Read-only access to UniFi Protect resources.
 - `liveviews: LiveviewPage!`  — List Protect liveviews (multi-camera grid layouts).
 - `recordingStatus: RecordingStatusList`  — Get current recording state for one or all cameras ({cameras, count}).
 - `recordings: RecordingPage!`  — List Protect recording windows for a camera. UniFi Protect exposes a single continuous recording window per camera.
+- `searchDetections: [SmartDetection!]!`  — Search detections across cameras via Protect's 'Find Anything' filter vocabulary. Pass labels of the form 'prefix:value' (e.g. 'vehicleType:truck'); use detectionSearchLabels to discover legal values.
 - `sensors: SensorPage!`  — List Protect sensors (motion / leak / temperature).
 - `smartDetections: SmartDetectionPage!`  — List Protect smart-detection events (paginated, most recent first).
 - `snapshot: Snapshot`  — Capture a JPEG snapshot from a camera (metadata only).

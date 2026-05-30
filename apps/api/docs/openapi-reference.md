@@ -1700,6 +1700,34 @@ No native ``protect_get_liveview`` tool — filter from LIST.
 
 ## protect/recognition
 
+### `GET /v1/sites/{site_id}/detection-search` — Search Detections
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `labels` (query) (required)
+- `search_limit` (query)
+- `order` (query)
+- `exclude_motion` (query)
+- `limit` (query)
+- `cursor` (query)
+- `controller` (query)
+
+
+**Returns:** `Page_SmartDetectionModel_`
+
+### `GET /v1/sites/{site_id}/detection-search-labels` — Detection Search Labels
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `DetectionSearchLabelsModel`
+
 ### `GET /v1/sites/{site_id}/known-faces` — List Known Faces
 
 

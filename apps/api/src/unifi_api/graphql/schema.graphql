@@ -469,6 +469,17 @@ type CredentialPage {
   nextCursor: String
 }
 
+"""Detection-search filter vocabulary (the 'Find Anything' label groups)."""
+type DetectionSearchLabels {
+  colors: JSON
+  vehicleTypes: JSON
+  smartDetectTypes: JSON
+  eventTypes: JSON
+  groupType: JSON
+  devices: JSON
+  doorAccess: JSON
+}
+
 """A UniFi network device (AP, switch, gateway)."""
 type Device {
   mac: ID
@@ -1347,6 +1358,14 @@ type ProtectQuery {
   List UniFi Protect license-plate identities (vehicle recognition groups). Each entry's id is the value to use in a `license_plate_known` alarm-rule condition.
   """
   knownLicensePlates(controller: ID!, limit: Int! = 50, cursor: String = null, minConfidence: Int! = 30, includeInterest: Boolean! = true, groupTypes: [String!] = null, orderBy: String! = "name", orderDirection: String! = "asc"): KnownLicensePlatePage!
+
+  """
+  Search detections across cameras via Protect's 'Find Anything' filter vocabulary. Pass labels of the form 'prefix:value' (e.g. 'vehicleType:truck'); use detectionSearchLabels to discover legal values.
+  """
+  searchDetections(controller: ID!, labels: [String!]!, limit: Int! = 100, order: String! = "desc", excludeMotion: Boolean! = true): [SmartDetection!]!
+
+  """The detection-search filter vocabulary ('Find Anything' label groups)."""
+  detectionSearchLabels(controller: ID!): DetectionSearchLabels!
 
   """List paired Protect chimes (paginated)."""
   chimes(controller: ID!, limit: Int! = 50, cursor: String = null): ChimePage!

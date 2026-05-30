@@ -1733,6 +1733,76 @@
         "title": "Detail[WlanModel]",
         "type": "object"
       },
+      "DetectionSearchLabelsModel": {
+        "additionalProperties": true,
+        "properties": {
+          "colors": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colors"
+          },
+          "devices": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Devices"
+          },
+          "door_access": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Door Access"
+          },
+          "event_types": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Types"
+          },
+          "group_type": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Type"
+          },
+          "smart_detect_types": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smart Detect Types"
+          },
+          "vehicle_types": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Types"
+          }
+        },
+        "title": "DetectionSearchLabelsModel",
+        "type": "object"
+      },
       "DeviceModel": {
         "additionalProperties": true,
         "properties": {
@@ -4576,6 +4646,46 @@
         "title": "Page[RouteModel]",
         "type": "object"
       },
+      "Page_SmartDetectionModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SmartDetectionModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[SmartDetectionModel]",
+        "type": "object"
+      },
       "Page_TrafficRouteModel_": {
         "additionalProperties": true,
         "properties": {
@@ -5335,6 +5445,141 @@
           "settings"
         ],
         "title": "SettingsBody",
+        "type": "object"
+      },
+      "SmartDetectionModel": {
+        "additionalProperties": true,
+        "properties": {
+          "camera": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera"
+          },
+          "detected_thumbnail_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detected Thumbnail Id"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "recognized_person_confidence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recognized Person Confidence"
+          },
+          "recognized_person_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recognized Person Id"
+          },
+          "recognized_person_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recognized Person Name"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "smart_detect_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Smart Detect Types",
+            "type": "array"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "thumbnail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          }
+        },
+        "title": "SmartDetectionModel",
         "type": "object"
       },
       "TrafficRouteModel": {
@@ -10056,6 +10301,200 @@
         "summary": "Get Credential",
         "tags": [
           "access/credentials"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/detection-search": {
+      "get": {
+        "operationId": "search_detections_v1_sites__site_id__detection_search_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Filter labels of the form 'prefix:value' (e.g. ['vehicleType:truck', 'color:black']). At least one is required; all are applied together. Use the detection-search-labels endpoint to discover legal values.",
+            "in": "query",
+            "name": "labels",
+            "required": true,
+            "schema": {
+              "description": "Filter labels of the form 'prefix:value' (e.g. ['vehicleType:truck', 'color:black']). At least one is required; all are applied together. Use the detection-search-labels endpoint to discover legal values.",
+              "items": {
+                "type": "string"
+              },
+              "title": "Labels",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search_limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Search Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "title": "Order",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_motion",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Exclude Motion",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_SmartDetectionModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Detections",
+        "tags": [
+          "protect/recognition"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/detection-search-labels": {
+      "get": {
+        "operationId": "detection_search_labels_v1_sites__site_id__detection_search_labels_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionSearchLabelsModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detection Search Labels",
+        "tags": [
+          "protect/recognition"
         ]
       }
     },
