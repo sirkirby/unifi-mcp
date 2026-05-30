@@ -10,6 +10,8 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
         "protect_update_known_face": {"kind": RenderKind.DETAIL},
         "protect_merge_known_faces": {"kind": RenderKind.DETAIL},
         "protect_delete_known_face": {"kind": RenderKind.DETAIL},
+        "protect_update_known_license_plate": {"kind": RenderKind.DETAIL},
+        "protect_delete_known_license_plate": {"kind": RenderKind.DETAIL},
     },
 )
 class RecognitionMutationAckSerializer(Serializer):

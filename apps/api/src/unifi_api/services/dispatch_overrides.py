@@ -104,6 +104,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "protect_update_known_face": ("recognition_manager", "apply_update_known_face"),
     "protect_merge_known_faces": ("recognition_manager", "apply_merge_known_faces"),
     "protect_delete_known_face": ("recognition_manager", "apply_delete_known_face"),
+    "protect_update_known_license_plate": ("recognition_manager", "apply_update_known_license_plate"),
+    "protect_delete_known_license_plate": ("recognition_manager", "apply_delete_known_license_plate"),
     # =========================================================================
     # Access — preview/execute split (X + apply_X)
     # =========================================================================
