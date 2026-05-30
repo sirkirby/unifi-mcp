@@ -221,7 +221,7 @@ def from_controller(raw: Any) -> Event:
 
 def smart_detection_from_controller(raw: Any) -> SmartDetection:
     """Build a SmartDetection from a uiprotect / manager dict or object."""
-    sdt = _get(raw, "smart_detect_types")
+    sdt = _get_any(raw, "smart_detect_types", "smartDetectTypes")
     if not isinstance(sdt, list):
         sdt = []
 

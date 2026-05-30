@@ -17,6 +17,7 @@
     "protect_delete_known_license_plate": "unifi_protect_mcp.tools.recognition",
     "protect_delete_liveview": "unifi_protect_mcp.tools.liveviews",
     "protect_delete_recording": "unifi_protect_mcp.tools.recordings",
+    "protect_detection_search_labels": "unifi_protect_mcp.tools.events",
     "protect_export_clip": "unifi_protect_mcp.tools.recordings",
     "protect_get_camera": "unifi_protect_mcp.tools.cameras",
     "protect_get_camera_analytics": "unifi_protect_mcp.tools.cameras",
@@ -45,6 +46,7 @@
     "protect_ptz_zoom": "unifi_protect_mcp.tools.cameras",
     "protect_reboot_camera": "unifi_protect_mcp.tools.cameras",
     "protect_recent_events": "unifi_protect_mcp.tools.events",
+    "protect_search_detections": "unifi_protect_mcp.tools.events",
     "protect_subscribe_events": "unifi_protect_mcp.tools.events",
     "protect_toggle_recording": "unifi_protect_mcp.tools.cameras",
     "protect_trigger_chime": "unifi_protect_mcp.tools.devices",
@@ -1628,6 +1630,90 @@
         }
       },
       "title": "Delete Recording"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "List the detection-search filter vocabulary supported by this controller. Returns the legal label values (colors, vehicle types, smart detection types, event types, etc.) that the 'Find Anything' panel offers. Use the returned values as labels for protect_search_detections.",
+      "name": "protect_detection_search_labels",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Detection Search Labels"
     },
     {
       "annotations": {
@@ -4430,6 +4516,110 @@
         }
       },
       "title": "Recent Events"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Search detections across all cameras using Protect's 'Find Anything' filter vocabulary. Pass one or more labels of the form 'prefix:value' (e.g. 'vehicleType:truck', 'color:black', 'smartDetectType:vehicle'); labels are applied conjunctively. Call protect_detection_search_labels first to discover the legal labels for this controller. Returns matching smart detection events. excludeMotion defaults to true so plain motion events are filtered out.",
+      "name": "protect_search_detections",
+      "schema": {
+        "input": {
+          "properties": {
+            "exclude_motion": {
+              "description": "When true (default), exclude plain motion events so only smart detections are returned.",
+              "type": "boolean"
+            },
+            "labels": {
+              "description": "Filter labels of the form 'prefix:value' (e.g. ['vehicleType:truck', 'color:black']). At least one is required; all are applied together. Use protect_detection_search_labels to discover legal values.",
+              "type": "array"
+            },
+            "limit": {
+              "description": "Maximum number of detections to return (1-1000, default 100).",
+              "type": "integer"
+            },
+            "order": {
+              "description": "Result ordering by time: 'desc' (newest first, default) or 'asc' (oldest first).",
+              "type": "string"
+            }
+          },
+          "required": [
+            "labels"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Search Detections"
     },
     {
       "annotations": {
