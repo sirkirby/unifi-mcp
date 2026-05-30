@@ -235,3 +235,11 @@ class DeleteKnownFaceInput(BaseModel):
     __action_input__: ClassVar[bool] = True
 
     face_id: str = Field(description="Face group UUID to remove")
+
+
+class DeleteKnownLicensePlateInput(BaseModel):
+    """Input for ``protect_delete_known_license_plate``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    plate_id: str = Field(description="License-plate group id to remove")

@@ -559,6 +559,87 @@ class TestRecognitionManagerLicensePlates:
         params = mock_cm.client.api_request.await_args.kwargs["params"]
         assert params["labels"] == "groupType:unknown"
 
+    @pytest.mark.asyncio
+    async def test_update_known_license_plate_preview_preserves_unmentioned_fields(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.return_value = {
+            "groups": [
+                {
+                    "id": "plate-1",
+                    "name": "Current",
+                    "description": "Keep",
+                    "isNotificationEnabled": True,
+                    "detectionsCount": 4,
+                }
+            ]
+        }
+
+        result = await RecognitionManager(mock_cm).update_known_license_plate("plate-1", {"name": "Updated"})
+
+        assert result["current_state"] == {"name": "Current"}
+        assert result["proposed_changes"] == {"name": "Updated"}
+
+    @pytest.mark.asyncio
+    async def test_update_known_license_plate_rejects_unknown_and_read_only_fields(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mgr = RecognitionManager(mock_cm)
+        with pytest.raises(ValueError, match="Read-only"):
+            await mgr.update_known_license_plate("plate-1", {"matched_name": "PLATE"})
+        with pytest.raises(ValueError, match="Unsupported"):
+            await mgr.update_known_license_plate("plate-1", {"nickname": "nope"})
+        with pytest.raises(ValueError, match="at least one"):
+            await mgr.update_known_license_plate("plate-1", {})
+
+    @pytest.mark.asyncio
+    async def test_apply_update_known_license_plate_patches_translated_fields(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.side_effect = [
+            {"groups": [{"id": "plate-1", "name": "Current", "isNotificationEnabled": False}]},
+            {"id": "plate-1", "name": "Current", "isNotificationEnabled": True},
+        ]
+
+        result = await RecognitionManager(mock_cm).apply_update_known_license_plate(
+            "plate-1", {"is_notification_enabled": True}
+        )
+
+        assert result["updated_fields"] == ["is_notification_enabled"]
+        mock_cm.client.api_request.assert_any_await(
+            "recognition/vehicle/groups/plate-1",
+            method="patch",
+            json={"isNotificationEnabled": True},
+        )
+
+    @pytest.mark.asyncio
+    async def test_delete_known_license_plate_preview_fetches_group(self, mock_cm):
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.return_value = {"groups": [{"id": "plate-1", "name": "Assigned"}]}
+
+        result = await RecognitionManager(mock_cm).delete_known_license_plate("plate-1")
+
+        assert result["license_plate"]["id"] == "plate-1"
+        assert result["warnings"]
+
+    @pytest.mark.asyncio
+    async def test_apply_delete_known_license_plate_uses_raw_delete(self, mock_cm):
+        """Vehicle DELETE returns an empty body; must use api_request_raw to avoid a
+        spurious 'Could not decode JSON' error after a successful delete."""
+        from unifi_core.protect.managers.recognition_manager import RecognitionManager
+
+        mock_cm.client.api_request.return_value = {"groups": [{"id": "plate-1", "name": "Assigned"}]}
+        mock_cm.client.api_request_raw = AsyncMock(return_value=None)
+
+        result = await RecognitionManager(mock_cm).apply_delete_known_license_plate("plate-1")
+
+        assert result["deleted"] is True
+        mock_cm.client.api_request_raw.assert_awaited_once_with(
+            "recognition/vehicle/groups/plate-1",
+            method="delete",
+        )
+
 
 class TestProtectListKnownLicensePlatesTool:
     """Tool-layer tests for the pass-through wrapping that diverges from the faces tool.
@@ -620,3 +701,105 @@ class TestProtectListKnownLicensePlatesTool:
         assert result["success"] is False
         assert "Failed to list known license plates" in result["error"]
         assert "connection lost" in result["error"]
+
+
+class TestProtectKnownLicensePlateMutationTools:
+    @pytest.mark.asyncio
+    async def test_update_preview(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_update_known_license_plate
+
+        mock_recognition_manager.update_known_license_plate = AsyncMock(
+            return_value={
+                "plate_id": "plate-1",
+                "plate_name": "Current",
+                "current_state": {"name": "Current"},
+                "proposed_changes": {"name": "Updated"},
+            }
+        )
+
+        result = await protect_update_known_license_plate("plate-1", {"name": "Updated"})
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["current"] == {"name": "Current"}
+        mock_recognition_manager.apply_update_known_license_plate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_confirm(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_update_known_license_plate
+
+        mock_recognition_manager.update_known_license_plate = AsyncMock(
+            return_value={
+                "plate_id": "plate-1",
+                "plate_name": "Current",
+                "current_state": {"description": None},
+                "proposed_changes": {"description": "Delivery van"},
+            }
+        )
+        mock_recognition_manager.apply_update_known_license_plate = AsyncMock(return_value={"plate_id": "plate-1"})
+
+        result = await protect_update_known_license_plate("plate-1", {"description": "Delivery van"}, confirm=True)
+
+        assert result == {"success": True, "data": {"plate_id": "plate-1"}}
+        mock_recognition_manager.apply_update_known_license_plate.assert_awaited_once_with(
+            "plate-1", {"description": "Delivery van"}
+        )
+
+    @pytest.mark.asyncio
+    async def test_delete_preview(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_delete_known_license_plate
+
+        mock_recognition_manager.delete_known_license_plate = AsyncMock(
+            return_value={"license_plate": {"id": "plate-1", "name": "Assigned"}, "warnings": ["destructive"]}
+        )
+
+        result = await protect_delete_known_license_plate("plate-1")
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["warnings"] == ["destructive"]
+        mock_recognition_manager.apply_delete_known_license_plate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_delete_confirm(self, mock_recognition_manager):
+        from unifi_protect_mcp.tools.recognition import protect_delete_known_license_plate
+
+        mock_recognition_manager.delete_known_license_plate = AsyncMock(
+            return_value={"license_plate": {"id": "plate-1"}, "warnings": []}
+        )
+        mock_recognition_manager.apply_delete_known_license_plate = AsyncMock(return_value={"deleted": True})
+
+        result = await protect_delete_known_license_plate("plate-1", confirm=True)
+
+        assert result == {"success": True, "data": {"deleted": True}}
+        mock_recognition_manager.apply_delete_known_license_plate.assert_awaited_once_with("plate-1")
+
+    @pytest.mark.asyncio
+    async def test_update_not_found_returns_error(self, mock_recognition_manager):
+        from unifi_core.exceptions import UniFiNotFoundError
+        from unifi_protect_mcp.tools.recognition import protect_update_known_license_plate
+
+        mock_recognition_manager.update_known_license_plate = AsyncMock(
+            side_effect=UniFiNotFoundError("known license plate", "missing")
+        )
+
+        result = await protect_update_known_license_plate("missing", {"name": "X"})
+
+        assert result["success"] is False
+        assert "missing" in result["error"]
+        mock_recognition_manager.apply_update_known_license_plate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_delete_not_found_returns_error(self, mock_recognition_manager):
+        from unifi_core.exceptions import UniFiNotFoundError
+        from unifi_protect_mcp.tools.recognition import protect_delete_known_license_plate
+
+        mock_recognition_manager.delete_known_license_plate = AsyncMock(
+            side_effect=UniFiNotFoundError("known license plate", "missing")
+        )
+
+        result = await protect_delete_known_license_plate("missing", confirm=True)
+
+        assert result["success"] is False
+        assert "missing" in result["error"]
+        mock_recognition_manager.apply_delete_known_license_plate.assert_not_called()

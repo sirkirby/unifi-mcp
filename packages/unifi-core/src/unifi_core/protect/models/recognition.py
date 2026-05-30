@@ -244,3 +244,47 @@ def to_controller_update(fields: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("fields must include at least one supported mutable field")
 
     return {_TO_CONTROLLER_UPDATE[key]: value for key, value in supplied.items()}
+
+
+class KnownLicensePlateUpdate(BaseModel):
+    """Mutable fields accepted by Known License Plate update operations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, description="Assigned license-plate identity name")
+    description: Optional[str] = Field(default=None, description="Optional group description")
+    is_notification_enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether notifications are enabled for this group",
+    )
+
+
+PLATE_MUTABLE_FIELDS = frozenset(KnownLicensePlateUpdate.model_fields.keys())
+PLATE_READ_ONLY_FIELDS = frozenset(KnownLicensePlate.model_fields.keys()) - PLATE_MUTABLE_FIELDS
+
+_TO_CONTROLLER_PLATE_UPDATE = {
+    "name": "name",
+    "description": "description",
+    "is_notification_enabled": "isNotificationEnabled",
+}
+
+
+def to_controller_plate_update(fields: dict[str, Any]) -> dict[str, Any]:
+    """Translate a partial Known License Plate update into Protect API field names."""
+    if not fields:
+        raise ValueError("fields must include at least one supported mutable field")
+
+    unknown = set(fields) - PLATE_MUTABLE_FIELDS - PLATE_READ_ONLY_FIELDS
+    if unknown:
+        raise ValueError(f"Unsupported known license plate fields: {sorted(unknown)}")
+
+    read_only = set(fields) & PLATE_READ_ONLY_FIELDS
+    if read_only:
+        raise ValueError(f"Read-only known license plate fields cannot be updated: {sorted(read_only)}")
+
+    update = KnownLicensePlateUpdate(**fields)
+    supplied = update.model_dump(exclude_unset=True)
+    if not supplied:
+        raise ValueError("fields must include at least one supported mutable field")
+
+    return {_TO_CONTROLLER_PLATE_UPDATE[key]: value for key, value in supplied.items()}

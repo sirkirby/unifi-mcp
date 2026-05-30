@@ -8,7 +8,11 @@ from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import preview_response, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.protect.models._actions import DeleteKnownFaceInput, MergeKnownFacesInput
+from unifi_core.protect.models._actions import (
+    DeleteKnownFaceInput,
+    DeleteKnownLicensePlateInput,
+    MergeKnownFacesInput,
+)
 from unifi_core.protect.models.recognition import from_controller
 from unifi_protect_mcp.runtime import recognition_manager, server
 
@@ -375,3 +379,133 @@ async def protect_delete_known_face(
     except Exception as e:
         logger.error("Error deleting known face %s: %s", face_id, e, exc_info=True)
         return {"success": False, "error": f"Failed to delete known face: {e}"}
+
+
+@server.tool(
+    name="protect_update_known_license_plate",
+    description=(
+        "Update UniFi Protect Known License Plate (license-plate identity) metadata. Pass only the "
+        "fields you want to change; current values are automatically preserved. Supported fields: "
+        "name, description, is_notification_enabled. Requires confirm=True to apply; otherwise returns a preview."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "plate_id": {
+                "type": "string",
+                "description": "License-plate group id from protect_list_known_license_plates.",
+            },
+            "fields": {
+                "type": "object",
+                "description": (
+                    "Partial update fields. Supported keys: name, description, is_notification_enabled. "
+                    "Read-only fields such as id, plate text (matched_name), image paths, detection counts, "
+                    "timestamps, type, tags, and metadata are rejected."
+                ),
+                "properties": {
+                    "name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "description": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "is_notification_enabled": {"anyOf": [{"type": "boolean"}, {"type": "null"}]},
+                },
+                "additionalProperties": False,
+            },
+            "confirm": {
+                "type": "boolean",
+                "description": "When true, applies the update. When false (default), returns a preview.",
+            },
+        },
+        "required": ["plate_id", "fields"],
+        "additionalProperties": False,
+    },
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+    permission_category="recognition",
+    permission_action="update",
+)
+async def protect_update_known_license_plate(
+    plate_id: Annotated[str, Field(description="License-plate group id from protect_list_known_license_plates.")],
+    fields: Annotated[
+        Dict[str, Any],
+        Field(
+            description=(
+                "Partial update fields. Supported keys: name, description, is_notification_enabled. "
+                "Read-only fields such as id, plate text (matched_name), image paths, detection counts, "
+                "timestamps, type, tags, and metadata are rejected."
+            )
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the update. When false (default), returns a preview."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Update Known License Plate metadata with preview/confirm."""
+    logger.info("protect_update_known_license_plate called for %s (confirm=%s)", plate_id, confirm)
+    try:
+        field_data = fields.model_dump(exclude_unset=True) if hasattr(fields, "model_dump") else dict(fields)
+        if not field_data:
+            return {"success": False, "error": "No fields provided. Specify at least one field to update."}
+
+        preview_data = await recognition_manager.update_known_license_plate(plate_id, field_data)
+        if not confirm:
+            return update_preview(
+                resource_type="known_license_plate",
+                resource_id=plate_id,
+                resource_name=preview_data.get("plate_name"),
+                current_state=preview_data["current_state"],
+                updates=preview_data["proposed_changes"],
+            )
+
+        result = await recognition_manager.apply_update_known_license_plate(plate_id, field_data)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error updating known license plate %s: %s", plate_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to update known license plate: {e}"}
+
+
+@server.tool(
+    name="protect_delete_known_license_plate",
+    description=(
+        "Delete or remove a UniFi Protect license-plate recognition group. This is destructive. "
+        "Requires confirm=True to apply; otherwise returns a preview of the exact group."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
+    permission_category="recognition",
+    permission_action="delete",
+)
+async def protect_delete_known_license_plate(
+    plate_id: Annotated[str, Field(description="License-plate group id from protect_list_known_license_plates.")],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, deletes the group. When false (default), returns a preview."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Delete a Known License Plate group with preview/confirm."""
+    logger.info("protect_delete_known_license_plate called for %s (confirm=%s)", plate_id, confirm)
+    try:
+        try:
+            DeleteKnownLicensePlateInput(plate_id=plate_id)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+
+        preview_data = await recognition_manager.delete_known_license_plate(plate_id)
+        if not confirm:
+            return preview_response(
+                action="delete",
+                resource_type="known_license_plate",
+                resource_id=plate_id,
+                current_state=preview_data["license_plate"],
+                proposed_changes={"deleted": True},
+                resource_name=preview_data["license_plate"].get("name")
+                or preview_data["license_plate"].get("matched_name"),
+                warnings=preview_data["warnings"],
+            )
+
+        result = await recognition_manager.apply_delete_known_license_plate(plate_id)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error deleting known license plate %s: %s", plate_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to delete known license plate: {e}"}
