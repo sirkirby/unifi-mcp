@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+from pydantic import ValidationError
 from unifi_core.network.models.traffic_flows import (
     TrafficFlowQuery,
     traffic_flow_from_controller,
@@ -23,6 +25,12 @@ def test_query_defaults_and_filters():
     assert q.destination_domain == ["x.test"]
     assert q.source_mac is None
     assert q.search_text is None
+
+
+def test_query_rejects_out_of_range_pagination():
+    for kwargs in ({"page_size": 0}, {"page_size": 1001}, {"page_number": -1}):
+        with pytest.raises(ValidationError):
+            TrafficFlowQuery(time_from=1, time_to=2, **kwargs)
 
 
 def test_serializer_maps_core_and_traffic_data():

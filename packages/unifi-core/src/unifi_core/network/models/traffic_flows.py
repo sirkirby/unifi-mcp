@@ -25,8 +25,8 @@ class TrafficFlowQuery(BaseModel):
 
     time_from: Optional[int] = Field(default=None, description="Window start (epoch ms)")
     time_to: Optional[int] = Field(default=None, description="Window end (epoch ms)")
-    page_number: int = Field(default=0, description="0-based page number")
-    page_size: int = Field(default=100, description="Rows per page (<=1000)")
+    page_number: int = Field(default=0, ge=0, description="0-based page number")
+    page_size: int = Field(default=100, ge=1, le=1000, description="Rows per page (1-1000)")
     search_text: Optional[str] = Field(default=None, description="Substring match")
     risk: Optional[list[str]] = Field(default=None, description="Filter by risk band")
     action: Optional[list[str]] = Field(default=None, description="Filter by action (allow/block)")
