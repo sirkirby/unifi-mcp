@@ -1,6 +1,5 @@
 """Tests for Alarm Manager v2 read models (normalized /api/v2/alarms/ rules)."""
 
-
 from unifi_core.protect.models.alarm_v2 import (
     MUTABLE_FIELDS,
     AlarmRuleV2,
