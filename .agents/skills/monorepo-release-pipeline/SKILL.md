@@ -1,7 +1,17 @@
 ---
 name: myco:monorepo-release-pipeline
 description: >-
-  Covers the full release pipeline for the unifi-mcp monorepo: determining release scope by analyzing changed packages, scoping hatch-vcs version tag globs per Python package to prevent sibling-tag contamination, pushing tags in strict dependency order (unifi-core → unifi-mcp-shared → app servers → relay → worker when needed), configuring scripts/generate_release_notes.py path scoping per package, wiring per-package publish workflows for OIDC trusted publishing, coordinating cross-package version bumps in pyproject.toml, understanding app vs. library versioning and writeback behavior, and validating releases post-tag. Apply this skill when cutting any release, adding a new package, bumping unifi-core, or debugging a versioning or publish-workflow failure — even if the user does not explicitly ask about tag ordering or release notes. CRITICAL: All PRs require pin-alignment CI gate before merge (automated, cannot be skipped).
+  Covers the full release pipeline for the unifi-mcp monorepo: determining release scope by
+  analyzing changed packages, scoping hatch-vcs version tag globs per Python package to prevent
+  sibling-tag contamination, pushing tags in strict dependency order (unifi-core → unifi-mcp-shared
+  → app servers → relay → worker when needed), configuring scripts/generate_release_notes.py
+  path scoping per package, wiring per-package publish workflows for OIDC trusted publishing,
+  coordinating cross-package version bumps in pyproject.toml, understanding app vs. library
+  versioning and writeback behavior, and validating releases post-tag. Apply this skill when
+  cutting any release, adding a new package, bumping unifi-core, or debugging a versioning or
+  publish-workflow failure — even if the user does not explicitly ask about tag ordering or
+  release notes. CRITICAL: All PRs require pin-alignment CI gate before merge (automated,
+  cannot be skipped).
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -11,8 +21,8 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 
 The unifi-mcp repo ships seven independently versioned Python packages plus the
 Node/TypeScript worker app: `unifi-core`
-and `unifi-mcp-shared` live under `packages/`; `unifi-mcp-network`, `unifi-mcp-protect`,
-`unifi-mcp-access`, and `unifi-api-server` live under `apps/`; `unifi-mcp-relay` lives under `packages/`
+and `unifi-mcp-shared` live under `packages/`; `unifi-network-mcp`, `unifi-protect-mcp`,
+`unifi-access-mcp`, and `unifi-api-server` live under `apps/`; `unifi-mcp-relay` lives under `packages/`
 alongside core and shared; `unifi-mcp-worker` lives under `apps/worker/` and publishes to npm.
 Each has its own package identity, tag namespace, publish workflow, and release-notes scope. Getting the release sequence wrong leaves downstream
 packages referencing non-existent PyPI versions or produces contaminated release notes
@@ -32,19 +42,24 @@ that bleed across package boundaries.
 
 ## Package Map
 
-| Package | Directory | Tag namespace | Publish workflow |
+| Package | Directory | PyPI Name | Tag namespace |
 |---|---|---|---|
-| `unifi-core` | `packages/unifi-core/` | `core/v*` | `release-core.yml` |
-| `unifi-mcp-shared` | `packages/unifi-mcp-shared/` | `shared/v*` | `release-shared.yml` |
-| `unifi-mcp-network` | `apps/network/` | `network/v*` | `release-network.yml` |
-| `unifi-mcp-protect` | `apps/protect/` | `protect/v*` | `release-protect.yml` |
-| `unifi-mcp-access` | `apps/access/` | `access/v*` | `release-access.yml` |
-| `unifi-api-server` | `apps/api/` | `api/v*` | `release-api.yml` |
-| `unifi-mcp-relay` | `packages/unifi-mcp-relay/` | `relay/v*` | `release-relay.yml` |
-| `unifi-mcp-worker` | `apps/worker/` | `worker/v*` | `release-worker.yml` |
+| `unifi-core` | `packages/unifi-core/` | `unifi-core` | `core/v*` |
+| `unifi-mcp-shared` | `packages/unifi-mcp-shared/` | `unifi-mcp-shared` | `shared/v*` |
+| `unifi-mcp-network` | `apps/network/` | `unifi-network-mcp` | `network/v*` |
+| `unifi-mcp-protect` | `apps/protect/` | `unifi-protect-mcp` | `protect/v*` |
+| `unifi-mcp-access` | `apps/access/` | `unifi-access-mcp` | `access/v*` |
+| `unifi-api-server` | `apps/api/` | `unifi-api-server` | `api/v*` |
+| `unifi-mcp-relay` | `packages/unifi-mcp-relay/` | `unifi-mcp-relay` | `relay/v*` |
+| `unifi-mcp-worker` | `apps/worker/` | `@unifi-mcp/worker` (npm) | `worker/v*` |
 
-When adding a new package, extend this table and the release-notes path configuration
-before pushing any tag.
+**Critical:** PyPI package names differ from directory names. Always reference the PyPI name when
+installing or checking versions. Example: `pip install unifi-network-mcp` (not `unifi-mcp-network`).
+
+When adding a new package, extend this table, update the release-notes path configuration,
+and add a new `release-<package>.yml` workflow before pushing any tag.
+
+---
 
 ## Procedure A: Determine Release Scope
 
@@ -149,27 +164,67 @@ cd apps/protect && pytest --tb=short
 
 Tag only the affected app(s). Unnecessary tags create spurious releases.
 
+---
+
+## Procedure A.5: Patch-Bump Lockstep Avoidance
+
+**Critical strategy:** When releasing multiple packages in one coordination, avoid bumping major versions for multiple packages simultaneously. This prevents accidental lockstep coupling and allows downstream users to consume updates independently.
+
+### The Problem
+
+If you bump `unifi-core` from 0.2.x to 0.3.0 AND `unifi-mcp-shared` from 0.4.x to 0.5.0 in the same release cycle, then every downstream app (`unifi-network-mcp`, `unifi-protect-mcp`, etc.) must update its dependency bounds **simultaneously**, creating a forced global coordination burden. Users cannot adopt the new core without also adopting the new shared, even if they only need the core.
+
+### The Strategy
+
+**When releasing shared with core:**
+1. Release `core/v0.3.0` (major bump)
+2. Release `shared/v0.4.9` (patch bump, staying within 0.4.x)
+3. Defer the `shared/v0.5.0` major bump to a future, separate release cycle
+
+Downstream apps can then:
+- Adopt `core@0.3.0` while keeping `shared@0.4.x`
+- Later (next cycle), adopt `shared@0.5.0` independently
+
+**Pin ranges remain simple:**
+- `unifi-core>=0.3.0,<0.4` (stays locked to major version 0.3)
+- `unifi-mcp-shared>=0.4.9,<0.5` (stays within major version 0.4 until the next planned cycle)
+
+**Risk mitigation:**
+- Version #283 breakage (2026-05-17) was caused by stale pins when multiple majors shipped together
+- Coordinating multiple major bumps requires manual dependency audits and high confidence
+- Patch bumps stay within major.minor and can be released independently without forcing downstream updates
+
+### When to Break the Rule
+
+Use simultaneous major bumps ONLY when:
+1. Breaking API changes are required in both packages
+2. There is NO feasible way to bridge the versions with shims
+3. You have explicitly coordinated with all downstream package maintainers
+4. You are prepared to support a temporary "dual-version" install guide if adoption is slow
+
+---
+
 ## Procedure B: App vs. Library Versioning and Writeback Behavior
 
 Understanding the difference between library and app package versioning is essential because writeback behavior differs, and missing writeback from an app package is a bug — while missing writeback from a library package is correct.
 
 ### Library packages (unifi-core, unifi-mcp-shared, relay)
 
-These packages use `dynamic = [\"version\"]` in `pyproject.toml` with hatch-vcs. Version is derived from the git tag **at build time** — no `_version.py` is ever committed to the repo. When a library tag is pushed:
+These packages use `dynamic = ["version"]` in `pyproject.toml` with hatch-vcs. Version is derived from the git tag **at build time** — no `_version.py` is ever committed to the repo. When a library tag is pushed:
 
 - The publish workflow builds and publishes the tagged commit as-is
 - `bump-plugin-versions.yml` runs and outputs: `No version changes to commit`
 - This is **correct and expected** — not a bug or a missed step
 - There is no manifest file to update (no plugin.json or server.json)
 
-### App packages (network, protect, access)
+### App packages (network, protect, access, api)
 
 These packages have writable manifest assets that get updated on tag:
 
 - `plugins/unifi-network/.claude-plugin/plugin.json`
 - `plugins/unifi-protect/.claude-plugin/plugin.json`
 - `plugins/unifi-access/.claude-plugin/plugin.json`
-- `apps/{network,protect,access}/server.json`
+- `apps/*/server.json`
 
 When an app tag is pushed, the workflow commits a version writeback to these files.
 If the writeback commit is missing, the manifests will be stale and users will see
@@ -177,6 +232,8 @@ the wrong version reported by the tool.
 
 **Rule:** Never expect writeback from a library package tag. Never accept a
 missing writeback from an app package tag.
+
+---
 
 ## Procedure C: hatch-vcs Tag Glob Scoping
 
@@ -222,6 +279,8 @@ raw-options.fallback_version = "0.0.0"
 
 Each package's `--match` pattern must be scoped to its own tag prefix from the
 Package Map. Never share or widen the `--match` pattern across packages.
+
+---
 
 ## Procedure D: Pin-Alignment CI Gate + Align Cross-Package Dependency Bounds Before Tagging
 
@@ -371,6 +430,8 @@ tags when the package is built (during CI), not when it is installed. The tag mu
 be reachable on the exact commit being built. If CI triggers before the tag propagates
 to GitHub, the version will be wrong even if the tag exists locally.
 
+---
+
 ## Procedure E: Manifest Bumper — args[2] vs args[0] Correction
 
 The manifest bumper workflow (`bump-plugin-versions.yml`) rewrites version fields in
@@ -401,7 +462,7 @@ to end users:
 - `plugins/unifi-network/.claude-plugin/plugin.json` (Claude plugin marketplace)
 - `plugins/unifi-network/.openai/plugin.json` (if deployed to OpenAI agents marketplace)
 - `plugins/unifi-network/.mcp.json` (MCP server manifest, if exposed as standalone server)
-- Same for protect, access, etc.
+- Same for protect, access, api, etc.
 
 The bumper workflow must commit a single atomic update across all copies. If some manifest
 files are updated and others are not, users will see version mismatches or stale metadata
@@ -409,17 +470,19 @@ in non-updated marketplaces.
 
 **Verification:** After a release workflow completes and the bumper runs, check the
 manifest commit in GitHub. All `plugin.json` and `.mcp.json` files should have updated
-version strings (e.g., `\"version\": \"0.14.14\"`), NOT corrupted field names. Spot-check
+version strings (e.g., `"version": "0.14.14"`), NOT corrupted field names. Spot-check
 that Claude plugin, OpenAI agents, and standalone MCP manifests are all in sync.
+
+---
 
 ## Procedure F: Dependency-Ordered Tag Pushing
 
 The dependency graph:
 
 ```
-unifi-core  →  unifi-mcp-shared  →  unifi-mcp-network
-                                  →  unifi-mcp-protect
-                                  →  unifi-mcp-access
+unifi-core  →  unifi-mcp-shared  →  unifi-network-mcp
+                                  →  unifi-protect-mcp
+                                  →  unifi-access-mcp
                                   →  unifi-mcp-relay
             →  unifi-api-server
 ```
@@ -453,15 +516,15 @@ git push origin shared/v0.4.0
 # Step 3 — app servers and API (push individually, one per command)
 git tag network/v0.14.13
 git push origin network/v0.14.13
-# WAIT: confirm https://pypi.org/project/unifi-mcp-network/ shows 0.14.13 and CI is green
+# WAIT: confirm https://pypi.org/project/unifi-network-mcp/ shows 0.14.13 and CI is green
 
 git tag protect/v0.3.5
 git push origin protect/v0.3.5
-# WAIT: confirm https://pypi.org/project/unifi-mcp-protect/ shows 0.3.5 and CI is green
+# WAIT: confirm https://pypi.org/project/unifi-protect-mcp/ shows 0.3.5 and CI is green
 
 git tag access/v0.2.4
 git push origin access/v0.2.4
-# WAIT: confirm https://pypi.org/project/unifi-mcp-access/ shows 0.2.4 and CI is green
+# WAIT: confirm https://pypi.org/project/unifi-access-mcp/ shows 0.2.4 and CI is green
 
 git tag api/v0.2.1
 git push origin api/v0.2.1
@@ -487,6 +550,8 @@ log — the jobs don't appear at all, so it's easy to miss that a publish never 
 **Worker app:** `apps/worker` has a separate npm release flow using OIDC via GitHub Actions.
 Apply the same ordering principle: if the worker depends on a Python package version or relay
 protocol behavior, confirm the upstream PyPI release is updated before pushing the `worker/v*` tag.
+
+---
 
 ## Procedure G: generate_release_notes.py Path Configuration
 
@@ -535,6 +600,8 @@ Each app server entry should include:
 2. Shared dependency directories (`packages/unifi-core/`, `packages/unifi-mcp-shared/`)
 3. Its own publish/test/docker workflows as Release Infrastructure
 
+---
+
 ## Procedure H: Release Validation
 
 After pushing a tag, verify it resolved correctly before closing the work.
@@ -554,13 +621,13 @@ After pushing a tag, verify it resolved correctly before closing the work.
    (too broad), it will pick up sibling package tags on multi-tag commits. Verify
    the CI test runs: `git describe --dirty --tags --long --match app-name/v*`.
 
-3. **Confirm PyPI:** `pip index versions unifi-mcp-<app>` or check the PyPI project page.
+3. **Confirm PyPI:** `pip index versions unifi-network-mcp` or check the PyPI project page.
 
 4. **Install smoke test:**
 
    ```bash
-   pip install --upgrade unifi-mcp-<app>
-   python -c "import unifi_mcp_<app>; print(unifi_mcp_<app>.__version__)"
+   pip install --upgrade unifi-network-mcp
+   python -c "import unifi_network_mcp; print(unifi_network_mcp.__version__)"
    ```
 
 5. **Post-Release Live Smoke Verification (Full Release Validation):**
@@ -582,17 +649,19 @@ After pushing a tag, verify it resolved correctly before closing the work.
    fails, the release is broken and requires either an immediate patch release or a
    rollback announcement.
 
+---
+
 ## Cross-Cutting Gotchas
 
 **Sibling tag contamination.** If `git_describe_command` `--match` is too broad
 (e.g., `v*`), hatch-vcs picks up a sibling package's tag and reports the wrong
-version. Symptom: `pip install unifi-mcp-network==0.14.13` installs a package that
+version. Symptom: `pip install unifi-network-mcp==0.14.13` installs a package that
 prints `0.3.5` from `importlib.metadata`. Fix: tighten the `--match` pattern in
 `raw-options.git_describe_command` in `pyproject.toml` and rebuild.
 
 **PR merge is NOT the release trigger — the tag push is.** `hatch-vcs` reads git tags at build time to generate `_version.py`. Merging a PR does NOT trigger a release. If the tag is never pushed, PyPI stays on the old version with no error — the build succeeds but installs the previous release. The tag push IS the release trigger. (Session 3: `core/v0.1.2` was never tagged; PyPI stayed at 0.1.1 until the tag was pushed manually.) Always run Procedure H after tagging.
 
-**Silent version freeze.** If a tag is missing, `hatch-vcs` falls back to `fallback_version = \"0.0.0\"` or the last matching tag. There is no error at merge time. The failure surfaces only when a user installs and notices the wrong version. Always run Procedure H after tagging.
+**Silent version freeze.** If a tag is missing, `hatch-vcs` falls back to `fallback_version = "0.0.0"` or the last matching tag. There is no error at merge time. The failure surfaces only when a user installs and notices the wrong version. Always run Procedure H after tagging.
 
 **Missing tag causes broken downstream install.** If `unifi-core` code is merged but
 `core/vX.Y.Z` is never pushed, downstream packages requesting `unifi-core>=X.Y.Z`
@@ -638,3 +707,8 @@ tag. Subsequent tags are queued but the workflows never execute, leaving PyPI on
 version with no error or warning. The fix: push tags one at a time. This is a GitHub
 orchestration issue, not a git or hatch-vcs bug. Always use individual `git push origin tag`
 commands per tag and wait for PyPI confirmation between pushes.
+
+**PyPI package names differ from directory names.** Always use the correct PyPI name when
+installing, checking, or troubleshooting. `unifi-network-mcp` ≠ `unifi-mcp-network`. See
+the Package Map for correct names. When debugging a release, verify the PyPI project page
+uses the expected name.
