@@ -64,6 +64,8 @@ class CommitInfo:
     sha: str
     subject: str
     files: tuple[str, ...]
+    author_name: str = ""
+    author_email: str = ""
 
 
 @dataclass(frozen=True)
@@ -258,17 +260,38 @@ def list_commits(start_tag: str | None, end_tag: str) -> list[CommitInfo]:
     """Return commits in release-note order for ``start_tag..end_tag``."""
 
     range_spec = f"{start_tag}..{end_tag}" if start_tag else end_tag
-    output = run_git(["log", "--reverse", "--format=%H%x00%s", range_spec])
+    output = run_git(["log", "--reverse", "--format=%H%x00%s%x00%an%x00%ae", range_spec])
     if not output:
         return []
 
     commits: list[CommitInfo] = []
     for line in output.splitlines():
-        sha, subject = line.split("\0", 1)
+        sha, subject, author_name, author_email = line.split("\0", 3)
         files_output = run_git(["diff-tree", "--no-commit-id", "--name-only", "-r", sha])
         files = tuple(file for file in files_output.splitlines() if file)
-        commits.append(CommitInfo(sha=sha, subject=subject, files=files))
+        commits.append(
+            CommitInfo(
+                sha=sha,
+                subject=subject,
+                files=files,
+                author_name=author_name,
+                author_email=author_email,
+            )
+        )
     return commits
+
+
+def _prior_author_emails(previous_tag: str | None) -> set[str]:
+    """Author emails of all commits up to (and including) ``previous_tag``.
+
+    Used to distinguish first-time contributors from returning ones. Empty for
+    a package's first release (no prior tag).
+    """
+
+    if not previous_tag:
+        return set()
+    output = run_git(["log", previous_tag, "--format=%ae"])
+    return {line.strip().lower() for line in output.splitlines() if line.strip()}
 
 
 def path_matches(path: str, pattern: str) -> bool:
@@ -341,12 +364,62 @@ def subject_with_links(subject: str) -> str:
     return re.sub(r"#(\d+)", replace, subject)
 
 
+_NOREPLY_RE = re.compile(
+    r"^(?:\d+\+)?([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)@users\.noreply\.github\.com$",
+    re.IGNORECASE,
+)
+
+
+def github_handle(email: str, name: str) -> str:
+    """Return ``@login`` from a GitHub noreply commit email, else the author name.
+
+    Squash-merge writes the PR author into the commit author with a
+    ``<id>+<login>@users.noreply.github.com`` (or legacy ``<login>@...``) email,
+    so the handle is recoverable offline with no GitHub API call.
+    """
+
+    match = _NOREPLY_RE.match((email or "").strip())
+    if match:
+        return f"@{match.group(1)}"
+    return (name or "").strip()
+
+
+def _pr_number(subject: str) -> str | None:
+    match = re.search(r"#(\d+)", subject)
+    return match.group(1) if match else None
+
+
+def compute_new_contributors(relevant: list[ClassifiedCommit], prior_emails: set[str]) -> list[tuple[str, str | None]]:
+    """First-time contributors among the relevant commits.
+
+    A contributor is "new" when their commit author email has not appeared in
+    the repo before this release range. Returns ``(handle, pr_number)`` pairs in
+    first-appearance order, deduped per author.
+    """
+
+    prior = {email.strip().lower() for email in prior_emails}
+    seen: set[str] = set()
+    new_contributors: list[tuple[str, str | None]] = []
+    for item in relevant:
+        commit = item.commit
+        email = (commit.author_email or "").strip().lower()
+        if not email or email in prior or email in seen:
+            continue
+        seen.add(email)
+        handle = github_handle(commit.author_email, commit.author_name)
+        if not handle:
+            continue
+        new_contributors.append((handle, _pr_number(commit.subject)))
+    return new_contributors
+
+
 def render_release_notes(
     release_tag: ReleaseTag,
     config: PackageConfig,
     previous_tag: str | None,
     relevant: list[ClassifiedCommit],
     omitted: list[CommitInfo],
+    new_contributors: list[tuple[str, str | None]] | None = None,
 ) -> str:
     """Render release notes as Markdown."""
 
@@ -376,7 +449,9 @@ def render_release_notes(
                 continue
             lines.extend([f"### {group.title}", ""])
             for commit in commits:
-                lines.append(f"* {subject_with_links(commit.subject)} ({commit.sha[:7]})")
+                handle = github_handle(commit.author_email, commit.author_name)
+                credit = f" by {handle}" if handle else ""
+                lines.append(f"* {subject_with_links(commit.subject)}{credit} ({commit.sha[:7]})")
             lines.append("")
     else:
         lines.extend(["No package-scoped code changes were detected for this tag.", ""])
@@ -389,6 +464,16 @@ def render_release_notes(
                 "",
             ]
         )
+
+    if new_contributors:
+        lines.extend(["## New Contributors", ""])
+        for handle, pr_number in new_contributors:
+            if pr_number:
+                where = f"[#{pr_number}]({REPO_URL}/pull/{pr_number})"
+            else:
+                where = "this release"
+            lines.append(f"* {handle} made their first contribution in {where}")
+        lines.append("")
 
     if previous_tag:
         lines.append(f"**Full Changelog**: {REPO_URL}/compare/{previous_tag}...{release_tag.tag}")
@@ -406,7 +491,8 @@ def generate_notes(tag: str) -> str:
     previous_tag = find_previous_tag(tag, config)
     commits = list_commits(previous_tag, tag)
     relevant, omitted = classify_commits(commits, config)
-    return render_release_notes(release_tag, config, previous_tag, relevant, omitted)
+    new_contributors = compute_new_contributors(relevant, _prior_author_emails(previous_tag))
+    return render_release_notes(release_tag, config, previous_tag, relevant, omitted, new_contributors)
 
 
 def main() -> int:

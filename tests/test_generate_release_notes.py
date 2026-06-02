@@ -210,3 +210,81 @@ class TestRendering:
         assert "npm install -g unifi-mcp-worker@1.3.1" in notes
         assert "https://img.shields.io/npm/v/unifi-mcp-worker" in notes
         assert "https://www.npmjs.com/package/unifi-mcp-worker/v/1.3.1" in notes
+
+
+def _authored(sha, subject, files, email, name="Some One", group="Protect MCP"):
+    return ClassifiedCommit(
+        commit=CommitInfo(sha=sha, subject=subject, files=files, author_name=name, author_email=email),
+        group_title=group,
+    )
+
+
+class TestAttribution:
+    def test_github_handle_from_modern_noreply_email(self):
+        assert _mod.github_handle("53508749+rmaher001@users.noreply.github.com", "Richard Maher") == "@rmaher001"
+
+    def test_github_handle_from_legacy_noreply_email(self):
+        assert _mod.github_handle("rmaher001@users.noreply.github.com", "Richard Maher") == "@rmaher001"
+
+    def test_github_handle_falls_back_to_name_for_real_email(self):
+        assert _mod.github_handle("richard@ram6.com", "Richard Maher") == "Richard Maher"
+
+    def test_render_credits_author_per_line(self):
+        config = APP_CONFIGS["protect"]
+        release_tag = ReleaseTag(tag="protect/v0.4.4", package_key="protect", version="0.4.4")
+        relevant = [
+            _authored(
+                "0f109f6abc",
+                "feat(protect): list known license plates (#311)",
+                ("apps/protect/src/x.py",),
+                "53508749+rmaher001@users.noreply.github.com",
+            )
+        ]
+
+        notes = render_release_notes(release_tag, config, "protect/v0.4.3", relevant, [])
+
+        assert "by @rmaher001" in notes
+        assert "feat(protect): list known license plates" in notes
+
+    def test_render_emits_new_contributors_section(self):
+        config = APP_CONFIGS["protect"]
+        release_tag = ReleaseTag(tag="protect/v0.4.4", package_key="protect", version="0.4.4")
+        relevant = [
+            _authored(
+                "0f109f6abc",
+                "feat(protect): list known license plates (#311)",
+                ("apps/protect/src/x.py",),
+                "53508749+rmaher001@users.noreply.github.com",
+            )
+        ]
+
+        notes = render_release_notes(
+            release_tag,
+            config,
+            "protect/v0.4.3",
+            relevant,
+            [],
+            new_contributors=[("@rmaher001", "311")],
+        )
+
+        assert "## New Contributors" in notes
+        assert "@rmaher001 made their first contribution in" in notes
+        assert "[#311](https://github.com/sirkirby/unifi-mcp/pull/311)" in notes
+
+    def test_compute_new_contributors_flags_first_timers_only(self):
+        relevant = [
+            _authored(
+                "abc",
+                "feat(protect): plates (#311)",
+                ("apps/protect/src/x.py",),
+                "53508749+rmaher001@users.noreply.github.com",
+            )
+        ]
+
+        new_first = _mod.compute_new_contributors(relevant, prior_emails=set())
+        assert new_first == [("@rmaher001", "311")]
+
+        returning = _mod.compute_new_contributors(
+            relevant, prior_emails={"53508749+rmaher001@users.noreply.github.com"}
+        )
+        assert returning == []
