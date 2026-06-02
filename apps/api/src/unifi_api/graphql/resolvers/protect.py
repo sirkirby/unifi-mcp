@@ -38,6 +38,9 @@ from unifi_api.graphql.types.protect.alarms import (
     AlarmRule,
     AlarmRuleList,
     AlarmStatus,
+    AlarmV2ProfileList,
+    AlarmV2Rule,
+    AlarmV2RuleList,
 )
 from unifi_api.graphql.types.protect.cameras import (
     Camera,
@@ -462,6 +465,42 @@ async def _fetch_alarm_rule(ctx: GraphQLContext, controller: str, rule_id: str) 
                 "protect",
             )
             return await mgr.get_rule(rule_id)
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_alarm_v2_rules(ctx: GraphQLContext, controller: str) -> Any:
+    key = f"protect/alarm-v2-rules/{controller}"
+
+    async def _do() -> Any:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(session, controller, "protect", "alarm_v2_manager")
+            await ctx.manager_factory.get_connection_manager(session, controller, "protect")
+            return await mgr.list_rules()
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_alarm_v2_rule(ctx: GraphQLContext, controller: str, rule_id: str) -> Any:
+    key = f"protect/alarm-v2-rules/{controller}/{rule_id}"
+
+    async def _do() -> Any:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(session, controller, "protect", "alarm_v2_manager")
+            await ctx.manager_factory.get_connection_manager(session, controller, "protect")
+            return await mgr.get_rule(rule_id)
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_alarm_v2_profiles(ctx: GraphQLContext, controller: str) -> Any:
+    key = f"protect/alarm-v2-profiles/{controller}"
+
+    async def _do() -> Any:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(session, controller, "protect", "alarm_v2_manager")
+            await ctx.manager_factory.get_connection_manager(session, controller, "protect")
+            return await mgr.list_profiles()
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -1142,6 +1181,52 @@ class ProtectQuery:
         if raw is None:
             return None
         return AlarmRule.from_manager_output(raw)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="List UniFi OS Alarm Manager v2 rules incl. AI alarms ({rules, count}). Requires SuperAdmin.",
+    )
+    async def alarm_v2_rules(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+    ) -> AlarmV2RuleList | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_alarm_v2_rules(ctx, controller)
+        if raw is None:
+            return None
+        return AlarmV2RuleList.from_manager_output(raw)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Fetch a single UniFi OS Alarm Manager v2 rule by id. Requires SuperAdmin.",
+    )
+    async def alarm_v2_rule(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        id: strawberry.ID,
+    ) -> AlarmV2Rule | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_alarm_v2_rule(ctx, controller, str(id))
+        if raw is None:
+            return None
+        return AlarmV2Rule.from_manager_output(raw)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="List UniFi OS Alarm Manager v2 arm profiles ({profiles, count}). Requires SuperAdmin.",
+    )
+    async def alarm_v2_profiles(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+    ) -> AlarmV2ProfileList | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_alarm_v2_profiles(ctx, controller)
+        if raw is None:
+            return None
+        return AlarmV2ProfileList.from_manager_output(raw)
 
     # ---- Events ----------------------------------------------------------
 

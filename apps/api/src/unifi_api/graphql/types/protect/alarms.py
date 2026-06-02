@@ -393,3 +393,152 @@ class AlarmProfileList:
         if self._fallback is not None:
             return {"result": self._fallback}
         return {}
+
+
+@strawberry.type(description="A UniFi OS Alarm Manager v2 rule (AI-capable) — normalized passthrough.")
+class AlarmV2Rule:
+    """DETAIL pass-through for a normalized v2 alarm rule (protect_alarm_v2_get_rule).
+
+    Triggers/actions/scope/stats are kept as JSON: the v2 surface embeds
+    per-trigger/action ``data`` whose shape varies by trigger type (e.g. AI
+    Natural Language carries ``nlsSentence``/``nlsThreshold``), so a strict
+    schema would break passthrough on new alarm types.
+    """
+
+    id: strawberry.ID | None
+    title: str | None
+    triggers: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    actions: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    scope: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    stats: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    created_at: str | None
+    updated_at: str | None
+
+    _raw: strawberry.Private[dict[str, Any] | None] = None
+    _fallback: strawberry.Private[str | None] = None
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {"kind": kind, "primary_key": "id", "display_columns": ["title"]}
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "AlarmV2Rule":
+        source = obj
+        if not isinstance(source, dict) and hasattr(obj, "model_dump"):
+            source = obj.model_dump()
+        if isinstance(source, dict):
+            inst = cls(
+                id=source.get("id"),
+                title=source.get("title"),
+                triggers=source.get("triggers"),
+                actions=source.get("actions"),
+                scope=source.get("scope"),
+                stats=source.get("stats"),
+                created_at=source.get("created_at"),
+                updated_at=source.get("updated_at"),
+            )
+            inst._raw = dict(source)
+            return inst
+        inst = cls(
+            id=None,
+            title=None,
+            triggers=None,
+            actions=None,
+            scope=None,
+            stats=None,
+            created_at=None,
+            updated_at=None,
+        )
+        inst._fallback = str(obj)
+        return inst
+
+    def to_dict(self) -> dict:
+        if self._raw is not None:
+            return self._raw
+        if self._fallback is not None:
+            return {"result": self._fallback}
+        return {}
+
+
+@strawberry.type(description="Wrapper for protect_alarm_v2_list_rules — {rules, count}.")
+class AlarmV2RuleList:
+    """Wrapper-dict pass-through for ``{rules: [...], count}`` (v2)."""
+
+    rules: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    count: int | None
+
+    _raw: strawberry.Private[dict[str, Any] | None] = None
+    _fallback: strawberry.Private[str | None] = None
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {"kind": kind}
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "AlarmV2RuleList":
+        if isinstance(obj, dict):
+            inst = cls(rules=obj.get("rules") or [], count=obj.get("count"))
+            inst._raw = dict(obj)
+            return inst
+        if isinstance(obj, list):
+            wrapper = {"rules": list(obj), "count": len(obj)}
+            inst = cls(rules=wrapper["rules"], count=wrapper["count"])
+            inst._raw = wrapper
+            return inst
+        if hasattr(obj, "model_dump"):
+            dumped = obj.model_dump()
+            inst = cls(rules=dumped.get("rules") or [], count=dumped.get("count"))
+            inst._raw = dict(dumped)
+            return inst
+        inst = cls(rules=None, count=None)
+        inst._fallback = str(obj)
+        return inst
+
+    def to_dict(self) -> dict:
+        if self._raw is not None:
+            return self._raw
+        if self._fallback is not None:
+            return {"result": self._fallback}
+        return {}
+
+
+@strawberry.type(description="Wrapper for protect_alarm_v2_list_profiles — {profiles, count}.")
+class AlarmV2ProfileList:
+    """Wrapper-dict pass-through for ``{profiles: [...], count}`` (v2)."""
+
+    profiles: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    count: int | None
+
+    _raw: strawberry.Private[dict[str, Any] | None] = None
+    _fallback: strawberry.Private[str | None] = None
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {"kind": kind}
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "AlarmV2ProfileList":
+        if isinstance(obj, dict):
+            inst = cls(profiles=obj.get("profiles") or [], count=obj.get("count"))
+            inst._raw = dict(obj)
+            return inst
+        if isinstance(obj, list):
+            wrapper = {"profiles": list(obj), "count": len(obj)}
+            inst = cls(profiles=wrapper["profiles"], count=wrapper["count"])
+            inst._raw = wrapper
+            return inst
+        if hasattr(obj, "model_dump"):
+            dumped = obj.model_dump()
+            inst = cls(profiles=dumped.get("profiles") or [], count=dumped.get("count"))
+            inst._raw = dict(dumped)
+            return inst
+        inst = cls(profiles=None, count=None)
+        inst._fallback = str(obj)
+        return inst
+
+    def to_dict(self) -> dict:
+        if self._raw is not None:
+            return self._raw
+        if self._fallback is not None:
+            return {"result": self._fallback}
+        return {}
