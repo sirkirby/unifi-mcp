@@ -1,4 +1,4 @@
-# Protect Server Tool Reference (59 tools)
+# Protect Server Tool Reference (56 tools)
 
 Complete reference for `protect_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Protect controls physical security hardware.
 
@@ -172,15 +172,15 @@ Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles c
 
 | Tool | Type | Description |
 |------|------|-------------|
-| `protect_alarm_get_rule` | Read | Fetches the full payload of a single alarm rule (automation) by id. |
+| `protect_alarm_get_rule` | Read | Fetches a single UniFi Protect alarm rule by id (normalized: id, title, enabled, triggers, actions, scope, stats), including AI-powered a... |
 | `protect_alarm_get_status` | Read | Returns the current armed/disarmed state of the UniFi Protect Alarm Manager, including the active profile, raw status string, armed-at ti... |
 | `protect_alarm_list_profiles` | Read | Lists all configured UniFi Protect Alarm Manager profiles with their id, name, activation delay, schedule count, and automation count. |
-| `protect_alarm_list_rules` | Read | Lists every alarm rule (automation) configured in the UniFi Protect Alarm Manager. |
+| `protect_alarm_list_rules` | Read | Lists every UniFi Protect alarm rule, including AI-powered alarms (e.g. |
 | `protect_alarm_arm` | Mutate | Arms the UniFi Protect Alarm Manager. |
 | `protect_alarm_create_rule` | Mutate | Creates a new alarm rule via POST. |
 | `protect_alarm_delete_rule` | Mutate | Deletes an alarm rule (automation) by id. |
 | `protect_alarm_disarm` | Mutate | Disarms the UniFi Protect Alarm Manager system-wide via POST arm/disable. |
-| `protect_alarm_update_rule` | Mutate | Updates an alarm rule via PATCH. |
+| `protect_alarm_update_rule` | Mutate | Updates an alarm rule. |
 <!-- /AUTO:tools:alarm -->
 
 **Tips:**

@@ -1,5 +1,5 @@
 {
-  "count": 59,
+  "count": 56,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -550,13 +550,13 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Fetches the full payload of a single alarm rule (automation) by id. Use the returned dict as the basis for protect_alarm_update_rule's body parameter \u2014 Protect requires the full rule body on PATCH.",
+      "description": "Fetches a single UniFi Protect alarm rule by id (normalized: id, title, enabled, triggers, actions, scope, stats), including AI-powered alarms.",
       "name": "protect_alarm_get_rule",
       "schema": {
         "input": {
           "properties": {
             "rule_id": {
-              "description": "Alarm rule (automation) UUID from protect_alarm_list_rules",
+              "description": "Alarm rule id from protect_alarm_list_rules",
               "type": "string"
             }
           },
@@ -810,7 +810,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Lists every alarm rule (automation) configured in the UniFi Protect Alarm Manager. Each rule includes id, name, enable flag, sources (camera scope), conditions (AND-list of triggers like license_plate_known or smartDetectLine), actions (webhook URLs, etc.), and cooldown. Use protect_alarm_get_rule for the full payload of a single rule needed for the read-modify-write update flow.",
+      "description": "Lists every UniFi Protect alarm rule, including AI-powered alarms (e.g. AI Natural Language). Each rule is normalized to id, title, enabled, triggers, actions, scope, and stats. Use protect_alarm_get_rule for a single rule.",
       "name": "protect_alarm_list_rules",
       "schema": {
         "input": {
@@ -896,29 +896,29 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Updates an alarm rule via PATCH. Protect requires the FULL rule body \u2014 partial PATCH bodies are rejected by the controller. The expected flow is: (1) call protect_alarm_get_rule to fetch the current rule, (2) mutate the returned dict in-place, (3) pass the mutated dict back here as body. Body keys may be snake_case (as returned by get_rule) or camelCase; the tool normalizes to camelCase before PATCHing. ``actions`` must be a non-empty list. Requires confirm=True to apply \u2014 otherwise returns a preview of current vs proposed.",
+      "description": "Updates an alarm rule. Pass only the fields you want to change; the tool fetches the current rule, deep-merges your changes, and PATCHes the full body (Protect rejects partial bodies \u2014 fetch-merge-put is handled for you). Field keys may be snake_case or camelCase. Requires confirm=True to apply \u2014 otherwise returns a preview of the proposed changes.",
       "name": "protect_alarm_update_rule",
       "permission_action": "update",
       "permission_category": "alarm",
       "schema": {
         "input": {
           "properties": {
-            "body": {
-              "description": "Full rule payload. Get the current rule via protect_alarm_get_rule, mutate, then pass here.",
-              "type": "object"
-            },
             "confirm": {
               "description": "When true, applies the update. When false (default), returns a preview.",
               "type": "boolean"
             },
+            "fields": {
+              "description": "Partial set of rule fields to change (e.g. name, enable, actions). Merged into the current rule.",
+              "type": "object"
+            },
             "rule_id": {
-              "description": "Alarm rule (automation) UUID to update",
+              "description": "Alarm rule id to update",
               "type": "string"
             }
           },
           "required": [
             "rule_id",
-            "body"
+            "fields"
           ],
           "type": "object"
         },
@@ -993,266 +993,6 @@
         }
       },
       "title": "Alarm Update Rule"
-    },
-    {
-      "annotations": {
-        "openWorldHint": false,
-        "readOnlyHint": true
-      },
-      "description": "Fetches a single UniFi OS Alarm Manager v2 rule by id (normalized). Requires a SuperAdmin credential.",
-      "name": "protect_alarm_v2_get_rule",
-      "schema": {
-        "input": {
-          "properties": {
-            "rule_id": {
-              "description": "Alarm v2 rule id (UUID) from protect_alarm_v2_list_rules.",
-              "type": "string"
-            }
-          },
-          "required": [
-            "rule_id"
-          ],
-          "type": "object"
-        },
-        "output": {
-          "additionalProperties": true,
-          "description": "Structured view of the existing UniFi MCP tool response contract.",
-          "properties": {
-            "data": {
-              "anyOf": [
-                {},
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "Successful result payload.",
-              "title": "Data"
-            },
-            "error": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "Actionable error message for handled failures.",
-              "title": "Error"
-            },
-            "preview": {
-              "anyOf": [
-                {},
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "Mutation preview payload returned before confirmation.",
-              "title": "Preview"
-            },
-            "requires_confirmation": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "True when a mutation preview requires caller confirmation.",
-              "title": "Requires Confirmation"
-            },
-            "success": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "True when the tool call succeeded; false for handled errors.",
-              "title": "Success"
-            }
-          },
-          "title": "UniFiToolResponse",
-          "type": "object"
-        }
-      },
-      "title": "Alarm V2 Get Rule"
-    },
-    {
-      "annotations": {
-        "openWorldHint": false,
-        "readOnlyHint": true
-      },
-      "description": "Lists UniFi OS Alarm Manager v2 arm profiles. Returns an empty list when no arm profiles are configured. Requires a SuperAdmin credential.",
-      "name": "protect_alarm_v2_list_profiles",
-      "schema": {
-        "input": {
-          "properties": {},
-          "type": "object"
-        },
-        "output": {
-          "additionalProperties": true,
-          "description": "Structured view of the existing UniFi MCP tool response contract.",
-          "properties": {
-            "data": {
-              "anyOf": [
-                {},
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "Successful result payload.",
-              "title": "Data"
-            },
-            "error": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "Actionable error message for handled failures.",
-              "title": "Error"
-            },
-            "preview": {
-              "anyOf": [
-                {},
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "Mutation preview payload returned before confirmation.",
-              "title": "Preview"
-            },
-            "requires_confirmation": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "True when a mutation preview requires caller confirmation.",
-              "title": "Requires Confirmation"
-            },
-            "success": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "True when the tool call succeeded; false for handled errors.",
-              "title": "Success"
-            }
-          },
-          "title": "UniFiToolResponse",
-          "type": "object"
-        }
-      },
-      "title": "Alarm V2 List Profiles"
-    },
-    {
-      "annotations": {
-        "openWorldHint": false,
-        "readOnlyHint": true
-      },
-      "description": "Lists UniFi OS Alarm Manager v2 rules, including AI-powered alarms (e.g. AI Natural Language) that protect_alarm_list_rules cannot see. Each rule is normalized to id, title, triggers, actions, scope, and stats. Requires a SuperAdmin credential.",
-      "name": "protect_alarm_v2_list_rules",
-      "schema": {
-        "input": {
-          "properties": {},
-          "type": "object"
-        },
-        "output": {
-          "additionalProperties": true,
-          "description": "Structured view of the existing UniFi MCP tool response contract.",
-          "properties": {
-            "data": {
-              "anyOf": [
-                {},
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "Successful result payload.",
-              "title": "Data"
-            },
-            "error": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "Actionable error message for handled failures.",
-              "title": "Error"
-            },
-            "preview": {
-              "anyOf": [
-                {},
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "Mutation preview payload returned before confirmation.",
-              "title": "Preview"
-            },
-            "requires_confirmation": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "True when a mutation preview requires caller confirmation.",
-              "title": "Requires Confirmation"
-            },
-            "success": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": null,
-              "description": "True when the tool call succeeded; false for handled errors.",
-              "title": "Success"
-            }
-          },
-          "title": "UniFiToolResponse",
-          "type": "object"
-        }
-      },
-      "title": "Alarm V2 List Rules"
     },
     {
       "annotations": {
