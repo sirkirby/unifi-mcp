@@ -81,3 +81,32 @@ def test_handles_missing_and_empty_fields():
 
 def test_is_read_only_model():
     assert MUTABLE_FIELDS == frozenset()
+
+
+_RAW_LEGACY_RULE = {
+    "id": "66a5c92a0022f903e4000400",
+    "name": "Motion",
+    "enable": True,
+    "conditions": [{"type": "motion", "source": "camera"}],
+    "actions": [{"type": "webhook", "url": "https://x"}],
+    "sources": [{"device": "AABBCCDDEEFF", "type": "include"}],
+}
+
+
+def test_alarm_rule_from_legacy_maps_to_canonical():
+    from unifi_core.protect.models.alarm_v2 import alarm_rule_from_legacy
+
+    rule = alarm_rule_from_legacy(_RAW_LEGACY_RULE)
+
+    assert rule.id == "66a5c92a0022f903e4000400"
+    assert rule.title == "Motion"
+    assert rule.enabled is True
+    assert rule.triggers[0].trigger_id == "motion"
+    assert rule.triggers[0].data == {"type": "motion", "source": "camera"}
+    assert rule.actions[0].action_id == "webhook"
+    assert rule.scope == {"sources": [{"device": "AABBCCDDEEFF", "type": "include"}]}
+
+
+def test_canonical_rule_enabled_defaults_none_for_v2():
+    rule = alarm_rule_v2_from_controller(_RAW_RULE)
+    assert rule.enabled is None

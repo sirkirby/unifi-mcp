@@ -65,8 +65,11 @@ class AlarmActionV2(BaseModel):
 class AlarmRuleV2(BaseModel):
     """A normalized UniFi OS Alarm Manager v2 rule."""
 
-    id: Optional[str] = Field(default=None, description="Rule id (UUID)", json_schema_extra={"mutable": False})
+    id: Optional[str] = Field(default=None, description="Rule id", json_schema_extra={"mutable": False})
     title: Optional[str] = Field(default=None, description="Rule title", json_schema_extra={"mutable": False})
+    enabled: Optional[bool] = Field(
+        default=None, description="Whether the rule is enabled", json_schema_extra={"mutable": False}
+    )
     triggers: list[AlarmTriggerV2] = Field(
         default_factory=list, description="Configured triggers", json_schema_extra={"mutable": False}
     )
@@ -136,6 +139,34 @@ def alarm_rule_v2_from_controller(raw: Any) -> AlarmRuleV2:
         stats=_get(raw, "stats", {}) or {},
         created_at=_get(raw, "created_at"),
         updated_at=_get(raw, "updated_at"),
+    )
+
+
+def alarm_rule_from_legacy(raw: Any) -> AlarmRuleV2:
+    """Normalize a legacy ``/automations`` rule into the canonical AlarmRuleV2 shape.
+
+    The legacy automations API models rules differently (``conditions`` /
+    ``sources`` / ``actions``) and cannot represent AI-powered alarms. This maps
+    its fields onto the canonical shape best-effort so the alarm tools return one
+    consistent structure regardless of which backend served the request.
+    """
+    triggers = [
+        AlarmTriggerV2(trigger_id=_get(condition, "type"), data=condition if isinstance(condition, dict) else {})
+        for condition in (_get(raw, "conditions", []) or [])
+    ]
+    actions = [
+        AlarmActionV2(action_id=_get(action, "type"), data=action if isinstance(action, dict) else {})
+        for action in (_get(raw, "actions", []) or [])
+    ]
+    sources = _get(raw, "sources", []) or []
+    return AlarmRuleV2(
+        id=_get(raw, "id"),
+        title=_get(raw, "name"),
+        enabled=_get(raw, "enable"),
+        triggers=triggers,
+        actions=actions,
+        scope={"sources": sources} if sources else {},
+        stats={},
     )
 
 
