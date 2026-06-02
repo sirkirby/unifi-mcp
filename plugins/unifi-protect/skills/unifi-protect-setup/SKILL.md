@@ -51,6 +51,8 @@ Ask for:
 
 Username and password are required.
 
+> **AI Alarm Manager (v2) needs SuperAdmin.** The `protect_alarm_v2_*` tools read the UniFi-OS Alarm Manager (`/api/v2/alarms/`), which is gated to **SuperAdmin** accounts. A standard local admin runs every other Protect tool fine but those alarm-v2 tools will return a "requires SuperAdmin" error. Mention this only if the user asks about the AI-alarm tools or hits that error; do not require SuperAdmin for normal setup. On a combined UDM console, SuperAdmin also grants Network/UniFi-OS control — call that out so the user can decide.
+
 ### Optional API Key
 
 After collecting username and password, explain that UniFi API key support is experimental and limited to read-only operations and a subset of tools. Ask whether to configure an API key too.

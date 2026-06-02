@@ -89,6 +89,8 @@ UNIFI_PROTECT_PASSWORD=your-password # Admin password
 
 **Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_PROTECT_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
 
+> **Alarm Manager v2 (AI alarms) needs SuperAdmin.** The `protect_alarm_v2_*` tools read the modern UniFi-OS Alarm Manager (`/api/v2/alarms/`), which is gated to **SuperAdmin** accounts — a regular admin returns a "requires SuperAdmin" error from those tools only. All other Protect tools work with a standard local admin. Grant the account SuperAdmin on the console hosting Protect if you want the AI-alarm tools. Note the blast radius: on a standalone UNVR this is contained to Protect; on a combined UDM console it also grants Network/UniFi-OS control.
+
 ## Run
 
 ```bash

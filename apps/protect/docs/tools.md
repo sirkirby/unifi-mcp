@@ -80,6 +80,14 @@ Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles t
 - `protect_alarm_arm` -- Arm the system for a given profile (confirm required; defaults to default profile)
 - `protect_alarm_disarm` -- Disarm the system for a given profile (confirm required; defaults to default profile)
 
+## Alarm Manager v2 — AI Alarms (3 tools)
+
+The modern UniFi-OS Alarm Manager (`/api/v2/alarms/`), including **AI-powered alarms** (e.g. AI Natural Language) that the legacy `protect_alarm_*` tools above cannot see. **Requires a SuperAdmin credential** — a standard admin gets a "requires SuperAdmin" error from these tools only. See the SuperAdmin note in the README.
+
+- `protect_alarm_v2_list_rules` -- List Alarm Manager v2 rules (normalized: id, title, triggers, actions, scope, stats), including AI alarms
+- `protect_alarm_v2_get_rule` -- Fetch a single Alarm Manager v2 rule by id
+- `protect_alarm_v2_list_profiles` -- List Alarm Manager v2 arm profiles
+
 ## Known Faces (4 tools)
 
 - `protect_list_known_faces` -- List assigned and optionally unlabeled face recognition groups

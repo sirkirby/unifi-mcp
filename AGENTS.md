@@ -83,11 +83,12 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 
 ### API Surface Boundaries
 
-UniFi exposes two API surfaces with disjoint ID namespaces: the V2 controller API (session cookie auth, Mongo ObjectIDs, `snake_case` fields) and the public Integration API (`X-API-Key` auth, UUIDs, `camelCase` fields). They are **not interchangeable**.
+UniFi exposes three API surfaces with disjoint ID/auth models: the V2 controller API (session cookie auth, Mongo ObjectIDs, `snake_case` fields), the public Integration API (`X-API-Key` auth, UUIDs, `camelCase` fields), and the UniFi-OS **Alarm Manager v2** service (`/api/v2/alarms/`, session + **SuperAdmin** auth, UUIDs, `snake_case` fields). They are **not interchangeable**.
 
 - **Tool families share an ID space.** Tools whose returned IDs and accepted IDs are mutually portable form a *family*. Cross-family ID use is prohibited.
 - **Tool descriptions MUST scope IDs** when they could be confused with another family's IDs. Standard formula: *"These IDs are scoped to the <family> tool family — do not pass them to other <resource> tools."* This applies to MCP tool descriptions, GraphQL type/query descriptions, and REST route descriptions alike.
 - **Integration API tools MUST require an API key** and fail with a clear remediation message when it is missing. The auth check belongs in the manager so every tool in the family inherits it.
+- **Alarm Manager v2 (`/api/v2/alarms/`) requires a SuperAdmin credential.** Reach it via `uiprotect`'s `api_request(..., api_path="/api/v2/alarms/")` (no bespoke client). A Protect-scoped account returns 403 — managers MUST map this to an actionable "requires SuperAdmin" error so callers/agents self-diagnose. Blast radius is topology-dependent: broad on a combined UDM console, contained to Protect on a standalone UNVR.
 - **Silent cross-API ID translation is banned** unless the mapping is 1:1, stable, and verified against live data. Zones are grandfathered (1:1 by name, stable, unique). Policies are not (membership diverges, no bridge field, V2 has duplicate names).
 - **Bridging tools must be explicit.** If you need to cross ID namespaces, write a named bridging tool (`unifi_resolve_<resource>_id_for_<family>`) with documented failure modes. Never bury the bridge inside another tool.
 
