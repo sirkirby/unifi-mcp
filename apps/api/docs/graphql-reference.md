@@ -190,20 +190,17 @@ type AlarmProfileList {
   count: Int
 }
 
-"""
-A UniFi Protect alarm rule (Alarm Manager automation) — flat passthrough.
-"""
+"""A UniFi Protect alarm rule (normalized; includes AI-powered alarms)."""
 type AlarmRule {
   id: ID
-  name: String
-  enable: Boolean
-  isCreatedBySystem: Boolean
-  sources: JSON
-  conditions: JSON
-  historyConditions: JSON
-  schedules: JSON
+  title: String
+  enabled: Boolean
+  triggers: JSON
   actions: JSON
-  cooldown: JSON
+  scope: JSON
+  stats: JSON
+  createdAt: String
+  updatedAt: String
 }
 
 """Wrapper for protect_alarm_list_rules — {rules, count}."""
@@ -223,32 +220,6 @@ type AlarmStatus {
   breachDetectedAt: String
   breachEventCount: Int
   profileCount: Int
-}
-
-"""Wrapper for protect_alarm_v2_list_profiles — {profiles, count}."""
-type AlarmV2ProfileList {
-  profiles: JSON
-  count: Int
-}
-
-"""
-A UniFi OS Alarm Manager v2 rule (AI-capable) — normalized passthrough.
-"""
-type AlarmV2Rule {
-  id: ID
-  title: String
-  triggers: JSON
-  actions: JSON
-  scope: JSON
-  stats: JSON
-  createdAt: String
-  updatedAt: String
-}
-
-"""Wrapper for protect_alarm_v2_list_rules — {rules, count}."""
-type AlarmV2RuleList {
-  rules: JSON
-  count: Int
 }
 
 """A UniFi AP group (collection of AP MAC addresses)."""
@@ -1405,21 +1376,6 @@ type ProtectQuery {
   """Fetch a single alarm rule (automation) by id."""
   alarmRule(controller: ID!, id: ID!): AlarmRule
 
-  """
-  List UniFi OS Alarm Manager v2 rules incl. AI alarms ({rules, count}). Requires SuperAdmin.
-  """
-  alarmV2Rules(controller: ID!): AlarmV2RuleList
-
-  """
-  Fetch a single UniFi OS Alarm Manager v2 rule by id. Requires SuperAdmin.
-  """
-  alarmV2Rule(controller: ID!, id: ID!): AlarmV2Rule
-
-  """
-  List UniFi OS Alarm Manager v2 arm profiles ({profiles, count}). Requires SuperAdmin.
-  """
-  alarmV2Profiles(controller: ID!): AlarmV2ProfileList
-
   """List Protect events (paginated, most recent first)."""
   events(controller: ID!, limit: Int! = 50, cursor: String = null, eventType: String = null, cameraId: String = null): EventPage!
 
@@ -2063,9 +2019,6 @@ Read-only access to UniFi Protect resources.
 - `alarmRule: AlarmRule`  — Fetch a single alarm rule (automation) by id.
 - `alarmRules: AlarmRuleList`  — List configured alarm rules / Alarm Manager automations ({rules, count}).
 - `alarmStatus: AlarmStatus`  — Get the alarm system arm-state snapshot.
-- `alarmV2Profiles: AlarmV2ProfileList`  — List UniFi OS Alarm Manager v2 arm profiles ({profiles, count}). Requires SuperAdmin.
-- `alarmV2Rule: AlarmV2Rule`  — Fetch a single UniFi OS Alarm Manager v2 rule by id. Requires SuperAdmin.
-- `alarmV2Rules: AlarmV2RuleList`  — List UniFi OS Alarm Manager v2 rules incl. AI alarms ({rules, count}). Requires SuperAdmin.
 - `camera: Camera`  — Look up a single Protect camera by id.
 - `cameraAnalytics: CameraAnalytics`  — Get analytics summary for a Protect camera.
 - `cameraStreams: CameraStreams`  — Get the stream catalog (channels + RTSPS URLs) for a camera.

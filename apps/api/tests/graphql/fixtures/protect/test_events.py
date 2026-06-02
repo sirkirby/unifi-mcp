@@ -223,10 +223,14 @@ async def test_protect_alarm_list_rules(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("protect", "alarm_manager", "list_rules"): [
-                {"id": "rule1", "name": "Arrival", "enable": True},
-                {"id": "rule2", "name": "Departure", "enable": True},
-            ],
+            # facade returns (canonical_rules, complete)
+            ("protect", "alarm_facade", "list_rules"): (
+                [
+                    {"id": "rule1", "title": "Arrival", "enabled": True},
+                    {"id": "rule2", "title": "Departure", "enabled": True},
+                ],
+                True,
+            ),
         },
     )
     body = await graphql_query(
@@ -252,12 +256,16 @@ async def test_protect_alarm_get_rule(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("protect", "alarm_manager", "get_rule"): {
-                "id": "rule1",
-                "name": "Test Camera Vehicle Arrival",
-                "enable": True,
-                "sources": [{"device": "AABBCCDDEEFF", "type": "include"}],
-            },
+            # facade returns (canonical_rule, complete)
+            ("protect", "alarm_facade", "get_rule"): (
+                {
+                    "id": "rule1",
+                    "title": "Test Camera Vehicle Arrival",
+                    "enabled": True,
+                    "scope": {"sources": [{"device": "AABBCCDDEEFF", "type": "include"}]},
+                },
+                True,
+            ),
         },
     )
     body = await graphql_query(
@@ -266,51 +274,13 @@ async def test_protect_alarm_get_rule(tmp_path, monkeypatch):
         f'''{{
         protect {{ alarmRule(controller: "{cid}", id: "rule1") {{
             id
-            name
-            enable
+            title
+            enabled
         }} }}
     }}''',
     )
     assert body.get("errors") is None, body
     result = body["data"]["protect"]["alarmRule"]
     assert result["id"] == "rule1"
-    assert result["name"] == "Test Camera Vehicle Arrival"
-    assert result["enable"] is True
-
-
-@pytest.mark.asyncio
-async def test_protect_alarm_get_rule_translates_camelcase_keys(tmp_path, monkeypatch):
-    """Manager returns raw Protect API dict with camelCase keys
-    (isCreatedBySystem, historyConditions). The GraphQL type's
-    from_manager_output must accept these alongside snake_case so the
-    fields aren't silently dropped to null.
-    """
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="protect")
-    stub_managers(
-        monkeypatch,
-        {
-            ("protect", "alarm_manager", "get_rule"): {
-                "id": "rule-builtin",
-                "name": "System-Created Rule",
-                "enable": True,
-                "isCreatedBySystem": True,
-                "historyConditions": [{"some": "history"}],
-            },
-        },
-    )
-    body = await graphql_query(
-        app,
-        key,
-        f'''{{
-        protect {{ alarmRule(controller: "{cid}", id: "rule-builtin") {{
-            id
-            isCreatedBySystem
-            historyConditions
-        }} }}
-    }}''',
-    )
-    assert body.get("errors") is None, body
-    result = body["data"]["protect"]["alarmRule"]
-    assert result["isCreatedBySystem"] is True, "camelCase isCreatedBySystem from raw API dict was dropped to None"
-    assert result["historyConditions"] == [{"some": "history"}]
+    assert result["title"] == "Test Camera Vehicle Arrival"
+    assert result["enabled"] is True
