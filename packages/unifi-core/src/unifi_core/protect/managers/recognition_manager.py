@@ -252,9 +252,14 @@ class RecognitionManager:
         }
 
     async def apply_delete_known_face(self, face_id: str) -> Dict[str, Any]:
-        """Delete a Protect face group after confirmation."""
+        """Delete a Protect face group after confirmation.
+
+        The controller returns an empty body on success, so use ``api_request_raw``
+        (not ``api_request``) to avoid a spurious 'Could not decode JSON' error
+        after the delete has already succeeded. Mirrors the vehicle-group delete.
+        """
         preview = await self.delete_known_face(face_id)
-        await self._cm.client.api_request(
+        await self._cm.client.api_request_raw(
             f"recognition/face/groups/{face_id}",
             method="delete",
         )

@@ -253,18 +253,18 @@ class TestRecognitionManager:
         assert result["warnings"]
 
     @pytest.mark.asyncio
-    async def test_apply_delete_known_face_calls_delete_endpoint(self, mock_cm):
+    async def test_apply_delete_known_face_uses_raw_delete(self, mock_cm):
+        """Face DELETE returns an empty body; must use api_request_raw to avoid a
+        spurious 'Could not decode JSON' error after a successful delete."""
         from unifi_core.protect.managers.recognition_manager import RecognitionManager
 
-        mock_cm.client.api_request.side_effect = [
-            {"groups": [{"id": "face-1", "name": "Assigned"}]},
-            None,
-        ]
+        mock_cm.client.api_request.return_value = {"groups": [{"id": "face-1", "name": "Assigned"}]}
+        mock_cm.client.api_request_raw = AsyncMock(return_value=None)
 
         result = await RecognitionManager(mock_cm).apply_delete_known_face("face-1")
 
         assert result["deleted"] is True
-        mock_cm.client.api_request.assert_any_await(
+        mock_cm.client.api_request_raw.assert_awaited_once_with(
             "recognition/face/groups/face-1",
             method="delete",
         )
