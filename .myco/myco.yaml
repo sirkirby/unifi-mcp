@@ -150,8 +150,3 @@ cortex:
       patterns: []
     inject_on_pre_tool_use: true
     min_file_bytes: 800
-appearance:
-  theme: sage
-  mode: dark
-  font: default
-  density: normal

@@ -1,15 +1,13 @@
 ---
 name: myco:migrate-domain-field-symmetry
-description: |
-  Use when migrating an existing UniFi resource domain to the shared
-  field-symmetry model — even if the user doesn't explicitly ask for
-  "field symmetry." Covers the full migration procedure: auditing list/create/update
-  field parity gaps, creating models/<domain>.py with DomainBase + submodels,
-  implementing field validation, and ensuring field symmetry compliance. Also enforces the critical
-  ResourceValidator safety constraint: shared validator defaults are forbidden
-  (blast-radius anti-pattern). Reference implementation: acl_manager.py +
-  models/acl.py. Rollout complete as of Phase 4 (May 2026). All three servers
-  (Network, Protect, Access) now use this pattern. Issue #137 closed via PR #235.
+description: >-
+  Use when migrating an existing UniFi resource domain to the shared field-symmetry model —
+  even if the user doesn't explicitly ask for "field symmetry." Covers the full migration
+  procedure: auditing list/create/update field parity gaps, creating models/<domain>.py with
+  DomainBase + submodels, implementing field validation, and ensuring field symmetry compliance.
+  Enforces the critical ResourceValidator safety constraint: shared validator defaults are
+  forbidden (blast-radius anti-pattern). Reference implementation patterns established in
+  Phase 4 (May 2026). All three servers (Network, Protect, Access) now use this pattern.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -28,8 +26,10 @@ servers (Network, Protect, Access) as of Phase 4 (May 2026).
 
 - The domain's existing tools and manager are stable (no open conflicts).
 - You know which `list_*` tool is the canonical shape source for this domain.
-- `packages/unifi-mcp-shared/src/unifi_mcp_shared/validators.py` is available for
-  implementing field validation patterns.
+- Understand the pattern for implementing field validation in manager classes
+  (see Procedure 3 for the inline pattern).
+
+---
 
 ## Procedure 1: Audit the Field Gap
 
@@ -61,12 +61,14 @@ matching create/update tools. You want a punch list of mismatches.
    already exist for similar domains. Look for test files that validate field
    acceptance patterns.
 
+---
+
 ## Procedure 2: Create `models/<domain>.py`
 
 Model files live at:
 `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py`
 
-The reference implementation is `models/acl.py`. Use this structure:
+Use this structure:
 
 ```python
 from pydantic import BaseModel
@@ -96,9 +98,11 @@ class Update<Domain>(<Domain>Base):
 - All `<Domain>Base` fields must be `Optional` with `= None` only —
   never supply non-`None` defaults here (see Gotcha 1 below).
 
+---
+
 ## Procedure 3: Implement Field Validation in the Manager
 
-The manager validates that update calls only send recognized field names.
+The manager validates that update calls only send recognized field names. Implementation is manager-local, inline in your domain manager class (not a centralized validator module).
 
 1. **Implement validation logic** in `managers/<domain>_manager.py` to check
    field names against the model schema:
@@ -106,13 +110,14 @@ The manager validates that update calls only send recognized field names.
    ```python
    from ..models.<domain> import Create<Domain>, Update<Domain>
 
-   def _validate_update_fields(self, data: dict, model_class):
-       """Validate that update data only contains recognized fields."""
-       allowed_fields = set(model_class.model_fields.keys())
-       provided_fields = set(data.keys())
-       invalid_fields = provided_fields - allowed_fields
-       if invalid_fields:
-           raise ValueError(f"Invalid fields: {invalid_fields}")
+   class <Domain>Manager(BaseManager):
+       def _validate_update_fields(self, data: dict, model_class):
+           """Validate that update data only contains recognized fields."""
+           allowed_fields = set(model_class.model_fields.keys())
+           provided_fields = set(data.keys())
+           invalid_fields = provided_fields - allowed_fields
+           if invalid_fields:
+               raise ValueError(f"Invalid fields: {invalid_fields}")
    ```
 
 2. **Add validation at the top of the update method:**
@@ -136,6 +141,8 @@ The manager validates that update calls only send recognized field names.
 4. **Verify the tool layer** passes the flat field names from the list output
    (not nested dicts). The manager's model accepts the flat names and translates
    to whatever the UniFi API expects internally (see Gotcha 2).
+
+---
 
 ## Procedure 4: Create Field Symmetry Tests
 
@@ -184,7 +191,7 @@ Create a test file to validate field symmetry for this domain.
    PR time. The Strawberry type must expose every mutable pydantic field name
    with a compatible type annotation.
 
-   Anchor: `apps/api/tests/unit/test_cross_layer_symmetry.py`
+---
 
 ## Gotcha 1 — ResourceValidator Blast Radius (NEVER put defaults in shared validators)
 
@@ -209,6 +216,8 @@ only wanted to rename the policy. This is a project-wide regression hiding in a
 If you see non-`None` defaults in a `Base` or shared validator during code
 review, treat it as a merge blocker.
 
+---
+
 ## Gotcha 2 — Flat Fields vs. Nested API Payloads
 
 Some domains expose flat boolean fields in list output (`qos_enabled`,
@@ -230,6 +239,8 @@ The model accepts `qos_enabled: Optional[bool] = None`. The manager maps it to
 the nested API shape. This keeps the tool contract flat and round-trippable
 while encapsulating API complexity in the manager layer.
 
+---
+
 ## Gotcha 3 — Non-Mutable Fields Stay in Test Exceptions Permanently
 
 Fields like `id`, `created_at`, and computed read-only summaries must be
@@ -237,12 +248,24 @@ documented as exceptions in field symmetry tests. Do NOT enforce symmetry for
 genuinely non-mutable fields — only enforce symmetry for mutable fields that
 your new model handles.
 
+---
+
 ## Reference Files
 
 | File | Purpose |
 |------|---------|
-| `packages/unifi-core/src/unifi_core/network/models/acl.py` | Pilot model |
-| `apps/network/src/unifi_network_mcp/managers/acl_manager.py` | Pilot manager wiring |
+| `packages/unifi-core/src/unifi_core/network/models/acl.py` | ACL model example |
+| `apps/network/src/unifi_network_mcp/managers/acl_manager.py` | ACL manager example (field validation pattern) |
 | `apps/api/tests/unit/test_cross_layer_symmetry.py` | MCP↔API drift gate (REGISTERED_PAIRS) |
-| `packages/unifi-mcp-shared/src/unifi_mcp_shared/validators.py` | Shared validator patterns |
 | `AGENTS.md` | Governance rule (field-symmetry domain rollout) |
+| `tests/unit/test_*_field_symmetry.py` | Domain-specific symmetry test examples |
+
+---
+
+## Additional Notes
+
+Field validation implementation is **manager-local and inline** — there is no
+centralized shared validators module. Each domain manager implements its own
+`_validate_update_fields()` method following the pattern in Procedure 3.
+This keeps validation close to the domain logic and avoids the blast-radius
+hazard described in Gotcha 1.

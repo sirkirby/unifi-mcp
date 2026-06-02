@@ -27,6 +27,7 @@ This unified skill covers the complete flow for adding a new UniFi resource type
 - Know whether the resource's GET-by-ID endpoint returns 405 (Step 2A).
 - Have a live controller available for validation output in PR description.
 - **Dependency rule:** `apps/api/` may only import from `unifi-core`, never `unifi-mcp-shared`.
+- **V2 API identifier hazard:** Understand the difference between UniFi V2 ObjectID (`_id`) and Integration UUID semantics before implementing cross-controller queries.
 
 ---
 
@@ -69,6 +70,19 @@ response = self.client.get(f"/v2/api/site/{{site}}/resource/{id}")
 if isinstance(response, list): return response[0] if response else None
 return response
 ```
+
+### Step 2.5 — V2 API Identifier Hazard: ObjectID vs. Integration UUID
+
+**Critical:** UniFi V2 API returns two identifier types that are NOT interchangeable:
+
+| Identifier | Source | Use case | Example |
+|---|---|---|---|
+| `_id` (ObjectID) | V2 API `GET /api/site/{site}/devices` response | Local CRUD within a site/controller | "605d...7f3a" |
+| Integration UUID | External system mappings, cross-controller queries | Multi-controller operations, relay protocol | "12345678-uuid-format" |
+
+**Hazard:** If you extract an `_id` from a V2 response and send it to a different controller as a GET parameter, it will fail silently (404 or empty result) because the ObjectID is local to that controller's database. Always document which identifier type your tool accepts. If you need cross-controller queries, you must use the Integration UUID path, not the ObjectID path.
+
+**Example gotcha:** Alarm rule IDs from Protect — `rule._id` is the controller-local ObjectID; if you're implementing a cross-controller alarm view, you need the Integration UUID instead. Check the API docs and test against multi-controller setups.
 
 ### Step 3 — Define Domain Pydantic Model
 
@@ -164,7 +178,7 @@ All 8 must be complete:
 3. REST resource route (`GET /v1/sites/{site_id}/{resource}`)
 4. Action dispatcher (`POST /v1/actions/unifi_tool_name`)
 5. Fixture e2e test in `apps/api/tests/fixtures/`
-6. Run `scripts/codegen_api_docs.py`
+6. Run `apps/api/src/unifi_api/graphql/docgen.py` to generate GraphQL reference docs
 7. Commit updated `openapi.json`
 8. Commit updated `graphql-reference.md`
 
@@ -194,6 +208,38 @@ Register in `apps/api/src/unifi_api/types/__init__.py`:
 from unifi_api.types._base import type_registry
 type_registry.register_tool_type("unifi_list_clients", Client)
 ```
+
+### Procedure B.5 — Protect List Tools: kind=DETAIL Wrapper Pattern
+
+Certain Protect resources return heterogeneous shapes (list vs. single-dict) depending on firmware version or feature flags. The API must normalize these to a consistent contract.
+
+**Pattern:** Wrap the raw response in a `kind=DETAIL` type that coerces both list and dict shapes to a unified contract:
+
+```python
+# apps/api/src/unifi_api/types/protect/alarm_rule.py
+@strawberry.type
+class AlarmRuleListType(UniFiType):
+    kind: str = "DETAIL"  # coerce list/dict to unified shape
+    id: str
+    name: str
+    # ... other fields
+    
+    @classmethod
+    def from_manager_object(cls, obj):
+        # Handle both list and dict responses
+        if isinstance(obj.raw, list):
+            # Coerce list to first element or aggregated shape
+            data = obj.raw[0] if obj.raw else {}
+        else:
+            data = obj.raw
+        return cls(
+            id=data.get("_id"),
+            name=data.get("name"),
+            # ...
+        )
+```
+
+This prevents tool output contract drift when Protect firmware varies or toggles optional response wrapping.
 
 ### Procedure C: Mutation Registration
 
@@ -299,3 +345,9 @@ Manager class: `{Resource}Manager`. Factory: `get_{resource}_manager` with `@lru
 **Firmware variation:** Different versions return different field shapes; request firmware version with bug reports.
 
 **Action dispatcher arg-mismatch:** Without DISPATCH_ARG_TRANSLATORS, action tools fail silently. Test both MCP and `/v1/actions/` paths.
+
+**V2 ObjectID vs. Integration UUID:** ObjectIDs are controller-local; if implementing cross-controller queries, use Integration UUID path instead. Test against multi-controller setups.
+
+**Pass-through test pattern:** For tools that pass raw manager output to API without transformation, validate that the shape is compatible with Strawberry type expectations. Use snapshot tests or schema-compliance tests to catch shape drift early.
+
+**Protect list heterogeneity:** Alarm rules and other Protect resources may return list or dict depending on firmware. Use the `kind=DETAIL` wrapper pattern to normalize the shape in the API layer. Document the firmware versions tested and the heterogeneous behavior observed.
