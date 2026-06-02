@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Protect MCP server exposes 43 tools, all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Protect MCP server exposes 59 tools (including 5 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `protect_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`.
 
@@ -71,7 +71,7 @@ In lazy mode, an additional meta-tool is available:
 - `protect_create_liveview` -- Validate liveview creation (not supported by uiprotect API)
 - `protect_delete_liveview` -- Validate liveview deletion (not supported by uiprotect API)
 
-## Alarm Manager (4 tools)
+## Alarm Manager (9 tools)
 
 Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles to be configured in the Protect web UI first.
 
@@ -79,6 +79,11 @@ Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles t
 - `protect_alarm_get_status` -- Current armed/disarmed state across all profiles
 - `protect_alarm_arm` -- Arm the system for a given profile (confirm required; defaults to default profile)
 - `protect_alarm_disarm` -- Disarm the system for a given profile (confirm required; defaults to default profile)
+- `protect_alarm_list_rules` -- List alarm rules (automations) with sources, conditions, and actions
+- `protect_alarm_get_rule` -- Fetch the full payload of a single alarm rule by id (for read-modify-write updates)
+- `protect_alarm_create_rule` -- Create an alarm rule (automation) (confirm required)
+- `protect_alarm_update_rule` -- Update an alarm rule via full read-modify-write body (confirm required)
+- `protect_alarm_delete_rule` -- Delete an alarm rule by id (confirm required)
 
 ## Alarm Manager v2 — AI Alarms (3 tools)
 
@@ -88,12 +93,15 @@ The modern UniFi-OS Alarm Manager (`/api/v2/alarms/`), including **AI-powered al
 - `protect_alarm_v2_get_rule` -- Fetch a single Alarm Manager v2 rule by id
 - `protect_alarm_v2_list_profiles` -- List Alarm Manager v2 arm profiles
 
-## Known Faces (4 tools)
+## Known Faces & License Plates (7 tools)
 
 - `protect_list_known_faces` -- List assigned and optionally unlabeled face recognition groups
 - `protect_update_known_face` -- Update Known Face metadata such as name, description, and notifications (confirm required)
 - `protect_merge_known_faces` -- Merge one face group into another (confirm required)
 - `protect_delete_known_face` -- Delete or remove a face recognition group (confirm required)
+- `protect_list_known_license_plates` -- List license-plate recognition groups (vehicle identities)
+- `protect_update_known_license_plate` -- Update Known License Plate metadata such as name, description, and notifications (confirm required)
+- `protect_delete_known_license_plate` -- Delete or remove a license-plate recognition group (confirm required)
 
 ## System (4 tools)
 
