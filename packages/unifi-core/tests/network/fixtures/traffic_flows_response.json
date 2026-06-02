@@ -1,0 +1,129 @@
+{
+  "data": [
+    {
+      "id": "flow-0001",
+      "action": "ALLOW",
+      "risk": "low",
+      "service": "HTTPS",
+      "protocol": "tcp",
+      "direction": "UPLOAD",
+      "count": 4,
+      "duration_milliseconds": 1200,
+      "time": 1779742801200,
+      "flow_start_time": 1779742800000,
+      "flow_end_time": 1779742801200,
+      "source": {
+        "client_fingerprint": {
+          "computed_dev_id": 11, "computed_engine": 2, "confidence": 90,
+          "dev_cat": 1, "dev_family": 5, "dev_id": 42, "dev_vendor": 7,
+          "has_override": false, "os_name": 3
+        },
+        "client_name": "Lab-Laptop",
+        "client_oui": "ExampleCo",
+        "host_name": "lab-laptop",
+        "id": "src-1",
+        "ip": "192.0.2.10",
+        "mac": "aa:bb:cc:00:00:01",
+        "network_id": "net-trusted",
+        "network_name": "Trusted",
+        "port": 51514,
+        "subnet": "192.0.2.0/24",
+        "zone_id": "zone-1",
+        "zone_name": "Trusted"
+      },
+      "destination": {
+        "client_fingerprint": {
+          "computed_dev_id": 0, "computed_engine": 0,
+          "dev_cat": 0, "dev_family": 0, "dev_id": 0, "dev_vendor": 0,
+          "has_override": false, "os_class": 0, "os_name": 0
+        },
+        "client_name": "",
+        "client_oui": "",
+        "domains": ["example.test"],
+        "host_name": "example.test",
+        "id": "dst-1",
+        "ip": "203.0.113.20",
+        "mac": "",
+        "network_id": "",
+        "network_name": "",
+        "port": 443,
+        "subnet": "",
+        "zone_id": "",
+        "zone_name": ""
+      },
+      "in": {"network_id": "net-trusted", "network_name": "Trusted"},
+      "out": {"network_id": "net-wan", "network_name": "WAN"},
+      "policies": [{"type": "FIREWALL", "internal_type": "DEFAULT"}],
+      "next_ai": [],
+      "traffic_data": {
+        "bytes_rx": 8421, "bytes_tx": 2310, "bytes_total": 10731,
+        "packets_rx": 14, "packets_tx": 9, "packets_total": 23
+      }
+    },
+    {
+      "id": "flow-0002",
+      "action": "BLOCK",
+      "risk": "high",
+      "service": "DNS",
+      "protocol": "udp",
+      "direction": "UPLOAD",
+      "count": 1,
+      "duration_milliseconds": 30,
+      "time": 1779742700030,
+      "flow_start_time": 1779742700000,
+      "flow_end_time": 1779742700030,
+      "source": {
+        "client_fingerprint": {
+          "computed_dev_id": 21, "computed_engine": 2, "confidence": 70,
+          "dev_cat": 3, "dev_family": 1, "dev_id": 88, "dev_vendor": 9,
+          "has_override": false, "os_name": 0
+        },
+        "client_name": "IoT-Plug",
+        "client_oui": "ExampleCo",
+        "host_name": "iot-plug",
+        "id": "src-2",
+        "ip": "192.0.2.55",
+        "mac": "aa:bb:cc:00:00:02",
+        "network_id": "net-iot",
+        "network_name": "IoT",
+        "port": 53314,
+        "subnet": "192.0.2.0/24",
+        "zone_id": "zone-2",
+        "zone_name": "IoT"
+      },
+      "destination": {
+        "client_fingerprint": {
+          "computed_dev_id": 0, "computed_engine": 0,
+          "dev_cat": 0, "dev_family": 0, "dev_id": 0, "dev_vendor": 0,
+          "has_override": false, "os_class": 0, "os_name": 0
+        },
+        "client_name": "",
+        "client_oui": "",
+        "domains": ["bad.test"],
+        "host_name": "bad.test",
+        "id": "dst-2",
+        "ip": "198.51.100.3",
+        "mac": "",
+        "network_id": "",
+        "network_name": "",
+        "port": 53,
+        "subnet": "",
+        "zone_id": "",
+        "zone_name": ""
+      },
+      "in": {"network_id": "net-iot", "network_name": "IoT"},
+      "out": {"network_id": "net-wan", "network_name": "WAN"},
+      "policies": [{"type": "THREAT", "internal_type": "IDS"}],
+      "next_ai": [],
+      "traffic_data": {
+        "bytes_rx": 0, "bytes_tx": 74, "bytes_total": 74,
+        "packets_rx": 0, "packets_tx": 1, "packets_total": 1
+      }
+    }
+  ],
+  "has_next": true,
+  "or_more": true,
+  "page_number": 0,
+  "total_element_count": 10000,
+  "total_page_count": 100
+}
