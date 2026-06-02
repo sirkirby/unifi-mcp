@@ -69,7 +69,7 @@ The UniFi Network MCP server. 169 tools across 21 categories covering firewall, 
 
 ### apps/protect
 
-The UniFi Protect MCP server. 59 tools across 8 categories covering cameras, events, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (legacy + AI-capable v2). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
+The UniFi Protect MCP server. 56 tools across 8 categories covering cameras, events, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (including AI-powered alarms, which require a SuperAdmin credential). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
 
 - `src/unifi_protect_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch

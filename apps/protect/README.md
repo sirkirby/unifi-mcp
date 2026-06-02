@@ -89,7 +89,7 @@ UNIFI_PROTECT_PASSWORD=your-password # Admin password
 
 **Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_PROTECT_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
 
-> **Alarm Manager v2 (AI alarms) needs SuperAdmin.** The `protect_alarm_v2_*` tools read the modern UniFi-OS Alarm Manager (`/api/v2/alarms/`), which is gated to **SuperAdmin** accounts — a regular admin returns a "requires SuperAdmin" error from those tools only. All other Protect tools work with a standard local admin. Grant the account SuperAdmin on the console hosting Protect if you want the AI-alarm tools. Note the blast radius: on a standalone UNVR this is contained to Protect; on a combined UDM console it also grants Network/UniFi-OS control.
+> **AI-powered alarms need SuperAdmin.** The alarm-rule tools (`protect_alarm_list_rules` / `protect_alarm_get_rule`) transparently surface AI-powered alarms (e.g. AI Natural Language) from the modern UniFi-OS Alarm Manager when the account is **SuperAdmin**, and fall back to the classic automations view otherwise. With a non-SuperAdmin account those AI alarms aren't visible and the response includes a standard MCP `_meta` notice saying so. Grant the account SuperAdmin on the console hosting Protect to view/manage them. Blast radius: on a standalone UNVR this is contained to Protect; on a combined UDM console SuperAdmin also grants Network/UniFi-OS control.
 
 ## Run
 
@@ -198,7 +198,7 @@ Compact mode is the recommended default when building summaries or feeding event
 
 - [Configuration](docs/configuration.md) -- Full env var reference, YAML config, Protect-specific options
 - [Permissions](docs/permissions.md) -- Permission system, category defaults, how to enable mutations
-- [Tool Catalog](docs/tools.md) -- All 59 tools organized by category
+- [Tool Catalog](docs/tools.md) -- All 56 tools organized by category
 - [Event Streaming](docs/events.md) -- Real-time event architecture, MCP resources, polling
 - [Troubleshooting](docs/troubleshooting.md) -- Connection issues, SSL, missing tools
 

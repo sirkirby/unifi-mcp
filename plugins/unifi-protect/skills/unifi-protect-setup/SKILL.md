@@ -51,7 +51,7 @@ Ask for:
 
 Username and password are required.
 
-> **AI Alarm Manager (v2) needs SuperAdmin.** The `protect_alarm_v2_*` tools read the UniFi-OS Alarm Manager (`/api/v2/alarms/`), which is gated to **SuperAdmin** accounts. A standard local admin runs every other Protect tool fine but those alarm-v2 tools will return a "requires SuperAdmin" error. Mention this only if the user asks about the AI-alarm tools or hits that error; do not require SuperAdmin for normal setup. On a combined UDM console, SuperAdmin also grants Network/UniFi-OS control — call that out so the user can decide.
+> **AI-powered alarms need SuperAdmin.** The alarm-rule tools (`protect_alarm_list_rules` / `protect_alarm_get_rule`) surface AI-powered alarms from the UniFi-OS Alarm Manager only when the account is **SuperAdmin**; otherwise they return the classic automations view (with a `_meta` notice that AI alarms need SuperAdmin). A standard local admin runs every Protect tool fine. Mention SuperAdmin only if the user asks about AI alarms; don't require it for normal setup. On a combined UDM console, SuperAdmin also grants Network/UniFi-OS control — call that out so the user can decide.
 
 ### Optional API Key
 

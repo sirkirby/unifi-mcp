@@ -230,7 +230,7 @@ This is a monorepo with shared packages:
 ```
 apps/
   network/          # UniFi Network MCP server (stable, 169 tools)
-  protect/          # UniFi Protect MCP server (beta, 59 tools)
+  protect/          # UniFi Protect MCP server (beta, 56 tools)
   access/           # UniFi Access MCP server (beta, 29 tools)
   worker/           # Cloudflare Worker gateway + npm CLI
 packages/
