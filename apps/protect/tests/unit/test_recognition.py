@@ -223,19 +223,21 @@ class TestRecognitionManager:
             await RecognitionManager(mock_cm).merge_known_faces("face-1", "face-1")
 
     @pytest.mark.asyncio
-    async def test_apply_merge_known_faces_posts_validated_payload(self, mock_cm):
+    async def test_apply_merge_known_faces_uses_raw_post(self, mock_cm):
+        """merge-group returns an empty body on success; must use api_request_raw
+        to avoid a spurious 'Could not decode JSON' after a successful merge."""
         from unifi_core.protect.managers.recognition_manager import RecognitionManager
 
         mock_cm.client.api_request.side_effect = [
             {"groups": [{"id": "source", "name": "Source"}]},
             {"groups": [{"id": "target", "name": "Target"}]},
-            None,
         ]
+        mock_cm.client.api_request_raw = AsyncMock(return_value=None)
 
         result = await RecognitionManager(mock_cm).apply_merge_known_faces("source", "target")
 
         assert result["merged"] is True
-        mock_cm.client.api_request.assert_any_await(
+        mock_cm.client.api_request_raw.assert_awaited_once_with(
             "recognition/v2/merge-group",
             method="post",
             json={"fromGroupIds": ["source"], "toGroupId": "target"},

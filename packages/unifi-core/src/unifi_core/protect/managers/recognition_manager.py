@@ -225,9 +225,15 @@ class RecognitionManager:
         }
 
     async def apply_merge_known_faces(self, source_face_id: str, target_face_id: str) -> Dict[str, Any]:
-        """Merge one Protect face group into another."""
+        """Merge one Protect face group into another.
+
+        The merge-group endpoint returns an empty body on success, so use
+        ``api_request_raw`` (not ``api_request``) to avoid a spurious
+        'Could not decode JSON' error after the merge has already succeeded.
+        Mirrors the recognition-group delete paths; the response is unused.
+        """
         preview = await self.merge_known_faces(source_face_id, target_face_id)
-        await self._cm.client.api_request(
+        await self._cm.client.api_request_raw(
             "recognition/v2/merge-group",
             method="post",
             json={"fromGroupIds": [source_face_id], "toGroupId": target_face_id},
