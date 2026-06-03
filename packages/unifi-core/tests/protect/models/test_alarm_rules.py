@@ -1,9 +1,9 @@
 """Tests for Alarm Manager v2 read models (normalized /api/v2/alarms/ rules)."""
 
-from unifi_core.protect.models.alarm_v2 import (
+from unifi_core.protect.models.alarm_rules import (
     MUTABLE_FIELDS,
-    AlarmRuleV2,
-    alarm_rule_v2_from_controller,
+    AlarmRule,
+    alarm_rule_from_controller,
 )
 
 # Synthetic raw rule mirroring /api/v2/alarms/protect shape (no real data).
@@ -44,9 +44,9 @@ _RAW_RULE = {
 
 
 def test_normalizes_rule_triggers_actions_and_metadata():
-    rule = alarm_rule_v2_from_controller(_RAW_RULE)
+    rule = alarm_rule_from_controller(_RAW_RULE)
 
-    assert isinstance(rule, AlarmRuleV2)
+    assert isinstance(rule, AlarmRule)
     assert rule.id == "rule-uuid-1"
     assert rule.title == "Dog Alarm"
 
@@ -70,7 +70,7 @@ def test_normalizes_rule_triggers_actions_and_metadata():
 
 
 def test_handles_missing_and_empty_fields():
-    rule = alarm_rule_v2_from_controller({"id": "x"})
+    rule = alarm_rule_from_controller({"id": "x"})
     assert rule.id == "x"
     assert rule.title is None
     assert rule.triggers == []
@@ -94,7 +94,7 @@ _RAW_LEGACY_RULE = {
 
 
 def test_alarm_rule_from_legacy_maps_to_canonical():
-    from unifi_core.protect.models.alarm_v2 import alarm_rule_from_legacy
+    from unifi_core.protect.models.alarm_rules import alarm_rule_from_legacy
 
     rule = alarm_rule_from_legacy(_RAW_LEGACY_RULE)
 
@@ -108,5 +108,5 @@ def test_alarm_rule_from_legacy_maps_to_canonical():
 
 
 def test_canonical_rule_enabled_defaults_none_for_v2():
-    rule = alarm_rule_v2_from_controller(_RAW_RULE)
+    rule = alarm_rule_from_controller(_RAW_RULE)
     assert rule.enabled is None

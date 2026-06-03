@@ -1,13 +1,13 @@
-"""Tests for AlarmV2Manager (read surface over /api/v2/alarms/)."""
+"""Tests for AlarmManagerService (read surface over /api/v2/alarms/)."""
 
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from uiprotect.exceptions import NotAuthorized
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.protect.managers.alarm_v2_manager import (
-    AlarmV2Manager,
-    AlarmV2PermissionError,
+from unifi_core.protect.managers.alarm_manager_service import (
+    AlarmManagerPermissionError,
+    AlarmManagerService,
 )
 
 _RAW_RULE = {
@@ -41,7 +41,7 @@ def _conn(*, return_value=None, side_effect=None):
 @pytest.mark.asyncio
 async def test_list_rules_normalizes_via_api_path():
     conn = _conn(return_value=[_RAW_RULE])
-    rules = await AlarmV2Manager(conn).list_rules()
+    rules = await AlarmManagerService(conn).list_rules()
 
     assert len(rules) == 1
     assert rules[0]["id"] == "rule-1"
@@ -57,19 +57,19 @@ async def test_forbidden_maps_to_actionable_permission_error():
     exc = NotAuthorized("Request failed: https://h/api/v2/alarms/protect - Status: 403 - Reason: Forbidden")
     conn = _conn(side_effect=exc)
 
-    with pytest.raises(AlarmV2PermissionError, match="SuperAdmin"):
-        await AlarmV2Manager(conn).list_rules()
+    with pytest.raises(AlarmManagerPermissionError, match="SuperAdmin"):
+        await AlarmManagerService(conn).list_rules()
 
 
 @pytest.mark.asyncio
 async def test_get_rule_not_found_raises():
     conn = _conn(return_value=[_RAW_RULE])
     with pytest.raises(UniFiNotFoundError):
-        await AlarmV2Manager(conn).get_rule("does-not-exist")
+        await AlarmManagerService(conn).get_rule("does-not-exist")
 
 
 @pytest.mark.asyncio
 async def test_get_rule_returns_match():
     conn = _conn(return_value=[_RAW_RULE])
-    rule = await AlarmV2Manager(conn).get_rule("rule-1")
+    rule = await AlarmManagerService(conn).get_rule("rule-1")
     assert rule["id"] == "rule-1"

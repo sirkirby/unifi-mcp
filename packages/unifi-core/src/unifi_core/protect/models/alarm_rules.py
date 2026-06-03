@@ -1,10 +1,10 @@
-"""Read models for UniFi OS Alarm Manager v2 (``/api/v2/alarms/``).
+"""Read models for UniFi OS Alarm Manager (``/api/v2/alarms/``).
 
-Normalized, read-only view of the v2 alarm-rule surface. This is the modern
+Normalized, read-only view of the alarm-rule surface. This is the modern
 UniFi-OS Alarm Manager (cross-app), distinct from the legacy Protect automations
-model in :mod:`unifi_core.protect.models.alarms`. The v2 service exposes
+model in :mod:`unifi_core.protect.models.alarms`. The Alarm Manager service exposes
 AI-powered alarms (e.g. AI Natural Language triggers) not present on the legacy
-surface, and requires a SuperAdmin credential to reach (see ``AlarmV2Manager``).
+surface, and requires a SuperAdmin credential to reach (see ``AlarmManagerService``).
 
 Read-only: no create/update/delete here, so ``MUTABLE_FIELDS = frozenset()``.
 """
@@ -22,7 +22,7 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
-class AlarmTriggerV2(BaseModel):
+class AlarmTrigger(BaseModel):
     """A configured trigger within an alarm rule (category + trigger + params)."""
 
     category_id: Optional[str] = Field(
@@ -42,7 +42,7 @@ class AlarmTriggerV2(BaseModel):
     )
 
 
-class AlarmActionV2(BaseModel):
+class AlarmAction(BaseModel):
     """A configured action within an alarm rule (category + action + params)."""
 
     category_id: Optional[str] = Field(
@@ -62,18 +62,18 @@ class AlarmActionV2(BaseModel):
     )
 
 
-class AlarmRuleV2(BaseModel):
-    """A normalized UniFi OS Alarm Manager v2 rule."""
+class AlarmRule(BaseModel):
+    """A normalized UniFi OS Alarm Manager rule."""
 
     id: Optional[str] = Field(default=None, description="Rule id", json_schema_extra={"mutable": False})
     title: Optional[str] = Field(default=None, description="Rule title", json_schema_extra={"mutable": False})
     enabled: Optional[bool] = Field(
         default=None, description="Whether the rule is enabled", json_schema_extra={"mutable": False}
     )
-    triggers: list[AlarmTriggerV2] = Field(
+    triggers: list[AlarmTrigger] = Field(
         default_factory=list, description="Configured triggers", json_schema_extra={"mutable": False}
     )
-    actions: list[AlarmActionV2] = Field(
+    actions: list[AlarmAction] = Field(
         default_factory=list, description="Configured actions", json_schema_extra={"mutable": False}
     )
     scope: dict[str, Any] = Field(
@@ -92,14 +92,14 @@ class AlarmRuleV2(BaseModel):
     )
 
 
-def _normalize_triggers(raw: Any) -> list[AlarmTriggerV2]:
-    out: list[AlarmTriggerV2] = []
+def _normalize_triggers(raw: Any) -> list[AlarmTrigger]:
+    out: list[AlarmTrigger] = []
     for category in _get(raw, "trigger_categories", []) or []:
         cat_id = _get(category, "id")
         cat_title = _get(category, "title")
         for trigger in _get(category, "triggers", []) or []:
             out.append(
-                AlarmTriggerV2(
+                AlarmTrigger(
                     category_id=cat_id,
                     category_title=cat_title,
                     trigger_id=_get(trigger, "id"),
@@ -110,14 +110,14 @@ def _normalize_triggers(raw: Any) -> list[AlarmTriggerV2]:
     return out
 
 
-def _normalize_actions(raw: Any) -> list[AlarmActionV2]:
-    out: list[AlarmActionV2] = []
+def _normalize_actions(raw: Any) -> list[AlarmAction]:
+    out: list[AlarmAction] = []
     for category in _get(raw, "action_categories", []) or []:
         cat_id = _get(category, "id")
         cat_title = _get(category, "title")
         for action in _get(category, "actions", []) or []:
             out.append(
-                AlarmActionV2(
+                AlarmAction(
                     category_id=cat_id,
                     category_title=cat_title,
                     action_id=_get(action, "id"),
@@ -128,9 +128,9 @@ def _normalize_actions(raw: Any) -> list[AlarmActionV2]:
     return out
 
 
-def alarm_rule_v2_from_controller(raw: Any) -> AlarmRuleV2:
-    """Normalize a raw ``/api/v2/alarms/protect`` rule into an AlarmRuleV2."""
-    return AlarmRuleV2(
+def alarm_rule_from_controller(raw: Any) -> AlarmRule:
+    """Normalize a raw ``/api/v2/alarms/protect`` rule into an AlarmRule."""
+    return AlarmRule(
         id=_get(raw, "id"),
         title=_get(raw, "title"),
         triggers=_normalize_triggers(raw),
@@ -142,8 +142,8 @@ def alarm_rule_v2_from_controller(raw: Any) -> AlarmRuleV2:
     )
 
 
-def alarm_rule_from_legacy(raw: Any) -> AlarmRuleV2:
-    """Normalize a legacy ``/automations`` rule into the canonical AlarmRuleV2 shape.
+def alarm_rule_from_legacy(raw: Any) -> AlarmRule:
+    """Normalize a legacy ``/automations`` rule into the canonical AlarmRule shape.
 
     The legacy automations API models rules differently (``conditions`` /
     ``sources`` / ``actions``) and cannot represent AI-powered alarms. This maps
@@ -151,15 +151,15 @@ def alarm_rule_from_legacy(raw: Any) -> AlarmRuleV2:
     consistent structure regardless of which backend served the request.
     """
     triggers = [
-        AlarmTriggerV2(trigger_id=_get(condition, "type"), data=condition if isinstance(condition, dict) else {})
+        AlarmTrigger(trigger_id=_get(condition, "type"), data=condition if isinstance(condition, dict) else {})
         for condition in (_get(raw, "conditions", []) or [])
     ]
     actions = [
-        AlarmActionV2(action_id=_get(action, "type"), data=action if isinstance(action, dict) else {})
+        AlarmAction(action_id=_get(action, "type"), data=action if isinstance(action, dict) else {})
         for action in (_get(raw, "actions", []) or [])
     ]
     sources = _get(raw, "sources", []) or []
-    return AlarmRuleV2(
+    return AlarmRule(
         id=_get(raw, "id"),
         title=_get(raw, "name"),
         enabled=_get(raw, "enable"),
@@ -170,7 +170,7 @@ def alarm_rule_from_legacy(raw: Any) -> AlarmRuleV2:
     )
 
 
-ALARM_V2_MUTABLE_FIELDS: frozenset[str] = frozenset()
-ALARM_V2_READ_ONLY_FIELDS: frozenset[str] = frozenset(AlarmRuleV2.model_fields.keys())
+ALARM_RULE_MUTABLE_FIELDS: frozenset[str] = frozenset()
+ALARM_RULE_READ_ONLY_FIELDS: frozenset[str] = frozenset(AlarmRule.model_fields.keys())
 # Alias required by the model-symmetry test harness — read-only model pattern.
-MUTABLE_FIELDS = ALARM_V2_MUTABLE_FIELDS
+MUTABLE_FIELDS = ALARM_RULE_MUTABLE_FIELDS
