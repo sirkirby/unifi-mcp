@@ -1,5 +1,5 @@
 {
-  "count": 176,
+  "count": 177,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -86,6 +86,7 @@
     "unifi_get_switch_ports": "unifi_network_mcp.tools.switch",
     "unifi_get_system_info": "unifi_network_mcp.tools.system",
     "unifi_get_top_clients": "unifi_network_mcp.tools.stats",
+    "unifi_get_traffic_flows": "unifi_network_mcp.tools.traffic_flows",
     "unifi_get_traffic_route_details": "unifi_network_mcp.tools.traffic_routes",
     "unifi_get_usergroup_details": "unifi_network_mcp.tools.usergroups",
     "unifi_get_voucher_details": "unifi_network_mcp.tools.hotspot",
@@ -8512,6 +8513,163 @@
         }
       },
       "title": "Get Top Clients"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Query historical UniFi Traffic Flows (Insights > Flows). Returns completed flow records \u2014 source/destination (incl. resolved destination domains), service, risk, action, bytes, and timestamps \u2014 for a time window, with server-side filtering and pagination. Supply both time_from and time_to (epoch ms) for an explicit window, or use within_hours. Read-only; one page per call (use page/total_page_count to paginate).",
+      "name": "unifi_get_traffic_flows",
+      "schema": {
+        "input": {
+          "properties": {
+            "action": {
+              "description": "Filter by action (allow/block)",
+              "type": "string"
+            },
+            "destination_domain": {
+              "description": "Filter by destination domain",
+              "type": "string"
+            },
+            "destination_ip": {
+              "description": "Filter by destination IP",
+              "type": "string"
+            },
+            "destination_region": {
+              "description": "Filter by destination region/country",
+              "type": "string"
+            },
+            "direction": {
+              "description": "Filter by direction",
+              "type": "string"
+            },
+            "page": {
+              "description": "0-based page number",
+              "type": "integer"
+            },
+            "page_size": {
+              "description": "Rows per page (<=1000)",
+              "type": "integer"
+            },
+            "protocol": {
+              "description": "Filter by protocol",
+              "type": "string"
+            },
+            "risk": {
+              "description": "Filter by risk (low/medium/high/critical)",
+              "type": "string"
+            },
+            "search_text": {
+              "description": "Free-text match (destination domain/host aware)",
+              "type": "string"
+            },
+            "service": {
+              "description": "Filter by service",
+              "type": "string"
+            },
+            "source_ip": {
+              "description": "Filter by source IP",
+              "type": "string"
+            },
+            "source_mac": {
+              "description": "Filter by source MAC",
+              "type": "string"
+            },
+            "source_name": {
+              "description": "Filter by source host/client name",
+              "type": "string"
+            },
+            "source_network_id": {
+              "description": "Filter by source network ID",
+              "type": "string"
+            },
+            "time_from": {
+              "description": "Explicit window start, epoch ms",
+              "type": "integer"
+            },
+            "time_to": {
+              "description": "Explicit window end, epoch ms",
+              "type": "integer"
+            },
+            "within_hours": {
+              "description": "Look-back window in hours (used when time_from/time_to absent)",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Traffic Flows"
     },
     {
       "annotations": {

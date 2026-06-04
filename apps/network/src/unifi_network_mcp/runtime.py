@@ -50,6 +50,7 @@ from unifi_core.network.managers.routing_manager import RoutingManager
 from unifi_core.network.managers.stats_manager import StatsManager
 from unifi_core.network.managers.switch_manager import SwitchManager
 from unifi_core.network.managers.system_manager import SystemManager
+from unifi_core.network.managers.traffic_flow_manager import TrafficFlowManager
 from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager
 from unifi_core.network.managers.usergroup_manager import UsergroupManager
 from unifi_core.network.managers.vpn_manager import VpnManager
@@ -262,6 +263,11 @@ def get_routing_manager() -> RoutingManager:
 
 
 @lru_cache
+def get_traffic_flow_manager() -> TrafficFlowManager:
+    return TrafficFlowManager(get_connection_manager())
+
+
+@lru_cache
 def get_traffic_route_manager() -> TrafficRouteManager:
     return TrafficRouteManager(get_connection_manager())
 
@@ -302,6 +308,7 @@ event_manager = get_event_manager()
 hotspot_manager = get_hotspot_manager()
 usergroup_manager = get_usergroup_manager()
 routing_manager = get_routing_manager()
+traffic_flow_manager = get_traffic_flow_manager()
 traffic_route_manager = get_traffic_route_manager()
 tool_registry = get_tool_registry()
 
