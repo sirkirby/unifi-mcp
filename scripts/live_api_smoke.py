@@ -615,6 +615,116 @@ async def run_protect_assertions(  # noqa: C901
         retry=retry,
     )
 
+    # 9a. REST detection-search labels vocabulary (Find Anything)
+    async def _rest_detection_search_labels():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
+            r = await c.get(
+                f"/v1/sites/default/detection-search-labels?controller={cid}",
+                headers=headers,
+            )
+            assert r.status_code == 200, f"status={r.status_code}"
+            body = r.json()
+            assert "vehicle_types" in body, f"missing 'vehicle_types': {list(body)[:8]}"
+            return {"vehicle_type_count": len(body.get("vehicle_types") or [])}
+
+    await _run_assertion(
+        report,
+        "REST detection-search-labels (vocabulary)",
+        "protect",
+        "rest",
+        _rest_detection_search_labels,
+        retry=retry,
+    )
+
+    # 9b. REST detection-search — Page envelope (Find Anything)
+    async def _rest_detection_search():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
+            r = await c.get(
+                f"/v1/sites/default/detection-search?controller={cid}&labels=smartDetectType:vehicle&limit=5",
+                headers=headers,
+            )
+            assert r.status_code == 200, f"status={r.status_code}"
+            body = r.json()
+            assert "items" in body, f"missing 'items': {body}"
+            assert "next_cursor" in body, f"missing 'next_cursor': {body}"
+            return {"item_count": len(body["items"])}
+
+    await _run_assertion(
+        report,
+        "REST detection-search (Page envelope)",
+        "protect",
+        "rest",
+        _rest_detection_search,
+        retry=retry,
+    )
+
+    # 9c. REST detection-search with min_confidence filter (Find Anything)
+    async def _rest_detection_search_min_confidence():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
+            r = await c.get(
+                f"/v1/sites/default/detection-search?controller={cid}&labels=smartDetectType:vehicle&min_confidence=50&limit=5",
+                headers=headers,
+            )
+            assert r.status_code == 200, f"status={r.status_code}"
+            body = r.json()
+            assert "items" in body, f"missing 'items': {body}"
+            assert "next_cursor" in body, f"missing 'next_cursor': {body}"
+            return {"item_count": len(body["items"])}
+
+    await _run_assertion(
+        report,
+        "REST detection-search (min_confidence)",
+        "protect",
+        "rest",
+        _rest_detection_search_min_confidence,
+        retry=retry,
+    )
+
+    # 9d. GraphQL searchDetections query (Find Anything, incl minConfidence)
+    async def _gql_search_detections():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
+            q = (
+                f'{{ protect {{ searchDetections(controller: "{cid}", '
+                f'labels: ["smartDetectType:vehicle"], limit: 5, minConfidence: 50) '
+                f"{{ id type smartDetectTypes }} }} }}"
+            )
+            r = await c.post("/v1/graphql", headers=headers, json={"query": q})
+            assert r.status_code == 200, f"status={r.status_code}"
+            body = r.json()
+            assert not body.get("errors"), f"GraphQL errors: {body.get('errors')}"
+            items = body["data"]["protect"]["searchDetections"]
+            return {"item_count": len(items)}
+
+    await _run_assertion(
+        report,
+        "GraphQL protect.searchDetections query",
+        "protect",
+        "graphql",
+        _gql_search_detections,
+        retry=retry,
+    )
+
+    # 9e. GraphQL detectionSearchLabels query (Find Anything)
+    async def _gql_detection_search_labels():
+        async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
+            # vehicleTypes/colors are JSON-scalar sub-maps on DetectionSearchLabels — no subfield selection.
+            q = f'{{ protect {{ detectionSearchLabels(controller: "{cid}") {{ vehicleTypes colors }} }} }}'
+            r = await c.post("/v1/graphql", headers=headers, json={"query": q})
+            assert r.status_code == 200, f"status={r.status_code}"
+            body = r.json()
+            assert not body.get("errors"), f"GraphQL errors: {body.get('errors')}"
+            vts = body["data"]["protect"]["detectionSearchLabels"]["vehicleTypes"]
+            return {"vehicle_type_count": len(vts)}
+
+    await _run_assertion(
+        report,
+        "GraphQL protect.detectionSearchLabels query",
+        "protect",
+        "graphql",
+        _gql_detection_search_labels,
+        retry=retry,
+    )
+
     # 10. Auth scope rejection
     async def _auth_rejection():
         async with AsyncClient(transport=ASGITransport(app=app), base_url=base) as c:
