@@ -130,6 +130,11 @@ class TestProtectSearchDetections:
 
     @pytest.mark.asyncio
     async def test_read_only_annotation(self):
+        # Importing the tools module runs its @server.tool registrations on THIS
+        # worker. Without it the test only imports runtime.server and depends on
+        # another test having imported tools.events first, which pytest-xdist
+        # load-distribution (-n auto) does not guarantee.
+        import unifi_protect_mcp.tools.events  # noqa: F401
         from unifi_protect_mcp.runtime import server
 
         tools = {tool.name: tool for tool in await server.list_tools()}
@@ -182,6 +187,11 @@ class TestProtectDetectionSearchLabels:
 
     @pytest.mark.asyncio
     async def test_read_only_annotation(self):
+        # Importing the tools module runs its @server.tool registrations on THIS
+        # worker. Without it the test only imports runtime.server and depends on
+        # another test having imported tools.events first, which pytest-xdist
+        # load-distribution (-n auto) does not guarantee.
+        import unifi_protect_mcp.tools.events  # noqa: F401
         from unifi_protect_mcp.runtime import server
 
         tools = {tool.name: tool for tool in await server.list_tools()}
