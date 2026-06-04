@@ -61,6 +61,7 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
     from unifi_core.network.managers.stats_manager import StatsManager
     from unifi_core.network.managers.switch_manager import SwitchManager
     from unifi_core.network.managers.system_manager import SystemManager
+    from unifi_core.network.managers.traffic_flow_manager import TrafficFlowManager
     from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager
     from unifi_core.network.managers.usergroup_manager import UsergroupManager
     from unifi_core.network.managers.vpn_manager import VpnManager
@@ -89,6 +90,7 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
         "stats_manager": lambda cm: StatsManager(cm, ClientManager(cm)),
         "switch_manager": lambda cm: SwitchManager(cm),
         "system_manager": lambda cm: SystemManager(cm),
+        "traffic_flow_manager": lambda cm: TrafficFlowManager(cm),
         "traffic_route_manager": lambda cm: TrafficRouteManager(cm),
         "usergroup_manager": lambda cm: UsergroupManager(cm),
         "vpn_manager": lambda cm: VpnManager(cm),

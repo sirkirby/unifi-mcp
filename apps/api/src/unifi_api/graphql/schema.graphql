@@ -1142,6 +1142,9 @@ type NetworkQuery {
   """Get a client's current WiFi parameters (signal, rates)."""
   clientWifiDetails(controller: ID!, mac: ID!, site: String! = "default"): ClientWifiDetails
 
+  """Query historical traffic flows (Insights > Flows), paginated."""
+  trafficFlows(controller: ID!, site: String! = "default", withinHours: Int! = 24, timeFrom: Int = null, timeTo: Int = null, searchText: String = null, pageSize: Int! = 100, cursor: String = null): TrafficFlowPage!
+
   """List switch port profiles on the given controller/site (paginated)."""
   portProfiles(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): PortProfilePage!
 
@@ -1683,6 +1686,42 @@ type TopClient {
   txBytes: Int
   rxBytes: Int
   totalBytes: Int
+}
+
+"""A single UniFi traffic-flow record."""
+type TrafficFlow {
+  id: String
+  action: String
+  risk: String
+  service: String
+  protocol: String
+  direction: String
+  count: Int
+  durationMilliseconds: Int
+  time: Int
+  flowStartTime: Int
+  flowEndTime: Int
+  bytesTotal: Int
+  bytesRx: Int
+  bytesTx: Int
+  source: TrafficFlowEndpoint!
+  destination: TrafficFlowEndpoint!
+}
+
+"""One side (source or destination) of a traffic flow."""
+type TrafficFlowEndpoint {
+  name: String
+  mac: String
+  ip: String
+  networkName: String
+  zoneName: String
+  domains: [String!]!
+}
+
+"""Paginated page of UniFi traffic flows."""
+type TrafficFlowPage {
+  items: [TrafficFlow!]!
+  nextCursor: String
 }
 
 """A traffic-route policy (V2 /trafficroutes entry)."""

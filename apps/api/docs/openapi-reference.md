@@ -1267,6 +1267,26 @@ LIST kind per Phase 4A — manager returns multi-element list of subsystems.
 **Returns:** `object`
 
 
+## network/traffic-flows
+
+### `GET /v1/sites/{site_id}/traffic-flows` — Get Traffic Flows
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `within_hours` (query)
+- `time_from` (query)
+- `time_to` (query)
+- `search_text` (query)
+- `page_size` (query)
+- `cursor` (query)
+- `controller` (query)
+
+
+**Returns:** `Page_TrafficFlowModel_`
+
+
 ## network/vouchers
 
 ### `GET /v1/sites/{site_id}/voucher-details/{voucher_id}` — Get Voucher Details
