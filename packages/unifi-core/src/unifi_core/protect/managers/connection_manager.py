@@ -93,6 +93,7 @@ class ProtectConnectionManager:
                 port=self.port,
                 username=self.username,
                 password=self.password,
+                api_key=self._api_key,
                 verify_ssl=self.verify_ssl,
             )
             # update() authenticates + fetches the full bootstrap (NVR, cameras, etc.)

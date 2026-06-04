@@ -117,12 +117,20 @@ class TestInitialize:
         with patch(
             "unifi_core.protect.managers.connection_manager.ProtectApiClient",
             return_value=mock_client,
-        ):
+        ) as protect_client:
             result = await cm.initialize()
 
         assert result is True
         assert cm._initialized is True
         assert cm._client is mock_client
+        protect_client.assert_called_once_with(
+            host="192.168.1.1",
+            port=443,
+            username="admin",
+            password="secret",
+            api_key="test-api-key",
+            verify_ssl=False,
+        )
         mock_client.update.assert_awaited_once()
 
     @pytest.mark.asyncio
