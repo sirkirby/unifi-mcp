@@ -1710,6 +1710,7 @@ No native ``protect_get_liveview`` tool — filter from LIST.
 - `search_limit` (query)
 - `order` (query)
 - `exclude_motion` (query)
+- `min_confidence` (query)
 - `limit` (query)
 - `cursor` (query)
 - `controller` (query)

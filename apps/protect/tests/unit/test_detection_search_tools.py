@@ -81,6 +81,56 @@ class TestProtectSearchDetections:
         assert call_kwargs["exclude_motion"] is False
 
     @pytest.mark.asyncio
+    async def test_passes_optional_filters_through(self, mock_event_manager):
+        from datetime import datetime
+
+        from unifi_protect_mcp.tools.events import protect_search_detections
+
+        mock_event_manager.search_detections = AsyncMock(return_value={"detections": [], "count": 0})
+
+        await protect_search_detections(
+            labels=["color:black"],
+            min_confidence=70,
+            start="2026-05-28T07:00:00+00:00",
+            end="2026-06-04T13:51:59.999+00:00",
+        )
+
+        call_kwargs = mock_event_manager.search_detections.call_args.kwargs
+        assert call_kwargs["min_confidence"] == 70
+        # The tool parses ISO strings into datetimes before handing off to the manager.
+        assert isinstance(call_kwargs["start"], datetime)
+        assert isinstance(call_kwargs["end"], datetime)
+        assert call_kwargs["start"].isoformat().startswith("2026-05-28T07:00:00")
+
+    @pytest.mark.asyncio
+    async def test_optional_filters_default_to_none(self, mock_event_manager):
+        from unifi_protect_mcp.tools.events import protect_search_detections
+
+        mock_event_manager.search_detections = AsyncMock(return_value={"detections": [], "count": 0})
+
+        await protect_search_detections(labels=["color:black"])
+
+        call_kwargs = mock_event_manager.search_detections.call_args.kwargs
+        assert call_kwargs["min_confidence"] is None
+        assert call_kwargs["start"] is None
+        assert call_kwargs["end"] is None
+
+    @pytest.mark.asyncio
+    async def test_unparseable_start_end_coerce_to_none(self, mock_event_manager):
+        # Mirrors protect_list_events/list_smart_detections: an unparseable ISO
+        # timestamp is coerced to None (no bound) rather than raising.
+        from unifi_protect_mcp.tools.events import protect_search_detections
+
+        mock_event_manager.search_detections = AsyncMock(return_value={"detections": [], "count": 0})
+
+        result = await protect_search_detections(labels=["color:black"], start="not-a-date", end="garbage")
+
+        assert result["success"] is True
+        call_kwargs = mock_event_manager.search_detections.call_args.kwargs
+        assert call_kwargs["start"] is None
+        assert call_kwargs["end"] is None
+
+    @pytest.mark.asyncio
     async def test_defaults_passed_through(self, mock_event_manager):
         from unifi_protect_mcp.tools.events import protect_search_detections
 

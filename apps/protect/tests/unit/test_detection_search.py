@@ -66,6 +66,83 @@ class TestSearchDetections:
         assert ("orderDirection", "ASC") in params
 
     @pytest.mark.asyncio
+    async def test_min_confidence_appended(self, mock_cm):
+        mock_cm.client.api_request.return_value = {"events": []}
+
+        await _make_manager(mock_cm).search_detections(
+            labels=["color:black"],
+            limit=50,
+            order="desc",
+            exclude_motion=True,
+            min_confidence=70,
+        )
+
+        params = mock_cm.client.api_request.await_args.kwargs["params"]
+        assert ("minConfidence", "70") in params
+
+    @pytest.mark.asyncio
+    async def test_min_confidence_zero_is_accepted(self, mock_cm):
+        mock_cm.client.api_request.return_value = {"events": []}
+
+        await _make_manager(mock_cm).search_detections(
+            labels=["color:black"],
+            limit=50,
+            order="desc",
+            exclude_motion=True,
+            min_confidence=0,
+        )
+
+        params = mock_cm.client.api_request.await_args.kwargs["params"]
+        assert ("minConfidence", "0") in params
+
+    @pytest.mark.asyncio
+    async def test_start_end_serialized_as_epoch_millis(self, mock_cm):
+        from datetime import datetime, timezone
+
+        mock_cm.client.api_request.return_value = {"events": []}
+
+        await _make_manager(mock_cm).search_detections(
+            labels=["color:black"],
+            limit=50,
+            order="desc",
+            exclude_motion=True,
+            start=datetime(2026, 5, 28, 7, 0, 0, tzinfo=timezone.utc),
+            end=datetime(2026, 6, 4, 13, 51, 59, 999000, tzinfo=timezone.utc),
+        )
+
+        params = mock_cm.client.api_request.await_args.kwargs["params"]
+        # detection-search wants epoch-millis (captured live from the Find Anything UI).
+        assert ("start", "1779951600000") in params
+        assert ("end", "1780581119999") in params
+
+    @pytest.mark.asyncio
+    async def test_optional_filters_omitted_by_default(self, mock_cm):
+        mock_cm.client.api_request.return_value = {"events": []}
+
+        await _make_manager(mock_cm).search_detections(
+            labels=["color:black"],
+            limit=50,
+            order="desc",
+            exclude_motion=True,
+        )
+
+        keys = [key for key, _ in mock_cm.client.api_request.await_args.kwargs["params"]]
+        assert "minConfidence" not in keys
+        assert "start" not in keys
+        assert "end" not in keys
+
+    @pytest.mark.asyncio
+    async def test_rejects_min_confidence_out_of_range(self, mock_cm):
+        with pytest.raises(ValueError):
+            await _make_manager(mock_cm).search_detections(
+                labels=["color:black"],
+                limit=50,
+                order="desc",
+                exclude_motion=True,
+                min_confidence=150,
+            )
+
+    @pytest.mark.asyncio
     async def test_coalesces_events_into_detections(self, mock_cm):
         mock_cm.client.api_request.return_value = {
             "events": [

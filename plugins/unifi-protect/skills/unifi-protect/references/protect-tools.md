@@ -1,4 +1,4 @@
-# Protect Server Tool Reference (56 tools)
+# Protect Server Tool Reference (58 tools)
 
 Complete reference for `protect_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Protect controls physical security hardware.
 

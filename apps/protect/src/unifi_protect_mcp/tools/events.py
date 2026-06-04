@@ -321,14 +321,33 @@ async def protect_search_detections(
         bool,
         Field(description="When true (default), exclude plain motion events so only smart detections are returned."),
     ] = True,
+    min_confidence: Annotated[
+        Optional[int],
+        Field(description="Minimum confidence score (0-100) to include. Omit to apply no confidence filter."),
+    ] = None,
+    start: Annotated[
+        Optional[str],
+        Field(
+            description="Only include detections at/after this time, as an ISO 8601 timestamp (e.g., 2026-03-17T00:00:00Z). Omit for no lower bound."
+        ),
+    ] = None,
+    end: Annotated[
+        Optional[str],
+        Field(
+            description="Only include detections at/before this time, as an ISO 8601 timestamp (e.g., 2026-03-17T23:59:59Z). Omit for no upper bound."
+        ),
+    ] = None,
 ) -> Dict[str, Any]:
     """Search detections via the controller's detection-search endpoint."""
     logger.info(
-        "protect_search_detections called (labels=%s, limit=%s, order=%s, exclude_motion=%s)",
+        "protect_search_detections called (labels=%s, limit=%s, order=%s, exclude_motion=%s, min_confidence=%s, start=%s, end=%s)",
         labels,
         limit,
         order,
         exclude_motion,
+        min_confidence,
+        start,
+        end,
     )
     try:
         result = await event_manager.search_detections(
@@ -336,6 +355,9 @@ async def protect_search_detections(
             limit=limit,
             order=order,
             exclude_motion=exclude_motion,
+            min_confidence=min_confidence,
+            start=_parse_datetime(start),
+            end=_parse_datetime(end),
         )
         detections = [d.model_dump(exclude_none=True) for d in result["detections"]]
         return {"success": True, "data": {"detections": detections, "count": len(detections)}}

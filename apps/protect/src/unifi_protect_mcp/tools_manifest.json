@@ -1,5 +1,5 @@
 {
-  "count": 56,
+  "count": 58,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -4527,6 +4527,10 @@
       "schema": {
         "input": {
           "properties": {
+            "end": {
+              "description": "Only include detections at/before this time, as an ISO 8601 timestamp (e.g., 2026-03-17T23:59:59Z). Omit for no upper bound.",
+              "type": "string"
+            },
             "exclude_motion": {
               "description": "When true (default), exclude plain motion events so only smart detections are returned.",
               "type": "boolean"
@@ -4539,8 +4543,16 @@
               "description": "Maximum number of detections to return (1-1000, default 100).",
               "type": "integer"
             },
+            "min_confidence": {
+              "description": "Minimum confidence score (0-100) to include. Omit to apply no confidence filter.",
+              "type": "integer"
+            },
             "order": {
               "description": "Result ordering by time: 'desc' (newest first, default) or 'asc' (oldest first).",
+              "type": "string"
+            },
+            "start": {
+              "description": "Only include detections at/after this time, as an ISO 8601 timestamp (e.g., 2026-03-17T00:00:00Z). Omit for no lower bound.",
               "type": "string"
             }
           },

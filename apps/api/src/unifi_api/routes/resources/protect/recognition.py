@@ -194,6 +194,7 @@ async def search_detections(
     search_limit: int = Query(100, ge=1, le=1000),
     order: str = Query("desc"),
     exclude_motion: bool = Query(True),
+    min_confidence: int | None = Query(None, ge=0, le=100),
     limit: int = Query(50, ge=1, le=200),
     cursor: str | None = Query(None),
 ) -> dict:
@@ -214,6 +215,7 @@ async def search_detections(
                 limit=search_limit,
                 order=order,
                 exclude_motion=exclude_motion,
+                min_confidence=min_confidence,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e

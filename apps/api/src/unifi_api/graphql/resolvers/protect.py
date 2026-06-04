@@ -645,9 +645,10 @@ async def _fetch_detection_search(
     limit: int,
     order: str,
     exclude_motion: bool,
+    min_confidence: int | None,
 ) -> list:
     labels_key = ",".join(labels)
-    key = f"protect/detection-search/{controller}/{labels_key}/{limit}/{order}/{exclude_motion}"
+    key = f"protect/detection-search/{controller}/{labels_key}/{limit}/{order}/{exclude_motion}/{min_confidence}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
@@ -667,6 +668,7 @@ async def _fetch_detection_search(
                 limit=limit,
                 order=order,
                 exclude_motion=exclude_motion,
+                min_confidence=min_confidence,
             )
             return list(result.get("detections", []))
 
@@ -1120,6 +1122,7 @@ class ProtectQuery:
         limit: int = 100,
         order: str = "desc",
         exclude_motion: bool = True,
+        min_confidence: int | None = None,
     ) -> list[SmartDetection]:
         ctx: GraphQLContext = info.context
         detections = await _fetch_detection_search(
@@ -1129,6 +1132,7 @@ class ProtectQuery:
             limit,
             order,
             exclude_motion,
+            min_confidence,
         )
         return [SmartDetection.from_manager_output(d) for d in detections]
 

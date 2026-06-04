@@ -46,6 +46,10 @@ _VALID_DETECTION_ORDERS = frozenset({"asc", "desc"})
 _DETECTION_LIMIT_MIN = 1
 _DETECTION_LIMIT_MAX = 1000
 
+# Inclusive bounds for the detection-search minimum-confidence filter (percent).
+_DETECTION_CONFIDENCE_MIN = 0
+_DETECTION_CONFIDENCE_MAX = 100
+
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
     if obj is None:
@@ -809,6 +813,9 @@ class EventManager:
         limit: int,
         order: str,
         exclude_motion: bool,
+        min_confidence: int | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> list[tuple[str, str]]:
         """Validate inputs and build the detection-search query params.
 
@@ -834,10 +841,25 @@ class EventManager:
         if normalized_order not in _VALID_DETECTION_ORDERS:
             raise ValueError(f"Invalid order {order!r}. Valid orders: {sorted(_VALID_DETECTION_ORDERS)}.")
 
+        if min_confidence is not None and not (
+            _DETECTION_CONFIDENCE_MIN <= min_confidence <= _DETECTION_CONFIDENCE_MAX
+        ):
+            raise ValueError(
+                f"min_confidence must be between {_DETECTION_CONFIDENCE_MIN} and "
+                f"{_DETECTION_CONFIDENCE_MAX}, got {min_confidence}."
+            )
+
         params: list[tuple[str, str]] = [("excludeMotion", "true" if exclude_motion else "false")]
         params.extend(("labels", label) for label in normalized_labels)
         params.append(("limit", str(limit)))
         params.append(("orderDirection", normalized_order.upper()))
+        if min_confidence is not None:
+            params.append(("minConfidence", str(min_confidence)))
+        # The controller's detection-search endpoint expects epoch-millisecond bounds.
+        if start is not None:
+            params.append(("start", str(int(start.timestamp() * 1000))))
+        if end is not None:
+            params.append(("end", str(int(end.timestamp() * 1000))))
         return params
 
     async def search_detections(
@@ -847,6 +869,9 @@ class EventManager:
         limit: int,
         order: str,
         exclude_motion: bool,
+        min_confidence: int | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> dict[str, Any]:
         """Search detections via the controller's detection-search endpoint.
 
@@ -855,15 +880,18 @@ class EventManager:
         envelope of :class:`SmartDetection` items parsed from the
         ``{"events": [...]}`` response shape.
 
-        Additional filters (e.g. confidence, time window) are intentionally not
-        wired yet; the keyword-only signature keeps them addable without breaking
-        callers.
+        Optional ``min_confidence`` (0-100) maps to the ``minConfidence`` query
+        param; ``start``/``end`` map to the ``start``/``end`` epoch-millisecond
+        bounds. All three are omitted from the request when ``None``.
         """
         params = self._build_detection_search_params(
             labels=labels,
             limit=limit,
             order=order,
             exclude_motion=exclude_motion,
+            min_confidence=min_confidence,
+            start=start,
+            end=end,
         )
         data = await self._cm.client.api_request("detection-search", method="get", params=params)
         if not isinstance(data, dict):

@@ -1362,7 +1362,7 @@ type ProtectQuery {
   """
   Search detections across cameras via Protect's 'Find Anything' filter vocabulary. Pass labels of the form 'prefix:value' (e.g. 'vehicleType:truck'); use detectionSearchLabels to discover legal values.
   """
-  searchDetections(controller: ID!, labels: [String!]!, limit: Int! = 100, order: String! = "desc", excludeMotion: Boolean! = true): [SmartDetection!]!
+  searchDetections(controller: ID!, labels: [String!]!, limit: Int! = 100, order: String! = "desc", excludeMotion: Boolean! = true, minConfidence: Int = null): [SmartDetection!]!
 
   """The detection-search filter vocabulary ('Find Anything' label groups)."""
   detectionSearchLabels(controller: ID!): DetectionSearchLabels!
