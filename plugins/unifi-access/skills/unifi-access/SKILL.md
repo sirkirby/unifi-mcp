@@ -5,7 +5,7 @@ description: How to manage UniFi Access door control — locks, credentials, vis
 
 # UniFi Access MCP Server
 
-You have access to a UniFi Access MCP server that lets you query and manage a UniFi Access controller. It provides 29 tools covering doors, locks, credentials, visitors, access policies, and events.
+You have access to a UniFi Access MCP server that lets you query and manage a UniFi Access controller. It provides 34 tools covering doors, locks, credentials, visitors, access policies, events, devices, and system health.
 
 ## Tool Discovery
 
@@ -81,4 +81,4 @@ Access readers are network clients — if a reader appears offline, the Network 
 
 ## Tool Reference
 
-For the complete list of all 29 tools organized by category with descriptions, tips, and common scenarios, read `references/access-tools.md`.
+For the complete list of all 34 tools organized by category with descriptions, tips, and common scenarios, read `references/access-tools.md`.

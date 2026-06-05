@@ -5,7 +5,7 @@
   <img src="../../assets/hero-network.svg" alt="UniFi Network MCP Server" width="720">
 </p>
 
-MCP server exposing 169 UniFi Network Controller tools for LLMs, agents, and automation platforms. Query clients, devices, firewall rules, VLANs, VPNs, stats, and more — with safe-by-default permissions and preview-before-confirm for all mutations.
+MCP server exposing 177 UniFi Network Controller tools for LLMs, agents, and automation platforms. Query clients, devices, firewall rules, VLANs, VPNs, Traffic Flows, stats, and more — with safe-by-default permissions and preview-before-confirm for all mutations.
 
 ## Install
 
@@ -66,6 +66,8 @@ Once connected, just ask your AI agent in natural language:
 > "Rename the device at 192.168.1.45 to 'Living Room TV' and show me its traffic stats"
 
 > "What changed on my network in the last 24 hours? Show me new clients and config changes."
+
+> "Show me the largest traffic flows from the last hour and summarize who talked to what."
 
 All mutations (firewall rules, device changes, client blocking) use a **preview-then-confirm** flow — you see exactly what will change before anything is applied.
 
@@ -213,7 +215,7 @@ Each device record now includes additional fields alongside the existing MAC, na
 
 - [Configuration](docs/configuration.md) — Full env var reference, YAML config, controller type detection
 - [Permissions](docs/permissions.md) — Permission system, category defaults, how to enable high-risk tools
-- [Tool Catalog](docs/tools.md) — All 169 tools organized by category
+- [Tool Catalog](docs/tools.md) — All 177 tools organized by category
 - [Transports](docs/transports.md) — stdio, Streamable HTTP, and SSE setup
 - [Troubleshooting](docs/troubleshooting.md) — Connection issues, SSL, missing tools
 

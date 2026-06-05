@@ -5,7 +5,7 @@
   <img src="../../assets/hero-protect.svg" alt="UniFi Protect MCP Server" width="720">
 </p>
 
-MCP server exposing UniFi Protect tools for LLMs, agents, and automation platforms. Query cameras, events, smart detections, recordings, lights, sensors, chimes, Known Faces, and the Alarm Manager -- with safe-by-default permissions and preview-before-confirm for all mutations.
+MCP server exposing UniFi Protect tools for LLMs, agents, and automation platforms. Query cameras, events, smart detections, Find Anything detection search, recordings, lights, sensors, chimes, Known Faces, license plates, and the Alarm Manager -- with safe-by-default permissions and preview-before-confirm for all mutations.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
@@ -61,6 +61,8 @@ Once connected, just ask your AI agent in natural language:
 > "List all cameras that detected motion in the last hour"
 
 > "Show me smart detection events from the front door camera today — people and vehicles only"
+
+> "Find driveway detections for white vans this week"
 
 > "Which cameras have the most motion events this week? Any unusual patterns?"
 
@@ -128,7 +130,7 @@ Add to `claude_desktop_config.json`:
 ## Features
 
 - **Cameras** -- list, inspect, snapshot, RTSP streams, PTZ control, settings, recording toggle, reboot
-- **Events** -- query historical events, smart detections (person/vehicle/animal/package), thumbnails
+- **Events** -- query historical events, smart detections (person/vehicle/animal/package), Find Anything detection search, thumbnails
 - **Real-time streaming** -- websocket event buffer with MCP resource subscriptions and polling
 - **Recordings** -- status, availability, clip export with timelapse support
 - **Known Faces** -- list, rename, merge, and remove face recognition groups
@@ -198,7 +200,7 @@ Compact mode is the recommended default when building summaries or feeding event
 
 - [Configuration](docs/configuration.md) -- Full env var reference, YAML config, Protect-specific options
 - [Permissions](docs/permissions.md) -- Permission system, category defaults, how to enable mutations
-- [Tool Catalog](docs/tools.md) -- All 56 tools organized by category
+- [Tool Catalog](docs/tools.md) -- All 58 tools organized by category
 - [Event Streaming](docs/events.md) -- Real-time event architecture, MCP resources, polling
 - [Troubleshooting](docs/troubleshooting.md) -- Connection issues, SSL, missing tools
 

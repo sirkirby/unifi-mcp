@@ -57,6 +57,11 @@ Once you're signed in:
   - OpenAPI spec: `/v1/openapi.json`
   - Health: `/v1/health`
 
+Current Network and Protect read surfaces include Network Traffic Flows
+(`GET /v1/sites/{site_id}/traffic-flows`, `network.trafficFlows`) and Protect
+Find Anything detection search (`GET /v1/sites/{site_id}/detection-search`,
+`protect.searchDetections`).
+
 First GraphQL query:
 
 ```bash

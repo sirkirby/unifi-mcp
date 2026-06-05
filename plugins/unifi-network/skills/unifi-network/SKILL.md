@@ -1,11 +1,11 @@
 ---
 name: unifi-network
-description: How to manage UniFi network infrastructure — devices, clients, firewall, VPN, routing, WLANs, and statistics. Use this skill when the user mentions UniFi, Ubiquiti, network management, WiFi configuration, firewall rules, port forwarding, VPN, QoS, bandwidth, connected clients, network devices, or any UniFi networking task.
+description: How to manage UniFi network infrastructure — devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, and statistics. Use this skill when the user mentions UniFi, Ubiquiti, network management, WiFi configuration, firewall rules, port forwarding, VPN, QoS, bandwidth, traffic flows, connected clients, network devices, or any UniFi networking task.
 ---
 
 # UniFi Network MCP Server
 
-You have access to a UniFi Network MCP server that lets you query and manage a UniFi Network Controller. It provides 169 tools covering devices, clients, firewall, VPN, routing, WLANs, statistics, and more.
+You have access to a UniFi Network MCP server that lets you query and manage a UniFi Network Controller. It provides 177 tools covering devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, statistics, and more.
 
 ## Tool Discovery
 
@@ -62,6 +62,7 @@ Additional enriched fields: `upgradable` (bool), `connection_network` (VLAN name
 - **`unifi_lookup_by_ip`** — faster than listing all clients when you know the IP
 - **Use filters** — most list tools accept time range, type, and ID parameters
 - **`unifi_get_top_clients`** — fastest way to find bandwidth hogs
+- **`unifi_get_traffic_flows`** — query historical Insights > Flows records when the user asks who talked to what, which ports/protocols were used, or where traffic went
 - **Check health first** — `unifi_get_network_health` for quick "is everything OK?"
 - **Device counts** — use `device_category` field, not `type`, for accurate AP/switch/PDU counts
 
@@ -86,4 +87,4 @@ Cameras and access readers appear as network clients — use `unifi_lookup_by_ip
 
 ## Tool Reference
 
-For the complete list of all 169 tools organized by category with descriptions, tips, and common scenarios, read `references/network-tools.md`.
+For the complete list of all 177 tools organized by category with descriptions, tips, and common scenarios, read `references/network-tools.md`.

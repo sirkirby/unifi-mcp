@@ -81,6 +81,7 @@ Always available, regardless of registration mode.
 
 **Tips:**
 - **Real-time vs historical**: Use `protect_recent_events` for "what just happened?" (instant, from websocket buffer). Use `protect_list_events` for "what happened last Tuesday?" (API query, slower)
+- **Find Anything searches**: Call `protect_detection_search_labels` first, then pass the returned `value` strings to `protect_search_detections` for attribute searches such as vehicle type, color, device, or smart-detection type.
 - Smart detection types: `person`, `vehicle`, `animal`, `package`, `face`, `licensePlate`
 - `min_confidence` parameter filters out low-confidence detections (default threshold: 50)
 - Event types for filtering: `motion`, `smartDetectZone`, `ring`, `sensorMotion`, `sensorContact`, `sensorDoorbell`

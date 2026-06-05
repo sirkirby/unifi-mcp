@@ -63,6 +63,8 @@ A lightweight summary of the buffer: total event count, breakdown by event type,
 | `protect_recent_events` | Websocket buffer | Real-time monitoring with filters |
 | `protect_list_events` | NVR REST API | Historical queries with time ranges |
 | `protect_list_smart_detections` | NVR REST API | Filtered smart detection history |
+| `protect_detection_search_labels` | NVR REST API | Discover Find Anything labels supported by this controller |
+| `protect_search_detections` | NVR REST API | Find Anything searches with labels such as color, vehicle type, detection type, or device |
 | `protect_subscribe_events` | -- | Getting subscription instructions |
 
 ### protect_recent_events vs protect_list_events
@@ -72,6 +74,8 @@ A lightweight summary of the buffer: total event count, breakdown by event type,
 - **`protect_list_events`** queries the NVR's REST API. It can access the full event history stored on disk. Supports filtering by time range, event type, camera, and result limit.
 
 Use `protect_recent_events` for near-real-time monitoring. Use `protect_list_events` for historical analysis.
+
+Use `protect_list_smart_detections` when a simple detection-type timeline is enough. Use `protect_detection_search_labels` followed by `protect_search_detections` when the user asks for Protect's richer Find Anything filters, such as vehicle type, color, device-specific labels, or controller-specific recognition categories. The label `value` fields returned by `protect_detection_search_labels` are safe to pass directly back in the `labels` argument.
 
 ## Recommended Client Pattern
 

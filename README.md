@@ -19,9 +19,9 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 
 | Server | Status | Tools | Package |
 |--------|--------|-------|---------|
-| [Network](apps/network/) | Stable | 169 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
-| [Protect](apps/protect/) | Beta | 43 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
-| [Access](apps/access/) | Beta | 29 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
+| [Network](apps/network/) | Stable | 177 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
+| [Protect](apps/protect/) | Beta | 58 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
+| [Access](apps/access/) | Beta | 34 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 
 ## Cloud Relay
 
@@ -166,10 +166,12 @@ Once connected, just ask your AI agent in natural language:
 > "Show me all clients on the Guest VLAN with their signal strength and data usage"
 > "Create a firewall rule that blocks IoT devices from reaching the internet between midnight and 6 AM"
 > "Audit my firewall policies — are there any redundant or conflicting rules?"
+> "Show me the top traffic flows from the last hour and group them by destination"
 
 **Protect**
 > "List all cameras that detected motion in the last hour"
 > "Show me smart detection events from the front door camera today — people and vehicles only"
+> "Find driveway detections for white vans this week"
 
 **Access**
 > "Who badged into the office today? Show me a timeline of all door access events"
@@ -229,9 +231,9 @@ This is a monorepo with shared packages:
 
 ```
 apps/
-  network/          # UniFi Network MCP server (stable, 169 tools)
-  protect/          # UniFi Protect MCP server (beta, 56 tools)
-  access/           # UniFi Access MCP server (beta, 29 tools)
+  network/          # UniFi Network MCP server (stable, 177 tools)
+  protect/          # UniFi Protect MCP server (beta, 58 tools)
+  access/           # UniFi Access MCP server (beta, 34 tools)
   worker/           # Cloudflare Worker gateway + npm CLI
 packages/
   unifi-core/       # Shared UniFi connectivity (auth, detection, retry)

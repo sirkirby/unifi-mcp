@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Access MCP server exposes 29 tools, all prefixed with `access_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Access MCP server exposes 34 tools, all prefixed with `access_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `access_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_access_mcp/tools_manifest.json`.
 
@@ -48,7 +48,7 @@ In lazy mode, an additional meta-tool is available:
 - `access_create_credential` -- Create NFC card, PIN, or mobile credential. Confirm required. Proxy session only.
 - `access_revoke_credential` -- Permanently revoke a credential. Confirm required. Proxy session only.
 
-## Visitors (3 tools)
+## Visitors (4 tools)
 
 - `access_list_visitors` -- List all visitor passes with name, status, time range, and doors
 - `access_get_visitor` -- Detailed visitor pass info: name, access period, doors, status

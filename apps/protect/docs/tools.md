@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Protect MCP server exposes 56 tools (including 5 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Protect MCP server exposes 58 tools (including 5 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `protect_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`.
 
@@ -31,12 +31,14 @@ In lazy mode, an additional meta-tool is available:
 - `protect_ptz_preset` -- Move PTZ camera to a saved preset position (confirm required)
 - `protect_reboot_camera` -- Reboot a camera; interrupts active recordings (confirm required)
 
-## Events (7 tools)
+## Events (9 tools)
 
 - `protect_list_events` -- Query events from NVR with filters (time range, type, camera, limit)
 - `protect_get_event` -- Get single event details by ID
 - `protect_get_event_thumbnail` -- Get event thumbnail as base64 JPEG
 - `protect_list_smart_detections` -- List smart detections (person, vehicle, animal, package) with confidence filter
+- `protect_detection_search_labels` -- List Find Anything filter labels accepted by this controller
+- `protect_search_detections` -- Search detections across cameras with Find Anything labels such as `vehicleType:truck` or `color:white`
 - `protect_recent_events` -- Get events from the in-memory websocket buffer (fast, no API call)
 - `protect_subscribe_events` -- Get instructions for real-time event subscription via MCP resources
 - `protect_acknowledge_event` -- Mark event as favorite/acknowledged (confirm required)

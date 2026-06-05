@@ -1,11 +1,11 @@
 ---
 name: unifi-protect
-description: How to manage UniFi Protect cameras and NVR — view cameras, smart detections, recordings, snapshots, lights, sensors, Known Faces, and the Alarm Manager. Use this skill when the user mentions UniFi cameras, security cameras, NVR, recordings, motion detection, person detection, face recognition, Known Faces, snapshots, RTSP streams, floodlights, sensors, chimes, arming/disarming the alarm, or any UniFi Protect task.
+description: How to manage UniFi Protect cameras and NVR — view cameras, smart detections, Find Anything detection search, recordings, snapshots, lights, sensors, Known Faces, license plates, and the Alarm Manager. Use this skill when the user mentions UniFi cameras, security cameras, NVR, recordings, motion detection, person detection, vehicle search, face recognition, Known Faces, license plates, snapshots, RTSP streams, floodlights, sensors, chimes, arming/disarming the alarm, or any UniFi Protect task.
 ---
 
 # UniFi Protect MCP Server
 
-You have access to a UniFi Protect MCP server that lets you query and manage a UniFi Protect NVR. It provides 43 tools covering cameras, smart detections, recordings, snapshots, lights, sensors, chimes, Known Faces, and the Alarm Manager (arm/disarm).
+You have access to a UniFi Protect MCP server that lets you query and manage a UniFi Protect NVR. It provides 58 tools covering cameras, smart detections, Find Anything detection search, recordings, snapshots, lights, sensors, chimes, Known Faces, license plates, and the Alarm Manager (arm/disarm).
 
 ## Tool Discovery
 
@@ -49,6 +49,7 @@ All tools return: `{"success": true, "data": ...}`, `{"success": false, "error":
 - **Snapshots:** `protect_get_snapshot` with `include_image=true` returns base64 JPEG inline
 - **RTSP streams:** `protect_get_camera_streams` gives stream URLs for video player integration
 - **Smart detections:** `protect_list_smart_detections` filters by type (person, vehicle, animal, package, face, licensePlate). These are the highest-signal events — prioritize over raw motion.
+- **Find Anything search:** use `protect_detection_search_labels` to discover controller-supported label values, then pass those values to `protect_search_detections` for richer searches by vehicle type, color, device, or other Protect labels.
 - **Event camera names:** All event responses include `camera_name` alongside `camera_id` — no need to call `protect_list_cameras` separately to resolve names.
 - **Real-time events:** `protect_recent_events` reads from websocket buffer instantly (no API call). Buffer holds ~100 events with 5-minute TTL. Use `protect_list_events` for historical queries.
 - **Video export:** `protect_export_clip` returns metadata (not video data — too large for MCP). Max 2 hours, supports timelapse (fps: 4=60x, 8=120x, 20=300x)
@@ -59,6 +60,7 @@ All tools return: `{"success": true, "data": ...}`, `{"success": false, "error":
 
 - **Use `protect_batch` for parallel queries** — biggest performance win. Batch smart detections + events in one call.
 - **Prefer `protect_list_smart_detections` over `protect_list_events`** for security analysis — smart detections are pre-classified (person, vehicle, etc.) and higher signal than raw motion.
+- **Use `protect_search_detections` for Find Anything questions** — if the user asks for "white vans", "animals in the driveway", or other attribute searches, discover labels first and reuse the returned `value` strings.
 - **`protect_recent_events` is fast but small** — only a few minutes of buffered data. For anything beyond real-time monitoring, use `protect_list_events` with time range filters.
 - **Limit results** — event queries default to 30 but can return large payloads. Use `limit` parameter to keep responses focused.
 - **Security digest** — for comprehensive event summaries, use the `security-digest` skill which handles batch calls, severity classification, and cross-product correlation.
@@ -84,4 +86,4 @@ Cameras are network clients — if a camera appears offline, the Network server 
 
 ## Tool Reference
 
-For the complete list of all 43 tools organized by category with descriptions, tips, and common scenarios, read `references/protect-tools.md`.
+For the complete list of all 58 tools organized by category with descriptions, tips, and common scenarios, read `references/protect-tools.md`.
