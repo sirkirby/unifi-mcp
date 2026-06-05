@@ -1164,6 +1164,9 @@ type NetworkQuery {
   """Get a client's current WiFi parameters (signal, rates)."""
   clientWifiDetails(controller: ID!, mac: ID!, site: String! = "default"): ClientWifiDetails
 
+  """Query historical traffic flows (Insights > Flows), paginated."""
+  trafficFlows(controller: ID!, site: String! = "default", withinHours: Int! = 24, timeFrom: Int = null, timeTo: Int = null, searchText: String = null, pageSize: Int! = 100, cursor: String = null): TrafficFlowPage!
+
   """List switch port profiles on the given controller/site (paginated)."""
   portProfiles(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): PortProfilePage!
 
@@ -1715,6 +1718,42 @@ type TopClient {
   totalBytes: Int
 }
 
+"""A single UniFi traffic-flow record."""
+type TrafficFlow {
+  id: String
+  action: String
+  risk: String
+  service: String
+  protocol: String
+  direction: String
+  count: Int
+  durationMilliseconds: Int
+  time: Int
+  flowStartTime: Int
+  flowEndTime: Int
+  bytesTotal: Int
+  bytesRx: Int
+  bytesTx: Int
+  source: TrafficFlowEndpoint!
+  destination: TrafficFlowEndpoint!
+}
+
+"""One side (source or destination) of a traffic flow."""
+type TrafficFlowEndpoint {
+  name: String
+  mac: String
+  ip: String
+  networkName: String
+  zoneName: String
+  domains: [String!]!
+}
+
+"""Paginated page of UniFi traffic flows."""
+type TrafficFlowPage {
+  items: [TrafficFlow!]!
+  nextCursor: String
+}
+
 """A traffic-route policy (V2 /trafficroutes entry)."""
 type TrafficRoute {
   id: ID
@@ -2012,6 +2051,7 @@ Read-only access to UniFi Network resources.
 - `switchPorts: SwitchPorts`  — Get the port-override wrapper for a switch (name/model + per-port overrides).
 - `systemInfo: SystemInfo`  — Get controller system info (build, uptime, hardware).
 - `topClients: [TopClient!]!`  — List top-traffic clients within a window.
+- `trafficFlows: TrafficFlowPage!`  — Query historical traffic flows (Insights > Flows), paginated.
 - `trafficRoute: TrafficRoute`  — Look up a single traffic-route policy by id.
 - `trafficRoutes: TrafficRoutePage!`  — List traffic-route policies (V2 /trafficroutes) (paginated).
 - `userGroup: UserGroup`  — Look up a single QoS user group by id.

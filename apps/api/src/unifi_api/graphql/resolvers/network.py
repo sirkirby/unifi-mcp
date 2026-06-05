@@ -18,6 +18,8 @@ follow-up dispatches.
 
 from __future__ import annotations
 
+import base64
+import time
 from typing import Any
 
 import strawberry
@@ -85,6 +87,7 @@ from unifi_api.graphql.types.network.system import (
     SystemInfo,
     TopClient,
 )
+from unifi_api.graphql.types.network.traffic_flow import TrafficFlow, TrafficFlowPage
 from unifi_api.graphql.types.network.voucher import Voucher
 from unifi_api.graphql.types.network.vpn import VpnClient, VpnServer
 from unifi_api.graphql.types.network.wlan import Wlan
@@ -623,6 +626,32 @@ async def _fetch_traffic_routes(
             return list(await mgr.get_traffic_routes())
 
     return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_traffic_flows(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    query: Any,
+) -> dict:
+    # Not routed through ctx.cache: the manager owns its own short-TTL cache,
+    # and results are specific to the (page, query) pair rather than a stable
+    # per-(controller, site) snapshot like the other LIST fetches.
+    async with ctx.sessionmaker() as session:
+        mgr = await ctx.manager_factory.get_domain_manager(
+            session,
+            controller,
+            "network",
+            "traffic_flow_manager",
+        )
+        cm = await ctx.manager_factory.get_connection_manager(
+            session,
+            controller,
+            "network",
+        )
+        if cm.site != site:
+            await cm.set_site(site)
+        return await mgr.get_traffic_flows(query)
 
 
 # ---- Cluster C fetch helpers (firewall / qos / dpi / cf / acl / oon / pf) -
@@ -2000,6 +2029,27 @@ def _decode_cursor(cursor: str | None):
         return Cursor.decode(cursor)
     except InvalidCursor:
         raise ValueError("invalid cursor")
+
+
+# ---- Traffic-flows cursor helpers ----------------------------------------
+#
+# The traffic-flows manager is already server-paginated (it owns page_number
+# / has_next), so the list-style ``paginate()`` is the wrong tool here. The
+# opaque cursor instead encodes the controller's 0-based page number.
+
+
+def _encode_flow_cursor(page: int) -> str:
+    return base64.urlsafe_b64encode(str(page).encode()).decode()
+
+
+def _decode_flow_cursor(cursor: str | None) -> int:
+    if not cursor:
+        return 0
+    try:
+        page = int(base64.urlsafe_b64decode(cursor.encode()).decode())
+    except Exception:
+        raise ValueError("invalid cursor")
+    return max(0, page)
 
 
 @strawberry.type(description="Read-only access to UniFi Network resources.")
@@ -3732,6 +3782,47 @@ class NetworkQuery:
         if raw is None:
             return None
         return ClientWifiDetails.from_manager_output(raw)
+
+    # ---- Traffic-flows domain -------------------------------------------
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Query historical traffic flows (Insights > Flows), paginated.",
+    )
+    async def traffic_flows(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+        within_hours: int = 24,
+        time_from: int | None = None,
+        time_to: int | None = None,
+        search_text: str | None = None,
+        page_size: int = 100,
+        cursor: str | None = None,
+    ) -> TrafficFlowPage:
+        from unifi_core.network.models.traffic_flows import TrafficFlowQuery
+
+        ctx: GraphQLContext = info.context
+        page = _decode_flow_cursor(cursor)
+        if (time_from is None) != (time_to is None):
+            raise ValueError("provide both time_from and time_to, or use within_hours")
+        if time_from is None:
+            if within_hours < 1 or within_hours > 8760:
+                raise ValueError("within_hours must be between 1 and 8760")
+            now_ms = int(time.time() * 1000)
+            time_from, time_to = now_ms - within_hours * 3600 * 1000, now_ms
+        query = TrafficFlowQuery(
+            time_from=time_from,
+            time_to=time_to,
+            page_number=page,
+            page_size=max(1, min(page_size, 1000)),
+            search_text=search_text,
+        )
+        result = await _fetch_traffic_flows(ctx, controller, site, query)
+        items = [TrafficFlow.from_manager_output(f) for f in result.get("flows", [])]
+        next_cursor = _encode_flow_cursor(page + 1) if result.get("has_next") else None
+        return TrafficFlowPage(items=items, next_cursor=next_cursor)
 
     # ---- Switch domain ---------------------------------------------------
 

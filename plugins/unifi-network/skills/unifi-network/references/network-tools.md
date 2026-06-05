@@ -1,4 +1,4 @@
-# Network Server Tool Reference (176 tools)
+# Network Server Tool Reference (177 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 
@@ -11,6 +11,7 @@ Complete reference for `unifi_*` tools. All read tools are always available. Mut
 - [DNS Records](#dns-records)
 - [Port Forwarding](#port-forwarding)
 - [QoS / Traffic Shaping](#qos--traffic-shaping)
+- [Traffic Flows](#traffic-flows)
 - [Traffic Routes](#traffic-routes)
 - [VPN](#vpn)
 - [Routing](#routing)
@@ -212,6 +213,18 @@ Manage static DNS A/AAAA/CNAME/MX/TXT/NS/SRV records on the controller's local D
 | `unifi_toggle_qos_rule_enabled` | Mutate | Enable or disable a specific QoS rule by ID. |
 | `unifi_update_qos_rule` | Mutate | Update specific fields of an existing QoS rule. |
 <!-- /AUTO:tools:qos -->
+
+---
+
+## Traffic Flows
+
+<!-- AUTO:tools:traffic_flows -->
+1 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `unifi_get_traffic_flows` | Read | Query historical UniFi Traffic Flows (Insights > Flows). |
+<!-- /AUTO:tools:traffic_flows -->
 
 ---
 

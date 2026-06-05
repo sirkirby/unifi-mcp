@@ -147,6 +147,9 @@ from unifi_api.routes.resources.network import (
     system as net_system_routes,
 )
 from unifi_api.routes.resources.network import (
+    traffic_flows as net_traffic_flows_routes,
+)
+from unifi_api.routes.resources.network import (
     user_groups as net_user_groups_routes,
 )
 from unifi_api.routes.resources.network import (
@@ -495,6 +498,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_user_groups_routes,
         net_lookup_routes,
         net_routes_routes,
+        net_traffic_flows_routes,
         net_dns_routes,
         net_vpn_routes,
         net_ap_groups_routes,
