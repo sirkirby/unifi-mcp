@@ -61,6 +61,21 @@ class TestDetectionSearchLabelsFromController:
         assert labels.devices[0].value == "camera:abc123"
         assert labels.door_access[0].value == "doorAccess:granted"
 
+    def test_uses_prefixed_label_when_controller_value_is_suffix_only(self):
+        labels = from_controller(
+            {
+                "colors": [{"label": "color:black", "value": "black"}],
+                "vehicleTypes": [{"label": "vehicleType:truck", "value": "truck"}],
+                "smartDetectTypes": [{"label": "smartDetectType:animal", "value": "animal"}],
+                "devices": [{"label": "camera:abc123", "value": "abc123"}],
+            }
+        )
+
+        assert labels.colors[0].value == "color:black"
+        assert labels.vehicle_types[0].value == "vehicleType:truck"
+        assert labels.smart_detect_types[0].value == "smartDetectType:animal"
+        assert labels.devices[0].value == "camera:abc123"
+
     def test_items_are_label_value_models(self):
         labels = from_controller(self._raw())
         assert isinstance(labels.colors[0], DetectionSearchLabelValue)

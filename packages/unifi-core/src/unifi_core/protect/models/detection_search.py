@@ -85,7 +85,14 @@ def _label_values(raw: Any, *keys: str) -> list[DetectionSearchLabelValue]:
     for entry in group:
         if not isinstance(entry, dict):
             continue
-        items.append(DetectionSearchLabelValue(label=entry.get("label"), value=entry.get("value")))
+        label = entry.get("label")
+        value = entry.get("value")
+        # Some firmware returns the usable prefix:value token in "label" while
+        # "value" contains only the suffix. Expose a value callers can pass
+        # directly back to detection-search.
+        if isinstance(label, str) and ":" in label and not (isinstance(value, str) and ":" in value):
+            value = label
+        items.append(DetectionSearchLabelValue(label=label, value=value))
     return items
 
 
