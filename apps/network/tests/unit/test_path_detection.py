@@ -10,12 +10,41 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 from aioresponses import CallbackResult, aioresponses
+from yarl import URL
 
 from unifi_core.network.managers.connection_manager import (
     ConnectionManager,
     detect_unifi_os_proactively,
     detect_with_retry,
 )
+
+
+def _mock_url(base_url: str, path: str = "") -> URL:
+    """Mirror aiohttp/yarl URL normalization for aioresponses matching."""
+    return URL(f"{base_url}{path}")
+
+
+class _Aiohttp314CompatibleResponse(aiohttp.ClientResponse):
+    """Test shim until aioresponses supports aiohttp 3.14's stream_writer arg."""
+
+    def __init__(self, method, url, **kwargs):
+        kwargs.setdefault("stream_writer", MagicMock(output_size=0))
+        super().__init__(method, url, **kwargs)
+
+
+def _callback_result(**kwargs) -> CallbackResult:
+    kwargs.setdefault("response_class", _Aiohttp314CompatibleResponse)
+    return CallbackResult(**kwargs)
+
+
+def _mock_get(mock: aioresponses, base_url: str, path: str = "", **kwargs) -> None:
+    kwargs.setdefault("response_class", _Aiohttp314CompatibleResponse)
+    mock.get(_mock_url(base_url, path), **kwargs)
+
+
+def _mock_post(mock: aioresponses, base_url: str, path: str = "", **kwargs) -> None:
+    kwargs.setdefault("response_class", _Aiohttp314CompatibleResponse)
+    mock.post(_mock_url(base_url, path), **kwargs)
 
 
 class TestPathDetection:
@@ -38,8 +67,10 @@ class TestPathDetection:
 
         with aioresponses() as mock:
             # Mock UniFi OS endpoint to succeed
-            mock.get(
-                f"{base_url}/proxy/network/api/self/sites",
+            _mock_get(
+                mock,
+                base_url,
+                "/proxy/network/api/self/sites",
                 status=200,
                 payload={"meta": {"rc": "ok"}, "data": []},
             )
@@ -65,11 +96,13 @@ class TestPathDetection:
 
         with aioresponses() as mock:
             # Mock UniFi OS endpoint to fail
-            mock.get(f"{base_url}/proxy/network/api/self/sites", status=404)
+            _mock_get(mock, base_url, "/proxy/network/api/self/sites", status=404)
 
             # Mock standard endpoint to succeed
-            mock.get(
-                f"{base_url}/api/self/sites",
+            _mock_get(
+                mock,
+                base_url,
+                "/api/self/sites",
                 status=200,
                 payload={"meta": {"rc": "ok"}, "data": []},
             )
@@ -93,9 +126,9 @@ class TestPathDetection:
 
         with aioresponses() as mock:
             # Mock both endpoints to fail
-            mock.get(f"{base_url}/proxy/network/api/self/sites", status=404)
+            _mock_get(mock, base_url, "/proxy/network/api/self/sites", status=404)
 
-            mock.get(f"{base_url}/api/self/sites", status=404)
+            _mock_get(mock, base_url, "/api/self/sites", status=404)
 
             async with aiohttp.ClientSession() as session:
                 result = await detect_unifi_os_proactively(session=session, base_url=base_url, timeout=5)
@@ -117,14 +150,18 @@ class TestPathDetection:
 
         with aioresponses() as mock:
             # Mock both endpoints to succeed
-            mock.get(
-                f"{base_url}/proxy/network/api/self/sites",
+            _mock_get(
+                mock,
+                base_url,
+                "/proxy/network/api/self/sites",
                 status=200,
                 payload={"meta": {"rc": "ok"}, "data": []},
             )
 
-            mock.get(
-                f"{base_url}/api/self/sites",
+            _mock_get(
+                mock,
+                base_url,
+                "/api/self/sites",
                 status=200,
                 payload={"meta": {"rc": "ok"}, "data": []},
             )
@@ -150,14 +187,18 @@ class TestPathDetection:
 
         with aioresponses() as mock:
             # Mock timeout on UniFi OS endpoint
-            mock.get(
-                f"{base_url}/proxy/network/api/self/sites",
+            _mock_get(
+                mock,
+                base_url,
+                "/proxy/network/api/self/sites",
                 exception=asyncio.TimeoutError("Request timeout"),
             )
 
             # Mock timeout on standard endpoint
-            mock.get(
-                f"{base_url}/api/self/sites",
+            _mock_get(
+                mock,
+                base_url,
+                "/api/self/sites",
                 exception=asyncio.TimeoutError("Request timeout"),
             )
 
@@ -193,7 +234,7 @@ class TestPathDetection:
                 nonlocal attempt_count
                 attempt_count += 1
                 # Always return 404 for proxy endpoint
-                return CallbackResult(status=404)
+                return _callback_result(status=404)
 
             def standard_callback(url, **kwargs):
                 nonlocal attempt_count
@@ -202,15 +243,15 @@ class TestPathDetection:
                 current_attempt = attempt_count // 2
                 if current_attempt >= 3:
                     # Third attempt: standard succeeds
-                    return CallbackResult(
+                    return _callback_result(
                         status=200,
                         payload={"meta": {"rc": "ok"}, "data": []},
                     )
                 # First 2 attempts: return 404
-                return CallbackResult(status=404)
+                return _callback_result(status=404)
 
-            mock.get(f"{base_url}/proxy/network/api/self/sites", callback=proxy_callback, repeat=True)
-            mock.get(f"{base_url}/api/self/sites", callback=standard_callback, repeat=True)
+            _mock_get(mock, base_url, "/proxy/network/api/self/sites", callback=proxy_callback, repeat=True)
+            _mock_get(mock, base_url, "/api/self/sites", callback=standard_callback, repeat=True)
 
             async with aiohttp.ClientSession() as session:
                 result = await detect_with_retry(session, base_url, max_retries=3, timeout=5)
@@ -249,8 +290,8 @@ class TestPathDetection:
 
         with aioresponses() as mock:
             # Both endpoints always raise errors
-            mock.get(f"{base_url}/proxy/network/api/self/sites", callback=error_callback, repeat=True)
-            mock.get(f"{base_url}/api/self/sites", callback=error_callback, repeat=True)
+            _mock_get(mock, base_url, "/proxy/network/api/self/sites", callback=error_callback, repeat=True)
+            _mock_get(mock, base_url, "/api/self/sites", callback=error_callback, repeat=True)
 
             async with aiohttp.ClientSession() as session:
                 with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
@@ -291,14 +332,14 @@ class TestPathDetection:
             nonlocal pre_login_probe_count
             pre_login_probe_count += 1
             # Return 200 to indicate UniFi OS
-            return CallbackResult(status=200, body="<html>UniFi OS</html>")
+            return _callback_result(status=200, body="<html>UniFi OS</html>")
 
         def post_login_proxy_callback(url, **kwargs):
             """Track post-login proxy endpoint probes."""
             nonlocal post_login_probe_count
             post_login_probe_count += 1
             # Return success for proxy endpoint (UniFi OS)
-            return CallbackResult(
+            return _callback_result(
                 status=200,
                 payload={"meta": {"rc": "ok"}, "data": []},
             )
@@ -308,7 +349,7 @@ class TestPathDetection:
             nonlocal post_login_probe_count
             post_login_probe_count += 1
             # Return 404 for standard endpoint
-            return CallbackResult(status=404)
+            return _callback_result(status=404)
 
         # Create connection manager
         manager = ConnectionManager(
@@ -330,19 +371,21 @@ class TestPathDetection:
 
         with aioresponses() as mock:
             # Pre-login detection endpoint (base URL)
-            mock.get(base_url, callback=pre_login_callback, repeat=True)
+            _mock_get(mock, base_url, callback=pre_login_callback, repeat=True)
             # Post-login detection endpoints
-            mock.get(f"{base_url}/proxy/network/api/self/sites", callback=post_login_proxy_callback, repeat=True)
-            mock.get(f"{base_url}/api/self/sites", callback=post_login_standard_callback, repeat=True)
-            # Mock login endpoint (UniFi OS uses /api/auth/login)
-            # Need both with and without explicit port for URL normalization
-            mock.post(
-                f"{base_url}/api/auth/login",
-                payload={"unique_id": "test", "first_name": "Test", "last_name": "User"},
+            _mock_get(
+                mock,
+                base_url,
+                "/proxy/network/api/self/sites",
+                callback=post_login_proxy_callback,
                 repeat=True,
             )
-            mock.post(
-                "https://192.168.1.1/api/auth/login",
+            _mock_get(mock, base_url, "/api/self/sites", callback=post_login_standard_callback, repeat=True)
+            # Mock login endpoint (UniFi OS uses /api/auth/login)
+            _mock_post(
+                mock,
+                base_url,
+                "/api/auth/login",
                 payload={"unique_id": "test", "first_name": "Test", "last_name": "User"},
                 repeat=True,
             )

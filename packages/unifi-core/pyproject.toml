@@ -4,7 +4,7 @@ dynamic = ["version"]
 description = "UniFi controller connectivity: auth, detection, retry, exceptions"
 requires-python = ">=3.13"
 dependencies = [
-    "aiohttp>=3.13.4",
+    "aiohttp>=3.14.0",
     "pydantic>=2.10.0",
     "pyyaml>=6.0",
 ]
@@ -16,7 +16,7 @@ dependencies = [
 # mode hit prod historically. Versions floor at the lowest tested.
 [project.optional-dependencies]
 network = ["aiounifi>=88"]
-protect = ["uiprotect>=10.5.0"]
+protect = ["uiprotect>=11.0.1"]
 access = ["py-unifi-access>=1.1.1"]
 
 [dependency-groups]

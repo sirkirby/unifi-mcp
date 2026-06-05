@@ -5,8 +5,8 @@ description = "MCP relay: bridges local MCP servers to a Cloudflare Worker gatew
 requires-python = ">=3.13"
 dependencies = [
     "websockets>=13.0",
-    "mcp[cli]>=1.26.0,<2",
-    "aiohttp>=3.13.4",
+    "mcp[cli]>=1.27.2,<2",
+    "aiohttp>=3.14.0",
     "python-dotenv>=1.2.2",
     "unifi-mcp-shared>=0.5.0,<0.6",
 ]

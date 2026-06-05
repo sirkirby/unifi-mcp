@@ -5,7 +5,7 @@ description = "Shared MCP server patterns: permissions, confirmation, lazy loadi
 requires-python = ">=3.13"
 dependencies = [
     "unifi-core>=0.3.2,<0.4",
-    "mcp[cli]>=1.26.0,<2",
+    "mcp[cli]>=1.27.2,<2",
     "omegaconf>=2.3.0",
     "pyyaml>=6.0",
     "jsonschema>=4.0.0",

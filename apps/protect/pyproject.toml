@@ -9,8 +9,8 @@ dependencies = [
     # Protect managers in unifi-core import uiprotect; pull it in via the
     # [protect] extra rather than declaring uiprotect here directly.
     "unifi-core[protect]>=0.3.2,<0.4",
-    "mcp[cli]>=1.26.0,<2",
-    "aiohttp>=3.13.4",
+    "mcp[cli]>=1.27.2,<2",
+    "aiohttp>=3.14.0",
     "pyyaml>=6.0",
     "python-dotenv>=1.2.2",
     "omegaconf>=2.3.0",
@@ -57,7 +57,7 @@ dev = [
     "pytest-xdist>=3.6.0",
     "aioresponses>=0.7.0",
     "pytest-cov>=4.0.0",
-    "ruff>=0.8.0",
+    "ruff>=0.15.15",
 ]
 
 [tool.rye]
@@ -67,7 +67,7 @@ dev-dependencies = [
     "pytest-asyncio>=0.21.0",
     "aioresponses>=0.7.0",
     "pytest-cov>=4.0.0",
-    "ruff>=0.8.0",
+    "ruff>=0.15.15",
 ]
 
 [project.scripts]
