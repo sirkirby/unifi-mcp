@@ -4,9 +4,13 @@ Reads the modern UniFi-OS alarm surface via ``uiprotect``'s ``api_request`` with
 an ``api_path`` override (lib-native; no bespoke client). This is the AI-capable
 Alarm Manager, distinct from the legacy Protect automations in ``alarm_manager``.
 
-**Requires a SuperAdmin credential.** A Protect-scoped account receives 403
-Forbidden, which is surfaced as :class:`AlarmManagerPermissionError` carrying
-actionable guidance so callers (and agents) can self-diagnose.
+A Protect-scoped account receives 403 Forbidden, surfaced as
+:class:`AlarmManagerPermissionError` with actionable guidance. An adequate
+(e.g. SuperAdmin) credential is necessary but not sufficient: on a console where
+Protect has not migrated to the Alarm Manager, this endpoint returns ``200 []``
+even when legacy automations exist, so an empty result here does not mean
+"no rules." :class:`~unifi_core.protect.managers.alarm_facade.AlarmRulesFacade`
+falls back to the legacy automations API on both 403 and empty/4xx for this reason.
 """
 
 import logging

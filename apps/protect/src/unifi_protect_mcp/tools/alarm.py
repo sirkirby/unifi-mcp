@@ -36,10 +36,15 @@ from unifi_protect_mcp.runtime import alarm_facade, alarm_manager, server
 logger = logging.getLogger(__name__)
 
 # Standard MCP _meta key (reverse-DNS, project-owned) signalling that the active
-# alarm backend is the limited one — AI-powered alarms are not visible without a
-# SuperAdmin credential. Anchored in the MCP _meta convention (see tasks.py).
+# alarm backend is the legacy one — used when the UniFi-OS Alarm Manager (v2)
+# returns no rules on this console, so any AI-powered alarms are not included.
+# Anchored in the MCP _meta convention (see tasks.py).
 _ALARM_COVERAGE_META = "com.github.sirkirby.unifi-mcp/alarm-coverage"
-_ALARM_COVERAGE_NOTICE = "AI-powered alarms are not included; viewing them requires a SuperAdmin credential."
+_ALARM_COVERAGE_NOTICE = (
+    "Showing legacy Protect automations: the UniFi-OS Alarm Manager (/api/v2/alarms) "
+    "returned no rules or is unavailable on this console, so AI-powered alarms "
+    "(where supported) are not included."
+)
 
 
 @server.tool(
