@@ -14,29 +14,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Optional
 
-from pydantic import BaseModel, Field, model_validator
-
-
-def _require_non_empty_actions(body: dict) -> None:
-    """Reject rule bodies that would brick the Protect UI.
-
-    Protect's controller accepts ``actions: []`` (and even a body with no
-    ``actions`` key at all) and returns a normal-looking rule on POST. But
-    the resulting rule cannot be opened in the Protect web UI -- clicking
-    it shows "We're Unable to Complete Your Request" and the rule becomes
-    only deletable via API. Found via live-test 2026-05-27. Reject here so
-    the failure mode never reaches a homelab.
-
-    ``body`` is already type-validated as ``dict`` by the calling Pydantic
-    model field, so this helper does not re-check that.
-    """
-    actions = body.get("actions")
-    if not isinstance(actions, list) or len(actions) == 0:
-        raise ValueError(
-            "body.actions must be a non-empty list. Protect accepts rules "
-            "with no actions, but the resulting rule cannot be opened in "
-            "the Protect UI."
-        )
+from pydantic import BaseModel, Field
 
 
 class PtzMoveInput(BaseModel):
@@ -129,11 +107,6 @@ class AlarmUpdateRuleInput(BaseModel):
         )
     )
 
-    @model_validator(mode="after")
-    def _check_actions(self) -> "AlarmUpdateRuleInput":
-        _require_non_empty_actions(self.body)
-        return self
-
 
 class AlarmCreateRuleInput(BaseModel):
     """Input for ``protect_alarm_create_rule``.
@@ -157,11 +130,6 @@ class AlarmCreateRuleInput(BaseModel):
             "in the Protect UI."
         )
     )
-
-    @model_validator(mode="after")
-    def _check_actions(self) -> "AlarmCreateRuleInput":
-        _require_non_empty_actions(self.body)
-        return self
 
 
 class AlarmDeleteRuleInput(BaseModel):

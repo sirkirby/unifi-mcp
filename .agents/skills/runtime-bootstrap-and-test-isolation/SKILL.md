@@ -246,3 +246,5 @@ Key invariant: **tools are always registered and visible regardless of policy ga
 **DI violation in shared packages** — `unifi-mcp-shared` and `unifi-core` must never import application-level config. All context flows in via `setup_permissioned_tool()`. If you see `from app.settings import ...` inside these packages, that is a regression.
 
 **Missing `confirm` parameter breaks bypass mode.** Every mutating tool must declare `confirm: bool = False`. Bypass injection inspects the function signature; if the param is missing, bypass mode silently fails to inject `confirm=True`.
+
+**Worktree `uv sync --all-packages` requirement.** New git worktrees do not inherit the monorepo's installed package set. Before running focused pytest in a new worktree, run `uv sync --all-packages` from the worktree root; otherwise cross-package imports (`from unifi_core...`, `from unifi_mcp_shared...`) fail with `ModuleNotFoundError`. Note: `uv sync` (without `--all-packages`) installs only the current package and will not install workspace siblings.

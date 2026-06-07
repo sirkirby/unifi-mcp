@@ -102,40 +102,64 @@ class Update<Domain>(<Domain>Base):
 
 ## Procedure 3: Implement Field Validation in the Manager
 
-The manager validates that update calls only send recognized field names. Implementation is manager-local, inline in your domain manager class (not a centralized validator module).
+Field validation is **model-local**: the model file exposes a `MUTABLE_FIELDS`
+frozenset and optionally a module-level `validate_update_fields()` function.
+There is no shared validator module and no manager instance method — each
+domain model owns its own validation helpers.
 
-1. **Implement validation logic** in `managers/<domain>_manager.py` to check
-   field names against the model schema:
+1. **Export `MUTABLE_FIELDS` from the model file** — the frozenset of field
+   names the update tool accepts. Fields marked read-only (e.g., `id`,
+   `created_at`) are excluded:
 
    ```python
-   from ..models.<domain> import Create<Domain>, Update<Domain>
-
-   class <Domain>Manager(BaseManager):
-       def _validate_update_fields(self, data: dict, model_class):
-           """Validate that update data only contains recognized fields."""
-           allowed_fields = set(model_class.model_fields.keys())
-           provided_fields = set(data.keys())
-           invalid_fields = provided_fields - allowed_fields
-           if invalid_fields:
-               raise ValueError(f"Invalid fields: {invalid_fields}")
+   # In models/<domain>.py
+   MUTABLE_FIELDS = frozenset(
+       name for name, info in <Domain>Base.model_fields.items()
+       if (info.json_schema_extra or {}).get("mutable") is not False
+   )
    ```
 
-2. **Add validation at the top of the update method:**
+   Alternatively, list them explicitly for clarity.
+
+2. **Add a module-level `validate_update_fields()` helper** (optional but
+   recommended for domains with type-sensitive fields):
 
    ```python
-   async def update_<domain>(self, <domain>_id: str, data: dict) -> dict:
-       self._validate_update_fields(data, Update<Domain>)
-       # ... existing fetch-merge-put logic
+   from pydantic import TypeAdapter, ValidationError
+   from typing import Dict, Any, Tuple, Optional
+
+   def validate_update_fields(fields: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+       """Type-check a partial update dict against the model field annotations.
+
+       Field names are assumed to have been validated against MUTABLE_FIELDS
+       separately. Returns (is_valid, error_message).
+       """
+       for field_name, value in fields.items():
+           field_info = <Domain>Base.model_fields.get(field_name)
+           if field_info is None:
+               continue
+           try:
+               TypeAdapter(field_info.annotation).validate_python(value, strict=True)
+           except ValidationError as e:
+               err = e.errors()[0]
+               return False, f"Invalid value for '{field_name}': {err['msg']}"
+       return True, None
    ```
 
-3. **Update the create method** to use `Create<Domain>` for input validation
-   if it doesn't already:
+3. **Filter update fields at the manager or tool layer** using `MUTABLE_FIELDS`:
 
    ```python
-   async def create_<domain>(self, data: dict) -> dict:
-       validated = Create<Domain>(**data)
-       payload = validated.model_dump(exclude_none=True)
-       # ... POST to UniFi API
+   from ..models.<domain> import MUTABLE_FIELDS, validate_update_fields
+
+   async def update_<domain>(self, <domain>_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+       # Filter to mutable fields only
+       filtered = {k: v for k, v in update_data.items() if k in MUTABLE_FIELDS and v is not None}
+       if not filtered:
+           return await self.get_<domain>_by_id(<domain>_id)
+       # Fetch-merge-put (see implement-update-tool-fetch-merge-put skill)
+       existing = await self.get_<domain>_by_id(<domain>_id)
+       merged = deep_merge(existing, filtered)
+       # ... PUT to UniFi API
    ```
 
 4. **Verify the tool layer** passes the flat field names from the list output
@@ -254,8 +278,8 @@ your new model handles.
 
 | File | Purpose |
 |------|---------|
-| `packages/unifi-core/src/unifi_core/network/models/acl.py` | ACL model example |
-| `packages/unifi-core/src/unifi_core/network/managers/acl_manager.py` | ACL manager example (field validation pattern) |
+| `packages/unifi-core/src/unifi_core/network/models/acl.py` | ACL model example (`MUTABLE_FIELDS`, `validate_update_fields`, `to_controller_update`) |
+| `packages/unifi-core/src/unifi_core/network/managers/acl_manager.py` | ACL manager example (fetch-merge-put without manager-level validator) |
 | `apps/api/tests/unit/test_cross_layer_symmetry.py` | MCP↔API drift gate (REGISTERED_PAIRS) |
 | `AGENTS.md` | Governance rule (field-symmetry domain rollout) |
 | `tests/unit/test_*_field_symmetry.py` | Domain-specific symmetry test examples |
@@ -264,8 +288,9 @@ your new model handles.
 
 ## Additional Notes
 
-Field validation implementation is **manager-local and inline** — there is no
-centralized shared validators module. Each domain manager implements its own
-`_validate_update_fields()` method following the pattern in Procedure 3.
-This keeps validation close to the domain logic and avoids the blast-radius
-hazard described in Gotcha 1.
+Field validation is **model-local** — the `MUTABLE_FIELDS` frozenset and
+optional `validate_update_fields()` helper live in `models/<domain>.py`, not
+in the manager or any shared module. Managers use `MUTABLE_FIELDS` inline
+(e.g., `{k: v for k, v in data.items() if k in MUTABLE_FIELDS}`) rather than
+calling a method on `self`. This keeps validation close to the schema definition
+and avoids the blast-radius hazard described in Gotcha 1.

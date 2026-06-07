@@ -200,6 +200,9 @@ published docs stay in sync with the merged code at every point in history.
 
 For PR #126, this gate was explicitly enforced — the PR wasn't merged until doc counts matched.
 
+**Note:** `docs/index.html` is a static marketing site HTML file, not a generated artifact.
+Marketing site changes must be made and reviewed manually, separate from the tool documentation sweep.
+
 ---
 
 ### Gate 4: Shared Pydantic Model Defaults — Blast Radius Check
@@ -453,6 +456,26 @@ gh pr merge <PR-number> --merge
 
 Prefer merge commits over squash so individual commits from the contributor remain visible
 in history. Squash only if the branch history is genuinely noisy.
+
+**Merge strategy override:** The merge-commit default can be overridden on explicit user instruction.
+If the user specifies squash-merge for a PR, apply it without hesitation — do not silently revert
+to the default. Acknowledge the override explicitly. Reference: PRs #315, #316.
+
+---
+
+## Sequential PR Artifact Conflicts
+
+When two community PRs both modify the same generated artifacts (GraphQL schema, REST docs, or
+manifest files), the second PR becomes conflicting after the first is merged.
+
+Resolution:
+1. Review both PRs before deciding merge order — earlier detection minimizes rebase cycles.
+2. After merging the first PR, rebase the second onto updated `main`.
+3. Regenerate the affected artifacts on the rebased branch.
+4. Push the regenerated artifacts and wait for CI to re-run.
+5. Proceed with the standard review checklist on the rebased branch.
+
+Do not merge both PRs in rapid succession without first checking for shared artifact dependencies.
 
 ---
 

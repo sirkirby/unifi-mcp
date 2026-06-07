@@ -12,15 +12,26 @@ Transient/server errors (5xx) are not masked — they propagate.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from uiprotect.exceptions import BadRequest
 
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.merge import deep_merge
 from unifi_core.protect.managers.alarm_manager import AlarmManager
 from unifi_core.protect.managers.alarm_manager_service import AlarmManagerPermissionError, AlarmManagerService
 from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
-from unifi_core.protect.models.alarm_rules import alarm_rule_from_legacy
+from unifi_core.protect.models._validators import require_non_empty_actions
+from unifi_core.protect.models.alarm_rules import (
+    alarm_rule_from_controller,
+    alarm_rule_from_legacy,
+    alarm_rule_to_legacy_body,
+    alarm_rule_to_v2_body,
+)
+
+_OBJECT_ID_RE = re.compile(r"^[0-9a-fA-F]{24}$")
+_UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 
 class AlarmRulesFacade:
@@ -69,3 +80,67 @@ class AlarmRulesFacade:
         except (AlarmManagerPermissionError, BadRequest, UniFiNotFoundError):
             raw = await self._legacy.get_rule(rule_id)
             return alarm_rule_from_legacy(raw).model_dump(exclude_none=True), False
+
+    async def create_rule(self, fields: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """Create a rule on the newest writable backend available."""
+        self._require_non_empty_canonical_actions(fields)
+        if await self._v2_write_available():
+            body = alarm_rule_to_v2_body(fields)
+            raw = await self._service.create_rule(body)
+            return alarm_rule_from_controller(raw).model_dump(exclude_none=True), True
+
+        body = alarm_rule_to_legacy_body(fields)
+        raw = await self._legacy.create_rule(body)
+        return alarm_rule_from_legacy(raw).model_dump(exclude_none=True), False
+
+    async def update_rule(self, rule_id: str, fields: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+        """Update a rule, routing by id family."""
+        family = self._id_family(rule_id)
+        if "actions" in fields:
+            self._require_non_empty_canonical_actions(fields)
+
+        if family == "v2":
+            current_raw = await self._service.get_rule_raw(rule_id)
+            current = alarm_rule_from_controller(current_raw).model_dump(exclude_none=True)
+            merged = self._write_fields(deep_merge(current, fields))
+            body = alarm_rule_to_v2_body(merged)
+            raw = await self._service.update_rule(rule_id, body)
+            return alarm_rule_from_controller(raw).model_dump(exclude_none=True), True
+
+        current_raw = await self._legacy.get_rule(rule_id)
+        current = alarm_rule_from_legacy(current_raw).model_dump(exclude_none=True)
+        merged = self._write_fields(deep_merge(current, fields))
+        body = deep_merge(current_raw, alarm_rule_to_legacy_body(merged))
+        raw = await self._legacy.update_rule(rule_id, body)
+        return alarm_rule_from_legacy(raw).model_dump(exclude_none=True), False
+
+    async def delete_rule(self, rule_id: str) -> tuple[dict[str, Any], bool]:
+        """Delete a rule, routing by id family."""
+        family = self._id_family(rule_id)
+        if family == "v2":
+            return await self._service.delete_rule(rule_id), True
+        return await self._legacy.delete_rule(rule_id), False
+
+    async def _v2_write_available(self) -> bool:
+        try:
+            await self._service.list_rules_raw()
+            return True
+        except (AlarmManagerPermissionError, BadRequest):
+            return False
+
+    @staticmethod
+    def _id_family(rule_id: str) -> str:
+        if _UUID_RE.match(rule_id):
+            return "v2"
+        if _OBJECT_ID_RE.match(rule_id):
+            return "legacy"
+        raise ValueError("Alarm rule id must be either a v2 UUID or a legacy 24-character ObjectID")
+
+    @staticmethod
+    def _require_non_empty_canonical_actions(fields: dict[str, Any]) -> None:
+        require_non_empty_actions(fields.get("actions"))
+
+    @staticmethod
+    def _write_fields(fields: dict[str, Any]) -> dict[str, Any]:
+        allowed = {"title", "enabled", "triggers", "actions", "scope"}
+        return {key: value for key, value in fields.items() if key in allowed}

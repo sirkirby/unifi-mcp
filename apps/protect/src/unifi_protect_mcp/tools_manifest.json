@@ -261,7 +261,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Creates a new alarm rule via POST. Body must be a full rule payload matching the Protect automations schema: name, enable, sources (scope), conditions (triggers), actions (webhook/etc), cooldown. The server assigns the rule id and returns the created rule. Body keys may be snake_case (as returned by protect_alarm_get_rule) or camelCase (controller-native); the tool normalizes to camelCase before POSTing, so the natural read-modify-write clone flow works. ``actions`` must be a non-empty list \u2014 the controller will accept an empty actions list but the resulting rule cannot be opened in the Protect UI. Requires confirm=True to apply \u2014 otherwise returns a preview.",
+      "description": "Creates a new alarm rule via POST. Body uses the canonical alarm rule shape returned by protect_alarm_list_rules/protect_alarm_get_rule: title, enabled, triggers, actions, and scope. The server assigns the rule id and returns the created rule. ``actions`` must be a non-empty list \u2014 the controller will accept an empty actions list but the resulting rule cannot be opened in the Protect UI. Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_create_rule",
       "permission_action": "create",
       "permission_category": "alarm",
@@ -269,7 +269,7 @@
         "input": {
           "properties": {
             "body": {
-              "description": "Full alarm rule payload (see Protect automations schema)",
+              "description": "Full canonical alarm rule payload: title, enabled, triggers, actions, and scope.",
               "type": "object"
             },
             "confirm": {
@@ -373,7 +373,7 @@
               "type": "boolean"
             },
             "rule_id": {
-              "description": "Alarm rule (automation) UUID to delete",
+              "description": "Alarm rule id to delete: v2 UUID or legacy 24-character ObjectID",
               "type": "string"
             }
           },
@@ -898,7 +898,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Updates an alarm rule. Pass only the fields you want to change; the tool fetches the current rule, deep-merges your changes, and PATCHes the full body (Protect rejects partial bodies \u2014 fetch-merge-put is handled for you). Field keys may be snake_case or camelCase. Requires confirm=True to apply \u2014 otherwise returns a preview of the proposed changes.",
+      "description": "Updates an alarm rule. Pass only the fields you want to change \u2014 current values are automatically preserved. Field keys use the canonical alarm rule shape returned by protect_alarm_list_rules/protect_alarm_get_rule: title, enabled, triggers, actions, and scope. Requires confirm=True to apply \u2014 otherwise returns a preview of the proposed changes.",
       "name": "protect_alarm_update_rule",
       "permission_action": "update",
       "permission_category": "alarm",
@@ -910,7 +910,7 @@
               "type": "boolean"
             },
             "fields": {
-              "description": "Partial set of rule fields to change (e.g. name, enable, actions). Merged into the current rule.",
+              "description": "Partial set of canonical rule fields to change (e.g. title, enabled, triggers, actions, scope).",
               "type": "object"
             },
             "rule_id": {

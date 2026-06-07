@@ -36,7 +36,7 @@ def _valid_rule_body(actions: list | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# AlarmCreateRuleInput — empty-actions rejection (live-test learning)
+# AlarmCreateRuleInput / AlarmUpdateRuleInput — shape validation only
 # ---------------------------------------------------------------------------
 
 
@@ -48,21 +48,9 @@ class TestAlarmCreateRuleInput:
         m = AlarmCreateRuleInput(body=_valid_rule_body())
         assert m.body["actions"]
 
-    def test_rejects_empty_actions_list(self) -> None:
-        """Protect accepts ``actions: []`` server-side but the resulting rule
-        cannot be opened in the Protect UI ("We're Unable to Complete Your
-        Request"). Found via live-test 2026-05-27. Reject client-side."""
-        with pytest.raises(ValidationError, match="actions"):
-            AlarmCreateRuleInput(body=_valid_rule_body(actions=[]))
-
-    def test_rejects_missing_actions_key(self) -> None:
-        body = {"name": "x", "enable": False}
-        with pytest.raises(ValidationError, match="actions"):
-            AlarmCreateRuleInput(body=body)
-
-    def test_rejects_non_list_actions(self) -> None:
-        with pytest.raises(ValidationError, match="actions"):
-            AlarmCreateRuleInput(body=_valid_rule_body(actions="not-a-list"))  # type: ignore[arg-type]
+    def test_allows_body_without_actions_guard_lives_in_facade(self) -> None:
+        m = AlarmCreateRuleInput(body={"title": "x"})
+        assert m.body == {"title": "x"}
 
 
 class TestAlarmUpdateRuleInput:
@@ -73,21 +61,9 @@ class TestAlarmUpdateRuleInput:
         m = AlarmUpdateRuleInput(rule_id="r-1", body=_valid_rule_body())
         assert m.rule_id == "r-1"
 
-    def test_rejects_empty_actions_list(self) -> None:
-        """Same brick-the-UI risk as create — reject empty actions on PATCH too."""
-        with pytest.raises(ValidationError, match="actions"):
-            AlarmUpdateRuleInput(rule_id="r-1", body=_valid_rule_body(actions=[]))
-
-    def test_rejects_missing_actions_key(self) -> None:
-        with pytest.raises(ValidationError, match="actions"):
-            AlarmUpdateRuleInput(rule_id="r-1", body={"name": "x"})
-
-    def test_rejects_non_list_actions(self) -> None:
-        with pytest.raises(ValidationError, match="actions"):
-            AlarmUpdateRuleInput(
-                rule_id="r-1",
-                body=_valid_rule_body(actions="not-a-list"),  # type: ignore[arg-type]
-            )
+    def test_allows_partial_update_without_actions_guard_lives_in_facade(self) -> None:
+        m = AlarmUpdateRuleInput(rule_id="r-1", body={"title": "x"})
+        assert m.body == {"title": "x"}
 
 
 # ---------------------------------------------------------------------------

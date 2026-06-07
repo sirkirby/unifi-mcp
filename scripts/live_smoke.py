@@ -472,6 +472,8 @@ class LiveSmokeRunner:
     def expected_fixture_miss(self, tool: str, error: str | None) -> bool:
         if tool == "unifi_get_pdu_outlets" and error and "not a Smart Power PDU" in error:
             return True
+        if tool == "protect_alarm_arm" and error and "No arm profiles found" in error:
+            return True
         return False
 
     def unwrap_result(self, raw: Any) -> dict[str, Any]:
@@ -591,6 +593,7 @@ class LiveSmokeRunner:
         elif self.server_key == "access":
             await self.lifecycle_access_visitor()
         elif self.server_key == "protect":
+            await self.lifecycle_protect_alarm_rule()
             self.skip(
                 "protect_create_liveview/protect_delete_liveview",
                 "lifecycle",
@@ -801,6 +804,14 @@ class LiveSmokeRunner:
             value = first_value(camera, ("id", "_id", "camera_id", "uuid"))
             if value:
                 return str(value)
+        return None
+
+    def protect_camera_scope_id(self) -> str | None:
+        cameras = self.cache.items_from_tool("protect_list_cameras", "cameras") or self.cache.items("cameras")
+        for camera in cameras:
+            value = first_value(camera, ("mac", "mac_address", "id", "_id", "camera_id", "uuid"))
+            if value:
+                return str(value).replace(":", "").upper()
         return None
 
     def protect_preset_slot(self, camera_id: str) -> int | None:
@@ -1155,6 +1166,71 @@ class LiveSmokeRunner:
         if revoke.success:
             self.report.cleaned_resources.append({"type": "voucher", "id": voucher_id, "name": note})
 
+    async def lifecycle_protect_alarm_rule(self) -> None:
+        if not self.cache.items_from_tool("protect_list_cameras", "cameras"):
+            await self.call("protect_list_cameras", {}, "lifecycle:seed")
+
+        camera_scope_id = self.protect_camera_scope_id()
+        if not camera_scope_id:
+            self.skip(
+                "protect_alarm_create_rule/protect_alarm_delete_rule",
+                "lifecycle",
+                "could not discover camera scope id",
+            )
+            return
+
+        stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        title = f"{RUN_PREFIX}-alarm-{stamp}"
+        updated_title = f"{title}-updated"
+        body = {
+            "title": title,
+            "triggers": [
+                {
+                    "trigger_id": "protect:ai.nls",
+                    "data": {
+                        "nlsSentence": f"{RUN_PREFIX} validation token {stamp}",
+                        "nlsThreshold": 50,
+                    },
+                }
+            ],
+            "actions": [
+                {
+                    "action_id": "protect:notify",
+                    "data": {
+                        "default_channels": ["push"],
+                        "is_critical": False,
+                        "receivers": ["ALL_ITEMS"],
+                    },
+                }
+            ],
+            "scope": {"mode": "include", "data": {"scope_all_cameras": [camera_scope_id]}},
+        }
+
+        create = await self.call("protect_alarm_create_rule", {"body": body, "confirm": True}, "lifecycle:create")
+        rule_id = create.summary.get("resource_id")
+        if not rule_id:
+            self.skip(
+                "protect_alarm_update_rule/protect_alarm_delete_rule",
+                "lifecycle",
+                "alarm rule create did not return an id",
+            )
+            return
+
+        self.report.created_resources.append({"type": "protect_alarm_rule", "id": rule_id, "name": title})
+        await self.call(
+            "protect_alarm_update_rule",
+            {"rule_id": rule_id, "fields": {"title": updated_title}, "confirm": True},
+            "lifecycle:update",
+        )
+        await self.call("protect_alarm_get_rule", {"rule_id": rule_id}, "lifecycle:get")
+        delete = await self.call(
+            "protect_alarm_delete_rule",
+            {"rule_id": rule_id, "confirm": True},
+            "lifecycle:delete",
+        )
+        if delete.success:
+            self.report.cleaned_resources.append({"type": "protect_alarm_rule", "id": rule_id, "name": title})
+
     async def approved_protect_physical(self) -> None:
         camera_id = self.protect_camera_id()
         if not camera_id:
@@ -1263,6 +1339,8 @@ def summarize_payload(data: dict[str, Any]) -> dict[str, Any]:
         summary[f"{collection}_count"] = len(items)
     if "error" in data:
         summary["error"] = data["error"]
+    if "_meta" in data:
+        summary["_meta"] = data["_meta"]
     return summary
 
 

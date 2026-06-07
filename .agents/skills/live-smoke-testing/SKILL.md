@@ -58,6 +58,16 @@ Before any live run, ensure:
 4. **Branch context** — the harness lives in `scripts/live_smoke.py` on the main branch.
    When branching or bisecting, confirm you have the current harness code before running.
 
+5. **Git worktree `.env` placement** — `scripts/live_smoke.py` derives its repo root from
+   its own file location (`Path(__file__).resolve().parents[1]`) and loads `.env` from that
+   root. In a git worktree the root resolves to the worktree directory, NOT the main
+   checkout. Copy or symlink your credentials file from the main checkout into the worktree
+   root before running:
+   ```bash
+   ln -s /path/to/main-checkout/.env /path/to/worktree/.env
+   ```
+   Omitting this causes silent credential-not-found failures with no warning.
+
 ## Procedure 0: PRE-MERGE BLOCKING GATE — API Response Parsing Changes
 
 **Trigger Criteria — Live Smoke is Mandatory Before Merge:**
@@ -81,6 +91,11 @@ cannot evolve with real hardware firmware updates. Changes to response parsing a
 to unit tests — they pass against the fixed fixture forever, but fail against real hardware
 running a different API version. The 2026-05-17 Access proxy incident (#283) exemplifies
 this: unit tests passed; live hardware returned auth-wrapped-in-200 errors invisible to mocks.
+
+**Ship doctrine — verify the changed code path, not an adjacent green path:** Smoke evidence
+only counts if it exercises the specific code modified by the PR. If your PR touches the
+alarm manager, a passing run that exercises only the client manager is not evidence. Identify
+the tools that invoke the changed code and name them explicitly in the PR smoke evidence block.
 
 **Execution:**
 
@@ -189,6 +204,13 @@ create+delete pairs with `confirm=True`.
   Investigate the tool's argument construction before proceeding to `approved`.
 - Safe-lifecycle runs should leave zero net hardware changes. After an `approved` run,
   verify the controller UI shows no orphaned test resources.
+
+**Disposable resource rule for destructive operations:** When a lifecycle method exercises
+destructive operations (archive, bulk-delete, format), always target a disposable resource
+created specifically for that run (e.g., a DNS record named `smoke-test-<timestamp>`). Never
+run destructive smoke against a production resource. If a dedicated test resource cannot be
+guaranteed (e.g., hardware-bound resources like camera channels), add the tool to
+`RISKY_OPERATION_NAMES` to exclude it from automated phases and require explicit human approval.
 
 ## Procedure D: Interpret Artifacts in `live-smoke-results/`
 
@@ -392,3 +414,17 @@ in developer workflows; the fourth is automated in the release pipeline.
 - **`tools_manifest.json` is the source of truth for auto-discovery.** Manifest annotation
   correctness (`readOnlyHint`, `destructiveHint`) and harness registration (for lifecycle
   methods) are both required. Wrong annotations silently misclassify tools.
+
+- **`AlarmRulesFacade` fallback silently masks SuperAdmin credential failures.** If the
+  account lacks SuperAdmin on the Protect console, `AlarmManagerPermissionError` is caught by
+  `AlarmRulesFacade` and it silently falls back to the legacy automations API. The smoke
+  record shows `status: ok` — but the v2 code path was never exercised. The `complete` flag
+  in the MCP `_meta` block distinguishes v2 success (`complete: true`) from legacy fallback
+  (`complete: false`). When smoke-testing alarm rules, inspect the `summary._meta` block and
+  confirm `complete: true`; a passing run with `complete: false` means v2 was never reached.
+
+- **HTTP 404 from Access API-key endpoints confirms auth is working.** When using
+  API-key-authenticated Access endpoints, a 404 on a valid-format resource path means the
+  key was accepted but the resource doesn't exist — this is a green credential signal. A
+  401/403 means the key was rejected. Use this to validate Access API key configuration:
+  deliberately query a known-missing resource ID and expect 404, not 401.
