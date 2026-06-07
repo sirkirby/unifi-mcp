@@ -261,11 +261,14 @@ def test_dispatch_overrides_specific_targets() -> None:
     assert table["protect_update_known_face"].method == "apply_update_known_face"
     assert table["protect_merge_known_faces"].method == "apply_merge_known_faces"
     assert table["protect_delete_known_face"].method == "apply_delete_known_face"
-    # Alarm rule mutations: update/delete await the preview method first, so the
-    # AST captures preview_*; the override must point at the real mutation.
+    # Alarm rule mutations use the facade so v2 UUIDs and legacy ObjectIDs share
+    # the same API action path as the MCP tools.
+    assert table["protect_alarm_update_rule"].manager_attr == "alarm_facade"
     assert table["protect_alarm_update_rule"].method == "update_rule"
+    assert table["protect_alarm_delete_rule"].manager_attr == "alarm_facade"
     assert table["protect_alarm_delete_rule"].method == "delete_rule"
-    # create_rule's only await is the mutation itself — AST is correct, no override.
+    # create_rule's only await is the facade mutation itself — AST is correct, no override.
+    assert table["protect_alarm_create_rule"].manager_attr == "alarm_facade"
     assert table["protect_alarm_create_rule"].method == "create_rule"
 
     # Access preview/execute split
