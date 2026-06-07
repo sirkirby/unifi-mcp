@@ -17,18 +17,18 @@ from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import preview_response, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.merge import deep_merge
 from unifi_core.protect.models._actions import (
     AlarmArmInput,
     AlarmCreateRuleInput,
     AlarmDeleteRuleInput,
     AlarmDisarmInput,
     AlarmGetRuleInput,
+    AlarmUpdateRuleInput,
 )
+from unifi_core.protect.models._validators import require_non_empty_actions
 from unifi_core.protect.models.alarms import (
     profile_from_controller,
     profile_list_from_controller,
-    rule_to_controller,
     status_from_controller,
 )
 from unifi_protect_mcp.runtime import alarm_facade, alarm_manager, server
@@ -45,6 +45,12 @@ _ALARM_COVERAGE_NOTICE = (
     "returned no rules or is unavailable on this console, so AI-powered alarms "
     "(where supported) are not included."
 )
+
+
+def _with_alarm_coverage_meta(result: Dict[str, Any], complete: bool) -> Dict[str, Any]:
+    if not complete:
+        result["_meta"] = {_ALARM_COVERAGE_META: {"complete": False, "reason": _ALARM_COVERAGE_NOTICE}}
+    return result
 
 
 @server.tool(
@@ -211,10 +217,7 @@ async def protect_alarm_list_rules() -> Dict[str, Any]:
     logger.info("protect_alarm_list_rules tool called")
     try:
         rules, complete = await alarm_facade.list_rules()
-        result: Dict[str, Any] = {"success": True, "data": {"rules": rules, "count": len(rules)}}
-        if not complete:
-            result["_meta"] = {_ALARM_COVERAGE_META: {"complete": False, "reason": _ALARM_COVERAGE_NOTICE}}
-        return result
+        return _with_alarm_coverage_meta({"success": True, "data": {"rules": rules, "count": len(rules)}}, complete)
     except Exception as e:
         logger.error("Error listing alarm rules: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list alarm rules: {e}"}
@@ -242,10 +245,7 @@ async def protect_alarm_get_rule(
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         rule, complete = await alarm_facade.get_rule(rule_id)
-        result: Dict[str, Any] = {"success": True, "data": rule}
-        if not complete:
-            result["_meta"] = {_ALARM_COVERAGE_META: {"complete": False, "reason": _ALARM_COVERAGE_NOTICE}}
-        return result
+        return _with_alarm_coverage_meta({"success": True, "data": rule}, complete)
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -256,10 +256,10 @@ async def protect_alarm_get_rule(
 @server.tool(
     name="protect_alarm_update_rule",
     description=(
-        "Updates an alarm rule. Pass only the fields you want to change; the tool "
-        "fetches the current rule, deep-merges your changes, and PATCHes the full "
-        "body (Protect rejects partial bodies — fetch-merge-put is handled for you). "
-        "Field keys may be snake_case or camelCase. Requires confirm=True to apply — "
+        "Updates an alarm rule. Pass only the fields you want to change — current "
+        "values are automatically preserved. Field keys use the canonical alarm "
+        "rule shape returned by protect_alarm_list_rules/protect_alarm_get_rule: "
+        "title, enabled, triggers, actions, and scope. Requires confirm=True to apply — "
         "otherwise returns a preview of the proposed changes."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
@@ -271,7 +271,9 @@ async def protect_alarm_update_rule(
     fields: Annotated[
         Dict[str, Any],
         Field(
-            description="Partial set of rule fields to change (e.g. name, enable, actions). Merged into the current rule."
+            description=(
+                "Partial set of canonical rule fields to change (e.g. title, enabled, triggers, actions, scope)."
+            )
         ),
     ],
     confirm: Annotated[
@@ -285,21 +287,25 @@ async def protect_alarm_update_rule(
         field_data = fields.model_dump(exclude_unset=True) if hasattr(fields, "model_dump") else dict(fields)
         if not field_data:
             return {"success": False, "error": "No fields provided. Specify at least one field to update."}
+        try:
+            AlarmUpdateRuleInput(rule_id=rule_id, body=field_data)
+        except ValidationError as e:
+            return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        if "actions" in field_data:
+            require_non_empty_actions(field_data.get("actions"))
 
-        current = await alarm_manager.get_rule(rule_id)
-        changes = rule_to_controller(field_data)
         if not confirm:
+            current, complete = await alarm_facade.get_rule(rule_id)
             return update_preview(
                 resource_type="alarm_rule",
                 resource_id=rule_id,
-                resource_name=current.get("name") or rule_id,
-                current_state={key: current.get(key) for key in changes},
-                updates=changes,
+                resource_name=current.get("title") or rule_id,
+                current_state={key: current.get(key) for key in field_data},
+                updates=field_data,
             )
 
-        merged = deep_merge(current, changes)
-        result = await alarm_manager.update_rule(rule_id, merged)
-        return {"success": True, "data": result}
+        result, complete = await alarm_facade.update_rule(rule_id, field_data)
+        return _with_alarm_coverage_meta({"success": True, "data": result}, complete)
     except (UniFiNotFoundError, ValueError, TypeError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -310,16 +316,12 @@ async def protect_alarm_update_rule(
 @server.tool(
     name="protect_alarm_create_rule",
     description=(
-        "Creates a new alarm rule via POST. Body must be a full rule payload "
-        "matching the Protect automations schema: name, enable, sources "
-        "(scope), conditions (triggers), actions (webhook/etc), cooldown. "
-        "The server assigns the rule id and returns the created rule. "
-        "Body keys may be snake_case (as returned by protect_alarm_get_rule) "
-        "or camelCase (controller-native); the tool normalizes to camelCase "
-        "before POSTing, so the natural read-modify-write clone flow works. "
-        "``actions`` must be a non-empty list — the controller will accept "
-        "an empty actions list but the resulting rule cannot be opened in "
-        "the Protect UI. "
+        "Creates a new alarm rule via POST. Body uses the canonical alarm rule "
+        "shape returned by protect_alarm_list_rules/protect_alarm_get_rule: title, "
+        "enabled, triggers, actions, and scope. The server assigns the rule id and "
+        "returns the created rule. ``actions`` must be a non-empty list — the "
+        "controller will accept an empty actions list but the resulting rule cannot "
+        "be opened in the Protect UI. "
         "Requires confirm=True to apply — otherwise returns a preview."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
@@ -329,7 +331,7 @@ async def protect_alarm_update_rule(
 async def protect_alarm_create_rule(
     body: Annotated[
         Dict[str, Any],
-        Field(description="Full alarm rule payload (see Protect automations schema)"),
+        Field(description="Full canonical alarm rule payload: title, enabled, triggers, actions, and scope."),
     ],
     confirm: Annotated[
         bool,
@@ -343,21 +345,19 @@ async def protect_alarm_create_rule(
             AlarmCreateRuleInput(body=body)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
-        # Translate ONCE so the preview's "proposed" exactly matches the
-        # body that would be POSTed on confirm (no snake/camel drift).
-        translated = rule_to_controller(body)
+        require_non_empty_actions(body.get("actions"))
         if not confirm:
             return preview_response(
                 action="create",
                 resource_type="alarm_rule",
-                resource_id=translated.get("id") or "<server-assigned>",
+                resource_id=body.get("id") or "<server-assigned>",
                 current_state={},
-                proposed_changes=translated,
-                resource_name=translated.get("name") or "new alarm rule",
+                proposed_changes=body,
+                resource_name=body.get("title") or "new alarm rule",
             )
 
-        result = await alarm_manager.create_rule(translated)
-        return {"success": True, "data": result}
+        result, complete = await alarm_facade.create_rule(body)
+        return _with_alarm_coverage_meta({"success": True, "data": result}, complete)
     except (UniFiNotFoundError, ValueError, TypeError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -378,7 +378,7 @@ async def protect_alarm_create_rule(
     permission_action="delete",
 )
 async def protect_alarm_delete_rule(
-    rule_id: Annotated[str, Field(description="Alarm rule (automation) UUID to delete")],
+    rule_id: Annotated[str, Field(description="Alarm rule id to delete: v2 UUID or legacy 24-character ObjectID")],
     confirm: Annotated[
         bool,
         Field(description="When true, deletes the rule. When false (default), returns a preview."),
@@ -392,18 +392,18 @@ async def protect_alarm_delete_rule(
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         if not confirm:
-            preview_data = await alarm_manager.preview_delete_rule(rule_id)
+            current, complete = await alarm_facade.get_rule(rule_id)
             return preview_response(
                 action="delete",
                 resource_type="alarm_rule",
                 resource_id=rule_id,
-                current_state={"name": preview_data["current_name"]},
-                proposed_changes=preview_data["proposed_changes"],
-                resource_name=preview_data["current_name"] or rule_id,
+                current_state={"title": current.get("title")},
+                proposed_changes={"deleted": True},
+                resource_name=current.get("title") or rule_id,
             )
 
-        result = await alarm_manager.delete_rule(rule_id)
-        return {"success": True, "data": result}
+        result, complete = await alarm_facade.delete_rule(rule_id)
+        return _with_alarm_coverage_meta({"success": True, "data": result}, complete)
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:

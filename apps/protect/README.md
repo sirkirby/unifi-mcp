@@ -91,7 +91,7 @@ UNIFI_PROTECT_PASSWORD=your-password # Admin password
 
 **Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_PROTECT_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
 
-> **AI-powered alarms need SuperAdmin.** The alarm-rule tools (`protect_alarm_list_rules` / `protect_alarm_get_rule`) transparently surface AI-powered alarms (e.g. AI Natural Language) from the modern UniFi-OS Alarm Manager when the account is **SuperAdmin**, and fall back to the classic automations view otherwise. With a non-SuperAdmin account those AI alarms aren't visible and the response includes a standard MCP `_meta` notice saying so. Grant the account SuperAdmin on the console hosting Protect to view/manage them. Blast radius: on a standalone UNVR this is contained to Protect; on a combined UDM console SuperAdmin also grants Network/UniFi-OS control.
+> **AI-powered alarms need SuperAdmin.** The alarm-rule tools (`protect_alarm_list_rules` / `protect_alarm_get_rule` / `protect_alarm_create_rule` / `protect_alarm_update_rule` / `protect_alarm_delete_rule`) transparently use the modern UniFi-OS Alarm Manager when the account is **SuperAdmin**, and fall back to the classic automations view otherwise. The modern path surfaces and manages AI-powered alarms (e.g. AI Natural Language); the legacy path cannot see those rules and responses include a standard MCP `_meta` notice when the view is limited. Grant the account SuperAdmin on the console hosting Protect to view/manage AI alarms. Blast radius: on a standalone UNVR this is contained to Protect; on a combined UDM console SuperAdmin also grants Network/UniFi-OS control.
 
 ## Run
 

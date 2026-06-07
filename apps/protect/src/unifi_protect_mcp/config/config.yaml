@@ -30,7 +30,7 @@ server:
   #     - devices      # All Protect devices (lights, sensors, chimes)
   #     - liveviews    # Liveview management
   #     - system       # System info, NVR health, storage
-  #     - alarm        # Alarm Manager arm/disarm (Protect 6.1+)
+  #     - alarm        # Alarm Manager arm/disarm and rule CRUD (Protect 6.1+)
   #   Example: "cameras,events,system" or ["cameras", "events", "system"]
   #
   # enabled_tools: Only register these specific tools (use with enabled_categories or alone)

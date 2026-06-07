@@ -60,7 +60,7 @@ Fall back to `/rest/user` (historical snapshots) only for offline clients or
 transient failures. Never invert this order.
 
 | Aspect | `/stat/sta` | `/rest/user` |
-|--------|------------|--------------|\
+|--------|------------|--------------|
 | Freshness | Current (controller polls ~every second) | Infrequently refreshed snapshot |
 | Field count | 92+ (signal, channel, uptime, traffic, satisfaction…) | 7 (basic MAC/IP/name) |
 | Online clients | ✅ Complete and current | ❌ Can lag hours or days |
@@ -74,6 +74,8 @@ difference.
 **Implementation shape (see also Procedure 4):**
 
 ```python
+from unifi_core.exceptions import UniFiNotFoundError
+
 async def get_client_details(mac: str) -> dict:
     """Retrieve live client data with fallback to historical."""
     try:
@@ -90,7 +92,7 @@ async def get_client_details(mac: str) -> dict:
         if client.mac == mac:
             return client
 
-    raise ClientNotFoundError(mac)
+    raise UniFiNotFoundError("client", mac)
 ```
 
 Apply this pattern in `unifi_get_client_details` and `unifi_list_clients`.
@@ -222,6 +224,8 @@ for client in clients:
    read paths need the fallback chain.
 
 ```python
+from unifi_core.exceptions import UniFiNotFoundError
+
 try:
     clients = await self.clients.update()  # /stat/sta
     for client in clients:
@@ -239,7 +243,7 @@ for client in all_clients:
     if client.mac == mac:
         return client
 
-raise ClientNotFoundError(mac)
+raise UniFiNotFoundError("client", mac)
 ```
 
 **Cost accepted:** Failure case requires 2 round-trips instead of 1. This is

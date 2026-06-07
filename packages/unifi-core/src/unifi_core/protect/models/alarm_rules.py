@@ -170,6 +170,81 @@ def alarm_rule_from_legacy(raw: Any) -> AlarmRule:
     )
 
 
+_WRITE_FIELDS = {"title", "enabled", "triggers", "actions", "scope"}
+
+
+def _reject_unknown_write_fields(raw: dict[str, Any]) -> None:
+    unknown = set(raw) - _WRITE_FIELDS
+    if unknown:
+        raise ValueError(f"Unknown alarm rule write fields: {', '.join(sorted(unknown))}")
+
+
+def _to_grouped_entries(items: Any, *, id_key: str, fallback_id_key: str) -> list[list[dict[str, Any]]]:
+    """Convert canonical trigger/action rows into the v2 editable envelope."""
+    entries: list[dict[str, Any]] = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            raise ValueError("Alarm rule triggers/actions must be objects")
+        item_id = item.get(id_key) or item.get(fallback_id_key)
+        if not item_id:
+            raise ValueError(f"Alarm rule trigger/action is missing {id_key}")
+        data = item.get("data") or {}
+        if not isinstance(data, dict):
+            raise ValueError("Alarm rule trigger/action data must be an object")
+        entries.append({"id": item_id, "data": data})
+    return [entries] if entries else []
+
+
+def alarm_rule_to_v2_body(fields: dict[str, Any]) -> dict[str, Any]:
+    """Serialize canonical alarm-rule write fields to ``/api/v2/alarms/protect``.
+
+    Live UI capture (2026-06-07) showed create uses ``POST /protect`` and
+    update uses ``PATCH /protect/{uuid}``, both with this editable envelope:
+    ``triggers_data``, ``actions_data``, ``scope``, and ``title``.
+    """
+    _reject_unknown_write_fields(fields)
+    body: dict[str, Any] = {}
+    if "triggers" in fields:
+        body["triggers_data"] = _to_grouped_entries(fields["triggers"], id_key="trigger_id", fallback_id_key="id")
+    if "actions" in fields:
+        body["actions_data"] = _to_grouped_entries(fields["actions"], id_key="action_id", fallback_id_key="id")
+    if "scope" in fields:
+        body["scope"] = fields["scope"] or {}
+    if "title" in fields:
+        body["title"] = fields["title"]
+    if "enabled" in fields:
+        body["enabled"] = fields["enabled"]
+    return body
+
+
+def alarm_rule_to_legacy_body(fields: dict[str, Any]) -> dict[str, Any]:
+    """Serialize canonical alarm-rule write fields to legacy Protect automations.
+
+    ``alarm_rule_from_legacy`` stores each raw legacy condition/action dict in
+    ``data``. The inverse therefore echoes those nested ``data`` dicts verbatim
+    instead of rebuilding ``{"type": ..., **data}``.
+
+    Legacy-only fields such as cooldown, schedules, and historyConditions are
+    not expressible in the canonical write shape; update preserves them by
+    merging this translated body into the raw legacy rule before PATCH.
+    """
+    _reject_unknown_write_fields(fields)
+    body: dict[str, Any] = {}
+    if "title" in fields:
+        body["name"] = fields["title"]
+    if "enabled" in fields:
+        body["enable"] = fields["enabled"]
+    if "scope" in fields:
+        scope = fields["scope"] or {}
+        if isinstance(scope, dict) and "sources" in scope:
+            body["sources"] = scope["sources"]
+    if "triggers" in fields:
+        body["conditions"] = [item.get("data") or {} for item in (fields["triggers"] or []) if isinstance(item, dict)]
+    if "actions" in fields:
+        body["actions"] = [item.get("data") or {} for item in (fields["actions"] or []) if isinstance(item, dict)]
+    return body
+
+
 ALARM_RULE_MUTABLE_FIELDS: frozenset[str] = frozenset()
 ALARM_RULE_READ_ONLY_FIELDS: frozenset[str] = frozenset(AlarmRule.model_fields.keys())
 # Alias required by the model-symmetry test harness — read-only model pattern.

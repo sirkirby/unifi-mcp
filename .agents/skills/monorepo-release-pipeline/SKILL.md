@@ -120,10 +120,12 @@ Depending on the scope and confidence of the release, choose one of three taggin
   all workflows.
 - Example: `for p in core shared network protect access api relay; do git tag $p/v<version>; done`
 
-**Decision rule:** Start with Standard (accounts for the shared library rule and downstream
-dependency bumps). Use Minimal only if you've verified the transitive dependency chain and
-are confident of your scope. Use Full when recovering from a release failure or for
-scheduled releases.
+**Decision rule:** Default to Minimal — tag only packages with code changes, provided existing
+downstream pin ranges already accommodate the upstream bump. Escalate to Standard when a shared
+library change requires every dependent to ship a new wheel (behavioral changes all dependents
+need to pick up). Use Full when recovering from a release failure or for scheduled releases.
+Example: PR #301 used Minimal — only changed packages tagged because downstream pins already
+covered the shared bump within the existing range.
 
 ### Plugin-only Release and Cache Invalidation
 
@@ -376,7 +378,7 @@ for app in apps/network apps/protect apps/access packages/unifi-mcp-relay; do
   uv build --wheel "$app" --out-dir /tmp/wheelcheck/$(basename $app) 2>&1 | tail -2
   whl=$(ls /tmp/wheelcheck/$(basename $app)/*.whl | tail -1)
   python -m zipfile -e "$whl" /tmp/wheelcheck/extracted/$(basename $app)/
-  grep -h 'Requires-Dist.*\\(unifi-mcp-shared\\|unifi-core\\)' \\
+  grep -h 'Requires-Dist.*\(unifi-mcp-shared\|unifi-core\)' \
     /tmp/wheelcheck/extracted/$(basename $app)/*.dist-info/METADATA
 done
 ```
@@ -390,8 +392,8 @@ A fast supplementary grep that catches the most common shape:
 ```bash
 # Confirm no downstream pyproject still pins below the new upstream major.minor.
 # Example: releasing shared 0.5.0 — every match below should be empty.
-grep -n "unifi-mcp-shared" apps/*/pyproject.toml packages/*/pyproject.toml \\
-  | grep -v 'workspace = true' \\
+grep -n "unifi-mcp-shared" apps/*/pyproject.toml packages/*/pyproject.toml \
+  | grep -v 'workspace = true' \
   | grep -v '>=0.5'
 ```
 
@@ -600,6 +602,10 @@ Each app server entry should include:
 2. Shared dependency directories (`packages/unifi-core/`, `packages/unifi-mcp-shared/`)
 3. Its own publish/test/docker workflows as Release Infrastructure
 
+**Known limitation — contributor attribution:** `scripts/generate_release_notes.py` does not
+emit PR author information. Contributor credit must be added manually to the release body
+after the script runs.
+
 ---
 
 ## Procedure H: Release Validation
@@ -707,6 +713,17 @@ tag. Subsequent tags are queued but the workflows never execute, leaving PyPI on
 version with no error or warning. The fix: push tags one at a time. This is a GitHub
 orchestration issue, not a git or hatch-vcs bug. Always use individual `git push origin tag`
 commands per tag and wait for PyPI confirmation between pushes.
+
+**Broken published wheels: remediation via PyPI yank (PEP 592).** When already-published
+wheels contain broken pins or other defects, yank the affected versions via the PyPI web UI
+(release management page for each version) — `twine` does not support the yank operation.
+PEP 592 semantics: yanked versions are skipped by pip and uv during dependency resolution
+(`pip install pkg`, `uvx pkg@latest`) but remain installable when explicitly pinned
+(`pip install pkg==X.Y.Z`). Verify a successful yank: `pip install <pkg>` resolves to the
+newest non-yanked version. Canonical occurrence: issue #331 (2026-06-05) required yanking
+59 releases across multiple packages — historical coordinated-release stale pins that
+pre-dated the pin-alignment CI gate. Always follow a bulk yank with a corrected patch
+release to give users with explicit pins an upgrade path.
 
 **PyPI package names differ from directory names.** Always use the correct PyPI name when
 installing, checking, or troubleshooting. `unifi-network-mcp` ≠ `unifi-mcp-network`. See
