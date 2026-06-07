@@ -36,7 +36,7 @@ Protect defaults all mutations to denied because operations directly affect phys
 
 | Category | Create | Update | Delete | Notes |
 |----------|--------|--------|--------|-------|
-| `alarm` | — | `UNIFI_POLICY_PROTECT_ALARM_UPDATE` | — | Arm/disarm Alarm Manager profiles |
+| `alarm` | `UNIFI_POLICY_PROTECT_ALARM_CREATE` | `UNIFI_POLICY_PROTECT_ALARM_UPDATE` | `UNIFI_POLICY_PROTECT_ALARM_DELETE` | Arm/disarm profiles and create/update/delete alarm rules |
 | `cameras` | — | `UNIFI_POLICY_PROTECT_CAMERAS_UPDATE` | — | IR, HDR, recording, PTZ, reboot |
 | `chimes` | — | `UNIFI_POLICY_PROTECT_CHIMES_UPDATE` | — | Volume, repeat, trigger |
 | `events` | — | `UNIFI_POLICY_PROTECT_EVENTS_UPDATE` | — | Acknowledge/favorite |

@@ -77,7 +77,7 @@ In lazy mode, an additional meta-tool is available:
 
 Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles to be configured in the Protect web UI first.
 
-`protect_alarm_list_rules` / `protect_alarm_get_rule` are version-agnostic: they surface **AI-powered alarms** (e.g. AI Natural Language) from the modern Alarm Manager when the account is **SuperAdmin**, and fall back to the legacy automations view otherwise. When the limited view is served, the response carries a standard MCP `_meta` notice that AI alarms require SuperAdmin. See the SuperAdmin note in the README.
+The alarm-rule tools are version-agnostic. `protect_alarm_list_rules` / `protect_alarm_get_rule` surface **AI-powered alarms** (e.g. AI Natural Language) from the modern Alarm Manager when the account is **SuperAdmin**, and fall back to the legacy automations view otherwise. `protect_alarm_create_rule` prefers the modern Alarm Manager when it is available; `protect_alarm_update_rule` / `protect_alarm_delete_rule` route by rule id family, so v2 UUIDs stay on the modern path and legacy ObjectIDs stay on the legacy path. When the limited view is served, the response carries a standard MCP `_meta` notice that AI alarms require SuperAdmin. See the SuperAdmin note in the README.
 
 - `protect_alarm_list_profiles` -- List all configured arm profiles with id, name, armed state, default flag
 - `protect_alarm_get_status` -- Current armed/disarmed state across all profiles
@@ -85,9 +85,9 @@ Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles t
 - `protect_alarm_disarm` -- Disarm the system for a given profile (confirm required; defaults to default profile)
 - `protect_alarm_list_rules` -- List alarm rules (normalized: id, title, enabled, triggers, actions, scope, stats), including AI alarms
 - `protect_alarm_get_rule` -- Fetch a single alarm rule by id (normalized)
-- `protect_alarm_create_rule` -- Create an alarm rule (automation) (confirm required)
-- `protect_alarm_update_rule` -- Update an alarm rule (pass only changed fields; fetch-merge-put) (confirm required)
-- `protect_alarm_delete_rule` -- Delete an alarm rule by id (confirm required)
+- `protect_alarm_create_rule` -- Create an alarm rule using the canonical shape returned by list/get (confirm required)
+- `protect_alarm_update_rule` -- Update an alarm rule; pass only changed canonical fields (confirm required)
+- `protect_alarm_delete_rule` -- Delete an alarm rule by v2 UUID or legacy ObjectID (confirm required)
 
 ## Known Faces & License Plates (7 tools)
 
