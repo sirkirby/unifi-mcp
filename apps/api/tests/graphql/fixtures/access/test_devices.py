@@ -63,3 +63,46 @@ async def test_access_device_detail(tmp_path, monkeypatch):
     assert body.get("errors") is None, body
     assert body["data"]["access"]["device"]["id"] == "dev1"
     assert body["data"]["access"]["device"]["name"] == "Reader A"
+
+
+@pytest.mark.asyncio
+async def test_access_device_surfaces_structured_location(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="access")
+    stub_managers(
+        monkeypatch,
+        {
+            ("access", "device_manager", "list_devices"): [
+                {
+                    "id": "dev1",
+                    "name": "Hub B",
+                    "type": "UA-Hub",
+                    "location": {
+                        "unique_id": "loc-1",
+                        "name": "Front Door",
+                        "up_id": "loc-parent",
+                        "location_type": "door",
+                        "full_name": "Site - Floor 1 - Front Door",
+                        "level": 3,
+                    },
+                },
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        access {{ devices(controller: "{cid}", limit: 10) {{
+            items {{ id location {{ uniqueId name upId locationType fullName level }} }}
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    loc = body["data"]["access"]["devices"]["items"][0]["location"]
+    assert loc["uniqueId"] == "loc-1"
+    assert loc["name"] == "Front Door"
+    assert loc["upId"] == "loc-parent"
+    assert loc["locationType"] == "door"
+    assert loc["fullName"] == "Site - Floor 1 - Front Door"
+    assert loc["level"] == 3
