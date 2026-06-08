@@ -10,10 +10,10 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260603.1",
-    "@types/node": "^22.19.19",
+    "@cloudflare/workers-types": "^4.20260608.1",
+    "@types/node": "^22.19.20",
     "typescript": "^5.7.0",
     "vitest": "^4.1.0",
-    "wrangler": "^4.97.0"
+    "wrangler": "^4.98.0"
   }
 }
