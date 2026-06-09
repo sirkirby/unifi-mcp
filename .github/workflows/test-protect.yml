@@ -52,7 +52,7 @@ jobs:
         uv run --package unifi-protect-mcp pytest apps/protect/tests/ -n auto -v --cov=unifi_protect_mcp --cov-report=term-missing --cov-report=xml
 
     - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v6
+      uses: codecov/codecov-action@v7
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         files: ./coverage.xml
