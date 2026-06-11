@@ -19,6 +19,7 @@ def mock_mcp_client():
         mock_cls = MagicMock()
         mock_instance = MagicMock()
         mock_instance.request = AsyncMock(side_effect=side_effect_fn)
+        mock_instance.notify = AsyncMock()
         mock_instance.close = AsyncMock()
         mock_instance.session_id = "session-abc-123"
         mock_instance.protocol_version = LEGACY_MCP_PROTOCOL_REVISION
@@ -58,6 +59,43 @@ class FakeSession:
     def post(self, url: str, *, json: dict, headers: dict):
         self.posts.append({"url": url, "json": json, "headers": headers})
         return self._responses.pop(0)
+
+
+@pytest.mark.asyncio
+async def test_discover_tools_uses_current_initialize_flow_before_tools_list(mock_mcp_client):
+    """Current discovery initializes, sends initialized, then lists tools."""
+
+    calls: list[str] = []
+
+    def route_request(method, params=None):
+        calls.append(method)
+        if method == "initialize":
+            assert params["protocolVersion"] == DEFAULT_MCP_PROTOCOL_REVISION
+            return {
+                "protocolVersion": DEFAULT_MCP_PROTOCOL_REVISION,
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "unifi-network-mcp", "version": "1.0.0"},
+            }
+        if method == "tools/list":
+            return {"tools": []}
+        raise ValueError(f"Unexpected method: {method}")
+
+    mock_cls, mock_instance = mock_mcp_client(route_request)
+
+    async def route_notify(method, params=None):
+        calls.append(method)
+
+    mock_instance.notify.side_effect = route_notify
+
+    with patch("unifi_mcp_relay.discovery.McpHttpClient", mock_cls):
+        from unifi_mcp_relay.discovery import discover_tools
+
+        result = await discover_tools("http://localhost:3000")
+
+    assert result is not None
+    assert result.name == "unifi-network-mcp"
+    assert calls == ["initialize", "notifications/initialized", "tools/list"]
+    mock_instance.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
