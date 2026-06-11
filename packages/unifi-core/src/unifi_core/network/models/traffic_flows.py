@@ -28,8 +28,8 @@ class TrafficFlowQuery(BaseModel):
     page_number: int = Field(default=0, ge=0, description="0-based page number")
     page_size: int = Field(default=100, ge=1, le=1000, description="Rows per page (1-1000)")
     search_text: Optional[str] = Field(default=None, description="Substring match")
-    risk: Optional[list[str]] = Field(default=None, description="Filter by risk band")
-    action: Optional[list[str]] = Field(default=None, description="Filter by action (allow/block)")
+    risk: Optional[list[str]] = Field(default=None, description="Filter by risk band (low/medium/high)")
+    action: Optional[list[str]] = Field(default=None, description="Filter by action (allowed/blocked)")
     direction: Optional[list[str]] = Field(default=None, description="Filter by direction")
     protocol: Optional[list[str]] = Field(default=None, description="Filter by transport protocol")
     service: Optional[list[str]] = Field(default=None, description="Filter by service")
@@ -74,7 +74,9 @@ class TrafficFlow(BaseModel):
     """A single completed traffic flow."""
 
     id: Optional[str] = Field(default=None, description="Flow record ID", json_schema_extra={"mutable": False})
-    action: Optional[str] = Field(default=None, description="Allow/Block", json_schema_extra={"mutable": False})
+    action: Optional[str] = Field(
+        default=None, description="Action taken (allowed/blocked)", json_schema_extra={"mutable": False}
+    )
     risk: Optional[str] = Field(default=None, description="Risk classification", json_schema_extra={"mutable": False})
     service: Optional[str] = Field(
         default=None, description="Service (HTTPS/DNS/...)", json_schema_extra={"mutable": False}

@@ -8525,7 +8525,7 @@
         "input": {
           "properties": {
             "action": {
-              "description": "Filter by action (allow/block)",
+              "description": "Filter by action (allowed/blocked)",
               "type": "string"
             },
             "destination_domain": {
@@ -8557,7 +8557,7 @@
               "type": "string"
             },
             "risk": {
-              "description": "Filter by risk (low/medium/high/critical)",
+              "description": "Filter by risk (low/medium/high)",
               "type": "string"
             },
             "search_text": {
