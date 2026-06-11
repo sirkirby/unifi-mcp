@@ -216,6 +216,16 @@ def _relay_version() -> str:
         return "0.0.0"
 
 
+def _relay_client_info() -> dict:
+    return {
+        "name": "unifi-mcp-relay",
+        "title": "UniFi MCP Relay",
+        "version": _relay_version(),
+        "websiteUrl": PROJECT_WEBSITE_URL,
+        "icons": [icon.model_dump(exclude_none=True) for icon in mcp_icons_for_server("relay")],
+    }
+
+
 def _extract_annotations(tool_data: dict) -> dict | None:
     """Extract MCP ToolAnnotations from a tools/list entry (eager mode fallback)."""
     annotations = tool_data.get("annotations")
@@ -289,13 +299,7 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
             {
                 "protocolVersion": DEFAULT_MCP_PROTOCOL_REVISION,
                 "capabilities": {},
-                "clientInfo": {
-                    "name": "unifi-mcp-relay",
-                    "title": "UniFi MCP Relay",
-                    "version": _relay_version(),
-                    "websiteUrl": PROJECT_WEBSITE_URL,
-                    "icons": [icon.model_dump(exclude_none=True) for icon in mcp_icons_for_server("relay")],
-                },
+                "clientInfo": _relay_client_info(),
             },
         )
 

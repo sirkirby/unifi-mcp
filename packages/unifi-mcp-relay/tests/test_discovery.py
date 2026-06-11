@@ -7,7 +7,7 @@ from importlib.metadata import version
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unifi_mcp_relay.discovery import LEGACY_MCP_PROTOCOL_REVISION, McpHttpClient
+from unifi_mcp_relay.discovery import LEGACY_MCP_PROTOCOL_REVISION, McpHttpClient, _relay_client_info
 from unifi_mcp_shared.protocol import DEFAULT_MCP_PROTOCOL_REVISION
 
 
@@ -59,6 +59,20 @@ class FakeSession:
     def post(self, url: str, *, json: dict, headers: dict):
         self.posts.append({"url": url, "json": json, "headers": headers})
         return self._responses.pop(0)
+
+
+def test_relay_client_info_matches_current_initialize_metadata():
+    info = _relay_client_info()
+
+    assert info["name"] == "unifi-mcp-relay"
+    assert info["title"] == "UniFi MCP Relay"
+    assert info["version"] == version("unifi-mcp-relay")
+    assert info["websiteUrl"] == "https://github.com/sirkirby/unifi-mcp"
+    assert [icon["sizes"] for icon in info["icons"]] == [["48x48"], ["96x96"], ["192x192"]]
+    assert {icon["mimeType"] for icon in info["icons"]} == {"image/png"}
+    assert base64.b64decode(info["icons"][0]["src"].removeprefix("data:image/png;base64,")).startswith(
+        b"\x89PNG\r\n\x1a\n"
+    )
 
 
 @pytest.mark.asyncio
