@@ -7,8 +7,10 @@ from unittest.mock import MagicMock
 import pytest
 from unifi_mcp_shared.protocol import (
     DEFAULT_MCP_PROTOCOL_REVISION,
+    FUTURE_MCP_PROTOCOL_REVISION,
     create_mcp_tool_adapter,
     get_protocol_revision,
+    is_known_protocol_target,
 )
 
 
@@ -35,6 +37,13 @@ class TestGetProtocolRevision:
         monkeypatch.setenv("UNIFI_MCP_PROTOCOL_VERSION", "v1")
         assert get_protocol_revision() == DEFAULT_MCP_PROTOCOL_REVISION
 
+    def test_future_revision_is_known_target(self):
+        assert FUTURE_MCP_PROTOCOL_REVISION == "2026-07-28"
+        assert is_known_protocol_target("2026-07-28") is True
+
+    def test_unknown_revision_is_not_known_target(self):
+        assert is_known_protocol_target("2026-06-18") is False
+
 
 class TestCreateMcpToolAdapter:
     """Test the tool decorator adapter factory."""
@@ -53,6 +62,11 @@ class TestCreateMcpToolAdapter:
         mock_decorator = MagicMock()
         with pytest.raises(ValueError, match="Unsupported MCP protocol revision"):
             create_mcp_tool_adapter(mock_decorator, protocol_revision="2026-06-18")
+
+    def test_future_target_revision_is_not_runtime_supported(self):
+        mock_decorator = MagicMock()
+        with pytest.raises(ValueError, match="Unsupported MCP protocol revision"):
+            create_mcp_tool_adapter(mock_decorator, protocol_revision="2026-07-28")
 
     def test_v2_revision_alias_raises(self):
         mock_decorator = MagicMock()

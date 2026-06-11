@@ -23,8 +23,15 @@ from typing import Any, Callable
 logger = logging.getLogger(__name__)
 
 DEFAULT_MCP_PROTOCOL_REVISION = "2025-11-25"
+FUTURE_MCP_PROTOCOL_REVISION = "2026-07-28"
 
 _KNOWN_REVISIONS = frozenset({DEFAULT_MCP_PROTOCOL_REVISION})
+_KNOWN_PROTOCOL_TARGETS = frozenset(
+    {
+        DEFAULT_MCP_PROTOCOL_REVISION,
+        FUTURE_MCP_PROTOCOL_REVISION,
+    }
+)
 _LEGACY_PROTOCOL_VERSION_ALIASES = {
     "v1": DEFAULT_MCP_PROTOCOL_REVISION,
 }
@@ -60,6 +67,11 @@ def get_protocol_revision() -> str:
         return _normalize_protocol_revision(legacy_version)
 
     return DEFAULT_MCP_PROTOCOL_REVISION
+
+
+def is_known_protocol_target(value: str) -> bool:
+    """Return whether a revision is tracked as a current or future MCP target."""
+    return _normalize_protocol_revision(value) in _KNOWN_PROTOCOL_TARGETS
 
 
 def create_mcp_tool_adapter(
