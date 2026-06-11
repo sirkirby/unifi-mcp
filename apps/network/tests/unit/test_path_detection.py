@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 from aioresponses import CallbackResult, aioresponses
+from aiounifi.errors import RequestError
+from aiounifi.models.api import ApiRequest
 from yarl import URL
 
 from unifi_core.network.managers.connection_manager import (
@@ -45,6 +47,26 @@ def _mock_get(mock: aioresponses, base_url: str, path: str = "", **kwargs) -> No
 def _mock_post(mock: aioresponses, base_url: str, path: str = "", **kwargs) -> None:
     kwargs.setdefault("response_class", _Aiohttp314CompatibleResponse)
     mock.post(_mock_url(base_url, path), **kwargs)
+
+
+class _FailingLoginController:
+    def __init__(self, config):
+        self.connectivity = MagicMock()
+        self.connectivity.is_unifi_os = False
+        self.connectivity.config = config
+
+    async def login(self):
+        raise RequestError("SSO MFA required but no totp_secret configured")
+
+
+class _PasswordLeakingLoginController:
+    def __init__(self, config):
+        self.connectivity = MagicMock()
+        self.connectivity.is_unifi_os = False
+        self.connectivity.config = config
+
+    async def login(self):
+        raise RequestError(f"login failed for {self.connectivity.config.password}")
 
 
 class TestPathDetection:
@@ -418,4 +440,37 @@ class TestPathDetection:
                     assert manager._unifi_os_override is True, "Cached result should be preserved"
 
         # Cleanup
+        await manager.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_request_includes_last_initialize_error_after_auth_failure(self):
+        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=1)
+
+        with patch("unifi_core.network.managers.connection_manager.Controller", _FailingLoginController):
+            with patch("unifi_core.network.controller_type.resolve_controller_type", return_value="direct"):
+                initialized = await manager.initialize()
+                assert initialized is False
+
+                with pytest.raises(ConnectionError) as exc_info:
+                    await manager.request(ApiRequest(method="get", path="/stat/sysinfo"))
+
+        assert "Not connected to controller" in str(exc_info.value)
+        assert "SSO MFA required but no totp_secret configured" in str(exc_info.value)
+        await manager.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_last_initialize_error_redacts_configured_secret(self):
+        manager = ConnectionManager("192.168.1.1", "admin", "super-secret-password", max_retries=1)
+
+        with patch("unifi_core.network.managers.connection_manager.Controller", _PasswordLeakingLoginController):
+            with patch("unifi_core.network.controller_type.resolve_controller_type", return_value="direct"):
+                initialized = await manager.initialize()
+                assert initialized is False
+
+                with pytest.raises(ConnectionError) as exc_info:
+                    await manager.request(ApiRequest(method="get", path="/stat/sysinfo"))
+
+        message = str(exc_info.value)
+        assert "super-secret-password" not in message
+        assert "<redacted>" in message
         await manager.cleanup()

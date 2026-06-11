@@ -74,10 +74,23 @@ assert_not_contains() {
   fi
 }
 
+assert_no_crlf() {
+  local desc="$1"
+  local file="$2"
+  if LC_ALL=C grep -q $'\r' "$file"; then
+    echo "  [FAIL] $desc (CRLF byte found in $file)"
+    fails=$((fails + 1))
+    fail_messages="$fail_messages\n  - $desc"
+  else
+    echo "  [OK]   $desc"
+    passes=$((passes + 1))
+  fi
+}
+
 # --- 1. Scripts are byte-identical across all three plugins (drift guard) ---
 echo ""
 echo "== 1. Cross-plugin script parity =="
-for script in check-prereqs.sh set-env.sh; do
+for script in check-prereqs.sh set-env.sh check-prereqs.ps1; do
   reference="$REPO_ROOT/plugins/${PLUGINS[0]}/scripts/$script"
   for plugin in "${PLUGINS[@]:1}"; do
     other="$REPO_ROOT/plugins/$plugin/scripts/$script"
@@ -90,6 +103,13 @@ for script in check-prereqs.sh set-env.sh; do
       fail_messages="$fail_messages\n  - $script drift: ${PLUGINS[0]} vs $plugin"
     fi
   done
+done
+
+echo ""
+echo "== 1b. Script line endings =="
+for plugin in "${PLUGINS[@]}"; do
+  assert_no_crlf "$plugin check-prereqs.sh uses LF" "$REPO_ROOT/plugins/$plugin/scripts/check-prereqs.sh"
+  assert_no_crlf "$plugin set-env.sh uses LF" "$REPO_ROOT/plugins/$plugin/scripts/set-env.sh"
 done
 
 # --- 2. check-prereqs.sh behavior ---

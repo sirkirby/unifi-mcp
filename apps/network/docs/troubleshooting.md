@@ -22,6 +22,10 @@
 3. Try logging into the controller web UI with the same credentials
 4. If using an API key: note that API key auth is experimental and limited to read-only operations — username/password are still required for full functionality
 
+### SSO/MFA auth fails but tools say "Not connected"
+
+If logs show `SSO MFA required but no totp_secret configured`, the controller is reachable but the configured account requires an MFA flow that Network MCP does not currently expose in configuration. Configure a dedicated local UniFi admin/service account without SSO MFA or local 2FA, then restart the MCP client so the updated environment is loaded.
+
 ### 404 errors on API calls
 
 **Symptoms:** Tools return 404 Not Found or "endpoint not found" errors.

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import time
 import time as _time
 from typing import Any, Dict, Optional
@@ -240,6 +241,7 @@ class ConnectionManager:
         self._connect_lock = asyncio.Lock()
         self._cache: Dict[str, Any] = {}
         self._last_cache_update: Dict[str, float] = {}
+        self._last_connection_error: Optional[str] = None
 
         # Path detection state
         self._unifi_os_override: Optional[bool] = None
@@ -254,6 +256,26 @@ class ConnectionManager:
     def url_base(self) -> str:
         proto = "https"
         return f"{proto}://{self.host}:{self.port}"
+
+    def _sanitize_connection_error(self, error: BaseException) -> str:
+        """Return a user-facing connection error without configured secrets."""
+        message = str(error) or type(error).__name__
+        for secret in (self.password, self.username):
+            if secret:
+                pattern = rf"(?<![A-Za-z0-9_-]){re.escape(secret)}(?![A-Za-z0-9_-])"
+                message = re.sub(pattern, "<redacted>", message)
+        return message
+
+    def _record_connection_error(self, error: BaseException) -> str:
+        self._last_connection_error = self._sanitize_connection_error(error)
+        return self._last_connection_error
+
+    def _not_connected_error(self) -> ConnectionError:
+        if self._last_connection_error:
+            return ConnectionError(
+                f"Not connected to controller: last connection attempt failed: {self._last_connection_error}"
+            )
+        return ConnectionError("Not connected to controller")
 
     async def initialize(self) -> bool:
         """Initialize the controller connection (correct for attached aiounifi version)."""
@@ -363,6 +385,7 @@ class ConnectionManager:
                             logger.debug("Post-login detection confirmed pre-login result")
 
                     self._initialized = True
+                    self._last_connection_error = None
                     logger.info("Successfully connected to Unifi controller at %s for site '%s'", self.host, self.site)
                     self._invalidate_cache()
                     return True
@@ -374,7 +397,8 @@ class ConnectionManager:
                     asyncio.TimeoutError,
                     aiohttp.ClientError,
                 ) as e:
-                    logger.warning("Connection attempt %s failed: %s", attempt + 1, e)
+                    connection_error = self._record_connection_error(e)
+                    logger.warning("Connection attempt %s failed: %s", attempt + 1, connection_error)
                     if session_created and self._aiohttp_session and not self._aiohttp_session.closed:
                         await self._aiohttp_session.close()
                         self._aiohttp_session = None
@@ -383,14 +407,17 @@ class ConnectionManager:
                         await asyncio.sleep(self._retry_delay)
                     else:
                         logger.error(
-                            "Failed to initialize Unifi controller after %s attempts: %s", self._max_retries, e
+                            "Failed to initialize Unifi controller after %s attempts: %s",
+                            self._max_retries,
+                            connection_error,
                         )
                         self._initialized = False
                         return False
                 except Exception as e:
+                    connection_error = self._record_connection_error(e)
                     logger.error(
                         "Unexpected error during controller initialization: %s",
-                        e,
+                        connection_error,
                         exc_info=True,
                     )
                     if session_created and self._aiohttp_session and not self._aiohttp_session.closed:
@@ -435,7 +462,7 @@ class ConnectionManager:
     async def request(self, api_request: ApiRequest | ApiRequestV2, return_raw: bool = False) -> Any:
         """Make a request to the controller API, handling raw responses."""
         if not await self.ensure_connected() or not self.controller:
-            raise ConnectionError("Not connected to controller")
+            raise self._not_connected_error()
 
         # Apply override if we have better detection (FR-003: use cached detection)
         original_is_unifi_os = None

@@ -84,6 +84,10 @@ Launch `codex`, run `/plugins`, open the UniFi MCP marketplace, and install `uni
 
 The setup skill registers the MCP server with `codex mcp add`, stores the selected environment values in Codex's MCP configuration, and keeps the same preview-before-confirm safety model as Claude Code.
 
+### UniFi account requirements
+
+The MCP servers authenticate to the local UniFi controller APIs with a local admin/service account. Do not use a Ubiquiti SSO cloud account for MCP setup. For Network MCP today, accounts that require SSO MFA or local 2FA are not supported through configuration; use a dedicated local admin account without MFA for the service account, scoped to the permissions you are comfortable giving the MCP server.
+
 ### OpenClaw
 
 OpenClaw can install the same UniFi plugin bundles from the marketplace and map their skills plus MCP server definitions into embedded Pi sessions:
@@ -190,8 +194,8 @@ Set these environment variables (or use a `.env` file):
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `UNIFI_HOST` | Yes | Controller IP or hostname |
-| `UNIFI_USERNAME` | Yes | Local admin username |
-| `UNIFI_PASSWORD` | Yes | Admin password |
+| `UNIFI_USERNAME` | Yes | Local admin/service account username; do not use a Ubiquiti SSO account |
+| `UNIFI_PASSWORD` | Yes | Password for the local account |
 | `UNIFI_API_KEY` | No | UniFi API key (experimental — limited to read-only, subset of tools) |
 
 ### Multi-controller setups
