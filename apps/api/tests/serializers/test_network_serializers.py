@@ -122,3 +122,14 @@ def test_wlan_serializer_shape() -> None:
     assert out["name"] == "MyWiFi"
     assert out["security"] == "wpapsk"
     assert out["enabled"] is True
+
+
+def test_wlan_projection_redacts_passphrase() -> None:
+    from unifi_api.graphql.types.network.wlan import Wlan
+    from unifi_core.redaction import REDACTED
+
+    out = Wlan.from_manager_output(
+        {"_id": "wlan1", "name": "MyWiFi", "enabled": True, "x_passphrase": "wifi-secret"}
+    ).to_dict()
+
+    assert out["x_passphrase"] == REDACTED

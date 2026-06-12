@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from unifi_core.redaction import REDACTED
 from tests.graphql.fixtures._helpers import bootstrap, graphql_query, stub_managers
 
 
@@ -47,7 +48,7 @@ async def test_access_credential_detail(tmp_path, monkeypatch):
         monkeypatch,
         {
             ("access", "credential_manager", "list_credentials"): [
-                {"id": "cred1", "type": "nfc", "status": "active"},
+                {"id": "cred1", "type": "nfc", "status": "active", "token": "nfc-token", "pin_code": "123456"},
             ],
         },
     )
@@ -56,10 +57,12 @@ async def test_access_credential_detail(tmp_path, monkeypatch):
         key,
         f'''{{
         access {{ credential(controller: "{cid}", id: "cred1") {{
-            id type status
+            id type status token pinCode
         }} }}
     }}''',
     )
     assert body.get("errors") is None, body
     assert body["data"]["access"]["credential"]["id"] == "cred1"
     assert body["data"]["access"]["credential"]["type"] == "nfc"
+    assert body["data"]["access"]["credential"]["token"] == REDACTED
+    assert body["data"]["access"]["credential"]["pinCode"] == REDACTED

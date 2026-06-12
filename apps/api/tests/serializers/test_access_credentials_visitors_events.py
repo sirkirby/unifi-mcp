@@ -61,6 +61,18 @@ def test_credential_mutation_ack_revoke() -> None:
     assert out["render_hint"]["kind"] == "detail"
 
 
+def test_access_credential_projection_redacts_token_and_pin() -> None:
+    from unifi_api.graphql.types.access.credentials import Credential
+    from unifi_core.redaction import REDACTED
+
+    out = Credential.from_manager_output(
+        {"id": "cred1", "type": "pin", "token": "nfc-token", "pin_code": "123456"}
+    ).to_dict()
+
+    assert out["token"] == REDACTED
+    assert out["pin_code"] == REDACTED
+
+
 # ---- visitors ----
 
 

@@ -10,6 +10,7 @@ from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
+from unifi_core.redaction import REDACTED
 
 
 def _cfg(tmp_path):
@@ -255,7 +256,14 @@ async def test_get_credential_happy_and_404(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    target = {"id": "cred-1", "type": "card", "user_id": "user-1", "status": "active"}
+    target = {
+        "id": "cred-1",
+        "type": "card",
+        "user_id": "user-1",
+        "status": "active",
+        "token": "nfc-token",
+        "pin_code": "123456",
+    }
 
     async def fake_get(self, credential_id):
         if credential_id == "cred-1":
@@ -279,5 +287,7 @@ async def test_get_credential_happy_and_404(tmp_path, monkeypatch) -> None:
     assert ok.status_code == 200, ok.text
     body = ok.json()
     assert body["data"]["id"] == "cred-1"
+    assert body["data"]["token"] == REDACTED
+    assert body["data"]["pin_code"] == REDACTED
     assert body["render_hint"]["kind"] == "detail"
     assert miss.status_code == 404

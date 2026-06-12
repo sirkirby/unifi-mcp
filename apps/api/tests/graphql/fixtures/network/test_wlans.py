@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from unifi_core.redaction import REDACTED
 from tests.graphql.fixtures._helpers import (
     bootstrap,
     graphql_query,
@@ -52,7 +53,7 @@ async def test_wlan_detail(tmp_path, monkeypatch):
         monkeypatch,
         {
             ("network", "network_manager", "get_wlans"): [
-                {"_id": "wl-1", "name": "HomeNet"},
+                {"_id": "wl-1", "name": "HomeNet", "x_passphrase": "wifi-secret"},
             ],
         },
     )
@@ -61,9 +62,10 @@ async def test_wlan_detail(tmp_path, monkeypatch):
         key,
         f'''{{
         network {{ wlan(controller: "{cid}", id: "wl-1") {{
-            id name
+            id name xPassphrase
         }} }}
     }}''',
     )
     assert body.get("errors") is None, body
     assert body["data"]["network"]["wlan"]["id"] == "wl-1"
+    assert body["data"]["network"]["wlan"]["xPassphrase"] == REDACTED

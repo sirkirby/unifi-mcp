@@ -10,6 +10,7 @@ from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
+from unifi_core.redaction import REDACTED
 
 
 def _cfg(tmp_path):
@@ -245,7 +246,16 @@ async def test_list_wlans_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_wlans = [
-        _FakeRaw({"_id": f"w-{i}", "name": f"ssid-{i}", "enabled": True, "security": "wpapsk"}) for i in range(2)
+        _FakeRaw(
+            {
+                "_id": f"w-{i}",
+                "name": f"ssid-{i}",
+                "enabled": True,
+                "security": "wpapsk",
+                "x_passphrase": f"wifi-secret-{i}",
+            }
+        )
+        for i in range(2)
     ]
 
     async def fake_get_wlans(self, *a, **kw):
@@ -263,6 +273,7 @@ async def test_list_wlans_happy_path(tmp_path, monkeypatch) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert len(body["items"]) == 2
+    assert all(item["x_passphrase"] == REDACTED for item in body["items"])
     assert body["render_hint"]["kind"] == "list"
 
 

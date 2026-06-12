@@ -5,6 +5,8 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Callable
 
+from unifi_core.redaction import redact_sensitive_fields
+
 
 class RenderKind(str, Enum):
     LIST = "list"
@@ -54,6 +56,9 @@ class Serializer:
             hint["sort_default"] = self.sort_default
         return hint
 
+    def _redact(self, data: Any) -> Any:
+        return redact_sensitive_fields(data)
+
     def serialize_action(self, result, *, tool_name: str) -> dict:
         kind = self._kind_for_tool(tool_name)
         hint = self._render_hint(kind)
@@ -62,21 +67,21 @@ class Serializer:
                 raise SerializerContractError(
                     f"tool '{tool_name}' declared kind=list but manager returned {type(result).__name__}"
                 )
-            return {"success": True, "data": [self.serialize(item) for item in result], "render_hint": hint}
+            return {"success": True, "data": self._redact([self.serialize(item) for item in result]), "render_hint": hint}
         if kind == RenderKind.DETAIL:
-            return {"success": True, "data": self.serialize(result), "render_hint": hint}
+            return {"success": True, "data": self._redact(self.serialize(result)), "render_hint": hint}
         if kind == RenderKind.EMPTY:
             return {"success": True, "render_hint": hint}
         if kind == RenderKind.DIFF:
-            return {"success": True, "data": self.serialize(result), "render_hint": hint}
+            return {"success": True, "data": self._redact(self.serialize(result)), "render_hint": hint}
         if kind == RenderKind.STREAM:
-            return {"success": True, "data": self.serialize(result), "render_hint": hint}
+            return {"success": True, "data": self._redact(self.serialize(result)), "render_hint": hint}
         if kind in (RenderKind.TIMESERIES, RenderKind.EVENT_LOG):
             if not isinstance(result, list):
                 raise SerializerContractError(
                     f"tool '{tool_name}' declared kind={kind.value} but manager returned {type(result).__name__}"
                 )
-            return {"success": True, "data": [self.serialize(item) for item in result], "render_hint": hint}
+            return {"success": True, "data": self._redact([self.serialize(item) for item in result]), "render_hint": hint}
         raise SerializerContractError(f"unknown kind {kind} for tool '{tool_name}'")
 
 

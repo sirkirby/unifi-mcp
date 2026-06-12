@@ -81,6 +81,38 @@ def test_serialize_action_detail_kind() -> None:
     }
 
 
+def test_serialize_action_detail_redacts_sensitive_fields() -> None:
+    from unifi_core.redaction import REDACTED
+
+    @register_serializer(tools=["t_secret"])
+    class SecretSer(Serializer):
+        kind = RenderKind.DETAIL
+
+        @staticmethod
+        def serialize(obj):
+            return {"id": "1", "x_passphrase": obj}
+
+    out = SecretSer().serialize_action("wifi-secret", tool_name="t_secret")
+
+    assert out["data"]["x_passphrase"] == REDACTED
+
+
+def test_serialize_action_list_redacts_sensitive_fields() -> None:
+    from unifi_core.redaction import REDACTED
+
+    @register_serializer(tools=["t_secret_list"])
+    class SecretListSer(Serializer):
+        kind = RenderKind.LIST
+
+        @staticmethod
+        def serialize(obj):
+            return {"id": obj, "token": "tok"}
+
+    out = SecretListSer().serialize_action(["a"], tool_name="t_secret_list")
+
+    assert out["data"][0]["token"] == REDACTED
+
+
 def test_serialize_action_empty_kind() -> None:
     @register_serializer(tools=["t_empty"])
     class EmpSer(Serializer):
