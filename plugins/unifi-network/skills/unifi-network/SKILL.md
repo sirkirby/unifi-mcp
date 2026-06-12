@@ -43,6 +43,8 @@ Always preview first and show the user before confirming.
 
 All tools return: `{"success": true, "data": ...}`, `{"success": false, "error": "..."}`, or `{"success": true, "requires_confirmation": true, "preview": ...}`. Always check `success` first.
 
+**Redacted secrets:** Secret fields — WLAN passphrases (`x_passphrase`), VPN private/preshared keys, and SNMP community strings — come back as `***REDACTED***` by default. When the user genuinely needs the value (e.g. "what's the guest WiFi password?"), pass `include_sensitive=true` to the read tool. On an update, send **only** the fields you are changing — to keep a secret unchanged, omit it; never echo `***REDACTED***` back, which is rejected so the placeholder can't overwrite the real secret.
+
 ## Device Classification
 
 `unifi_list_devices` returns a `device_category` field that accurately classifies devices:
