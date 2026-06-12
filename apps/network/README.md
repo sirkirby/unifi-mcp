@@ -89,6 +89,10 @@ UNIFI_NETWORK_PASSWORD=your-password # Admin password
 
 **Fallback:** Existing `UNIFI_*` variables (e.g., `UNIFI_HOST`) continue to work. The server checks for `UNIFI_NETWORK_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
 
+### Sensitive response fields
+
+Network tools redact known secret-bearing fields by default before returning data to MCP clients. This includes WLAN passphrases and VPN key material in raw/detail responses and mutation previews. Tools that expose raw controller data accept `include_sensitive=true` when you explicitly need the original value for local administrative work.
+
 ## Run
 
 ```bash

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated:** 2026-03-24
+**Last updated:** 2026-06-12
 
 ## Summary
 
@@ -67,6 +67,8 @@ We do not integrate with any analytics, advertising, or data broker services.
 - They are read at startup and used to authenticate with your controller
 - They are never logged, transmitted externally, or stored in any persistent database
 - API keys (if used) follow the same local-only pattern
+
+MCP and API responses redact known controller secret fields by default, including Wi-Fi passphrases, VPN private or preshared keys, API tokens, and credential token/PIN values. Some MCP tools that return raw controller configuration expose an explicit `include_sensitive=true` escape hatch for local administrative inspection; leave it unset for normal AI-agent use.
 
 ## Data Retention
 

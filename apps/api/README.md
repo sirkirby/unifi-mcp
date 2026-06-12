@@ -120,6 +120,10 @@ The HTTP layer is FastAPI; GraphQL is Strawberry on top of the same projection
 types REST uses, so consumer-facing field names are identical across the two
 surfaces. Pagination is cursor-based on REST, slice-based on GraphQL.
 
+### Sensitive response fields
+
+REST, GraphQL, and action responses redact known controller secret fields by default. The API does not expose a broad raw-secret opt-out; add a purpose-built administrative endpoint if a future use case genuinely needs secret retrieval.
+
 ## Distribution
 
 `unifi-api-server` is published to:
