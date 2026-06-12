@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
+from unifi_core.redaction import redact_sensitive_fields
 
 # ---------------------------------------------------------------------------
 # Pydantic domain model
@@ -109,6 +110,12 @@ def from_controller(raw: Any) -> Credential:
     """
     last_used = _get(raw, "last_used") or _get(raw, "last_used_at")
     expiry = _get(raw, "expiry") or _get(raw, "expires_at")
+    sensitive = redact_sensitive_fields(
+        {
+            "token": _get(raw, "token"),
+            "pin_code": _get(raw, "pin_code"),
+        }
+    )
     return Credential(
         id=_get(raw, "id"),
         status=_get(raw, "status"),
@@ -116,8 +123,8 @@ def from_controller(raw: Any) -> Credential:
         last_used=last_used,
         type=_get(raw, "type"),
         user_id=_get(raw, "user_id"),
-        token=_get(raw, "token"),
-        pin_code=_get(raw, "pin_code"),
+        token=sensitive.get("token"),
+        pin_code=sensitive.get("pin_code"),
     )
 
 

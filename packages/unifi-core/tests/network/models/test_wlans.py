@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from unifi_core.redaction import REDACTED
 from unifi_core.network.models.wlans import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -67,7 +68,7 @@ class TestFromController:
         assert wlan.site_id == "site-a"
         assert wlan.name == "HomeWiFi"
         assert wlan.security == "wpa2-psk"
-        assert wlan.x_passphrase == "secret123"
+        assert wlan.x_passphrase == REDACTED
         assert wlan.enabled is True
         assert wlan.hide_ssid is False
         assert wlan.network_id == "net-1"
@@ -91,6 +92,11 @@ class TestFromController:
         assert wlan.id is None
         assert wlan.name is None
         assert wlan.enabled is None
+
+    def test_wlan_from_controller_redacts_passphrase_by_default(self) -> None:
+        model = from_controller({"_id": "w1", "name": "SSID", "x_passphrase": "wifi-secret"})
+
+        assert model.x_passphrase == REDACTED
 
 
 class TestToControllerCreate:
@@ -116,6 +122,12 @@ class TestToControllerCreate:
         model = Wlan(name="Secure", security="wpa2-psk", x_passphrase="mysecret")
         payload = to_controller_create(model)
         assert payload["x_passphrase"] == "mysecret"
+
+    def test_create_and_update_preserve_caller_passphrase(self) -> None:
+        model = Wlan(name="SSID", security="wpapsk", x_passphrase="wifi-secret")
+
+        assert to_controller_create(model)["x_passphrase"] == "wifi-secret"
+        assert to_controller_update({"x_passphrase": "new-secret"})["x_passphrase"] == "new-secret"
 
     def test_omits_none_fields(self) -> None:
         model = Wlan(name="Minimal", security="open")

@@ -62,3 +62,9 @@ def test_include_sensitive_returns_values_unchanged() -> None:
     payload = {"password": "secret", "nested": [{"token": "tok"}]}
 
     assert redact_sensitive_fields(payload, include_sensitive=True) == payload
+
+
+def test_preserves_none_sensitive_values() -> None:
+    payload = {"token": None, "pin_code": None}
+
+    assert redact_sensitive_fields(payload) == payload

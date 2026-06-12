@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from unifi_core.redaction import REDACTED
 from unifi_core.access.models.credentials import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -56,7 +57,7 @@ class TestFromController:
         assert c.expiry == "2027-01-01T00:00:00Z"
         assert c.last_used == "2026-05-01T12:00:00Z"
         assert c.user_id == "user-1"
-        assert c.token == "AABBCCDD"
+        assert c.token == REDACTED
         assert c.pin_code is None
 
     def test_coalesces_last_used_at(self) -> None:
@@ -124,6 +125,19 @@ class TestFromController:
         assert c.type == "mobile"
         assert c.user_id == "user-99"
 
+    def test_credential_from_controller_redacts_token_and_pin_by_default(self) -> None:
+        model = from_controller(
+            {
+                "id": "cred1",
+                "type": "nfc",
+                "token": "nfc-token",
+                "pin_code": "123456",
+            }
+        )
+
+        assert model.token == REDACTED
+        assert model.pin_code == REDACTED
+
 
 class TestToControllerCreate:
     def test_nfc_emits_type_user_id_token(self) -> None:
@@ -131,6 +145,14 @@ class TestToControllerCreate:
         payload = to_controller_create(model)
         assert payload["credential_type"] == "nfc"
         assert payload["data"] == {"user_id": "u1", "token": "DEADBEEF"}
+
+    def test_create_preserves_token_and_pin_input(self) -> None:
+        model = Credential(type="pin", user_id="user1", token="nfc-token", pin_code="123456")
+
+        payload = to_controller_create(model)
+
+        assert payload["data"]["token"] == "nfc-token"
+        assert payload["data"]["pin_code"] == "123456"
 
     def test_pin_emits_type_user_id_pin_code(self) -> None:
         model = Credential(type="pin", user_id="u2", pin_code="1234")
