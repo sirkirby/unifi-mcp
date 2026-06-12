@@ -1,6 +1,12 @@
 from copy import deepcopy
 
-from unifi_core.redaction import REDACTED, is_sensitive_key, redact_sensitive_fields, redaction_marker_paths
+from unifi_core.redaction import (
+    REDACTED,
+    is_sensitive_key,
+    redact_sensitive_fields,
+    redact_value,
+    redaction_marker_paths,
+)
 
 
 def test_redacts_exact_and_compound_sensitive_keys() -> None:
@@ -24,7 +30,9 @@ def test_redacts_exact_and_compound_sensitive_keys() -> None:
     assert redacted["x_passphrase"] == REDACTED
     assert redacted["privateKey"] == REDACTED
     assert redacted["private_preshared_keys"] == REDACTED
-    assert redacted["private_preshared_keys_enabled"] == REDACTED
+    # The boolean feature flag is NOT a secret — redacting it would hide
+    # useful, non-sensitive configuration state from the agent.
+    assert redacted["private_preshared_keys_enabled"] is True
     assert redacted["wireguard_private_key"] == REDACTED
     assert redacted["preshared_key"] == REDACTED
     assert redacted["x_iapp_key"] == REDACTED
@@ -80,6 +88,22 @@ def test_preserves_none_sensitive_values() -> None:
     payload = {"token": None, "pin_code": None}
 
     assert redact_sensitive_fields(payload) == payload
+
+
+def test_redact_value_redacts_sensitive_keys_only() -> None:
+    assert redact_value("x_passphrase", "wifi-secret") == REDACTED
+    assert redact_value("token", "tok") == REDACTED
+    assert redact_value("name", "Guest") == "Guest"
+    # None is exempt (nothing to hide), matching redact_sensitive_fields.
+    assert redact_value("token", None) is None
+    # The opt-out returns the raw value untouched.
+    assert redact_value("token", "tok", include_sensitive=True) == "tok"
+
+
+def test_does_not_redact_preshared_keys_enabled_flag() -> None:
+    # The boolean toggle is non-sensitive config, unlike the keys list itself.
+    assert is_sensitive_key("private_preshared_keys_enabled") is False
+    assert is_sensitive_key("private_preshared_keys") is True
 
 
 def test_redaction_marker_paths_reports_only_sensitive_marker_values() -> None:

@@ -20,10 +20,14 @@ from unifi_core.network.models.system import (
     snmp_to_controller_update,
     system_info_from_controller,
 )
-from unifi_core.redaction import REDACTED, redact_sensitive_fields
+from unifi_core.redaction import redact_sensitive_fields
 from unifi_network_mcp.runtime import server, system_manager
 
 logger = logging.getLogger(__name__)
+
+_INCLUDE_SENSITIVE_FIELD = Field(
+    description="When true, returns raw controller secret fields. Leave false for normal AI-agent use."
+)
 
 # Explicitly retrieve and log the server instance to confirm it's being used
 logger.info("System tools module loaded, server instance: %s", server)
@@ -112,7 +116,9 @@ async def get_site_settings() -> Dict[str, Any]:
     description="Get current SNMP settings for the site (enabled state, community string).",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
-async def get_snmp_settings() -> Dict[str, Any]:
+async def get_snmp_settings(
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
+) -> Dict[str, Any]:
     """Implementation for getting SNMP settings."""
     logger.info("unifi_get_snmp_settings tool called")
     try:
@@ -123,7 +129,8 @@ async def get_snmp_settings() -> Dict[str, Any]:
                 "success": True,
                 "site": system_manager._connection.site,
                 "snmp_settings": shaped,
-            }
+            },
+            include_sensitive=include_sensitive,
         )
     except Exception as e:
         logger.error("Error getting SNMP settings: %s", e, exc_info=True)
@@ -147,6 +154,7 @@ async def update_snmp_settings(
         bool,
         Field(description="When true, applies the changes. When false (default), returns a preview of the changes"),
     ] = False,
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Implementation for updating SNMP settings.
 
@@ -154,16 +162,14 @@ async def update_snmp_settings(
         enabled: Whether SNMP should be enabled on the site.
         community: SNMP community string (optional, keeps current value if not provided).
         confirm: Must be true to apply changes. When false, returns a preview of proposed changes.
+        include_sensitive: When true, the response echoes the community string verbatim.
     """
     logger.info("unifi_update_snmp_settings tool called (enabled=%s, confirm=%s)", enabled, confirm)
 
+    # Redaction-marker write-back (e.g. community="***REDACTED***") is rejected
+    # centrally at the MCP dispatch boundary (StrictKwargFastMCP.call_tool).
     updates: Dict[str, Any] = {"enabled": enabled}
     if community is not None:
-        if community == REDACTED:
-            return {
-                "success": False,
-                "error": "Failed to update SNMP settings: omit community to keep the current value; do not pass the redaction marker.",
-            }
         updates["community"] = community
 
     validated_data = snmp_to_controller_update(updates)
@@ -178,7 +184,8 @@ async def update_snmp_settings(
                 resource_name="SNMP Settings",
                 current_state={},
                 updates=validated_data,
-            )
+            ),
+            include_sensitive=include_sensitive,
         )
 
     try:
@@ -192,7 +199,8 @@ async def update_snmp_settings(
                         "enabled": validated_data.get("enabled", enabled),
                         "community": validated_data.get("community", community or ""),
                     },
-                }
+                },
+                include_sensitive=include_sensitive,
             )
         return {"success": False, "error": "Failed to update SNMP settings."}
     except Exception as e:

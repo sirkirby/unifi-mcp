@@ -56,6 +56,11 @@ logger = logging.getLogger(__name__)
 
 
 _DEFAULT_PRODUCTS: tuple[str, ...] = ("network", "protect", "access")
+
+# Presentation-only flags are valid tool arguments that managers do not accept.
+# They are dropped before the manager call and consumed at the response
+# boundary instead (e.g. ``include_sensitive`` is honored by the serializer /
+# Strawberry type in ``routes.actions.post_action``).
 _PRESENTATION_ONLY_ARGS = frozenset({"include_sensitive"})
 
 # Tool category directories under apps/<product>/src/unifi_<product>_mcp/tools/

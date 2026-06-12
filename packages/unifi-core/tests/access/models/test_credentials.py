@@ -9,7 +9,6 @@ from unifi_core.access.models.credentials import (
     from_controller,
     to_controller_create,
 )
-from unifi_core.redaction import REDACTED
 
 
 class TestFieldSets:
@@ -57,7 +56,7 @@ class TestFromController:
         assert c.expiry == "2027-01-01T00:00:00Z"
         assert c.last_used == "2026-05-01T12:00:00Z"
         assert c.user_id == "user-1"
-        assert c.token == REDACTED
+        assert c.token == "AABBCCDD"
         assert c.pin_code is None
 
     def test_coalesces_last_used_at(self) -> None:
@@ -125,7 +124,9 @@ class TestFromController:
         assert c.type == "mobile"
         assert c.user_id == "user-99"
 
-    def test_credential_from_controller_redacts_token_and_pin_by_default(self) -> None:
+    def test_credential_from_controller_carries_secrets_verbatim(self) -> None:
+        # The domain model is lossless: redaction is a response-boundary
+        # concern (MCP tool / serializer / GraphQL type), not the model's job.
         model = from_controller(
             {
                 "id": "cred1",
@@ -135,8 +136,8 @@ class TestFromController:
             }
         )
 
-        assert model.token == REDACTED
-        assert model.pin_code == REDACTED
+        assert model.token == "nfc-token"
+        assert model.pin_code == "123456"
 
 
 class TestToControllerCreate:

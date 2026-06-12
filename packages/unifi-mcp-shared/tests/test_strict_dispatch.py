@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
+from unifi_core.redaction import REDACTED
 from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP, _load_allowed_kwargs
 
 
@@ -157,6 +158,57 @@ async def test_missing_required_not_double_reported(acl_manifest: pathlib.Path) 
         result = await server.call_tool("unifi_create_acl_rule", {"name": "rule"})
     assert result is sentinel
     super_mock.assert_awaited_once_with("unifi_create_acl_rule", {"name": "rule"})
+
+
+# -----------------------------
+# redaction-marker write-back guard
+# -----------------------------
+
+
+async def test_rejects_top_level_redaction_marker(tmp_path: pathlib.Path) -> None:
+    """A sensitive top-level kwarg echoed back as the marker is rejected."""
+    manifest = _write_manifest(
+        tmp_path,
+        [_make_tool("unifi_update_snmp_settings", {"enabled": {"type": "boolean"}, "community": {"type": "string"}})],
+    )
+    server = StrictKwargFastMCP("test", tools_manifest_path=manifest)
+    with pytest.raises(ToolError) as excinfo:
+        await server.call_tool("unifi_update_snmp_settings", {"enabled": True, "community": REDACTED})
+    msg = str(excinfo.value)
+    assert "community" in msg
+    assert "redaction marker" in msg
+
+
+async def test_rejects_nested_redaction_marker(acl_manifest: pathlib.Path) -> None:
+    """Unlike the kwarg check, the marker guard recurses into inner dicts."""
+    server = StrictKwargFastMCP("test", tools_manifest_path=acl_manifest)
+    with pytest.raises(ToolError) as excinfo:
+        await server.call_tool(
+            "unifi_update_policy",
+            {"policy_id": "p1", "policy_data": {"x_passphrase": REDACTED}},
+        )
+    assert "policy_data.x_passphrase" in str(excinfo.value)
+
+
+async def test_marker_guard_allows_non_sensitive_field_equal_to_marker(acl_manifest: pathlib.Path) -> None:
+    """A non-sensitive field whose value equals the marker passes — the guard
+    only fires on keys the shared vocabulary deems sensitive."""
+    server = StrictKwargFastMCP("test", tools_manifest_path=acl_manifest)
+    sentinel = [{"type": "text", "text": "ok"}]
+    args = {"name": REDACTED, "action": "REJECT"}
+    with patch.object(FastMCP, "call_tool", new=AsyncMock(return_value=sentinel)) as super_mock:
+        result = await server.call_tool("unifi_create_acl_rule", args)
+    assert result is sentinel
+    super_mock.assert_awaited_once_with("unifi_create_acl_rule", args)
+
+
+async def test_marker_guard_runs_for_unknown_tools(tmp_path: pathlib.Path) -> None:
+    """The guard is not gated on manifest presence: a tool absent from the
+    manifest still cannot smuggle a marker write-back through."""
+    manifest = _write_manifest(tmp_path, [_make_tool("unifi_known", {"x": {"type": "string"}})])
+    server = StrictKwargFastMCP("test", tools_manifest_path=manifest)
+    with pytest.raises(ToolError):
+        await server.call_tool("unifi_not_in_manifest", {"token": REDACTED})
 
 
 # -----------------------------

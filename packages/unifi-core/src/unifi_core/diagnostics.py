@@ -27,7 +27,7 @@ import time
 from functools import wraps
 from typing import Any, Callable, Dict
 
-from unifi_core.redaction import REDACTED, is_sensitive_key, redact_sensitive_fields
+from unifi_core.redaction import redact_sensitive_fields
 
 # Module-level state set by init_diagnostics()
 _config_provider: Callable[[], Any] | None = None
@@ -113,12 +113,6 @@ def diagnostics_enabled() -> bool:
 # ---------------------------------------------------------------------------
 # Redaction / truncation helpers
 # ---------------------------------------------------------------------------
-
-
-def _redact_value(key: str, value: Any) -> Any:
-    if is_sensitive_key(key):
-        return REDACTED
-    return value
 
 
 def _redact(obj: Any) -> Any:

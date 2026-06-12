@@ -25,6 +25,7 @@ from typing import Any, Sequence
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ContentBlock
+from unifi_core.redaction import redaction_marker_paths
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,17 @@ class StrictKwargFastMCP(FastMCP):
           registered, or empty cache) pass through to FastMCP unchanged so
           its own "Unknown tool" path still works.
         - Tools present in the cache with unknown kwargs raise ``ToolError``.
+        - Any argument carrying the redaction marker at a sensitive key raises
+          ``ToolError`` (write-back guard, see below).
         - All other cases delegate to ``super().call_tool``.
+
+        Write-back guard: redacted responses surface secrets as the redaction
+        marker. An agent that echoes such a value back into a mutation would
+        otherwise persist the literal marker as the real secret. Rejecting it
+        once here covers every tool — including ``unifi_execute``/``unifi_batch``,
+        which re-enter ``call_tool`` for their inner dispatch — so individual
+        mutation tools need no per-field check. Mirrors the API-side guard in
+        ``unifi_api.services.actions.dispatch_action``.
         """
         if name in self._allowed_kwargs:
             allowed = self._allowed_kwargs[name]
@@ -74,6 +85,13 @@ class StrictKwargFastMCP(FastMCP):
                 raise ToolError(
                     f"Invalid params for '{name}': unknown arguments {{{unknown_str}}}. Valid arguments: [{valid_str}]."
                 )
+        marker_paths = redaction_marker_paths(arguments)
+        if marker_paths:
+            field = marker_paths[0]
+            raise ToolError(
+                f"Invalid params for '{name}': {field} is the redaction marker, not a real value. "
+                f"Omit {field} to keep the current value."
+            )
         return await super().call_tool(name, arguments)
 
 

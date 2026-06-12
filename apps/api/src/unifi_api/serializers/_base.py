@@ -56,10 +56,10 @@ class Serializer:
             hint["sort_default"] = self.sort_default
         return hint
 
-    def _redact(self, data: Any) -> Any:
-        return redact_sensitive_fields(data)
+    def _redact(self, data: Any, *, include_sensitive: bool = False) -> Any:
+        return redact_sensitive_fields(data, include_sensitive=include_sensitive)
 
-    def serialize_action(self, result, *, tool_name: str) -> dict:
+    def serialize_action(self, result, *, tool_name: str, include_sensitive: bool = False) -> dict:
         kind = self._kind_for_tool(tool_name)
         hint = self._render_hint(kind)
         if kind == RenderKind.LIST:
@@ -69,17 +69,29 @@ class Serializer:
                 )
             return {
                 "success": True,
-                "data": self._redact([self.serialize(item) for item in result]),
+                "data": self._redact([self.serialize(item) for item in result], include_sensitive=include_sensitive),
                 "render_hint": hint,
             }
         if kind == RenderKind.DETAIL:
-            return {"success": True, "data": self._redact(self.serialize(result)), "render_hint": hint}
+            return {
+                "success": True,
+                "data": self._redact(self.serialize(result), include_sensitive=include_sensitive),
+                "render_hint": hint,
+            }
         if kind == RenderKind.EMPTY:
             return {"success": True, "render_hint": hint}
         if kind == RenderKind.DIFF:
-            return {"success": True, "data": self._redact(self.serialize(result)), "render_hint": hint}
+            return {
+                "success": True,
+                "data": self._redact(self.serialize(result), include_sensitive=include_sensitive),
+                "render_hint": hint,
+            }
         if kind == RenderKind.STREAM:
-            return {"success": True, "data": self._redact(self.serialize(result)), "render_hint": hint}
+            return {
+                "success": True,
+                "data": self._redact(self.serialize(result), include_sensitive=include_sensitive),
+                "render_hint": hint,
+            }
         if kind in (RenderKind.TIMESERIES, RenderKind.EVENT_LOG):
             if not isinstance(result, list):
                 raise SerializerContractError(
@@ -87,7 +99,7 @@ class Serializer:
                 )
             return {
                 "success": True,
-                "data": self._redact([self.serialize(item) for item in result]),
+                "data": self._redact([self.serialize(item) for item in result], include_sensitive=include_sensitive),
                 "render_hint": hint,
             }
         raise SerializerContractError(f"unknown kind {kind} for tool '{tool_name}'")

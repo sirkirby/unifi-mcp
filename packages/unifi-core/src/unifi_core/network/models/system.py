@@ -40,8 +40,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from unifi_core.redaction import redact_sensitive_fields
-
 # ---------------------------------------------------------------------------
 # SnmpSettings
 # ---------------------------------------------------------------------------
@@ -169,13 +167,15 @@ def snmp_from_controller(raw: Any) -> SnmpSettings:
     """Build a SnmpSettings from a controller API response.
 
     The controller returns SNMP settings as a list; this unwraps the first element.
+
+    The community string is carried verbatim — redaction is a response-boundary
+    concern applied by the serving surface, not the domain model.
     """
     if isinstance(raw, list):
         raw = raw[0] if raw else {}
-    sensitive = redact_sensitive_fields({"community": _get(raw, "community")})
     return SnmpSettings(
         enabled=_get(raw, "enabled"),
-        community=sensitive.get("community"),
+        community=_get(raw, "community"),
         port=_get(raw, "port"),
         version=_get(raw, "version"),
     )

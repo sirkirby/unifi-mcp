@@ -20,8 +20,6 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-from unifi_core.redaction import redact_sensitive_fields
-
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -108,15 +106,13 @@ def from_controller(raw: Any) -> Credential:
     Coalesces:
     - ``last_used`` / ``last_used_at`` → ``last_used``
     - ``expiry`` / ``expires_at`` → ``expiry``
+
+    Secrets (``token``, ``pin_code``) are carried verbatim — redaction is a
+    response-boundary concern applied by the serving surface, not the domain
+    model.
     """
     last_used = _get(raw, "last_used") or _get(raw, "last_used_at")
     expiry = _get(raw, "expiry") or _get(raw, "expires_at")
-    sensitive = redact_sensitive_fields(
-        {
-            "token": _get(raw, "token"),
-            "pin_code": _get(raw, "pin_code"),
-        }
-    )
     return Credential(
         id=_get(raw, "id"),
         status=_get(raw, "status"),
@@ -124,8 +120,8 @@ def from_controller(raw: Any) -> Credential:
         last_used=last_used,
         type=_get(raw, "type"),
         user_id=_get(raw, "user_id"),
-        token=sensitive.get("token"),
-        pin_code=sensitive.get("pin_code"),
+        token=_get(raw, "token"),
+        pin_code=_get(raw, "pin_code"),
     )
 
 

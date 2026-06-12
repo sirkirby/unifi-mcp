@@ -16,7 +16,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
-from unifi_core.redaction import redact_sensitive_fields
+from unifi_core.redaction import redact_value
 
 
 def _get(obj: Any, *keys: str, default: Any = None) -> Any:
@@ -76,9 +76,8 @@ class Wlan:
         }
 
     @classmethod
-    def from_manager_output(cls, obj: Any) -> "Wlan":
+    def from_manager_output(cls, obj: Any, *, include_sensitive: bool = False) -> "Wlan":
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
-        sensitive = redact_sensitive_fields({"x_passphrase": raw.get("x_passphrase")})
         return cls(
             id=raw.get("_id") or raw.get("id"),
             name=raw.get("name"),
@@ -87,7 +86,7 @@ class Wlan:
             network_id=raw.get("networkconf_id") or raw.get("network_id"),
             hide_ssid=raw.get("hide_ssid"),
             vlan_id=raw.get("vlan") or raw.get("vlan_id"),
-            x_passphrase=sensitive.get("x_passphrase"),
+            x_passphrase=redact_value("x_passphrase", raw.get("x_passphrase"), include_sensitive=include_sensitive),
             guest_policy=raw.get("guest_policy"),
             usergroup_id=raw.get("usergroup_id"),
             fast_roaming_enabled=raw.get("fast_roaming_enabled"),

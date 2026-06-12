@@ -31,8 +31,6 @@ _SENSITIVE_EXACT = frozenset(
         "privatekey",
         "private_preshared_keys",
         "privatepresharedkeys",
-        "private_preshared_keys_enabled",
-        "privatepresharedkeysenabled",
         "wireguard_private_key",
         "wireguardprivatekey",
         "preshared_key",
@@ -60,7 +58,6 @@ _SENSITIVE_COMPOUNDS = frozenset(
         "apitoken",
         "privatekey",
         "privatepresharedkeys",
-        "privatepresharedkeysenabled",
         "wireguardprivatekey",
         "presharedkey",
         "authkey",
@@ -98,6 +95,26 @@ def is_sensitive_key(key: Any) -> bool:
             continue
         return True
     return False
+
+
+def redact_value(
+    key: Any,
+    value: Any,
+    *,
+    include_sensitive: bool = False,
+    marker: str = REDACTED,
+) -> Any:
+    """Redact a single ``key``/``value`` pair by the shared vocabulary.
+
+    Returns ``marker`` when ``key`` names secret material and ``value`` is
+    present; otherwise returns ``value`` unchanged. Use at boundaries that
+    project individual fields (e.g. typed serializers) so the sensitivity
+    decision stays routed through :func:`is_sensitive_key` rather than a
+    local hard-coded field list.
+    """
+    if include_sensitive or value is None:
+        return value
+    return marker if is_sensitive_key(key) else value
 
 
 def redact_sensitive_fields(

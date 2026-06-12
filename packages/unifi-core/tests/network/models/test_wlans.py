@@ -10,7 +10,6 @@ from unifi_core.network.models.wlans import (
     to_controller_create,
     to_controller_update,
 )
-from unifi_core.redaction import REDACTED
 
 
 class TestFieldSets:
@@ -68,7 +67,7 @@ class TestFromController:
         assert wlan.site_id == "site-a"
         assert wlan.name == "HomeWiFi"
         assert wlan.security == "wpa2-psk"
-        assert wlan.x_passphrase == REDACTED
+        assert wlan.x_passphrase == "secret123"
         assert wlan.enabled is True
         assert wlan.hide_ssid is False
         assert wlan.network_id == "net-1"
@@ -93,10 +92,12 @@ class TestFromController:
         assert wlan.name is None
         assert wlan.enabled is None
 
-    def test_wlan_from_controller_redacts_passphrase_by_default(self) -> None:
+    def test_wlan_from_controller_carries_passphrase_verbatim(self) -> None:
+        # The domain model is lossless: redaction is a response-boundary
+        # concern (MCP tool / serializer / GraphQL type), not the model's job.
         model = from_controller({"_id": "w1", "name": "SSID", "x_passphrase": "wifi-secret"})
 
-        assert model.x_passphrase == REDACTED
+        assert model.x_passphrase == "wifi-secret"
 
 
 class TestToControllerCreate:

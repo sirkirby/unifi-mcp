@@ -113,6 +113,20 @@ def test_serialize_action_list_redacts_sensitive_fields() -> None:
     assert out["data"][0]["token"] == REDACTED
 
 
+def test_serialize_action_include_sensitive_opts_out_of_redaction() -> None:
+    @register_serializer(tools=["t_secret_opt_out"])
+    class OptOutSer(Serializer):
+        kind = RenderKind.DETAIL
+
+        @staticmethod
+        def serialize(obj):
+            return {"id": "1", "x_passphrase": obj}
+
+    out = OptOutSer().serialize_action("wifi-secret", tool_name="t_secret_opt_out", include_sensitive=True)
+
+    assert out["data"]["x_passphrase"] == "wifi-secret"
+
+
 def test_serialize_action_empty_kind() -> None:
     @register_serializer(tools=["t_empty"])
     class EmpSer(Serializer):

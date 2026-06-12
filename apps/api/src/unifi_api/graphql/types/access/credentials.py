@@ -17,7 +17,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
-from unifi_core.redaction import redact_sensitive_fields
+from unifi_core.redaction import redact_value
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -54,13 +54,7 @@ class Credential:
         }
 
     @classmethod
-    def from_manager_output(cls, obj: Any) -> "Credential":
-        sensitive = redact_sensitive_fields(
-            {
-                "token": _get(obj, "token"),
-                "pin_code": _get(obj, "pin_code"),
-            }
-        )
+    def from_manager_output(cls, obj: Any, *, include_sensitive: bool = False) -> "Credential":
         return cls(
             id=_get(obj, "id"),
             user_id=_get(obj, "user_id"),
@@ -68,8 +62,8 @@ class Credential:
             status=_get(obj, "status"),
             expiry=_get(obj, "expiry"),
             last_used=_get(obj, "last_used"),
-            token=sensitive.get("token"),
-            pin_code=sensitive.get("pin_code"),
+            token=redact_value("token", _get(obj, "token"), include_sensitive=include_sensitive),
+            pin_code=redact_value("pin_code", _get(obj, "pin_code"), include_sensitive=include_sensitive),
         )
 
     def to_dict(self) -> dict:

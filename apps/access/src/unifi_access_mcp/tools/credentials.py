@@ -27,6 +27,10 @@ from unifi_core.redaction import redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
 
+_INCLUDE_SENSITIVE_FIELD = Field(
+    description="When true, returns raw credential secret fields (token, pin_code). Leave false for normal AI-agent use."
+)
+
 
 @server.tool(
     name="access_list_credentials",
@@ -38,13 +42,18 @@ logger = logging.getLogger(__name__)
     permission_action="read",
     auth="local_only",
 )
-async def access_list_credentials() -> Dict[str, Any]:
+async def access_list_credentials(
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
+) -> Dict[str, Any]:
     """List all credentials."""
     logger.info("access_list_credentials tool called")
     try:
         raw_list = await credential_manager.list_credentials()
         credentials = [credential_from_controller(raw).model_dump(exclude_none=True) for raw in raw_list]
-        return {"success": True, "data": {"credentials": credentials, "count": len(credentials)}}
+        return redact_sensitive_fields(
+            {"success": True, "data": {"credentials": credentials, "count": len(credentials)}},
+            include_sensitive=include_sensitive,
+        )
     except Exception as e:
         logger.error("Error listing credentials: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list credentials: {e}"}
@@ -63,13 +72,17 @@ async def access_list_credentials() -> Dict[str, Any]:
 )
 async def access_get_credential(
     credential_id: Annotated[str, Field(description="Credential UUID (from access_list_credentials)")],
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Get detailed credential information by ID."""
     logger.info("access_get_credential tool called for %s", credential_id)
     try:
         raw = await credential_manager.get_credential(credential_id)
         shaped = credential_from_controller(raw).model_dump(exclude_none=True)
-        return {"success": True, "data": shaped}
+        return redact_sensitive_fields(
+            {"success": True, "data": shaped},
+            include_sensitive=include_sensitive,
+        )
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -109,6 +122,7 @@ async def access_create_credential(
         bool,
         Field(description="When true, creates the credential. When false (default), returns a preview."),
     ] = False,
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Create a credential with preview/confirm."""
     logger.info("access_create_credential tool called (type=%s, confirm=%s)", credential_type, confirm)
@@ -133,7 +147,7 @@ async def access_create_credential(
 
         if confirm:
             result = await credential_manager.apply_create_credential(cred_type, cred_data)
-            return redact_sensitive_fields({"success": True, "data": result})
+            return redact_sensitive_fields({"success": True, "data": result}, include_sensitive=include_sensitive)
 
         preview_data = await credential_manager.create_credential(cred_type, cred_data)
         return redact_sensitive_fields(
@@ -141,7 +155,8 @@ async def access_create_credential(
                 resource_type="access_credential",
                 resource_data=preview_data["proposed_changes"],
                 resource_name=f"{credential_type} credential",
-            )
+            ),
+            include_sensitive=include_sensitive,
         )
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}

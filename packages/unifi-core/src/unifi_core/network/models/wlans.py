@@ -21,8 +21,6 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from unifi_core.redaction import redact_sensitive_fields
-
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -215,14 +213,16 @@ def from_controller(raw: Any) -> Wlan:
 
     The controller stores the network association as 'networkconf_id'
     and the VLAN as 'vlan'. Both are normalised to model field names.
+
+    Secrets are carried verbatim — redaction is a response-boundary
+    concern applied by the serving surface, not the domain model.
     """
-    sensitive = redact_sensitive_fields({"x_passphrase": _get(raw, "x_passphrase")})
     return Wlan(
         id=_get(raw, "_id") or _get(raw, "id"),
         site_id=_get(raw, "site_id"),
         name=_get(raw, "name"),
         security=_get(raw, "security"),
-        x_passphrase=sensitive.get("x_passphrase"),
+        x_passphrase=_get(raw, "x_passphrase"),
         enabled=_get(raw, "enabled"),
         hide_ssid=_get(raw, "hide_ssid"),
         guest_policy=_get(raw, "guest_policy"),

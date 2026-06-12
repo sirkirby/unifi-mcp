@@ -233,19 +233,21 @@ class TestSnmpTools:
         assert result["preview"]["proposed"]["community"] == REDACTED
 
     @pytest.mark.asyncio
-    async def test_update_snmp_settings_rejects_redaction_marker_community(self, monkeypatch):
+    async def test_get_snmp_settings_opt_out_returns_community(self, monkeypatch):
         from unifi_network_mcp.tools import system
 
         mock_mgr = MagicMock()
         mock_mgr._connection.site = "default"
-        mock_mgr.update_settings = AsyncMock()
+        mock_mgr.get_settings = AsyncMock(return_value=[{"enabled": True, "community": "public", "port": 161}])
         monkeypatch.setattr(system, "system_manager", mock_mgr)
 
-        result = await system.update_snmp_settings(enabled=True, community=REDACTED, confirm=True)
+        result = await system.get_snmp_settings(include_sensitive=True)
 
-        assert result["success"] is False
-        assert "omit community" in result["error"]
-        mock_mgr.update_settings.assert_not_called()
+        assert result["snmp_settings"]["community"] == "public"
+
+    # Redaction-marker write-back (community="***REDACTED***") is rejected
+    # centrally at the MCP dispatch boundary (StrictKwargFastMCP.call_tool),
+    # covered in the unifi-mcp-shared strict_dispatch tests.
 
     @pytest.mark.asyncio
     async def test_update_snmp_settings_confirm_redacts_community(self, monkeypatch):

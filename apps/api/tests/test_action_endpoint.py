@@ -198,6 +198,41 @@ async def test_action_endpoint_unwraps_recognition_list_envelope(
 
 
 @pytest.mark.asyncio
+async def test_action_endpoint_redacts_by_default_and_honors_opt_out(tmp_path, monkeypatch) -> None:
+    """The API redacts secrets by default but honors include_sensitive=true as a
+    response-boundary opt-out (threaded through the Strawberry type path)."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+
+    wlan = _FakeClient({"_id": "wl-1", "name": "HomeNet", "x_passphrase": "wifi-secret"})
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=wlan))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        default = await c.post(
+            "/v1/actions/unifi_get_wlan_details",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"wlan_id": "wl-1"}, "confirm": False},
+        )
+        opted_out = await c.post(
+            "/v1/actions/unifi_get_wlan_details",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "site": "default",
+                "controller": cid,
+                "args": {"wlan_id": "wl-1", "include_sensitive": True},
+                "confirm": False,
+            },
+        )
+
+    assert default.status_code == 200, default.text
+    assert default.json()["data"]["x_passphrase"] == "***REDACTED***"
+    assert opted_out.status_code == 200, opted_out.text
+    assert opted_out.json()["data"]["x_passphrase"] == "wifi-secret"
+
+
+@pytest.mark.asyncio
 async def test_action_endpoint_unknown_tool(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)

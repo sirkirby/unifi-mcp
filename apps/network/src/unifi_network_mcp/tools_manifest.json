@@ -7929,7 +7929,12 @@
       "name": "unifi_get_snmp_settings",
       "schema": {
         "input": {
-          "properties": {},
+          "properties": {
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
+            }
+          },
           "type": "object"
         },
         "output": {
@@ -16569,6 +16574,10 @@
             },
             "enabled": {
               "description": "Set to true to enable SNMP on the site, false to disable it",
+              "type": "boolean"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
               "type": "boolean"
             }
           },

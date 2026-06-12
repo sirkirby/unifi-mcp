@@ -253,7 +253,8 @@ class TestWlanToolRedaction:
             raw = await get_wlan_details("w1", include_sensitive=True)
 
         assert default["details"]["private_preshared_keys"] == REDACTED
-        assert default["details"]["private_preshared_keys_enabled"] == REDACTED
+        # The boolean toggle is non-sensitive config and stays visible.
+        assert default["details"]["private_preshared_keys_enabled"] is True
         assert default["details"]["x_iapp_key"] == REDACTED
         assert raw["details"]["private_preshared_keys"] == [{"id": "k1", "psk": "wifi-psk"}]
         assert raw["details"]["private_preshared_keys_enabled"] is True
@@ -274,20 +275,9 @@ class TestWlanToolRedaction:
         assert result["preview"]["proposed"]["x_passphrase"] == REDACTED
         mock_mgr.update_wlan.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_update_wlan_rejects_redaction_marker_for_passphrase(self):
-        secret_wlan = {"_id": "w1", "name": "SSID", "x_passphrase": "old-secret"}
-        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.get_wlan_details = AsyncMock(return_value=secret_wlan)
-            mock_mgr.update_wlan = AsyncMock()
-
-            from unifi_network_mcp.tools.network import update_wlan
-
-            result = await update_wlan("w1", {"x_passphrase": REDACTED}, confirm=True)
-
-        assert result["success"] is False
-        assert "omit x_passphrase" in result["error"]
-        mock_mgr.update_wlan.assert_not_called()
+    # Redaction-marker write-back is rejected centrally at the MCP dispatch
+    # boundary (StrictKwargFastMCP.call_tool), covered in the unifi-mcp-shared
+    # strict_dispatch tests rather than per tool.
 
     @pytest.mark.asyncio
     async def test_create_wlan_preview_redacts_passphrase_by_default(self):
