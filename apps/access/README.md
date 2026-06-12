@@ -98,6 +98,10 @@ The Access server supports two independent auth paths:
 
 At least one path must be configured. When both are available, each tool selects the most appropriate path. Most mutating tools require the local proxy session.
 
+## Secret redaction
+
+Access tools redact credential secrets by default before returning data to MCP clients — credential `token` and `pin_code` values surface as `***REDACTED***` in reads, lists, and create previews. Pass `include_sensitive=true` when you explicitly need the raw value for local administrative work. To preserve an existing secret on an update, omit the field rather than passing the `***REDACTED***` marker back (which is rejected).
+
 ## Run
 
 ```bash

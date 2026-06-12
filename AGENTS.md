@@ -227,6 +227,7 @@ make pre-commit   # format + lint + sync-skills + test
 - [ ] Added to `TOOL_MODULE_MAP` in `categories.py`
 - [ ] `make manifest` run and manifest committed
 - [ ] Mutating tools implement preview-then-confirm
+- [ ] Tools returning raw controller secrets redact at the boundary and accept `include_sensitive` (see Response redaction pattern)
 - [ ] Permission category and action set via decorator kwargs
 - [ ] `ToolAnnotations` added
 - [ ] Tests cover success, error, and permission denial paths
@@ -252,6 +253,12 @@ make pre-commit   # format + lint + sync-skills + test
 All three app servers run on `StrictKwargFastMCP` (a `FastMCP` subclass in `packages/unifi-mcp-shared/src/unifi_mcp_shared/strict_dispatch.py`) that intercepts incoming `tools/call` requests and rejects unknown top-level kwargs against `tools_manifest.json` BEFORE pydantic's `extra="ignore"` can silently drop them. Schema-dict drops (free-form `*_data` dicts) are independently caught by `additionalProperties: false` from #206. Do not bypass this wrapper; do not patch FastMCP internals to achieve the same effect. The wrapper retires when upstream lands `extra="forbid"` on FastMCP's tool arg models — at that point `StrictKwargFastMCP` becomes a no-op guard and can be removed cleanly.
 
 - **Anchor:** `packages/unifi-mcp-shared/src/unifi_mcp_shared/strict_dispatch.py`
+
+### Response redaction (#348)
+
+Secret-bearing response fields are redacted at egress boundaries, NOT in domain models — `from_controller` and friends carry real values. Sensitivity is decided by key name in `packages/unifi-core/src/unifi_core/redaction.py` (`is_sensitive_key` / `redact_sensitive_fields` / `redact_value`); redact once per surface — MCP tool returns (with an `include_sensitive` opt-out), the REST serializer, GraphQL types, SSE frames, and diagnostics. A tool that returns raw controller config containing secrets MUST accept `include_sensitive: bool = False` and redact its payload. Redacted values surface as the marker `***REDACTED***`; write-back of the marker is rejected centrally in `StrictKwargFastMCP.call_tool` (MCP) and `dispatch_action` (API) — do NOT add per-tool marker checks.
+
+- **Anchor:** `packages/unifi-core/src/unifi_core/redaction.py`
 
 ### Extension Over Patching
 
