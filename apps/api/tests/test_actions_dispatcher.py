@@ -13,6 +13,7 @@ from unifi_api.services.actions import (
     dispatch_action,
 )
 from unifi_api.services.manifest import ManifestRegistry, ToolEntry, ToolNotFound
+from unifi_core.redaction import REDACTED
 
 
 def _registry_with(tool: ToolEntry) -> ManifestRegistry:
@@ -144,6 +145,48 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
     domain_manager.get_clients.assert_awaited_once_with()
     # Same site -> no set_site call.
     conn_manager.set_site.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_strips_presentation_only_include_sensitive_arg() -> None:
+    entry = ToolEntry(
+        name="unifi_get_wlan_details",
+        product="network",
+        category="networks",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    expected_response = {"_id": "w1", "name": "SSID"}
+    domain_manager = MagicMock()
+    domain_manager.get_wlan_details = AsyncMock(return_value=expected_response)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_get_wlan_details",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"wlan_id": "w1", "include_sensitive": True},
+        confirm=False,
+        dispatch_table={
+            "unifi_get_wlan_details": DispatchEntry(manager_attr="network_manager", method="get_wlan_details"),
+        },
+    )
+
+    assert result is expected_response
+    domain_manager.get_wlan_details.assert_awaited_once_with(wlan_id="w1")
 
 
 @pytest.mark.asyncio
@@ -312,6 +355,37 @@ async def test_dispatch_reorder_firewall_policies_requires_confirm() -> None:
                     manager_attr="firewall_manager",
                     method="reorder_firewall_policies",
                 ),
+            },
+        )
+
+    factory.get_domain_manager.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_update_wlan_rejects_redaction_marker_before_manager() -> None:
+    entry = ToolEntry(
+        name="unifi_update_wlan",
+        product="network",
+        category="networks",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+    factory = MagicMock()
+
+    with pytest.raises(ValueError, match="omit update_data.x_passphrase"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="unifi_update_wlan",
+            controller_id="cid",
+            controller_products=["network"],
+            site="default",
+            args={"wlan_id": "w1", "update_data": {"x_passphrase": REDACTED}},
+            confirm=True,
+            dispatch_table={
+                "unifi_update_wlan": DispatchEntry(manager_attr="network_manager", method="update_wlan"),
             },
         )
 

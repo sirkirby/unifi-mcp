@@ -274,4 +274,4 @@ async def test_get_snmp_settings_happy_path(tmp_path, monkeypatch) -> None:
     body = r.json()
     assert body["render_hint"]["kind"] == "detail"
     assert body["data"]["enabled"] is True
-    assert body["data"]["community"] == "public"
+    assert body["data"]["community"] == "***REDACTED***"

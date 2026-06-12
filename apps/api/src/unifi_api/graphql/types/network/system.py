@@ -27,6 +27,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
+from unifi_core.redaction import redact_sensitive_fields
 
 
 def _get(obj: Any, *keys: str, default: Any = None) -> Any:
@@ -311,9 +312,10 @@ class SnmpSettings:
                 version=None,
                 _had_payload=False,
             )
+        sensitive = redact_sensitive_fields({"community": _get(obj, "community", default="")})
         return cls(
             enabled=bool(obj.get("enabled", False)),
-            community=_get(obj, "community", default=""),
+            community=sensitive.get("community"),
             port=_get(obj, "port"),
             version=_get(obj, "version"),
             _had_payload=True,

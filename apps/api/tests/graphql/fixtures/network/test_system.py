@@ -107,7 +107,7 @@ async def test_snmp_settings(tmp_path, monkeypatch):
     assert body.get("errors") is None, body
     snmp = body["data"]["network"]["snmpSettings"]
     assert snmp["enabled"] is True
-    assert snmp["community"] == "public"
+    assert snmp["community"] == "***REDACTED***"
 
 
 @pytest.mark.asyncio

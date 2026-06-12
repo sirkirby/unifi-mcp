@@ -235,6 +235,31 @@ class TestWlanToolRedaction:
         assert raw["details"]["x_passphrase"] == "wifi-secret"
 
     @pytest.mark.asyncio
+    async def test_get_wlan_details_redacts_private_psk_and_iapp_key_by_default(self):
+        secret_wlan = {
+            "_id": "w1",
+            "name": "SSID",
+            "private_preshared_keys": [{"id": "k1", "psk": "wifi-psk"}],
+            "private_preshared_keys_enabled": True,
+            "x_iapp_key": "wlan-iapp",
+        }
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_wlan_details = AsyncMock(return_value=secret_wlan)
+            mock_mgr._connection.site = "default"
+
+            from unifi_network_mcp.tools.network import get_wlan_details
+
+            default = await get_wlan_details("w1")
+            raw = await get_wlan_details("w1", include_sensitive=True)
+
+        assert default["details"]["private_preshared_keys"] == REDACTED
+        assert default["details"]["private_preshared_keys_enabled"] == REDACTED
+        assert default["details"]["x_iapp_key"] == REDACTED
+        assert raw["details"]["private_preshared_keys"] == [{"id": "k1", "psk": "wifi-psk"}]
+        assert raw["details"]["private_preshared_keys_enabled"] is True
+        assert raw["details"]["x_iapp_key"] == "wlan-iapp"
+
+    @pytest.mark.asyncio
     async def test_update_wlan_preview_redacts_current_and_proposed_passphrase(self):
         secret_wlan = {"_id": "w1", "name": "SSID", "x_passphrase": "old-secret"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
@@ -247,6 +272,21 @@ class TestWlanToolRedaction:
 
         assert result["preview"]["current"]["x_passphrase"] == REDACTED
         assert result["preview"]["proposed"]["x_passphrase"] == REDACTED
+        mock_mgr.update_wlan.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_wlan_rejects_redaction_marker_for_passphrase(self):
+        secret_wlan = {"_id": "w1", "name": "SSID", "x_passphrase": "old-secret"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_wlan_details = AsyncMock(return_value=secret_wlan)
+            mock_mgr.update_wlan = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_wlan
+
+            result = await update_wlan("w1", {"x_passphrase": REDACTED}, confirm=True)
+
+        assert result["success"] is False
+        assert "omit x_passphrase" in result["error"]
         mock_mgr.update_wlan.assert_not_called()
 
     @pytest.mark.asyncio

@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from unifi_core.redaction import redaction_marker_paths
 
 from unifi_api.services.dispatch_overrides import (
     CONFIRM_REQUIRED_TOOLS,
@@ -55,6 +56,7 @@ logger = logging.getLogger(__name__)
 
 
 _DEFAULT_PRODUCTS: tuple[str, ...] = ("network", "protect", "access")
+_PRESENTATION_ONLY_ARGS = frozenset({"include_sensitive"})
 
 # Tool category directories under apps/<product>/src/unifi_<product>_mcp/tools/
 # are dynamic; we discover them by walking the ``tools`` package at startup.
@@ -262,8 +264,9 @@ async def dispatch_action(
       via ``set_site`` when the requested site differs from the current one.
     - Returns the manager method's response unchanged.
 
-    The method is invoked as ``await method(**args)`` — args are the tool's
-    own parameters as defined in ``tools_manifest.json``. ``confirm`` is
+    The method is invoked with the tool's own parameters as defined in
+    ``tools_manifest.json`` after dropping presentation-only MCP/API flags
+    that managers do not accept. ``confirm`` is
     spread in only when the manager method accepts it (best-effort: tools
     today wrap confirm logic at the *tool* layer, not the manager layer, so
     most managers will not accept ``confirm`` and Task 13 will adapt by
@@ -284,6 +287,12 @@ async def dispatch_action(
         )
     if tool_name in CONFIRM_REQUIRED_TOOLS and not confirm:
         raise ValueError(f"tool '{tool_name}' requires confirm=true")
+    marker_paths = redaction_marker_paths(args)
+    if marker_paths:
+        field = marker_paths[0]
+        raise ValueError(
+            f"Failed to dispatch {tool_name}: omit {field} to keep the current value; do not pass the redaction marker."
+        )
 
     manager = await factory.get_domain_manager(
         session=session,
@@ -312,8 +321,9 @@ async def dispatch_action(
             f"manager '{binding.manager_attr}' has no callable method '{binding.method}' for tool '{tool_name}'"
         )
 
+    manager_args = {key: value for key, value in args.items() if key not in _PRESENTATION_ONLY_ARGS}
     translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)
     if translator is not None:
-        positional, keyword = translator(args)
+        positional, keyword = translator(manager_args)
         return await method(*positional, **keyword)
-    return await method(**args)
+    return await method(**manager_args)

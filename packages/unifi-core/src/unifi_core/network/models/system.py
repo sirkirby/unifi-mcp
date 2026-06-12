@@ -40,6 +40,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from unifi_core.redaction import redact_sensitive_fields
+
 # ---------------------------------------------------------------------------
 # SnmpSettings
 # ---------------------------------------------------------------------------
@@ -170,9 +172,10 @@ def snmp_from_controller(raw: Any) -> SnmpSettings:
     """
     if isinstance(raw, list):
         raw = raw[0] if raw else {}
+    sensitive = redact_sensitive_fields({"community": _get(raw, "community")})
     return SnmpSettings(
         enabled=_get(raw, "enabled"),
-        community=_get(raw, "community"),
+        community=sensitive.get("community"),
         port=_get(raw, "port"),
         version=_get(raw, "version"),
     )

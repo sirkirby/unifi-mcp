@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from unifi_core.redaction import REDACTED
+
 
 class TestBackupTools:
     """Tests for backup-related SystemManager methods."""
@@ -198,3 +200,63 @@ class TestBackupTools:
         assert api_req.path == "/cmd/backup"
         assert api_req.method == "post"
         assert api_req.data["cmd"] == "list-backups"
+
+
+class TestSnmpTools:
+    """Tests for SNMP tool response redaction."""
+
+    @pytest.mark.asyncio
+    async def test_get_snmp_settings_redacts_community(self, monkeypatch):
+        from unifi_network_mcp.tools import system
+
+        mock_mgr = MagicMock()
+        mock_mgr._connection.site = "default"
+        mock_mgr.get_settings = AsyncMock(return_value=[{"enabled": True, "community": "public", "port": 161}])
+        monkeypatch.setattr(system, "system_manager", mock_mgr)
+
+        result = await system.get_snmp_settings()
+
+        assert result["success"] is True
+        assert result["snmp_settings"]["community"] == REDACTED
+
+    @pytest.mark.asyncio
+    async def test_update_snmp_settings_preview_redacts_community(self, monkeypatch):
+        from unifi_network_mcp.tools import system
+
+        mock_mgr = MagicMock()
+        mock_mgr._connection.site = "default"
+        monkeypatch.setattr(system, "system_manager", mock_mgr)
+
+        result = await system.update_snmp_settings(enabled=True, community="private", confirm=False)
+
+        assert result["success"] is True
+        assert result["preview"]["proposed"]["community"] == REDACTED
+
+    @pytest.mark.asyncio
+    async def test_update_snmp_settings_rejects_redaction_marker_community(self, monkeypatch):
+        from unifi_network_mcp.tools import system
+
+        mock_mgr = MagicMock()
+        mock_mgr._connection.site = "default"
+        mock_mgr.update_settings = AsyncMock()
+        monkeypatch.setattr(system, "system_manager", mock_mgr)
+
+        result = await system.update_snmp_settings(enabled=True, community=REDACTED, confirm=True)
+
+        assert result["success"] is False
+        assert "omit community" in result["error"]
+        mock_mgr.update_settings.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_snmp_settings_confirm_redacts_community(self, monkeypatch):
+        from unifi_network_mcp.tools import system
+
+        mock_mgr = MagicMock()
+        mock_mgr._connection.site = "default"
+        mock_mgr.update_settings = AsyncMock(return_value=True)
+        monkeypatch.setattr(system, "system_manager", mock_mgr)
+
+        result = await system.update_snmp_settings(enabled=True, community="private", confirm=True)
+
+        assert result["success"] is True
+        assert result["snmp_settings"]["community"] == REDACTED

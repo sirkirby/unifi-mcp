@@ -37,7 +37,7 @@ from unifi_core.network.models.wlans import (
 from unifi_core.network.models.wlans import (
     to_controller_update as wlan_to_update,
 )
-from unifi_core.redaction import redact_sensitive_fields
+from unifi_core.redaction import redact_sensitive_fields, redaction_marker_paths
 from unifi_network_mcp.runtime import network_manager, server
 
 logger = logging.getLogger(__name__)
@@ -971,6 +971,15 @@ async def update_wlan(
         return {"success": False, "error": "wlan_id is required"}
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
+    marker_paths = redaction_marker_paths(update_data)
+    if marker_paths:
+        field = marker_paths[0]
+        return {
+            "success": False,
+            "error": (
+                f"Failed to update WLAN: omit {field} to keep the current value; do not pass the redaction marker."
+            ),
+        }
 
     # Translate to controller-compatible update payload via pydantic model
     validated_data = wlan_to_update(update_data)

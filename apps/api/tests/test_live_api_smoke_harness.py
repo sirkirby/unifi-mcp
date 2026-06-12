@@ -56,3 +56,43 @@ def test_report_counters():
     assert r.total == 2
     assert r.passed == 1
     assert r.failed == 1
+
+
+def test_live_smoke_known_controller_issue_matches_exact_error_code():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+
+    assert runner.expected_known_controller_issue(
+        "access_get_activity_summary",
+        "Proxy request failed: API code -3 CODE_SYSTEM_ERROR GET https://example.test",
+    )
+    assert not runner.expected_known_controller_issue(
+        "access_get_activity_summary",
+        "Proxy request failed: API code -30 CODE_SYSTEM_ERROR GET https://example.test",
+    )
+
+
+def test_live_smoke_known_visitor_endpoint_404_requires_full_signature():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+
+    assert runner.expected_known_controller_issue(
+        "access_create_visitor",
+        (
+            "Failed to create visitor: Proxy request failed: HTTP 404 POST "
+            "https://127.0.0.1:11444/proxy/access/api/v2/visitors "
+            '{"code":404,"codeS":"CODE_NOT_FOUND","msg":"The API was not found.",'
+            '"error":"you entered no-man zone"}'
+        ),
+    )
+    assert not runner.expected_known_controller_issue(
+        "access_create_visitor",
+        (
+            "Failed to create visitor: Proxy request failed: HTTP 404 POST "
+            "https://127.0.0.1:11444/proxy/access/api/v2/visitor-groups "
+            '{"code":404,"codeS":"CODE_NOT_FOUND","msg":"The API was not found.",'
+            '"error":"you entered no-man zone"}'
+        ),
+    )

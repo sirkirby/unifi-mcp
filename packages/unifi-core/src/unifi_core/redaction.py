@@ -29,12 +29,21 @@ _SENSITIVE_EXACT = frozenset(
         "api_token",
         "private_key",
         "privatekey",
+        "private_preshared_keys",
+        "privatepresharedkeys",
+        "private_preshared_keys_enabled",
+        "privatepresharedkeysenabled",
         "wireguard_private_key",
         "wireguardprivatekey",
         "preshared_key",
         "presharedkey",
         "auth_key",
         "authkey",
+        "x_iapp_key",
+        "xiappkey",
+        "community",
+        "snmp_community",
+        "snmpcommunity",
         "tls_auth",
         "tlsauth",
         "tls_crypt",
@@ -50,9 +59,13 @@ _SENSITIVE_COMPOUNDS = frozenset(
         "apikey",
         "apitoken",
         "privatekey",
+        "privatepresharedkeys",
+        "privatepresharedkeysenabled",
         "wireguardprivatekey",
         "presharedkey",
         "authkey",
+        "xiappkey",
+        "snmpcommunity",
         "tlsauth",
         "tlscrypt",
         "pincode",
@@ -108,3 +121,20 @@ def redact_sensitive_fields(
     if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
         return [redact_sensitive_fields(value, marker=marker) for value in obj]
     return obj
+
+
+def redaction_marker_paths(obj: Any, *, marker: str = REDACTED, prefix: str = "") -> list[str]:
+    """Return sensitive-key paths whose value is the redaction marker."""
+    paths: list[str] = []
+    if isinstance(obj, Mapping):
+        for key, value in obj.items():
+            key_text = str(key)
+            path = f"{prefix}.{key_text}" if prefix else key_text
+            if value == marker and is_sensitive_key(key_text):
+                paths.append(path)
+            paths.extend(redaction_marker_paths(value, marker=marker, prefix=path))
+    elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
+        for index, value in enumerate(obj):
+            path = f"{prefix}[{index}]" if prefix else f"[{index}]"
+            paths.extend(redaction_marker_paths(value, marker=marker, prefix=path))
+    return paths

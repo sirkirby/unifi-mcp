@@ -20,6 +20,7 @@ from unifi_core.network.models.system import (
     snmp_to_controller_update,
     system_info_from_controller,
 )
+from unifi_core.redaction import REDACTED, redact_sensitive_fields
 from unifi_network_mcp.runtime import server, system_manager
 
 logger = logging.getLogger(__name__)
@@ -117,11 +118,13 @@ async def get_snmp_settings() -> Dict[str, Any]:
     try:
         settings_list = await system_manager.get_settings("snmp")
         shaped = snmp_from_controller(settings_list).model_dump(exclude_none=False)
-        return {
-            "success": True,
-            "site": system_manager._connection.site,
-            "snmp_settings": shaped,
-        }
+        return redact_sensitive_fields(
+            {
+                "success": True,
+                "site": system_manager._connection.site,
+                "snmp_settings": shaped,
+            }
+        )
     except Exception as e:
         logger.error("Error getting SNMP settings: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to get SNMP settings: {e}"}
@@ -156,6 +159,11 @@ async def update_snmp_settings(
 
     updates: Dict[str, Any] = {"enabled": enabled}
     if community is not None:
+        if community == REDACTED:
+            return {
+                "success": False,
+                "error": "Failed to update SNMP settings: omit community to keep the current value; do not pass the redaction marker.",
+            }
         updates["community"] = community
 
     validated_data = snmp_to_controller_update(updates)
@@ -163,25 +171,29 @@ async def update_snmp_settings(
         return {"success": False, "error": "No valid fields to update after validation."}
 
     if not confirm:
-        return update_preview(
-            resource_type="snmp_settings",
-            resource_id="snmp",
-            resource_name="SNMP Settings",
-            current_state={},
-            updates=validated_data,
+        return redact_sensitive_fields(
+            update_preview(
+                resource_type="snmp_settings",
+                resource_id="snmp",
+                resource_name="SNMP Settings",
+                current_state={},
+                updates=validated_data,
+            )
         )
 
     try:
         success = await system_manager.update_settings("snmp", validated_data)
         if success:
-            return {
-                "success": True,
-                "site": system_manager._connection.site,
-                "snmp_settings": {
-                    "enabled": validated_data.get("enabled", enabled),
-                    "community": validated_data.get("community", community or ""),
-                },
-            }
+            return redact_sensitive_fields(
+                {
+                    "success": True,
+                    "site": system_manager._connection.site,
+                    "snmp_settings": {
+                        "enabled": validated_data.get("enabled", enabled),
+                        "community": validated_data.get("community", community or ""),
+                    },
+                }
+            )
         return {"success": False, "error": "Failed to update SNMP settings."}
     except Exception as e:
         logger.error("Error updating SNMP settings: %s", e, exc_info=True)

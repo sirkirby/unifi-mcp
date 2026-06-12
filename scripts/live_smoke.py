@@ -17,6 +17,7 @@ import asyncio
 import importlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -84,6 +85,20 @@ STREAM_OR_HEAVY_READS = {
     "access_subscribe_events",
     "protect_subscribe_events",
     "protect_export_clip",
+}
+
+KNOWN_CONTROLLER_ISSUE_READS = {
+    "access_get_activity_summary": "Access activities histogram returns controller CODE_SYSTEM_ERROR -3",
+}
+
+KNOWN_CONTROLLER_ISSUE_MARKERS = {
+    "access_get_activity_summary": ("CODE_SYSTEM_ERROR", r"API code -3\b"),
+    "access_create_visitor": (
+        "HTTP 404",
+        "CODE_NOT_FOUND",
+        r"/proxy/access/api/v2/visitors\b",
+        "you entered no-man zone",
+    ),
 }
 
 
@@ -455,7 +470,9 @@ class LiveSmokeRunner:
                     record.error = str(data["error"])
                 record.summary = summarize_payload(data)
                 self.cache.remember(tool, data)
-                if self.expected_fixture_miss(tool, record.error):
+                if self.expected_fixture_miss(tool, record.error) or self.expected_known_controller_issue(
+                    tool, record.error
+                ):
                     record.status = "skipped"
                     record.success = None
         except Exception as exc:
@@ -475,6 +492,12 @@ class LiveSmokeRunner:
         if tool == "protect_alarm_arm" and error and "No arm profiles found" in error:
             return True
         return False
+
+    def expected_known_controller_issue(self, tool: str, error: str | None) -> bool:
+        markers = KNOWN_CONTROLLER_ISSUE_MARKERS.get(tool)
+        if not markers or not error:
+            return False
+        return all(re.search(marker, error) for marker in markers)
 
     def unwrap_result(self, raw: Any) -> dict[str, Any]:
         if isinstance(raw, tuple) and len(raw) > 1 and isinstance(raw[1], dict):

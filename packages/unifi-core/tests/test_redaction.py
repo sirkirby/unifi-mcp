@@ -1,15 +1,19 @@
 from copy import deepcopy
 
-from unifi_core.redaction import REDACTED, is_sensitive_key, redact_sensitive_fields
+from unifi_core.redaction import REDACTED, is_sensitive_key, redact_sensitive_fields, redaction_marker_paths
 
 
 def test_redacts_exact_and_compound_sensitive_keys() -> None:
     payload = {
         "x_passphrase": "wifi-secret",
         "privateKey": "wg-private",
+        "private_preshared_keys": [{"id": "k1", "psk": "wifi-psk"}],
+        "private_preshared_keys_enabled": True,
         "wireguard_private_key": "wg-private",
         "preshared_key": "wg-psk",
+        "x_iapp_key": "wlan-iapp",
         "apiToken": "api-token",
+        "community": "snmp-secret",
         "tls_crypt": "tls-secret",
         "pin_code": "123456",
         "name": "Guest",
@@ -19,9 +23,13 @@ def test_redacts_exact_and_compound_sensitive_keys() -> None:
 
     assert redacted["x_passphrase"] == REDACTED
     assert redacted["privateKey"] == REDACTED
+    assert redacted["private_preshared_keys"] == REDACTED
+    assert redacted["private_preshared_keys_enabled"] == REDACTED
     assert redacted["wireguard_private_key"] == REDACTED
     assert redacted["preshared_key"] == REDACTED
+    assert redacted["x_iapp_key"] == REDACTED
     assert redacted["apiToken"] == REDACTED
+    assert redacted["community"] == REDACTED
     assert redacted["tls_crypt"] == REDACTED
     assert redacted["pin_code"] == REDACTED
     assert redacted["name"] == "Guest"
@@ -51,6 +59,7 @@ def test_does_not_redact_unrelated_key_words() -> None:
         "monkey": "value",
         "public_key": "public-key-material",
         "token_count": 4,
+        "community_id": "community-1",
     }
 
     assert redact_sensitive_fields(payload) == payload
@@ -58,6 +67,7 @@ def test_does_not_redact_unrelated_key_words() -> None:
     assert is_sensitive_key("monkey") is False
     assert is_sensitive_key("public_key") is False
     assert is_sensitive_key("token_count") is False
+    assert is_sensitive_key("community_id") is False
 
 
 def test_include_sensitive_returns_values_unchanged() -> None:
@@ -70,3 +80,15 @@ def test_preserves_none_sensitive_values() -> None:
     payload = {"token": None, "pin_code": None}
 
     assert redact_sensitive_fields(payload) == payload
+
+
+def test_redaction_marker_paths_reports_only_sensitive_marker_values() -> None:
+    payload = {
+        "update_data": {
+            "x_passphrase": REDACTED,
+            "name": REDACTED,
+            "nested": [{"community": REDACTED}, {"community_id": REDACTED}],
+        }
+    }
+
+    assert redaction_marker_paths(payload) == ["update_data.x_passphrase", "update_data.nested[0].community"]

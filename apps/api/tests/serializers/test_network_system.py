@@ -150,7 +150,7 @@ def test_snmp_settings_detail_first_item_unwrap() -> None:
     out = SnmpSettings.from_manager_output(sample).to_dict()
     assert SnmpSettings.render_hint("detail")["kind"] == "detail"
     assert out["enabled"] is True
-    assert out["community"] == "public"
+    assert out["community"] == "***REDACTED***"
     assert out["port"] == 161
     assert out["version"] == "v2c"
 

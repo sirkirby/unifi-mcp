@@ -7,6 +7,8 @@ import json
 import logging
 from typing import Any, AsyncIterator, Callable
 
+from unifi_core.redaction import redact_sensitive_fields
+
 from unifi_api.services.streams import StreamSubscriber, SubscriberPool
 
 logger = logging.getLogger("unifi-api.stream-generator")
@@ -14,7 +16,7 @@ logger = logging.getLogger("unifi-api.stream-generator")
 
 def format_sse_frame(*, event: dict, product: str, serializer: Any) -> bytes:
     """Render a single SSE frame: event tag, id, json data."""
-    payload = serializer.serialize(event)
+    payload = redact_sensitive_fields(serializer.serialize(event))
     eid = event.get("id") or event.get("_buffered_at") or ""
     return (f"event: {product}.event\nid: {eid}\ndata: {json.dumps(payload, default=str)}\n\n").encode()
 

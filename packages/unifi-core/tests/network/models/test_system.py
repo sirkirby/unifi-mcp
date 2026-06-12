@@ -46,6 +46,7 @@ from unifi_core.network.models.system import (
     system_info_from_controller,
     top_client_from_controller,
 )
+from unifi_core.redaction import REDACTED
 
 
 class TestSnmpSettingsFieldSets:
@@ -102,7 +103,7 @@ class TestSnmpFromController:
         }
         settings = snmp_from_controller(raw)
         assert settings.enabled is True
-        assert settings.community == "public"
+        assert settings.community == REDACTED
         assert settings.port == 161
         assert settings.version == "v2c"
 
@@ -110,7 +111,7 @@ class TestSnmpFromController:
         raw = [{"enabled": False, "community": "private"}]
         settings = snmp_from_controller(raw)
         assert settings.enabled is False
-        assert settings.community == "private"
+        assert settings.community == REDACTED
 
     def test_empty_list_returns_default(self) -> None:
         settings = snmp_from_controller([])
