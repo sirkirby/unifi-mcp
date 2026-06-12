@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from unifi_core.redaction import REDACTED
 from unifi_core.access.models.credentials import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -10,6 +9,7 @@ from unifi_core.access.models.credentials import (
     from_controller,
     to_controller_create,
 )
+from unifi_core.redaction import REDACTED
 
 
 class TestFieldSets:

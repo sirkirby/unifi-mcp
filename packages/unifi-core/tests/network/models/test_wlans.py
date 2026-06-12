@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from unifi_core.redaction import REDACTED
 from unifi_core.network.models.wlans import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -11,6 +10,7 @@ from unifi_core.network.models.wlans import (
     to_controller_create,
     to_controller_update,
 )
+from unifi_core.redaction import REDACTED
 
 
 class TestFieldSets:

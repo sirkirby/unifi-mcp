@@ -67,7 +67,11 @@ class Serializer:
                 raise SerializerContractError(
                     f"tool '{tool_name}' declared kind=list but manager returned {type(result).__name__}"
                 )
-            return {"success": True, "data": self._redact([self.serialize(item) for item in result]), "render_hint": hint}
+            return {
+                "success": True,
+                "data": self._redact([self.serialize(item) for item in result]),
+                "render_hint": hint,
+            }
         if kind == RenderKind.DETAIL:
             return {"success": True, "data": self._redact(self.serialize(result)), "render_hint": hint}
         if kind == RenderKind.EMPTY:
@@ -81,7 +85,11 @@ class Serializer:
                 raise SerializerContractError(
                     f"tool '{tool_name}' declared kind={kind.value} but manager returned {type(result).__name__}"
                 )
-            return {"success": True, "data": self._redact([self.serialize(item) for item in result]), "render_hint": hint}
+            return {
+                "success": True,
+                "data": self._redact([self.serialize(item) for item in result]),
+                "render_hint": hint,
+            }
         raise SerializerContractError(f"unknown kind {kind} for tool '{tool_name}'")
 
 

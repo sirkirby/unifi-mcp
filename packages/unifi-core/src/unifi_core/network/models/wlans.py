@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+
 from unifi_core.redaction import redact_sensitive_fields
 
 # ---------------------------------------------------------------------------

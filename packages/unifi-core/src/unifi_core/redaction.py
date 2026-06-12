@@ -98,7 +98,9 @@ def redact_sensitive_fields(
         return obj
     if isinstance(obj, Mapping):
         return {
-            key: marker if value is not None and is_sensitive_key(key) else redact_sensitive_fields(value, marker=marker)
+            key: marker
+            if value is not None and is_sensitive_key(key)
+            else redact_sensitive_fields(value, marker=marker)
             for key, value in obj.items()
         }
     if isinstance(obj, tuple):

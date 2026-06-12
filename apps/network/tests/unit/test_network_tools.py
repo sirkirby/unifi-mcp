@@ -9,6 +9,7 @@ import os
 from unittest.mock import AsyncMock, patch
 
 import pytest
+
 from unifi_core.redaction import REDACTED
 
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")

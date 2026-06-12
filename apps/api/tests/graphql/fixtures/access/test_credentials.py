@@ -7,8 +7,8 @@
 from __future__ import annotations
 
 import pytest
-
 from unifi_core.redaction import REDACTED
+
 from tests.graphql.fixtures._helpers import bootstrap, graphql_query, stub_managers
 
 

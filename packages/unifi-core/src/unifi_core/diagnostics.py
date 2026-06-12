@@ -114,6 +114,7 @@ def diagnostics_enabled() -> bool:
 # Redaction / truncation helpers
 # ---------------------------------------------------------------------------
 
+
 def _redact_value(key: str, value: Any) -> Any:
     if is_sensitive_key(key):
         return REDACTED

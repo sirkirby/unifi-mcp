@@ -11,7 +11,6 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
-from unifi_core.redaction import redact_sensitive_fields
 from unifi_core.network.models.firewall import (
     firewall_group_from_controller,
     firewall_zone_from_controller,
@@ -22,6 +21,7 @@ from unifi_core.network.models.firewall import (
 from unifi_core.network.models.firewall import (
     to_controller_update as fw_to_update,
 )
+from unifi_core.redaction import redact_sensitive_fields
 from unifi_network_mcp.runtime import firewall_manager, server
 
 logger = logging.getLogger(__name__)

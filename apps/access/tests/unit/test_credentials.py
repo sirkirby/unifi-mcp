@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from unifi_core.redaction import REDACTED
 from unifi_core.access.managers.connection_manager import AccessConnectionManager
 from unifi_core.access.managers.credential_manager import CredentialManager
 from unifi_core.exceptions import UniFiConnectionError
+from unifi_core.redaction import REDACTED
 
 # ---------------------------------------------------------------------------
 # Fixtures
