@@ -34,6 +34,21 @@ class TestRedact:
         data = {"host": "192.168.1.1", "port": 443}
         assert _redact(data) == data
 
+    def test_redacts_new_sensitive_key_forms(self):
+        result = _redact(
+            {
+                "apiToken": "tok",
+                "private_key": "private",
+                "pin_code": "123456",
+                "public_key": "public",
+            }
+        )
+
+        assert result["apiToken"] == "***REDACTED***"
+        assert result["private_key"] == "***REDACTED***"
+        assert result["pin_code"] == "***REDACTED***"
+        assert result["public_key"] == "public"
+
     def test_handles_non_dict(self):
         assert _redact("plain string") == "plain string"
         assert _redact(42) == 42

@@ -27,6 +27,8 @@ import time
 from functools import wraps
 from typing import Any, Callable, Dict
 
+from unifi_core.redaction import REDACTED, is_sensitive_key, redact_sensitive_fields
+
 # Module-level state set by init_diagnostics()
 _config_provider: Callable[[], Any] | None = None
 _logger: logging.Logger = logging.getLogger(__name__)
@@ -112,31 +114,15 @@ def diagnostics_enabled() -> bool:
 # Redaction / truncation helpers
 # ---------------------------------------------------------------------------
 
-_REDACT_KEYS = {
-    "password",
-    "x_password",
-    "x_passphrase",
-    "passphrase",
-    "token",
-    "authorization",
-    "auth",
-    "cookie",
-}
-
-
 def _redact_value(key: str, value: Any) -> Any:
-    if key.lower() in _REDACT_KEYS:
-        return "***REDACTED***"
+    if is_sensitive_key(key):
+        return REDACTED
     return value
 
 
 def _redact(obj: Any) -> Any:
     try:
-        if isinstance(obj, dict):
-            return {k: _redact(v) if k.lower() not in _REDACT_KEYS else "***REDACTED***" for k, v in obj.items()}
-        if isinstance(obj, (list, tuple)):
-            return [_redact(v) for v in obj]
-        return obj
+        return redact_sensitive_fields(obj)
     except Exception:
         return obj
 
