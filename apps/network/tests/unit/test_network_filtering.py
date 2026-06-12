@@ -79,16 +79,17 @@ async def test_get_network_details_summary_false_returns_raw():
         from unifi_network_mcp.tools.network import get_network_details
 
         result = await get_network_details("n2", summary=False)
+        raw_result = await get_network_details("n2", summary=False, include_sensitive=True)
 
     assert result["summary_mode"] is False
-    assert result["details"]["secret"] == "x"
+    assert result["details"]["secret"] == "***REDACTED***"
+    assert raw_result["details"]["secret"] == "x"
 
 
 @pytest.mark.asyncio
-async def test_get_network_details_default_preserves_pre_pr_full_raw_object():
-    # Regression guard for the default contract: no-args must return the full raw
-    # network object (extra keys like 'secret' pass through). Pre-PR upstream
-    # returned the raw object via json.loads(json.dumps(network)).
+async def test_get_network_details_default_preserves_full_object_with_redaction():
+    # Regression guard for the default contract: no-args must return the full
+    # network object, but sensitive raw keys are redacted unless explicitly requested.
     raw = {"_id": "n2", "name": "IoT", "dhcpd_enabled": True, "secret": "x", "purpose": "corporate"}
     with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
         mock_nm.get_network_details = AsyncMock(return_value=raw)
@@ -100,8 +101,8 @@ async def test_get_network_details_default_preserves_pre_pr_full_raw_object():
 
     assert result["success"] is True
     assert result["summary_mode"] is False
-    # extra/unknown keys preserved (raw passthrough)
-    assert result["details"]["secret"] == "x"
+    # extra/unknown keys preserved, sensitive values redacted by default
+    assert result["details"]["secret"] == "***REDACTED***"
     assert result["details"]["dhcpd_enabled"] is True
 
 
