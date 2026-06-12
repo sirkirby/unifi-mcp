@@ -193,11 +193,13 @@ bash plugins/unifi-protect/scripts/check-prereqs.sh
 bash plugins/unifi-access/scripts/check-prereqs.sh
 ```
 
-Run each separately — the three plugins can have different prerequisite sets. A failure in `unifi-protect` does not imply a failure in `unifi-network`.
+On Windows, each plugin's `scripts/` directory also provides a PowerShell prereq companion script. Consult the plugin's runtime SKILL.md manifest for the exact invocation — it accepts a `-Target <claude|codex|openclaw>` parameter and `-PluginName` flag.
+
+Run each plugin separately — the three plugins can have different prerequisite sets. A failure in `unifi-protect` does not imply a failure in `unifi-network`.
 
 ### Adding new prerequisites
 
-When a plugin gains a new required environment variable or system dependency, add a check to `check-prereqs.sh` in the **same PR**:
+When a plugin gains a new required environment variable or system dependency, add a check to both the `.sh` and the PowerShell companion script in the **same PR**:
 
 ```bash
 # Pattern for a required variable with a helpful error message
@@ -221,7 +223,9 @@ Do not rely on the plugin process itself to surface missing prerequisites — pr
 
 ### The constraint
 
-macOS ships `/bin/bash` at version **3.2** (circa 2007). Homebrew may install a newer `bash`, but users run plugin scripts without Homebrew in their PATH. Any script in `plugins/` must work against the system shell. This constraint is documented in each `check-prereqs.sh`: "Bash 3.2 compatible (works on stock macOS /bin/bash)."
+macOS ships `/bin/bash` at version **3.2** (circa 2007). Homebrew may install a newer `bash`, but users run plugin scripts without Homebrew in their PATH. Any `.sh` script in `plugins/` must work against the system shell. This constraint is documented in each `check-prereqs.sh`: "Bash 3.2 compatible (works on stock macOS /bin/bash)."
+
+**On Windows, use PowerShell (`.ps1`) — not `.sh`.** Each plugin's `scripts/` directory provides PowerShell equivalents for environment setup and prereq checking. Never add `.sh` scripts that assume a bash version higher than 3.2 and expect them to work on macOS.
 
 **`declare -A` (associative arrays) is bash 4+ only.** Using it in any `plugins/*/scripts/*.sh` causes a silent no-op or `unbound variable` error on macOS. The `set-env.sh` scripts use sed-based manipulation instead of associative arrays for exactly this reason (fixed in PR #202).
 
@@ -339,6 +343,7 @@ If a PR modifies only plugin manifests or scripts (no Python code changes in `sh
 | Python code change in `shared/` | Yes | Functional patch / minor / major |
 | HTTP transport config change only | Yes | No-op patch |
 | `check-prereqs.sh` or `set-env.sh` change | Yes | No-op patch |
+| PowerShell plugin script (`.ps1`) change | Yes | No-op patch |
 | Plugin skill SKILL.md change | Yes | No-op patch |
 | Codex manifest or `.codex-plugin/` change | Yes | No-op patch |
 | OpenClaw manifest or `.agents/plugins/openclaw/` change | Yes | No-op patch |

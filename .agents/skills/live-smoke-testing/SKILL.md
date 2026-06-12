@@ -428,3 +428,17 @@ in developer workflows; the fourth is automated in the release pipeline.
   key was accepted but the resource doesn't exist — this is a green credential signal. A
   401/403 means the key was rejected. Use this to validate Access API key configuration:
   deliberately query a known-missing resource ID and expect 404, not 401.
+
+- **HTTP 401 on the uiprotect bootstrap/WebSocket path during Protect smoke is expected and benign.**
+  The uiprotect library opens a WebSocket channel for real-time events using a cookie-based
+  auth path that the MCP API key does not cover. A 401 on that WebSocket/bootstrap path does
+  not indicate a problem with the REST API key — the REST path used by all MCP tool calls
+  is healthy. When you see a 401 in Protect smoke output, check whether it's on the
+  WebSocket bootstrap path before treating it as a real auth failure.
+
+- **`access_get_activity_summary` CODE_SYSTEM_ERROR -3 on the Access activities histogram endpoint is a pre-existing controller issue, not a code bug.**
+  This error reproduces consistently across branches and controller firmware versions on
+  affected controllers. It is a known upstream Access controller issue unrelated to MCP
+  code changes. When this error appears in smoke results, treat it as an
+  environment/controller issue: note it in the PR, re-run on a different controller if
+  available, and do not block merge solely on this error.
