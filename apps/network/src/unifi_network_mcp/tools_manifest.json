@@ -1573,6 +1573,10 @@
               "description": "Type: 'address-group' (IPv4), 'ipv6-address-group' (IPv6), or 'port-group'",
               "type": "string"
             },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
+            },
             "name": {
               "description": "Name of the firewall group",
               "type": "string"
@@ -1675,6 +1679,10 @@
               "description": "When true, creates the policy. When false (default), validates and returns a preview",
               "type": "boolean"
             },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
+            },
             "policy_data": {
               "description": "V2 zone-based firewall policy dict. Required: name, action (ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), destination (same structure). For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. Optional: enabled, description, protocol, connection_state_type, connection_states, ip_version, schedule, logging.",
               "type": "object"
@@ -1773,6 +1781,10 @@
           "properties": {
             "confirm": {
               "description": "When true, creates the network. When false (default), validates and returns a preview",
+              "type": "boolean"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
               "type": "boolean"
             },
             "network_data": {
@@ -2873,6 +2885,10 @@
               "description": "When true, creates the WLAN. When false (default), validates and returns a preview",
               "type": "boolean"
             },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
+            },
             "wlan_data": {
               "description": "WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (bool), usergroup_id, networkconf_id (network to associate)",
               "type": "object"
@@ -3971,6 +3987,10 @@
           "properties": {
             "confirm": {
               "description": "When true, deletes the WLAN. When false (default), returns a preview. WARNING: All devices using this SSID will be disconnected",
+              "type": "boolean"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
               "type": "boolean"
             },
             "wlan_id": {
@@ -6156,6 +6176,10 @@
             "group_id": {
               "description": "The unique identifier (_id) of the firewall group",
               "type": "string"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
             }
           },
           "required": [
@@ -6245,6 +6269,10 @@
       "schema": {
         "input": {
           "properties": {
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
+            },
             "policy_id": {
               "description": "Unique identifier (_id) of the firewall policy (from unifi_list_firewall_policies)",
               "type": "string"
@@ -6715,6 +6743,10 @@
             "include": {
               "description": "Comma-separated sections to return when summary=true (default 'basic'). Sections: basic, dhcp, ipv6, vpn, all.",
               "type": "string"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
             },
             "network_id": {
               "description": "Unique identifier (_id) of the network (from unifi_list_networks)",
@@ -8960,6 +8992,10 @@
             "client_id": {
               "description": "Unique identifier (_id) of the VPN client (from unifi_list_vpn_clients)",
               "type": "string"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw VPN secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
             }
           },
           "required": [
@@ -9049,6 +9085,10 @@
       "schema": {
         "input": {
           "properties": {
+            "include_sensitive": {
+              "description": "When true, returns raw VPN secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
+            },
             "server_id": {
               "description": "Unique identifier (_id) of the VPN server (from unifi_list_vpn_servers)",
               "type": "string"
@@ -9141,6 +9181,10 @@
       "schema": {
         "input": {
           "properties": {
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
+            },
             "wlan_id": {
               "description": "Unique identifier (_id) of the WLAN/SSID (from unifi_list_wlans)",
               "type": "string"
@@ -11738,7 +11782,12 @@
       "name": "unifi_list_vpn_clients",
       "schema": {
         "input": {
-          "properties": {},
+          "properties": {
+            "include_sensitive": {
+              "description": "When true, returns raw VPN secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
+            }
+          },
           "type": "object"
         },
         "output": {
@@ -11822,7 +11871,12 @@
       "name": "unifi_list_vpn_servers",
       "schema": {
         "input": {
-          "properties": {},
+          "properties": {
+            "include_sensitive": {
+              "description": "When true, returns raw VPN secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
+            }
+          },
           "type": "object"
         },
         "output": {
@@ -15649,6 +15703,10 @@
             "group_id": {
               "description": "The ID of the group to update",
               "type": "string"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
+              "type": "boolean"
             }
           },
           "required": [
@@ -15745,6 +15803,10 @@
           "properties": {
             "confirm": {
               "description": "When true, applies the update. When false (default), returns a preview of the changes",
+              "type": "boolean"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
               "type": "boolean"
             },
             "policy_id": {
@@ -15850,6 +15912,10 @@
           "properties": {
             "confirm": {
               "description": "When true, applies the update. When false (default), returns a preview of the changes",
+              "type": "boolean"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
               "type": "boolean"
             },
             "network_id": {
@@ -17129,6 +17195,10 @@
           "properties": {
             "confirm": {
               "description": "When true, applies the update. When false (default), returns a preview of the changes",
+              "type": "boolean"
+            },
+            "include_sensitive": {
+              "description": "When true, returns raw controller secret fields. Leave false for normal AI-agent use.",
               "type": "boolean"
             },
             "update_data": {

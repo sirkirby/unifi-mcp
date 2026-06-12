@@ -7,6 +7,7 @@ def test_redacts_exact_and_compound_sensitive_keys() -> None:
     payload = {
         "x_passphrase": "wifi-secret",
         "privateKey": "wg-private",
+        "wireguard_private_key": "wg-private",
         "preshared_key": "wg-psk",
         "apiToken": "api-token",
         "tls_crypt": "tls-secret",
@@ -18,6 +19,7 @@ def test_redacts_exact_and_compound_sensitive_keys() -> None:
 
     assert redacted["x_passphrase"] == REDACTED
     assert redacted["privateKey"] == REDACTED
+    assert redacted["wireguard_private_key"] == REDACTED
     assert redacted["preshared_key"] == REDACTED
     assert redacted["apiToken"] == REDACTED
     assert redacted["tls_crypt"] == REDACTED

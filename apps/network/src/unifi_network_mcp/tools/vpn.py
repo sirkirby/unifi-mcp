@@ -12,9 +12,14 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.redaction import redact_sensitive_fields
 from unifi_network_mcp.runtime import server, vpn_manager
 
 logger = logging.getLogger(__name__)
+
+_INCLUDE_SENSITIVE_FIELD = Field(
+    description="When true, returns raw VPN secret fields. Leave false for normal AI-agent use."
+)
 
 
 @server.tool(
@@ -22,16 +27,21 @@ logger = logging.getLogger(__name__)
     description="List all configured VPN clients (Wireguard, OpenVPN, etc).",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
-async def list_vpn_clients() -> Dict[str, Any]:
+async def list_vpn_clients(
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
+) -> Dict[str, Any]:
     """Implementation for listing VPN clients."""
     try:
         clients = await vpn_manager.get_vpn_clients()
-        return {
-            "success": True,
-            "site": vpn_manager._connection.site,
-            "count": len(clients),
-            "vpn_clients": clients,
-        }
+        return redact_sensitive_fields(
+            {
+                "success": True,
+                "site": vpn_manager._connection.site,
+                "count": len(clients),
+                "vpn_clients": clients,
+            },
+            include_sensitive=include_sensitive,
+        )
     except Exception as e:
         logger.error("Error listing VPN clients: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list VPN clients: {e}"}
@@ -46,16 +56,20 @@ async def get_vpn_client_details(
     client_id: Annotated[
         str, Field(description="Unique identifier (_id) of the VPN client (from unifi_list_vpn_clients)")
     ],
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Implementation for getting VPN client details."""
     try:
         client = await vpn_manager.get_vpn_client_details(client_id)
-        return {
-            "success": True,
-            "site": vpn_manager._connection.site,
-            "client_id": client_id,
-            "details": client,
-        }
+        return redact_sensitive_fields(
+            {
+                "success": True,
+                "site": vpn_manager._connection.site,
+                "client_id": client_id,
+                "details": client,
+            },
+            include_sensitive=include_sensitive,
+        )
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -101,16 +115,21 @@ async def update_vpn_client_state(
     description="List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc).",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
-async def list_vpn_servers() -> Dict[str, Any]:
+async def list_vpn_servers(
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
+) -> Dict[str, Any]:
     """Implementation for listing VPN servers."""
     try:
         servers = await vpn_manager.get_vpn_servers()
-        return {
-            "success": True,
-            "site": vpn_manager._connection.site,
-            "count": len(servers),
-            "vpn_servers": servers,
-        }
+        return redact_sensitive_fields(
+            {
+                "success": True,
+                "site": vpn_manager._connection.site,
+                "count": len(servers),
+                "vpn_servers": servers,
+            },
+            include_sensitive=include_sensitive,
+        )
     except Exception as e:
         logger.error("Error listing VPN servers: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list VPN servers: {e}"}
@@ -125,16 +144,20 @@ async def get_vpn_server_details(
     server_id: Annotated[
         str, Field(description="Unique identifier (_id) of the VPN server (from unifi_list_vpn_servers)")
     ],
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Implementation for getting VPN server details."""
     try:
         server = await vpn_manager.get_vpn_server_details(server_id)
-        return {
-            "success": True,
-            "site": vpn_manager._connection.site,
-            "server_id": server_id,
-            "details": server,
-        }
+        return redact_sensitive_fields(
+            {
+                "success": True,
+                "site": vpn_manager._connection.site,
+                "server_id": server_id,
+                "details": server,
+            },
+            include_sensitive=include_sensitive,
+        )
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:

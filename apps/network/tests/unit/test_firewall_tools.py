@@ -5,6 +5,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from unifi_core.redaction import REDACTED
 
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")
 os.environ.setdefault("UNIFI_USERNAME", "test")
@@ -247,6 +248,49 @@ class TestListFirewallPolicies:
         assert rp.get("protocol") == "all"
         assert rp.get("ip_version") == "BOTH"
         assert rp.get("logging") is False
+
+
+class TestFirewallToolRedaction:
+    @pytest.mark.asyncio
+    async def test_policy_details_redacts_by_default_and_allows_opt_out(self):
+        policy_raw = {
+            **SAMPLE_ZONE_POLICY_RAW,
+            "source": {**SAMPLE_ZONE_POLICY_RAW["source"], "auth_key": "secret"},
+        }
+        mock_policy = _make_policy(policy_raw)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+
+            from unifi_network_mcp.tools.firewall import get_firewall_policy_details
+
+            default = await get_firewall_policy_details("pol_zone_001")
+            raw = await get_firewall_policy_details("pol_zone_001", include_sensitive=True)
+
+        assert default["details"]["source"]["auth_key"] == REDACTED
+        assert raw["details"]["source"]["auth_key"] == "secret"
+
+    @pytest.mark.asyncio
+    async def test_update_policy_preview_redacts_current_and_proposed_nested_secret(self):
+        policy_raw = {
+            **SAMPLE_ZONE_POLICY_RAW,
+            "source": {**SAMPLE_ZONE_POLICY_RAW["source"], "auth_key": "old-secret"},
+        }
+        mock_policy = _make_policy(policy_raw)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                "pol_zone_001",
+                {"source": {"zone_id": "internal-zone-id", "matching_target": "ANY", "auth_key": "new-secret"}},
+                confirm=False,
+            )
+
+        assert result["preview"]["current"]["source"]["auth_key"] == REDACTED
+        assert result["preview"]["proposed"]["source"]["auth_key"] == REDACTED
 
 
 # ---------------------------------------------------------------------------

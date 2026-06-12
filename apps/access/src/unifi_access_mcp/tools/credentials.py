@@ -23,6 +23,7 @@ from unifi_core.access.models.credentials import (
 )
 from unifi_core.confirmation import create_preview, preview_response
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.redaction import redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
 
@@ -132,13 +133,15 @@ async def access_create_credential(
 
         if confirm:
             result = await credential_manager.apply_create_credential(cred_type, cred_data)
-            return {"success": True, "data": result}
+            return redact_sensitive_fields({"success": True, "data": result})
 
         preview_data = await credential_manager.create_credential(cred_type, cred_data)
-        return create_preview(
-            resource_type="access_credential",
-            resource_data=preview_data["proposed_changes"],
-            resource_name=f"{credential_type} credential",
+        return redact_sensitive_fields(
+            create_preview(
+                resource_type="access_credential",
+                resource_data=preview_data["proposed_changes"],
+                resource_name=f"{credential_type} credential",
+            )
         )
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}

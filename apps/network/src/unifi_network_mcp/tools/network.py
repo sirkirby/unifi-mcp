@@ -13,6 +13,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
+from unifi_core.redaction import redact_sensitive_fields
 from unifi_core.network.models.ap_group import (
     from_controller as ap_group_from_controller,
 )
@@ -40,6 +41,10 @@ from unifi_core.network.models.wlans import (
 from unifi_network_mcp.runtime import network_manager, server
 
 logger = logging.getLogger(__name__)
+
+_INCLUDE_SENSITIVE_FIELD = Field(
+    description="When true, returns raw controller secret fields. Leave false for normal AI-agent use."
+)
 
 
 @server.tool(
@@ -244,6 +249,7 @@ async def get_network_details(
             )
         ),
     ] = False,
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Gets the detailed configuration of a specific network by its ID.
 
@@ -286,14 +292,17 @@ async def get_network_details(
         network = await network_manager.get_network_details(network_id)
         if network:
             if not summary:
-                return {
-                    "success": True,
-                    "site": network_manager._connection.site,
-                    "network_id": network_id,
-                    "include": "all",
-                    "summary_mode": False,
-                    "details": json.loads(json.dumps(network, default=str)),
-                }
+                return redact_sensitive_fields(
+                    {
+                        "success": True,
+                        "site": network_manager._connection.site,
+                        "network_id": network_id,
+                        "include": "all",
+                        "summary_mode": False,
+                        "details": json.loads(json.dumps(network, default=str)),
+                    },
+                    include_sensitive=include_sensitive,
+                )
 
             known_sections = {"basic", "dhcp", "ipv6", "vpn", "all"}
             sections = set(s.strip().lower() for s in include.split(","))
@@ -360,7 +369,7 @@ async def get_network_details(
             }
             if unknown_sections:
                 response["unknown_sections"] = unknown_sections
-            return response
+            return redact_sensitive_fields(response, include_sensitive=include_sensitive)
         else:
             return {
                 "success": False,
@@ -404,6 +413,7 @@ async def update_network(
         bool,
         Field(description="When true, applies the update. When false (default), returns a preview of the changes"),
     ] = False,
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Updates specific fields of an existing network.
 
@@ -490,12 +500,15 @@ async def update_network(
         return {"success": False, "error": "Network not found"}
 
     if not confirm:
-        return update_preview(
-            resource_type="network",
-            resource_id=network_id,
-            resource_name=current.get("name"),
-            current_state=current,
-            updates=validated_data,
+        return redact_sensitive_fields(
+            update_preview(
+                resource_type="network",
+                resource_id=network_id,
+                resource_name=current.get("name"),
+                current_state=current,
+                updates=validated_data,
+            ),
+            include_sensitive=include_sensitive,
         )
 
     # Basic cross-field validation (more complex logic might need Pydantic models)
@@ -513,21 +526,27 @@ async def update_network(
         if success:
             updated_network = await network_manager.get_network_details(network_id)
             logger.info("Successfully updated network (%s)", network_id)
-            return {
-                "success": True,
-                "network_id": network_id,
-                "updated_fields": updated_fields_list,
-                "details": json.loads(json.dumps(updated_network, default=str)),
-            }
+            return redact_sensitive_fields(
+                {
+                    "success": True,
+                    "network_id": network_id,
+                    "updated_fields": updated_fields_list,
+                    "details": json.loads(json.dumps(updated_network, default=str)),
+                },
+                include_sensitive=include_sensitive,
+            )
         else:
             logger.error("Failed to update network (%s): %s", network_id, error_detail)
             network_after_update = await network_manager.get_network_details(network_id)
-            return {
-                "success": False,
-                "network_id": network_id,
-                "error": f"Failed to update network ({network_id}): {error_detail}",
-                "details_after_attempt": json.loads(json.dumps(network_after_update, default=str)),
-            }
+            return redact_sensitive_fields(
+                {
+                    "success": False,
+                    "network_id": network_id,
+                    "error": f"Failed to update network ({network_id}): {error_detail}",
+                    "details_after_attempt": json.loads(json.dumps(network_after_update, default=str)),
+                },
+                include_sensitive=include_sensitive,
+            )
 
     except Exception as e:
         logger.error("Error updating network %s: %s", network_id, e, exc_info=True)
@@ -552,6 +571,7 @@ async def create_network(
         bool,
         Field(description="When true, creates the network. When false (default), validates and returns a preview"),
     ] = False,
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Create a new network (LAN/VLAN) with comprehensive validation.
 
@@ -682,11 +702,14 @@ async def create_network(
         return {"success": False, "error": "'vlan' must be between 1 and 4094."}
 
     if not confirm:
-        return create_preview(
-            resource_type="network",
-            resource_data=validated_data,
-            resource_name=validated_data.get("name"),
-            warnings=["Creating a network may temporarily disrupt connectivity"],
+        return redact_sensitive_fields(
+            create_preview(
+                resource_type="network",
+                resource_data=validated_data,
+                resource_name=validated_data.get("name"),
+                warnings=["Creating a network may temporarily disrupt connectivity"],
+            ),
+            include_sensitive=include_sensitive,
         )
 
     logger.info("Attempting to create network '%s' with purpose '%s'", validated_data["name"], purpose)
@@ -700,13 +723,16 @@ async def create_network(
         if created_network and created_network.get("_id"):
             new_network_id = created_network.get("_id")
             logger.info("Successfully created network '%s' with ID %s", validated_data["name"], new_network_id)
-            return {
-                "success": True,
-                "site": network_manager._connection.site,
-                "message": f"Network '{validated_data['name']}' created successfully.",
-                "network_id": new_network_id,
-                "details": json.loads(json.dumps(created_network, default=str)),
-            }
+            return redact_sensitive_fields(
+                {
+                    "success": True,
+                    "site": network_manager._connection.site,
+                    "message": f"Network '{validated_data['name']}' created successfully.",
+                    "network_id": new_network_id,
+                    "details": json.loads(json.dumps(created_network, default=str)),
+                },
+                include_sensitive=include_sensitive,
+            )
         else:
             error_msg = (
                 created_network.get("error", "Manager returned failure")
@@ -831,6 +857,7 @@ async def list_wlans(
 )
 async def get_wlan_details(
     wlan_id: Annotated[str, Field(description="Unique identifier (_id) of the WLAN/SSID (from unifi_list_wlans)")],
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Gets the detailed configuration of a specific WLAN (SSID) by its ID.
 
@@ -870,12 +897,15 @@ async def get_wlan_details(
             return {"success": False, "error": "wlan_id is required"}
         wlan = await network_manager.get_wlan_details(wlan_id)
         if wlan:
-            return {
-                "success": True,
-                "site": network_manager._connection.site,
-                "wlan_id": wlan_id,
-                "details": json.loads(json.dumps(wlan, default=str)),
-            }
+            return redact_sensitive_fields(
+                {
+                    "success": True,
+                    "site": network_manager._connection.site,
+                    "wlan_id": wlan_id,
+                    "details": json.loads(json.dumps(wlan, default=str)),
+                },
+                include_sensitive=include_sensitive,
+            )
         else:
             return {"success": False, "error": f"WLAN with ID '{wlan_id}' not found."}
     except Exception as e:
@@ -913,6 +943,7 @@ async def update_wlan(
         bool,
         Field(description="When true, applies the update. When false (default), returns a preview of the changes"),
     ] = False,
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Updates specific fields of an existing WLAN (Wireless SSID).
 
@@ -957,12 +988,15 @@ async def update_wlan(
         return {"success": False, "error": "WLAN not found"}
 
     if not confirm:
-        return update_preview(
-            resource_type="wlan",
-            resource_id=wlan_id,
-            resource_name=current.get("name"),
-            current_state=current,
-            updates=validated_data,
+        return redact_sensitive_fields(
+            update_preview(
+                resource_type="wlan",
+                resource_id=wlan_id,
+                resource_name=current.get("name"),
+                current_state=current,
+                updates=validated_data,
+            ),
+            include_sensitive=include_sensitive,
         )
 
     # Basic cross-field validation for password
@@ -978,21 +1012,27 @@ async def update_wlan(
         if success:
             updated_wlan = await network_manager.get_wlan_details(wlan_id)
             logger.info("Successfully updated WLAN (%s)", wlan_id)
-            return {
-                "success": True,
-                "wlan_id": wlan_id,
-                "updated_fields": updated_fields_list,
-                "details": json.loads(json.dumps(updated_wlan, default=str)),
-            }
+            return redact_sensitive_fields(
+                {
+                    "success": True,
+                    "wlan_id": wlan_id,
+                    "updated_fields": updated_fields_list,
+                    "details": json.loads(json.dumps(updated_wlan, default=str)),
+                },
+                include_sensitive=include_sensitive,
+            )
         else:
             logger.error("Failed to update WLAN (%s): %s", wlan_id, error_detail)
             wlan_after_update = await network_manager.get_wlan_details(wlan_id)
-            return {
-                "success": False,
-                "wlan_id": wlan_id,
-                "error": f"Failed to update WLAN ({wlan_id}): {error_detail}",
-                "details_after_attempt": json.loads(json.dumps(wlan_after_update, default=str)),
-            }
+            return redact_sensitive_fields(
+                {
+                    "success": False,
+                    "wlan_id": wlan_id,
+                    "error": f"Failed to update WLAN ({wlan_id}): {error_detail}",
+                    "details_after_attempt": json.loads(json.dumps(wlan_after_update, default=str)),
+                },
+                include_sensitive=include_sensitive,
+            )
 
     except Exception as e:
         logger.error("Error updating WLAN %s: %s", wlan_id, e, exc_info=True)
@@ -1017,6 +1057,7 @@ async def create_wlan(
         bool,
         Field(description="When true, creates the WLAN. When false (default), validates and returns a preview"),
     ] = False,
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Create a new WLAN (SSID) with comprehensive validation.
 
@@ -1078,11 +1119,14 @@ async def create_wlan(
         }
 
     if not confirm:
-        return create_preview(
-            resource_type="wlan",
-            resource_data=validated_data,
-            resource_name=validated_data.get("name"),
-            warnings=["Creating a WLAN may temporarily affect wireless connectivity"],
+        return redact_sensitive_fields(
+            create_preview(
+                resource_type="wlan",
+                resource_data=validated_data,
+                resource_name=validated_data.get("name"),
+                warnings=["Creating a WLAN may temporarily affect wireless connectivity"],
+            ),
+            include_sensitive=include_sensitive,
         )
 
     logger.info("Attempting to create WLAN '%s' with security '%s'", validated_data["name"], validated_data["security"])
@@ -1096,13 +1140,16 @@ async def create_wlan(
         if created_wlan and created_wlan.get("_id"):
             new_wlan_id = created_wlan.get("_id")
             logger.info("Successfully created WLAN '%s' with ID %s", validated_data["name"], new_wlan_id)
-            return {
-                "success": True,
-                "site": network_manager._connection.site,
-                "message": f"WLAN '{validated_data['name']}' created successfully.",
-                "wlan_id": new_wlan_id,
-                "details": json.loads(json.dumps(created_wlan, default=str)),
-            }
+            return redact_sensitive_fields(
+                {
+                    "success": True,
+                    "site": network_manager._connection.site,
+                    "message": f"WLAN '{validated_data['name']}' created successfully.",
+                    "wlan_id": new_wlan_id,
+                    "details": json.loads(json.dumps(created_wlan, default=str)),
+                },
+                include_sensitive=include_sensitive,
+            )
         else:
             error_msg = (
                 created_wlan.get("error", "Manager returned failure")
@@ -1145,6 +1192,7 @@ async def delete_wlan(
             "WARNING: All devices using this SSID will be disconnected"
         ),
     ] = False,
+    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Delete a WLAN/SSID. All devices using this SSID will be disconnected."""
     if not confirm:
@@ -1157,6 +1205,7 @@ async def delete_wlan(
                     "name": wlan.get("name", "Unknown"),
                     "enabled": wlan.get("enabled"),
                     "security": wlan.get("security"),
+                    "x_passphrase": wlan.get("x_passphrase"),
                 }
                 if wlan
                 else {"wlan_id": wlan_id}
@@ -1166,11 +1215,14 @@ async def delete_wlan(
             resource_data = {"wlan_id": wlan_id}
             resource_name = wlan_id
 
-        return create_preview(
-            resource_type="wlan",
-            resource_data=resource_data,
-            resource_name=resource_name,
-            warnings=["All devices using this SSID will be disconnected"],
+        return redact_sensitive_fields(
+            create_preview(
+                resource_type="wlan",
+                resource_data=resource_data,
+                resource_name=resource_name,
+                warnings=["All devices using this SSID will be disconnected"],
+            ),
+            include_sensitive=include_sensitive,
         )
 
     try:
