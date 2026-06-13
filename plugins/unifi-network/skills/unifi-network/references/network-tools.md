@@ -1,4 +1,4 @@
-# Network Server Tool Reference (177 tools)
+# Network Server Tool Reference (178 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 
@@ -219,10 +219,11 @@ Manage static DNS A/AAAA/CNAME/MX/TXT/NS/SRV records on the controller's local D
 ## Traffic Flows
 
 <!-- AUTO:tools:traffic_flows -->
-1 tools.
+2 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
+| `unifi_get_traffic_flow_statistics` | Read | Aggregated UniFi Traffic Flows summary (Insights > Flows 'Flow Summary'). |
 | `unifi_get_traffic_flows` | Read | Query historical UniFi Traffic Flows (Insights > Flows). |
 <!-- /AUTO:tools:traffic_flows -->
 

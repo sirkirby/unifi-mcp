@@ -125,3 +125,119 @@ class TrafficFlow:
 class TrafficFlowPage:
     items: list[TrafficFlow]
     next_cursor: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Traffic-flow statistics (Insights > Flows "Flow Summary")
+#
+# Mirrors ``TrafficFlowManager.get_traffic_flow_statistics()``. Count-by-risk /
+# region maps are exposed as ``JSON`` scalars (dynamic key sets); the Top-Talker
+# rankings are enumerated sub-types.
+# ---------------------------------------------------------------------------
+
+
+@strawberry.type(description="A client in a traffic-flow Top-Talkers ranking.")
+class TrafficFlowTopClient:
+    count: int | None
+    client_mac: str | None
+    client_name: str | None
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "TrafficFlowTopClient":
+        return cls(
+            count=_get(obj, "count"),
+            client_mac=_get(obj, "client_mac"),
+            client_name=_get(obj, "client_name"),
+        )
+
+
+@strawberry.type(description="A destination in a traffic-flow Top-Talkers ranking.")
+class TrafficFlowTopDestination:
+    count: int | None
+    destination: str | None
+    most_frequent_region: str | None
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "TrafficFlowTopDestination":
+        return cls(
+            count=_get(obj, "count"),
+            destination=_get(obj, "destination"),
+            most_frequent_region=_get(obj, "most_frequent_region"),
+        )
+
+
+@strawberry.type(description="An application in a traffic-flow Top-Talkers ranking (by bytes).")
+class TrafficFlowTopApplication:
+    application_id: int | None
+    category_id: int | None
+    bytes: int | None
+    application_name: str | None
+    category_name: str | None
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "TrafficFlowTopApplication":
+        return cls(
+            application_id=_get(obj, "application_id"),
+            category_id=_get(obj, "category_id"),
+            bytes=_get(obj, "bytes"),
+            application_name=_get(obj, "application_name"),
+            category_name=_get(obj, "category_name"),
+        )
+
+
+@strawberry.type(description="A policy in a traffic-flow blocked-flow ranking.")
+class TrafficFlowTopPolicy:
+    count: int | None
+    policy_id: str | None
+    policy_name: str | None
+    policy_type: str | None
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "TrafficFlowTopPolicy":
+        return cls(
+            count=_get(obj, "count"),
+            policy_id=_get(obj, "policy_id"),
+            policy_name=_get(obj, "policy_name"),
+            policy_type=_get(obj, "policy_type"),
+        )
+
+
+@strawberry.type(description="Aggregated Insights > Flows summary (latest-statistics).")
+class TrafficFlowStatistics:
+    # Count maps keyed by risk band (low/medium/high) or region (country code);
+    # dynamic key sets, so exposed as JSON scalars.
+    allowed_count_by_risk: strawberry.scalars.JSON  # type: ignore[name-defined]
+    blocked_count_by_risk: strawberry.scalars.JSON  # type: ignore[name-defined]
+    allowed_count_by_region_by_risk: strawberry.scalars.JSON  # type: ignore[name-defined]
+    all_count_by_region: strawberry.scalars.JSON  # type: ignore[name-defined]
+    blocked_count_by_region: strawberry.scalars.JSON  # type: ignore[name-defined]
+    top_clients: list[TrafficFlowTopClient]
+    top_blocked_clients: list[TrafficFlowTopClient]
+    top_destinations: list[TrafficFlowTopDestination]
+    top_applications: list[TrafficFlowTopApplication]
+    top_blocked_policies: list[TrafficFlowTopPolicy]
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {"kind": kind}
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "TrafficFlowStatistics":
+        def _list(key: str, sub: Any) -> list:
+            return [sub.from_manager_output(i) for i in (_get(obj, key, default=[]) or [])]
+
+        return cls(
+            allowed_count_by_risk=_get(obj, "allowed_count_by_risk", default={}),
+            blocked_count_by_risk=_get(obj, "blocked_count_by_risk", default={}),
+            allowed_count_by_region_by_risk=_get(obj, "allowed_count_by_region_by_risk", default={}),
+            all_count_by_region=_get(obj, "all_count_by_region", default={}),
+            blocked_count_by_region=_get(obj, "blocked_count_by_region", default={}),
+            top_clients=_list("top_clients", TrafficFlowTopClient),
+            top_blocked_clients=_list("top_blocked_clients", TrafficFlowTopClient),
+            top_destinations=_list("top_destinations", TrafficFlowTopDestination),
+            top_applications=_list("top_applications", TrafficFlowTopApplication),
+            top_blocked_policies=_list("top_blocked_policies", TrafficFlowTopPolicy),
+        )
+
+    def to_dict(self) -> dict:
+        return asdict(self)

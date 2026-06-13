@@ -152,3 +152,188 @@ TRAFFICFLOW_MUTABLE_FIELDS: frozenset[str] = frozenset()
 TRAFFICFLOW_READ_ONLY_FIELDS: frozenset[str] = frozenset(TrafficFlow.model_fields.keys())
 # Alias required by the model-symmetry test harness — pattern used by all read-only models
 MUTABLE_FIELDS = TRAFFICFLOW_MUTABLE_FIELDS
+
+
+# ---------------------------------------------------------------------------
+# Traffic-flow statistics (Insights > Flows "Flow Summary")
+#
+# Read shape of the private v2 /traffic-flow-latest-statistics endpoint: risk
+# and region count breakdowns plus Top-Talker rankings (clients, destinations,
+# applications, blocked clients, blocked policies). Read-only.
+# ---------------------------------------------------------------------------
+
+
+class TrafficFlowTopClient(BaseModel):
+    """A client in a Top-Talkers ranking (by flow count)."""
+
+    count: Optional[int] = Field(default=None, description="Flow count", json_schema_extra={"mutable": False})
+    client_mac: Optional[str] = Field(
+        default=None, description="Client MAC address", json_schema_extra={"mutable": False}
+    )
+    client_name: Optional[str] = Field(
+        default=None, description="Client display name", json_schema_extra={"mutable": False}
+    )
+
+
+class TrafficFlowTopDestination(BaseModel):
+    """A destination in a Top-Talkers ranking (by flow count)."""
+
+    count: Optional[int] = Field(default=None, description="Flow count", json_schema_extra={"mutable": False})
+    destination: Optional[str] = Field(
+        default=None, description="Destination domain or IP", json_schema_extra={"mutable": False}
+    )
+    most_frequent_region: Optional[str] = Field(
+        default=None,
+        description="Most frequent destination region (country code)",
+        json_schema_extra={"mutable": False},
+    )
+
+
+class TrafficFlowTopApplication(BaseModel):
+    """An application in a Top-Talkers ranking (by bytes).
+
+    ``application_id``/``category_id`` are DPI catalog ids; ``application_name``/
+    ``category_name`` are resolved via the DPI catalog and are null when the
+    catalog does not cover the application.
+    """
+
+    application_id: Optional[int] = Field(
+        default=None, description="DPI application id", json_schema_extra={"mutable": False}
+    )
+    category_id: Optional[int] = Field(
+        default=None, description="DPI category id", json_schema_extra={"mutable": False}
+    )
+    bytes: Optional[int] = Field(default=None, description="Total bytes", json_schema_extra={"mutable": False})
+    application_name: Optional[str] = Field(
+        default=None,
+        description="Resolved DPI application name (null when unresolved)",
+        json_schema_extra={"mutable": False},
+    )
+    category_name: Optional[str] = Field(
+        default=None,
+        description="Resolved DPI category name (null when unresolved)",
+        json_schema_extra={"mutable": False},
+    )
+
+
+class TrafficFlowTopPolicy(BaseModel):
+    """A firewall/protection policy in a blocked-flow ranking (by flow count)."""
+
+    count: Optional[int] = Field(default=None, description="Blocked-flow count", json_schema_extra={"mutable": False})
+    policy_id: Optional[str] = Field(default=None, description="Policy id", json_schema_extra={"mutable": False})
+    policy_name: Optional[str] = Field(default=None, description="Policy name", json_schema_extra={"mutable": False})
+    policy_type: Optional[str] = Field(default=None, description="Policy type", json_schema_extra={"mutable": False})
+
+
+class TrafficFlowStatistics(BaseModel):
+    """Aggregated Insights > Flows summary (v2 /traffic-flow-latest-statistics).
+
+    Risk keys are ``low``/``medium``/``high`` (the UI surfaces these as Low /
+    Suspicious / Concerning). Region keys are ISO country codes.
+    """
+
+    allowed_count_by_risk: dict[str, int] = Field(
+        default_factory=dict, description="Allowed flow counts by risk band", json_schema_extra={"mutable": False}
+    )
+    blocked_count_by_risk: dict[str, int] = Field(
+        default_factory=dict, description="Blocked flow counts by risk band", json_schema_extra={"mutable": False}
+    )
+    allowed_count_by_region_by_risk: dict[str, dict[str, int]] = Field(
+        default_factory=dict,
+        description="Allowed flow counts by region then risk band",
+        json_schema_extra={"mutable": False},
+    )
+    all_count_by_region: dict[str, int] = Field(
+        default_factory=dict, description="All flow counts by region", json_schema_extra={"mutable": False}
+    )
+    blocked_count_by_region: dict[str, int] = Field(
+        default_factory=dict, description="Blocked flow counts by region", json_schema_extra={"mutable": False}
+    )
+    top_clients: list[TrafficFlowTopClient] = Field(
+        default_factory=list, description="Top clients by flow count", json_schema_extra={"mutable": False}
+    )
+    top_blocked_clients: list[TrafficFlowTopClient] = Field(
+        default_factory=list, description="Top blocked clients by flow count", json_schema_extra={"mutable": False}
+    )
+    top_destinations: list[TrafficFlowTopDestination] = Field(
+        default_factory=list, description="Top destinations by flow count", json_schema_extra={"mutable": False}
+    )
+    top_applications: list[TrafficFlowTopApplication] = Field(
+        default_factory=list, description="Top applications by bytes", json_schema_extra={"mutable": False}
+    )
+    top_blocked_policies: list[TrafficFlowTopPolicy] = Field(
+        default_factory=list,
+        description="Top blocking policies by blocked-flow count",
+        json_schema_extra={"mutable": False},
+    )
+
+
+def _top_client_from_controller(raw: Any) -> TrafficFlowTopClient:
+    return TrafficFlowTopClient(
+        count=_get(raw, "count"),
+        client_mac=_get(raw, "client_mac"),
+        client_name=_get(raw, "client_name"),
+    )
+
+
+def _top_destination_from_controller(raw: Any) -> TrafficFlowTopDestination:
+    region = _get(raw, "mostFrequentRegion")
+    if region is None:
+        region = _get(raw, "most_frequent_region")
+    return TrafficFlowTopDestination(
+        count=_get(raw, "count"),
+        destination=_get(raw, "destination"),
+        most_frequent_region=region,
+    )
+
+
+def _top_application_from_controller(raw: Any) -> TrafficFlowTopApplication:
+    # Name fields are intentionally left None here; DPI-catalog resolution of
+    # application_id/category_id is a separate concern layered on top.
+    return TrafficFlowTopApplication(
+        application_id=_get(raw, "application_id"),
+        category_id=_get(raw, "category_id"),
+        bytes=_get(raw, "bytes"),
+    )
+
+
+def _top_policy_from_controller(raw: Any) -> TrafficFlowTopPolicy:
+    return TrafficFlowTopPolicy(
+        count=_get(raw, "count"),
+        policy_id=_get(raw, "policy_id"),
+        policy_name=_get(raw, "policy_name"),
+        policy_type=_get(raw, "policy_type"),
+    )
+
+
+def traffic_flow_statistics_from_controller(obj: Any) -> TrafficFlowStatistics:
+    """Normalise a raw /traffic-flow-latest-statistics response into the model."""
+
+    def _region_by_risk(raw: Any) -> dict[str, dict[str, int]]:
+        # Guard each sub-entry: a firmware edge case can send {"US": null}.
+        return {
+            k: dict(v)
+            for k, v in (_get(raw, "allowed_count_by_region_by_risk", {}) or {}).items()
+            if isinstance(v, dict)
+        }
+
+    return TrafficFlowStatistics(
+        allowed_count_by_risk=dict(_get(obj, "allowed_count_by_risk", {}) or {}),
+        blocked_count_by_risk=dict(_get(obj, "blocked_count_by_risk", {}) or {}),
+        allowed_count_by_region_by_risk=_region_by_risk(obj),
+        all_count_by_region=dict(_get(obj, "all_count_by_region", {}) or {}),
+        blocked_count_by_region=dict(_get(obj, "blocked_count_by_region", {}) or {}),
+        top_clients=[_top_client_from_controller(c) for c in (_get(obj, "top_all_count_by_client", []) or [])],
+        top_blocked_clients=[
+            _top_client_from_controller(c) for c in (_get(obj, "top_blocked_count_by_client", []) or [])
+        ],
+        top_destinations=[
+            _top_destination_from_controller(d) for d in (_get(obj, "top_all_count_by_destination", []) or [])
+        ],
+        top_applications=[
+            _top_application_from_controller(a) for a in (_get(obj, "top_all_traffic_by_application", []) or [])
+        ],
+        top_blocked_policies=[
+            _top_policy_from_controller(p) for p in (_get(obj, "top_blocked_count_by_policy", []) or [])
+        ],
+    )

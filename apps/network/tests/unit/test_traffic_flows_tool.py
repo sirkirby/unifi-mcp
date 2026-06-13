@@ -5,7 +5,10 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from unifi_network_mcp.runtime import traffic_flow_manager
-from unifi_network_mcp.tools.traffic_flows import get_traffic_flows
+from unifi_network_mcp.tools.traffic_flows import (
+    get_traffic_flow_statistics,
+    get_traffic_flows,
+)
 
 # Patch the manager METHOD on the class so interception is robust regardless of
 # which TrafficFlowManager instance the tool resolves (real singleton vs mock)
@@ -105,3 +108,48 @@ async def test_tool_manager_failure_returns_error_envelope():
         out = await get_traffic_flows(time_from=1, time_to=2)
     assert out["success"] is False
     assert "Failed to get traffic flows" in out["error"]
+
+
+# ---------------------------------------------------------------------------
+# unifi_get_traffic_flow_statistics
+# ---------------------------------------------------------------------------
+
+_STATS_METHOD = "unifi_core.network.managers.traffic_flow_manager.TrafficFlowManager.get_traffic_flow_statistics"
+
+_STATS_ENVELOPE = {
+    "allowed_count_by_risk": {"low": 9},
+    "blocked_count_by_risk": {"low": 1},
+    "top_clients": [{"count": 5, "client_mac": "aa:bb:cc:00:00:01", "client_name": "Lab"}],
+    "top_applications": [{"application_id": 470, "category_id": 4, "bytes": 9, "application_name": None}],
+}
+
+
+@pytest.mark.asyncio
+async def test_stats_tool_maps_params_and_returns_success():
+    with patch(_STATS_METHOD, new_callable=AsyncMock) as mock_get:
+        mock_get.return_value = dict(_STATS_ENVELOPE)
+        out = await get_traffic_flow_statistics(period="WEEK", top=5)
+
+    assert out["success"] is True
+    assert out["site"] == traffic_flow_manager._connection.site
+    for key, value in _STATS_ENVELOPE.items():
+        assert out[key] == value
+    # period/top forwarded as kwargs.
+    assert mock_get.call_args.kwargs == {"period": "WEEK", "top": 5}
+
+
+@pytest.mark.asyncio
+async def test_stats_tool_invalid_period_returns_error_envelope():
+    # The real manager validates period before any controller call, so no patch.
+    out = await get_traffic_flow_statistics(period="YEAR")
+    assert out["success"] is False
+    assert "period must be one of" in out["error"]
+
+
+@pytest.mark.asyncio
+async def test_stats_tool_manager_failure_returns_error_envelope():
+    with patch(_STATS_METHOD, new_callable=AsyncMock) as mock_get:
+        mock_get.side_effect = RuntimeError("boom")
+        out = await get_traffic_flow_statistics(period="DAY")
+    assert out["success"] is False
+    assert "Failed to get traffic flow statistics" in out["error"]

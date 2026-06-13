@@ -198,6 +198,9 @@ from unifi_api.graphql.types.network.system import (
 from unifi_api.graphql.types.network.traffic_flow import (
     TrafficFlow as NetworkTrafficFlowType,
 )
+from unifi_api.graphql.types.network.traffic_flow import (
+    TrafficFlowStatistics as NetworkTrafficFlowStatisticsType,
+)
 from unifi_api.graphql.types.network.voucher import (
     Voucher as NetworkVoucherType,
 )
@@ -309,6 +312,7 @@ def build_type_registry() -> TypeRegistry:
 
     # network/traffic-flows
     reg.register_tool_type("unifi_get_traffic_flows", NetworkTrafficFlowType, "list")
+    reg.register_tool_type("unifi_get_traffic_flow_statistics", NetworkTrafficFlowStatisticsType, "detail")
 
     # network/devices
     reg.register_type("network", "devices", NetworkDeviceType)

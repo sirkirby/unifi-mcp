@@ -87,7 +87,11 @@ from unifi_api.graphql.types.network.system import (
     SystemInfo,
     TopClient,
 )
-from unifi_api.graphql.types.network.traffic_flow import TrafficFlow, TrafficFlowPage
+from unifi_api.graphql.types.network.traffic_flow import (
+    TrafficFlow,
+    TrafficFlowPage,
+    TrafficFlowStatistics,
+)
 from unifi_api.graphql.types.network.voucher import Voucher
 from unifi_api.graphql.types.network.vpn import VpnClient, VpnServer
 from unifi_api.graphql.types.network.wlan import Wlan
@@ -652,6 +656,30 @@ async def _fetch_traffic_flows(
         if cm.site != site:
             await cm.set_site(site)
         return await mgr.get_traffic_flows(query)
+
+
+async def _fetch_traffic_flow_statistics(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+    period: str,
+    top: int,
+) -> dict:
+    async with ctx.sessionmaker() as session:
+        mgr = await ctx.manager_factory.get_domain_manager(
+            session,
+            controller,
+            "network",
+            "traffic_flow_manager",
+        )
+        cm = await ctx.manager_factory.get_connection_manager(
+            session,
+            controller,
+            "network",
+        )
+        if cm.site != site:
+            await cm.set_site(site)
+        return await mgr.get_traffic_flow_statistics(period=period, top=top)
 
 
 # ---- Cluster C fetch helpers (firewall / qos / dpi / cf / acl / oon / pf) -
@@ -3823,6 +3851,22 @@ class NetworkQuery:
         items = [TrafficFlow.from_manager_output(f) for f in result.get("flows", [])]
         next_cursor = _encode_flow_cursor(page + 1) if result.get("has_next") else None
         return TrafficFlowPage(items=items, next_cursor=next_cursor)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Aggregated Insights > Flows summary (risk/region counts + Top-Talkers).",
+    )
+    async def traffic_flow_statistics(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+        period: str = "DAY",
+        top: int = 10,
+    ) -> TrafficFlowStatistics:
+        ctx: GraphQLContext = info.context
+        result = await _fetch_traffic_flow_statistics(ctx, controller, site, period, top)
+        return TrafficFlowStatistics.from_manager_output(result)
 
     # ---- Switch domain ---------------------------------------------------
 

@@ -1182,6 +1182,11 @@ type NetworkQuery {
   """Query historical traffic flows (Insights > Flows), paginated."""
   trafficFlows(controller: ID!, site: String! = "default", withinHours: Int! = 24, timeFrom: Int = null, timeTo: Int = null, searchText: String = null, pageSize: Int! = 100, cursor: String = null): TrafficFlowPage!
 
+  """
+  Aggregated Insights > Flows summary (risk/region counts + Top-Talkers).
+  """
+  trafficFlowStatistics(controller: ID!, site: String! = "default", period: String! = "DAY", top: Int! = 10): TrafficFlowStatistics!
+
   """List switch port profiles on the given controller/site (paginated)."""
   portProfiles(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): PortProfilePage!
 
@@ -1772,6 +1777,51 @@ type TrafficFlowPage {
   nextCursor: String
 }
 
+"""Aggregated Insights > Flows summary (latest-statistics)."""
+type TrafficFlowStatistics {
+  allowedCountByRisk: JSON!
+  blockedCountByRisk: JSON!
+  allowedCountByRegionByRisk: JSON!
+  allCountByRegion: JSON!
+  blockedCountByRegion: JSON!
+  topClients: [TrafficFlowTopClient!]!
+  topBlockedClients: [TrafficFlowTopClient!]!
+  topDestinations: [TrafficFlowTopDestination!]!
+  topApplications: [TrafficFlowTopApplication!]!
+  topBlockedPolicies: [TrafficFlowTopPolicy!]!
+}
+
+"""An application in a traffic-flow Top-Talkers ranking (by bytes)."""
+type TrafficFlowTopApplication {
+  applicationId: Int
+  categoryId: Int
+  bytes: Int
+  applicationName: String
+  categoryName: String
+}
+
+"""A client in a traffic-flow Top-Talkers ranking."""
+type TrafficFlowTopClient {
+  count: Int
+  clientMac: String
+  clientName: String
+}
+
+"""A destination in a traffic-flow Top-Talkers ranking."""
+type TrafficFlowTopDestination {
+  count: Int
+  destination: String
+  mostFrequentRegion: String
+}
+
+"""A policy in a traffic-flow blocked-flow ranking."""
+type TrafficFlowTopPolicy {
+  count: Int
+  policyId: String
+  policyName: String
+  policyType: String
+}
+
 """A traffic-route policy (V2 /trafficroutes entry)."""
 type TrafficRoute {
   id: ID
@@ -2069,6 +2119,7 @@ Read-only access to UniFi Network resources.
 - `switchPorts: SwitchPorts`  — Get the port-override wrapper for a switch (name/model + per-port overrides).
 - `systemInfo: SystemInfo`  — Get controller system info (build, uptime, hardware).
 - `topClients: [TopClient!]!`  — List top-traffic clients within a window.
+- `trafficFlowStatistics: TrafficFlowStatistics!`  — Aggregated Insights > Flows summary (risk/region counts + Top-Talkers).
 - `trafficFlows: TrafficFlowPage!`  — Query historical traffic flows (Insights > Flows), paginated.
 - `trafficRoute: TrafficRoute`  — Look up a single traffic-route policy by id.
 - `trafficRoutes: TrafficRoutePage!`  — List traffic-route policies (V2 /trafficroutes) (paginated).

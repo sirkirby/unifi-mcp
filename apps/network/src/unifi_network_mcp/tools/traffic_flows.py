@@ -90,3 +90,30 @@ async def get_traffic_flows(
     except Exception as e:
         logger.error("Error getting traffic flows: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to get traffic flows: {e}"}
+
+
+@server.tool(
+    name="unifi_get_traffic_flow_statistics",
+    description=(
+        "Aggregated UniFi Traffic Flows summary (Insights > Flows 'Flow Summary'). Returns risk and "
+        "region count breakdowns plus Top-Talker rankings for a preset period: top clients, top "
+        "destinations, top applications (by bytes), top blocked clients, and top blocking policies. "
+        "Risk bands are low/medium/high (the UI labels these Low/Suspicious/Concerning). Application "
+        "entries carry DPI application_id/category_id and bytes; application_name/category_name are "
+        "null (DPI-catalog name resolution is not yet wired). Read-only."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def get_traffic_flow_statistics(
+    period: Annotated[str, Field(description="Time window: HOUR, DAY, WEEK, or MONTH")] = "DAY",
+    top: Annotated[int, Field(description="Entries per ranking (1-100)")] = 10,
+) -> Dict[str, Any]:
+    """Query aggregated traffic-flow statistics."""
+    try:
+        result = await traffic_flow_manager.get_traffic_flow_statistics(period=period, top=top)
+        return {"success": True, "site": traffic_flow_manager._connection.site, **result}
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error getting traffic flow statistics: %s", e, exc_info=True)
+        return {"success": False, "error": f"Failed to get traffic flow statistics: {e}"}

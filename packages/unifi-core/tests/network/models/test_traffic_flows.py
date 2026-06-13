@@ -61,3 +61,114 @@ def test_trafficflow_fields_marked_immutable():
         for name, field in model.model_fields.items():
             extra = field.json_schema_extra or {}
             assert extra.get("mutable") is False, f"{model.__name__}.{name} missing mutable:False"
+
+
+# ---------------------------------------------------------------------------
+# TrafficFlowStatistics (Insights > Flows "Flow Summary" — latest-statistics)
+# ---------------------------------------------------------------------------
+
+# Mirrors the live v2 /traffic-flow-latest-statistics response shape with
+# synthetic data (no real identifiers). Risk keys are low/medium/high; the
+# top_* arrays drop the UI-only client_fingerprint/icon_* noise.
+_RAW_STATS = {
+    "all_count_by_region": {"US": 100, "DE": 5},
+    "allowed_count_by_region_by_risk": {"US": {"low": 98, "medium": 2}, "DE": {"low": 5}},
+    "allowed_count_by_risk": {"low": 103, "medium": 2},
+    "blocked_count_by_region": {"US": 7},
+    "blocked_count_by_risk": {"low": 7},
+    "top_all_count_by_client": [
+        {
+            "count": 500,
+            "client_mac": "aa:bb:cc:00:00:01",
+            "client_name": "Lab-Laptop",
+            "client_fingerprint": {"dev_id": 1, "dev_vendor": 7},
+            "icon_filename": None,
+            "icon_resolutions": None,
+        }
+    ],
+    "top_all_count_by_destination": [{"count": 200, "destination": "example.test", "mostFrequentRegion": "US"}],
+    "top_all_traffic_by_application": [{"application_id": 470, "bytes": 123456789, "category_id": 4}],
+    "top_blocked_count_by_client": [{"count": 7, "client_mac": "aa:bb:cc:00:00:02", "client_name": "Blocked-Host"}],
+    "top_blocked_count_by_policy": [
+        {"count": 7, "policy_id": "pol-1", "policy_name": "Region Blocking", "policy_type": "PROTECTION"}
+    ],
+}
+
+
+def test_statistics_maps_count_breakdowns():
+    from unifi_core.network.models.traffic_flows import traffic_flow_statistics_from_controller
+
+    stats = traffic_flow_statistics_from_controller(_RAW_STATS)
+    assert stats.allowed_count_by_risk == {"low": 103, "medium": 2}
+    assert stats.blocked_count_by_risk == {"low": 7}
+    assert stats.all_count_by_region == {"US": 100, "DE": 5}
+    assert stats.blocked_count_by_region == {"US": 7}
+    assert stats.allowed_count_by_region_by_risk["US"] == {"low": 98, "medium": 2}
+
+
+def test_statistics_maps_top_clients_dropping_fingerprint_and_icon():
+    from unifi_core.network.models.traffic_flows import traffic_flow_statistics_from_controller
+
+    stats = traffic_flow_statistics_from_controller(_RAW_STATS)
+    assert len(stats.top_clients) == 1
+    client = stats.top_clients[0]
+    assert client.count == 500
+    assert client.client_mac == "aa:bb:cc:00:00:01"
+    assert client.client_name == "Lab-Laptop"
+    # The UI-only fingerprint/icon fields are not projected.
+    dumped = client.model_dump()
+    assert "client_fingerprint" not in dumped
+    assert "icon_filename" not in dumped
+    assert set(dumped) == {"count", "client_mac", "client_name"}
+
+
+def test_statistics_maps_top_destinations_camel_to_snake():
+    from unifi_core.network.models.traffic_flows import traffic_flow_statistics_from_controller
+
+    stats = traffic_flow_statistics_from_controller(_RAW_STATS)
+    dest = stats.top_destinations[0]
+    assert dest.count == 200
+    assert dest.destination == "example.test"
+    assert dest.most_frequent_region == "US"
+
+
+def test_statistics_top_applications_carry_ids_and_nullable_names():
+    from unifi_core.network.models.traffic_flows import traffic_flow_statistics_from_controller
+
+    stats = traffic_flow_statistics_from_controller(_RAW_STATS)
+    app = stats.top_applications[0]
+    assert app.application_id == 470
+    assert app.category_id == 4
+    assert app.bytes == 123456789
+    # Name resolution is deferred (PR-B / DPI catalog) — fields exist but default None.
+    assert app.application_name is None
+    assert app.category_name is None
+
+
+def test_statistics_maps_blocked_clients_and_policies():
+    from unifi_core.network.models.traffic_flows import traffic_flow_statistics_from_controller
+
+    stats = traffic_flow_statistics_from_controller(_RAW_STATS)
+    assert stats.top_blocked_clients[0].client_name == "Blocked-Host"
+    policy = stats.top_blocked_policies[0]
+    assert policy.policy_id == "pol-1"
+    assert policy.policy_name == "Region Blocking"
+    assert policy.policy_type == "PROTECTION"
+
+
+def test_statistics_handles_empty_response():
+    from unifi_core.network.models.traffic_flows import traffic_flow_statistics_from_controller
+
+    stats = traffic_flow_statistics_from_controller({})
+    assert stats.allowed_count_by_risk == {}
+    assert stats.top_clients == []
+    assert stats.top_applications == []
+    assert stats.top_blocked_policies == []
+
+
+def test_statistics_skips_null_region_subentry():
+    # A firmware edge case can send a null per-region sub-entry; it must not crash.
+    from unifi_core.network.models.traffic_flows import traffic_flow_statistics_from_controller
+
+    stats = traffic_flow_statistics_from_controller({"allowed_count_by_region_by_risk": {"US": {"low": 5}, "DE": None}})
+    assert stats.allowed_count_by_region_by_risk == {"US": {"low": 5}}

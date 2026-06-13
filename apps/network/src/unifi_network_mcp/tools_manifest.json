@@ -1,5 +1,5 @@
 {
-  "count": 177,
+  "count": 178,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -86,6 +86,7 @@
     "unifi_get_switch_ports": "unifi_network_mcp.tools.switch",
     "unifi_get_system_info": "unifi_network_mcp.tools.system",
     "unifi_get_top_clients": "unifi_network_mcp.tools.stats",
+    "unifi_get_traffic_flow_statistics": "unifi_network_mcp.tools.traffic_flows",
     "unifi_get_traffic_flows": "unifi_network_mcp.tools.traffic_flows",
     "unifi_get_traffic_route_details": "unifi_network_mcp.tools.traffic_routes",
     "unifi_get_usergroup_details": "unifi_network_mcp.tools.usergroups",
@@ -8550,6 +8551,99 @@
         }
       },
       "title": "Get Top Clients"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Aggregated UniFi Traffic Flows summary (Insights > Flows 'Flow Summary'). Returns risk and region count breakdowns plus Top-Talker rankings for a preset period: top clients, top destinations, top applications (by bytes), top blocked clients, and top blocking policies. Risk bands are low/medium/high (the UI labels these Low/Suspicious/Concerning). Application entries carry DPI application_id/category_id and bytes; application_name/category_name are null (DPI-catalog name resolution is not yet wired). Read-only.",
+      "name": "unifi_get_traffic_flow_statistics",
+      "schema": {
+        "input": {
+          "properties": {
+            "period": {
+              "description": "Time window: HOUR, DAY, WEEK, or MONTH",
+              "type": "string"
+            },
+            "top": {
+              "description": "Entries per ranking (1-100)",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Traffic Flow Statistics"
     },
     {
       "annotations": {

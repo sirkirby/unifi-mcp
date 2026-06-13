@@ -12,9 +12,16 @@ from typing import Any, Dict
 from aiounifi.models.api import ApiRequestV2
 
 from unifi_core.network.managers.connection_manager import ConnectionManager
-from unifi_core.network.models.traffic_flows import TrafficFlowQuery, traffic_flow_from_controller
+from unifi_core.network.models.traffic_flows import (
+    TrafficFlowQuery,
+    traffic_flow_from_controller,
+    traffic_flow_statistics_from_controller,
+)
 
 _FLOWS_CACHE_TTL = 45  # seconds; short-lived, matching the 60s alerts-cache precedent
+
+# Periods accepted by /traffic-flow-latest-statistics (the UI's 1h/1D/1W/1M).
+_STATISTICS_PERIODS = ("HOUR", "DAY", "WEEK", "MONTH")
 
 # User-facing filter arrays (populated from TrafficFlowQuery).
 _FILTER_FIELDS = (
@@ -108,5 +115,37 @@ class TrafficFlowManager:
             "has_next": response.get("has_next", False),
             "or_more": response.get("or_more", False),
         }
+        self._connection._update_cache(cache_key, result, timeout=_FLOWS_CACHE_TTL)
+        return result
+
+    async def get_traffic_flow_statistics(self, period: str = "DAY", top: int = 10) -> Dict[str, Any]:
+        """Fetch aggregated Insights > Flows statistics (latest-statistics).
+
+        ``period`` is one of HOUR/DAY/WEEK/MONTH (the UI's 1h/1D/1W/1M); ``top``
+        bounds each Top-Talker ranking (clamped 1-100). Validated client-side so
+        an unknown period fails clearly instead of as an opaque controller 400.
+        Cached ~45s keyed on period+top+site.
+        """
+        period = (period or "").upper()
+        if period not in _STATISTICS_PERIODS:
+            raise ValueError(f"period must be one of {', '.join(_STATISTICS_PERIODS)}")
+        top = max(1, min(int(top), 100))
+
+        cache_key = f"traffic_flow_statistics_{period}_{top}_{self._connection.site}"
+        cached = self._connection.get_cached(cache_key, timeout=_FLOWS_CACHE_TTL)
+        if cached is not None:
+            return cached
+
+        api_request = ApiRequestV2(method="get", path=f"/traffic-flow-latest-statistics?period={period}&top={top}")
+        response = await self._connection.request(api_request)
+
+        # aiounifi's ApiRequestV2.decode list-wraps the response object (data=[obj]),
+        # mirroring the /traffic-flows path; unwrap to the single statistics object.
+        if isinstance(response, list):
+            response = response[0] if response else {}
+        if not isinstance(response, dict):
+            response = {}
+
+        result = traffic_flow_statistics_from_controller(response).model_dump()
         self._connection._update_cache(cache_key, result, timeout=_FLOWS_CACHE_TTL)
         return result

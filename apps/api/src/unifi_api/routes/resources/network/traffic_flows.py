@@ -104,3 +104,44 @@ async def get_traffic_flows(
         "next_cursor": next_cursor,
         "render_hint": hint,
     }
+
+
+@router.get(
+    "/sites/{site_id}/traffic-flow-statistics",
+    dependencies=[Depends(require_scope(Scope.READ))],
+    tags=["network/traffic-flows"],
+)
+async def get_traffic_flow_statistics(
+    request: Request,
+    site_id: str,
+    controller=Depends(resolve_controller),
+    period: str = Query("DAY"),
+    top: int = Query(10, ge=1, le=100),
+) -> dict:
+    require_capability(controller, "network")
+    factory = request.app.state.manager_factory
+    sm = request.app.state.sessionmaker
+    async with sm() as session:
+        mgr = await factory.get_domain_manager(
+            session,
+            controller.id,
+            "network",
+            "traffic_flow_manager",
+        )
+        cm = await factory.get_connection_manager(session, controller.id, "network")
+        if cm.site != site_id:
+            await cm.set_site(site_id)
+        try:
+            result = await mgr.get_traffic_flow_statistics(period=period, top=top)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    type_registry = request.app.state.type_registry
+    tool_type = type_registry.lookup_tool("unifi_get_traffic_flow_statistics")
+    if tool_type is None:
+        raise HTTPException(status_code=500, detail="traffic-flow-statistics projection not registered")
+    type_class, kind = tool_type
+    return {
+        "data": type_class.from_manager_output(result).to_dict(),
+        "render_hint": type_class.render_hint(kind),
+    }
