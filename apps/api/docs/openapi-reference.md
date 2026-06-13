@@ -1280,7 +1280,7 @@ LIST kind per Phase 4A — manager returns multi-element list of subsystems.
 - `controller` (query)
 
 
-**Returns:** `object`
+**Returns:** `Detail_TrafficFlowStatisticsModel_`
 
 ### `GET /v1/sites/{site_id}/traffic-flows` — Get Traffic Flows
 

@@ -15,12 +15,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.graphql.pydantic_export import to_pydantic_model
-from unifi_api.graphql.types.network.traffic_flow import TrafficFlow
+from unifi_api.graphql.types.network.traffic_flow import (
+    TrafficFlow,
+    TrafficFlowStatistics,
+)
 from unifi_api.routes.resources._common import (
     require_capability,
     resolve_controller,
 )
-from unifi_api.services.pydantic_models import Page
+from unifi_api.services.pydantic_models import Detail, Page
 
 router = APIRouter()
 
@@ -108,6 +111,7 @@ async def get_traffic_flows(
 
 @router.get(
     "/sites/{site_id}/traffic-flow-statistics",
+    response_model=Detail[to_pydantic_model(TrafficFlowStatistics)],
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/traffic-flows"],
 )

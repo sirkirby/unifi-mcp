@@ -1558,6 +1558,31 @@
         "title": "Detail[RouteModel]",
         "type": "object"
       },
+      "Detail_TrafficFlowStatisticsModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TrafficFlowStatisticsModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[TrafficFlowStatisticsModel]",
+        "type": "object"
+      },
       "Detail_TrafficRouteModel_": {
         "additionalProperties": true,
         "properties": {
@@ -5922,6 +5947,256 @@
           }
         },
         "title": "TrafficFlowModel",
+        "type": "object"
+      },
+      "TrafficFlowStatisticsModel": {
+        "additionalProperties": true,
+        "properties": {
+          "all_count_by_region": {
+            "title": "All Count By Region"
+          },
+          "allowed_count_by_region_by_risk": {
+            "title": "Allowed Count By Region By Risk"
+          },
+          "allowed_count_by_risk": {
+            "title": "Allowed Count By Risk"
+          },
+          "blocked_count_by_region": {
+            "title": "Blocked Count By Region"
+          },
+          "blocked_count_by_risk": {
+            "title": "Blocked Count By Risk"
+          },
+          "top_applications": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficFlowTopApplicationModel"
+            },
+            "title": "Top Applications",
+            "type": "array"
+          },
+          "top_blocked_clients": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficFlowTopClientModel"
+            },
+            "title": "Top Blocked Clients",
+            "type": "array"
+          },
+          "top_blocked_policies": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficFlowTopPolicyModel"
+            },
+            "title": "Top Blocked Policies",
+            "type": "array"
+          },
+          "top_clients": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficFlowTopClientModel"
+            },
+            "title": "Top Clients",
+            "type": "array"
+          },
+          "top_destinations": {
+            "items": {
+              "$ref": "#/components/schemas/TrafficFlowTopDestinationModel"
+            },
+            "title": "Top Destinations",
+            "type": "array"
+          }
+        },
+        "title": "TrafficFlowStatisticsModel",
+        "type": "object"
+      },
+      "TrafficFlowTopApplicationModel": {
+        "additionalProperties": true,
+        "properties": {
+          "application_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Id"
+          },
+          "application_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Application Name"
+          },
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          }
+        },
+        "title": "TrafficFlowTopApplicationModel",
+        "type": "object"
+      },
+      "TrafficFlowTopClientModel": {
+        "additionalProperties": true,
+        "properties": {
+          "client_mac": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Mac"
+          },
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          }
+        },
+        "title": "TrafficFlowTopClientModel",
+        "type": "object"
+      },
+      "TrafficFlowTopDestinationModel": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination"
+          },
+          "most_frequent_region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Most Frequent Region"
+          }
+        },
+        "title": "TrafficFlowTopDestinationModel",
+        "type": "object"
+      },
+      "TrafficFlowTopPolicyModel": {
+        "additionalProperties": true,
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          },
+          "policy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Name"
+          },
+          "policy_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Type"
+          }
+        },
+        "title": "TrafficFlowTopPolicyModel",
         "type": "object"
       },
       "TrafficRouteModel": {
@@ -17400,9 +17675,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Get Traffic Flow Statistics V1 Sites  Site Id  Traffic Flow Statistics Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/Detail_TrafficFlowStatisticsModel_"
                 }
               }
             },
