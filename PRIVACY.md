@@ -68,7 +68,9 @@ We do not integrate with any analytics, advertising, or data broker services.
 - They are never logged, transmitted externally, or stored in any persistent database
 - API keys (if used) follow the same local-only pattern
 
-MCP and API responses redact known controller secret fields by default, including Wi-Fi passphrases, VPN private or preshared keys, API tokens, and credential token/PIN values. Some MCP tools that return raw controller configuration expose an explicit `include_sensitive=true` escape hatch for local administrative inspection; leave it unset for normal AI-agent use.
+MCP and API responses redact known controller secret fields by default, including Wi-Fi passphrases, VPN private or preshared keys, whole VPN configuration blobs (imported WireGuard/OpenVPN config files, which embed private keys and certificates), API tokens, and credential token/PIN values. Some MCP tools that return raw controller configuration expose an explicit `include_sensitive=true` escape hatch for local administrative inspection; leave it unset for normal AI-agent use.
+
+Redaction targets secret/credential material, not hardware inventory. Some read-only tools — for example switch port statistics (`unifi_get_port_stats`) — return physical device identifiers such as SFP/transceiver module serial numbers by default, because they are needed for legitimate inventory and audit workflows. These identifiers are not treated as secrets and are not redacted.
 
 ## Data Retention
 

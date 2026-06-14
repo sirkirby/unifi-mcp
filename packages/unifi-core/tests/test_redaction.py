@@ -106,6 +106,33 @@ def test_does_not_redact_preshared_keys_enabled_flag() -> None:
     assert is_sensitive_key("private_preshared_keys") is True
 
 
+def test_redacts_role_infixed_private_and_preshared_keys() -> None:
+    # Real UniFi networkconf field names (WireGuard manual mode) carry a role
+    # infix (wireguard_client_*/wireguard_server_*) that the bare exact-match
+    # vocabulary missed, leaking key material — see issue #351.
+    assert is_sensitive_key("wireguard_client_private_key") is True
+    assert is_sensitive_key("wireguard_server_private_key") is True
+    assert is_sensitive_key("x_wireguard_private_key") is True
+    assert is_sensitive_key("wireguard_client_preshared_key") is True
+    assert is_sensitive_key("wireguard_server_preshared_key") is True
+    # Public keys are not secret and must stay visible.
+    assert is_sensitive_key("public_key") is False
+    assert is_sensitive_key("wireguard_client_public_key") is False
+
+
+def test_redacts_vpn_config_blob_fields() -> None:
+    # The secret rides inside a config-blob string under an innocuous key
+    # (issue #351): the whole blob field is treated as a secret (suppression).
+    assert is_sensitive_key("openvpn_configuration") is True
+    assert is_sensitive_key("wireguard_client_configuration_file") is True
+    assert is_sensitive_key("wireguard_server_configuration_file") is True
+    # Sibling metadata keys are NOT secret and must remain visible.
+    assert is_sensitive_key("openvpn_configuration_status") is False
+    assert is_sensitive_key("openvpn_configuration_filename") is False
+    assert is_sensitive_key("wireguard_client_configuration_filename") is False
+    assert is_sensitive_key("wireguard_client_mode") is False
+
+
 def test_redaction_marker_paths_reports_only_sensitive_marker_values() -> None:
     payload = {
         "update_data": {
