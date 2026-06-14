@@ -1,6 +1,6 @@
 {
   "name": "unifi-network",
-  "version": "0.20.1",
+  "version": "0.20.2",
   "description": "UniFi Network MCP server \u2014 manage network devices, clients, firewall, VPN, and more",
   "author": {
     "name": "sirkirby",
