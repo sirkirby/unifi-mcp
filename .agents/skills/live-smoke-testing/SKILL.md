@@ -289,17 +289,7 @@ the harness as follows:
 3. **If the tool has a `confirm` param (preview/lifecycle):** The harness auto-includes it
    in `preview` phase with `confirm=False`. For safe lifecycle testing (create+delete pair),
    add a new lifecycle method to the `LiveSmokeRunner` class in `scripts/live_smoke.py` and
-   call it from `run_lifecycles()` or `run_approved()`:
-   ```python
-   async def lifecycle_network_new_thing(self) -> None:
-       # 1. Create the resource
-       create_rec = await self.call("unifi_create_new_thing", {...}, "lifecycle")
-       if not create_rec.success:
-           return
-       resource_id = ...  # extract from create_rec.summary
-       # 2. Delete it (idempotent cleanup)
-       await self.call("unifi_delete_new_thing", {"id": resource_id, "confirm": True}, "lifecycle")
-   ```
+   call it from `run_lifecycles()` or `run_approved()`.
 
 4. **If the tool is risky/destructive:** Add it to `RISKY_OPERATION_NAMES` (the set at
    line ~90 in `scripts/live_smoke.py`) or set `destructiveHint=True` on `ToolAnnotations`.
@@ -442,3 +432,9 @@ in developer workflows; the fourth is automated in the release pipeline.
   code changes. When this error appears in smoke results, treat it as an
   environment/controller issue: note it in the PR, re-run on a different controller if
   available, and do not block merge solely on this error.
+
+- **macOS local-network privacy gate — Homebrew Python/uv gets `[Errno 65] No route to host` on RFC1918 addresses.** macOS 15/26.x enforces a per-binary local-network entitlement. Homebrew Python, uv, and other ad-hoc-signed (non-Apple-signed) binaries are denied LAN access by the system firewall even when macOS Privacy & Security shows them as approved — the entitlement check is per binary and resets on Homebrew upgrades. Symptoms: `[Errno 65] No route to host` for any 192.168.x.x / 10.x.x.x connection while `ping` succeeds. **Workaround:** run the smoke harness inside Docker (`docker run --rm ...`) where the container inherits the LAN entitlement from Docker Desktop. Per-binary macOS approval is also possible but resets on the next `brew upgrade`.
+
+- **`UNIFI_NETWORK_HOST` vs `UNIFI_HOST` — `--server all` MCP-direct runs use `UNIFI_HOST` for the Network controller.** These are distinct variables operating at different layers. MCP-direct smoke (`--server all`) bootstraps the Network server using `UNIFI_HOST`, not `UNIFI_NETWORK_HOST`. The API bootstrap path used by REST API phases uses `UNIFI_NETWORK_HOST` when set. If `UNIFI_NETWORK_HOST` is correct but `UNIFI_HOST` is wrong or absent, `--server all` MCP-direct runs connect to the wrong controller (or fail silently) while `--phase api-actions` and `--phase api-resources` continue working. Always verify both variables when debugging unexpected `--server all` connection behavior.
+
+- **Enum-hint PRs require explicit non-default MCP tool calls — `--phase safe` alone is insufficient evidence.** The default `--phase safe` run exercises every tool with its default argument values only. A PR that modifies enum hints or filter descriptions on tool arguments is never exercised by the harness defaults — the modified annotation paths are simply not invoked. Required evidence: make an explicit targeted call (e.g., via Docker Compose MCP or a short probe script) that passes the newly-documented enum value and confirms the correct filtered response. `--phase safe` output is necessary background but not sufficient smoke evidence for enum-hint changes.

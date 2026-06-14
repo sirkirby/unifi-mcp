@@ -48,8 +48,21 @@ _SENSITIVE_EXACT = frozenset(
         "tlscrypt",
         "pin_code",
         "pincode",
+        # VPN config blobs: the secret rides inside the value (e.g. a WireGuard
+        # .conf with `PrivateKey =`, or an OpenVPN .ovpn with an embedded
+        # tls-crypt static key). Key-name matching can't see into the value, so
+        # the whole blob field is treated as a secret (suppression).
+        "openvpn_configuration",
+        "wireguard_client_configuration_file",
+        "wireguard_server_configuration_file",
     }
 )
+
+# Words that name secret key material only when immediately followed by "key".
+# Requiring the pair keeps role-infixed controller fields such as
+# ``wireguard_client_private_key`` sensitive while leaving non-secret keys like
+# ``public_key`` and ``network_key`` visible.
+_SENSITIVE_KEY_QUALIFIERS = frozenset({"private", "preshared"})
 
 _SENSITIVE_COMPOUNDS = frozenset(
     {
@@ -94,6 +107,9 @@ def is_sensitive_key(key: Any) -> bool:
         if part == "token" and index + 1 < len(parts) and parts[index + 1] in {"count", "counts"}:
             continue
         return True
+    for left, right in zip(parts, parts[1:]):
+        if right == "key" and left in _SENSITIVE_KEY_QUALIFIERS:
+            return True
     return False
 
 

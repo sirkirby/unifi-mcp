@@ -31,6 +31,7 @@ This skill covers the full lifecycle of Claude MCP plugin integration in unifi-m
 - `plugins/unifi-protect/scripts/set-env.sh`, `plugins/unifi-protect/scripts/check-prereqs.sh`
 - `plugins/unifi-access/scripts/set-env.sh`, `plugins/unifi-access/scripts/check-prereqs.sh`
 - `packages/unifi-mcp-shared/src/unifi_mcp_shared/transport.py`
+- `packages/unifi-mcp-shared/src/unifi_mcp_shared/strict_dispatch.py`
 - `.agents/plugins/marketplace.json` (multi-target plugin registry: Claude, Codex, OpenClaw)
 - `.codex-plugin/` (Codex-specific manifest directory, PR #246)
 - `.agents/plugins/openclaw/` (OpenClaw-specific manifest directory, PR #248)
@@ -203,8 +204,8 @@ When a plugin gains a new required environment variable or system dependency, ad
 
 ```bash
 # Pattern for a required variable with a helpful error message
-if [ -z "${MY_NEW_VAR:-}" ]; then
-  echo "ERROR: MY_NEW_VAR is not set. See README for setup instructions." >&2
+if [ -z "${NEW_VAR:-}" ]; then
+  echo "ERROR: NEW_VAR is not set. See README for setup instructions." >&2
   exit 1
 fi
 
@@ -234,28 +235,19 @@ macOS ships `/bin/bash` at version **3.2** (circa 2007). Homebrew may install a 
 If a new script needs key→value mapping:
 
 ```bash
-# FAILS on macOS /bin/bash 3.2 — do not use
-declare -A env_map
-env_map["NETWORK_HOST"]="192.168.1.1"
-echo "${env_map[NETWORK_HOST]}"
-```
-
-Replace with:
-
-```bash
 # Option 1 — case/esac dispatch
 get_default() {
   case "$1" in
-    NETWORK_HOST) echo "192.168.1.1" ;;
-    NETWORK_PORT) echo "443" ;;
-    *)            echo "" ;;
+    FOO_HOST) echo "192.168.1.1" ;;
+    FOO_PORT) echo "443" ;;
+    *)        echo "" ;;
   esac
 }
-NETWORK_HOST="${NETWORK_HOST:-$(get_default NETWORK_HOST)}"
+FOO_HOST="${FOO_HOST:-$(get_default FOO_HOST)}"
 
 # Option 2 — explicit variable pairs (simplest for small sets)
-NETWORK_HOST="${NETWORK_HOST:-192.168.1.1}"
-NETWORK_PORT="${NETWORK_PORT:-443}"
+FOO_HOST="${FOO_HOST:-192.168.1.1}"
+FOO_PORT="${FOO_PORT:-443}"
 ```
 
 ### Verification rule for new plugin scripts
@@ -282,47 +274,15 @@ Plugin versions are **strictly slaved** to MCP package release tags. The version
 
 ### Multi-target plugin registry (PR #246, PR #248)
 
-As of PR #246 (Codex) and PR #248 (OpenClaw), unifi-mcp supports **three plugin targets: Claude, Codex, and OpenClaw**. The multi-target registry lives in `.agents/plugins/marketplace.json`:
-
-```json
-{
-  "claude": {
-    "plugins": [
-      {"name": "unifi-network", "version": "1.2.3"},
-      {"name": "unifi-protect", "version": "1.2.3"},
-      {"name": "unifi-access", "version": "1.2.3"}
-    ]
-  },
-  "codex": {
-    "plugins": [
-      {"name": "unifi-network", "version": "1.2.3"},
-      {"name": "unifi-protect", "version": "1.2.3"},
-      {"name": "unifi-access", "version": "1.2.3"}
-    ]
-  },
-  "openclaw": {
-    "plugins": [
-      {"name": "unifi-network", "version": "1.2.3"},
-      {"name": "unifi-protect", "version": "1.2.3"},
-      {"name": "unifi-access", "version": "1.2.3"}
-    ]
-  }
-}
-```
-
-When a version bump is released, **all target registries** in `.agents/plugins/marketplace.json` must be updated in the same commit. Codex-specific manifests are in `.codex-plugin/` and OpenClaw-specific manifests are in `.agents/plugins/openclaw/` — these must be synchronized with the main app configs and the root marketplace.json entry.
+As of PR #246 (Codex) and PR #248 (OpenClaw), unifi-mcp supports **three plugin targets: Claude, Codex, and OpenClaw**. The multi-target registry lives in `.agents/plugins/marketplace.json`. When a version bump is released, **all target registries** in `.agents/plugins/marketplace.json` must be updated in the same commit. Codex-specific manifests are in `.codex-plugin/` and OpenClaw-specific manifests are in `.agents/plugins/openclaw/` — these must be synchronized with the main app configs and the root marketplace.json entry.
 
 ### When only plugin config or scripts change
 
 If a PR modifies only plugin manifests or scripts (no Python code changes in `shared/`), the correct release mechanism is a **no-op patch release**:
 
-1. Bump the patch version in `packages/unifi-mcp-shared/pyproject.toml` (e.g., `1.2.3` → `1.2.4`).
-2. Commit, tag, and push:
-   ```bash
-   git tag v1.2.4
-   git push origin v1.2.4
-   ```
-3. Wait for the release pipeline to publish the wheel to PyPI. The Python wheel is functionally identical to the prior version — the bump exists solely to create a version anchor the plugin can reference.
+1. Bump the patch version in `packages/unifi-mcp-shared/pyproject.toml`.
+2. Commit, tag, and push the new tag.
+3. Wait for the release pipeline to publish the wheel to PyPI.
 4. **Atomically update version fields** in all target registries and manifests:
    - `.agents/plugins/marketplace.json` — all three target sections (claude, codex, openclaw) for all three plugins (network, protect, access)
    - `.codex-plugin/plugin.json` — version field in the Codex-specific manifest
@@ -331,7 +291,7 @@ If a PR modifies only plugin manifests or scripts (no Python code changes in `sh
    - `apps/protect/src/unifi_protect_mcp/config/config.yaml` — version string
    - `apps/access/src/unifi_access_mcp/config/config.yaml` — version string
 
-5. **Workflow automation:** The `bump-plugin-versions.yml` CI workflow should atomically cover all three locations (marketplace.json root, .codex-plugin/plugin.json, .agents/plugins/openclaw/plugin.json) in a single workflow commit — do not bump them separately. Version skew between registry entries causes marketplace distribution inconsistencies.
+5. **Workflow automation:** The `bump-plugin-versions.yml` CI workflow should atomically cover all three locations in a single workflow commit — do not bump them separately.
 6. Do **not** update the plugin version before the PyPI step completes (PyPI ordering gate — see `monorepo-release-pipeline` skill).
 
 **Never skip the release for plugin-only changes.** Without a new tag, the plugin version field cannot advance, the config change has no anchored release identity, and existing users stay pinned to the cached old config until a tagged release forces cache invalidation.
@@ -385,3 +345,13 @@ The `.agents/plugins/marketplace.json` root registry, `.codex-plugin/plugin.json
 ### Skill-dir naming collision — Manifest registration gotcha
 
 The `.agents/skills/*/` directory structure can collide with plugin name patterns if not carefully scoped. Plugin skill manifests registered in `.agents/plugins/*/skills/*/` must use fully qualified names (e.g., `unifi-mcp:skill-name`) to avoid colliding with agent-owned skills. Always verify that a new plugin skill manifest's fully qualified name does not collide with existing agent or plugin skill names. Test on all three targets (Claude, Codex, OpenClaw) — skill resolution may differ by target.
+
+### Redaction awareness — never echo `***REDACTED***` markers into mutation args (PR #350)
+
+As of PR #350, all plugin tool responses redact sensitive fields by default — Wi-Fi passphrases, VPN private/preshared keys, SNMP community strings, and Access credential token/PIN values are replaced with `***REDACTED***` in read, list, and preview responses.
+
+**When you need an unredacted value for a write operation:** Pass `include_sensitive=true` to the relevant read tool first to retrieve the real value, then use that value in the mutation call.
+
+**Never feed a `***REDACTED***` string back into a mutation argument.** `StrictKwargFastMCP` (in `packages/unifi-mcp-shared/src/unifi_mcp_shared/strict_dispatch.py`) rejects `tools/call` requests that pass a redaction marker as an argument value. The rejection may not surface a clear diagnostic to the agent — the tool call fails without indicating that a redacted placeholder was the cause. This guard prevents accidental passthrough of masked values into real API writes.
+
+**Affected workflows:** WLAN passphrase updates, VPN key rotation, SNMP community string changes, Access credential token/PIN mutations. Plugin skills that guide agents through these workflows must explicitly mention the `include_sensitive=true` pattern — agents that rely on a prior read response and pass the field value through verbatim will hit this guard.
