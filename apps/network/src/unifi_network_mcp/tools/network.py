@@ -223,7 +223,7 @@ async def list_networks(
     description=(
         "Get details for a specific network by ID. By default (summary=false) returns the full raw "
         "network configuration. Set summary=true to trim to selected sections via include "
-        "(basic, dhcp, ipv6, vpn, all).\n\n"
+        "(basic, dhcp, ipv6, vpn, wan, all).\n\n"
         "Examples: <no args> (full raw); summary=true,include='basic' (minimal); "
         "summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'."
     ),
@@ -236,7 +236,7 @@ async def get_network_details(
         Field(
             description=(
                 "Comma-separated sections to return when summary=true (default 'basic'). "
-                "Sections: basic, dhcp, ipv6, vpn, all."
+                "Sections: basic, dhcp, ipv6, vpn, wan, all."
             )
         ),
     ] = "basic",
@@ -304,7 +304,7 @@ async def get_network_details(
                     include_sensitive=include_sensitive,
                 )
 
-            known_sections = {"basic", "dhcp", "ipv6", "vpn", "all"}
+            known_sections = {"basic", "dhcp", "ipv6", "vpn", "wan", "all"}
             sections = set(s.strip().lower() for s in include.split(","))
             unknown_sections = sorted(sections - known_sections)
             include_all = "all" in sections
@@ -359,6 +359,24 @@ async def get_network_details(
                     }
                 )
 
+            if include_all or "wan" in sections:
+                network_data.update(
+                    {
+                        "wan_networkgroup": network.get("wan_networkgroup"),
+                        "wan_type": network.get("wan_type"),
+                        "wan_dns_preference": network.get("wan_dns_preference"),
+                        "wan_load_balance_type": network.get("wan_load_balance_type"),
+                        "wan_load_balance_weight": network.get("wan_load_balance_weight"),
+                        "wan_failover_priority": network.get("wan_failover_priority"),
+                        "wan_smartq_enabled": network.get("wan_smartq_enabled"),
+                        "wan_vlan_enabled": network.get("wan_vlan_enabled"),
+                        "igmp_proxy_upstream": network.get("igmp_proxy_upstream"),
+                        "igmp_proxy_for": network.get("igmp_proxy_for"),
+                        "mac_override_enabled": network.get("mac_override_enabled"),
+                        "wan_ip_aliases": network.get("wan_ip_aliases"),
+                    }
+                )
+
             response = {
                 "success": True,
                 "site": network_manager._connection.site,
@@ -380,6 +398,22 @@ async def get_network_details(
         return {"success": False, "error": f"Failed to get network details for {network_id}: {e}"}
 
 
+# WAN fields whose change can interrupt internet connectivity. When any appear in an
+# update diff, the confirm-preview surfaces an explicit warning (see update_network).
+CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
+    {
+        "wan_type",
+        "wan_networkgroup",
+        "wan_dns_preference",
+        "wan_load_balance_type",
+        "wan_load_balance_weight",
+        "wan_failover_priority",
+        "wan_vlan_enabled",
+        "mac_override_enabled",
+    }
+)
+
+
 @server.tool(
     name="unifi_update_network",
     description="Update specific fields of an existing network (LAN/VLAN). "
@@ -396,6 +430,12 @@ async def get_network_details(
     "DNS: domain_name (str). "
     "Multicast: igmp_snooping (bool), igmp_querier_switches (list of {switch_mac, querier_address}), "
     "igmp_flood_unknown_multicast (bool), mdns_enabled (bool). "
+    "WAN (gateway uplink, purpose='wan' networks): wan_type ('dhcp'/'static'/'pppoe'/'disabled'), "
+    "wan_networkgroup ('WAN'/'WAN2'), wan_dns_preference ('auto'/'manual'), "
+    "wan_load_balance_type ('failover-only'/'weighted'), wan_load_balance_weight (int 0-100), "
+    "wan_failover_priority (int), wan_smartq_enabled (bool), wan_vlan_enabled (bool), "
+    "igmp_proxy_upstream (bool), igmp_proxy_for (str), mac_override_enabled (bool), wan_ip_aliases (list). "
+    "WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. "
     "Requires confirmation.",
     permission_category="networks",
     permission_action="update",
@@ -462,6 +502,20 @@ async def update_network(
             - igmp_querier_switches (list): IGMP querier assignment.
             - igmp_flood_unknown_multicast (boolean): Flood unknown multicast.
             - mdns_enabled (boolean): Enable mDNS reflection.
+            WAN uplink fields (purpose='wan' networks — changing connectivity-critical ones
+            surfaces a warning in the confirm-preview):
+            - wan_type (string): WAN IPv4 type: 'dhcp', 'static', 'pppoe', 'disabled'.
+            - wan_networkgroup (string): Physical WAN: 'WAN' (primary) or 'WAN2' (secondary).
+            - wan_dns_preference (string): WAN DNS source: 'auto' or 'manual'.
+            - wan_load_balance_type (string): Dual-WAN mode: 'failover-only' or 'weighted'.
+            - wan_load_balance_weight (integer): Load-balance weight (0-100, used when 'weighted').
+            - wan_failover_priority (integer): Failover priority (lower = higher priority).
+            - wan_smartq_enabled (boolean): Enable Smart Queues (QoS/bufferbloat) on the WAN.
+            - wan_vlan_enabled (boolean): Enable VLAN tagging on the WAN uplink.
+            - igmp_proxy_upstream (boolean): Enable IGMP proxy on this WAN (IPTV multicast).
+            - igmp_proxy_for (string): IGMP proxy downstream scope (e.g. 'none').
+            - mac_override_enabled (boolean): Enable MAC clone/override on the WAN.
+            - wan_ip_aliases (list): Secondary IP aliases on the WAN.
         confirm (bool): Must be set to `True` to execute. Defaults to `False`.
 
     Important Constraints:
@@ -500,6 +554,16 @@ async def update_network(
         return {"success": False, "error": "Network not found"}
 
     if not confirm:
+        wan_critical = sorted(set(validated_data) & CONNECTIVITY_CRITICAL_WAN_FIELDS)
+        warnings = None
+        if wan_critical and current.get("purpose") == "wan":
+            wan_name = current.get("name") or network_id
+            warnings = [
+                "WARNING: Changing "
+                + ", ".join(wan_critical)
+                + f" on WAN '{wan_name}' may interrupt internet connectivity. "
+                "Verify the values before setting confirm=true."
+            ]
         return redact_sensitive_fields(
             update_preview(
                 resource_type="network",
@@ -507,6 +571,7 @@ async def update_network(
                 resource_name=current.get("name"),
                 current_state=current,
                 updates=validated_data,
+                warnings=warnings,
             ),
             include_sensitive=include_sensitive,
         )
@@ -517,6 +582,13 @@ async def update_network(
         pass  # Let manager handle fetching existing state for merge
     if "vlan" in validated_data and (int(validated_data["vlan"]) < 1 or int(validated_data["vlan"]) > 4094):
         return {"success": False, "error": "'vlan' must be between 1 and 4094."}
+    if "wan_load_balance_weight" in validated_data:
+        try:
+            _weight = int(validated_data["wan_load_balance_weight"])
+        except (TypeError, ValueError):
+            return {"success": False, "error": "'wan_load_balance_weight' must be an integer between 0 and 100."}
+        if _weight < 0 or _weight > 100:
+            return {"success": False, "error": "'wan_load_balance_weight' must be between 0 and 100."}
 
     updated_fields_list = list(validated_data.keys())
     logger.info("Attempting to update network '%s' with fields: %s", network_id, ", ".join(updated_fields_list))

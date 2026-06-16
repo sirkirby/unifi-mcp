@@ -924,6 +924,18 @@ type Network {
   networkIsolationEnabled: Boolean
   internetAccessEnabled: Boolean
   upnpLanEnabled: Boolean
+  wanType: String
+  wanNetworkgroup: String
+  wanDnsPreference: String
+  wanLoadBalanceType: String
+  wanLoadBalanceWeight: Int
+  wanFailoverPriority: Int
+  wanSmartqEnabled: Boolean
+  wanVlanEnabled: Boolean
+  igmpProxyUpstream: Boolean
+  igmpProxyFor: JSON
+  macOverrideEnabled: Boolean
+  wanIpAliases: JSON
 
   """Clients on this network."""
   clients: [Client!]!

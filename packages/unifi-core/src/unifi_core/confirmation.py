@@ -113,6 +113,7 @@ def update_preview(
     resource_name: Optional[str],
     current_state: Dict[str, Any],
     updates: Dict[str, Any],
+    warnings: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Convenience helper for update operations.
 
@@ -122,6 +123,7 @@ def update_preview(
         resource_name: Human-readable name
         current_state: Current values of fields being changed
         updates: New values being applied
+        warnings: Optional warnings about the update (e.g. connectivity risk)
 
     Returns:
         Preview response for update operation
@@ -136,6 +138,7 @@ def update_preview(
         resource_name=resource_name,
         current_state=relevant_current,
         proposed_changes=updates,
+        warnings=warnings,
     )
 
     # Make the message more descriptive
