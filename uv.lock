@@ -1842,7 +1842,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.50" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.51" },
     { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.316.0,<0.320.0" },
     { name = "typer", specifier = ">=0.26.7" },
     { name = "unifi-core", extras = ["access", "network", "protect"], editable = "packages/unifi-core" },
