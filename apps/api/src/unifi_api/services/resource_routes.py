@@ -4,7 +4,7 @@ and the test_resource_route_coverage CI gate (Task 22)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Any, Iterable
 
 from fastapi import FastAPI
 
@@ -18,13 +18,29 @@ class ResourceRoute:
 
 def collect_resource_routes(app: FastAPI) -> list[ResourceRoute]:
     """Walk the FastAPI app and return all GET routes under /v1/sites/."""
+    return _collect_routes(app.routes)
+
+
+def _collect_routes(raw_routes: Iterable[Any], prefix: str = "") -> list[ResourceRoute]:
     routes: list[ResourceRoute] = []
-    for r in app.routes:
-        if not hasattr(r, "methods") or "GET" not in r.methods:
+    for route in raw_routes:
+        include_context = getattr(route, "include_context", None)
+        included_router = getattr(include_context, "included_router", None)
+        if included_router is not None:
+            # FastAPI 0.137 keeps included routers nested instead of flattening
+            # them into app.routes, so preserve the include prefix while walking.
+            include_prefix = getattr(include_context, "prefix", "")
+            routes.extend(_collect_routes(included_router.routes, f"{prefix}{include_prefix}"))
             continue
-        if not r.path.startswith("/v1/sites/"):
+
+        methods = getattr(route, "methods", None)
+        path = getattr(route, "path", None)
+        if not methods or "GET" not in methods or path is None:
             continue
-        routes.append(ResourceRoute(method="GET", path=r.path, name=r.name))
+        full_path = f"{prefix}{path}"
+        if not full_path.startswith("/v1/sites/"):
+            continue
+        routes.append(ResourceRoute(method="GET", path=full_path, name=route.name))
     return routes
 
 
