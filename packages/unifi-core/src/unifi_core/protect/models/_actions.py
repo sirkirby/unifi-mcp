@@ -86,7 +86,7 @@ class AlarmGetRuleInput(BaseModel):
 
     __action_input__: ClassVar[bool] = True
 
-    rule_id: str = Field(description="Alarm rule (automation) UUID")
+    rule_id: str = Field(description="Alarm rule (automation) id")
 
 
 class AlarmUpdateRuleInput(BaseModel):
@@ -99,7 +99,7 @@ class AlarmUpdateRuleInput(BaseModel):
 
     __action_input__: ClassVar[bool] = True
 
-    rule_id: str = Field(description="Alarm rule (automation) UUID")
+    rule_id: str = Field(description="Alarm rule (automation) id")
     body: dict = Field(
         description=(
             "Full rule payload (Protect rejects partial bodies). "
@@ -137,7 +137,7 @@ class AlarmDeleteRuleInput(BaseModel):
 
     __action_input__: ClassVar[bool] = True
 
-    rule_id: str = Field(description="Alarm rule (automation) UUID to delete")
+    rule_id: str = Field(description="Alarm rule (automation) id to delete")
 
 
 class TriggerChimeInput(BaseModel):
