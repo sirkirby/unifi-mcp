@@ -153,6 +153,7 @@ class AlarmArmInput(BaseModel):
 
 **File:** `apps/api/src/unifi_api/services/dispatch_overrides.py`
 
+**Action translators** (arm, disarm, toggle — no nested `rule_data`):
 ```python
 from unifi_core.protect.models._actions import AlarmArmInput
 DISPATCH_ARG_TRANSLATORS = {
@@ -160,7 +161,22 @@ DISPATCH_ARG_TRANSLATORS = {
 }
 ```
 
-Only action tools (arm, disarm, toggle) need this. CRUD tools do not.
+**Update translators** (tools that pass a nested `rule_data: dict`) follow the `_translate_acl_update` pattern. The critical requirement is to **reject** unknown fields rather than silently filter, then run `validate_update_fields()` on the full nested dict:
+
+```python
+# Pattern from _translate_acl_update — adapt per resource
+rule_data = args.get("rule_data") or {}
+unknown = set(rule_data) - MUTABLE_FIELDS
+if unknown:
+    raise ValueError(f"Unknown or read-only fields: {sorted(unknown)}. Allowed: {sorted(MUTABLE_FIELDS)}")
+ok, err = validate_update_fields(rule_data)
+if not ok:
+    raise ValueError(err)
+```
+
+Reference: `_translate_acl_update` in `apps/api/src/unifi_api/services/dispatch_overrides.py` for the full canonical implementation (includes `CLEAR_NETMASK_FIELDS` handling and no-op guard).
+
+Only tools whose arg shapes need reshaping or validation need a translator. Simple CRUD tools that don't use a nested `rule_data` dict do not.
 
 ---
 
@@ -462,3 +478,5 @@ Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(
 **Facade migration — audit ALL call sites:** When migrating a service handler to a facade, audit EVERY call site: action dispatcher (`apps/api/src/unifi_api/services/dispatch_overrides.py`), GraphQL query/mutation fields, and any routing table entries. Missing one leaves old code silently routing to the pre-migration target. (Ref: PR #335 alarm facade migration where dispatcher kept routing to legacy `alarm_manager` after the facade was introduced.)
 
 **Cross-package combined pytest run hits conftest collision:** Running `uv run pytest packages/ apps/` causes pytest to load conflicting conftest files from different packages and fail. Run per-package instead: `uv run pytest packages/unifi-core` or `uv run pytest apps/network`.
+
+**Update translators must reject unknown fields — never filter silently:** When a dispatch translator handles a tool that uses a nested `rule_data: dict`, check `set(rule_data) - MUTABLE_FIELDS` and raise `ValueError` on unknown fields. Then run `validate_update_fields(rule_data)` on the full dict before returning. Silent filtering (e.g., `{k: v for k, v in rule_data.items() if k in MUTABLE_FIELDS}`) masks caller errors and hides field-name mismatches. Reference: `_translate_acl_update` in `apps/api/src/unifi_api/services/dispatch_overrides.py`.
