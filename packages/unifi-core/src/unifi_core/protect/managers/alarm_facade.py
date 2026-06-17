@@ -30,7 +30,6 @@ from unifi_core.protect.models.alarm_rules import (
     alarm_rule_to_v2_body,
 )
 
-_OBJECT_ID_RE = re.compile(r"^[0-9a-fA-F]{24}$")
 _UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
 
@@ -122,19 +121,32 @@ class AlarmRulesFacade:
         return await self._legacy.delete_rule(rule_id), False
 
     async def _v2_write_available(self) -> bool:
+        """v2 is the write target only when it actually serves rules here.
+
+        An empty list means the endpoint exists but is not the active rule store
+        on this console (e.g. Protect not migrated to ``/api/v2/alarms``), so —
+        mirroring the read fallback in :meth:`list_rules` — writes go to legacy
+        instead. A 4xx/permission error likewise routes writes to legacy.
+        """
         try:
-            await self._service.list_rules_raw()
-            return True
+            rules = await self._service.list_rules_raw()
         except (AlarmManagerPermissionError, BadRequest):
             return False
+        return bool(rules)
 
     @staticmethod
     def _id_family(rule_id: str) -> str:
-        if _UUID_RE.match(rule_id):
-            return "v2"
-        if _OBJECT_ID_RE.match(rule_id):
-            return "legacy"
-        raise ValueError("Alarm rule id must be either a v2 UUID or a legacy 24-character ObjectID")
+        """Route by id: v2 UUIDs go to the Alarm Manager, everything else to the
+        legacy automations API.
+
+        Legacy automation ids are controller-assigned and may carry suffixes
+        (e.g. ``_new``), so their shape is not validated here — only a v2 UUID
+        routes to v2. The legacy list-filter is the real existence check and
+        raises ``UniFiNotFoundError`` when no rule with the id exists.
+        """
+        if not isinstance(rule_id, str) or not rule_id.strip():
+            raise ValueError("Alarm rule id must be a non-empty string")
+        return "v2" if _UUID_RE.match(rule_id) else "legacy"
 
     @staticmethod
     def _require_non_empty_canonical_actions(fields: dict[str, Any]) -> None:

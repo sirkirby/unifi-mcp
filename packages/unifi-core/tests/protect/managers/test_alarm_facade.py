@@ -7,6 +7,7 @@ from uiprotect.exceptions import BadRequest, NvrError
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.alarm_facade import AlarmRulesFacade
 from unifi_core.protect.managers.alarm_manager_service import AlarmManagerPermissionError
+from unifi_core.protect.models.alarm_rules import alarm_rule_from_legacy
 
 _CANONICAL = {"id": "uuid-1", "title": "Dog Poop", "triggers": [{"trigger_id": "protect:ai.nls"}]}
 _RAW_V2 = {
@@ -46,6 +47,18 @@ _RAW_LEGACY = {
     "enable": True,
     "conditions": [{"type": "motion"}],
     "actions": [{"type": "webhook"}],
+}
+# A legacy automation whose controller-assigned id carries a `_new` suffix, and
+# whose condition has no `type` key (so the canonical trigger_id normalizes to
+# None and is dropped) — the shape that breaks update/create round-trips.
+_LEGACY_NEW_ID = "66d12910038b6803e40003eb_new"
+_RAW_LEGACY_NEW = {
+    "id": _LEGACY_NEW_ID,
+    "name": "Doorbell Ring",
+    "enable": True,
+    "conditions": [{"trigger": "isDoorbellRing"}],
+    "actions": [{"type": "webhook", "url": "https://example/hook"}],
+    "sources": [{"device": "camera-1"}],
 }
 
 
@@ -233,20 +246,44 @@ async def test_create_rule_prefers_v2_when_v2_serves_rules():
 
 
 @pytest.mark.asyncio
-async def test_create_rule_prefers_v2_when_endpoint_available_but_empty():
+async def test_create_rule_falls_back_to_legacy_when_v2_endpoint_empty():
+    # An empty v2 response (200 []) means the endpoint exists but is not the
+    # active rule store on this console (e.g. Protect not migrated to
+    # /api/v2/alarms). Mirror the read fallback: write to legacy, not v2 — so a
+    # rule read from legacy can be created back on the same backend.
     facade = _facade(service_list=[])
 
     result, complete = await facade.create_rule(
         {
             "title": "New",
-            "actions": [{"action_id": "protect:notify", "data": {"receivers": ["ALL_ITEMS"]}}],
+            "actions": [{"action_id": "webhook", "data": {"type": "webhook"}}],
         }
     )
 
-    assert complete is True
-    assert result["id"] == _RAW_V2["id"]
-    facade._service.create_rule.assert_awaited_once()
-    facade._legacy.create_rule.assert_not_called()
+    assert complete is False
+    assert result["id"] == _RAW_LEGACY["id"]
+    facade._service.create_rule.assert_not_called()
+    facade._legacy.create_rule.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_rule_legacy_roundtrip_succeeds_when_v2_empty():
+    # The reporter's flow: read a legacy rule, feed its canonical shape straight
+    # back into create. The legacy condition has no `type`, so the canonical
+    # trigger carries no trigger_id — which the v2 serializer rejects. With an
+    # empty v2 endpoint the create must route to legacy, whose serializer echoes
+    # the trigger data and needs no v2 trigger_id.
+    canonical = alarm_rule_from_legacy(_RAW_LEGACY_NEW).model_dump(exclude_none=True)
+    create_body = {k: canonical[k] for k in ("title", "enabled", "triggers", "actions", "scope") if k in canonical}
+    assert "trigger_id" not in create_body["triggers"][0]
+
+    facade = _facade(service_list=[])
+
+    result, complete = await facade.create_rule(create_body)
+
+    assert complete is False
+    facade._service.create_rule.assert_not_called()
+    facade._legacy.create_rule.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -264,3 +301,49 @@ async def test_create_rule_falls_back_to_legacy_when_v2_write_unavailable():
     assert result["id"] == _RAW_LEGACY["id"]
     facade._service.create_rule.assert_not_called()
     facade._legacy.create_rule.assert_awaited_once()
+
+
+# --- Bug 1: legacy ids with a `_new` suffix must route, not be rejected --------
+
+
+def test_id_family_routes_v2_uuid_to_v2():
+    assert AlarmRulesFacade._id_family("019e9f9d-59a1-7ee3-8921-27f84a0086ea") == "v2"
+
+
+def test_id_family_routes_plain_object_id_to_legacy():
+    assert AlarmRulesFacade._id_family("66a5c92a0022f903e4000400") == "legacy"
+
+
+def test_id_family_routes_suffixed_legacy_id_to_legacy():
+    # Controller-assigned legacy ids may carry a `_new` suffix; route, don't reject.
+    assert AlarmRulesFacade._id_family(_LEGACY_NEW_ID) == "legacy"
+
+
+def test_id_family_rejects_blank_id():
+    with pytest.raises(ValueError):
+        AlarmRulesFacade._id_family("   ")
+
+
+@pytest.mark.asyncio
+async def test_update_rule_accepts_legacy_id_with_new_suffix():
+    # The id the read tools return (with `_new`) must be the id the writer accepts.
+    facade = _facade(legacy_get=_RAW_LEGACY_NEW)
+
+    result, complete = await facade.update_rule(_LEGACY_NEW_ID, {"title": "Renamed"})
+
+    assert complete is False
+    facade._service.update_rule.assert_not_called()
+    facade._legacy.update_rule.assert_awaited_once()
+    rule_id, _body = facade._legacy.update_rule.await_args.args
+    assert rule_id == _LEGACY_NEW_ID
+
+
+@pytest.mark.asyncio
+async def test_delete_rule_accepts_legacy_id_with_new_suffix():
+    facade = _facade()
+
+    result, complete = await facade.delete_rule(_LEGACY_NEW_ID)
+
+    assert complete is False
+    facade._service.delete_rule.assert_not_called()
+    facade._legacy.delete_rule.assert_awaited_once_with(_LEGACY_NEW_ID)
