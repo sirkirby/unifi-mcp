@@ -25,6 +25,23 @@ class TestFieldSets:
         for field in ("igmp_snooping", "mdns_enabled", "igmp_flood_unknown_multicast"):
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
 
+    def test_mutable_fields_contains_wan_fields(self) -> None:
+        for field in (
+            "wan_type",
+            "wan_networkgroup",
+            "wan_dns_preference",
+            "wan_load_balance_type",
+            "wan_load_balance_weight",
+            "wan_failover_priority",
+            "wan_smartq_enabled",
+            "wan_vlan_enabled",
+            "igmp_proxy_upstream",
+            "igmp_proxy_for",
+            "mac_override_enabled",
+            "wan_ip_aliases",
+        ):
+            assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
+
     def test_mutable_fields_excludes_read_only(self) -> None:
         for field in ("id", "site_id"):
             assert field not in MUTABLE_FIELDS, f"{field!r} should NOT be in MUTABLE_FIELDS"
@@ -111,6 +128,49 @@ class TestFromController:
         n = from_controller(raw)
         assert n.network_isolation_enabled is True
 
+    def test_wan_fields_captured(self) -> None:
+        # Values mirror a real dual-WAN controller dump (purpose=wan networkconf).
+        raw = {
+            "_id": "wan-1",
+            "purpose": "wan",
+            "name": "Quantum",
+            "wan_networkgroup": "WAN",
+            "wan_type": "dhcp",
+            "wan_dns_preference": "auto",
+            "wan_load_balance_type": "weighted",
+            "wan_load_balance_weight": 99,
+            "wan_failover_priority": 1,
+            "wan_smartq_enabled": False,
+            "wan_vlan_enabled": False,
+            "igmp_proxy_upstream": False,
+            "igmp_proxy_for": "none",
+            "mac_override_enabled": False,
+            "wan_ip_aliases": [],
+        }
+        n = from_controller(raw)
+        assert n.wan_networkgroup == "WAN"
+        assert n.wan_type == "dhcp"
+        assert n.wan_dns_preference == "auto"
+        assert n.wan_load_balance_type == "weighted"
+        assert n.wan_load_balance_weight == 99
+        assert n.wan_failover_priority == 1
+        assert n.wan_smartq_enabled is False
+        assert n.wan_vlan_enabled is False
+        assert n.igmp_proxy_upstream is False
+        # 'none' (string) when disabled; field is Optional[Any] so a configured
+        # list value cannot crash the read path (see test_igmp_proxy_for_list_does_not_raise).
+        assert n.igmp_proxy_for == "none"
+        assert n.mac_override_enabled is False
+        assert n.wan_ip_aliases == []
+
+    def test_igmp_proxy_for_list_does_not_raise(self) -> None:
+        # When IGMP proxy is CONFIGURED the controller returns a list (not 'none').
+        # igmp_proxy_for is Optional[Any], so from_controller must NOT raise — otherwise a
+        # single configured WAN would break list_networks for ALL networks (un-guarded loop).
+        raw = {"_id": "wan-1", "purpose": "wan", "igmp_proxy_for": ["net-a", "net-b"]}
+        n = from_controller(raw)
+        assert n.igmp_proxy_for == ["net-a", "net-b"]
+
 
 class TestToControllerCreate:
     def test_full_model(self) -> None:
@@ -186,3 +246,21 @@ class TestToControllerUpdate:
         assert result["dhcpd_start"] == "10.0.0.100"
         assert result["dhcpd_stop"] == "10.0.0.200"
         assert result["dhcpd_leasetime"] == 86400
+
+    def test_wan_fields_passthrough(self) -> None:
+        result = to_controller_update(
+            {
+                "wan_type": "dhcp",
+                "wan_load_balance_weight": 50,
+                "igmp_proxy_for": "none",
+            }
+        )
+        assert result["wan_type"] == "dhcp"
+        assert result["wan_load_balance_weight"] == 50
+        assert result["igmp_proxy_for"] == "none"
+
+    def test_wan_bool_false_preserved(self) -> None:
+        # Disabling a WAN feature (False) must survive the update filter (v is not None).
+        result = to_controller_update({"wan_smartq_enabled": False, "wan_vlan_enabled": False})
+        assert result["wan_smartq_enabled"] is False
+        assert result["wan_vlan_enabled"] is False

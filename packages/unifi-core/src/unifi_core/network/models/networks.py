@@ -197,6 +197,57 @@ class Network(BaseModel):
         default=None,
         description="Enable UPnP on this network",
     )
+    # --- WAN uplink (gateway interface; networkconf entries with purpose=wan) ---
+    # NOTE: changing connectivity-critical WAN fields can interrupt internet access;
+    # the update tool surfaces a warning in its confirm-preview for these.
+    wan_type: Optional[str] = Field(
+        default=None,
+        description="WAN IPv4 addressing type: 'dhcp', 'static', 'pppoe', or 'disabled'",
+    )
+    wan_networkgroup: Optional[str] = Field(
+        default=None,
+        description="Physical WAN port group: 'WAN' (primary) or 'WAN2' (secondary)",
+    )
+    wan_dns_preference: Optional[str] = Field(
+        default=None,
+        description="WAN DNS source: 'auto' (from ISP) or 'manual'",
+    )
+    wan_load_balance_type: Optional[str] = Field(
+        default=None,
+        description="Dual-WAN mode: 'failover-only' or 'weighted' (load balance)",
+    )
+    wan_load_balance_weight: Optional[int] = Field(
+        default=None,
+        description="Load-balance weight for this WAN (0-100; used when type is 'weighted')",
+    )
+    wan_failover_priority: Optional[int] = Field(
+        default=None,
+        description="Failover priority (lower value = higher priority)",
+    )
+    wan_smartq_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable Smart Queues (QoS / bufferbloat shaping) on this WAN",
+    )
+    wan_vlan_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable VLAN tagging on the WAN uplink (some ISPs require it)",
+    )
+    igmp_proxy_upstream: Optional[bool] = Field(
+        default=None,
+        description="Enable IGMP proxy on this WAN (upstream side, for IPTV multicast)",
+    )
+    igmp_proxy_for: Optional[Any] = Field(
+        default=None,
+        description="IGMP proxy downstream scope: 'none' (disabled) or a list of network refs (configured)",
+    )
+    mac_override_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable MAC-address clone/override on the WAN interface",
+    )
+    wan_ip_aliases: Optional[List[Any]] = Field(
+        default=None,
+        description="Secondary IP aliases on the WAN interface",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +324,18 @@ def from_controller(raw: Any) -> Network:
         network_isolation_enabled=_get(raw, "network_isolation_enabled"),
         internet_access_enabled=_get(raw, "internet_access_enabled"),
         upnp_lan_enabled=_get(raw, "upnp_lan_enabled"),
+        wan_type=_get(raw, "wan_type"),
+        wan_networkgroup=_get(raw, "wan_networkgroup"),
+        wan_dns_preference=_get(raw, "wan_dns_preference"),
+        wan_load_balance_type=_get(raw, "wan_load_balance_type"),
+        wan_load_balance_weight=_get(raw, "wan_load_balance_weight"),
+        wan_failover_priority=_get(raw, "wan_failover_priority"),
+        wan_smartq_enabled=_get(raw, "wan_smartq_enabled"),
+        wan_vlan_enabled=_get(raw, "wan_vlan_enabled"),
+        igmp_proxy_upstream=_get(raw, "igmp_proxy_upstream"),
+        igmp_proxy_for=_get(raw, "igmp_proxy_for"),
+        mac_override_enabled=_get(raw, "mac_override_enabled"),
+        wan_ip_aliases=_get(raw, "wan_ip_aliases"),
     )
 
 

@@ -3372,6 +3372,26 @@
             ],
             "title": "Igmp Flood Unknown Multicast"
           },
+          "igmp_proxy_for": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Igmp Proxy For"
+          },
+          "igmp_proxy_upstream": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Igmp Proxy Upstream"
+          },
           "igmp_querier_switches": {
             "anyOf": [
               {},
@@ -3413,6 +3433,17 @@
               }
             ],
             "title": "Ip Subnet"
+          },
+          "mac_override_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mac Override Enabled"
           },
           "mdns_enabled": {
             "anyOf": [
@@ -3501,6 +3532,103 @@
               }
             ],
             "title": "Vlan Enabled"
+          },
+          "wan_dns_preference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Dns Preference"
+          },
+          "wan_failover_priority": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Failover Priority"
+          },
+          "wan_ip_aliases": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Ip Aliases"
+          },
+          "wan_load_balance_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Load Balance Type"
+          },
+          "wan_load_balance_weight": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Load Balance Weight"
+          },
+          "wan_networkgroup": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Networkgroup"
+          },
+          "wan_smartq_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Smartq Enabled"
+          },
+          "wan_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Type"
+          },
+          "wan_vlan_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Vlan Enabled"
           }
         },
         "title": "NetworkModel",
