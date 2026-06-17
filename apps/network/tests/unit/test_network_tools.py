@@ -229,6 +229,39 @@ SAMPLE_WAN = {
 }
 
 
+class TestGetNetworkDetailsWanSummary:
+    """WAN fields in get_network_details summary mode."""
+
+    @pytest.mark.asyncio
+    async def test_wan_summary_section_includes_wan_fields(self):
+        """summary=true,include='wan' exposes the curated WAN config section."""
+        wan = {
+            **SAMPLE_WAN,
+            "wan_load_balance_type": "weighted",
+            "wan_load_balance_weight": 50,
+            "wan_failover_priority": 1,
+            "wan_vlan_enabled": False,
+            "igmp_proxy_upstream": False,
+            "igmp_proxy_for": ["net-a"],
+            "mac_override_enabled": False,
+            "wan_ip_aliases": [],
+        }
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=wan)
+            mock_mgr._connection.site = "default"
+
+            from unifi_network_mcp.tools.network import get_network_details
+
+            result = await get_network_details(network_id="wan001", summary=True, include="wan")
+
+        assert result["success"] is True
+        assert result["summary_mode"] is True
+        assert result["details"]["wan_type"] == "dhcp"
+        assert result["details"]["wan_load_balance_weight"] == 50
+        assert result["details"]["igmp_proxy_for"] == ["net-a"]
+        assert "dhcpd_enabled" not in result["details"]
+
+
 class TestUpdateNetworkWanFields:
     """WAN field updates + connectivity-loss warnings in the confirm-preview."""
 
@@ -309,10 +342,11 @@ class TestUpdateNetworkWanFields:
         from unifi_network_mcp.tools.network import CONNECTIVITY_CRITICAL_WAN_FIELDS, update_network
 
         for field in sorted(CONNECTIVITY_CRITICAL_WAN_FIELDS):
+            value = 50 if field == "wan_load_balance_weight" else "x"
             with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
                 mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_WAN)
                 mock_mgr.update_network = AsyncMock()
-                result = await update_network(network_id="wan001", update_data={field: "x"}, confirm=False)
+                result = await update_network(network_id="wan001", update_data={field: value}, confirm=False)
             warnings = result.get("warnings") or []
             assert any("interrupt internet" in w for w in warnings), f"{field}: no warning fired"
             assert any(field in w for w in warnings), f"{field}: not named in warning"
@@ -346,6 +380,24 @@ class TestUpdateNetworkWanFields:
 
         assert result["success"] is False
         assert "0 and 100" in result["error"]
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_wan_load_balance_weight_out_of_range_rejected_in_preview(self):
+        """Preview validates weight too; invalid previews must not look confirmable."""
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_WAN)
+            mock_mgr.update_network = AsyncMock()
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="wan001", update_data={"wan_load_balance_weight": 999}, confirm=False
+            )
+
+        assert result["success"] is False
+        assert "0 and 100" in result["error"]
+        assert result.get("requires_confirmation") is not True
+        mock_mgr.get_network_details.assert_not_called()
         mock_mgr.update_network.assert_not_called()
 
 

@@ -434,7 +434,8 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "wan_networkgroup ('WAN'/'WAN2'), wan_dns_preference ('auto'/'manual'), "
     "wan_load_balance_type ('failover-only'/'weighted'), wan_load_balance_weight (int 0-100), "
     "wan_failover_priority (int), wan_smartq_enabled (bool), wan_vlan_enabled (bool), "
-    "igmp_proxy_upstream (bool), igmp_proxy_for (str), mac_override_enabled (bool), wan_ip_aliases (list). "
+    "igmp_proxy_upstream (bool), igmp_proxy_for (JSON: 'none' or list of network refs), "
+    "mac_override_enabled (bool), wan_ip_aliases (list). "
     "WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. "
     "Requires confirmation.",
     permission_category="networks",
@@ -513,7 +514,7 @@ async def update_network(
             - wan_smartq_enabled (boolean): Enable Smart Queues (QoS/bufferbloat) on the WAN.
             - wan_vlan_enabled (boolean): Enable VLAN tagging on the WAN uplink.
             - igmp_proxy_upstream (boolean): Enable IGMP proxy on this WAN (IPTV multicast).
-            - igmp_proxy_for (string): IGMP proxy downstream scope (e.g. 'none').
+            - igmp_proxy_for (JSON): IGMP proxy downstream scope ('none' or list of network refs).
             - mac_override_enabled (boolean): Enable MAC clone/override on the WAN.
             - wan_ip_aliases (list): Secondary IP aliases on the WAN.
         confirm (bool): Must be set to `True` to execute. Defaults to `False`.
@@ -547,6 +548,14 @@ async def update_network(
             "success": False,
             "error": "No valid mutable fields provided for update.",
         }
+
+    if "wan_load_balance_weight" in validated_data:
+        try:
+            _weight = int(validated_data["wan_load_balance_weight"])
+        except (TypeError, ValueError):
+            return {"success": False, "error": "'wan_load_balance_weight' must be an integer between 0 and 100."}
+        if _weight < 0 or _weight > 100:
+            return {"success": False, "error": "'wan_load_balance_weight' must be between 0 and 100."}
 
     # Fetch current state for preview
     current = await network_manager.get_network_details(network_id)
@@ -582,13 +591,6 @@ async def update_network(
         pass  # Let manager handle fetching existing state for merge
     if "vlan" in validated_data and (int(validated_data["vlan"]) < 1 or int(validated_data["vlan"]) > 4094):
         return {"success": False, "error": "'vlan' must be between 1 and 4094."}
-    if "wan_load_balance_weight" in validated_data:
-        try:
-            _weight = int(validated_data["wan_load_balance_weight"])
-        except (TypeError, ValueError):
-            return {"success": False, "error": "'wan_load_balance_weight' must be an integer between 0 and 100."}
-        if _weight < 0 or _weight > 100:
-            return {"success": False, "error": "'wan_load_balance_weight' must be between 0 and 100."}
 
     updated_fields_list = list(validated_data.keys())
     logger.info("Attempting to update network '%s' with fields: %s", network_id, ", ".join(updated_fields_list))
