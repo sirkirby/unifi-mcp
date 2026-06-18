@@ -220,7 +220,7 @@ class TestCredentialToolRedaction:
         assert result["data"]["pin_code"] == REDACTED
 
     @pytest.mark.asyncio
-    async def test_get_credential_redacts_by_default_and_allows_opt_out(self):
+    async def test_get_credential_redacts_by_default_and_allows_policy_disable(self, monkeypatch):
         secret = {"id": "cred-1", "type": "nfc", "user_id": "u1", "token": "AABBCCDD", "pin_code": "123456"}
         with patch("unifi_access_mcp.tools.credentials.credential_manager") as mock_mgr:
             mock_mgr.get_credential = AsyncMock(return_value=secret)
@@ -228,7 +228,8 @@ class TestCredentialToolRedaction:
             from unifi_access_mcp.tools.credentials import access_get_credential
 
             default = await access_get_credential("cred-1")
-            raw = await access_get_credential("cred-1", include_sensitive=True)
+            monkeypatch.setenv("UNIFI_ACCESS_REDACT_SENSITIVE_FIELDS", "false")
+            raw = await access_get_credential("cred-1")
 
         assert default["data"]["token"] == REDACTED
         assert default["data"]["pin_code"] == REDACTED

@@ -48,6 +48,10 @@ _SENSITIVE_EXACT = frozenset(
         "tlscrypt",
         "pin_code",
         "pincode",
+        "rtsp_alias",
+        "rtsp_url",
+        "rtsps_url",
+        "rtsps_streams",
         # VPN config blobs: the secret rides inside the value (e.g. a WireGuard
         # .conf with `PrivateKey =`, or an OpenVPN .ovpn with an embedded
         # tls-crypt static key). Key-name matching can't see into the value, so
@@ -79,6 +83,10 @@ _SENSITIVE_COMPOUNDS = frozenset(
         "tlsauth",
         "tlscrypt",
         "pincode",
+        "rtspalias",
+        "rtspurl",
+        "rtspsurl",
+        "rtspsstreams",
     }
 )
 
@@ -117,7 +125,7 @@ def redact_value(
     key: Any,
     value: Any,
     *,
-    include_sensitive: bool = False,
+    redact_sensitive: bool = True,
     marker: str = REDACTED,
 ) -> Any:
     """Redact a single ``key``/``value`` pair by the shared vocabulary.
@@ -128,7 +136,7 @@ def redact_value(
     decision stays routed through :func:`is_sensitive_key` rather than a
     local hard-coded field list.
     """
-    if include_sensitive or value is None:
+    if not redact_sensitive or value is None:
         return value
     return marker if is_sensitive_key(key) else value
 
@@ -136,23 +144,23 @@ def redact_value(
 def redact_sensitive_fields(
     obj: Any,
     *,
-    include_sensitive: bool = False,
+    redact_sensitive: bool = True,
     marker: str = REDACTED,
 ) -> Any:
     """Return a redacted copy of ``obj``."""
-    if include_sensitive:
+    if not redact_sensitive:
         return obj
     if isinstance(obj, Mapping):
         return {
             key: marker
             if value is not None and is_sensitive_key(key)
-            else redact_sensitive_fields(value, marker=marker)
+            else redact_sensitive_fields(value, redact_sensitive=redact_sensitive, marker=marker)
             for key, value in obj.items()
         }
     if isinstance(obj, tuple):
-        return tuple(redact_sensitive_fields(value, marker=marker) for value in obj)
+        return tuple(redact_sensitive_fields(value, redact_sensitive=redact_sensitive, marker=marker) for value in obj)
     if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
-        return [redact_sensitive_fields(value, marker=marker) for value in obj]
+        return [redact_sensitive_fields(value, redact_sensitive=redact_sensitive, marker=marker) for value in obj]
     return obj
 
 

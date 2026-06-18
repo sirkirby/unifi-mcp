@@ -671,7 +671,7 @@ class AccessQuery:
         )
         items: list[Credential] = []
         for c in page:
-            inst = Credential.from_manager_output(c)
+            inst = Credential.from_manager_output(c, redact_sensitive=ctx.redact_sensitive_fields)
             inst._controller_id = str(controller)
             items.append(inst)
         return CredentialPage(
@@ -693,7 +693,7 @@ class AccessQuery:
         raw = await _fetch_credentials(ctx, controller)
         for c in raw:
             if _id_of(c) == id:
-                inst = Credential.from_manager_output(c)
+                inst = Credential.from_manager_output(c, redact_sensitive=ctx.redact_sensitive_fields)
                 inst._controller_id = str(controller)
                 return inst
         return None

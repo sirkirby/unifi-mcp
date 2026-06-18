@@ -54,7 +54,7 @@ class Credential:
         }
 
     @classmethod
-    def from_manager_output(cls, obj: Any, *, include_sensitive: bool = False) -> "Credential":
+    def from_manager_output(cls, obj: Any, *, redact_sensitive: bool = True) -> "Credential":
         return cls(
             id=_get(obj, "id"),
             user_id=_get(obj, "user_id"),
@@ -62,8 +62,8 @@ class Credential:
             status=_get(obj, "status"),
             expiry=_get(obj, "expiry"),
             last_used=_get(obj, "last_used"),
-            token=redact_value("token", _get(obj, "token"), include_sensitive=include_sensitive),
-            pin_code=redact_value("pin_code", _get(obj, "pin_code"), include_sensitive=include_sensitive),
+            token=redact_value("token", _get(obj, "token"), redact_sensitive=redact_sensitive),
+            pin_code=redact_value("pin_code", _get(obj, "pin_code"), redact_sensitive=redact_sensitive),
         )
 
     def to_dict(self) -> dict:

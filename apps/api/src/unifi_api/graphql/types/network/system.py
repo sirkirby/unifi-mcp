@@ -299,7 +299,7 @@ class SnmpSettings:
         return {"kind": kind}
 
     @classmethod
-    def from_manager_output(cls, obj: Any, *, include_sensitive: bool = False) -> "SnmpSettings":
+    def from_manager_output(cls, obj: Any, *, redact_sensitive: bool = True) -> "SnmpSettings":
         # Manager returns list[dict]; type unwraps first item to match the
         # legacy serializer contract.
         if isinstance(obj, list):
@@ -314,9 +314,7 @@ class SnmpSettings:
             )
         return cls(
             enabled=bool(obj.get("enabled", False)),
-            community=redact_value(
-                "community", _get(obj, "community", default=""), include_sensitive=include_sensitive
-            ),
+            community=redact_value("community", _get(obj, "community", default=""), redact_sensitive=redact_sensitive),
             port=_get(obj, "port"),
             version=_get(obj, "version"),
             _had_payload=True,

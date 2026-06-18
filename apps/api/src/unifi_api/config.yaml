@@ -8,3 +8,7 @@ logging:
 
 db:
   path: /var/lib/unifi-api/state.db
+
+policy:
+  response:
+    redact_sensitive_fields: ${oc.env:UNIFI_API_REDACT_SENSITIVE_FIELDS,true}

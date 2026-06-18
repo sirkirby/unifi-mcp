@@ -111,6 +111,31 @@ async def test_snmp_settings(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_snmp_settings_policy_disabled_returns_raw_community(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network", redact_sensitive_fields=False)
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "system_manager", "get_settings"): [
+                {"enabled": True, "community": "public", "port": 161},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ snmpSettings(controller: "{cid}") {{
+            enabled community port
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    assert body["data"]["network"]["snmpSettings"]["community"] == "public"
+
+
+@pytest.mark.asyncio
 async def test_autobackup_settings(tmp_path, monkeypatch):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")

@@ -122,7 +122,7 @@ surfaces. Pagination is cursor-based on REST, slice-based on GraphQL.
 
 ### Sensitive response fields
 
-REST, GraphQL, and action responses redact known controller secret fields by default. The action endpoint (`POST /v1/actions/{tool}`) honors an `include_sensitive=true` argument in the request `args` for callers that explicitly need raw values; GraphQL queries and resource reads always redact.
+REST, GraphQL, and action responses redact known controller secret fields by default. Disable redaction for a trusted local API process with `UNIFI_API_REDACT_SENSITIVE_FIELDS=false` or the global `UNIFI_REDACT_SENSITIVE_FIELDS=false` policy flag when raw values are required. The action endpoint (`POST /v1/actions/{tool}`) rejects `include_sensitive`; response redaction is process policy, not a request argument.
 
 ## Distribution
 

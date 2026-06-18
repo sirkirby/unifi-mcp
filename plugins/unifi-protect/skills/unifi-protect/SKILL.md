@@ -44,10 +44,12 @@ Always preview first and show the user before confirming.
 
 All tools return: `{"success": true, "data": ...}`, `{"success": false, "error": "..."}`, or `{"success": true, "requires_confirmation": true, "preview": ...}`. Always check `success` first.
 
+**Redacted secrets:** RTSP/RTSPS stream aliases and URLs come back as `***REDACTED***` by default from `protect_get_camera_streams`. Raw values are controlled by process policy (`UNIFI_PROTECT_REDACT_SENSITIVE_FIELDS=false` or global `UNIFI_REDACT_SENSITIVE_FIELDS=false`), not by tool arguments.
+
 ## Key Capabilities
 
 - **Snapshots:** `protect_get_snapshot` with `include_image=true` returns base64 JPEG inline
-- **RTSP streams:** `protect_get_camera_streams` gives stream URLs for video player integration
+- **RTSP streams:** `protect_get_camera_streams` gives stream URL metadata for video player integration; raw URLs require redaction policy to be disabled for a trusted local process
 - **Smart detections:** `protect_list_smart_detections` filters by type (person, vehicle, animal, package, face, licensePlate). These are the highest-signal events — prioritize over raw motion.
 - **Find Anything search:** use `protect_detection_search_labels` to discover controller-supported label values, then pass those values to `protect_search_detections` for richer searches by vehicle type, color, device, or other Protect labels.
 - **Event camera names:** All event responses include `camera_name` alongside `camera_id` — no need to call `protect_list_cameras` separately to resolve names.

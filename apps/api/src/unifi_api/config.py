@@ -11,11 +11,12 @@ from __future__ import annotations
 import logging
 import os
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 from omegaconf import OmegaConf
+from unifi_core.policy import should_redact_sensitive_fields
 
 
 @dataclass(frozen=True)
@@ -36,10 +37,21 @@ class DbConfig:
 
 
 @dataclass(frozen=True)
+class ResponsePolicyConfig:
+    redact_sensitive_fields: bool = True
+
+
+@dataclass(frozen=True)
+class PolicyConfig:
+    response: ResponsePolicyConfig = field(default_factory=ResponsePolicyConfig)
+
+
+@dataclass(frozen=True)
 class ApiConfig:
     http: HttpConfig
     logging: LoggingConfig
     db: DbConfig
+    policy: PolicyConfig = field(default_factory=PolicyConfig)
 
     @staticmethod
     def read_db_key() -> str:
@@ -72,6 +84,11 @@ def load_config(yaml_path: Path) -> ApiConfig:
         db=DbConfig(
             path=str(container.get("db", {}).get("path", "/var/lib/unifi-api/state.db")),
         ),
+        policy=PolicyConfig(
+            response=ResponsePolicyConfig(
+                redact_sensitive_fields=should_redact_sensitive_fields("api", config=container),
+            ),
+        ),
     )
 
 
@@ -79,7 +96,10 @@ def _extract_env_overrides() -> dict:
     """Translate UNIFI_API_<SECTION>_<KEY> env vars into a nested dict."""
     overrides: dict = {}
     prefix = "UNIFI_API_"
-    skip = {"UNIFI_API_DB_KEY"}  # handled separately, never put in config tree
+    skip = {
+        "UNIFI_API_DB_KEY",  # handled separately, never put in config tree
+        "UNIFI_API_REDACT_SENSITIVE_FIELDS",  # resolved by unifi_core.policy into policy.response
+    }
     for full_key, value in os.environ.items():
         if not full_key.startswith(prefix) or full_key in skip:
             continue

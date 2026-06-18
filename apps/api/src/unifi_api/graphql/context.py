@@ -65,6 +65,7 @@ class GraphQLContext(BaseContext):
         api_key_id: str | None = None,
         api_key_scopes: str | None = None,
         api_key_prefix: str | None = None,
+        redact_sensitive_fields: bool = True,
     ) -> None:
         super().__init__()
         self.cache = cache if cache is not None else RequestCache()
@@ -73,3 +74,4 @@ class GraphQLContext(BaseContext):
         self.api_key_id = api_key_id
         self.api_key_scopes = api_key_scopes
         self.api_key_prefix = api_key_prefix
+        self.redact_sensitive_fields = redact_sensitive_fields

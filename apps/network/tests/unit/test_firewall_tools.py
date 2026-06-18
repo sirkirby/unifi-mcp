@@ -253,7 +253,7 @@ class TestListFirewallPolicies:
 
 class TestFirewallToolRedaction:
     @pytest.mark.asyncio
-    async def test_policy_details_redacts_by_default_and_allows_opt_out(self):
+    async def test_policy_details_redacts_by_default_and_uses_policy_opt_out(self, monkeypatch):
         policy_raw = {
             **SAMPLE_ZONE_POLICY_RAW,
             "source": {**SAMPLE_ZONE_POLICY_RAW["source"], "auth_key": "secret"},
@@ -266,7 +266,8 @@ class TestFirewallToolRedaction:
             from unifi_network_mcp.tools.firewall import get_firewall_policy_details
 
             default = await get_firewall_policy_details("pol_zone_001")
-            raw = await get_firewall_policy_details("pol_zone_001", include_sensitive=True)
+            monkeypatch.setenv("UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS", "false")
+            raw = await get_firewall_policy_details("pol_zone_001")
 
         assert default["details"]["source"]["auth_key"] == REDACTED
         assert raw["details"]["source"]["auth_key"] == "secret"

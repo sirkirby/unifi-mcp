@@ -999,7 +999,7 @@ class ProtectQuery:
         raw = await _fetch_camera_streams(ctx, controller, id)
         if raw is None:
             return None
-        return CameraStreams.from_manager_output(raw)
+        return CameraStreams.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
 
     @strawberry.field(
         permission_classes=[IsRead],

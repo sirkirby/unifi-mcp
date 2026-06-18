@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.redaction import REDACTED
 
 # ---------------------------------------------------------------------------
 # Fixtures: mock pyunifiprotect Camera model data
@@ -748,11 +749,36 @@ class TestProtectGetCameraStreamsTool:
         from unifi_protect_mcp.tools.cameras import protect_get_camera_streams
 
         mock_camera_manager.get_camera_streams = AsyncMock(
-            return_value={"camera_id": "cam-001", "channels": {"High": {"rtsps_url": "rtsps://..."}}}
+            return_value={
+                "camera_id": "cam-001",
+                "channels": {"High": {"rtsp_alias": "abc123", "rtsps_url": "rtsps://nvr.local/abc123"}},
+                "rtsps_streams": {"High": "rtsps://nvr.local/abc123"},
+            }
         )
         result = await protect_get_camera_streams("cam-001")
         assert result["success"] is True
         assert "High" in result["data"]["channels"]
+        assert result["data"]["channels"]["High"]["rtsp_alias"] == REDACTED
+        assert result["data"]["channels"]["High"]["rtsps_url"] == REDACTED
+        assert result["data"]["rtsps_streams"] == REDACTED
+
+    @pytest.mark.asyncio
+    async def test_policy_disabled_returns_raw_stream_urls(self, mock_camera_manager, monkeypatch):
+        from unifi_protect_mcp.tools.cameras import protect_get_camera_streams
+
+        monkeypatch.setenv("UNIFI_PROTECT_REDACT_SENSITIVE_FIELDS", "false")
+        mock_camera_manager.get_camera_streams = AsyncMock(
+            return_value={
+                "camera_id": "cam-001",
+                "channels": {"High": {"rtsp_alias": "abc123", "rtsps_url": "rtsps://nvr.local/abc123"}},
+                "rtsps_streams": {"High": "rtsps://nvr.local/abc123"},
+            }
+        )
+        result = await protect_get_camera_streams("cam-001")
+        assert result["success"] is True
+        assert result["data"]["channels"]["High"]["rtsp_alias"] == "abc123"
+        assert result["data"]["channels"]["High"]["rtsps_url"] == "rtsps://nvr.local/abc123"
+        assert result["data"]["rtsps_streams"]["High"] == "rtsps://nvr.local/abc123"
 
     @pytest.mark.asyncio
     async def test_error(self, mock_camera_manager):

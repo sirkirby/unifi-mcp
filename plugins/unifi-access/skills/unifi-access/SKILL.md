@@ -45,7 +45,7 @@ Door lock/unlock operations are **physical real-world actions** — always previ
 
 All tools return: `{"success": true, "data": ...}`, `{"success": false, "error": "..."}`, or `{"success": true, "requires_confirmation": true, "preview": ...}`. Always check `success` first.
 
-**Redacted secrets:** Credential `token` and `pin_code` values come back as `***REDACTED***` by default in reads, lists, and create previews. Pass `include_sensitive=true` to a read tool only when the user genuinely needs the raw value. Never echo `***REDACTED***` back into a create/update — it is rejected so the placeholder can't be stored as a real credential.
+**Redacted secrets:** Credential `token` and `pin_code` values come back as `***REDACTED***` by default in reads, lists, and create previews. Raw values are controlled by process policy (`UNIFI_ACCESS_REDACT_SENSITIVE_FIELDS=false` or global `UNIFI_REDACT_SENSITIVE_FIELDS=false`), not by tool arguments. Never echo `***REDACTED***` back into a create/update — it is rejected so the placeholder can't be stored as a real credential.
 
 ## Key Capabilities
 

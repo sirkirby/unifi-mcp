@@ -2480,7 +2480,7 @@ class NetworkQuery:
             key_fn=_id_key,
         )
         return WlanPage(
-            items=[Wlan.from_manager_output(w) for w in page],
+            items=[Wlan.from_manager_output(w, redact_sensitive=ctx.redact_sensitive_fields) for w in page],
             next_cursor=next_cursor.encode() if next_cursor else None,
         )
 
@@ -2504,7 +2504,7 @@ class NetworkQuery:
             else:
                 wid = getattr(r, "_id", None) or getattr(r, "id", None)
             if wid == id:
-                return Wlan.from_manager_output(w)
+                return Wlan.from_manager_output(w, redact_sensitive=ctx.redact_sensitive_fields)
         return None
 
     # ---- VPN domain ------------------------------------------------------
@@ -3599,7 +3599,7 @@ class NetworkQuery:
         raw = await _fetch_snmp_settings(ctx, controller, site)
         if raw is None:
             return None
-        return SnmpSettings.from_manager_output(raw)
+        return SnmpSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
 
     @strawberry.field(
         permission_classes=[IsRead],

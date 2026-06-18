@@ -10,6 +10,7 @@ from unifi_api.serializers._registry import (
     discover_serializers,
     serializer_registry_singleton,
 )
+from unifi_core.redaction import REDACTED
 
 
 def _registry():
@@ -103,8 +104,33 @@ def test_camera_streams_serializer_shape() -> None:
     out = CameraStreams.from_manager_output(sample).to_dict()
     assert out["camera_id"] == "cam1"
     assert "high" in out["channels"]
-    assert out["channels"]["high"]["rtsps_url"].startswith("rtsps://")
+    assert out["channels"]["high"]["rtsp_alias"] == REDACTED
+    assert out["channels"]["high"]["rtsps_url"] == REDACTED
+    assert out["channels"]["high"]["rtsp_url"] == REDACTED
+    assert out["rtsps_streams"] == REDACTED
     assert CameraStreams.render_hint("detail")["kind"] == "detail"
+
+
+def test_camera_streams_policy_disabled_returns_raw_urls() -> None:
+    from unifi_api.graphql.types.protect.cameras import CameraStreams
+
+    sample = {
+        "camera_id": "cam1",
+        "camera_name": "Front Door",
+        "channels": {
+            "high": {
+                "rtsp_alias": "abc123",
+                "rtsps_url": "rtsps://nvr.local:7441/abc123",
+                "rtsp_url": "rtsp://nvr.local:7447/abc123",
+            }
+        },
+        "rtsps_streams": {"high": "rtsps://nvr.local:7441/xyz789"},
+    }
+    out = CameraStreams.from_manager_output(sample, redact_sensitive=False).to_dict()
+    assert out["channels"]["high"]["rtsp_alias"] == "abc123"
+    assert out["channels"]["high"]["rtsps_url"] == "rtsps://nvr.local:7441/abc123"
+    assert out["channels"]["high"]["rtsp_url"] == "rtsp://nvr.local:7447/abc123"
+    assert out["rtsps_streams"]["high"] == "rtsps://nvr.local:7441/xyz789"
 
 
 def test_snapshot_serializer_bytes_shape() -> None:

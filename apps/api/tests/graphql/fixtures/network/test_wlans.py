@@ -69,3 +69,28 @@ async def test_wlan_detail(tmp_path, monkeypatch):
     assert body.get("errors") is None, body
     assert body["data"]["network"]["wlan"]["id"] == "wl-1"
     assert body["data"]["network"]["wlan"]["xPassphrase"] == REDACTED
+
+
+@pytest.mark.asyncio
+async def test_wlan_detail_policy_disabled_returns_raw_passphrase(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network", redact_sensitive_fields=False)
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "network_manager", "get_wlans"): [
+                {"_id": "wl-1", "name": "HomeNet", "x_passphrase": "wifi-secret"},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ wlan(controller: "{cid}", id: "wl-1") {{
+            id name xPassphrase
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    assert body["data"]["network"]["wlan"]["xPassphrase"] == "wifi-secret"

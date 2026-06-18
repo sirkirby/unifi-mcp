@@ -52,7 +52,7 @@ Always available, regardless of registration mode.
 
 **Tips:**
 - `protect_get_snapshot` with `include_image=true` returns base64 JPEG inline — useful for quick visual checks
-- `protect_get_camera_streams` gives RTSP URLs for video player integration — these can be shared with the user
+- `protect_get_camera_streams` gives RTSP URL metadata for video player integration. Raw aliases and URLs are redacted by default and require redaction policy to be disabled for a trusted local process before sharing.
 - Camera settings use a dict: `settings={"ir_led_mode": "auto", "hdr_mode": true, "mic_enabled": true}`
 - PTZ pan/tilt uses `protect_ptz_move`; PTZ zoom uses `protect_ptz_zoom`; saved positions use `protect_ptz_preset`
 

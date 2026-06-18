@@ -25,6 +25,10 @@ def _wlan_key(obj) -> tuple:
     return (0, raw.get("_id") or raw.get("id") or "")
 
 
+def _redact_sensitive(request: Request) -> bool:
+    return request.app.state.config.policy.response.redact_sensitive_fields
+
+
 @router.get(
     "/sites/{site_id}/wlans",
     response_model=Page[to_pydantic_model(Wlan)],
@@ -69,7 +73,8 @@ async def list_wlans(
     )
 
     type_class = request.app.state.type_registry.lookup("network", "wlans")
-    items = [type_class.from_manager_output(w).to_dict() for w in page]
+    redact_sensitive = _redact_sensitive(request)
+    items = [type_class.from_manager_output(w, redact_sensitive=redact_sensitive).to_dict() for w in page]
     hint = type_class.render_hint("list")
 
     return {
@@ -112,7 +117,7 @@ async def get_wlan(
         raise HTTPException(status_code=404, detail="wlan not found")
 
     type_class = request.app.state.type_registry.lookup("network", "wlans/{id}")
-    data = type_class.from_manager_output(wlan).to_dict()
+    data = type_class.from_manager_output(wlan, redact_sensitive=_redact_sensitive(request)).to_dict()
     hint = type_class.render_hint("detail")
     return {
         "data": data,

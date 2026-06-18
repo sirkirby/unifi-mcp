@@ -6,23 +6,24 @@ from datetime import datetime, timezone
 import pytest
 from httpx import ASGITransport, AsyncClient
 from unifi_api.auth.api_key import generate_key, hash_key
-from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
+from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig, PolicyConfig, ResponsePolicyConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
 from unifi_core.redaction import REDACTED
 
 
-def _cfg(tmp_path):
+def _cfg(tmp_path, *, redact_sensitive_fields: bool = True):
     return ApiConfig(
         http=HttpConfig(host="127.0.0.1", port=8080, cors_origins=()),
         logging=LoggingConfig(level="WARNING"),
         db=DbConfig(path=str(tmp_path / "state.db")),
+        policy=PolicyConfig(response=ResponsePolicyConfig(redact_sensitive_fields=redact_sensitive_fields)),
     )
 
 
-async def _bootstrap(tmp_path, products="access"):
-    app = create_app(_cfg(tmp_path))
+async def _bootstrap(tmp_path, products="access", *, redact_sensitive_fields: bool = True):
+    app = create_app(_cfg(tmp_path, redact_sensitive_fields=redact_sensitive_fields))
     async with app.state.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = app.state.sessionmaker
@@ -229,7 +230,15 @@ async def test_list_credentials_happy_path(tmp_path, monkeypatch) -> None:
     _stub_connection(app, cid)
 
     fake_credentials = [
-        {"id": f"cred-{i}", "type": "card", "user_id": f"user-{i}", "status": "active"} for i in range(3)
+        {
+            "id": f"cred-{i}",
+            "type": "card",
+            "user_id": f"user-{i}",
+            "status": "active",
+            "token": f"token-{i}",
+            "pin_code": "123456",
+        }
+        for i in range(3)
     ]
 
     async def fake_list(self, *a, **kw):
@@ -247,7 +256,44 @@ async def test_list_credentials_happy_path(tmp_path, monkeypatch) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert len(body["items"]) == 3
+    assert all(item["token"] == REDACTED for item in body["items"])
+    assert all(item["pin_code"] == REDACTED for item in body["items"])
     assert body["render_hint"]["kind"] == "list"
+
+
+@pytest.mark.asyncio
+async def test_list_credentials_policy_disabled_returns_raw_secrets(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, redact_sensitive_fields=False)
+    _stub_connection(app, cid)
+
+    fake_credentials = [
+        {
+            "id": "cred-1",
+            "type": "card",
+            "user_id": "user-1",
+            "status": "active",
+            "token": "nfc-token",
+            "pin_code": "123456",
+        }
+    ]
+
+    async def fake_list(self, *a, **kw):
+        return fake_credentials
+
+    from unifi_core.access.managers.credential_manager import CredentialManager
+
+    monkeypatch.setattr(CredentialManager, "list_credentials", fake_list)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/credentials?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    item = r.json()["items"][0]
+    assert item["token"] == "nfc-token"
+    assert item["pin_code"] == "123456"
 
 
 @pytest.mark.asyncio
@@ -291,3 +337,38 @@ async def test_get_credential_happy_and_404(tmp_path, monkeypatch) -> None:
     assert body["data"]["pin_code"] == REDACTED
     assert body["render_hint"]["kind"] == "detail"
     assert miss.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_credential_policy_disabled_returns_raw_secrets(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, redact_sensitive_fields=False)
+    _stub_connection(app, cid)
+
+    target = {
+        "id": "cred-1",
+        "type": "card",
+        "user_id": "user-1",
+        "status": "active",
+        "token": "nfc-token",
+        "pin_code": "123456",
+    }
+
+    async def fake_get(self, credential_id):
+        return target
+
+    from unifi_core.access.managers.credential_manager import CredentialManager
+
+    monkeypatch.setattr(CredentialManager, "get_credential", fake_get)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/credentials/cred-1?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["data"]["token"] == "nfc-token"
+    assert body["data"]["pin_code"] == "123456"
+    assert body["render_hint"]["kind"] == "detail"

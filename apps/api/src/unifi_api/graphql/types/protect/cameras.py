@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import strawberry
 from strawberry.types import Info
+from unifi_core.redaction import redact_sensitive_fields, redact_value
 
 if TYPE_CHECKING:
     from unifi_api.graphql.types.protect.events import Event
@@ -211,12 +212,16 @@ class CameraStreams:
         return {"kind": kind}
 
     @classmethod
-    def from_manager_output(cls, obj: Any) -> "CameraStreams":
+    def from_manager_output(cls, obj: Any, *, redact_sensitive: bool = True) -> "CameraStreams":
         return cls(
             camera_id=_get(obj, "camera_id"),
             camera_name=_get(obj, "camera_name"),
-            channels=_get(obj, "channels") or {},
-            rtsps_streams=_get(obj, "rtsps_streams") or {},
+            channels=redact_sensitive_fields(_get(obj, "channels") or {}, redact_sensitive=redact_sensitive),
+            rtsps_streams=redact_value(
+                "rtsps_streams",
+                _get(obj, "rtsps_streams") or {},
+                redact_sensitive=redact_sensitive,
+            ),
         )
 
     def to_dict(self) -> dict:

@@ -233,15 +233,16 @@ class TestSnmpTools:
         assert result["preview"]["proposed"]["community"] == REDACTED
 
     @pytest.mark.asyncio
-    async def test_get_snmp_settings_opt_out_returns_community(self, monkeypatch):
+    async def test_get_snmp_settings_policy_disabled_returns_community(self, monkeypatch):
         from unifi_network_mcp.tools import system
 
         mock_mgr = MagicMock()
         mock_mgr._connection.site = "default"
         mock_mgr.get_settings = AsyncMock(return_value=[{"enabled": True, "community": "public", "port": 161}])
         monkeypatch.setattr(system, "system_manager", mock_mgr)
+        monkeypatch.setenv("UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS", "false")
 
-        result = await system.get_snmp_settings(include_sensitive=True)
+        result = await system.get_snmp_settings()
 
         assert result["snmp_settings"]["community"] == "public"
 

@@ -25,26 +25,32 @@ from unittest.mock import AsyncMock, MagicMock
 
 from httpx import ASGITransport, AsyncClient
 from unifi_api.auth.api_key import generate_key, hash_key
-from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
+from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig, PolicyConfig, ResponsePolicyConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
 
 
-def cfg(tmp_path: Path) -> ApiConfig:
+def cfg(tmp_path: Path, *, redact_sensitive_fields: bool = True) -> ApiConfig:
     return ApiConfig(
         http=HttpConfig(host="127.0.0.1", port=8080, cors_origins=()),
         logging=LoggingConfig(level="WARNING"),
         db=DbConfig(path=str(tmp_path / "state.db")),
+        policy=PolicyConfig(response=ResponsePolicyConfig(redact_sensitive_fields=redact_sensitive_fields)),
     )
 
 
-async def bootstrap(tmp_path: Path, *, product: str = "network") -> tuple[Any, str, str]:
+async def bootstrap(
+    tmp_path: Path,
+    *,
+    product: str = "network",
+    redact_sensitive_fields: bool = True,
+) -> tuple[Any, str, str]:
     """Bootstrap an admin-keyed app with one controller seeded for ``product``.
 
     Returns (app, api_key_plaintext, controller_id).
     """
-    app = create_app(cfg(tmp_path))
+    app = create_app(cfg(tmp_path, redact_sensitive_fields=redact_sensitive_fields))
     async with app.state.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = app.state.sessionmaker

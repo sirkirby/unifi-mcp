@@ -12,23 +12,25 @@ from datetime import datetime, timezone
 import pytest
 from httpx import ASGITransport, AsyncClient
 from unifi_api.auth.api_key import generate_key, hash_key
-from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
+from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig, PolicyConfig, ResponsePolicyConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.redaction import REDACTED
 
 
-def _cfg(tmp_path):
+def _cfg(tmp_path, *, redact_sensitive_fields: bool = True):
     return ApiConfig(
         http=HttpConfig(host="127.0.0.1", port=8080, cors_origins=()),
         logging=LoggingConfig(level="WARNING"),
         db=DbConfig(path=str(tmp_path / "state.db")),
+        policy=PolicyConfig(response=ResponsePolicyConfig(redact_sensitive_fields=redact_sensitive_fields)),
     )
 
 
-async def _bootstrap(tmp_path, products="protect"):
-    app = create_app(_cfg(tmp_path))
+async def _bootstrap(tmp_path, products="protect", *, redact_sensitive_fields: bool = True):
+    app = create_app(_cfg(tmp_path, redact_sensitive_fields=redact_sensitive_fields))
     async with app.state.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = app.state.sessionmaker
@@ -128,7 +130,14 @@ async def test_get_camera_streams_happy_path(tmp_path, monkeypatch) -> None:
     payload = {
         "camera_id": "cam-1",
         "camera_name": "Door",
-        "channels": {"high": {"channel_id": 0}},
+        "channels": {
+            "high": {
+                "channel_id": 0,
+                "rtsp_alias": "abc123",
+                "rtsps_url": "rtsps://x/abc",
+                "rtsp_url": "rtsp://x/abc",
+            }
+        },
         "rtsps_streams": {"high": "rtsps://x/abc"},
     }
 
@@ -147,6 +156,49 @@ async def test_get_camera_streams_happy_path(tmp_path, monkeypatch) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["data"]["camera_id"] == "cam-1"
+    assert body["data"]["channels"]["high"]["rtsp_alias"] == REDACTED
+    assert body["data"]["channels"]["high"]["rtsps_url"] == REDACTED
+    assert body["data"]["channels"]["high"]["rtsp_url"] == REDACTED
+    assert body["data"]["rtsps_streams"] == REDACTED
+
+
+@pytest.mark.asyncio
+async def test_get_camera_streams_policy_disabled_returns_raw_urls(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, redact_sensitive_fields=False)
+    _stub_connection(app, cid)
+
+    payload = {
+        "camera_id": "cam-1",
+        "camera_name": "Door",
+        "channels": {
+            "high": {
+                "channel_id": 0,
+                "rtsp_alias": "abc123",
+                "rtsps_url": "rtsps://x/abc",
+                "rtsp_url": "rtsp://x/abc",
+            }
+        },
+        "rtsps_streams": {"high": "rtsps://x/abc"},
+    }
+
+    async def fake(self, camera_id):
+        return payload
+
+    from unifi_core.protect.managers.camera_manager import CameraManager
+
+    monkeypatch.setattr(CameraManager, "get_camera_streams", fake)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/cameras/cam-1/streams?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["data"]["channels"]["high"]["rtsp_alias"] == "abc123"
+    assert body["data"]["channels"]["high"]["rtsps_url"] == "rtsps://x/abc"
+    assert body["data"]["channels"]["high"]["rtsp_url"] == "rtsp://x/abc"
     assert body["data"]["rtsps_streams"]["high"] == "rtsps://x/abc"
 
 

@@ -56,12 +56,10 @@ logger = logging.getLogger(__name__)
 
 
 _DEFAULT_PRODUCTS: tuple[str, ...] = ("network", "protect", "access")
-
-# Presentation-only flags are valid tool arguments that managers do not accept.
-# They are dropped before the manager call and consumed at the response
-# boundary instead (e.g. ``include_sensitive`` is honored by the serializer /
-# Strawberry type in ``routes.actions.post_action``).
-_PRESENTATION_ONLY_ARGS = frozenset({"include_sensitive"})
+INCLUDE_SENSITIVE_UNSUPPORTED_ERROR = (
+    "include_sensitive is not supported; set UNIFI_API_REDACT_SENSITIVE_FIELDS=false or "
+    "policy.response.redact_sensitive_fields=false to allow raw sensitive fields for this API surface."
+)
 
 # Tool category directories under apps/<product>/src/unifi_<product>_mcp/tools/
 # are dynamic; we discover them by walking the ``tools`` package at startup.
@@ -270,8 +268,8 @@ async def dispatch_action(
     - Returns the manager method's response unchanged.
 
     The method is invoked with the tool's own parameters as defined in
-    ``tools_manifest.json`` after dropping presentation-only MCP/API flags
-    that managers do not accept. ``confirm`` is
+    ``tools_manifest.json``. Stale per-call response flags such as
+    ``include_sensitive`` are rejected before manager invocation. ``confirm`` is
     spread in only when the manager method accepts it (best-effort: tools
     today wrap confirm logic at the *tool* layer, not the manager layer, so
     most managers will not accept ``confirm`` and Task 13 will adapt by
@@ -292,6 +290,8 @@ async def dispatch_action(
         )
     if tool_name in CONFIRM_REQUIRED_TOOLS and not confirm:
         raise ValueError(f"tool '{tool_name}' requires confirm=true")
+    if "include_sensitive" in args:
+        raise ValueError(INCLUDE_SENSITIVE_UNSUPPORTED_ERROR)
     marker_paths = redaction_marker_paths(args)
     if marker_paths:
         field = marker_paths[0]
@@ -326,7 +326,7 @@ async def dispatch_action(
             f"manager '{binding.manager_attr}' has no callable method '{binding.method}' for tool '{tool_name}'"
         )
 
-    manager_args = {key: value for key, value in args.items() if key not in _PRESENTATION_ONLY_ARGS}
+    manager_args = dict(args)
     translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)
     if translator is not None:
         positional, keyword = translator(manager_args)

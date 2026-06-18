@@ -21,14 +21,14 @@ router = APIRouter()
 
 
 @lru_cache(maxsize=None)
-def _type_accepts_include_sensitive(type_class: type) -> bool:
-    """Whether a Strawberry type's ``from_manager_output`` takes the opt-out flag.
+def _type_accepts_redact_sensitive(type_class: type) -> bool:
+    """Whether a Strawberry type's ``from_manager_output`` takes the redaction flag.
 
     Only the few types with secret fields (WLAN, SNMP, credentials) accept
-    ``include_sensitive``; the rest keep a single-arg signature. Cached per
+    ``redact_sensitive``; the rest keep a single-arg signature. Cached per
     class so the reflection runs once, not per request.
     """
-    return "include_sensitive" in inspect.signature(type_class.from_manager_output).parameters
+    return "redact_sensitive" in inspect.signature(type_class.from_manager_output).parameters
 
 
 def _coerce_list_result(result: object, tool_name: str, kind: str) -> list:
@@ -74,6 +74,9 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
     type_registry = request.app.state.type_registry
     key_prefix = getattr(request.state, "api_key_prefix", "(unknown)")
 
+    if "include_sensitive" in body.args:
+        return {"success": False, "error": actions_svc.INCLUDE_SENSITIVE_UNSUPPORTED_ERROR}
+
     async with sm() as session:
         try:
             controller = await get_controller(session, body.controller)
@@ -102,10 +105,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 args=body.args,
                 confirm=body.confirm,
             )
-            # include_sensitive is a presentation-only flag: stripped from the
-            # manager call by dispatch_action, but honored here at the response
-            # boundary so an authorized caller can opt out of redaction.
-            include_sensitive = bool(body.args.get("include_sensitive", False))
+            redact_sensitive = request.app.state.config.policy.response.redact_sensitive_fields
             tool_type = type_registry.lookup_tool(tool_name)
             if tool_type is not None:
                 # Phase 6 PR2 — read tool migrated to a Strawberry type. Shape
@@ -115,7 +115,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 type_class, kind = tool_type
                 hint = type_class.render_hint(kind)
                 shape_kwargs = (
-                    {"include_sensitive": include_sensitive} if _type_accepts_include_sensitive(type_class) else {}
+                    {"redact_sensitive": redact_sensitive} if _type_accepts_redact_sensitive(type_class) else {}
                 )
                 if kind in ("list", "timeseries", "event_log"):
                     items = _coerce_list_result(result, tool_name, kind)
@@ -125,7 +125,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 shaped = {"success": True, "data": data, "render_hint": hint}
             else:
                 serializer = serializer_registry.serializer_for_tool(tool_name)
-                shaped = serializer.serialize_action(result, tool_name=tool_name, include_sensitive=include_sensitive)
+                shaped = serializer.serialize_action(result, tool_name=tool_name, redact_sensitive=redact_sensitive)
             outcome = "success" if shaped.get("success", True) else "error"
             await write_audit(
                 session,

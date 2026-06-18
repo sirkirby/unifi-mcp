@@ -49,6 +49,7 @@ async def stream_protect_camera_events(
             controller_id=controller.id,
             product=PRODUCT,
             serializer=serializer,
+            redact_sensitive=request.app.state.config.policy.response.redact_sensitive_fields,
             last_event_id=last_event_id,
             filter_fn=lambda evt: evt.get("camera_id") == camera_id,
         ),

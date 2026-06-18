@@ -93,6 +93,10 @@ UNIFI_PROTECT_PASSWORD=your-password # Admin password
 
 > **AI-powered alarms need SuperAdmin.** The alarm-rule tools (`protect_alarm_list_rules` / `protect_alarm_get_rule` / `protect_alarm_create_rule` / `protect_alarm_update_rule` / `protect_alarm_delete_rule`) transparently use the modern UniFi-OS Alarm Manager when the account is **SuperAdmin**, and fall back to the classic automations view otherwise. The modern path surfaces and manages AI-powered alarms (e.g. AI Natural Language); the legacy path cannot see those rules and responses include a standard MCP `_meta` notice when the view is limited. Grant the account SuperAdmin on the console hosting Protect to view/manage AI alarms. Blast radius: on a standalone UNVR this is contained to Protect; on a combined UDM console SuperAdmin also grants Network/UniFi-OS control.
 
+### Sensitive response fields
+
+Protect tools redact secret-bearing stream fields by default before returning data to MCP clients. This includes RTSP/RTSPS stream aliases and URLs from `protect_get_camera_streams`. Disable redaction for a trusted local administration process with `UNIFI_PROTECT_REDACT_SENSITIVE_FIELDS=false` or the global `UNIFI_REDACT_SENSITIVE_FIELDS=false` policy flag when raw stream values are required.
+
 ## Run
 
 ```bash

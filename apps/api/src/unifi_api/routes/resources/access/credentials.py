@@ -29,6 +29,10 @@ def _credential_key(obj) -> tuple:
     return (0, raw.get("id") or "")
 
 
+def _redact_sensitive(request: Request) -> bool:
+    return request.app.state.config.policy.response.redact_sensitive_fields
+
+
 async def _maybe_set_site(cm, site_id: str) -> None:
     set_site = getattr(cm, "set_site", None)
     if set_site is None:
@@ -79,7 +83,8 @@ async def list_credentials(
     )
 
     type_class = request.app.state.type_registry.lookup("access", "credentials")
-    items = [type_class.from_manager_output(c).to_dict() for c in page]
+    redact_sensitive = _redact_sensitive(request)
+    items = [type_class.from_manager_output(c, redact_sensitive=redact_sensitive).to_dict() for c in page]
     hint = type_class.render_hint("list")
 
     return {
@@ -119,7 +124,7 @@ async def get_credential(
             raise HTTPException(status_code=404, detail="credential not found")
 
     type_class = request.app.state.type_registry.lookup("access", "credentials/{id}")
-    data = type_class.from_manager_output(credential).to_dict()
+    data = type_class.from_manager_output(credential, redact_sensitive=_redact_sensitive(request)).to_dict()
     hint = type_class.render_hint("detail")
     return {
         "data": data,

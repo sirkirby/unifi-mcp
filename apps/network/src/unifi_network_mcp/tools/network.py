@@ -38,13 +38,14 @@ from unifi_core.network.models.wlans import (
     to_controller_update as wlan_to_update,
 )
 from unifi_core.redaction import redact_sensitive_fields
-from unifi_network_mcp.runtime import network_manager, server
+from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
+from unifi_network_mcp.runtime import config, network_manager, server
 
 logger = logging.getLogger(__name__)
 
-_INCLUDE_SENSITIVE_FIELD = Field(
-    description="When true, returns raw controller secret fields. Leave false for normal AI-agent use."
-)
+
+def _should_redact_sensitive_fields() -> bool:
+    return should_redact_response_sensitive_fields("network", config)
 
 
 @server.tool(
@@ -249,7 +250,6 @@ async def get_network_details(
             )
         ),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Gets the detailed configuration of a specific network by its ID.
 
@@ -286,6 +286,7 @@ async def get_network_details(
         }
     }
     """
+    redact_sensitive = _should_redact_sensitive_fields()
     try:
         if not network_id:
             return {"success": False, "error": "network_id is required"}
@@ -301,7 +302,7 @@ async def get_network_details(
                         "summary_mode": False,
                         "details": json.loads(json.dumps(network, default=str)),
                     },
-                    include_sensitive=include_sensitive,
+                    redact_sensitive=redact_sensitive,
                 )
 
             known_sections = {"basic", "dhcp", "ipv6", "vpn", "wan", "all"}
@@ -396,7 +397,7 @@ async def get_network_details(
             }
             if unknown_sections:
                 response["unknown_sections"] = unknown_sections
-            return redact_sensitive_fields(response, include_sensitive=include_sensitive)
+            return redact_sensitive_fields(response, redact_sensitive=redact_sensitive)
         else:
             return {
                 "success": False,
@@ -466,7 +467,6 @@ async def update_network(
         bool,
         Field(description="When true, applies the update. When false (default), returns a preview of the changes"),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Updates specific fields of an existing network.
 
@@ -557,6 +557,7 @@ async def update_network(
         }
     """
     logger.info("unifi_update_network tool called (network_id=%s, confirm=%s)", network_id, confirm)
+    redact_sensitive = _should_redact_sensitive_fields()
     if not network_id:
         return {"success": False, "error": "network_id is required"}
     if not update_data:
@@ -604,7 +605,7 @@ async def update_network(
                 updates=validated_data,
                 warnings=warnings,
             ),
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
 
     # Basic cross-field validation (more complex logic might need Pydantic models)
@@ -629,7 +630,7 @@ async def update_network(
                     "updated_fields": updated_fields_list,
                     "details": json.loads(json.dumps(updated_network, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
         else:
             logger.error("Failed to update network (%s): %s", network_id, error_detail)
@@ -641,7 +642,7 @@ async def update_network(
                     "error": f"Failed to update network ({network_id}): {error_detail}",
                     "details_after_attempt": json.loads(json.dumps(network_after_update, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
 
     except Exception as e:
@@ -667,7 +668,6 @@ async def create_network(
         bool,
         Field(description="When true, creates the network. When false (default), validates and returns a preview"),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Create a new network (LAN/VLAN) with comprehensive validation.
 
@@ -725,6 +725,7 @@ async def create_network(
     - details (object): Details of the created network
     - error (string): Error message if unsuccessful
     """
+    redact_sensitive = _should_redact_sensitive_fields()
     # Filter input to known mutable fields
     validated_data = network_to_update(network_data) if network_data else {}
     # Supplement with any required-on-create fields that to_controller_update might drop
@@ -805,7 +806,7 @@ async def create_network(
                 resource_name=validated_data.get("name"),
                 warnings=["Creating a network may temporarily disrupt connectivity"],
             ),
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
 
     logger.info("Attempting to create network '%s' with purpose '%s'", validated_data["name"], purpose)
@@ -827,7 +828,7 @@ async def create_network(
                     "network_id": new_network_id,
                     "details": json.loads(json.dumps(created_network, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
         else:
             error_msg = (
@@ -953,7 +954,6 @@ async def list_wlans(
 )
 async def get_wlan_details(
     wlan_id: Annotated[str, Field(description="Unique identifier (_id) of the WLAN/SSID (from unifi_list_wlans)")],
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Gets the detailed configuration of a specific WLAN (SSID) by its ID.
 
@@ -988,6 +988,7 @@ async def get_wlan_details(
         }
     }
     """
+    redact_sensitive = _should_redact_sensitive_fields()
     try:
         if not wlan_id:
             return {"success": False, "error": "wlan_id is required"}
@@ -1000,7 +1001,7 @@ async def get_wlan_details(
                     "wlan_id": wlan_id,
                     "details": json.loads(json.dumps(wlan, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
         else:
             return {"success": False, "error": f"WLAN with ID '{wlan_id}' not found."}
@@ -1039,7 +1040,6 @@ async def update_wlan(
         bool,
         Field(description="When true, applies the update. When false (default), returns a preview of the changes"),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Updates specific fields of an existing WLAN (Wireless SSID).
 
@@ -1063,6 +1063,7 @@ async def update_wlan(
             "details": { ... updated WLAN details ... }
         }
     """
+    redact_sensitive = _should_redact_sensitive_fields()
     if not wlan_id:
         return {"success": False, "error": "wlan_id is required"}
     if not update_data:
@@ -1095,7 +1096,7 @@ async def update_wlan(
                 current_state=current,
                 updates=validated_data,
             ),
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
 
     # Basic cross-field validation for password
@@ -1118,7 +1119,7 @@ async def update_wlan(
                     "updated_fields": updated_fields_list,
                     "details": json.loads(json.dumps(updated_wlan, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
         else:
             logger.error("Failed to update WLAN (%s): %s", wlan_id, error_detail)
@@ -1130,7 +1131,7 @@ async def update_wlan(
                     "error": f"Failed to update WLAN ({wlan_id}): {error_detail}",
                     "details_after_attempt": json.loads(json.dumps(wlan_after_update, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
 
     except Exception as e:
@@ -1156,7 +1157,6 @@ async def create_wlan(
         bool,
         Field(description="When true, creates the WLAN. When false (default), validates and returns a preview"),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Create a new WLAN (SSID) with comprehensive validation.
 
@@ -1193,6 +1193,7 @@ async def create_wlan(
     - details (object): Details of the created WLAN
     - error (string): Error message if unsuccessful
     """
+    redact_sensitive = _should_redact_sensitive_fields()
     # Filter input to known mutable fields via pydantic model
     from unifi_core.network.models.wlans import Wlan as WlanModel
 
@@ -1225,7 +1226,7 @@ async def create_wlan(
                 resource_name=validated_data.get("name"),
                 warnings=["Creating a WLAN may temporarily affect wireless connectivity"],
             ),
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
 
     logger.info("Attempting to create WLAN '%s' with security '%s'", validated_data["name"], validated_data["security"])
@@ -1247,7 +1248,7 @@ async def create_wlan(
                     "wlan_id": new_wlan_id,
                     "details": json.loads(json.dumps(created_wlan, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
         else:
             error_msg = (
@@ -1291,9 +1292,9 @@ async def delete_wlan(
             "WARNING: All devices using this SSID will be disconnected"
         ),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Delete a WLAN/SSID. All devices using this SSID will be disconnected."""
+    redact_sensitive = _should_redact_sensitive_fields()
     if not confirm:
         # Fetch current WLAN details to show what will be deleted
         try:
@@ -1321,7 +1322,7 @@ async def delete_wlan(
                 resource_name=resource_name,
                 warnings=["All devices using this SSID will be disconnected"],
             ),
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
 
     try:

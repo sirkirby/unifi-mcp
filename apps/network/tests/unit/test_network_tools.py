@@ -439,7 +439,7 @@ class TestUpdateNetworkWanFields:
 
 class TestWlanToolRedaction:
     @pytest.mark.asyncio
-    async def test_get_wlan_details_redacts_by_default_and_allows_opt_out(self):
+    async def test_get_wlan_details_redacts_by_default_and_uses_policy_opt_out(self, monkeypatch):
         secret_wlan = {"_id": "w1", "name": "SSID", "x_passphrase": "wifi-secret"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_wlan_details = AsyncMock(return_value=secret_wlan)
@@ -448,13 +448,14 @@ class TestWlanToolRedaction:
             from unifi_network_mcp.tools.network import get_wlan_details
 
             default = await get_wlan_details("w1")
-            raw = await get_wlan_details("w1", include_sensitive=True)
+            monkeypatch.setenv("UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS", "false")
+            raw = await get_wlan_details("w1")
 
         assert default["details"]["x_passphrase"] == REDACTED
         assert raw["details"]["x_passphrase"] == "wifi-secret"
 
     @pytest.mark.asyncio
-    async def test_get_wlan_details_redacts_private_psk_and_iapp_key_by_default(self):
+    async def test_get_wlan_details_redacts_private_psk_and_iapp_key_by_default(self, monkeypatch):
         secret_wlan = {
             "_id": "w1",
             "name": "SSID",
@@ -469,7 +470,8 @@ class TestWlanToolRedaction:
             from unifi_network_mcp.tools.network import get_wlan_details
 
             default = await get_wlan_details("w1")
-            raw = await get_wlan_details("w1", include_sensitive=True)
+            monkeypatch.setenv("UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS", "false")
+            raw = await get_wlan_details("w1")
 
         assert default["details"]["private_preshared_keys"] == REDACTED
         # The boolean toggle is non-sensitive config and stays visible.

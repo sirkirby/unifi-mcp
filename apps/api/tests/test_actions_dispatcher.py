@@ -148,7 +148,7 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_strips_presentation_only_include_sensitive_arg() -> None:
+async def test_dispatch_rejects_include_sensitive_arg_before_manager_invocation() -> None:
     entry = ToolEntry(
         name="unifi_get_wlan_details",
         product="network",
@@ -158,9 +158,8 @@ async def test_dispatch_strips_presentation_only_include_sensitive_arg() -> None
     )
     registry = _registry_with(entry)
 
-    expected_response = {"_id": "w1", "name": "SSID"}
     domain_manager = MagicMock()
-    domain_manager.get_wlan_details = AsyncMock(return_value=expected_response)
+    domain_manager.get_wlan_details = AsyncMock(return_value={"_id": "w1", "name": "SSID"})
 
     conn_manager = MagicMock()
     conn_manager.site = "default"
@@ -170,23 +169,24 @@ async def test_dispatch_strips_presentation_only_include_sensitive_arg() -> None
     factory.get_domain_manager = AsyncMock(return_value=domain_manager)
     factory.get_connection_manager = AsyncMock(return_value=conn_manager)
 
-    result = await dispatch_action(
-        registry=registry,
-        factory=factory,
-        session=MagicMock(),
-        tool_name="unifi_get_wlan_details",
-        controller_id="cid",
-        controller_products=["network"],
-        site="default",
-        args={"wlan_id": "w1", "include_sensitive": True},
-        confirm=False,
-        dispatch_table={
-            "unifi_get_wlan_details": DispatchEntry(manager_attr="network_manager", method="get_wlan_details"),
-        },
-    )
+    with pytest.raises(ValueError, match="include_sensitive is not supported"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="unifi_get_wlan_details",
+            controller_id="cid",
+            controller_products=["network"],
+            site="default",
+            args={"wlan_id": "w1", "include_sensitive": True},
+            confirm=False,
+            dispatch_table={
+                "unifi_get_wlan_details": DispatchEntry(manager_attr="network_manager", method="get_wlan_details"),
+            },
+        )
 
-    assert result is expected_response
-    domain_manager.get_wlan_details.assert_awaited_once_with(wlan_id="w1")
+    factory.get_domain_manager.assert_not_awaited()
+    domain_manager.get_wlan_details.assert_not_awaited()
 
 
 @pytest.mark.asyncio

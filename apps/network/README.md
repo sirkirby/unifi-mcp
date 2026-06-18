@@ -91,7 +91,7 @@ UNIFI_NETWORK_PASSWORD=your-password # Admin password
 
 ### Sensitive response fields
 
-Network tools redact known secret-bearing fields by default before returning data to MCP clients. This includes WLAN passphrases and VPN key material in raw/detail responses and mutation previews. Tools that expose raw controller data accept `include_sensitive=true` when you explicitly need the original value for local administrative work.
+Network tools redact known secret-bearing fields by default before returning data to MCP clients. This includes WLAN passphrases, VPN key material, whole VPN config blobs, and SNMP community strings in raw/detail responses and mutation previews. Disable redaction for a trusted local administration process with `UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false` or the global `UNIFI_REDACT_SENSITIVE_FIELDS=false` policy flag when raw values are required.
 
 ## Run
 

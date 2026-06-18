@@ -22,6 +22,10 @@ def test_redacts_exact_and_compound_sensitive_keys() -> None:
         "community": "snmp-secret",
         "tls_crypt": "tls-secret",
         "pin_code": "123456",
+        "rtsp_alias": "stream-alias",
+        "rtsps_url": "rtsps://nvr.local:7441/stream-alias",
+        "rtsp_url": "rtsp://nvr.local:7447/stream-alias",
+        "rtsps_streams": {"high": "rtsps://nvr.local:7441/high"},
         "name": "Guest",
     }
 
@@ -40,6 +44,10 @@ def test_redacts_exact_and_compound_sensitive_keys() -> None:
     assert redacted["community"] == REDACTED
     assert redacted["tls_crypt"] == REDACTED
     assert redacted["pin_code"] == REDACTED
+    assert redacted["rtsp_alias"] == REDACTED
+    assert redacted["rtsps_url"] == REDACTED
+    assert redacted["rtsp_url"] == REDACTED
+    assert redacted["rtsps_streams"] == REDACTED
     assert redacted["name"] == "Guest"
 
 
@@ -78,10 +86,10 @@ def test_does_not_redact_unrelated_key_words() -> None:
     assert is_sensitive_key("community_id") is False
 
 
-def test_include_sensitive_returns_values_unchanged() -> None:
+def test_redact_sensitive_false_returns_values_unchanged() -> None:
     payload = {"password": "secret", "nested": [{"token": "tok"}]}
 
-    assert redact_sensitive_fields(payload, include_sensitive=True) == payload
+    assert redact_sensitive_fields(payload, redact_sensitive=False) == payload
 
 
 def test_preserves_none_sensitive_values() -> None:
@@ -96,8 +104,8 @@ def test_redact_value_redacts_sensitive_keys_only() -> None:
     assert redact_value("name", "Guest") == "Guest"
     # None is exempt (nothing to hide), matching redact_sensitive_fields.
     assert redact_value("token", None) is None
-    # The opt-out returns the raw value untouched.
-    assert redact_value("token", "tok", include_sensitive=True) == "tok"
+    # Disabling redaction returns the raw value untouched.
+    assert redact_value("token", "tok", redact_sensitive=False) == "tok"
 
 
 def test_does_not_redact_preshared_keys_enabled_flag() -> None:

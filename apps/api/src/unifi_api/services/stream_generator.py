@@ -14,9 +14,9 @@ from unifi_api.services.streams import StreamSubscriber, SubscriberPool
 logger = logging.getLogger("unifi-api.stream-generator")
 
 
-def format_sse_frame(*, event: dict, product: str, serializer: Any) -> bytes:
+def format_sse_frame(*, event: dict, product: str, serializer: Any, redact_sensitive: bool = True) -> bytes:
     """Render a single SSE frame: event tag, id, json data."""
-    payload = redact_sensitive_fields(serializer.serialize(event))
+    payload = redact_sensitive_fields(serializer.serialize(event), redact_sensitive=redact_sensitive)
     eid = event.get("id") or event.get("_buffered_at") or ""
     return (f"event: {product}.event\nid: {eid}\ndata: {json.dumps(payload, default=str)}\n\n").encode()
 
@@ -33,6 +33,7 @@ async def sse_event_stream(
     controller_id: str,
     product: str,
     serializer: Any,
+    redact_sensitive: bool = True,
     last_event_id: str | None = None,
     keepalive_interval: float = 30.0,
     filter_fn: Callable[[dict], bool] | None = None,
@@ -60,13 +61,23 @@ async def sse_event_stream(
         if filter_fn is not None:
             replay = [e for e in replay if filter_fn(e)]
         for evt in replay:
-            yield format_sse_frame(event=evt, product=product, serializer=serializer)
+            yield format_sse_frame(
+                event=evt,
+                product=product,
+                serializer=serializer,
+                redact_sensitive=redact_sensitive,
+            )
 
         # 2. Live tail with keepalive
         while True:
             try:
                 evt = await asyncio.wait_for(sub.queue.get(), timeout=keepalive_interval)
-                yield format_sse_frame(event=evt, product=product, serializer=serializer)
+                yield format_sse_frame(
+                    event=evt,
+                    product=product,
+                    serializer=serializer,
+                    redact_sensitive=redact_sensitive,
+                )
             except asyncio.TimeoutError:
                 yield format_keepalive()
     finally:

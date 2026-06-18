@@ -100,7 +100,7 @@ At least one path must be configured. When both are available, each tool selects
 
 ## Secret redaction
 
-Access tools redact credential secrets by default before returning data to MCP clients — credential `token` and `pin_code` values surface as `***REDACTED***` in reads, lists, and create previews. Pass `include_sensitive=true` when you explicitly need the raw value for local administrative work. To preserve an existing secret on an update, omit the field rather than passing the `***REDACTED***` marker back (which is rejected).
+Access tools redact credential secrets by default before returning data to MCP clients — credential `token` and `pin_code` values surface as `***REDACTED***` in reads, lists, and create previews. Disable redaction for a trusted local administration process with `UNIFI_ACCESS_REDACT_SENSITIVE_FIELDS=false` or the global `UNIFI_REDACT_SENSITIVE_FIELDS=false` policy flag when raw values are required. To preserve an existing secret on an update, omit the field rather than passing the `***REDACTED***` marker back (which is rejected).
 
 ## Run
 

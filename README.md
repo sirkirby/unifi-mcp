@@ -219,7 +219,7 @@ For the full configuration reference including permissions, transports, and adva
 
 Tool and API responses redact known controller secret fields by default — Wi-Fi passphrases, VPN private/preshared keys, whole VPN config blobs (imported WireGuard/OpenVPN `.conf`/`.ovpn` files), API tokens, SNMP community strings, and Access credential token/PIN values come back as `***REDACTED***`. This keeps secrets out of agent context and logs.
 
-When you genuinely need a raw value for local administration, pass `include_sensitive=true` to the MCP tool (or to the REST action endpoint). To keep an existing secret during an update, simply omit the field — do **not** pass the `***REDACTED***` marker back; doing so is rejected so the placeholder can never be written as a real secret. See [`PRIVACY.md`](PRIVACY.md) for the full list of redacted fields.
+When a trusted local administration workflow genuinely needs raw values, disable redaction for that process with `UNIFI_REDACT_SENSITIVE_FIELDS=false` or a server-specific override such as `UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_PROTECT_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_ACCESS_REDACT_SENSITIVE_FIELDS=false`, or `UNIFI_API_REDACT_SENSITIVE_FIELDS=false`. To keep an existing secret during an update, simply omit the field — do **not** pass the `***REDACTED***` marker back; doing so is rejected so the placeholder can never be written as a real secret. See [`PRIVACY.md`](PRIVACY.md) for the full list of redacted fields.
 
 ## Agent Skills
 

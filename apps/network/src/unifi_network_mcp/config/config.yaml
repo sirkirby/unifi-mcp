@@ -65,6 +65,10 @@ server:
     log_tool_result: ${oc.env:UNIFI_MCP_DIAG_LOG_TOOL_RESULT,true}
     max_payload_chars: ${oc.env:UNIFI_MCP_DIAG_MAX_PAYLOAD,2000}
 
+policy:
+  response:
+    redact_sensitive_fields: ${oc.env:UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS,true}
+
 # Permissions are controlled via environment variables:
 #   UNIFI_TOOL_PERMISSION_MODE=confirm|bypass (default: confirm)
 #   UNIFI_POLICY_<ACTION>=true|false (global policy gates)

@@ -9,22 +9,24 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from unifi_api.auth.api_key import generate_key, hash_key
-from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
+from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig, PolicyConfig, ResponsePolicyConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, AuditLog, Base, Controller
 from unifi_api.server import create_app
 
 
-def _cfg(tmp_path: Path) -> ApiConfig:
+def _cfg(tmp_path: Path, *, redact_sensitive_fields: bool = True) -> ApiConfig:
     return ApiConfig(
         http=HttpConfig(host="127.0.0.1", port=8080, cors_origins=()),
         logging=LoggingConfig(level="WARNING"),
         db=DbConfig(path=str(tmp_path / "state.db")),
+        policy=PolicyConfig(response=ResponsePolicyConfig(redact_sensitive_fields=redact_sensitive_fields)),
     )
 
 
-async def _bootstrap(tmp_path: Path):
-    app = create_app(_cfg(tmp_path))
+async def _bootstrap(tmp_path: Path, *, redact_sensitive_fields: bool = True):
+    config = _cfg(tmp_path, redact_sensitive_fields=redact_sensitive_fields)
+    app = create_app(config)
     async with app.state.engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sm = app.state.sessionmaker
@@ -198,9 +200,8 @@ async def test_action_endpoint_unwraps_recognition_list_envelope(
 
 
 @pytest.mark.asyncio
-async def test_action_endpoint_redacts_by_default_and_honors_opt_out(tmp_path, monkeypatch) -> None:
-    """The API redacts secrets by default but honors include_sensitive=true as a
-    response-boundary opt-out (threaded through the Strawberry type path)."""
+async def test_action_endpoint_redacts_by_default(tmp_path, monkeypatch) -> None:
+    """The API action response path redacts secrets by default."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
 
@@ -210,11 +211,124 @@ async def test_action_endpoint_redacts_by_default_and_honors_opt_out(tmp_path, m
     monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=wlan))
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        default = await c.post(
+        response = await c.post(
             "/v1/actions/unifi_get_wlan_details",
             headers={"Authorization": f"Bearer {key}"},
             json={"site": "default", "controller": cid, "args": {"wlan_id": "wl-1"}, "confirm": False},
         )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["x_passphrase"] == "***REDACTED***"
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_policy_disabled_returns_raw_sensitive_fields(tmp_path, monkeypatch) -> None:
+    """Operator policy can disable action response redaction for the API surface."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, redact_sensitive_fields=False)
+
+    from unifi_api.services import actions as actions_svc
+
+    wlan = _FakeClient({"_id": "wl-1", "name": "HomeNet", "x_passphrase": "wifi-secret"})
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=wlan))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.post(
+            "/v1/actions/unifi_get_wlan_details",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"wlan_id": "wl-1"}, "confirm": False},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["x_passphrase"] == "wifi-secret"
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_redacts_protect_camera_stream_urls_by_default(tmp_path, monkeypatch) -> None:
+    """Typed action responses also honor response redaction policy."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+
+    streams = {
+        "camera_id": "cam-1",
+        "camera_name": "Door",
+        "channels": {
+            "high": {
+                "rtsp_alias": "abc123",
+                "rtsps_url": "rtsps://nvr.local/abc123",
+                "rtsp_url": "rtsp://nvr.local/abc123",
+            }
+        },
+        "rtsps_streams": {"high": "rtsps://nvr.local/abc123"},
+    }
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=streams))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.post(
+            "/v1/actions/protect_get_camera_streams",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"camera_id": "cam-1"}, "confirm": False},
+        )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["channels"]["high"]["rtsp_alias"] == "***REDACTED***"
+    assert data["channels"]["high"]["rtsps_url"] == "***REDACTED***"
+    assert data["channels"]["high"]["rtsp_url"] == "***REDACTED***"
+    assert data["rtsps_streams"] == "***REDACTED***"
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_policy_disabled_returns_raw_protect_camera_stream_urls(tmp_path, monkeypatch) -> None:
+    """Typed action responses return raw stream URLs when API redaction policy is disabled."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, redact_sensitive_fields=False)
+
+    from unifi_api.services import actions as actions_svc
+
+    streams = {
+        "camera_id": "cam-1",
+        "camera_name": "Door",
+        "channels": {
+            "high": {
+                "rtsp_alias": "abc123",
+                "rtsps_url": "rtsps://nvr.local/abc123",
+                "rtsp_url": "rtsp://nvr.local/abc123",
+            }
+        },
+        "rtsps_streams": {"high": "rtsps://nvr.local/abc123"},
+    }
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=streams))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.post(
+            "/v1/actions/protect_get_camera_streams",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"camera_id": "cam-1"}, "confirm": False},
+        )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["channels"]["high"]["rtsp_alias"] == "abc123"
+    assert data["channels"]["high"]["rtsps_url"] == "rtsps://nvr.local/abc123"
+    assert data["channels"]["high"]["rtsp_url"] == "rtsp://nvr.local/abc123"
+    assert data["rtsps_streams"]["high"] == "rtsps://nvr.local/abc123"
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_rejects_include_sensitive_before_dispatch(tmp_path, monkeypatch) -> None:
+    """Request args cannot override sensitive-field redaction per call."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+
+    fake_dispatch = AsyncMock(return_value=_FakeClient({"_id": "wl-1"}))
+    monkeypatch.setattr(actions_svc, "dispatch_action", fake_dispatch)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         opted_out = await c.post(
             "/v1/actions/unifi_get_wlan_details",
             headers={"Authorization": f"Bearer {key}"},
@@ -226,10 +340,11 @@ async def test_action_endpoint_redacts_by_default_and_honors_opt_out(tmp_path, m
             },
         )
 
-    assert default.status_code == 200, default.text
-    assert default.json()["data"]["x_passphrase"] == "***REDACTED***"
     assert opted_out.status_code == 200, opted_out.text
-    assert opted_out.json()["data"]["x_passphrase"] == "wifi-secret"
+    body = opted_out.json()
+    assert body["success"] is False
+    assert "include_sensitive is not supported" in body["error"]
+    fake_dispatch.assert_not_awaited()
 
 
 @pytest.mark.asyncio

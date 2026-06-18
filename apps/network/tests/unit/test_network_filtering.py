@@ -70,7 +70,7 @@ async def test_list_networks_search_matches_vlan_id():
 
 
 @pytest.mark.asyncio
-async def test_get_network_details_summary_false_returns_raw():
+async def test_get_network_details_summary_false_redacts_by_default_and_uses_policy_opt_out(monkeypatch):
     raw = {"_id": "n2", "name": "IoT", "dhcpd_enabled": True, "secret": "x"}
     with patch("unifi_network_mcp.tools.network.network_manager") as mock_nm:
         mock_nm.get_network_details = AsyncMock(return_value=raw)
@@ -79,7 +79,8 @@ async def test_get_network_details_summary_false_returns_raw():
         from unifi_network_mcp.tools.network import get_network_details
 
         result = await get_network_details("n2", summary=False)
-        raw_result = await get_network_details("n2", summary=False, include_sensitive=True)
+        monkeypatch.setenv("UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS", "false")
+        raw_result = await get_network_details("n2", summary=False)
 
     assert result["summary_mode"] is False
     assert result["details"]["secret"] == "***REDACTED***"

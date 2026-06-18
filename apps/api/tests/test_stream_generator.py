@@ -42,6 +42,22 @@ def test_format_sse_frame_redacts_serialized_payload() -> None:
     }
 
 
+def test_format_sse_frame_policy_disabled_returns_raw_payload() -> None:
+    frame = format_sse_frame(
+        event={"id": "e1", "metadata": {"token": "raw-token"}, "password": "secret"},
+        product="protect",
+        serializer=MagicMock(serialize=lambda e: e),
+        redact_sensitive=False,
+    )
+    payload_line = next(line for line in frame.decode().split("\n") if line.startswith("data: "))
+
+    assert json.loads(payload_line[6:]) == {
+        "id": "e1",
+        "metadata": {"token": "raw-token"},
+        "password": "secret",
+    }
+
+
 def test_format_keepalive() -> None:
     assert format_keepalive() == b": keepalive\n\n"
 

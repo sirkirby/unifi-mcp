@@ -183,10 +183,6 @@
             "credential_type": {
               "description": "Type of credential to create: nfc, pin, or mobile.",
               "type": "string"
-            },
-            "include_sensitive": {
-              "description": "When true, returns raw credential secret fields (token, pin_code). Leave false for normal AI-agent use.",
-              "type": "boolean"
             }
           },
           "required": [
@@ -625,10 +621,6 @@
             "credential_id": {
               "description": "Credential UUID (from access_list_credentials)",
               "type": "string"
-            },
-            "include_sensitive": {
-              "description": "When true, returns raw credential secret fields (token, pin_code). Leave false for normal AI-agent use.",
-              "type": "boolean"
             }
           },
           "required": [
@@ -1455,12 +1447,7 @@
       "permission_category": "credential",
       "schema": {
         "input": {
-          "properties": {
-            "include_sensitive": {
-              "description": "When true, returns raw credential secret fields (token, pin_code). Leave false for normal AI-agent use.",
-              "type": "boolean"
-            }
-          },
+          "properties": {},
           "type": "object"
         },
         "output": {

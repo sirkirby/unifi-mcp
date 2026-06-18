@@ -454,6 +454,7 @@ def create_app(config: ApiConfig) -> FastAPI:
     app.state.capability_cache = CapabilityCache()
     app.state.settings_service = SettingsService(app.state.sessionmaker)
     app.state.db_path = config.db.path
+    app.state.config = config
     app.state.api_version = _api_version
     app.state.started_at = datetime.now(timezone.utc)
     app.state.log_file_path = None  # Task 11 may override this if log file is enabled
@@ -602,6 +603,7 @@ def create_app(config: ApiConfig) -> FastAPI:
             api_key_id=api_key_id,
             api_key_scopes=api_key_scopes,
             api_key_prefix=api_key_prefix,
+            redact_sensitive_fields=config.policy.response.redact_sensitive_fields,
         )
 
     graphql_app = _UnifiGraphQLRouter(

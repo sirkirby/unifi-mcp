@@ -22,13 +22,14 @@ from unifi_core.network.models.firewall import (
     to_controller_update as fw_to_update,
 )
 from unifi_core.redaction import redact_sensitive_fields
-from unifi_network_mcp.runtime import firewall_manager, server
+from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
+from unifi_network_mcp.runtime import config, firewall_manager, server
 
 logger = logging.getLogger(__name__)
 
-_INCLUDE_SENSITIVE_FIELD = Field(
-    description="When true, returns raw controller secret fields. Leave false for normal AI-agent use."
-)
+
+def _should_redact_sensitive_fields() -> bool:
+    return should_redact_response_sensitive_fields("network", config)
 
 
 # Legacy V1 firewall fields removed in #210. The V1 endpoint is dead on
@@ -196,7 +197,6 @@ async def get_firewall_policy_details(
         str,
         Field(description="Unique identifier (_id) of the firewall policy (from unifi_list_firewall_policies)"),
     ],
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """
     Gets the detailed configuration of a specific firewall policy by its ID.
@@ -235,6 +235,7 @@ async def get_firewall_policy_details(
         }
     }
     """
+    redact_sensitive = _should_redact_sensitive_fields()
     try:
         if not policy_id:
             return {"success": False, "error": "policy_id is required"}
@@ -252,7 +253,7 @@ async def get_firewall_policy_details(
                 "policy_id": policy_id,
                 "details": json.loads(json.dumps(policy, default=str)),
             },
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
     except Exception as e:
         logger.error("Error getting firewall policy details for %s: %s", policy_id, e, exc_info=True)
@@ -430,9 +431,9 @@ async def create_firewall_policy(
         bool,
         Field(description="When true, creates the policy. When false (default), validates and returns a preview"),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Create a V2 zone-based firewall policy."""
+    redact_sensitive = _should_redact_sensitive_fields()
     if not isinstance(policy_data, dict) or not policy_data:
         return {
             "success": False,
@@ -526,7 +527,7 @@ async def create_firewall_policy(
                 resource_data=validated_data,
                 resource_name=policy_name,
             ),
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
 
     logger.info("Creating firewall policy '%s'", policy_name)
@@ -545,7 +546,7 @@ async def create_firewall_policy(
                     "policy_id": new_policy_id,
                     "details": json.loads(json.dumps(created_policy_details, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
         else:
             logger.error("Failed to create firewall policy '%s'. Manager returned None.", policy_name)
@@ -615,9 +616,9 @@ async def update_firewall_policy(
         bool,
         Field(description="When true, applies the update. When false (default), returns a preview of the changes"),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Update specific fields of an existing V2 zone-based firewall policy. Requires confirmation."""
+    redact_sensitive = _should_redact_sensitive_fields()
     if not policy_id:
         return {"success": False, "error": "policy_id is required"}
     if not update_data:
@@ -666,7 +667,7 @@ async def update_firewall_policy(
                     current_state=current,
                     updates=validated_data,
                 ),
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
 
         logger.info("Updating firewall policy '%s' fields: %s", policy_id, ", ".join(updated_fields_list))
@@ -718,7 +719,7 @@ async def update_firewall_policy(
                         % ", ".join(mismatched),
                         "details": json.loads(json.dumps(updated_details, default=str)),
                     },
-                    include_sensitive=include_sensitive,
+                    redact_sensitive=redact_sensitive,
                 )
 
             logger.info("Updated firewall policy (%s)", policy_id)
@@ -729,7 +730,7 @@ async def update_firewall_policy(
                     "updated_fields": updated_fields_list,
                     "details": json.loads(json.dumps(updated_details, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
         else:
             logger.error("Failed to update firewall policy (%s). Manager returned false.", policy_id)
@@ -957,9 +958,9 @@ async def list_firewall_groups() -> Dict[str, Any]:
 )
 async def get_firewall_group_details(
     group_id: Annotated[str, Field(description="The unique identifier (_id) of the firewall group")],
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Gets a specific firewall group."""
+    redact_sensitive = _should_redact_sensitive_fields()
     try:
         if not group_id:
             return {"success": False, "error": "group_id is required"}
@@ -974,7 +975,7 @@ async def get_firewall_group_details(
                 "group_id": group_id,
                 "details": json.loads(json.dumps(group, default=str)),
             },
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
     except Exception as e:
         logger.error("Error getting firewall group %s: %s", group_id, e, exc_info=True)
@@ -1006,9 +1007,9 @@ async def create_firewall_group(
         bool,
         Field(description="When true, creates the group. When false (default), returns a preview"),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Creates a new firewall group."""
+    redact_sensitive = _should_redact_sensitive_fields()
     group_data = {
         "name": name,
         "group_type": group_type,
@@ -1022,7 +1023,7 @@ async def create_firewall_group(
                 resource_data=group_data,
                 resource_name=name,
             ),
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
 
     try:
@@ -1034,7 +1035,7 @@ async def create_firewall_group(
                     "message": f"Firewall group '{name}' created successfully.",
                     "group": json.loads(json.dumps(result, default=str)),
                 },
-                include_sensitive=include_sensitive,
+                redact_sensitive=redact_sensitive,
             )
         return {"success": False, "error": f"Failed to create firewall group '{name}'."}
     except Exception as e:
@@ -1060,9 +1061,9 @@ async def update_firewall_group(
         bool,
         Field(description="When true, updates the group. When false (default), returns a preview"),
     ] = False,
-    include_sensitive: Annotated[bool, _INCLUDE_SENSITIVE_FIELD] = False,
 ) -> Dict[str, Any]:
     """Updates an existing firewall group."""
+    redact_sensitive = _should_redact_sensitive_fields()
     if not confirm:
         return redact_sensitive_fields(
             create_preview(
@@ -1070,7 +1071,7 @@ async def update_firewall_group(
                 resource_data=group_data,
                 resource_name=group_id,
             ),
-            include_sensitive=include_sensitive,
+            redact_sensitive=redact_sensitive,
         )
 
     try:

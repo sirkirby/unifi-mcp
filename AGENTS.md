@@ -227,7 +227,7 @@ make pre-commit   # format + lint + sync-skills + test
 - [ ] Added to `TOOL_MODULE_MAP` in `categories.py`
 - [ ] `make manifest` run and manifest committed
 - [ ] Mutating tools implement preview-then-confirm
-- [ ] Tools returning raw controller secrets redact at the boundary and accept `include_sensitive` (see Response redaction pattern)
+- [ ] Tools returning raw controller secrets redact at the boundary according to response policy (see Response redaction pattern)
 - [ ] Permission category and action set via decorator kwargs
 - [ ] `ToolAnnotations` added
 - [ ] Tests cover success, error, and permission denial paths
@@ -256,7 +256,7 @@ All three app servers run on `StrictKwargFastMCP` (a `FastMCP` subclass in `pack
 
 ### Response redaction (#348)
 
-Secret-bearing response fields are redacted at egress boundaries, NOT in domain models — `from_controller` and friends carry real values. Sensitivity is decided by key name in `packages/unifi-core/src/unifi_core/redaction.py` (`is_sensitive_key` / `redact_sensitive_fields` / `redact_value`); redact once per surface — MCP tool returns (with an `include_sensitive` opt-out), the REST serializer, GraphQL types, SSE frames, and diagnostics. A tool that returns raw controller config containing secrets MUST accept `include_sensitive: bool = False` and redact its payload. Redacted values surface as the marker `***REDACTED***`; write-back of the marker is rejected centrally in `StrictKwargFastMCP.call_tool` (MCP) and `dispatch_action` (API) — do NOT add per-tool marker checks.
+Secret-bearing response fields are redacted at egress boundaries, NOT in domain models — `from_controller` and friends carry real values. Sensitivity is decided by key name in `packages/unifi-core/src/unifi_core/redaction.py` (`is_sensitive_key` / `redact_sensitive_fields` / `redact_value`); policy is resolved centrally by `packages/unifi-core/src/unifi_core/policy.py` (`should_redact_sensitive_fields`) and exposed to MCP apps through `packages/unifi-mcp-shared/src/unifi_mcp_shared/response_policy.py`. Redact once per surface — MCP tool returns, the REST serializer, GraphQL types, SSE frames, and diagnostics — using `redact_sensitive=True` by default. Raw secret values are enabled only by response policy (`UNIFI_REDACT_SENSITIVE_FIELDS=false` or a server-specific override such as `UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_PROTECT_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_ACCESS_REDACT_SENSITIVE_FIELDS=false`, or `UNIFI_API_REDACT_SENSITIVE_FIELDS=false`); do not add per-tool/request opt-out arguments. Redacted values surface as the marker `***REDACTED***`; write-back of the marker is rejected centrally in `StrictKwargFastMCP.call_tool` (MCP) and `dispatch_action` (API) — do NOT add per-tool marker checks.
 
 - **Anchor:** `packages/unifi-core/src/unifi_core/redaction.py`
 
