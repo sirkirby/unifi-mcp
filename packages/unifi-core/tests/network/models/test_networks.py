@@ -42,6 +42,20 @@ class TestFieldSets:
         ):
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
 
+    def test_mutable_fields_contains_ipv6_wan_fields(self) -> None:
+        for field in (
+            "ipv6_enabled",
+            "wan_type_v6",
+            "ipv6_setting_preference",
+            "ipv6_wan_delegation_type",
+            "wan_dhcpv6_pd_size",
+            "wan_dhcpv6_pd_size_auto",
+            "wan_ipv6_dns_preference",
+            "wan_ipv6_dns1",
+            "wan_ipv6_dns2",
+        ):
+            assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
+
     def test_mutable_fields_excludes_read_only(self) -> None:
         for field in ("id", "site_id"):
             assert field not in MUTABLE_FIELDS, f"{field!r} should NOT be in MUTABLE_FIELDS"
@@ -171,6 +185,32 @@ class TestFromController:
         n = from_controller(raw)
         assert n.igmp_proxy_for == ["net-a", "net-b"]
 
+    def test_wan_ipv6_fields_captured(self) -> None:
+        # Values mirror the live dual-WAN dump (Xfinity WAN2, IPv6 enabled).
+        raw = {
+            "_id": "wan-2",
+            "purpose": "wan",
+            "ipv6_enabled": True,
+            "wan_type_v6": "disabled",
+            "ipv6_setting_preference": "manual",
+            "ipv6_wan_delegation_type": "none",
+            "wan_dhcpv6_pd_size": 64,
+            "wan_dhcpv6_pd_size_auto": False,
+            "wan_ipv6_dns_preference": "auto",
+            "wan_ipv6_dns1": "",
+            "wan_ipv6_dns2": "",
+        }
+        n = from_controller(raw)
+        assert n.ipv6_enabled is True
+        assert n.wan_type_v6 == "disabled"
+        assert n.ipv6_setting_preference == "manual"
+        assert n.ipv6_wan_delegation_type == "none"
+        assert n.wan_dhcpv6_pd_size == 64
+        assert n.wan_dhcpv6_pd_size_auto is False
+        assert n.wan_ipv6_dns_preference == "auto"
+        assert n.wan_ipv6_dns1 == ""
+        assert n.wan_ipv6_dns2 == ""
+
 
 class TestToControllerCreate:
     def test_full_model(self) -> None:
@@ -264,3 +304,21 @@ class TestToControllerUpdate:
         result = to_controller_update({"wan_smartq_enabled": False, "wan_vlan_enabled": False})
         assert result["wan_smartq_enabled"] is False
         assert result["wan_vlan_enabled"] is False
+
+    def test_wan_ipv6_fields_passthrough(self) -> None:
+        result = to_controller_update(
+            {
+                "ipv6_enabled": True,
+                "wan_type_v6": "dhcpv6",
+                "wan_dhcpv6_pd_size": 56,
+                "wan_dhcpv6_pd_size_auto": False,
+                "wan_ipv6_dns1": "2001:4860:4860::8888",
+                "wan_ipv6_dns2": None,
+            }
+        )
+        assert result["ipv6_enabled"] is True
+        assert result["wan_type_v6"] == "dhcpv6"
+        assert result["wan_dhcpv6_pd_size"] == 56
+        assert result["wan_dhcpv6_pd_size_auto"] is False
+        assert result["wan_ipv6_dns1"] == "2001:4860:4860::8888"
+        assert "wan_ipv6_dns2" not in result  # None is dropped (v is not None filter)

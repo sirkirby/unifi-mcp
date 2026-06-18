@@ -3434,6 +3434,39 @@
             ],
             "title": "Ip Subnet"
           },
+          "ipv6_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Enabled"
+          },
+          "ipv6_setting_preference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Setting Preference"
+          },
+          "ipv6_wan_delegation_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Wan Delegation Type"
+          },
           "mac_override_enabled": {
             "anyOf": [
               {
@@ -3533,6 +3566,28 @@
             ],
             "title": "Vlan Enabled"
           },
+          "wan_dhcpv6_pd_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Dhcpv6 Pd Size"
+          },
+          "wan_dhcpv6_pd_size_auto": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Dhcpv6 Pd Size Auto"
+          },
           "wan_dns_preference": {
             "anyOf": [
               {
@@ -3563,6 +3618,39 @@
               }
             ],
             "title": "Wan Ip Aliases"
+          },
+          "wan_ipv6_dns1": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Ipv6 Dns1"
+          },
+          "wan_ipv6_dns2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Ipv6 Dns2"
+          },
+          "wan_ipv6_dns_preference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Ipv6 Dns Preference"
           },
           "wan_load_balance_type": {
             "anyOf": [
@@ -3618,6 +3706,17 @@
               }
             ],
             "title": "Wan Type"
+          },
+          "wan_type_v6": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Type V6"
           },
           "wan_vlan_enabled": {
             "anyOf": [

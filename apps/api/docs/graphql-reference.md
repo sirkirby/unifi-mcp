@@ -947,6 +947,15 @@ type Network {
   igmpProxyFor: JSON
   macOverrideEnabled: Boolean
   wanIpAliases: JSON
+  ipv6Enabled: Boolean
+  wanTypeV6: String
+  ipv6SettingPreference: String
+  ipv6WanDelegationType: String
+  wanDhcpv6PdSize: Int
+  wanDhcpv6PdSizeAuto: Boolean
+  wanIpv6DnsPreference: String
+  wanIpv6Dns1: String
+  wanIpv6Dns2: String
 
   """Clients on this network."""
   clients: [Client!]!

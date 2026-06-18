@@ -245,6 +245,15 @@ class TestGetNetworkDetailsWanSummary:
             "igmp_proxy_for": ["net-a"],
             "mac_override_enabled": False,
             "wan_ip_aliases": [],
+            "ipv6_enabled": True,
+            "wan_type_v6": "disabled",
+            "ipv6_setting_preference": "manual",
+            "ipv6_wan_delegation_type": "none",
+            "wan_dhcpv6_pd_size": 64,
+            "wan_dhcpv6_pd_size_auto": False,
+            "wan_ipv6_dns_preference": "auto",
+            "wan_ipv6_dns1": "",
+            "wan_ipv6_dns2": "",
         }
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_network_details = AsyncMock(return_value=wan)
@@ -259,6 +268,19 @@ class TestGetNetworkDetailsWanSummary:
         assert result["details"]["wan_type"] == "dhcp"
         assert result["details"]["wan_load_balance_weight"] == 50
         assert result["details"]["igmp_proxy_for"] == ["net-a"]
+        # IPv6 WAN keys present in the curated summary section (guards key typos/drops)
+        assert result["details"]["ipv6_enabled"] is True
+        assert result["details"]["wan_type_v6"] == "disabled"
+        assert result["details"]["wan_dhcpv6_pd_size"] == 64
+        assert result["details"]["wan_ipv6_dns_preference"] == "auto"
+        for k in (
+            "ipv6_setting_preference",
+            "ipv6_wan_delegation_type",
+            "wan_dhcpv6_pd_size_auto",
+            "wan_ipv6_dns1",
+            "wan_ipv6_dns2",
+        ):
+            assert k in result["details"], f"summary 'wan' section missing {k}"
         assert "dhcpd_enabled" not in result["details"]
 
 
@@ -398,6 +420,20 @@ class TestUpdateNetworkWanFields:
         assert "0 and 100" in result["error"]
         assert result.get("requires_confirmation") is not True
         mock_mgr.get_network_details.assert_not_called()
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_wan_ipv6_field_no_connectivity_warning(self):
+        """IPv6 WAN fields are dual-stack and not connectivity-critical -> no warning."""
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_WAN)
+            mock_mgr.update_network = AsyncMock()
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(network_id="wan001", update_data={"ipv6_enabled": True}, confirm=False)
+
+        assert result.get("requires_confirmation") is True
+        assert not result.get("warnings")
         mock_mgr.update_network.assert_not_called()
 
 

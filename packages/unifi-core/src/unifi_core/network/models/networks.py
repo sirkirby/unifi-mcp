@@ -248,6 +248,43 @@ class Network(BaseModel):
         default=None,
         description="Secondary IP aliases on the WAN interface",
     )
+    # --- WAN uplink — IPv6 (dual-stack; changing these does not drop IPv4 internet) ---
+    ipv6_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable IPv6 on the WAN uplink",
+    )
+    wan_type_v6: Optional[str] = Field(
+        default=None,
+        description="WAN IPv6 addressing type (e.g. 'disabled', 'dhcpv6', 'slaac', 'static', 'pppoe')",
+    )
+    ipv6_setting_preference: Optional[str] = Field(
+        default=None,
+        description="IPv6 settings source: 'auto' or 'manual'",
+    )
+    ipv6_wan_delegation_type: Optional[str] = Field(
+        default=None,
+        description="IPv6 prefix-delegation type (e.g. 'none', 'dhcpv6', 'static')",
+    )
+    wan_dhcpv6_pd_size: Optional[int] = Field(
+        default=None,
+        description="DHCPv6 prefix-delegation size (prefix length, e.g. 64)",
+    )
+    wan_dhcpv6_pd_size_auto: Optional[bool] = Field(
+        default=None,
+        description="Auto-negotiate the DHCPv6 prefix-delegation size",
+    )
+    wan_ipv6_dns_preference: Optional[str] = Field(
+        default=None,
+        description="WAN IPv6 DNS source: 'auto' (from ISP) or 'manual'",
+    )
+    wan_ipv6_dns1: Optional[str] = Field(
+        default=None,
+        description="Primary WAN IPv6 DNS server (when wan_ipv6_dns_preference='manual')",
+    )
+    wan_ipv6_dns2: Optional[str] = Field(
+        default=None,
+        description="Secondary WAN IPv6 DNS server (when wan_ipv6_dns_preference='manual')",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +373,15 @@ def from_controller(raw: Any) -> Network:
         igmp_proxy_for=_get(raw, "igmp_proxy_for"),
         mac_override_enabled=_get(raw, "mac_override_enabled"),
         wan_ip_aliases=_get(raw, "wan_ip_aliases"),
+        ipv6_enabled=_get(raw, "ipv6_enabled"),
+        wan_type_v6=_get(raw, "wan_type_v6"),
+        ipv6_setting_preference=_get(raw, "ipv6_setting_preference"),
+        ipv6_wan_delegation_type=_get(raw, "ipv6_wan_delegation_type"),
+        wan_dhcpv6_pd_size=_get(raw, "wan_dhcpv6_pd_size"),
+        wan_dhcpv6_pd_size_auto=_get(raw, "wan_dhcpv6_pd_size_auto"),
+        wan_ipv6_dns_preference=_get(raw, "wan_ipv6_dns_preference"),
+        wan_ipv6_dns1=_get(raw, "wan_ipv6_dns1"),
+        wan_ipv6_dns2=_get(raw, "wan_ipv6_dns2"),
     )
 
 

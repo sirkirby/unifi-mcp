@@ -374,6 +374,15 @@ async def get_network_details(
                         "igmp_proxy_for": network.get("igmp_proxy_for"),
                         "mac_override_enabled": network.get("mac_override_enabled"),
                         "wan_ip_aliases": network.get("wan_ip_aliases"),
+                        "ipv6_enabled": network.get("ipv6_enabled"),
+                        "wan_type_v6": network.get("wan_type_v6"),
+                        "ipv6_setting_preference": network.get("ipv6_setting_preference"),
+                        "ipv6_wan_delegation_type": network.get("ipv6_wan_delegation_type"),
+                        "wan_dhcpv6_pd_size": network.get("wan_dhcpv6_pd_size"),
+                        "wan_dhcpv6_pd_size_auto": network.get("wan_dhcpv6_pd_size_auto"),
+                        "wan_ipv6_dns_preference": network.get("wan_ipv6_dns_preference"),
+                        "wan_ipv6_dns1": network.get("wan_ipv6_dns1"),
+                        "wan_ipv6_dns2": network.get("wan_ipv6_dns2"),
                     }
                 )
 
@@ -436,6 +445,9 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "wan_failover_priority (int), wan_smartq_enabled (bool), wan_vlan_enabled (bool), "
     "igmp_proxy_upstream (bool), igmp_proxy_for (JSON: 'none' or list of network refs), "
     "mac_override_enabled (bool), wan_ip_aliases (list). "
+    "WAN IPv6 (dual-stack; does not affect IPv4 internet): ipv6_enabled (bool), wan_type_v6 (str), "
+    "ipv6_setting_preference ('auto'/'manual'), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), "
+    "wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). "
     "WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. "
     "Requires confirmation.",
     permission_category="networks",
@@ -517,6 +529,16 @@ async def update_network(
             - igmp_proxy_for (JSON): IGMP proxy downstream scope ('none' or list of network refs).
             - mac_override_enabled (boolean): Enable MAC clone/override on the WAN.
             - wan_ip_aliases (list): Secondary IP aliases on the WAN.
+            WAN IPv6 uplink fields (dual-stack; changing these does not drop IPv4 internet):
+            - ipv6_enabled (boolean): Enable IPv6 on the WAN uplink.
+            - wan_type_v6 (string): WAN IPv6 type (e.g. 'disabled', 'dhcpv6', 'slaac', 'static').
+            - ipv6_setting_preference (string): IPv6 settings source: 'auto' or 'manual'.
+            - ipv6_wan_delegation_type (string): IPv6 prefix-delegation type (e.g. 'none', 'dhcpv6', 'static').
+            - wan_dhcpv6_pd_size (integer): DHCPv6 prefix-delegation size (e.g. 64).
+            - wan_dhcpv6_pd_size_auto (boolean): Auto-negotiate the DHCPv6 PD size.
+            - wan_ipv6_dns_preference (string): WAN IPv6 DNS source: 'auto' or 'manual'.
+            - wan_ipv6_dns1 (string): Primary WAN IPv6 DNS server.
+            - wan_ipv6_dns2 (string): Secondary WAN IPv6 DNS server.
         confirm (bool): Must be set to `True` to execute. Defaults to `False`.
 
     Important Constraints:

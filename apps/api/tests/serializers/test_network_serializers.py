@@ -84,6 +84,41 @@ def test_network_serializer_shape() -> None:
     assert out["enabled"] is True
 
 
+def test_network_serializer_wan_ipv6_fields() -> None:
+    """WAN IPv6 fields round-trip through the Strawberry from_manager_output -> to_dict.
+    Guards against a typo in any of the 9 raw.get() keys (which would silently null the
+    GraphQL/REST field; cross-layer symmetry checks the field name, not the .get() key)."""
+    from unifi_api.graphql.types.network.network import Network
+
+    class FakeNetwork:
+        raw = {
+            "_id": "wan2",
+            "name": "Xfinity",
+            "purpose": "wan",
+            "enabled": True,
+            "ipv6_enabled": True,
+            "wan_type_v6": "disabled",
+            "ipv6_setting_preference": "manual",
+            "ipv6_wan_delegation_type": "none",
+            "wan_dhcpv6_pd_size": 64,
+            "wan_dhcpv6_pd_size_auto": False,
+            "wan_ipv6_dns_preference": "auto",
+            "wan_ipv6_dns1": "2001:4860:4860::8888",
+            "wan_ipv6_dns2": "2001:4860:4860::8844",
+        }
+
+    out = Network.from_manager_output(FakeNetwork()).to_dict()
+    assert out["ipv6_enabled"] is True
+    assert out["wan_type_v6"] == "disabled"
+    assert out["ipv6_setting_preference"] == "manual"
+    assert out["ipv6_wan_delegation_type"] == "none"
+    assert out["wan_dhcpv6_pd_size"] == 64
+    assert out["wan_dhcpv6_pd_size_auto"] is False
+    assert out["wan_ipv6_dns_preference"] == "auto"
+    assert out["wan_ipv6_dns1"] == "2001:4860:4860::8888"
+    assert out["wan_ipv6_dns2"] == "2001:4860:4860::8844"
+
+
 def test_firewall_rule_serializer_shape() -> None:
     """Phase 6 PR2 Task 22 — projection moved to a Strawberry type. Same dict
     shape contract as the old serializer; verified via Type.to_dict()."""

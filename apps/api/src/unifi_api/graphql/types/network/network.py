@@ -89,6 +89,16 @@ class Network:
     igmp_proxy_for: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     mac_override_enabled: bool | None
     wan_ip_aliases: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    # WAN uplink — IPv6
+    ipv6_enabled: bool | None
+    wan_type_v6: str | None
+    ipv6_setting_preference: str | None
+    ipv6_wan_delegation_type: str | None
+    wan_dhcpv6_pd_size: int | None
+    wan_dhcpv6_pd_size_auto: bool | None
+    wan_ipv6_dns_preference: str | None
+    wan_ipv6_dns1: str | None
+    wan_ipv6_dns2: str | None
 
     # Context for relationship edges — NOT in SDL, NOT in to_dict().
     _controller_id: strawberry.Private[str | None] = None
@@ -161,6 +171,15 @@ class Network:
             igmp_proxy_for=raw.get("igmp_proxy_for"),
             mac_override_enabled=raw.get("mac_override_enabled"),
             wan_ip_aliases=raw.get("wan_ip_aliases"),
+            ipv6_enabled=raw.get("ipv6_enabled"),
+            wan_type_v6=raw.get("wan_type_v6"),
+            ipv6_setting_preference=raw.get("ipv6_setting_preference"),
+            ipv6_wan_delegation_type=raw.get("ipv6_wan_delegation_type"),
+            wan_dhcpv6_pd_size=raw.get("wan_dhcpv6_pd_size"),
+            wan_dhcpv6_pd_size_auto=raw.get("wan_dhcpv6_pd_size_auto"),
+            wan_ipv6_dns_preference=raw.get("wan_ipv6_dns_preference"),
+            wan_ipv6_dns1=raw.get("wan_ipv6_dns1"),
+            wan_ipv6_dns2=raw.get("wan_ipv6_dns2"),
         )
 
     def to_dict(self) -> dict:
