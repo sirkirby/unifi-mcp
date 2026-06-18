@@ -175,6 +175,13 @@ logger.info("Firewall policy response: %s", json.dumps(response))
 logger.debug("Firewall policy response: %s", json.dumps(response))
 ```
 
+**No-issue-refs ban extends to test docstrings and comment strings:** Hardcoded `#NNN` GitHub
+issue or PR numbers embedded in test docstrings, pytest parameterize IDs, or inline comment
+strings are banned under the same no-issue-refs rule as source code. These literals survive into
+the package wheel and create dangling stale references that are invisible to the f-string logger
+scanner. When the PR touches test files, scan them manually for `#\d+` embedded in string
+literals and docstrings.
+
 **Why this is a hard ban:** F-string loggers eagerly evaluate all arguments even when the log
 level is suppressed. On deployments with debug logging disabled, this creates unnecessary overhead
 on every suppressed call.
@@ -254,6 +261,14 @@ python scripts/live_smoke.py --server all --phase safe
 
 **What "passing" means:** each tool returns a structurally valid response; no unexpected errors
 or stack traces; list tools return at least the expected schema shape even with no controller objects.
+
+**Independent maintainer smoke is mandatory — contributor's run does not substitute:** Even when a
+contributor has already run live smoke tests and embedded results in the PR body, the maintainer
+must run a full independent validation suite. Contributor runs confirm the code works in their
+environment; maintainer runs confirm it against the project's reference hardware and catch
+environment-specific divergence that the contributor cannot reproduce. This is a non-optional
+standing rule. Reference: PR #356 (level99 ran smoke pre-submission; maintainer still ran full
+independent suite before merge).
 
 **Gotcha:** A tool already broken before the PR is still your responsibility to flag. Don't
 silently skip known-broken tools — note them explicitly in the PR description.
@@ -579,7 +594,7 @@ collecting this context at first filing is essential.
 ### Required Fields (never make optional)
 
 | Field | Type | Why required |
-|-------|------|--------------| 
+|-------|------|--------------|
 | Controller hardware | Dropdown | API behavior varies by hardware family |
 | UniFi OS version | Text | Firmware version determines which API fields are present |
 | Install method | Text | Determines whether aiounifi version is pinned vs. flexible |
@@ -647,6 +662,7 @@ developer correctly pushed back. Always verify with live reproduction before mer
 | Design fit (Gate 0) | Feature PR primary | Scope, duplication, project intent | Mechanical gates pass but tool is out of scope |
 | Ruff lint (Gate 1A) | Hard block | Output of `make lint` | Lint violations not run or not fixed |
 | F-string loggers (Gate 1B) | Hard block | `*_manager.py` | Manager layer even when tool layer is clean; full-payload calls promoted to INFO |
+| No-issue-refs in test strings (Gate 1B) | Hard block | Test docstrings and comment strings in PR diff | `#NNN` literals in pytest docstrings/parameterize IDs invisible to logger scanner |
 | Pydantic model wiring (Gate 2) | Critical (silent) | `unifi-core/models/<domain>.py` + tool `to_controller_update` call | Domain model exists but tool bypasses it with raw dict |
 | Doc site count (Gate 3) | Ordering gate | Doc site entry count | Updated after merge instead of before |
 | Shared pydantic model defaults (Gate 4) | Hard block | `<Domain>Base` model in `unifi-core` | Non-None defaults on shared base model fields silently overwrite update-tool fields |
@@ -655,6 +671,7 @@ developer correctly pushed back. Always verify with live reproduction before mer
 | mergeStateStatus:BLOCKED (Step 4) | Blocking | `gh pr view --json mergeStateStatus,reviewDecision` | Merging when protection rules block despite mergeable:MERGEABLE |
 | AI-Bot vs human (Step 1.5b) | Precedent gate | Issue tracker + PR scope | Merging bot PRs with parallel in-house work; missing credit for human contributors |
 | Live smoke tests (Step 1.5) | Validation requirement | `scripts/live_smoke.py` output | Approval without actual live controller tests; mock-only validation |
+| Independent maintainer smoke (Step 1.5) | Non-optional standing rule | Maintainer's own smoke run (not contributor's) | Accepting contributor's smoke results without running independent suite |
 | Plugin invokes published package (Step 1.5) | Coverage gap | MCP plugin tool calls during PR branch validation | Verifying branch-local fix via plugin before publishing; fix appears absent |
 | Enum-hint PRs (Step 1.5) | Coverage gap | Targeted script with explicit enum args | Harness defaults miss all constrained parameter paths |
 | Hardware-gated deferral (Step 1.5) | Deferral gate | Four-condition checklist | Blocking merge on hardware-absent failures without documenting deferral |
