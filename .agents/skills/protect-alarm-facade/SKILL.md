@@ -64,9 +64,9 @@ AI-NL alarms — agents saw a partial picture with no signal.
 await self._api.api_request(api_path="/api/v2/alarms/", url="...")
 ```
 
-**Verify with a live round-trip before committing to a schema.** The live check on
-`10.29.13.23` confirmed: 53 UUIDv7 rules on v2, 52 Mongo ObjectID rules on legacy (one
-AI-NL rule exists only in v2).
+**Verify with a live round-trip before committing to a schema.** A live check on a
+v2-migrated console confirmed the asymmetry: 53 UUIDv7 rules on v2, 52 Mongo ObjectID
+rules on legacy (one AI-NL rule exists only in v2).
 
 **Next dual-surface candidate:** Arm/disarm profiles (`/api/v2/alarms/profiles`) follow
 the same pattern. Apply this same procedure when implementing profile tools.

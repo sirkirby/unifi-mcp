@@ -191,13 +191,13 @@ def test_access_system_info_and_health() -> None:
         {
             "source": "access-proxy",
             "version": 4,
-            "host": {"device_type": "UNVR", "ip": "10.29.13.23"},
+            "host": {"device_type": "UNVR", "ip": "192.0.2.10"},
             "uptime": 83622.28,
         }
     ).to_dict()
     assert nested_host_out["name"] == "access-proxy"
     assert nested_host_out["version"] == "4"
-    assert nested_host_out["hostname"] == "10.29.13.23"
+    assert nested_host_out["hostname"] == "192.0.2.10"
     assert nested_host_out["uptime"] == 83622
 
     health_sample = {

@@ -73,7 +73,7 @@ class TestSystemInfoFromController:
                 "version": 4,
                 "host": {
                     "device_type": "UNVR",
-                    "ip": "10.29.13.23",
+                    "ip": "192.0.2.10",
                     "uptime": 83622.28,
                 },
                 "uptime": 83622.28,
@@ -81,7 +81,7 @@ class TestSystemInfoFromController:
         )
         assert info.name == "Access"
         assert info.version == "4"
-        assert info.hostname == "10.29.13.23"
+        assert info.hostname == "192.0.2.10"
         assert info.uptime == 83622
 
     def test_partial_dict(self) -> None:
