@@ -5,12 +5,16 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-from unifi_core.policy_gate import PolicyGateChecker, check_deprecated_env_vars, resolve_permission_mode
+from unifi_core.policy_gate import (
+    _FALSY,
+    _TRUTHY,
+    PolicyGateChecker,
+    check_deprecated_env_vars,
+    resolve_permission_mode,
+)
 
 logger = logging.getLogger(__name__)
 
-_TRUTHY = frozenset(("true", "1", "yes", "on"))
-_FALSY = frozenset(("false", "0", "no", "off"))
 _CONFIG_PATH = ("policy", "response", "redact_sensitive_fields")
 _CONFIG_LABEL = ".".join(_CONFIG_PATH)
 
@@ -36,7 +40,10 @@ def should_redact_sensitive_fields(
         "UNIFI_REDACT_SENSITIVE_FIELDS",
     ):
         value = env_values.get(name)
-        if value is not None:
+        # An empty / whitespace-only value is treated as unset so it falls
+        # through to the next precedence tier rather than masking a
+        # config-level disable (and avoids a spurious invalid-value warning).
+        if value is not None and value.strip():
             return _parse_policy_bool(value, source=name)
 
     config_value = _get_nested_config_value(config, _CONFIG_PATH)

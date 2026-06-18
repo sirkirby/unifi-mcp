@@ -38,14 +38,9 @@ from unifi_core.network.models.wlans import (
     to_controller_update as wlan_to_update,
 )
 from unifi_core.redaction import redact_sensitive_fields
-from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
-from unifi_network_mcp.runtime import config, network_manager, server
+from unifi_network_mcp.runtime import network_manager, server, should_redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
-
-
-def _should_redact_sensitive_fields() -> bool:
-    return should_redact_response_sensitive_fields("network", config)
 
 
 @server.tool(
@@ -286,7 +281,7 @@ async def get_network_details(
         }
     }
     """
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         if not network_id:
             return {"success": False, "error": "network_id is required"}
@@ -557,7 +552,7 @@ async def update_network(
         }
     """
     logger.info("unifi_update_network tool called (network_id=%s, confirm=%s)", network_id, confirm)
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     if not network_id:
         return {"success": False, "error": "network_id is required"}
     if not update_data:
@@ -725,7 +720,7 @@ async def create_network(
     - details (object): Details of the created network
     - error (string): Error message if unsuccessful
     """
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     # Filter input to known mutable fields
     validated_data = network_to_update(network_data) if network_data else {}
     # Supplement with any required-on-create fields that to_controller_update might drop
@@ -988,7 +983,7 @@ async def get_wlan_details(
         }
     }
     """
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         if not wlan_id:
             return {"success": False, "error": "wlan_id is required"}
@@ -1063,7 +1058,7 @@ async def update_wlan(
             "details": { ... updated WLAN details ... }
         }
     """
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     if not wlan_id:
         return {"success": False, "error": "wlan_id is required"}
     if not update_data:
@@ -1193,7 +1188,7 @@ async def create_wlan(
     - details (object): Details of the created WLAN
     - error (string): Error message if unsuccessful
     """
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     # Filter input to known mutable fields via pydantic model
     from unifi_core.network.models.wlans import Wlan as WlanModel
 
@@ -1294,7 +1289,7 @@ async def delete_wlan(
     ] = False,
 ) -> Dict[str, Any]:
     """Delete a WLAN/SSID. All devices using this SSID will be disconnected."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     if not confirm:
         # Fetch current WLAN details to show what will be deleted
         try:

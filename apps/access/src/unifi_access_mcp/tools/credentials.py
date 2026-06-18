@@ -10,7 +10,7 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
-from unifi_access_mcp.runtime import config, credential_manager, server
+from unifi_access_mcp.runtime import credential_manager, server, should_redact_sensitive_fields
 from unifi_core.access.models._actions import RevokeCredentialInput
 from unifi_core.access.models.credentials import (
     Credential,
@@ -24,13 +24,8 @@ from unifi_core.access.models.credentials import (
 from unifi_core.confirmation import create_preview, preview_response
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.redaction import redact_sensitive_fields
-from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
 
 logger = logging.getLogger(__name__)
-
-
-def _should_redact_sensitive_fields() -> bool:
-    return should_redact_response_sensitive_fields("access", config)
 
 
 @server.tool(
@@ -46,7 +41,7 @@ def _should_redact_sensitive_fields() -> bool:
 async def access_list_credentials() -> Dict[str, Any]:
     """List all credentials."""
     logger.info("access_list_credentials tool called")
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         raw_list = await credential_manager.list_credentials()
         credentials = [credential_from_controller(raw).model_dump(exclude_none=True) for raw in raw_list]
@@ -75,7 +70,7 @@ async def access_get_credential(
 ) -> Dict[str, Any]:
     """Get detailed credential information by ID."""
     logger.info("access_get_credential tool called for %s", credential_id)
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         raw = await credential_manager.get_credential(credential_id)
         shaped = credential_from_controller(raw).model_dump(exclude_none=True)
@@ -125,7 +120,7 @@ async def access_create_credential(
 ) -> Dict[str, Any]:
     """Create a credential with preview/confirm."""
     logger.info("access_create_credential tool called (type=%s, confirm=%s)", credential_type, confirm)
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         if not credential_data:
             return {"success": False, "error": "No credential data provided."}

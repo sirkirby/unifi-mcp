@@ -28,6 +28,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from unifi_core.auth import UniFiAuth
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, configure_mcp_server_metadata
+from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
 from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
 from unifi_network_mcp.bootstrap import load_config, logger
 
@@ -311,5 +312,16 @@ routing_manager = get_routing_manager()
 traffic_flow_manager = get_traffic_flow_manager()
 traffic_route_manager = get_traffic_route_manager()
 tool_registry = get_tool_registry()
+
+
+def should_redact_sensitive_fields() -> bool:
+    """Whether Network MCP responses should redact sensitive fields.
+
+    Policy-resolved per call (env → config) so the surface-specific and global
+    ``UNIFI_*REDACT_SENSITIVE_FIELDS`` overrides both take effect. Binds the
+    ``"network"`` prefix + config in one place for the tool modules.
+    """
+    return should_redact_response_sensitive_fields("network", config)
+
 
 logger.debug("runtime.py: shared singletons initialised")

@@ -27,14 +27,9 @@ from unifi_core.protect.models.cameras import (
     to_controller_update as camera_to_controller_update,
 )
 from unifi_core.redaction import redact_sensitive_fields
-from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
-from unifi_protect_mcp.runtime import camera_manager, config, server
+from unifi_protect_mcp.runtime import camera_manager, server, should_redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
-
-
-def _should_redact_sensitive_fields() -> bool:
-    return should_redact_response_sensitive_fields("protect", config)
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +157,7 @@ async def protect_get_camera_streams(
         streams = await camera_manager.get_camera_streams(camera_id)
         return redact_sensitive_fields(
             {"success": True, "data": streams},
-            redact_sensitive=_should_redact_sensitive_fields(),
+            redact_sensitive=should_redact_sensitive_fields(),
         )
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}

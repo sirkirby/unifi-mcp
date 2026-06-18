@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.redaction import redact_sensitive_fields
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -237,9 +238,7 @@ async def get_camera_streams(
     else:
         registry = request.app.state.serializer_registry
         serializer = registry.serializer_for_tool("protect_get_camera_streams")
-        data = serializer.serialize_action(
-            streams, tool_name="protect_get_camera_streams", redact_sensitive=redact_sensitive
-        )["data"]
+        data = redact_sensitive_fields(serializer.serialize(streams), redact_sensitive=redact_sensitive)
         hint = registry.render_hint_for_tool("protect_get_camera_streams")
     return {
         "data": data,

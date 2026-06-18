@@ -22,14 +22,9 @@ from unifi_core.network.models.firewall import (
     to_controller_update as fw_to_update,
 )
 from unifi_core.redaction import redact_sensitive_fields
-from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
-from unifi_network_mcp.runtime import config, firewall_manager, server
+from unifi_network_mcp.runtime import firewall_manager, server, should_redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
-
-
-def _should_redact_sensitive_fields() -> bool:
-    return should_redact_response_sensitive_fields("network", config)
 
 
 # Legacy V1 firewall fields removed in #210. The V1 endpoint is dead on
@@ -235,7 +230,7 @@ async def get_firewall_policy_details(
         }
     }
     """
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         if not policy_id:
             return {"success": False, "error": "policy_id is required"}
@@ -433,7 +428,7 @@ async def create_firewall_policy(
     ] = False,
 ) -> Dict[str, Any]:
     """Create a V2 zone-based firewall policy."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     if not isinstance(policy_data, dict) or not policy_data:
         return {
             "success": False,
@@ -618,7 +613,7 @@ async def update_firewall_policy(
     ] = False,
 ) -> Dict[str, Any]:
     """Update specific fields of an existing V2 zone-based firewall policy. Requires confirmation."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     if not policy_id:
         return {"success": False, "error": "policy_id is required"}
     if not update_data:
@@ -960,7 +955,7 @@ async def get_firewall_group_details(
     group_id: Annotated[str, Field(description="The unique identifier (_id) of the firewall group")],
 ) -> Dict[str, Any]:
     """Gets a specific firewall group."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         if not group_id:
             return {"success": False, "error": "group_id is required"}
@@ -1009,7 +1004,7 @@ async def create_firewall_group(
     ] = False,
 ) -> Dict[str, Any]:
     """Creates a new firewall group."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     group_data = {
         "name": name,
         "group_type": group_type,
@@ -1063,7 +1058,7 @@ async def update_firewall_group(
     ] = False,
 ) -> Dict[str, Any]:
     """Updates an existing firewall group."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     if not confirm:
         return redact_sensitive_fields(
             create_preview(

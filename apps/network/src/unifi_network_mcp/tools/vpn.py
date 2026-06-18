@@ -13,14 +13,9 @@ from pydantic import Field
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.redaction import redact_sensitive_fields
-from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
-from unifi_network_mcp.runtime import config, server, vpn_manager
+from unifi_network_mcp.runtime import server, should_redact_sensitive_fields, vpn_manager
 
 logger = logging.getLogger(__name__)
-
-
-def _should_redact_sensitive_fields() -> bool:
-    return should_redact_response_sensitive_fields("network", config)
 
 
 @server.tool(
@@ -30,7 +25,7 @@ def _should_redact_sensitive_fields() -> bool:
 )
 async def list_vpn_clients() -> Dict[str, Any]:
     """Implementation for listing VPN clients."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         clients = await vpn_manager.get_vpn_clients()
         return redact_sensitive_fields(
@@ -58,7 +53,7 @@ async def get_vpn_client_details(
     ],
 ) -> Dict[str, Any]:
     """Implementation for getting VPN client details."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         client = await vpn_manager.get_vpn_client_details(client_id)
         return redact_sensitive_fields(
@@ -117,7 +112,7 @@ async def update_vpn_client_state(
 )
 async def list_vpn_servers() -> Dict[str, Any]:
     """Implementation for listing VPN servers."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         servers = await vpn_manager.get_vpn_servers()
         return redact_sensitive_fields(
@@ -145,7 +140,7 @@ async def get_vpn_server_details(
     ],
 ) -> Dict[str, Any]:
     """Implementation for getting VPN server details."""
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         server = await vpn_manager.get_vpn_server_details(server_id)
         return redact_sensitive_fields(

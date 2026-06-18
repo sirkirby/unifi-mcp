@@ -21,14 +21,9 @@ from unifi_core.network.models.system import (
     system_info_from_controller,
 )
 from unifi_core.redaction import redact_sensitive_fields
-from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
-from unifi_network_mcp.runtime import config, server, system_manager
+from unifi_network_mcp.runtime import server, should_redact_sensitive_fields, system_manager
 
 logger = logging.getLogger(__name__)
-
-
-def _should_redact_sensitive_fields() -> bool:
-    return should_redact_response_sensitive_fields("network", config)
 
 
 # Explicitly retrieve and log the server instance to confirm it's being used
@@ -121,7 +116,7 @@ async def get_site_settings() -> Dict[str, Any]:
 async def get_snmp_settings() -> Dict[str, Any]:
     """Implementation for getting SNMP settings."""
     logger.info("unifi_get_snmp_settings tool called")
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
     try:
         settings_list = await system_manager.get_settings("snmp")
         shaped = snmp_from_controller(settings_list).model_dump(exclude_none=False)
@@ -164,7 +159,7 @@ async def update_snmp_settings(
         confirm: Must be true to apply changes. When false, returns a preview of proposed changes.
     """
     logger.info("unifi_update_snmp_settings tool called (enabled=%s, confirm=%s)", enabled, confirm)
-    redact_sensitive = _should_redact_sensitive_fields()
+    redact_sensitive = should_redact_sensitive_fields()
 
     # Redaction-marker write-back (e.g. community="***REDACTED***") is rejected
     # centrally at the MCP dispatch boundary (StrictKwargFastMCP.call_tool).
