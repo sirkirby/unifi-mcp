@@ -118,6 +118,11 @@ def is_sensitive_key(key: Any) -> bool:
     for left, right in zip(parts, parts[1:]):
         if right == "key" and left in _SENSITIVE_KEY_QUALIFIERS:
             return True
+    # "preshared" sometimes arrives underscore-split as "pre_shared" (e.g. the
+    # controller's x_ipsec_pre_shared_key field) — match that 3-gram too.
+    for first, second, third in zip(parts, parts[1:], parts[2:]):
+        if (first, second, third) == ("pre", "shared", "key"):
+            return True
     return False
 
 

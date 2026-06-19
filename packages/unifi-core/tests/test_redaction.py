@@ -128,6 +128,15 @@ def test_redacts_role_infixed_private_and_preshared_keys() -> None:
     assert is_sensitive_key("wireguard_client_public_key") is False
 
 
+def test_redacts_underscore_split_preshared_key_fields() -> None:
+    # Real UniFi networkconf field for L2TP/IPsec VPNs: "pre" and "shared" are
+    # split into separate underscore-delimited segments, so the bare
+    # "preshared" qualifier match misses it and the PSK leaks in cleartext.
+    assert is_sensitive_key("x_ipsec_pre_shared_key") is True
+    assert is_sensitive_key("ipsec_pre_shared_key") is True
+    assert is_sensitive_key("remote_pre_shared_key") is True
+
+
 def test_redacts_vpn_config_blob_fields() -> None:
     # The secret rides inside a config-blob string under an innocuous key
     # (issue #351): the whole blob field is treated as a secret (suppression).
