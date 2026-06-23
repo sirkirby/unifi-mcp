@@ -287,6 +287,22 @@ class TestSystemManagerGetFirmwareStatus:
         assert status["devices_with_updates"] == 0
         assert status["devices"][0]["update_available"] is False
 
+    @pytest.mark.asyncio
+    async def test_missing_optional_device_collection(self):
+        from unifi_core.protect.managers.system_manager import SystemManager
+
+        cam = _make_camera()
+        bs = _make_bootstrap(cameras={"c1": cam})
+        del bs.doorlocks
+        cm = MagicMock()
+        cm.client.bootstrap = bs
+
+        mgr = SystemManager(cm)
+        status = await mgr.get_firmware_status()
+
+        assert status["total_devices"] == 1
+        assert status["devices"][0]["type"] == "camera"
+
 
 # ===========================================================================
 # System tools tests

@@ -10,7 +10,7 @@ dependencies = [
     # [network] extra rather than declaring aiounifi here directly so
     # there's one source of truth.
     "unifi-core[network]>=0.4.8,<0.5",
-    "mcp[cli]>=1.27.2,<2",
+    "mcp[cli]>=1.28.0,<2",
     "aiohttp>=3.14.0",
     "pyyaml>=6.0",
     "python-dotenv>=1.2.2",

@@ -16,7 +16,7 @@ dependencies = [
 # mode hit prod historically. Versions floor at the lowest tested.
 [project.optional-dependencies]
 network = ["aiounifi>=88"]
-protect = ["uiprotect>=11.0.1"]
+protect = ["uiprotect>=14.1.0"]
 access = ["py-unifi-access>=1.1.1"]
 
 [dependency-groups]

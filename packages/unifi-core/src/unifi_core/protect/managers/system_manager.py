@@ -20,6 +20,11 @@ class SystemManager:
     def __init__(self, connection_manager: ProtectConnectionManager) -> None:
         self._cm = connection_manager
 
+    @staticmethod
+    def _bootstrap_collection(bootstrap: Any, name: str) -> Dict[str, Any]:
+        """Return a Protect bootstrap device collection when present."""
+        return getattr(bootstrap, name, None) or {}
+
     # ------------------------------------------------------------------
     # Public methods
     # ------------------------------------------------------------------
@@ -57,11 +62,11 @@ class SystemManager:
             "up_since": nvr.up_since.isoformat() if nvr.up_since else None,
             "is_updating": nvr.is_updating,
             "storage": storage_info,
-            "camera_count": len(bootstrap.cameras),
-            "light_count": len(bootstrap.lights),
-            "sensor_count": len(bootstrap.sensors),
-            "viewer_count": len(bootstrap.viewers),
-            "chime_count": len(bootstrap.chimes),
+            "camera_count": len(self._bootstrap_collection(bootstrap, "cameras")),
+            "light_count": len(self._bootstrap_collection(bootstrap, "lights")),
+            "sensor_count": len(self._bootstrap_collection(bootstrap, "sensors")),
+            "viewer_count": len(self._bootstrap_collection(bootstrap, "viewers")),
+            "chime_count": len(self._bootstrap_collection(bootstrap, "chimes")),
         }
 
     async def get_health(self) -> Dict[str, Any]:
@@ -127,13 +132,13 @@ class SystemManager:
 
         # Collect firmware info from each device category
         device_collections = {
-            "camera": bootstrap.cameras,
-            "light": bootstrap.lights,
-            "sensor": bootstrap.sensors,
-            "viewer": bootstrap.viewers,
-            "chime": bootstrap.chimes,
-            "bridge": bootstrap.bridges,
-            "doorlock": bootstrap.doorlocks,
+            "camera": self._bootstrap_collection(bootstrap, "cameras"),
+            "light": self._bootstrap_collection(bootstrap, "lights"),
+            "sensor": self._bootstrap_collection(bootstrap, "sensors"),
+            "viewer": self._bootstrap_collection(bootstrap, "viewers"),
+            "chime": self._bootstrap_collection(bootstrap, "chimes"),
+            "bridge": self._bootstrap_collection(bootstrap, "bridges"),
+            "doorlock": self._bootstrap_collection(bootstrap, "doorlocks"),
         }
 
         for category, collection in device_collections.items():

@@ -9,7 +9,7 @@ dependencies = [
     # needs every product extra. unifi-core's optional extras pull in
     # aiounifi / uiprotect / py-unifi-access transparently.
     "unifi-core[network,protect,access]>=0.4.7,<0.5",
-    "fastapi>=0.115.0",
+    "fastapi>=0.138.0",
     "uvicorn[standard]>=0.49.0",
     "sqlalchemy[asyncio]>=2.0.51",
     "alembic>=1.14.0",
@@ -19,7 +19,7 @@ dependencies = [
     "typer>=0.26.7",
     "pydantic>=2.10.0",
     "jinja2>=3.1.0",
-    "strawberry-graphql[fastapi]>=0.316.0,<0.320.0",
+    "strawberry-graphql[fastapi]>=0.319.0,<0.320.0",
     "pyyaml>=6.0",
     "omegaconf>=2.3.0",
     "python-dotenv>=1.2.2",
