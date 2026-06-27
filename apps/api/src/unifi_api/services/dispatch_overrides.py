@@ -69,6 +69,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_delete_wlan": ("network_manager", "delete_wlan"),
     "unifi_update_ap_group": ("network_manager", "update_ap_group"),
     "unifi_delete_ap_group": ("network_manager", "delete_ap_group"),
+    # Gateway (USG) settings: singleton update via fetch-merge-put.
+    "unifi_update_gateway_settings": ("gateway_settings_manager", "update_gateway_settings"),
     # Firewall: tool layer pre-fetches list to find policy by id.
     "unifi_toggle_firewall_policy": ("firewall_manager", "toggle_firewall_policy"),
     "unifi_update_firewall_policy": ("firewall_manager", "update_firewall_policy"),
@@ -201,6 +203,20 @@ def _translate_acl_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[s
     if not fields and not has_clear:
         raise ValueError("No fields to update")
     return (rule_id, to_controller_update(fields)), {}
+
+
+def _translate_gateway_settings_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Filter the gateway-settings update payload to mutable keys before dispatch.
+
+    Mirrors the ``gw_to_update`` filter the MCP tool applies
+    (``apps/network/src/unifi_network_mcp/tools/gateway_settings.py``) so the
+    ``/v1/actions`` path does not forward read-only / unknown keys into the
+    fetch-merge-put. The manager method is ``update_gateway_settings(update_data)``.
+    """
+    from unifi_core.network.models.gateway_settings import to_controller_update
+
+    update_data = args.get("update_data") or {}
+    return (to_controller_update(update_data),), {}
 
 
 def _parse_iso_datetime(value: Any) -> Any:
@@ -382,6 +398,7 @@ def _translate_get_top_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], d
 DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
     "unifi_create_acl_rule": _translate_acl_create,
     "unifi_update_acl_rule": _translate_acl_update,
+    "unifi_update_gateway_settings": _translate_gateway_settings_update,
     "protect_export_clip": _translate_export_clip,
     "protect_delete_recording": _translate_delete_recording,
     # Network — client mutations: tool uses mac_address, manager uses client_mac

@@ -4,6 +4,7 @@
 # tool: unifi_get_site_settings
 # tool: unifi_get_snmp_settings
 # tool: unifi_get_autobackup_settings
+# tool: unifi_get_gateway_settings
 # tool: unifi_list_backups
 # tool: unifi_get_event_types
 # tool: unifi_list_vouchers
@@ -162,6 +163,40 @@ async def test_autobackup_settings(tmp_path, monkeypatch):
     ab = body["data"]["network"]["autobackupSettings"]
     assert ab["enabled"] is True
     assert ab["maxCount"] == 5
+
+
+@pytest.mark.asyncio
+async def test_gateway_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network")
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "gateway_settings_manager", "get_gateway_settings"): {
+                "_id": "gw1",
+                "key": "usg",
+                "upnp_enabled": False,
+                "syn_cookies": True,
+                "dns_verification": {"primary_dns_server": "1.1.1.1"},
+                "tcp_established_timeout": 7440,
+            },
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ gatewaySettings(controller: "{cid}") {{
+            id key upnpEnabled synCookies dnsVerification tcpEstablishedTimeout
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    gw = body["data"]["network"]["gatewaySettings"]
+    assert gw["key"] == "usg"
+    assert gw["upnpEnabled"] is False
+    assert gw["synCookies"] is True
+    assert gw["tcpEstablishedTimeout"] == 7440
 
 
 @pytest.mark.asyncio

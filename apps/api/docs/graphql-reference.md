@@ -771,6 +771,49 @@ type FirmwareStatus {
   devicesWithUpdates: Int
 }
 
+"""UniFi gateway (USG) security / NAT / connection-tracking settings."""
+type GatewaySettings {
+  id: ID
+  key: String
+  geoIpFilteringEnabled: Boolean
+  geoIpFilteringBlock: String
+  geoIpFilteringCountries: String
+  geoIpFilteringTrafficDirection: String
+  synCookies: Boolean
+  broadcastPing: Boolean
+  receiveRedirects: Boolean
+  sendRedirects: Boolean
+  dnsVerification: JSON
+  upnpEnabled: Boolean
+  upnpNatPmpEnabled: Boolean
+  upnpSecureMode: Boolean
+  upnpWanInterface: String
+  mssClamp: String
+  ftpModule: Boolean
+  greModule: Boolean
+  h323Module: Boolean
+  pptpModule: Boolean
+  sipModule: Boolean
+  tftpModule: Boolean
+  offloadAccounting: Boolean
+  offloadL2Blocking: Boolean
+  offloadSch: Boolean
+  icmpTimeout: Int
+  otherTimeout: Int
+  udpStreamTimeout: Int
+  udpOtherTimeout: Int
+  tcpEstablishedTimeout: Int
+  tcpCloseTimeout: Int
+  tcpCloseWaitTimeout: Int
+  tcpFinWaitTimeout: Int
+  tcpLastAckTimeout: Int
+  tcpSynRecvTimeout: Int
+  tcpSynSentTimeout: Int
+  tcpTimeWaitTimeout: Int
+  timeoutSettingPreference: String
+  unbindWanMonitors: Boolean
+}
+
 """Service health snapshot — smoke field for the GraphQL endpoint."""
 type HealthSnapshot {
   ok: Boolean!
@@ -1176,6 +1219,9 @@ type NetworkQuery {
 
   """Get SNMP settings."""
   snmpSettings(controller: ID!, site: String! = "default"): SnmpSettings
+
+  """Get gateway (USG) security / NAT / connection-tracking settings."""
+  gatewaySettings(controller: ID!, site: String! = "default"): GatewaySettings
 
   """Get the controller's event-type prefix catalog."""
   eventTypes(controller: ID!, site: String! = "default"): EventTypes
@@ -2114,6 +2160,7 @@ Read-only access to UniFi Network resources.
 - `firewallPolicy: FirewallRule`  — Look up a single firewall policy/rule by id.
 - `firewallPolicyOrdering: FirewallPolicyOrdering!`  — Get user-defined firewall policy ordering for a source/destination zone pair. Returns policy IDs from the UniFi integration API (UUIDs); these IDs are scoped to the ordering tool family and do NOT correspond to the policy IDs returned by firewallPolicies or other controller-API firewall queries. Requires a UniFi API key (UNIFI_API_KEY).
 - `firewallZones: [FirewallZone!]!`  — List firewall zones (typically a small flat list — no pagination).
+- `gatewaySettings: GatewaySettings`  — Get gateway (USG) security / NAT / connection-tracking settings.
 - `gatewayStats: [StatPoint!]!`  — Gateway stats timeseries.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).
 - `lldpNeighbors: LldpNeighbors`  — Get LLDP neighbors reported by a switch.

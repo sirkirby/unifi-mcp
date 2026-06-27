@@ -1,5 +1,5 @@
 {
-  "count": 178,
+  "count": 180,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -63,6 +63,7 @@
     "unifi_get_firewall_group_details": "unifi_network_mcp.tools.firewall",
     "unifi_get_firewall_policy_details": "unifi_network_mcp.tools.firewall",
     "unifi_get_firewall_policy_ordering": "unifi_network_mcp.tools.firewall",
+    "unifi_get_gateway_settings": "unifi_network_mcp.tools.gateway_settings",
     "unifi_get_gateway_stats": "unifi_network_mcp.tools.stats",
     "unifi_get_ips_events": "unifi_network_mcp.tools.stats",
     "unifi_get_lldp_neighbors": "unifi_network_mcp.tools.switch",
@@ -161,6 +162,7 @@
     "unifi_update_dns_record": "unifi_network_mcp.tools.dns",
     "unifi_update_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_update_firewall_policy": "unifi_network_mcp.tools.firewall",
+    "unifi_update_gateway_settings": "unifi_network_mcp.tools.gateway_settings",
     "unifi_update_network": "unifi_network_mcp.tools.network",
     "unifi_update_oon_policy": "unifi_network_mcp.tools.oon",
     "unifi_update_port_forward": "unifi_network_mcp.tools.port_forwards",
@@ -6432,6 +6434,90 @@
         }
       },
       "title": "Get Firewall Policy Ordering"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Get the gateway (USG) settings: security (GeoIP filtering, SYN cookies, ICMP redirects, DNS verification), NAT/UPnP (UPnP, NAT-PMP, MSS clamp), connection-tracking ALG modules (FTP/GRE/H.323/PPTP/SIP/TFTP), hardware offloading, and conntrack timeouts. Read-only; use unifi_update_gateway_settings to change values.",
+      "name": "unifi_get_gateway_settings",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Gateway Settings"
     },
     {
       "annotations": {
@@ -15943,6 +16029,106 @@
         }
       },
       "title": "Update Firewall Policy"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Update gateway (USG) settings. Pass only the fields you want to change; current values (including nested sub-objects) are automatically preserved via deep-merge. Security: geo_ip_filtering_enabled (bool), geo_ip_filtering_block ('block'/'allow'), geo_ip_filtering_countries (CSV ISO codes), geo_ip_filtering_traffic_direction ('both'/'ingress'/'egress'), syn_cookies (bool), broadcast_ping (bool), receive_redirects (bool), send_redirects (bool), dns_verification (object). NAT/UPnP: upnp_enabled (bool), upnp_nat_pmp_enabled (bool), upnp_secure_mode (bool), upnp_wan_interface (str), mss_clamp ('auto'/'custom'/'disabled'). ALG modules: ftp_module, gre_module, h323_module, pptp_module, sip_module, tftp_module (bool). Offloading: offload_accounting (bool), offload_l2_blocking (bool), offload_sch (bool). Conntrack timeouts (int seconds): icmp_timeout, other_timeout, udp_stream_timeout, udp_other_timeout, tcp_established_timeout, tcp_close_timeout, tcp_close_wait_timeout, tcp_fin_wait_timeout, tcp_last_ack_timeout, tcp_syn_recv_timeout, tcp_syn_sent_timeout, tcp_time_wait_timeout, timeout_setting_preference ('auto'/'manual'). Misc: unbind_wan_monitors (bool). WARNING: changing security/NAT settings (UPnP/NAT-PMP, GeoIP filtering, DNS verification, SYN cookies, broadcast-ping, ICMP redirects, MSS clamp, offloading, or conntrack timeouts) affects gateway-wide security/NAT/reachability. Requires confirmation.",
+      "name": "unifi_update_gateway_settings",
+      "permission_action": "update",
+      "permission_category": "gateway_settings",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, applies the update. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "update_data": {
+              "description": "Dictionary of gateway settings fields to update. See tool description.",
+              "type": "object"
+            }
+          },
+          "required": [
+            "update_data"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Update Gateway Settings"
     },
     {
       "annotations": {
