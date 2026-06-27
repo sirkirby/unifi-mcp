@@ -96,3 +96,21 @@ def test_live_smoke_known_visitor_endpoint_404_requires_full_signature():
             '"error":"you entered no-man zone"}'
         ),
     )
+
+
+def test_live_smoke_known_firewall_policy_rejection_requires_controller_code():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+
+    assert runner.expected_known_controller_issue(
+        "unifi_create_firewall_policy",
+        (
+            "Failed to create firewall policy: api.err.FirewallPolicyCreateRespondTrafficPolicyNotAllowed "
+            "Firewall policy create respond traffic not allowed"
+        ),
+    )
+    assert not runner.expected_known_controller_issue(
+        "unifi_create_firewall_policy",
+        "Failed to create firewall policy: Firewall policy create respond traffic not allowed",
+    )
