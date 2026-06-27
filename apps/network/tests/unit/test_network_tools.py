@@ -582,10 +582,11 @@ class TestUpdateWlanNetworkconfId:
 
             result = await update_wlan("w1", {"networkconf_id": "new-net"}, confirm=True)
 
-        assert result.get("error") != "Update data is effectively empty or invalid."
         assert result["success"] is True
+        assert "networkconf_id" in result["updated_fields"]
         payload = mock_mgr.update_wlan.call_args[0][1]
         assert payload.get("networkconf_id") == "new-net"
+        assert "network_id" not in payload
 
     @pytest.mark.asyncio
     async def test_networkconf_id_preview_is_not_rejected(self):
@@ -598,6 +599,6 @@ class TestUpdateWlanNetworkconfId:
 
             result = await update_wlan("w1", {"networkconf_id": "new-net"}, confirm=False)
 
-        assert result.get("error") != "Update data is effectively empty or invalid."
         assert "preview" in result
+        assert result["preview"]["proposed"]["networkconf_id"] == "new-net"
         mock_mgr.update_wlan.assert_not_called()

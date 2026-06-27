@@ -178,3 +178,9 @@ class TestToControllerUpdate:
         result = to_controller_update({"networkconf_id": "net-3", "enabled": True})
         assert result.get("networkconf_id") == "net-3"
         assert result.get("enabled") is True
+
+    def test_network_id_takes_precedence_when_both_passed(self) -> None:
+        """Explicit model field name wins over the controller alias regardless of insertion order."""
+        result = to_controller_update({"networkconf_id": "alias", "network_id": "explicit"})
+        assert result.get("networkconf_id") == "explicit"
+        assert "network_id" not in result
