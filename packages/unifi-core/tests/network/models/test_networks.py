@@ -22,8 +22,12 @@ class TestFieldSets:
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
 
     def test_mutable_fields_contains_multicast_fields(self) -> None:
-        for field in ("igmp_snooping", "mdns_enabled", "igmp_flood_unknown_multicast"):
+        for field in ("igmp_snooping", "igmp_flood_unknown_multicast"):
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
+
+    def test_mdns_enabled_is_read_only(self) -> None:
+        assert "mdns_enabled" in READ_ONLY_FIELDS
+        assert "mdns_enabled" not in MUTABLE_FIELDS
 
     def test_mutable_fields_contains_wan_fields(self) -> None:
         for field in (
