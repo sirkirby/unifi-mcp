@@ -623,9 +623,41 @@ class TestUpdateNetworkReadOnlyFields:
         assert "read-only" in result["error"]
 
     @pytest.mark.asyncio
+    async def test_mdns_enabled_read_only_error_in_preview_mode(self):
+        """confirm=False also returns the read-only error — the check fires before
+        the preview gate so users get feedback without a wasted round-trip."""
+        from unifi_network_mcp.tools.network import update_network
+
+        result = await update_network(
+            network_id="net001",
+            update_data={"mdns_enabled": True},
+            confirm=False,
+        )
+
+        assert result["success"] is False
+        assert "mdns_enabled" in result["error"]
+        assert "read-only" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_unknown_field_gives_generic_error_not_read_only(self):
+        """Completely unrecognised fields produce the generic empty-payload error,
+        not the read-only error — the two code paths must stay distinct."""
+        from unifi_network_mcp.tools.network import update_network
+
+        result = await update_network(
+            network_id="net001",
+            update_data={"totally_unknown_field": "value"},
+            confirm=True,
+        )
+
+        assert result["success"] is False
+        assert "No valid mutable fields" in result["error"]
+        assert "read-only" not in result["error"]
+
+    @pytest.mark.asyncio
     async def test_mdns_enabled_with_valid_field_proceeds(self):
-        """When mdns_enabled is mixed with a valid field, the update proceeds
-        and mdns_enabled is silently excluded from the payload."""
+        """When mdns_enabled is mixed with a valid field, the update proceeds,
+        mdns_enabled is excluded from the payload, and absent from updated_fields."""
         updated = {**SAMPLE_NETWORK, "name": "Updated LAN"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_network_details = AsyncMock(side_effect=[SAMPLE_NETWORK, updated])
@@ -643,3 +675,5 @@ class TestUpdateNetworkReadOnlyFields:
         payload = mock_mgr.update_network.call_args[0][1]
         assert "mdns_enabled" not in payload
         assert payload.get("name") == "Updated LAN"
+        assert "mdns_enabled" not in result["updated_fields"]
+        assert "name" in result["updated_fields"]

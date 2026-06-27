@@ -29,6 +29,10 @@ class TestFieldSets:
         assert "mdns_enabled" in READ_ONLY_FIELDS
         assert "mdns_enabled" not in MUTABLE_FIELDS
 
+    def test_to_controller_update_filters_mdns_enabled(self) -> None:
+        result = to_controller_update({"mdns_enabled": False})
+        assert result == {}, f"mdns_enabled should be filtered out, got: {result}"
+
     def test_mutable_fields_contains_wan_fields(self) -> None:
         for field in (
             "wan_type",
