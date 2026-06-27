@@ -281,7 +281,12 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     Maps model field names to controller API field names.
+    Accepts ``networkconf_id`` as an alias for ``network_id`` so callers can
+    pass either the controller field name or the model field name.
     """
+    if "networkconf_id" in fields and "network_id" not in fields:
+        fields = {**fields, "network_id": fields["networkconf_id"]}
+        fields = {k: v for k, v in fields.items() if k != "networkconf_id"}
     result = {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
     # Map network_id → networkconf_id
     if "network_id" in result:

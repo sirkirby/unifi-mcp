@@ -1193,7 +1193,9 @@ async def create_wlan(
     from unifi_core.network.models.wlans import Wlan as WlanModel
 
     try:
-        wlan_model = WlanModel(**{k: v for k, v in wlan_data.items() if k in WLAN_MUTABLE_FIELDS})
+        # Accept networkconf_id as an alias for network_id (controller name vs model name)
+        normalized = {("network_id" if k == "networkconf_id" else k): v for k, v in wlan_data.items()}
+        wlan_model = WlanModel(**{k: v for k, v in normalized.items() if k in WLAN_MUTABLE_FIELDS})
     except Exception as exc:
         return {"success": False, "error": f"Invalid WLAN data: {exc}"}
     validated_data = wlan_to_create(wlan_model)

@@ -510,3 +510,94 @@ class TestWlanToolRedaction:
         )
 
         assert result["preview"]["will_create"]["x_passphrase"] == REDACTED
+
+
+class TestCreateWlanNetworkconfId:
+    """create_wlan must forward networkconf_id to the manager regardless of whether
+    the caller uses the controller field name (networkconf_id) or the model field name (network_id)."""
+
+    @pytest.mark.asyncio
+    async def test_networkconf_id_alias_reaches_manager(self):
+        created = {"_id": "w99", "name": "HomeSSID", "networkconf_id": "net-abc"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.create_wlan = AsyncMock(return_value=created)
+            mock_mgr._connection.site = "default"
+
+            from unifi_network_mcp.tools.network import create_wlan
+
+            result = await create_wlan(
+                {
+                    "name": "HomeSSID",
+                    "security": "wpapsk",
+                    "x_passphrase": "password1",
+                    "networkconf_id": "net-abc",
+                },
+                confirm=True,
+            )
+
+        assert result["success"] is True
+        payload = mock_mgr.create_wlan.call_args[0][0]
+        assert payload.get("networkconf_id") == "net-abc", (
+            "networkconf_id was silently dropped before reaching the manager"
+        )
+        assert "network_id" not in payload
+
+    @pytest.mark.asyncio
+    async def test_network_id_model_name_also_works(self):
+        created = {"_id": "w99", "name": "HomeSSID", "networkconf_id": "net-abc"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.create_wlan = AsyncMock(return_value=created)
+            mock_mgr._connection.site = "default"
+
+            from unifi_network_mcp.tools.network import create_wlan
+
+            result = await create_wlan(
+                {
+                    "name": "HomeSSID",
+                    "security": "wpapsk",
+                    "x_passphrase": "password1",
+                    "network_id": "net-abc",
+                },
+                confirm=True,
+            )
+
+        assert result["success"] is True
+        payload = mock_mgr.create_wlan.call_args[0][0]
+        assert payload.get("networkconf_id") == "net-abc"
+
+
+class TestUpdateWlanNetworkconfId:
+    """update_wlan must accept networkconf_id (controller field name) and not return
+    'Update data is effectively empty or invalid' when it is the only field passed."""
+
+    @pytest.mark.asyncio
+    async def test_networkconf_id_alias_is_not_rejected(self):
+        current_wlan = {"_id": "w1", "name": "SSID", "networkconf_id": "old-net"}
+        updated_wlan = {"_id": "w1", "name": "SSID", "networkconf_id": "new-net"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_wlan_details = AsyncMock(side_effect=[current_wlan, updated_wlan])
+            mock_mgr.update_wlan = AsyncMock(return_value=(True, None))
+
+            from unifi_network_mcp.tools.network import update_wlan
+
+            result = await update_wlan("w1", {"networkconf_id": "new-net"}, confirm=True)
+
+        assert result.get("error") != "Update data is effectively empty or invalid."
+        assert result["success"] is True
+        payload = mock_mgr.update_wlan.call_args[0][1]
+        assert payload.get("networkconf_id") == "new-net"
+
+    @pytest.mark.asyncio
+    async def test_networkconf_id_preview_is_not_rejected(self):
+        current_wlan = {"_id": "w1", "name": "SSID", "networkconf_id": "old-net"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_wlan_details = AsyncMock(return_value=current_wlan)
+            mock_mgr.update_wlan = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_wlan
+
+            result = await update_wlan("w1", {"networkconf_id": "new-net"}, confirm=False)
+
+        assert result.get("error") != "Update data is effectively empty or invalid."
+        assert "preview" in result
+        mock_mgr.update_wlan.assert_not_called()
