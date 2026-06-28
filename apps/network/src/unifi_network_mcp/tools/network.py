@@ -23,6 +23,9 @@ from unifi_core.network.models.ap_group import (
     to_controller_update as ap_group_to_update,
 )
 from unifi_core.network.models.networks import (
+    READ_ONLY_FIELDS as NETWORK_READ_ONLY_FIELDS,
+)
+from unifi_core.network.models.networks import (
     from_controller as network_from_controller,
 )
 from unifi_core.network.models.networks import (
@@ -434,7 +437,7 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "dhcpd_wins_1 (IP), dhcpd_wins_2 (IP), dhcpd_wins_enabled (bool), dhcpd_unifi_controller (IP). "
     "DNS: domain_name (str). "
     "Multicast: igmp_snooping (bool), igmp_querier_switches (list of {switch_mac, querier_address}), "
-    "igmp_flood_unknown_multicast (bool), mdns_enabled (bool). "
+    "igmp_flood_unknown_multicast (bool). "
     "WAN (gateway uplink, purpose='wan' networks): wan_type ('dhcp'/'static'/'pppoe'/'disabled'), "
     "wan_networkgroup ('WAN'/'WAN2'), wan_dns_preference ('auto'/'manual'), "
     "wan_load_balance_type ('failover-only'/'weighted'), wan_load_balance_weight (int 0-100), "
@@ -509,7 +512,6 @@ async def update_network(
             - igmp_snooping (boolean): Enable IGMP snooping.
             - igmp_querier_switches (list): IGMP querier assignment.
             - igmp_flood_unknown_multicast (boolean): Flood unknown multicast.
-            - mdns_enabled (boolean): Enable mDNS reflection.
             WAN uplink fields (purpose='wan' networks — changing connectivity-critical ones
             surfaces a warning in the confirm-preview):
             - wan_type (string): WAN IPv4 type: 'dhcp', 'static', 'pppoe', 'disabled'.
@@ -561,6 +563,16 @@ async def update_network(
     # Translate to controller-safe mutable fields
     validated_data = network_to_update(update_data)
     if not validated_data:
+        read_only_attempted = sorted(k for k in update_data if k in NETWORK_READ_ONLY_FIELDS)
+        if read_only_attempted:
+            return {
+                "success": False,
+                "error": (
+                    f"The following fields are read-only and cannot be updated: "
+                    f"{', '.join(read_only_attempted)}. "
+                    "Use unifi_get_network_details to read their current values."
+                ),
+            }
         logger.warning("Network update data for ID %s is empty after filtering.", network_id)
         return {
             "success": False,
