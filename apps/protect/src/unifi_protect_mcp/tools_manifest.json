@@ -1,5 +1,5 @@
 {
-  "count": 58,
+  "count": 59,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -49,6 +49,7 @@
     "protect_search_detections": "unifi_protect_mcp.tools.events",
     "protect_subscribe_events": "unifi_protect_mcp.tools.events",
     "protect_toggle_recording": "unifi_protect_mcp.tools.cameras",
+    "protect_toggle_rtsp": "unifi_protect_mcp.tools.cameras",
     "protect_trigger_chime": "unifi_protect_mcp.tools.devices",
     "protect_update_camera_settings": "unifi_protect_mcp.tools.cameras",
     "protect_update_chime": "unifi_protect_mcp.tools.devices",
@@ -4819,6 +4820,115 @@
         }
       },
       "title": "Toggle Recording"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Enables or disables the RTSP/RTSPS stream on a camera channel. When enabled, the controller publishes the channel and assigns a stream alias; the RTSP/RTSPS URLs are returned. Choose the channel with quality (high, medium, low; default high). Requires confirm=True to apply.",
+      "name": "protect_toggle_rtsp",
+      "permission_action": "update",
+      "permission_category": "camera",
+      "schema": {
+        "input": {
+          "properties": {
+            "camera_id": {
+              "description": "Camera UUID (from protect_list_cameras)",
+              "type": "string"
+            },
+            "confirm": {
+              "description": "When true, executes the mutation. When false (default), returns a preview of the changes.",
+              "type": "boolean"
+            },
+            "enabled": {
+              "description": "When true, publishes an RTSP/RTSPS stream on the channel. When false, stops it.",
+              "type": "boolean"
+            },
+            "quality": {
+              "description": "Channel quality to toggle: high, medium, or low. Defaults to high.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "camera_id",
+            "enabled"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Toggle Rtsp"
     },
     {
       "annotations": {

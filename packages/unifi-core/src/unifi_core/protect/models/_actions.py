@@ -12,7 +12,7 @@ validate kwargs via ``ToolInput(**kwargs)`` at the top of the body.
 
 from __future__ import annotations
 
-from typing import ClassVar, Optional
+from typing import ClassVar, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -62,6 +62,19 @@ class ToggleRecordingInput(BaseModel):
 
     camera_id: str = Field(description="Camera UUID")
     enabled: bool = Field(description="True enables recording (always); False disables (never)")
+
+
+class ToggleRtspInput(BaseModel):
+    """Input for ``protect_toggle_rtsp``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    camera_id: str = Field(description="Camera UUID")
+    enabled: bool = Field(description="True publishes an RTSP/RTSPS stream on the channel; False stops publishing it")
+    quality: Literal["high", "medium", "low"] = Field(
+        default="high",
+        description="Channel quality to toggle: high, medium, or low",
+    )
 
 
 class AlarmArmInput(BaseModel):

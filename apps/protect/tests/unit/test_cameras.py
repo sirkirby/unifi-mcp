@@ -502,6 +502,64 @@ class TestCameraManagerToggleRecording:
         cam.set_recording_mode.assert_awaited_once()
 
 
+class TestCameraManagerToggleRtsp:
+    @pytest.mark.asyncio
+    async def test_preview_enable_low(self, mock_cm):
+        from unifi_core.protect.managers.camera_manager import CameraManager
+
+        mgr = CameraManager(mock_cm)
+        # Low channel starts with is_rtsp_enabled=False in the fixture
+        result = await mgr.toggle_rtsp("cam-001", True, "low")
+        assert result["channel_name"] == "Low"
+        assert result["current_rtsp_enabled"] is False
+        assert result["proposed_rtsp_enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_apply_enable_low(self, mock_cm):
+        from unifi_core.protect.managers.camera_manager import CameraManager
+
+        mgr = CameraManager(mock_cm)
+        cam = mock_cm.client.bootstrap.cameras["cam-001"]
+        low = next(c for c in cam.channels if c.name == "Low")
+        low.rtsp_alias = "low_alias"  # controller would assign one on enable
+        result = await mgr.apply_toggle_rtsp("cam-001", True, "low")
+        assert result["rtsp_enabled"] is True
+        assert result["rtsp_alias"] == "low_alias"
+        assert "low_alias" in result["rtsps_url"]
+        assert low.is_rtsp_enabled is True
+        cam.save_device.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_disable_high(self, mock_cm):
+        from unifi_core.protect.managers.camera_manager import CameraManager
+
+        mgr = CameraManager(mock_cm)
+        cam = mock_cm.client.bootstrap.cameras["cam-001"]
+        result = await mgr.apply_toggle_rtsp("cam-001", False, "high")
+        assert result["rtsp_enabled"] is False
+        # Disabled channels expose no URL
+        assert "rtsps_url" not in result
+        cam.save_device.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_noop_when_already_in_state(self, mock_cm):
+        from unifi_core.protect.managers.camera_manager import CameraManager
+
+        mgr = CameraManager(mock_cm)
+        cam = mock_cm.client.bootstrap.cameras["cam-001"]
+        # High starts enabled; enabling again must not call save_device
+        await mgr.apply_toggle_rtsp("cam-001", True, "high")
+        cam.save_device.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unknown_quality_raises(self, mock_cm):
+        from unifi_core.protect.managers.camera_manager import CameraManager
+
+        mgr = CameraManager(mock_cm)
+        with pytest.raises(ValueError, match="no 'ultra' channel"):
+            await mgr.toggle_rtsp("cam-001", True, "ultra")
+
+
 class TestCameraManagerPTZ:
     @pytest.mark.asyncio
     async def test_ptz_not_supported(self, mock_cm):
@@ -903,6 +961,76 @@ class TestProtectToggleRecordingTool:
         result = await protect_toggle_recording("cam-001", enabled=False, confirm=True)
         assert result["success"] is True
         assert result["data"]["recording_mode"] == "never"
+
+
+class TestProtectToggleRtspTool:
+    @pytest.mark.asyncio
+    async def test_preview(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_toggle_rtsp
+
+        mock_camera_manager.toggle_rtsp = AsyncMock(
+            return_value={
+                "camera_id": "cam-001",
+                "camera_name": "Front Door",
+                "quality": "high",
+                "channel_name": "High",
+                "current_rtsp_enabled": False,
+                "proposed_rtsp_enabled": True,
+            }
+        )
+        result = await protect_toggle_rtsp("cam-001", enabled=True, confirm=False)
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["action"] == "toggle"
+        assert result["preview"]["proposed"]["rtsp_enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_confirm_redacts_urls(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_toggle_rtsp
+
+        mock_camera_manager.toggle_rtsp = AsyncMock(
+            return_value={
+                "camera_id": "cam-001",
+                "camera_name": "Front Door",
+                "quality": "high",
+                "channel_name": "High",
+                "current_rtsp_enabled": False,
+                "proposed_rtsp_enabled": True,
+            }
+        )
+        mock_camera_manager.apply_toggle_rtsp = AsyncMock(
+            return_value={
+                "camera_id": "cam-001",
+                "channel_name": "High",
+                "rtsp_enabled": True,
+                "rtsp_alias": "abc123",
+                "rtsps_url": "rtsps://nvr.local:7441/abc123",
+                "rtsp_url": "rtsp://nvr.local:7447/abc123",
+            }
+        )
+        result = await protect_toggle_rtsp("cam-001", enabled=True, confirm=True)
+        assert result["success"] is True
+        # Stream alias/URLs are secret-bearing and redacted at the boundary
+        assert result["data"]["rtsp_alias"] == REDACTED
+        assert result["data"]["rtsps_url"] == REDACTED
+        assert result["data"]["rtsp_url"] == REDACTED
+
+    @pytest.mark.asyncio
+    async def test_invalid_quality(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_toggle_rtsp
+
+        result = await protect_toggle_rtsp("cam-001", enabled=True, quality="ultra", confirm=False)
+        assert result["success"] is False
+        assert "Invalid input" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_error(self, mock_camera_manager):
+        from unifi_protect_mcp.tools.cameras import protect_toggle_rtsp
+
+        mock_camera_manager.toggle_rtsp = AsyncMock(side_effect=RuntimeError("boom"))
+        result = await protect_toggle_rtsp("cam-001", enabled=True, confirm=False)
+        assert result["success"] is False
+        assert "Failed to toggle RTSP" in result["error"]
 
 
 class TestProtectPTZMoveTool:

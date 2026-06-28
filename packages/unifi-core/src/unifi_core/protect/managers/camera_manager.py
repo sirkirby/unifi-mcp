@@ -461,6 +461,64 @@ class CameraManager:
             "enabled": enabled,
         }
 
+    @staticmethod
+    def _get_rtsp_channel(camera: Any, quality: str) -> Any:
+        """Return the camera channel matching a quality name (high/medium/low).
+
+        Channels are named "High"/"Medium"/"Low" on the controller; match
+        case-insensitively and raise an actionable error otherwise.
+        """
+        wanted = quality.strip().lower()
+        for channel in camera.channels or []:
+            if channel.name and channel.name.lower() == wanted:
+                return channel
+        available = ", ".join(c.name for c in (camera.channels or []) if c.name)
+        raise ValueError(f"Camera has no '{quality}' channel. Available channels: {available}")
+
+    async def toggle_rtsp(self, camera_id: str, enabled: bool, quality: str = "high") -> Dict[str, Any]:
+        """Return current and proposed RTSP state for a channel (preview)."""
+        camera = self._get_camera(camera_id)
+        channel = self._get_rtsp_channel(camera, quality)
+        return {
+            "camera_id": camera_id,
+            "camera_name": camera.name,
+            "quality": quality,
+            "channel_name": channel.name,
+            "current_rtsp_enabled": channel.is_rtsp_enabled,
+            "proposed_rtsp_enabled": enabled,
+        }
+
+    async def apply_toggle_rtsp(self, camera_id: str, enabled: bool, quality: str = "high") -> Dict[str, Any]:
+        """Enable or disable RTSP publishing on a channel after confirmation.
+
+        Mutates ``channel.is_rtsp_enabled`` and persists via the diff-based
+        ``save_device`` flow (the same pattern used for ``mic_enabled``). The
+        controller assigns ``rtsp_alias`` server-side when RTSP is first
+        enabled; the resulting stream URLs are returned (and redacted at the
+        tool boundary).
+        """
+        camera = self._get_camera(camera_id)
+        channel = self._get_rtsp_channel(camera, quality)
+
+        if channel.is_rtsp_enabled != enabled:
+            data_before = camera.dict_with_excludes()
+            channel.is_rtsp_enabled = enabled
+            await camera.save_device(data_before)
+
+        nvr_host = str(self._cm.client.bootstrap.nvr.host) if self._cm.client.bootstrap.nvr.host else self._cm.host
+        result: Dict[str, Any] = {
+            "camera_id": camera_id,
+            "camera_name": camera.name,
+            "quality": quality,
+            "channel_name": channel.name,
+            "rtsp_enabled": channel.is_rtsp_enabled,
+        }
+        if channel.is_rtsp_enabled and channel.rtsp_alias:
+            result["rtsp_alias"] = channel.rtsp_alias
+            result["rtsps_url"] = f"rtsps://{nvr_host}:7441/{channel.rtsp_alias}"
+            result["rtsp_url"] = f"rtsp://{nvr_host}:7447/{channel.rtsp_alias}"
+        return result
+
     async def ptz_goto_preset(self, camera_id: str, preset_slot: int) -> Dict[str, Any]:
         """Move a PTZ camera to a named preset position.
 
