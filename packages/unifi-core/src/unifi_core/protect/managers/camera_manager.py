@@ -21,6 +21,49 @@ PTZ_MIN_SPEED = -1000
 PTZ_MAX_SPEED = 1000
 PTZ_MAX_DURATION_MS = 5000
 
+# uiprotect's Camera.set_hdr_mode accepts the literals "off", "auto" and
+# "always". "always" maps to ISP HDRMode.ALWAYS_ON ("superHdr"), the highest
+# quality HDR. We accept booleans and the controller-facing value names as
+# aliases so callers can request superHdr explicitly and so that passing
+# ``false`` reliably turns HDR off (``set_hdr_mode(False)`` does NOT, because
+# ``False == "off"`` is false in Python).
+_HDR_MODE_ALIASES = {
+    # off
+    "off": "off",
+    "false": "off",
+    "none": "off",
+    "disabled": "off",
+    # auto: HDR on, normal dynamic range (ISP hdr_mode == "normal")
+    "auto": "auto",
+    "on": "auto",
+    "true": "auto",
+    "normal": "auto",
+    # always-on / super HDR: highest quality (ISP hdr_mode == "superHdr")
+    "always": "always",
+    "super": "always",
+    "superhdr": "always",
+    "super_hdr": "always",
+}
+
+
+def normalize_hdr_mode(value: Any) -> str:
+    """Map a user-supplied hdr_mode value to a uiprotect literal.
+
+    Returns one of "off", "auto", or "always". Raises ``ValueError`` for
+    unrecognised values so the error surfaces during preview, before any
+    mutation is applied.
+    """
+    if isinstance(value, bool):
+        return "auto" if value else "off"
+    if isinstance(value, str):
+        normalized = _HDR_MODE_ALIASES.get(value.strip().lower())
+        if normalized is not None:
+            return normalized
+    raise ValueError(
+        f"Invalid hdr_mode {value!r}. Use one of: off, auto, always "
+        "(aliases: true=auto, false=off, on, normal, super/superHdr=always)."
+    )
+
 
 class CameraManager:
     """Reads and mutates camera data from the Protect NVR bootstrap."""
@@ -349,7 +392,9 @@ class CameraManager:
             elif key == "hdr_mode":
                 current_isp_hdr = camera.isp_settings.hdr_mode
                 current_state["hdr_mode"] = str(current_isp_hdr.value) if current_isp_hdr else None
-                proposed_changes["hdr_mode"] = value
+                # Normalize so the preview shows what will actually be applied
+                # (and rejects invalid values before confirmation).
+                proposed_changes["hdr_mode"] = normalize_hdr_mode(value)
             elif key == "mic_enabled":
                 current_state["mic_enabled"] = camera.is_mic_enabled
                 proposed_changes["mic_enabled"] = value
@@ -395,8 +440,9 @@ class CameraManager:
                     await camera.set_ir_led_model(mode)
                     applied.append(f"ir_led_mode={value}")
                 elif key == "hdr_mode":
-                    await camera.set_hdr_mode(value)
-                    applied.append(f"hdr_mode={value}")
+                    mode = normalize_hdr_mode(value)
+                    await camera.set_hdr_mode(mode)
+                    applied.append(f"hdr_mode={mode}")
                 elif key == "mic_enabled":
                     # There's no direct set_mic_enabled; adjust mic volume to 0 for disable
                     # or use set_privacy for full mic control. Use save_device pattern.
