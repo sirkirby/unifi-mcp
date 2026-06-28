@@ -512,7 +512,6 @@ async def update_network(
             - igmp_snooping (boolean): Enable IGMP snooping.
             - igmp_querier_switches (list): IGMP querier assignment.
             - igmp_flood_unknown_multicast (boolean): Flood unknown multicast.
-            - mdns_enabled (boolean): Enable mDNS reflection.
             WAN uplink fields (purpose='wan' networks — changing connectivity-critical ones
             surfaces a warning in the confirm-preview):
             - wan_type (string): WAN IPv4 type: 'dhcp', 'static', 'pppoe', 'disabled'.
