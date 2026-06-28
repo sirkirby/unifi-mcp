@@ -472,6 +472,77 @@ class TestCameraManagerApplyCameraSettings:
         assert "errors" in result
         assert any("API error" in e for e in result["errors"])
 
+    @pytest.mark.asyncio
+    async def test_apply_hdr_superhdr(self, mock_cm):
+        from unifi_core.protect.managers.camera_manager import CameraManager
+
+        mgr = CameraManager(mock_cm)
+        cam = mock_cm.client.bootstrap.cameras["cam-001"]
+        result = await mgr.apply_camera_settings("cam-001", {"hdr_mode": "superHdr"})
+        assert "hdr_mode=always" in result["applied"]
+        cam.set_hdr_mode.assert_awaited_once_with("always")
+
+    @pytest.mark.asyncio
+    async def test_apply_hdr_bool_false_turns_off(self, mock_cm):
+        # Regression: set_hdr_mode(False) does NOT turn HDR off because
+        # ``False == "off"`` is false; we must normalize to the "off" literal.
+        from unifi_core.protect.managers.camera_manager import CameraManager
+
+        mgr = CameraManager(mock_cm)
+        cam = mock_cm.client.bootstrap.cameras["cam-001"]
+        result = await mgr.apply_camera_settings("cam-001", {"hdr_mode": False})
+        assert "hdr_mode=off" in result["applied"]
+        cam.set_hdr_mode.assert_awaited_once_with("off")
+
+    @pytest.mark.asyncio
+    async def test_apply_hdr_bool_true_is_auto(self, mock_cm):
+        from unifi_core.protect.managers.camera_manager import CameraManager
+
+        mgr = CameraManager(mock_cm)
+        cam = mock_cm.client.bootstrap.cameras["cam-001"]
+        await mgr.apply_camera_settings("cam-001", {"hdr_mode": True})
+        cam.set_hdr_mode.assert_awaited_once_with("auto")
+
+    @pytest.mark.asyncio
+    async def test_apply_hdr_invalid_value(self, mock_cm):
+        from unifi_core.protect.managers.camera_manager import CameraManager
+
+        mgr = CameraManager(mock_cm)
+        result = await mgr.apply_camera_settings("cam-001", {"hdr_mode": "ultra"})
+        assert "errors" in result
+        assert any("Invalid hdr_mode" in e for e in result["errors"])
+
+
+class TestNormalizeHdrMode:
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            (True, "auto"),
+            (False, "off"),
+            ("off", "off"),
+            ("none", "off"),
+            ("auto", "auto"),
+            ("normal", "auto"),
+            ("on", "auto"),
+            ("always", "always"),
+            ("super", "always"),
+            ("superHdr", "always"),
+            ("super_hdr", "always"),
+            ("  SuperHDR  ", "always"),
+        ],
+    )
+    def test_aliases(self, value, expected):
+        from unifi_core.protect.managers.camera_manager import normalize_hdr_mode
+
+        assert normalize_hdr_mode(value) == expected
+
+    @pytest.mark.parametrize("value", ["ultra", "", 3, None])
+    def test_invalid(self, value):
+        from unifi_core.protect.managers.camera_manager import normalize_hdr_mode
+
+        with pytest.raises(ValueError):
+            normalize_hdr_mode(value)
+
 
 class TestCameraManagerToggleRecording:
     @pytest.mark.asyncio

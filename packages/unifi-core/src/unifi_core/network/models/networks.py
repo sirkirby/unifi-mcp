@@ -182,7 +182,12 @@ class Network(BaseModel):
     )
     mdns_enabled: Optional[bool] = Field(
         default=None,
-        description="Enable mDNS reflection on this network",
+        description=(
+            "Whether mDNS reflection is enabled on this network (read-only via this tool). "
+            "On UniFi OS 5+, the controller accepts this field on the per-network write path "
+            "but silently ignores it. Per-network mDNS is not currently settable via the API."
+        ),
+        json_schema_extra={"mutable": False},
     )
     # Access control
     network_isolation_enabled: Optional[bool] = Field(
