@@ -28,7 +28,7 @@ help:
 	@echo "  make lint           Run linters"
 	@echo "  make format         Format code"
 	@echo "  make format-fix     Auto-fix lint issues"
-	@echo "  make pre-commit     Format + lint + test"
+	@echo "  make pre-commit     Format + manifests + lint + test"
 	@echo ""
 	@echo "Build & Release:"
 	@echo "  make version        Show current version (from git tags)"
@@ -115,7 +115,7 @@ version:
 build: manifest server-manifest
 	cd ../.. && uv build --package unifi-protect-mcp
 
-build-check: clean manifest
+build-check: clean manifest server-manifest
 	@echo "Building and verifying version..."
 	cd ../.. && uv build --package unifi-protect-mcp
 	@WHEEL=$$(ls ../../dist/unifi_protect_mcp-*.whl | head -1); \
@@ -159,9 +159,9 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 # Pre-commit / Pre-release
-pre-commit: format lint test
+pre-commit: format manifest server-manifest lint test
 
-pre-release: clean manifest format lint test build-check
+pre-release: clean manifest server-manifest format lint test build-check
 	@echo ""
 	@echo "Release preparation complete!"
 	@echo ""
