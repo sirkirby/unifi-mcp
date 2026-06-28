@@ -215,7 +215,9 @@ async def protect_update_camera_settings(
         Field(
             description=(
                 "Dictionary of settings to update. Supported keys: "
-                "ir_led_mode (auto, on, autoFilterOnly), hdr_mode (true/false), "
+                "ir_led_mode (auto, on, autoFilterOnly), "
+                "hdr_mode (off, auto, or always; always = superHdr highest quality. "
+                "Booleans accepted: true=auto, false=off), "
                 "mic_enabled (true/false), mic_volume (0-100), "
                 "status_light_on (true/false), speaker_volume (0-100), "
                 "name (string), motion_detection (true/false)."
