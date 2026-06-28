@@ -99,6 +99,10 @@ KNOWN_CONTROLLER_ISSUE_MARKERS = {
         r"/proxy/access/api/v2/visitors\b",
         "you entered no-man zone",
     ),
+    "unifi_create_firewall_policy": (
+        "FirewallPolicyCreateRespondTrafficPolicyNotAllowed",
+        "Firewall policy create respond traffic not allowed",
+    ),
 }
 
 

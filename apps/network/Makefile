@@ -30,7 +30,7 @@ help:
 	@echo "  make lint           Run linters"
 	@echo "  make format         Format code"
 	@echo "  make format-fix     Auto-fix lint issues"
-	@echo "  make pre-commit     Format + lint + test"
+	@echo "  make pre-commit     Format + manifests + lint + test"
 	@echo ""
 	@echo "Build & Release:"
 	@echo "  make version        Show current version (from git tags)"
@@ -118,7 +118,7 @@ version:
 build: manifest server-manifest
 	cd ../.. && uv build --package unifi-network-mcp
 
-build-check: clean manifest
+build-check: clean manifest server-manifest
 	@echo "Building and verifying version..."
 	cd ../.. && uv build --package unifi-network-mcp
 	@WHEEL=$$(ls ../../dist/unifi_network_mcp-*.whl | head -1); \
@@ -175,9 +175,9 @@ console-direct:
 	cd ../.. && UNIFI_CONTROLLER_TYPE=direct UNIFI_MCP_LOG_LEVEL=DEBUG UNIFI_TOOL_REGISTRATION_MODE=eager uv run --package unifi-network-mcp python apps/network/devtools/dev_console.py
 
 # Pre-commit / Pre-release
-pre-commit: format lint test
+pre-commit: format manifest server-manifest lint test
 
-pre-release: clean manifest format lint test build-check
+pre-release: clean manifest server-manifest format lint test build-check
 	@echo ""
 	@echo "Release preparation complete!"
 	@echo ""
