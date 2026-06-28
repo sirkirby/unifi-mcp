@@ -245,16 +245,11 @@ class CameraManager:
         streams: Dict[str, Any] = {}
         for ch in camera.channels:
             if ch.is_rtsp_enabled and ch.rtsp_alias:
-                # Build RTSP URL from the NVR host and the alias
-                nvr_host = (
-                    str(self._cm.client.bootstrap.nvr.host) if self._cm.client.bootstrap.nvr.host else self._cm.host
-                )
                 streams[ch.name] = {
                     "channel_id": ch.id,
                     "enabled": ch.enabled,
                     "rtsp_alias": ch.rtsp_alias,
-                    "rtsps_url": f"rtsps://{nvr_host}:7441/{ch.rtsp_alias}",
-                    "rtsp_url": f"rtsp://{nvr_host}:7447/{ch.rtsp_alias}",
+                    **self._rtsp_stream_urls(ch.rtsp_alias),
                     "width": ch.width,
                     "height": ch.height,
                     "fps": ch.fps,
@@ -521,6 +516,14 @@ class CameraManager:
         available = ", ".join(c.name for c in (camera.channels or []) if c.name)
         raise ValueError(f"Camera has no '{quality}' channel. Available channels: {available}")
 
+    def _rtsp_stream_urls(self, alias: str) -> Dict[str, str]:
+        """Build the RTSPS/RTSP URLs for a channel alias from the NVR host."""
+        host = str(self._cm.client.bootstrap.nvr.host) if self._cm.client.bootstrap.nvr.host else self._cm.host
+        return {
+            "rtsps_url": f"rtsps://{host}:7441/{alias}",
+            "rtsp_url": f"rtsp://{host}:7447/{alias}",
+        }
+
     async def toggle_rtsp(self, camera_id: str, enabled: bool, quality: str = "high") -> Dict[str, Any]:
         """Return current and proposed RTSP state for a channel (preview)."""
         camera = self._get_camera(camera_id)
@@ -551,7 +554,6 @@ class CameraManager:
             channel.is_rtsp_enabled = enabled
             await camera.save_device(data_before)
 
-        nvr_host = str(self._cm.client.bootstrap.nvr.host) if self._cm.client.bootstrap.nvr.host else self._cm.host
         result: Dict[str, Any] = {
             "camera_id": camera_id,
             "camera_name": camera.name,
@@ -561,8 +563,7 @@ class CameraManager:
         }
         if channel.is_rtsp_enabled and channel.rtsp_alias:
             result["rtsp_alias"] = channel.rtsp_alias
-            result["rtsps_url"] = f"rtsps://{nvr_host}:7441/{channel.rtsp_alias}"
-            result["rtsp_url"] = f"rtsp://{nvr_host}:7447/{channel.rtsp_alias}"
+            result.update(self._rtsp_stream_urls(channel.rtsp_alias))
         return result
 
     async def ptz_goto_preset(self, camera_id: str, preset_slot: int) -> Dict[str, Any]:
