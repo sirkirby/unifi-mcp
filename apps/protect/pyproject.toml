@@ -55,7 +55,7 @@ dev = [
     "pytest>=9.0.3",
     "pytest-asyncio>=0.21.0",
     "pytest-xdist>=3.6.0",
-    "aioresponses>=0.7.0",
+    "aioresponses>=0.7.9",
     "pytest-cov>=4.0.0",
     "ruff>=0.15.15",
 ]
@@ -65,7 +65,7 @@ managed = true
 dev-dependencies = [
     "pytest>=9.0.3",
     "pytest-asyncio>=0.21.0",
-    "aioresponses>=0.7.0",
+    "aioresponses>=0.7.9",
     "pytest-cov>=4.0.0",
     "ruff>=0.15.15",
 ]
