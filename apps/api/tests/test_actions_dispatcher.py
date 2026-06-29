@@ -584,6 +584,56 @@ async def test_dispatch_translates_acl_update_kwargs_to_rule_id_plus_payload() -
 
 
 @pytest.mark.asyncio
+async def test_dispatch_translates_gateway_settings_update_filters_to_mutable() -> None:
+    """unifi_update_gateway_settings: the action dispatcher must filter update_data
+    to mutable keys (dropping read-only / unknown) and pass it as the single
+    positional arg to GatewaySettingsManager.update_gateway_settings — the manager
+    itself does not filter, so this is the only guard on the /v1/actions path."""
+    entry = ToolEntry(
+        name="unifi_update_gateway_settings",
+        product="network",
+        category="gateway_settings",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.update_gateway_settings = AsyncMock(return_value=(True, None))
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_update_gateway_settings",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"update_data": {"upnp_enabled": True, "_id": "x", "key": "usg", "bogus": 1}},
+        confirm=True,
+        dispatch_table={
+            "unifi_update_gateway_settings": DispatchEntry(
+                manager_attr="gateway_settings_manager", method="update_gateway_settings"
+            ),
+        },
+    )
+
+    domain_manager.update_gateway_settings.assert_awaited_once()
+    (positional, keyword) = domain_manager.update_gateway_settings.await_args
+    assert keyword == {}, f"expected no kwargs; got {keyword}"
+    # read-only (_id, key) + unknown (bogus) filtered out; only the mutable field survives
+    assert positional[0] == {"upnp_enabled": True}
+
+
+@pytest.mark.asyncio
 async def test_dispatch_acl_update_clears_netmask() -> None:
     """clear_destination_netmask flows through the API translator to a None mac_mask sentinel."""
     entry = ToolEntry(name="unifi_update_acl_rule", product="network", category="acl_rules", manager="", method="")

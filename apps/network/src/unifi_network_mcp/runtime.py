@@ -43,6 +43,7 @@ from unifi_core.network.managers.dns_manager import DnsManager
 from unifi_core.network.managers.dpi_manager import DpiManager
 from unifi_core.network.managers.event_manager import EventManager
 from unifi_core.network.managers.firewall_manager import FirewallManager
+from unifi_core.network.managers.gateway_settings_manager import GatewaySettingsManager
 from unifi_core.network.managers.hotspot_manager import HotspotManager
 from unifi_core.network.managers.network_manager import NetworkManager
 from unifi_core.network.managers.oon_manager import OonManager
@@ -244,6 +245,11 @@ def get_firewall_manager() -> FirewallManager:
 
 
 @lru_cache
+def get_gateway_settings_manager() -> GatewaySettingsManager:
+    return GatewaySettingsManager(get_connection_manager())
+
+
+@lru_cache
 def get_event_manager() -> EventManager:
     return EventManager(get_connection_manager())
 
@@ -305,6 +311,7 @@ network_manager = get_network_manager()
 oon_manager = get_oon_manager()
 system_manager = get_system_manager()
 firewall_manager = get_firewall_manager()
+gateway_settings_manager = get_gateway_settings_manager()
 event_manager = get_event_manager()
 hotspot_manager = get_hotspot_manager()
 usergroup_manager = get_usergroup_manager()

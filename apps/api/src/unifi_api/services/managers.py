@@ -53,6 +53,7 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
     from unifi_core.network.managers.dpi_manager import DpiManager
     from unifi_core.network.managers.event_manager import EventManager
     from unifi_core.network.managers.firewall_manager import FirewallManager
+    from unifi_core.network.managers.gateway_settings_manager import GatewaySettingsManager
     from unifi_core.network.managers.hotspot_manager import HotspotManager
     from unifi_core.network.managers.network_manager import NetworkManager
     from unifi_core.network.managers.oon_manager import OonManager
@@ -80,6 +81,7 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
         "dpi_manager": lambda cm: DpiManager(cm, getattr(cm, "unifi_auth", None)),
         "event_manager": lambda cm: EventManager(cm),
         "firewall_manager": lambda cm: FirewallManager(cm),
+        "gateway_settings_manager": lambda cm: GatewaySettingsManager(cm),
         "hotspot_manager": lambda cm: HotspotManager(cm),
         "network_manager": lambda cm: NetworkManager(cm),
         "oon_manager": lambda cm: OonManager(cm),

@@ -617,6 +617,7 @@ class LiveSmokeRunner:
             await self.lifecycle_network_dns()
             await self.lifecycle_network_client_group()
             await self.lifecycle_network_firewall_group()
+            await self.lifecycle_network_gateway_settings()
         elif self.server_key == "access":
             await self.lifecycle_access_visitor()
         elif self.server_key == "protect":
@@ -769,6 +770,10 @@ class LiveSmokeRunner:
         }
         if name in simple:
             return dict(simple[name]), ""
+        if name == "unifi_update_gateway_settings":
+            # Preview only (run_previews forces confirm=False): renders the
+            # current-vs-proposed diff + the security warning. No write.
+            return {"update_data": {"broadcast_ping": False}}, ""
         if name == "unifi_set_client_ip_settings":
             mac = self.cache.client_mac()
             if not mac:
@@ -952,6 +957,69 @@ class LiveSmokeRunner:
         )
         if delete.success:
             self.report.cleaned_resources.append({"type": "dns_record", "id": record_id, "name": key})
+
+    async def lifecycle_network_gateway_settings(self) -> None:
+        """Apply -> re-read -> verify -> revert a low-risk field on the usg singleton.
+
+        Toggles ``broadcast_ping`` (a benign, instantly-reversible setting), confirms
+        the change persisted, asserts no sibling keys were dropped and the nested
+        ``dns_verification`` object survived the partial update, then reverts. This
+        exercises the full fetch-merge-put-verify path against the live controller.
+        """
+        import copy
+
+        from unifi_network_mcp import runtime
+
+        mgr = runtime.gateway_settings_manager
+        before = copy.deepcopy(await mgr.get_gateway_settings())
+        if not before:
+            self.skip("unifi_update_gateway_settings", "lifecycle", "could not read current gateway settings")
+            return
+
+        field = "broadcast_ping"
+        original = bool(before.get(field, False))
+        target = not original
+
+        apply_rec = await self.call(
+            "unifi_update_gateway_settings",
+            {"update_data": {field: target}, "confirm": True},
+            "lifecycle:apply",
+        )
+        if not apply_rec.success:
+            self.record_check(
+                "unifi_update_gateway_settings", "lifecycle:apply", False, f"apply failed: {apply_rec.error}"
+            )
+            return
+
+        after = copy.deepcopy(await mgr.get_gateway_settings())
+        self.record_check(
+            "unifi_update_gateway_settings",
+            "lifecycle:verify-changed",
+            after.get(field) == target,
+            f"{field} {original} -> {target}",
+        )
+
+        # Sibling preservation: no keys dropped (incl. controller-only fields the
+        # model never maps) and the nested dns_verification object is byte-identical.
+        dropped = sorted(k for k in before if k != field and k not in after)
+        dns_intact = after.get("dns_verification") == before.get("dns_verification")
+        ok_siblings = not dropped and dns_intact
+        self.record_check(
+            "unifi_update_gateway_settings",
+            "lifecycle:verify-siblings-preserved",
+            ok_siblings,
+            "no keys dropped; dns_verification intact" if ok_siblings else f"dropped={dropped} dns_intact={dns_intact}",
+        )
+
+        revert_rec = await self.call(
+            "unifi_update_gateway_settings",
+            {"update_data": {field: original}, "confirm": True},
+            "lifecycle:revert",
+        )
+        restored = bool(revert_rec.success) and (await mgr.get_gateway_settings()).get(field) == original
+        self.record_check(
+            "unifi_update_gateway_settings", "lifecycle:revert", restored, f"{field} restored to {original}"
+        )
 
     async def lifecycle_network_client_group(self) -> None:
         stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")

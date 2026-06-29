@@ -26,6 +26,7 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("network", "firewall", "FirewallRule"),
     ("network", "firewall", "FirewallGroup"),
     ("network", "firewall", "FirewallZone"),
+    ("network", "gateway_settings", "GatewaySettings"),
     ("network", "networks", "Network"),
     ("network", "oon", "OonPolicy"),
     ("network", "port_forwards", "PortForward"),

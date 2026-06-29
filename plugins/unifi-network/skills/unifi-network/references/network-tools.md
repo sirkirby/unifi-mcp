@@ -1,4 +1,4 @@
-# Network Server Tool Reference (178 tools)
+# Network Server Tool Reference (180 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 
@@ -7,6 +7,7 @@ Complete reference for `unifi_*` tools. All read tools are always available. Mut
 - [Clients](#clients)
 - [Devices](#devices)
 - [Firewall](#firewall)
+- [Gateway Settings](#gateway-settings)
 - [Networks & WLANs](#networks--wlans)
 - [DNS Records](#dns-records)
 - [Port Forwarding](#port-forwarding)
@@ -130,6 +131,25 @@ Always available, regardless of registration mode.
 - Use `create_firewall_policy` for all V2 zone-based firewall creates. Discover zone IDs with `unifi_list_firewall_zones` and network IDs with `unifi_list_networks` first; never hardcode them. See the `firewall-manager` skill for worked examples.
 - Always list existing policies first to understand current rule set before adding new ones
 - Zone IDs come from `unifi_list_firewall_zones` — don't guess them
+
+---
+
+## Gateway Settings
+
+Gateway-wide security / NAT / connection-tracking settings (the controller's `usg` singleton).
+
+<!-- AUTO:tools:gateway_settings -->
+2 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `unifi_get_gateway_settings` | Read | Get the gateway (USG) settings: security (GeoIP filtering, SYN cookies, ICMP redirects, DNS verification), NAT/UPnP (UPnP, NAT-PMP, MSS c... |
+| `unifi_update_gateway_settings` | Mutate | Update gateway (USG) settings. |
+<!-- /AUTO:tools:gateway_settings -->
+
+**Tips:**
+- `unifi_update_gateway_settings` is confirm-gated: call with `confirm=false` first to preview the change and any security/reachability warnings, then re-call with `confirm=true`.
+- Pass only the fields you want to change; current values (including the nested `dns_verification` object) are preserved via deep-merge.
 
 ---
 

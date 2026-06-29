@@ -760,6 +760,49 @@ type FirmwareStatus {
   devicesWithUpdates: Int
 }
 
+"""UniFi gateway (USG) security / NAT / connection-tracking settings."""
+type GatewaySettings {
+  id: ID
+  key: String
+  geoIpFilteringEnabled: Boolean
+  geoIpFilteringBlock: String
+  geoIpFilteringCountries: String
+  geoIpFilteringTrafficDirection: String
+  synCookies: Boolean
+  broadcastPing: Boolean
+  receiveRedirects: Boolean
+  sendRedirects: Boolean
+  dnsVerification: JSON
+  upnpEnabled: Boolean
+  upnpNatPmpEnabled: Boolean
+  upnpSecureMode: Boolean
+  upnpWanInterface: String
+  mssClamp: String
+  ftpModule: Boolean
+  greModule: Boolean
+  h323Module: Boolean
+  pptpModule: Boolean
+  sipModule: Boolean
+  tftpModule: Boolean
+  offloadAccounting: Boolean
+  offloadL2Blocking: Boolean
+  offloadSch: Boolean
+  icmpTimeout: Int
+  otherTimeout: Int
+  udpStreamTimeout: Int
+  udpOtherTimeout: Int
+  tcpEstablishedTimeout: Int
+  tcpCloseTimeout: Int
+  tcpCloseWaitTimeout: Int
+  tcpFinWaitTimeout: Int
+  tcpLastAckTimeout: Int
+  tcpSynRecvTimeout: Int
+  tcpSynSentTimeout: Int
+  tcpTimeWaitTimeout: Int
+  timeoutSettingPreference: String
+  unbindWanMonitors: Boolean
+}
+
 """Service health snapshot — smoke field for the GraphQL endpoint."""
 type HealthSnapshot {
   ok: Boolean!
@@ -1165,6 +1208,9 @@ type NetworkQuery {
 
   """Get SNMP settings."""
   snmpSettings(controller: ID!, site: String! = "default"): SnmpSettings
+
+  """Get gateway (USG) security / NAT / connection-tracking settings."""
+  gatewaySettings(controller: ID!, site: String! = "default"): GatewaySettings
 
   """Get the controller's event-type prefix catalog."""
   eventTypes(controller: ID!, site: String! = "default"): EventTypes

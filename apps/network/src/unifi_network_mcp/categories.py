@@ -50,6 +50,7 @@ NETWORK_CATEGORY_MAP = {
     "switch": "switch",
     "system": "system",
     "dns": "dns",
+    "gateway_settings": "gateway_settings",
 }
 
 # Backward-compatible alias

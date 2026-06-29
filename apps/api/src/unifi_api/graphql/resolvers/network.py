@@ -55,6 +55,7 @@ from unifi_api.graphql.types.network.firewall import (
     FirewallRule,
     FirewallZone,
 )
+from unifi_api.graphql.types.network.gateway_settings import GatewaySettings
 from unifi_api.graphql.types.network.network import Network
 from unifi_api.graphql.types.network.oon import OonPolicy
 from unifi_api.graphql.types.network.port_forward import PortForward
@@ -1427,6 +1428,33 @@ async def _fetch_autobackup_settings(
         key,
         "get_autobackup_settings",
     )
+
+
+async def _fetch_gateway_settings(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+) -> Any:
+    key = f"network/gateway-settings/{controller}/{site}"
+
+    async def _do():
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "gateway_settings_manager",
+            )
+            cm = await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "network",
+            )
+            if cm.site != site:
+                await cm.set_site(site)
+            return await mgr.get_gateway_settings()
+
+    return await ctx.cache.get_or_fetch(key, _do)
 
 
 async def _fetch_backups(
@@ -3600,6 +3628,22 @@ class NetworkQuery:
         if raw is None:
             return None
         return SnmpSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Get gateway (USG) security / NAT / connection-tracking settings.",
+    )
+    async def gateway_settings(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+    ) -> GatewaySettings | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_gateway_settings(ctx, controller, site)
+        if not raw:
+            return None
+        return GatewaySettings.from_manager_output(raw)
 
     @strawberry.field(
         permission_classes=[IsRead],

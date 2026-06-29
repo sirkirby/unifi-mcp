@@ -279,6 +279,42 @@ async def test_get_snmp_settings_happy_path(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_gateway_settings_happy_path(tmp_path, monkeypatch) -> None:
+    """Gateway (USG) settings singleton projects through the detail route."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    fake = {
+        "_id": "gw1",
+        "key": "usg",
+        "upnp_enabled": False,
+        "tcp_established_timeout": 7440,
+        "dns_verification": {"primary_dns_server": "1.1.1.1"},
+    }
+
+    async def fake_get(self):
+        return fake
+
+    from unifi_core.network.managers.gateway_settings_manager import GatewaySettingsManager
+
+    monkeypatch.setattr(GatewaySettingsManager, "get_gateway_settings", fake_get)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/gateway-settings?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["render_hint"]["kind"] == "detail"
+    assert body["data"]["key"] == "usg"
+    assert body["data"]["upnp_enabled"] is False
+    assert body["data"]["tcp_established_timeout"] == 7440
+    assert body["data"]["dns_verification"]["primary_dns_server"] == "1.1.1.1"
+
+
+@pytest.mark.asyncio
 async def test_get_snmp_settings_policy_disabled_returns_raw_community(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path, redact_sensitive_fields=False)

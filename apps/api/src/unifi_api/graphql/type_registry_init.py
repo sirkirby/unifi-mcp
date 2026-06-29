@@ -120,6 +120,9 @@ from unifi_api.graphql.types.network.firewall import (
 from unifi_api.graphql.types.network.firewall import (
     FirewallZone as NetworkFirewallZoneType,
 )
+from unifi_api.graphql.types.network.gateway_settings import (
+    GatewaySettings as NetworkGatewaySettingsType,
+)
 from unifi_api.graphql.types.network.network import (
     Network as NetworkNetworkType,
 )
@@ -344,6 +347,9 @@ def build_type_registry() -> TypeRegistry:
     reg.register_type("network", "networks/{id}", NetworkNetworkType)
     reg.register_tool_type("unifi_list_networks", NetworkNetworkType, "list")
     reg.register_tool_type("unifi_get_network_details", NetworkNetworkType, "detail")
+
+    reg.register_type("network", "gateway_settings", NetworkGatewaySettingsType)
+    reg.register_tool_type("unifi_get_gateway_settings", NetworkGatewaySettingsType, "detail")
 
     # network/wlans
     reg.register_type("network", "wlans", NetworkWlanType)

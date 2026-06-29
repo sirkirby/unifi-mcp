@@ -564,6 +564,20 @@ Returns the user-defined firewall policy ordering for a source/destination zone 
 **Returns:** `Page_FirewallZoneModel_`
 
 
+## network/gateway_settings
+
+### `GET /v1/sites/{site_id}/gateway-settings` — Get Gateway Settings
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_GatewaySettingsModel_`
+
+
 ## network/groups
 
 ### `GET /v1/sites/{site_id}/ap-groups` — List Ap Groups
