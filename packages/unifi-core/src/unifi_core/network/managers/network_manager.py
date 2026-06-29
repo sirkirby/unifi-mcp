@@ -366,7 +366,7 @@ class NetworkManager:
             # 3. Merge updates (deep merge preserves nested sub-objects)
             merged_data = deep_merge(existing_wlan, update_data)
 
-            # 3. Send the full merged data
+            # 4. Send the full merged data
             api_request = ApiRequest(
                 method="put",
                 path=f"/rest/wlanconf/{wlan_id}",
