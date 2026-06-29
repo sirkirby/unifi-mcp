@@ -9,8 +9,8 @@ description: >-
   fork-edit exception, and the close-and-redirect pattern. Also covers community infrastructure
   setup (.github/ health files, issue routing, bug report template design) and evidence-first
   bug triage protocol. Apply this skill before approving any externally-authored PR, before
-  running the merge command, when auditing recently merged PRs, and when setting up community
-  engagement infrastructure.
+  running the merge command, when auditing merged PRs retroactively, and when setting up
+  community engagement infrastructure.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -67,8 +67,8 @@ subagents rather than doing a single-pass review:
 Before dispatching either, check out the branch locally and run `git log origin/main..HEAD`
 to enumerate commits. This gives both subagents a shared commit list for scoped analysis.
 
-PR #135 (`fix/acl-create-mac-passthrough`) established this split — it caught both a code
-correctness issue and a test coverage gap that a single-pass review would have missed.
+The dual-subagent split was established for complex ACL PRs — it catches both code correctness
+issues and test coverage gaps that a single-pass review misses.
 
 ---
 
@@ -100,7 +100,8 @@ models, changes base class hierarchy, or implements a field-symmetry sub-issue
    read-surface output and create/update input. Name-match alone is insufficient — a field can
    appear in both surfaces but fail silently if types diverge (e.g., `source_macs: list[str]`
    returned by list tools vs. `source_macs: str` accepted by create). This is enforced by the
-   field-symmetry CI gate (the field-symmetry pattern, formalised in #137 and rolled out in Phases 0–4).
+   field-symmetry CI gate (the field-symmetry pattern, formalised in the field-symmetry milestone
+   and rolled out across phases).
 4. **No field leakage?** — Fields belonging to one resource variant must not silently appear
    on another through inheritance.
 5. **Matches issue spec?** — Compare against the linked GitHub issue. Every scoped item should
@@ -112,7 +113,7 @@ Gates 1–4 (f-string logger, Ruff lint, validator registry, doc site, shared va
 apply to governance PRs for any new or modified tool/manager files — but the structural
 questions above are the primary gate.
 
-**Why the split matters:** PR #140 (ACL shared-field-model pilot, level99) was reviewed with
+**Why the split matters:** The ACL shared-field-model pilot (level99) was reviewed with
 the feature-addition checklist. The structural questions were asked only because the reviewer
 recognized the PR type. A structural refactor can pass Gates 1–3 cleanly while still violating
 inheritance structure, field coverage, or type symmetry — the feature-addition checklist gives
@@ -161,18 +162,16 @@ logger.info("Found %s devices on %s", count, network)
 
 **Why the manager layer is the blind spot:** Tool files (`*_tools.py`) tend to get this right
 because they're reviewed more often. Manager files (`*_manager.py`) are where f-string loggers
-keep appearing. In PR #119, level99's tool layer used `%s` correctly but introduced 23 f-string
-calls in `device_manager.py` (14), `network_manager.py` (7), and `tools/network.py` (2). Always
-check manager files explicitly.
+keep appearing. In past reviews, the tool layer used `%s` correctly but the manager layer
+introduced dozens of f-string calls. Always check manager files explicitly.
 
 **Implicit concatenation is invisible to grep:** Adjacent string literals cannot
-be reliably caught by automated scripts. This survived a 481-call automated migration in PR #122
+be reliably caught by automated scripts. This survived a large automated migration in the past
 and was only caught by manual review. Scan manually for this pattern when logger calls span lines.
 
 **Full-payload logging promoted to INFO level:** A `logger.debug` call that dumps a full JSON
 payload is acceptable at DEBUG level but becomes production noise and data-exposure risk if
-promoted to `logger.info`. Watch for this in manager files — it appeared at `firewall_manager.py`
-line 622 in PR #146. All full-payload log calls must use `logger.debug`.
+promoted to `logger.info`. Watch for this in manager files. All full-payload log calls must use `logger.debug`.
 
 ```python
 # BLOCKED: full payload at INFO level
@@ -215,8 +214,6 @@ The doc site must be updated as part of the same PR — not as a follow-up. The 
 the doc site should be updated *after* the tool code is finalized but *before* merge, so the
 published docs stay in sync with the merged code at every point in history.
 
-For PR #126, this gate was explicitly enforced — the PR wasn't merged until doc counts matched.
-
 **Note:** `docs/index.html` is a static marketing site HTML file, not a generated artifact.
 Marketing site changes must be made and reviewed manually, separate from the tool documentation sweep.
 
@@ -232,7 +229,8 @@ If a PR adds non-`None` defaults to mutable fields on a shared base model, every
 
 ```python
 # DANGEROUS — non-None default on shared base model field
-class PolicyBase(BaseModel):
+# (illustrative; substitute the actual <Domain>Base class name from the PR diff)
+class <DomainBase>(BaseModel):
     create_allow_respond: bool = False   # silently overwrites on update
     schedule: dict = {"mode": "ALWAYS"}  # silently overwrites on update
 ```
@@ -241,7 +239,7 @@ class PolicyBase(BaseModel):
 code paths. Shared base model fields must use `= None`. Any PR that adds non-`None` defaults to
 a shared base model field is a **hard blocker**.
 
-This gate emerged from PR #146. Check for it whenever the PR diff touches a `<Domain>Base` class
+Check for it whenever the PR diff touches a `<Domain>Base` class
 that both create and update tools inherit from.
 
 ---
@@ -274,8 +272,7 @@ contributor has already run live smoke tests and embedded results in the PR body
 must run a full independent validation suite. Contributor runs confirm the code works in their
 environment; maintainer runs confirm it against the project's reference hardware and catch
 environment-specific divergence that the contributor cannot reproduce. This is a non-optional
-standing rule. Reference: PR #356 (level99 ran smoke pre-submission; maintainer still ran full
-independent suite before merge).
+standing rule.
 
 **Gotcha:** A tool already broken before the PR is still your responsibility to flag. Don't
 silently skip known-broken tools — note them explicitly in the PR description.
@@ -392,7 +389,7 @@ Structure your review body with explicit sections:
 
 ```
 ## Hard Blockers (must fix before merge)
-- [ ] Replace f-string loggers in device_manager.py (23 instances)
+- [ ] Replace f-string loggers in modified manager files
 - [ ] Register new tool in validator registry
 
 ## Minor Items (nice-to-have)
@@ -453,8 +450,7 @@ low-history contributors, prefer review comments so they learn the patterns.
 
 When a first-time contributor is **historically unresponsive** (72+ hours no response) AND the fix
 is **trivial and mechanical** (ruff format, logger replacement, simple doc fix), apply fork-edit
-instead of requesting changes. **Reference:** PR #288 — contributor non-responsive to ruff format
-request; fork-edit unblocked the PR.
+instead of requesting changes.
 
 ### Org Forks — Push Limitation
 
@@ -490,8 +486,6 @@ idea it surfaces is too big to carry in this PR.
 1. **Extract valid proposals** — open a new GitHub issue capturing genuine good ideas
 2. **Implement in-house** — if high-value, plan to implement on `main`
 3. **Credit the contributor** — close with a comment acknowledging them and linking the new issue
-
-**Reference:** PR #142 (riichard) was closed using this pattern.
 
 ### Principle #5 vs. Principle #6 — Decision Matrix
 
@@ -557,7 +551,6 @@ git diff --name-only <merge-commit>^1 <merge-commit>
 ```
 
 Then run Gates 1–4 against those files. If gaps are found, open a follow-up PR immediately.
-PR #122 was audited retroactively using this exact approach.
 
 ---
 
@@ -594,7 +587,7 @@ so the issue tracker stays actionable.
 
 ## Bug Report Template Design
 
-The bug report form collects hardware-specific context that prevents 3-comment follow-up cycles.
+The bug report form collects hardware-specific context that prevents multi-comment follow-up cycles.
 Because unifi-mcp behavior varies by controller firmware, hardware SKU, and install method,
 collecting this context at first filing is essential.
 
@@ -620,9 +613,9 @@ Because unifi-mcp is used by AI agents, many reported bugs are agent misuse rath
 Use four separate optional fields: AI model used, exact prompt, tool calls observed (render: shell),
 and raw tool output sanitized (render: json). Optional to avoid friction-stalling non-AI bugs.
 
-**Template impact:** Issue #297 (before template): "MacOS, Claude Code Desktop via uvx" with zero
-controller info — three follow-up comments without reproduction. Issue #298 (after template, commit
-`b8e8054`): hardware ("UDM Pro") and raw API output on first filing — fix confirmed within 5 minutes.
+**Template impact:** Bugs filed without the template required multiple follow-up comments to get
+controller info. Bugs filed with the template (hardware + raw API output on first filing) often
+yield a fix within minutes of triage.
 
 ---
 
@@ -654,9 +647,8 @@ either unnecessary or treats a symptom rather than the root cause.
    should you begin implementation.
 
 **Gotcha: AI-generated analysis without reproduction** — If an AI assistant proposes a code fix for
-a bug report, treat that proposal as a starting hypothesis — not a confirmed diagnosis. Issue #297
-showed this pattern: initial AI analysis proposed a code change without confirmed reproduction; the
-developer correctly pushed back. Always verify with live reproduction before merging any AI-proposed fix.
+a bug report, treat that proposal as a starting hypothesis — not a confirmed diagnosis. Always verify
+with live reproduction before merging any AI-proposed fix.
 
 **Gotcha: Community-submitted AI-traced root-cause diagnoses require independent source verification** —
 When a contributor submits a detailed AI-assisted root-cause trace (e.g., "the bug is in function X

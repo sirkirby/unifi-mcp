@@ -21,7 +21,7 @@ The project uses a four-stage lazy-loading architecture that keeps startup token
 
 ## Prerequisites
 
-- Familiarity with the project's `runtime.py`, `main.py`, and `tools/` directory layout
+- Familiarity with the project's `runtime.py`, `main.py`, and `tools/` directory layout. Each app has its own copy under `apps/{app}/src/{package}/` (e.g., `apps/network/src/unifi_network_mcp/runtime.py`).
 - `make manifest` available (run from repo root; `uv run make manifest` if outside the venv)
 - Any new tool category module must be created on disk before regenerating the manifest
 
@@ -69,6 +69,7 @@ Every shared service (network client, cache, connection pool) is managed as an `
 2. Open `runtime.py` and add a factory function decorated with `@lru_cache`. Use a **public** name (no leading underscore) — all existing factories follow this convention:
 
 ```python
+# Illustrative pattern — substitute your actual module and class names
 from functools import lru_cache
 from managers.domain_manager import DomainManager
 
@@ -139,15 +140,15 @@ setup_permissioned_tool(
 
 After this call, the permission system is fully operational: callers will see preview/execute state machine (confirm mode) or immediate execution (bypass mode), and policy gates block entire tool categories.
 
-**Writing a tool unit test:**
+**Writing a tool unit test (illustrative — substitute your actual tool names):**
 
 ```python
 # tests/tools/test_acl.py  (example — tool files are flat: tools/acl.py)
-from unifi_network_mcp.tools.acl import some_acl_function   # safe: stage 2 already stripped kwargs
+from unifi_network_mcp.tools.acl import acl_list_rules   # safe: stage 2 already stripped kwargs
 
-def test_acl_function_returns_expected(mock_manager):
-    result = some_acl_function(site_id="default")    # no permission kwargs needed
-    assert result["status"] == "ok"
+def test_acl_list_rules_returns_list(mock_manager):
+    result = acl_list_rules(site_id="default")    # no permission kwargs needed
+    assert isinstance(result, list)
 ```
 
 **Do not** pass `permission_category` or `permission_action` at test call sites — those kwargs are already gone after stage 2 and passing them will raise `TypeError: unexpected keyword argument`.
