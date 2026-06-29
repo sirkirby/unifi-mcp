@@ -49,6 +49,35 @@ def _unpersisted_fields(before: Dict[str, Any], after: Dict[str, Any], requested
     return stuck
 
 
+# Manual min-rate data-rate fields are honored only when the controller's rate
+# mode is "manual" and the band's min-rate is enabled. Setting a *_data_rate_kbps
+# while minrate_setting_preference is "auto" is answered rc:ok but silently
+# recomputed away — which the verify step above would (correctly) flag as a
+# non-persisted write. Map each rate field to the enable flag it requires.
+_MINRATE_RATE_FIELDS = {
+    "minrate_ng_data_rate_kbps": "minrate_ng_enabled",
+    "minrate_na_data_rate_kbps": "minrate_na_enabled",
+}
+
+
+def _apply_minrate_dependencies(update_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Return update_data with the dependencies a manual min-rate write needs.
+
+    When a caller sets ``minrate_{ng,na}_data_rate_kbps``, also force
+    ``minrate_setting_preference="manual"`` and the band's ``minrate_*_enabled``
+    so the controller persists the requested rate instead of recomputing it
+    under auto mode. Values the caller set explicitly are left untouched.
+    """
+    rate_fields = [field for field in _MINRATE_RATE_FIELDS if field in update_data]
+    if not rate_fields:
+        return update_data
+    patched = dict(update_data)
+    patched.setdefault("minrate_setting_preference", "manual")
+    for rate_field in rate_fields:
+        patched.setdefault(_MINRATE_RATE_FIELDS[rate_field], True)
+    return patched
+
+
 class NetworkManager:
     """Manages network (LAN/VLAN) and WLAN operations on the Unifi Controller."""
 
@@ -329,7 +358,12 @@ class NetworkManager:
             # 1. Existence check; raises UniFiNotFoundError on miss.
             existing_wlan = await self.get_wlan_details(wlan_id)
 
-            # 2. Merge updates (deep merge preserves nested sub-objects)
+            # 2. A manual min-rate request is silently recomputed away unless the
+            #    rate mode is "manual" and the band is enabled; inject those
+            #    dependencies so a rate-only update actually persists.
+            update_data = _apply_minrate_dependencies(update_data)
+
+            # 3. Merge updates (deep merge preserves nested sub-objects)
             merged_data = deep_merge(existing_wlan, update_data)
 
             # 3. Send the full merged data

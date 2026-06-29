@@ -8,7 +8,11 @@ unconditionally; they now re-read and confirm the change actually landed.
 
 from unittest.mock import AsyncMock, MagicMock
 
-from unifi_core.network.managers.network_manager import NetworkManager, _unpersisted_fields
+from unifi_core.network.managers.network_manager import (
+    NetworkManager,
+    _apply_minrate_dependencies,
+    _unpersisted_fields,
+)
 
 WLAN_ID = "60c7d8e9f0a1b2c3d4e5f6a7"
 NETWORK_ID = "70d8e9f0a1b2c3d4e5f6a7b8"
@@ -123,3 +127,67 @@ async def test_update_network_fails_when_not_persisted():
 
     assert ok is False
     assert err is not None and "igmp_snooping" in err
+
+
+# ---------------------------------------------------------------------------
+# _apply_minrate_dependencies helper
+# ---------------------------------------------------------------------------
+
+
+def test_minrate_deps_adds_manual_preference_and_enable_for_ng():
+    out = _apply_minrate_dependencies({"minrate_ng_data_rate_kbps": 6000})
+    assert out["minrate_setting_preference"] == "manual"
+    assert out["minrate_ng_enabled"] is True
+    assert out["minrate_ng_data_rate_kbps"] == 6000
+
+
+def test_minrate_deps_adds_enable_for_na_band():
+    out = _apply_minrate_dependencies({"minrate_na_data_rate_kbps": 12000})
+    assert out["minrate_setting_preference"] == "manual"
+    assert out["minrate_na_enabled"] is True
+
+
+def test_minrate_deps_preserves_explicit_caller_values():
+    # A caller who deliberately sets auto/disabled is not overridden.
+    out = _apply_minrate_dependencies(
+        {
+            "minrate_ng_data_rate_kbps": 6000,
+            "minrate_setting_preference": "auto",
+            "minrate_ng_enabled": False,
+        }
+    )
+    assert out["minrate_setting_preference"] == "auto"
+    assert out["minrate_ng_enabled"] is False
+
+
+def test_minrate_deps_noop_without_rate_field():
+    assert _apply_minrate_dependencies({"proxy_arp": True}) == {"proxy_arp": True}
+
+
+def test_minrate_deps_does_not_mutate_input():
+    src = {"minrate_ng_data_rate_kbps": 6000}
+    _apply_minrate_dependencies(src)
+    assert src == {"minrate_ng_data_rate_kbps": 6000}
+
+
+# ---------------------------------------------------------------------------
+# update_wlan applies the min-rate dependencies on the wire
+# ---------------------------------------------------------------------------
+
+
+async def test_update_wlan_injects_manual_minrate_dependencies_into_put():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _wlan(minrate_ng_data_rate_kbps=1000, minrate_setting_preference="auto", minrate_ng_enabled=True)
+    after = _wlan(minrate_ng_data_rate_kbps=6000, minrate_setting_preference="manual", minrate_ng_enabled=True)
+    # get(pre) -> put -> get(post, rate now persisted because mode is manual)
+    conn.request.side_effect = [[before], {}, [after]]
+
+    ok, err = await mgr.update_wlan(WLAN_ID, {"minrate_ng_data_rate_kbps": 6000})
+
+    assert ok is True
+    assert err is None
+    put_request = conn.request.call_args_list[1].args[0]
+    assert put_request.data["minrate_ng_data_rate_kbps"] == 6000
+    assert put_request.data["minrate_setting_preference"] == "manual"
+    assert put_request.data["minrate_ng_enabled"] is True

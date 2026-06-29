@@ -1177,6 +1177,15 @@ class LiveSmokeRunner:
             {"wlan_id": wlan_id, "update_data": {"hide_ssid": False}, "confirm": True},
             "approved:update",
         )
+        # Exercise the manual min-rate coupling: a freshly created WLAN is in auto
+        # rate mode, so a rate-only update persists only if the manager also flips
+        # minrate_setting_preference=manual and enables the band. verify-after-write
+        # turns a silent recompute into a failed record here.
+        await self.call(
+            "unifi_update_wlan",
+            {"wlan_id": wlan_id, "update_data": {"minrate_ng_data_rate_kbps": 6000}, "confirm": True},
+            "approved:update",
+        )
         delete = await self.call("unifi_delete_wlan", {"wlan_id": wlan_id, "confirm": True}, "approved:delete")
         if delete.success:
             self.report.cleaned_resources.append({"type": "wlan", "id": wlan_id, "name": name})
