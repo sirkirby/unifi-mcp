@@ -156,6 +156,71 @@ async def test_action_endpoint_serializer_contract_error(tmp_path, monkeypatch) 
         assert action_rows[0].error_kind == "serializer_contract"
 
 
+@pytest.mark.asyncio
+async def test_action_endpoint_update_ack_tuple_success(tmp_path, monkeypatch) -> None:
+    """Fetch-merge-put update managers return a (ok, error) ack tuple. A success
+    tuple must surface as a clean {"success": true} envelope (not a stringified
+    tuple) and audit as success."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=(True, None)))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post(
+            "/v1/actions/unifi_update_network",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"network_id": "n1"}, "confirm": True},
+        )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body == {"success": True}
+
+    sm = app.state.sessionmaker
+    async with sm() as session:
+        rows = (await session.execute(select(AuditLog))).scalars().all()
+        action_rows = [row for row in rows if row.target == "unifi_update_network"]
+        assert len(action_rows) == 1
+        assert action_rows[0].outcome == "success"
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_update_ack_tuple_failure(tmp_path, monkeypatch) -> None:
+    """Regression: a FAILED update ack tuple must report success=false with the
+    error message — not top-level success=true with the failure stringified into
+    data.result — and must audit as error."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+
+    err = "Controller accepted the request but did not persist field(s): upnp_enabled."
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=(False, err)))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post(
+            "/v1/actions/unifi_update_network",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {"network_id": "n1"}, "confirm": True},
+        )
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["success"] is False
+    assert body["error"] == err
+    assert "result" not in body.get("data", {})
+
+    sm = app.state.sessionmaker
+    async with sm() as session:
+        rows = (await session.execute(select(AuditLog))).scalars().all()
+        action_rows = [row for row in rows if row.target == "unifi_update_network"]
+        assert len(action_rows) == 1
+        assert action_rows[0].outcome == "error"
+
+
 @pytest.mark.parametrize(
     ("tool_name", "items_key", "item"),
     [

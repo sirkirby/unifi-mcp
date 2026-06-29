@@ -22,6 +22,20 @@ class SerializerContractError(Exception):
     """Raised when manager-method return type doesn't match declared kind."""
 
 
+def _is_ack_tuple(result: Any) -> bool:
+    """True for a mutation ``(ok: bool, error: Optional[str])`` ack tuple.
+
+    Fetch-merge-put update managers (e.g. update_network / update_wlan /
+    update_gateway_settings) return this shape instead of the resource dict.
+    """
+    return (
+        isinstance(result, tuple)
+        and len(result) == 2
+        and isinstance(result[0], bool)
+        and (result[1] is None or isinstance(result[1], str))
+    )
+
+
 class Serializer:
     """Subclass + override serialize() and declare kind. Optional richer
     metadata (primary_key, display_columns, sort_default) is per-serializer
@@ -60,6 +74,18 @@ class Serializer:
         return redact_sensitive_fields(data, redact_sensitive=redact_sensitive)
 
     def serialize_action(self, result, *, tool_name: str, redact_sensitive: bool = True) -> dict:
+        # Mutation managers that follow the fetch-merge-put golden path return a
+        # (ok: bool, error: Optional[str]) ack tuple rather than the resource. Surface
+        # it as a structured envelope so the action path reports failures correctly.
+        # Without this the tuple falls through to serialize()'s str() fallback, which
+        # stringifies it into data.result and always reports top-level success=True.
+        if _is_ack_tuple(result):
+            ok, error = result
+            envelope: dict[str, Any] = {"success": ok}
+            if error:
+                envelope["error"] = error
+            return envelope
+
         kind = self._kind_for_tool(tool_name)
         hint = self._render_hint(kind)
         if kind == RenderKind.LIST:
