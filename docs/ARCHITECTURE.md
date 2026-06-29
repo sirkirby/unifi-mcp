@@ -54,7 +54,7 @@ Used by: `apps/network`, `apps/protect`, `apps/access`.
 
 ### apps/network
 
-The UniFi Network MCP server. 177 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
+The UniFi Network MCP server. 180 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
 
 - `src/unifi_network_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
@@ -69,7 +69,7 @@ The UniFi Network MCP server. 177 tools covering firewall, clients, devices, net
 
 ### apps/protect
 
-The UniFi Protect MCP server. 58 tools across 8 categories covering cameras, events, Find Anything detection search, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (including AI-powered alarms, which require a SuperAdmin credential). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
+The UniFi Protect MCP server. 59 tools across 8 categories covering cameras, events, Find Anything detection search, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (including AI-powered alarms, which require a SuperAdmin credential). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
 
 - `src/unifi_protect_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch

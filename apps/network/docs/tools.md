@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 177 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 180 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`.
 
@@ -26,6 +26,13 @@ These are always registered regardless of mode:
 - `unifi_create_firewall_group` — Create a new address or port group
 - `unifi_update_firewall_group` — Update an existing group
 - `unifi_delete_firewall_group` — Delete a group
+
+## Gateway Settings (2 tools)
+
+Gateway-wide security / NAT / connection-tracking settings (the controller's `usg` singleton).
+
+- `unifi_get_gateway_settings` — Read gateway settings: GeoIP filtering, SYN cookies, ICMP redirects, DNS verification, UPnP/NAT-PMP, MSS clamp, ALG modules, hardware offloading, conntrack timeouts
+- `unifi_update_gateway_settings` — Update gateway settings (confirm-gated; deep-merges a partial update, preserving nested sub-objects and untouched keys)
 
 ## Content Filtering (4 tools)
 

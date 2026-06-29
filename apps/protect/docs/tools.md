@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Protect MCP server exposes 58 tools (including 5 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Protect MCP server exposes 59 tools (including 5 meta-tools), all prefixed with `protect_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `protect_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_protect_mcp/tools_manifest.json`.
 
@@ -17,7 +17,7 @@ In lazy mode, an additional meta-tool is available:
 
 - `protect_load_tools` -- Load a set of tools by category or name for direct calling
 
-## Cameras (11 tools)
+## Cameras (12 tools)
 
 - `protect_list_cameras` -- List all cameras with name, model, state, recording mode
 - `protect_get_camera` -- Detailed camera info: firmware, IP, MAC, IR/HDR, smart detection, PTZ
