@@ -185,6 +185,36 @@ async def test_update_nested_object_dropped_is_flagged_not_persisted():
     assert err is not None and "dns_verification.primary_dns_server" in err
 
 
+async def test_update_aborts_when_current_settings_empty():
+    """An empty pre-write read means deep-merging onto {} and PUTting would replace
+    the whole section — abort instead of clobbering, and never issue the PUT."""
+    conn = _make_connection()
+    mgr = GatewaySettingsManager(conn)
+    conn.request.side_effect = [[]]  # GET returns empty -> existing == {}
+    ok, err = await mgr.update_gateway_settings({"upnp_enabled": True})
+    assert ok is False
+    assert err is not None and "aborting" in err
+    # only the pre-write GET ran; no PUT was attempted
+    assert conn.request.call_count == 1
+    assert conn.request.call_args_list[0][0][0].method == "get"
+
+
+async def test_update_refilters_readonly_and_unknown_keys():
+    """Defense in depth: even a direct caller passing read-only / unknown keys must
+    not get them merged into the PUT body."""
+    conn = _make_connection()
+    mgr = GatewaySettingsManager(conn)
+    conn.request.side_effect = [[_usg()], {}, [_usg(upnp_enabled=True)]]
+    ok, err = await mgr.update_gateway_settings({"upnp_enabled": True, "_id": "evil", "site_id": "evil", "bogus": 1})
+    assert ok is True, err
+    put_call = conn.request.call_args_list[1][0][0]
+    sent = put_call.data
+    assert sent["upnp_enabled"] is True
+    assert sent["_id"] == "usg1"  # original id preserved, NOT overwritten by "evil"
+    assert "site_id" not in sent  # unknown/read-only key never reached the PUT
+    assert "bogus" not in sent
+
+
 def test_unpersisted_helper():
     assert _unpersisted_fields({"a": 1}, {"a": 1}, {"a": 2}) == ["a"]
     assert _unpersisted_fields({"a": 1}, {"a": 2}, {"a": 2}) == []

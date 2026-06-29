@@ -101,6 +101,16 @@ class TestFromController:
         assert m.upnp_enabled is None
         assert m.dns_verification is None
 
+    def test_geo_ip_countries_list_normalized_to_csv(self):
+        """Some firmware returns geo_ip_filtering_countries as an array; it must be
+        coerced to the canonical CSV string rather than failing str validation."""
+        m = from_controller({**SAMPLE_USG, "geo_ip_filtering_countries": ["US", "CA", "GB"]})
+        assert m.geo_ip_filtering_countries == "US,CA,GB"
+
+    def test_geo_ip_countries_string_passthrough(self):
+        m = from_controller({**SAMPLE_USG, "geo_ip_filtering_countries": "US,CA"})
+        assert m.geo_ip_filtering_countries == "US,CA"
+
 
 class TestFieldSets:
     def test_mutable_excludes_readonly(self):

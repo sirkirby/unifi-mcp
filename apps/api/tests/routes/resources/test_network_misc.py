@@ -311,6 +311,7 @@ async def test_get_gateway_settings_happy_path(tmp_path, monkeypatch) -> None:
     assert body["data"]["key"] == "usg"
     assert body["data"]["upnp_enabled"] is False
     assert body["data"]["tcp_established_timeout"] == 7440
+    assert body["data"]["dns_verification"]["primary_dns_server"] == "1.1.1.1"
 
 
 @pytest.mark.asyncio

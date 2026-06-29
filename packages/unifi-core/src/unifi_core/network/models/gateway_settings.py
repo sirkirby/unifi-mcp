@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class GatewaySettings(BaseModel):
@@ -119,6 +119,21 @@ class GatewaySettings(BaseModel):
 
     # --- Misc ---
     unbind_wan_monitors: Optional[bool] = Field(default=None, description="Unbind WAN uplink monitors.")
+
+    @field_validator("geo_ip_filtering_countries", mode="before")
+    @classmethod
+    def _normalize_countries(cls, value: Any) -> Any:
+        """Coerce the GeoIP country list to the canonical CSV string.
+
+        Some controller firmware returns ``geo_ip_filtering_countries`` as a JSON
+        array (e.g. ``["US", "CA"]``) rather than a comma-separated string. Without
+        this, a populated GeoIP config would fail ``str`` validation and break the
+        read path. The model's canonical shape stays CSV (matching the Strawberry
+        type and the tool description).
+        """
+        if isinstance(value, (list, tuple)):
+            return ",".join(str(item) for item in value)
+        return value
 
 
 # ---------------------------------------------------------------------------

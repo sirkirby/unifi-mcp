@@ -17,6 +17,7 @@ from aiounifi.models.api import ApiRequest
 
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.models.gateway_settings import to_controller_update
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -116,6 +117,12 @@ class GatewaySettingsManager:
         """
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
+
+        # Defense in depth: the MCP tool and the API dispatch translator both
+        # pre-filter, but re-filter here so a stray direct caller cannot merge
+        # read-only / unknown keys (e.g. _id, site_id) into the PUT body. Drops
+        # None values; preserves boolean False.
+        update_data = to_controller_update(update_data)
         if not update_data:
             logger.warning("No update data provided for gateway settings.")
             return True, None  # No action needed
@@ -129,6 +136,15 @@ class GatewaySettingsManager:
         try:
             # 1. Fetch current state.
             existing = await self.get_gateway_settings()
+            # Refuse to PUT onto an empty base: deep-merging the partial onto {} and
+            # PUTting it would be a full-section replace that wipes every other
+            # gateway setting. A real gateway always returns a populated object, so
+            # an empty read means something is wrong — abort rather than clobber.
+            if not existing:
+                return False, (
+                    "Could not read current gateway settings; aborting update to avoid "
+                    "overwriting the gateway settings section."
+                )
 
             # 2. Deep merge preserves nested sub-objects (e.g. dns_verification)
             #    and every sibling key the partial update did not touch.

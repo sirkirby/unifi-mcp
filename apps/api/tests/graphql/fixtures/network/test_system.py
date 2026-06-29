@@ -197,6 +197,8 @@ async def test_gateway_settings(tmp_path, monkeypatch):
     assert gw["upnpEnabled"] is False
     assert gw["synCookies"] is True
     assert gw["tcpEstablishedTimeout"] == 7440
+    # nested JSON scalar projects through intact
+    assert gw["dnsVerification"]["primary_dns_server"] == "1.1.1.1"
 
 
 @pytest.mark.asyncio

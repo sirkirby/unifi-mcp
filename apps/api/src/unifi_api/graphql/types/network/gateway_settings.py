@@ -75,12 +75,17 @@ class GatewaySettings:
     @classmethod
     def from_manager_output(cls, obj: Any) -> "GatewaySettings":
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
+        # Some firmware returns geo_ip_filtering_countries as an array; the GraphQL
+        # field is a CSV string. Normalize so a populated GeoIP config serializes.
+        countries = raw.get("geo_ip_filtering_countries")
+        if isinstance(countries, (list, tuple)):
+            countries = ",".join(str(item) for item in countries)
         return cls(
             id=raw.get("_id") or raw.get("id"),
             key=raw.get("key"),
             geo_ip_filtering_enabled=raw.get("geo_ip_filtering_enabled"),
             geo_ip_filtering_block=raw.get("geo_ip_filtering_block"),
-            geo_ip_filtering_countries=raw.get("geo_ip_filtering_countries"),
+            geo_ip_filtering_countries=countries,
             geo_ip_filtering_traffic_direction=raw.get("geo_ip_filtering_traffic_direction"),
             syn_cookies=raw.get("syn_cookies"),
             broadcast_ping=raw.get("broadcast_ping"),

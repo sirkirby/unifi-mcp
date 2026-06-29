@@ -106,6 +106,53 @@ class TestUpdateGatewaySettings:
         assert "upnp_enabled" in result["error"]
 
     @pytest.mark.asyncio
+    async def test_preview_does_not_write(self):
+        """confirm=false is preview-only — the manager update must never be called."""
+        with patch(_MGR) as mgr:
+            mgr.get_gateway_settings = AsyncMock(return_value=SAMPLE_USG)
+            mgr.update_gateway_settings = AsyncMock(return_value=(True, None))
+            from unifi_network_mcp.tools.gateway_settings import update_gateway_settings
+
+            result = await update_gateway_settings(update_data={"upnp_enabled": True}, confirm=False)
+
+        assert result.get("requires_confirmation") is True
+        mgr.update_gateway_settings.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_confirm_invokes_manager_with_filtered_data(self):
+        """confirm=true writes, and only mutable keys reach the manager (read-only /
+        unknown keys are stripped by gw_to_update before dispatch)."""
+        updated = {**SAMPLE_USG, "upnp_enabled": True}
+        with patch(_MGR) as mgr:
+            mgr.get_gateway_settings = AsyncMock(side_effect=[SAMPLE_USG, updated])
+            mgr.update_gateway_settings = AsyncMock(return_value=(True, None))
+            from unifi_network_mcp.tools.gateway_settings import update_gateway_settings
+
+            result = await update_gateway_settings(
+                update_data={"upnp_enabled": True, "id": "x", "bogus": 1}, confirm=True
+            )
+
+        assert result["success"] is True
+        mgr.update_gateway_settings.assert_awaited_once_with({"upnp_enabled": True})
+
+    @pytest.mark.asyncio
+    async def test_dns_verification_non_dict_rejection_surfaces(self):
+        """A non-dict dns_verification is passed through by gw_to_update and rejected
+        by the manager guard; the rejection must surface to the caller envelope."""
+        with patch(_MGR) as mgr:
+            mgr.get_gateway_settings = AsyncMock(return_value=SAMPLE_USG)
+            mgr.update_gateway_settings = AsyncMock(
+                return_value=(False, "dns_verification must be an object (a dict of DNS-verification keys).")
+            )
+            from unifi_network_mcp.tools.gateway_settings import update_gateway_settings
+
+            result = await update_gateway_settings(update_data={"dns_verification": "evil"}, confirm=True)
+
+        assert result["success"] is False
+        assert "dns_verification must be an object" in result["error"]
+        mgr.update_gateway_settings.assert_awaited_once_with({"dns_verification": "evil"})
+
+    @pytest.mark.asyncio
     async def test_every_sensitive_field_warns(self):
         from unifi_network_mcp.tools.gateway_settings import (
             SECURITY_SENSITIVE_FIELDS,
