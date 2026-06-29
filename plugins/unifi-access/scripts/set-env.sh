@@ -129,6 +129,64 @@ write_claude_settings() {
     fi
   fi
 
+  tmp_file="${SETTINGS_FILE}.tmp.$$"
+
+  # Preferred path: merge with python3, which understands JSON string
+  # boundaries. The previous sed-based approach corrupted any existing string
+  # value that happened to contain ",}" (e.g. a regex permission like
+  # `Bash(grep -inE "x{2,}")`) by rewriting the trailing-comma cleanup inside
+  # the string.
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 - "$SETTINGS_FILE" "$tmp_file" "$@" <<'PY'
+import json
+import sys
+
+settings_file, tmp_file = sys.argv[1], sys.argv[2]
+pairs = sys.argv[3:]
+
+try:
+    with open(settings_file) as handle:
+        data = json.load(handle)
+except FileNotFoundError:
+    data = {}
+
+if not isinstance(data, dict):
+    sys.stderr.write("ERROR: %s does not contain a JSON object.\n" % settings_file)
+    sys.exit(1)
+
+env = data.setdefault("env", {})
+if not isinstance(env, dict):
+    sys.stderr.write("ERROR: \"env\" in %s is not a JSON object.\n" % settings_file)
+    sys.exit(1)
+
+for pair in pairs:
+    key, sep, value = pair.partition("=")
+    if not sep:
+        sys.stderr.write("ERROR: invalid KEY=VALUE argument: %s\n" % pair)
+        sys.exit(1)
+    env[key] = value
+
+with open(tmp_file, "w") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+    then
+      echo "ERROR: failed to merge values into $SETTINGS_FILE." >&2
+      echo "       Original $SETTINGS_FILE was not modified." >&2
+      rm -f "$tmp_file"
+      exit 1
+    fi
+
+    mv "$tmp_file" "$SETTINGS_FILE"
+    print_values "$@"
+    echo ""
+    echo "Saved to $SETTINGS_FILE"
+    return
+  fi
+
+  # Fallback path (python3 unavailable): best-effort sed-based merge. Note this
+  # cannot safely handle string values containing ",}" and will be rejected by
+  # the validation below in that case.
   if [ -f "$SETTINGS_FILE" ]; then
     existing=$(cat "$SETTINGS_FILE")
   else
@@ -153,16 +211,7 @@ write_claude_settings() {
 
   existing=$(echo "$existing" | sed 's/,[[:space:]]*}/\n  }/g')
 
-  tmp_file="${SETTINGS_FILE}.tmp.$$"
   echo "$existing" > "$tmp_file"
-
-  if command -v python3 >/dev/null 2>&1; then
-    if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$tmp_file" 2>/dev/null; then
-      echo "ERROR: produced invalid JSON. Bad output left at $tmp_file for inspection." >&2
-      echo "       Original $SETTINGS_FILE was not modified." >&2
-      exit 1
-    fi
-  fi
 
   mv "$tmp_file" "$SETTINGS_FILE"
   print_values "$@"
