@@ -191,7 +191,7 @@ Each package must declare both `tag_regex` and `git_describe_command` scoped to 
 
 ### Step 0: Pin-Alignment CI Gate (Automated Blocker)
 
-The pin-alignment CI gate (PR #286) runs on every PR and **cannot be skipped**. It validates that every downstream package's dependency bounds permit the versions of upstream packages on main. If your PR fails: look at the CI output for the specific package and bound that failed, update the offending bounds in `pyproject.toml`, commit and push.
+The pin-alignment CI gate runs on every PR and **cannot be skipped**. It validates that every downstream package's dependency bounds permit the versions of upstream packages on main. If your PR fails: look at the CI output for the specific package and bound that failed, update the offending bounds in `pyproject.toml`, commit and push.
 
 **CI gate gap — import-only PRs:** The pin-alignment gate fires only when `pyproject.toml` changes. A PR that adds code using a new cross-package API (new import from `unifi-core` or `unifi-mcp-shared`) without updating the floor bound in `pyproject.toml` passes CI even when the published upstream wheel's metadata would reject the resolved version at user install time. Manually verify dependency bounds for any PR that expands cross-package imports.
 
@@ -259,11 +259,13 @@ git push origin relay/v0.1.0
 
 > **Floor-bump sequencing gotcha:** Open downstream `pyproject.toml` floor-bump PRs (raising the minimum version bound on an upstream package) **only after** the upstream tag is confirmed on PyPI. Committing the floor-bump PR before the upstream version exists on PyPI causes the pin-alignment CI gate on that PR to fail — the gate tries to resolve the declared lower bound but the version does not yet exist.
 
+> **Floor-bump local staging:** While waiting for PyPI to confirm the upstream version, stage the floor-bump work locally — create the branch, update downstream `pyproject.toml` version floors, and commit locally. Hold `git push` and PR creation until PyPI confirms the version exists. This decouples preparation from the PyPI propagation gate and eliminates idle waiting between confirmation and branch push.
+
 ---
 
 ## Procedure G: generate_release_notes.py Path Configuration
 
-Open `scripts/generate_release_notes.py` and locate `APP_CONFIGS`. Each entry is a `PackageConfig` with `path_groups` — a tuple of `PathGroup` objects that filter PRs to only those touching paths relevant to each package. Each entry should include the app directory, shared dependency directories (`packages/unifi-core/`, `packages/unifi-mcp-shared/`), and its own publish/test/docker workflows.
+Open `scripts/generate_release_notes.py` and locate `APP_CONFIGS`. Each entry is a `PackageConfig` with `path_groups` — a tuple of `PathGroup` objects that filter PRs to only those touching paths relevant to each package. Each entry should include the app directory, shared dependency directories (`packages/unifi-core/`, `packages/unifi-mcp-shared/`), and its own publish, test, and Docker build workflow paths.
 
 **Known limitation:** `scripts/generate_release_notes.py` does not emit PR author information. Contributor credit must be added manually.
 

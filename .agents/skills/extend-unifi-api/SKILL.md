@@ -6,12 +6,12 @@ description: >-
   dispatcher integration. Covers: manager CRUD with 405 workarounds, V2 API response
   normalization, domain Pydantic models and field validation, tool modules with preview/confirm
   flow, typed action input models for non-CRUD operations, test suites at both layers, manifest
-  generation, Strawberry GraphQL type registration,
-  cursor-based pagination for list endpoints, render-hint conventions, HTTP error contracts
-  (409 for capability mismatch), ManagerFactory multi-controller concurrency, the multi-surface
-  Phase 8 CI gate, field-symmetry migration procedure, update tool fetch-merge-put pattern,
-  mutation tool registration, and DISPATCH_ARG_TRANSLATORS action dispatcher wiring. Activates
-  for any task that introduces new resource support across the manager/tool/API boundary.
+  generation, Strawberry GraphQL type registration, cursor-based pagination for list endpoints,
+  render-hint conventions, HTTP error contracts (409 for capability mismatch), ManagerFactory
+  multi-controller concurrency, the multi-surface Phase 8 CI gate, field-symmetry migration
+  procedure, update tool fetch-merge-put pattern, mutation tool registration,
+  DISPATCH_ARG_TRANSLATORS action dispatcher wiring, and dual-surface Protect governance.
+  Activates for any task that introduces new resource support across the manager/tool/API boundary.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -74,7 +74,7 @@ return response
 | Identifier | Source | Use case | Example |
 |---|---|---|---|
 | `_id` (ObjectID) | V2 API `GET /api/site/{site}/devices` response | Local CRUD within a site/controller | "605d...7f3a" |
-| Integration UUID | External system mappings, cross-controller queries | Multi-controller operations, relay protocol | "12345678-uuid-format" |
+| Integration UUID | External system mappings, cross-controller queries | Multi-controller operations, relay protocol | UUID format |
 
 **Hazard:** If you extract an `_id` from a V2 response and send it to a different controller as a GET parameter, it will fail silently (404 or empty result) because the ObjectID is local to that controller's database. Always document which identifier type your tool accepts. If you need cross-controller queries, you must use the Integration UUID path, not the ObjectID path.
 
@@ -469,7 +469,7 @@ Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(
 
 **`api_request_raw` required for empty-body Protect DELETE and merge ops:** `client.api_request()` raises when the controller returns an empty response body. Use `client.api_request_raw()` instead. Reference: `packages/unifi-core/src/unifi_core/protect/managers/alarm_manager.py`
 
-**`AlarmRulesFacade` — version-transparent facade for dual-backend resources:** When a resource spans two API backends, implement a facade that prefers v2 and falls back to legacy on `AlarmManagerPermissionError` or `BadRequest`. Surface the `complete` flag in `_meta`. 5xx/transient errors must NOT be masked. Reference: `packages/unifi-core/src/unifi_core/protect/managers/alarm_facade.py`.
+**`AlarmRulesFacade` — version-transparent facade for dual-backend resources:** When a resource spans two API backends, implement a facade that prefers v2 and falls back to legacy on `AlarmManagerPermissionError` or `BadRequest`. Surface the `complete` flag in `_meta`. 5xx/transient errors must NOT be masked. The `AlarmRulesFacade` class is the reference implementation in `packages/unifi-core/src/unifi_core/protect/managers/`.
 
 **`AlarmRulesFacade._id_family` routing — UUID format wins, legacy IDs may have suffixes:** `_id_family` routes a rule ID to v2 (if it matches full UUID format) or legacy (everything else). Do NOT use a strict 24-hex ObjectID regex for this check — legacy automation IDs may carry suffixes like `_new` which would fail a strict hex test. The module uses `_UUID_RE` (UUID format match) as the sole branch condition: `return "v2" if _UUID_RE.match(rule_id) else "legacy"`. Any refactor that replaces `_UUID_RE` with a 24-hex regex will silently misroute suffixed legacy IDs.
 
@@ -479,8 +479,16 @@ Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(
 
 **Separate Network/Protect user databases:** SuperAdmin on the Network controller does NOT automatically mean SuperAdmin on the Protect console. Be explicit about which system the credential requirement applies to.
 
-**Facade migration — audit ALL call sites:** When migrating a service handler to a facade, audit EVERY call site: action dispatcher (`apps/api/src/unifi_api/services/dispatch_overrides.py`), GraphQL query/mutation fields, and any routing table entries. Missing one leaves old code silently routing to the pre-migration target. (Ref: PR #335 alarm facade migration where dispatcher kept routing to legacy `alarm_manager` after the facade was introduced.)
+**Facade migration — audit ALL call sites:** When migrating a service handler to a facade, audit EVERY call site: action dispatcher (`apps/api/src/unifi_api/services/dispatch_overrides.py`), GraphQL query/mutation fields, and any routing table entries. Missing one leaves old code silently routing to the pre-migration target. (Ref: alarm facade migration where dispatcher kept routing to legacy `alarm_manager` after the facade was introduced.)
 
 **Cross-package combined pytest run hits conftest collision:** Running `uv run pytest packages/ apps/` causes pytest to load conflicting conftest files from different packages and fail. Run per-package instead: `uv run pytest packages/unifi-core` or `uv run pytest apps/network`.
 
 **Update translators must reject unknown fields — never filter silently:** When a dispatch translator handles a tool that uses a nested `rule_data: dict`, check `set(rule_data) - MUTABLE_FIELDS` and raise `ValueError` on unknown fields. Then run `validate_update_fields(rule_data)` on the full dict before returning. Silent filtering (e.g., `{k: v for k, v in rule_data.items() if k in MUTABLE_FIELDS}`) masks caller errors and hides field-name mismatches. Reference: `_translate_acl_update` in `apps/api/src/unifi_api/services/dispatch_overrides.py`.
+
+**`_meta` alarm coverage signal:** When `AlarmRulesFacade` returns `complete=False`, emit `result["_meta"] = {_ALARM_COVERAGE_META: {"complete": False, "reason": notice}}`. The constant `_ALARM_COVERAGE_META = "com.github.sirkirby.unifi-mcp/alarm-coverage"` is defined in `apps/protect/src/unifi_protect_mcp/tools/alarm.py`. Omit `_meta` entirely on v2 success responses.
+
+**`if rules:` handles both permission errors and 200 empty lists:** The `AlarmRulesFacade` fallback condition evaluates False for both `None` (permission error/403) and `[]` (unmigrated console returns 200 OK with empty list). Both must trigger legacy fallback — a 200-empty-list from the primary backend is NOT a successful response.
+
+**Alarm rule write-schema vocabulary — legacy ≠ v2:** Do not reuse `rule_to_controller` for v2 mutations; it emits legacy vocabulary only. Legacy: `name`/`enable`/`conditions`/`sources`; v2: `title`/`enabled`/`triggers`/scope-nested sources. Implement `alarm_rule_to_legacy_body` in `packages/unifi-core/src/unifi_core/protect/models/alarm_rules.py`. Echo `data` verbatim in the inverse — do not reconstruct nested legacy structures.
+
+**`require_non_empty_actions` guard prevents Protect UI corruption:** Creating/updating an alarm rule with `actions: []` makes the Protect UI non-functional; only API deletion recovers it. Guard defined in `packages/unifi-core/src/unifi_core/protect/models/_validators.py`; applied in the alarm facade before routing. Apply on Create always; on Update only when `actions` is in the change set.

@@ -21,6 +21,49 @@ PTZ_MIN_SPEED = -1000
 PTZ_MAX_SPEED = 1000
 PTZ_MAX_DURATION_MS = 5000
 
+# uiprotect's Camera.set_hdr_mode accepts the literals "off", "auto" and
+# "always". "always" maps to ISP HDRMode.ALWAYS_ON ("superHdr"), the highest
+# quality HDR. We accept booleans and the controller-facing value names as
+# aliases so callers can request superHdr explicitly and so that passing
+# ``false`` reliably turns HDR off (``set_hdr_mode(False)`` does NOT, because
+# ``False == "off"`` is false in Python).
+_HDR_MODE_ALIASES = {
+    # off
+    "off": "off",
+    "false": "off",
+    "none": "off",
+    "disabled": "off",
+    # auto: HDR on, normal dynamic range (ISP hdr_mode == "normal")
+    "auto": "auto",
+    "on": "auto",
+    "true": "auto",
+    "normal": "auto",
+    # always-on / super HDR: highest quality (ISP hdr_mode == "superHdr")
+    "always": "always",
+    "super": "always",
+    "superhdr": "always",
+    "super_hdr": "always",
+}
+
+
+def normalize_hdr_mode(value: Any) -> str:
+    """Map a user-supplied hdr_mode value to a uiprotect literal.
+
+    Returns one of "off", "auto", or "always". Raises ``ValueError`` for
+    unrecognised values so the error surfaces during preview, before any
+    mutation is applied.
+    """
+    if isinstance(value, bool):
+        return "auto" if value else "off"
+    if isinstance(value, str):
+        normalized = _HDR_MODE_ALIASES.get(value.strip().lower())
+        if normalized is not None:
+            return normalized
+    raise ValueError(
+        f"Invalid hdr_mode {value!r}. Use one of: off, auto, always "
+        "(aliases: true=auto, false=off, on, normal, super/superHdr=always)."
+    )
+
 
 class CameraManager:
     """Reads and mutates camera data from the Protect NVR bootstrap."""
@@ -202,16 +245,11 @@ class CameraManager:
         streams: Dict[str, Any] = {}
         for ch in camera.channels:
             if ch.is_rtsp_enabled and ch.rtsp_alias:
-                # Build RTSP URL from the NVR host and the alias
-                nvr_host = (
-                    str(self._cm.client.bootstrap.nvr.host) if self._cm.client.bootstrap.nvr.host else self._cm.host
-                )
                 streams[ch.name] = {
                     "channel_id": ch.id,
                     "enabled": ch.enabled,
                     "rtsp_alias": ch.rtsp_alias,
-                    "rtsps_url": f"rtsps://{nvr_host}:7441/{ch.rtsp_alias}",
-                    "rtsp_url": f"rtsp://{nvr_host}:7447/{ch.rtsp_alias}",
+                    **self._rtsp_stream_urls(ch.rtsp_alias),
                     "width": ch.width,
                     "height": ch.height,
                     "fps": ch.fps,
@@ -349,7 +387,9 @@ class CameraManager:
             elif key == "hdr_mode":
                 current_isp_hdr = camera.isp_settings.hdr_mode
                 current_state["hdr_mode"] = str(current_isp_hdr.value) if current_isp_hdr else None
-                proposed_changes["hdr_mode"] = value
+                # Normalize so the preview shows what will actually be applied
+                # (and rejects invalid values before confirmation).
+                proposed_changes["hdr_mode"] = normalize_hdr_mode(value)
             elif key == "mic_enabled":
                 current_state["mic_enabled"] = camera.is_mic_enabled
                 proposed_changes["mic_enabled"] = value
@@ -395,8 +435,9 @@ class CameraManager:
                     await camera.set_ir_led_model(mode)
                     applied.append(f"ir_led_mode={value}")
                 elif key == "hdr_mode":
-                    await camera.set_hdr_mode(value)
-                    applied.append(f"hdr_mode={value}")
+                    mode = normalize_hdr_mode(value)
+                    await camera.set_hdr_mode(mode)
+                    applied.append(f"hdr_mode={mode}")
                 elif key == "mic_enabled":
                     # There's no direct set_mic_enabled; adjust mic volume to 0 for disable
                     # or use set_privacy for full mic control. Use save_device pattern.
@@ -460,6 +501,70 @@ class CameraManager:
             "recording_mode": mode.value,
             "enabled": enabled,
         }
+
+    @staticmethod
+    def _get_rtsp_channel(camera: Any, quality: str) -> Any:
+        """Return the camera channel matching a quality name (high/medium/low).
+
+        Channels are named "High"/"Medium"/"Low" on the controller; match
+        case-insensitively and raise an actionable error otherwise.
+        """
+        wanted = quality.strip().lower()
+        for channel in camera.channels or []:
+            if channel.name and channel.name.lower() == wanted:
+                return channel
+        available = ", ".join(c.name for c in (camera.channels or []) if c.name)
+        raise ValueError(f"Camera has no '{quality}' channel. Available channels: {available}")
+
+    def _rtsp_stream_urls(self, alias: str) -> Dict[str, str]:
+        """Build the RTSPS/RTSP URLs for a channel alias from the NVR host."""
+        host = str(self._cm.client.bootstrap.nvr.host) if self._cm.client.bootstrap.nvr.host else self._cm.host
+        return {
+            "rtsps_url": f"rtsps://{host}:7441/{alias}",
+            "rtsp_url": f"rtsp://{host}:7447/{alias}",
+        }
+
+    async def toggle_rtsp(self, camera_id: str, enabled: bool, quality: str = "high") -> Dict[str, Any]:
+        """Return current and proposed RTSP state for a channel (preview)."""
+        camera = self._get_camera(camera_id)
+        channel = self._get_rtsp_channel(camera, quality)
+        return {
+            "camera_id": camera_id,
+            "camera_name": camera.name,
+            "quality": quality,
+            "channel_name": channel.name,
+            "current_rtsp_enabled": channel.is_rtsp_enabled,
+            "proposed_rtsp_enabled": enabled,
+        }
+
+    async def apply_toggle_rtsp(self, camera_id: str, enabled: bool, quality: str = "high") -> Dict[str, Any]:
+        """Enable or disable RTSP publishing on a channel after confirmation.
+
+        Mutates ``channel.is_rtsp_enabled`` and persists via the diff-based
+        ``save_device`` flow (the same pattern used for ``mic_enabled``). The
+        controller assigns ``rtsp_alias`` server-side when RTSP is first
+        enabled; the resulting stream URLs are returned (and redacted at the
+        tool boundary).
+        """
+        camera = self._get_camera(camera_id)
+        channel = self._get_rtsp_channel(camera, quality)
+
+        if channel.is_rtsp_enabled != enabled:
+            data_before = camera.dict_with_excludes()
+            channel.is_rtsp_enabled = enabled
+            await camera.save_device(data_before)
+
+        result: Dict[str, Any] = {
+            "camera_id": camera_id,
+            "camera_name": camera.name,
+            "quality": quality,
+            "channel_name": channel.name,
+            "rtsp_enabled": channel.is_rtsp_enabled,
+        }
+        if channel.is_rtsp_enabled and channel.rtsp_alias:
+            result["rtsp_alias"] = channel.rtsp_alias
+            result.update(self._rtsp_stream_urls(channel.rtsp_alias))
+        return result
 
     async def ptz_goto_preset(self, camera_id: str, preset_slot: int) -> Dict[str, Any]:
         """Move a PTZ camera to a named preset position.

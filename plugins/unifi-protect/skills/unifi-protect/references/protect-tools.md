@@ -1,4 +1,4 @@
-# Protect Server Tool Reference (58 tools)
+# Protect Server Tool Reference (59 tools)
 
 Complete reference for `protect_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Protect controls physical security hardware.
 
@@ -33,7 +33,7 @@ Always available, regardless of registration mode.
 ## Cameras
 
 <!-- AUTO:tools:cameras -->
-11 tools.
+12 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -47,6 +47,7 @@ Always available, regardless of registration mode.
 | `protect_ptz_zoom` | Mutate | Zooms a PTZ camera using normalized zoom speed. |
 | `protect_reboot_camera` | Mutate | Reboots a camera. |
 | `protect_toggle_recording` | Mutate | Enables or disables recording on a camera. |
+| `protect_toggle_rtsp` | Mutate | Enables or disables the RTSP/RTSPS stream on a camera channel. |
 | `protect_update_camera_settings` | Mutate | Updates camera settings such as IR LED mode, HDR mode, mic/speaker volume, status light, and motion detection. |
 <!-- /AUTO:tools:cameras -->
 

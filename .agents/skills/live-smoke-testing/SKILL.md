@@ -21,7 +21,7 @@ allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 `scripts/live_smoke.py` is the manifest-driven live hardware test harness. It validates API
 contracts that mock-based CI (unit tests, golden fixtures) structurally cannot catch — auth
 token expiry, payload normalization, API version mismatches, and hardware-specific field
-assumptions. Phase 2 live smoke runs caught 3 critical bugs before merge. Run live smoke
+assumptions. Live smoke runs caught multiple critical bugs before merge. Run live smoke
 before every major merge that touches API-facing code.
 
 ## Prerequisites
@@ -97,8 +97,8 @@ before the PR can be merged:
 **Why this is a blocking gate:** Mock-based CI uses golden fixtures (static JSON files) that
 cannot evolve with real hardware firmware updates. Changes to response parsing are invisible
 to unit tests — they pass against the fixed fixture forever, but fail against real hardware
-running a different API version. The 2026-05-17 Access proxy incident (#283) exemplifies
-this: unit tests passed; live hardware returned auth-wrapped-in-200 errors invisible to mocks.
+running a different API version. The Access proxy incident exemplifies this: unit tests passed;
+live hardware returned auth-wrapped-in-200 errors invisible to mocks.
 
 **Ship doctrine — verify the changed code path, not an adjacent green path:** Smoke evidence
 only counts if it exercises the specific code modified by the PR. If your PR touches the
@@ -175,8 +175,8 @@ uv run python scripts/live_smoke.py --server network --phase inventory
 - Advance to `--phase approved` only after `safe` passes cleanly.
 - Never skip directly to `approved` on a first run against a new tool or new hardware.
 - Use `--phase inventory` to audit tier assignments without making any live calls.
-- Phase scope has expanded over the project lifecycle: Phase 1 was intentionally narrow
-  (deployment/auth only, no controller-touching); Phase 2 added full Protect physical actions
+- Phase scope has expanded over the project lifecycle: earlier phases were intentionally narrow
+  (deployment/auth only, no controller-touching); later phases added full Protect physical actions
   and Access lock/unlock patterns. Expect further expansion for each new REST endpoint domain.
 
 **Expected output:** The harness streams per-tool status to stdout. A passing run exits with
@@ -305,9 +305,15 @@ the harness as follows:
    - [ ] Non-default fields are tested with explicit targeted values (not just defaults)
    - [ ] The lifecycle method lands in the harness permanently, not a throwaway script
 
+   **Throwaway vs. permanent:** One-off validation scripts (for enum-hint PRs, new optional
+   parameters, or targeted edge-case verification) belong under `scripts/` and must be deleted
+   after verification — they are NOT lifecycle methods and must NOT be committed to the
+   harness permanently. Only full create→update→get→delete lifecycle flows should be
+   added as permanent harness methods.
+
    The DNS lifecycle (`lifecycle_network_dns`) is the canonical reference implementation:
    create a record, update one field, get it back to assert the update landed, then delete.
-   WLAN and AP-group lifecycles were extended to follow the same pattern (PR #372).
+   WLAN and AP-group lifecycles were extended to follow the same pattern.
 
 4. **If the tool is risky/destructive:** Add it to `RISKY_OPERATION_NAMES` (the set at
    line ~90 in `scripts/live_smoke.py`) or set `destructiveHint=True` on `ToolAnnotations`.
@@ -348,7 +354,7 @@ python scripts/probe_schemas.py
 Probe failures are non-fatal for local development but become CI gates to catch early
 regressions before a full hardware run.
 
-**Image-level Docker smoke** (Phase 3+ requirement):
+**Image-level Docker smoke** (release gate requirement):
 
 The release build pipeline runs image-level smoke tests on generated Docker images before
 they're pushed to GHCR. This tests:
@@ -407,17 +413,11 @@ in developer workflows; the fourth is automated in the release pipeline.
   HA cluster has stabilized before investigating the tool. Retry after 30–60 seconds. Do not
   block merge on HA transient failures — note them in the PR with a re-run confirmation.
 
-- **Phase 2 baseline is 56 passing approved-ops.** This count was established during Phase 2
-  development. A PR that drops the count or introduces new failures requires a documented
-  explanation and fix before merge.
-
 - **Credential rotation invalidates prior artifacts.** If credentials changed between runs,
   artifacts from prior runs cannot be used as PR evidence. Re-run from scratch.
 
-- **Phase scope expands with each new domain.** Phase 1 deliberately excluded
-  controller-touching endpoints; Phase 2 added them. Phase 3 will require harness expansion
-  for new REST endpoints. Every new tool category must be classified and added — do not
-  assume prior phases cover new domains.
+- **Phase scope expands with each new domain.** Each new tool category must be classified and
+  added — do not assume prior phases cover new domains.
 
 - **`tools_manifest.json` is the source of truth for auto-discovery.** Manifest annotation
   correctness (`readOnlyHint`, `destructiveHint`) and harness registration (for lifecycle

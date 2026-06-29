@@ -3,7 +3,7 @@
   "name": "io.github.sirkirby/unifi-network-mcp",
   "title": "UniFi Network MCP",
   "description": "Manage UniFi Network devices, clients, firewall, VLANs, VPNs, and more via MCP.",
-  "version": "0.20.9",
+  "version": "0.20.10",
   "repository": {
     "url": "https://github.com/sirkirby/unifi-mcp",
     "source": "github",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "unifi-network-mcp",
-      "version": "0.20.9",
+      "version": "0.20.10",
       "transport": {
         "type": "stdio"
       },
