@@ -58,7 +58,7 @@ dev = [
     "pytest-xdist>=3.6.0",
     "aioresponses>=0.7.9",
     "pytest-cov>=4.0.0",
-    "ruff>=0.15.15",
+    "ruff>=0.15.20",
 ]
 
 [tool.rye]
@@ -68,7 +68,7 @@ dev-dependencies = [
     "pytest-asyncio>=0.21.0",
     "aioresponses>=0.7.9",
     "pytest-cov>=4.0.0",
-    "ruff>=0.15.15",
+    "ruff>=0.15.20",
 ]
 
 [project.scripts]
