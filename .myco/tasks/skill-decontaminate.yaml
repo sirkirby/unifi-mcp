@@ -1,0 +1,84 @@
+# Copyright 2026 Goondocks.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: skill-decontaminate
+displayName: Skill Decontamination Sweep
+description: >-
+  One-shot custom task that updates existing Myco-managed skills so live
+  procedural prose contains durable procedure instead of release, PR, date,
+  branch, session, or decision-state artifacts.
+agent: myco-agent
+prompt: >-
+  Sweep every active Myco-managed skill once, using the content-contamination
+  scanner as the targeting signal. This is a migration recipe for existing
+  skills, not a recurring evolution policy and not a CI lint command.
+isDefault: false
+reasoningLevel: default
+maxTurns: 80
+timeoutSeconds: 3600
+schedule:
+  enabled: false
+  intervalSeconds: 86400
+  runIn:
+    - idle
+    - sleep
+phases:
+  - name: sweep
+    prompt: |
+      One-time content cleanup across active Myco-managed skills. Use the
+      contamination scanner to TARGET, and `vault_edit_skill` to FIX with
+      minimal span edits — never regenerate a whole skill.
+
+      ## Procedure
+      1. `vault_skill_records` { "action": "list", "status": "active", "limit": 500 }.
+      2. Process every active skill in order (respect Budget):
+         a. `vault_skill_records` { "action": "get", "id": "<name>" }. Missing content →
+            record skipped (reason `missing_content`), continue.
+         b. `vault_scan_skill_contamination` { "content": "<full SKILL.md>" }. If
+            hard_count 0 AND warn_count 0 → record clean, continue (NO write).
+         c. Build ONE `vault_edit_skill` edit batch that removes ALL flagged spans in
+            this skill (the gate validates the whole reconstructed skill and rejects if
+            ANY hard or warn span remains — you cannot fix spans one partial write at a
+            time). For each span replace ONLY the contaminated neighborhood with durable
+            procedure text: release/version → capability/behavior; PR/issue/session/
+            spore/branch/date refs → removed; temporal → stable wording; keep genuine
+            history only under `## Old patterns` / `## Historical context`. Preserve
+            protected frontmatter (`user-invocable`, `allowed-tools`) and real paths/
+            commands/symbols exactly. Choose each `old_string` to occur exactly once
+            (add surrounding context); use `replace_all` only for a repeated token.
+         d. `vault_edit_skill` { "name": "<name>", "edits": [ … ],
+            "rationale": "One-shot content hygiene migration: remove point-in-time skill prose." }.
+            On rejection, read the returned issues, fix the edits, retry — a clean apply
+            means the stored skill is already strict-clean (0 hard, 0 warn). No re-scan.
+      3. ESCAPE HATCH: if a skill cannot be made clean with span edits within a few
+         attempts (it `deferred`, or the contamination is too entangled to remove by
+         span replacement), STOP editing it and record it by name under `failed` with
+         the reason, for a manual full-rewrite follow-up. Do NOT loop on it.
+      4. BUDGET (hard): if you approach the turn budget before finishing the list, STOP.
+         Do NOT push past it (that is what timed out the old full-rewrite recipe). Report
+         the exact unprocessed skill names so a rerun finishes them.
+
+      ## Output
+      One `vault_report`: action `skill-decontaminate`; summary = counts for clean,
+      updated, skipped, deferred, failed; details = per-skill name, action, hard_count,
+      warn_count, any tool error.
+
+      Idempotency: a second run produces zero edits unless skills changed.
+    tools:
+      - vault_skill_records
+      - vault_scan_skill_contamination
+      - vault_edit_skill
+      - vault_report
+    maxTurns: 80
+    required: true

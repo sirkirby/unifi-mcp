@@ -219,6 +219,22 @@ Marketing site changes must be made and reviewed manually, separate from the too
 
 ---
 
+### Gate 3.5: New-Tool Registration Completeness — Generated Artifact Drift
+
+**Target:** Any PR that adds a new tool function or modifies tool dispatch registration.
+
+A new tool may pass Gates 1–3 while still causing silent failures if it bypasses required registration layers. Verify all three before approving:
+
+1. **Serializer projection** — Confirm the tool's response flows through the project's serialization/projection layer. A tool that returns raw internal objects instead of projected response models silently exposes unexpected types to MCP clients.
+
+2. **Dispatch/action registration** — If the tool category participates in the project's action dispatch layer (for routing tool calls), confirm the new tool is registered. A tool missing from the dispatcher is silently unreachable via that path even when correctly listed in the manifest.
+
+3. **Generated artifact regen** — Verify `make generate` was run on the PR branch and all committed generated artifacts (manifest, REST docs, schema files) match. Run `make check-generated` locally to confirm no drift. Artifact drift is a silent correctness failure — it does not fail lint but causes behavioral divergence between the code and what clients discover.
+
+**Note:** `make pre-commit` runs the full chain (format → generate → lint → test → drift checks). If the contributor did not run it, `make check-generated` will surface the gap immediately.
+
+---
+
 ### Gate 4: Shared Pydantic Model Defaults — Blast Radius Check
 
 **Target:** Any PR that modifies a shared `<Domain>Base` pydantic model in `packages/unifi-core`.
@@ -442,6 +458,20 @@ git push <contributor> HEAD:<pr-branch>
 ```
 
 **Tip:** `gh pr checkout <PR-number>` resolves the PR's head ref directly without requiring a named remote. Use this when the remote URL may be stale — it bypasses the rename/recreate gotcha entirely.
+
+### Rebase Before Push — When Branch Is Behind Main
+
+When another PR lands on `main` after the contributor's branch point, the contributor's branch must be rebased before merge to avoid a merge commit. Do this maintainer-side rather than requesting a contributor round-trip:
+
+```bash
+# From the checked-out review branch:
+git fetch origin main
+git rebase origin/main
+# Resolve any conflicts, then push back with --force-with-lease:
+git push --force-with-lease <contributor> HEAD:<pr-branch>
+```
+
+`--force-with-lease` is required for the post-rebase push — a plain `git push` will be rejected as non-fast-forward, and `--force` risks overwriting any commits the contributor added between your fetch and push. `--force-with-lease` fails safely if the remote has moved since your last fetch.
 
 **Trusted contributor definition:** Level99 qualifies (7+ merged PRs). For first-time or
 low-history contributors, prefer review comments so they learn the patterns.
@@ -690,3 +720,5 @@ Only after all three checks pass should you treat the AI-traced diagnosis as act
 | Cross-platform PRs (Step 1.5) | Validation requirement | Plugin bundle .ps1, stdio auth probe, prereq scripts | Approving Windows-targeting PRs without macOS cross-platform checks |
 | Issue triage (Triage section) | Evidence gate | Raw API payload from reporter | Implementing fixes without confirmed reproduction or raw payload inspection |
 | AI-traced diagnosis (Triage section) | Evidence gate | HEAD source + function verification + rebase check | Accepting community AI-traced root-cause without verifying current codebase state |
+| New-tool registration (Gate 3.5) | Silent failure | `make check-generated` + serializer and dispatch layer checks | Missing registration layers on tool-adding PRs; stale generated artifacts |
+| Rebase before push (Step 2) | Force-with-lease safety | `git fetch origin main && git rebase` then `--force-with-lease` | Using plain `--force` instead of `--force-with-lease`; requesting contributor round-trip for a maintainer-side rebase |

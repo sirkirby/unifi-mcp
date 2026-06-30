@@ -1,0 +1,7 @@
+# Myco-managed symlinks — generated skills are symlinked here automatically.
+# The canonical location for all skills is .agents/skills/.
+#
+# To add your own skill to this directory, un-ignore it:
+#   !my-skill
+*
+!.gitignore

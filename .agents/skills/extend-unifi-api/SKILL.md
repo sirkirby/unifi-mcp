@@ -189,9 +189,11 @@ All surfaces must be complete:
 2. GraphQL Query field
 3. REST resource route (`GET /v1/sites/{site_id}/{resource}`)
 4. Action dispatcher (`POST /v1/actions/unifi_tool_name`)
-5. Regenerate reference docs: `uv run --package unifi-api-server python -m unifi_api.graphql.docgen`
-6. Commit updated `apps/api/openapi.json`
-7. Commit updated `apps/api/docs/graphql-reference.md`
+5. Register serializer projection in `apps/api/src/unifi_api/serializers/<server>/` — every new tool needs a `@register_serializer` entry (with the tool name and appropriate `kind`) or CI raises `SerializerRegistryError`. Reference existing files in that directory for the pattern.
+6. Regenerate reference docs: `uv run --package unifi-api-server python -m unifi_api.graphql.docgen`
+7. Run `python3 scripts/generate_skill_references.py` (add `--check` in CI) to regenerate skill references artifact; commit the output.
+8. Commit updated `apps/api/openapi.json`
+9. Commit updated `apps/api/docs/graphql-reference.md`
 
 Incomplete PRs are merge-blocked by CI.
 
@@ -457,6 +459,8 @@ Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(
 
 **Action dispatcher arg-mismatch:** Without DISPATCH_ARG_TRANSLATORS, action tools fail silently. Test both MCP and `/v1/actions/` paths.
 
+**Dispatcher first-call heuristic — preview-prefetch tools need `DISPATCH_OVERRIDES`:** The action dispatcher selects the arg translator based on the **first** call that arrives for a tool name. If a preview/confirm tool issues a prefetch (e.g., a GET to build a diff preview) before the primary mutation call, the dispatcher may cache the wrong translator from the empty/diff-shape first call. **Rule:** any tool that prefetches data before its primary mutation MUST have an explicit entry in `DISPATCH_OVERRIDES` in `apps/api/src/unifi_api/services/dispatch_overrides.py`. Without it, the mutation call silently routes to the wrong translator and fails.
+
 **V2 ObjectID vs. Integration UUID:** ObjectIDs are controller-local; if implementing cross-controller queries, use Integration UUID path instead. Test against multi-controller setups.
 
 **Pass-through test pattern:** For tools that pass raw manager output to API without transformation, validate shape compatibility with Strawberry type expectations via snapshot or schema-compliance tests.
@@ -482,6 +486,8 @@ Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(
 **Facade migration — audit ALL call sites:** When migrating a service handler to a facade, audit EVERY call site: action dispatcher (`apps/api/src/unifi_api/services/dispatch_overrides.py`), GraphQL query/mutation fields, and any routing table entries. Missing one leaves old code silently routing to the pre-migration target. (Ref: alarm facade migration where dispatcher kept routing to legacy `alarm_manager` after the facade was introduced.)
 
 **Cross-package combined pytest run hits conftest collision:** Running `uv run pytest packages/ apps/` causes pytest to load conflicting conftest files from different packages and fail. Run per-package instead: `uv run pytest packages/unifi-core` or `uv run pytest apps/network`.
+
+**`uv sync --all-packages` required before isolated worktree api tests:** When running api-layer tests in an isolated worktree (outside the full monorepo workspace), cross-package deps are not resolved. Run `uv sync --all-packages` first or tests will import the wrong version of `unifi-core` and fail with import errors or stale-model assertions.
 
 **Update translators must reject unknown fields — never filter silently:** When a dispatch translator handles a tool that uses a nested `rule_data: dict`, check `set(rule_data) - MUTABLE_FIELDS` and raise `ValueError` on unknown fields. Then run `validate_update_fields(rule_data)` on the full dict before returning. Silent filtering (e.g., `{k: v for k, v in rule_data.items() if k in MUTABLE_FIELDS}`) masks caller errors and hides field-name mismatches. Reference: `_translate_acl_update` in `apps/api/src/unifi_api/services/dispatch_overrides.py`.
 
