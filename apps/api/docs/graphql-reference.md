@@ -669,6 +669,26 @@ type DpiStats {
   categories: JSON!
 }
 
+"""A Dynamic DNS provider entry configured on the controller."""
+type DynamicDns {
+  id: ID
+  siteId: String
+  hostName: String
+  service: String
+  server: String
+  login: String
+  xPassword: String
+  interface: String
+  customService: String
+  options: [String!]
+}
+
+"""Paginated page of Dynamic DNS entries."""
+type DynamicDnsPage {
+  items: [DynamicDns!]!
+  nextCursor: String
+}
+
 """A UniFi Protect event row (list + detail share this shape)."""
 type Event {
   id: ID
@@ -1123,6 +1143,14 @@ type NetworkQuery {
 
   """Look up a single DNS record by id."""
   dnsRecord(controller: ID!, id: ID!, site: String! = "default"): DnsRecord
+
+  """
+  List Dynamic DNS provider entries on the given controller/site (paginated).
+  """
+  dynamicDns(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): DynamicDnsPage!
+
+  """Look up a single Dynamic DNS entry by id."""
+  dynamicDnsEntry(controller: ID!, id: ID!, site: String! = "default"): DynamicDns
 
   """List configured static routes (paginated)."""
   routes(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): RoutePage!
@@ -2176,6 +2204,8 @@ Read-only access to UniFi Network resources.
 - `dpiApplications: DpiApplicationPage!`  — List DPI applications (paginated).
 - `dpiCategories: DpiCategoryPage!`  — List DPI categories (paginated).
 - `dpiStats: DpiStats`  — DPI stats catalog (applications + categories).
+- `dynamicDns: DynamicDnsPage!`  — List Dynamic DNS provider entries on the given controller/site (paginated).
+- `dynamicDnsEntry: DynamicDns`  — Look up a single Dynamic DNS entry by id.
 - `eventLog: EventLogPage!`  — List recent controller events (paginated).
 - `eventTypes: EventTypes`  — Get the controller's event-type prefix catalog.
 - `firewallGroup: FirewallGroup`  — Look up a single firewall group by id.

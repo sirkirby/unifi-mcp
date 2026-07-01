@@ -108,6 +108,9 @@ from unifi_api.graphql.types.network.dpi import (
 from unifi_api.graphql.types.network.dpi import (
     DpiCategory as NetworkDpiCategoryType,
 )
+from unifi_api.graphql.types.network.dynamic_dns import (
+    DynamicDns as NetworkDynamicDnsType,
+)
 from unifi_api.graphql.types.network.event import (
     EventLog as NetworkEventLogType,
 )
@@ -379,6 +382,14 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type(
         "unifi_get_dns_record_details",
         NetworkDnsRecordType,
+        "detail",
+    )
+
+    # network/dynamic_dns (tool-keyed only)
+    reg.register_tool_type("unifi_list_dynamic_dns", NetworkDynamicDnsType, "list")
+    reg.register_tool_type(
+        "unifi_get_dynamic_dns_entry_details",
+        NetworkDynamicDnsType,
         "detail",
     )
 

@@ -62,15 +62,15 @@ async def list_dynamic_dns() -> Dict[str, Any]:
 
 
 @server.tool(
-    name="unifi_get_dynamic_dns_details",
+    name="unifi_get_dynamic_dns_entry_details",
     description="Get details for a specific Dynamic DNS entry by ID. The provider password/token is redacted.",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
-async def get_dynamic_dns_details(
+async def get_dynamic_dns_entry_details(
     entry_id: Annotated[str, Field(description="The unique identifier (_id) of the Dynamic DNS entry")],
 ) -> Dict[str, Any]:
     """Get a specific Dynamic DNS entry."""
-    logger.info("unifi_get_dynamic_dns_details tool called (entry_id=%s)", entry_id)
+    logger.info("unifi_get_dynamic_dns_entry_details tool called (entry_id=%s)", entry_id)
     try:
         entry = await dynamic_dns_manager.get_dynamic_dns(entry_id)
         return redact_sensitive_fields(

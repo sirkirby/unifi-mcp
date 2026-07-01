@@ -469,6 +469,34 @@ Fetch a user by listing then filtering — no native get_user method.
 **Returns:** `Detail_DnsRecordModel_`
 
 
+## network/dynamic_dns
+
+### `GET /v1/sites/{site_id}/dynamic-dns` — List Dynamic Dns
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `limit` (query)
+- `cursor` (query)
+- `controller` (query)
+
+
+**Returns:** `Page_DynamicDnsModel_`
+
+### `GET /v1/sites/{site_id}/dynamic-dns/{entry_id}` — Get Dynamic Dns Entry Details
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `entry_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_DynamicDnsModel_`
+
+
 ## network/firewall
 
 ### `GET /v1/sites/{site_id}/acl-rules` — List Acl Rules

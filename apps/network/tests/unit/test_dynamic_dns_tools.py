@@ -121,7 +121,7 @@ class TestListDynamicDns:
 
 
 # ---------------------------------------------------------------------------
-# get_dynamic_dns_details
+# get_dynamic_dns_entry_details
 # ---------------------------------------------------------------------------
 
 
@@ -131,9 +131,9 @@ class TestGetDynamicDnsDetails:
         with patch("unifi_network_mcp.tools.dynamic_dns.dynamic_dns_manager") as mock_mgr:
             mock_mgr.get_dynamic_dns = AsyncMock(return_value=SAMPLE_ENTRY)
 
-            from unifi_network_mcp.tools.dynamic_dns import get_dynamic_dns_details
+            from unifi_network_mcp.tools.dynamic_dns import get_dynamic_dns_entry_details
 
-            result = await get_dynamic_dns_details(entry_id="ddns001")
+            result = await get_dynamic_dns_entry_details(entry_id="ddns001")
 
         assert result["success"] is True
         assert result["entry_id"] == "ddns001"
@@ -150,9 +150,9 @@ class TestGetDynamicDnsDetails:
         ):
             mock_mgr.get_dynamic_dns = AsyncMock(return_value=SAMPLE_ENTRY_SECRET)
 
-            from unifi_network_mcp.tools.dynamic_dns import get_dynamic_dns_details
+            from unifi_network_mcp.tools.dynamic_dns import get_dynamic_dns_entry_details
 
-            result = await get_dynamic_dns_details(entry_id="ddns001")
+            result = await get_dynamic_dns_entry_details(entry_id="ddns001")
 
         assert result["details"]["x_password"] == REDACTED
 
@@ -161,9 +161,9 @@ class TestGetDynamicDnsDetails:
         with patch("unifi_network_mcp.tools.dynamic_dns.dynamic_dns_manager") as mock_mgr:
             mock_mgr.get_dynamic_dns = AsyncMock(side_effect=UniFiNotFoundError("dynamic_dns", "nonexistent"))
 
-            from unifi_network_mcp.tools.dynamic_dns import get_dynamic_dns_details
+            from unifi_network_mcp.tools.dynamic_dns import get_dynamic_dns_entry_details
 
-            result = await get_dynamic_dns_details(entry_id="nonexistent")
+            result = await get_dynamic_dns_entry_details(entry_id="nonexistent")
 
         assert result["success"] is False
         assert "not found" in result["error"]
@@ -173,9 +173,9 @@ class TestGetDynamicDnsDetails:
         with patch("unifi_network_mcp.tools.dynamic_dns.dynamic_dns_manager") as mock_mgr:
             mock_mgr.get_dynamic_dns = AsyncMock(side_effect=Exception("Timeout"))
 
-            from unifi_network_mcp.tools.dynamic_dns import get_dynamic_dns_details
+            from unifi_network_mcp.tools.dynamic_dns import get_dynamic_dns_entry_details
 
-            result = await get_dynamic_dns_details(entry_id="ddns001")
+            result = await get_dynamic_dns_entry_details(entry_id="ddns001")
 
         assert result["success"] is False
         assert "Failed to get" in result["error"]
