@@ -59,6 +59,8 @@ make sync              # Install Python workspace + worker npm dependencies
 make lint              # Lint all packages
 make format            # Format all packages
 make pre-commit        # Format + lint + test
+make pre-pr            # Fast pre-push gate: format check + lint + drift + clean tree
+make install-hooks     # Install committed git hooks (core.hooksPath=.githooks)
 
 # Individual packages
 make core-test         # Run unifi-core tests
@@ -76,6 +78,14 @@ make access-test       # Run access server tests
 make access-lint       # Lint access server
 make access-manifest   # Regenerate access tools manifest
 ```
+
+### Git hooks
+
+Run `make install-hooks` once after cloning. It sets `core.hooksPath=.githooks`,
+which installs a `pre-push` hook that runs `make pre-pr` (format check, lint, and
+generated-artifact drift) before every push. This catches formatting and drift
+misses locally regardless of which editor or tool you use. Bypass a single push
+with `git push --no-verify`; the full test suite still runs in CI.
 
 ## App-Level Makefile
 

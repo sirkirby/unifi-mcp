@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Pre-push gate. Runs `make pre-pr` (format-check + lint + generated-artifact
+# drift + clean-tree) before allowing a push, so drift and formatting misses
+# are caught locally regardless of which editor or tooling is in use. The
+# full test suite runs in CI.
+#
+# Install with `make install-hooks` (sets core.hooksPath=.githooks).
+# Bypass for work-in-progress with `git push --no-verify`.
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+if ! make pre-pr; then
+	echo ""
+	echo "pre-push blocked: 'make pre-pr' failed. Fix the issues above, or run"
+	echo "'git push --no-verify' to bypass (discouraged on shared branches)."
+	exit 1
+fi
