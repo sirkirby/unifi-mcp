@@ -71,6 +71,7 @@ def test_port_forward_mutation_ack_dispatches_for_all_mutations() -> None:
         "unifi_create_simple_port_forward",
         "unifi_update_port_forward",
         "unifi_toggle_port_forward",
+        "unifi_delete_port_forward",
     ):
         s = reg.serializer_for_tool(tool)
         out = s.serialize_action(True, tool_name=tool)

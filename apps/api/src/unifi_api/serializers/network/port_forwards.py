@@ -2,8 +2,8 @@
 
 Phase 6 PR2 Task 22 migrated the read shape (PortForward LIST + DETAIL) to
 a Strawberry type at ``unifi_api.graphql.types.network.port_forward``. Only
-the mutation ack remains here — it covers create/update/toggle for port
-forward rules.
+the mutation ack remains here — it covers create/update/toggle/delete for
+port forward rules.
 """
 
 from typing import Any
@@ -26,13 +26,15 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
         "unifi_create_simple_port_forward": {"kind": RenderKind.DETAIL},
         "unifi_update_port_forward": {"kind": RenderKind.DETAIL},
         "unifi_toggle_port_forward": {"kind": RenderKind.DETAIL},
+        "unifi_delete_port_forward": {"kind": RenderKind.DETAIL},
     },
 )
 class PortForwardMutationAckSerializer(Serializer):
     """DETAIL ack for port forward mutations.
 
-    ``create_*`` returns a dict (or None); ``update_*`` / ``toggle_*``
-    return ``bool``."""
+    ``create_*`` returns a dict (or None); ``update_*`` / ``toggle_*`` /
+    ``delete_*`` return ``bool`` (the manager result the /v1/actions
+    dispatcher serializes)."""
 
     @staticmethod
     def serialize(obj) -> dict:
