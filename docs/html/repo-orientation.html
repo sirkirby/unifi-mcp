@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; font-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';">
+<title>UniFi MCP — Repo Orientation &amp; Infrastructure Map</title>
+<style>
+:root {
+  --clay: #D97757;
+  --slate: #141413;
+  --ivory: #FAF9F5;
+  --oat: #E3DACC;
+  --olive: #788C5D;
+  --danger: #B04A4A;
+  --warning: #C78E3F;
+  --blue: #5B7DB1;
+  --purple: #7B5EA7;
+  --muted: #6b6a66;
+  --surface: #FFFFFF;
+  --border: #E5DFD3;
+  --gray-100: #F3F0E9;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --r-sm: 6px; --r-md: 10px;
+  --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--ivory); color: var(--slate);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px; line-height: 1.6;
+}
+.wrap { max-width: 980px; margin: auto; padding: var(--sp-6) 1rem 80px; }
+:focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; border-radius: 4px; }
+.category-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--clay); margin-bottom: var(--sp-4);
+}
+.prompt-tag { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--muted); }
+.prompt-text { margin: 2px 0 var(--sp-5); font-style: italic; color: var(--muted); font-size: 13px; }
+h1 { font-size: 30px; line-height: 1.2; margin: 0 0 var(--sp-2); letter-spacing: -0.02em; }
+.subtitle { margin: 0 0 var(--sp-5); color: var(--muted); font-size: 16px; }
+h2 { font-size: 21px; margin: 56px 0 var(--sp-3); letter-spacing: -0.01em; }
+h2 .sec-num { color: var(--clay); font-family: var(--font-mono); font-size: 15px; margin-right: 8px; }
+h3 { font-size: 16px; margin: var(--sp-5) 0 var(--sp-2); }
+p { margin: 0 0 var(--sp-3); }
+code { font-family: var(--font-mono); font-size: 0.86em; background: var(--gray-100); padding: 1px 5px; border-radius: 4px; }
+a { color: var(--clay); }
+
+.tldr {
+  background: var(--oat); border-left: 4px solid var(--clay);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  padding: var(--sp-4) var(--sp-5); margin: var(--sp-5) 0 var(--sp-4);
+}
+.tldr-label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: #a05236; margin-bottom: var(--sp-2); }
+.tldr p { margin: 0 0 var(--sp-2); font-size: 15px; }
+.tldr p:last-child { margin: 0; }
+.tldr code { background: rgba(255,255,255,0.6); }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); margin: var(--sp-4) 0 var(--sp-2); }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); }
+.stat .num { font-size: 26px; font-weight: 700; color: var(--clay); line-height: 1.1; }
+.stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* Directory map */
+.dirmap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-4) var(--sp-5); overflow-x: auto; }
+.dirmap .row { display: flex; gap: var(--sp-4); padding: 3px 0; font-size: 13.5px; white-space: nowrap; }
+.dirmap .path { font-family: var(--font-mono); min-width: 340px; }
+.dirmap .path .tee { color: #c9c2b4; }
+.dirmap .path .dir { font-weight: 600; }
+.dirmap .path .app { color: var(--clay); }
+.dirmap .path .pkg { color: var(--blue); }
+.dirmap .path .infra { color: var(--olive); }
+.dirmap .note { color: var(--muted); }
+.dirmap .hdr { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: var(--sp-2) 0 4px; }
+
+/* Tables */
+.tblwrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+table.data { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.data th {
+  text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--border);
+  background: var(--gray-100); white-space: nowrap;
+}
+table.data td { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); vertical-align: top; }
+table.data tr:last-child td { border-bottom: none; }
+table.data td code { white-space: nowrap; }
+
+/* Diagram cards */
+.diagram-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-4); overflow-x: auto; }
+.diagram-card svg { min-width: 760px; }
+.legend-note { font-size: 13px; color: var(--muted); margin-top: var(--sp-2); }
+.legend-inline { display: flex; flex-wrap: wrap; gap: var(--sp-4); font-size: 13px; color: var(--muted); margin-top: var(--sp-3); }
+.legend-inline .key { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { display: inline-block; width: 22px; height: 3px; border-radius: 2px; }
+.swatch.dashed { background: repeating-linear-gradient(90deg, #9a958a 0 5px, transparent 5px 9px); height: 2px; }
+
+/* Layering flow */
+.flow { display: flex; flex-direction: column; align-items: stretch; gap: 0; max-width: 560px; margin: var(--sp-4) 0; }
+.flow .box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); }
+.flow .box b { font-size: 14px; }
+.flow .box .where { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.flow .box .what { font-size: 13px; color: var(--muted); }
+.flow .arrow { text-align: center; color: var(--clay); font-size: 15px; line-height: 1.4; padding: 2px 0; }
+.flow .box.hot { border-color: var(--clay); background: rgba(217,119,87,0.05); }
+
+/* Protocol legend cards */
+.proto-legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: var(--sp-3); margin-top: var(--sp-4); }
+.proto-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); font-size: 13px; }
+.proto-card .proto-name { font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.proto-card .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.proto-card .svc { color: var(--muted); }
+.proto-card .auth { margin-top: 6px; font-size: 12.5px; }
+.proto-card .auth b { font-weight: 600; }
+
+/* Detail panel */
+.detail-panel {
+  display: none; position: fixed; top: 50%; right: 24px; transform: translateY(-50%);
+  width: 300px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; z-index: 100; box-shadow: 0 8px 32px rgba(20,20,19,0.18);
+}
+.detail-panel.visible { display: block; }
+.detail-panel h3 { font-size: 14px; font-weight: 700; margin: 0 0 12px; padding-right: 20px; }
+.detail-panel table { width: 100%; font-size: 12.5px; border-collapse: collapse; }
+.detail-panel td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+.detail-panel tr:last-child td { border-bottom: none; }
+.detail-panel td:first-child { color: var(--muted); width: 34%; }
+.detail-close { position: absolute; top: 10px; right: 12px; cursor: pointer; font-size: 16px; color: var(--muted); background: none; border: none; padding: 4px; }
+
+/* SVG actors */
+.actor { cursor: pointer; }
+.actor rect, .actor ellipse { transition: filter 0.15s; }
+.actor:hover rect, .actor:hover ellipse, .actor:focus-visible rect { filter: brightness(0.96); }
+
+/* Collapsible steps */
+.steps { display: flex; flex-direction: column; gap: var(--sp-3); }
+.step { border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; background: var(--surface); }
+.step[open] { border-color: var(--clay); }
+.step-summary { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); cursor: pointer; list-style: none; background: var(--gray-100); }
+.step-summary::-webkit-details-marker { display: none; }
+.step[open] .step-summary { background: rgba(217,119,87,0.07); }
+.step-num { font-size: 12px; font-weight: 700; color: var(--clay); min-width: 20px; }
+.step-name { font-weight: 600; flex: 1; font-size: 14px; }
+.step-file { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.step-body { padding: var(--sp-4); font-size: 14px; }
+.step-body p:last-child { margin: 0; }
+
+/* Gotcha cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px,1fr)); gap: var(--sp-3); }
+.card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--warning); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); font-size: 13.5px; }
+.card.rule { border-left-color: var(--olive); }
+.card b { display: block; margin-bottom: 4px; font-size: 14px; }
+
+/* Tabs */
+.tab-bar {
+  display: flex; gap: 6px; border-bottom: 2px solid var(--border);
+  margin: var(--sp-6) 0 var(--sp-4); overflow-x: auto;
+  position: sticky; top: 0; background: var(--ivory); z-index: 50; padding-top: var(--sp-2);
+}
+.tab {
+  border: 1px solid var(--border); border-bottom: none; background: var(--gray-100);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  padding: var(--sp-2) var(--sp-3); font-size: 13.5px;
+  cursor: pointer; color: var(--muted);
+  margin-bottom: -2px; white-space: nowrap; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.tab .t-num { font-family: var(--font-mono); font-size: 11px; color: var(--clay); }
+.tab:hover { color: var(--slate); background: var(--oat); }
+.tab.active { background: var(--ivory); border-color: var(--clay); color: var(--slate); font-weight: 600; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.tab-panel > h2:first-child { margin-top: var(--sp-2); }
+
+@media (max-width: 720px) {
+  .dirmap .row { flex-direction: column; gap: 0; }
+  .dirmap .path { min-width: 0; }
+  .detail-panel { right: 8px; left: 8px; width: auto; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="category-label">Codebase Orientation · System Context · unifi-mcp</div>
+<header>
+  <div class="prompt-tag">PROMPT</div>
+  <p class="prompt-text">Orient me to this repo to understand its architecture and infra.</p>
+  <h1>UniFi MCP — Repo Orientation &amp; Infrastructure Map</h1>
+  <p class="subtitle">A uv-managed Python monorepo of MCP servers, a REST/GraphQL API, and a Cloudflare relay that let AI agents manage Ubiquiti UniFi controllers.</p>
+</header>
+
+<div class="tldr">
+  <div class="tldr-label">TL;DR</div>
+  <p><strong>What it is:</strong> three MCP servers (<code>network</code> · 180 tools, <code>protect</code> · 59, <code>access</code> · 34) that expose UniFi controller operations to AI assistants, plus a non-MCP REST+GraphQL server (<code>apps/api</code>) and a cloud relay pair (<code>packages/unifi-mcp-relay</code> sidecar ↔ <code>apps/worker</code> Cloudflare Worker) so cloud agents can reach your LAN without open ports.</p>
+  <p><strong>The shape:</strong> every server follows the same strict layering — thin <code>tools/</code> wrappers → <code>managers/</code> domain logic → <code>unifi-core</code> ConnectionManager → controller HTTPS. Shared MCP plumbing (permissions, preview-then-confirm, lazy tool loading) lives in <code>unifi-mcp-shared</code>. All state lives on the controller; this repo is deliberately stateless (the API server's SQLite is the one exception).</p>
+  <p><strong>Read first:</strong> <code>AGENTS.md</code> (canonical rules) and <code>docs/ARCHITECTURE.md</code>, then trace one tool family in <code>apps/network</code>.</p>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="num">5</div><div class="lbl">apps (3 MCP servers, API, worker)</div></div>
+  <div class="stat"><div class="num">273</div><div class="lbl">MCP tools across 3 servers</div></div>
+  <div class="stat"><div class="num">3</div><div class="lbl">shared packages</div></div>
+  <div class="stat"><div class="num">3</div><div class="lbl">UniFi API surfaces (disjoint IDs)</div></div>
+</div>
+
+<div class="tab-bar" role="tablist" aria-label="Orientation sections">
+  <button class="tab active" role="tab" aria-selected="true" id="tabbtn-dirs" aria-controls="tab-dirs" data-tab="dirs"><span class="t-num">01</span>Directory Map</button>
+  <button class="tab" role="tab" aria-selected="false" id="tabbtn-modules" aria-controls="tab-modules" data-tab="modules"><span class="t-num">02</span>Key Modules</button>
+  <button class="tab" role="tab" aria-selected="false" id="tabbtn-deps" aria-controls="tab-deps" data-tab="deps"><span class="t-num">03</span>Dependencies</button>
+  <button class="tab" role="tab" aria-selected="false" id="tabbtn-deploy" aria-controls="tab-deploy" data-tab="deploy"><span class="t-num">04</span>Deployment</button>
+  <button class="tab" role="tab" aria-selected="false" id="tabbtn-reading" aria-controls="tab-reading" data-tab="reading"><span class="t-num">05</span>Start Reading</button>
+  <button class="tab" role="tab" aria-selected="false" id="tabbtn-gotchas" aria-controls="tab-gotchas" data-tab="gotchas"><span class="t-num">06</span>Gotchas</button>
+  <button class="tab" role="tab" aria-selected="false" id="tabbtn-glossary" aria-controls="tab-glossary" data-tab="glossary"><span class="t-num">07</span>Glossary</button>
+</div>
+
+<div class="tab-panel active" id="tab-dirs" role="tabpanel" aria-labelledby="tabbtn-dirs">
+<h2><span class="sec-num">01</span>Directory Map</h2>
+<p>Python 3.13+ workspace managed by <a href="https://docs.astral.sh/uv/">uv</a> (root <code>pyproject.toml</code> globs <code>apps/*</code> and <code>packages/*</code>). <code>apps/worker</code> is the one Node/TypeScript citizen and is excluded from the uv workspace.</p>
+<div class="dirmap" role="img" aria-label="Annotated directory tree of the unifi-mcp repository">
+  <div class="row hdr"><span>Path</span></div>
+  <div class="row"><span class="path"><span class="dir">unifi-mcp/</span></span><span class="note">monorepo root — uv workspace, root Makefile delegates to apps</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir app">apps/network/</span></span><span class="note">Network MCP server — firewall, clients, VPN, QoS, Traffic Flows (stable, 180 tools)</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir app">apps/protect/</span></span><span class="note">Protect MCP server — cameras, events, recordings, alarms via <code>uiprotect</code> (beta, 59 tools)</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir app">apps/access/</span></span><span class="note">Access MCP server — doors, credentials, visitors; dual-path auth (beta, 34 tools)</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir app">apps/api/</span></span><span class="note">standalone REST + GraphQL server (FastAPI-style, alembic, encrypted SQLite, admin UI)</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir app">apps/worker/</span></span><span class="note">Cloudflare Worker gateway + npm CLI (<code>unifi-mcp-worker</code>) — Node/TS, outside uv</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir pkg">packages/unifi-core/</span></span><span class="note">controller connectivity: auth, connection, detection, retry — zero MCP deps</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir pkg">packages/unifi-mcp-shared/</span></span><span class="note">MCP patterns: permissions, confirmation, lazy/meta tools, config, transport</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir pkg">packages/unifi-mcp-relay/</span></span><span class="note">relay sidecar — pure MCP client, no imports from apps or other packages</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir infra">docker/</span></span><span class="note">two independent compose files: MCP servers + relay (:3000–3002), API (:8089)</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir infra">plugins/</span></span><span class="note">Claude Code / Codex plugin bundles per product + cross-product agent skills</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir infra">skills/</span></span><span class="note">skill test harness (<code>conftest.py</code>) for plugin skills</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir infra">scripts/</span></span><span class="note">smoke tests (live + image), manifest &amp; release-notes generators, <code>start-api.sh</code></span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir infra">docs/</span></span><span class="note">ARCHITECTURE.md, permissions, tool-index, GitHub Pages site</span></div>
+  <div class="row"><span class="path"><span class="tee">├─</span> <span class="dir">examples/</span></span><span class="note">Claude Desktop configs, python client examples</span></div>
+  <div class="row"><span class="path"><span class="tee">└─</span> <span class="dir">AGENTS.md</span></span><span class="note">⭐ canonical project rules — layering, tool contract, API-surface boundaries</span></div>
+</div>
+
+</div>
+<div class="tab-panel" id="tab-modules" role="tabpanel" aria-labelledby="tabbtn-modules">
+<h2><span class="sec-num">02</span>Key Modules</h2>
+<div class="tblwrap"><table class="data">
+  <thead><tr><th>Module</th><th>Owns</th><th>Key files</th><th>Depends on</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>apps/network</code></td>
+      <td>Network MCP server: 23 tool modules (firewall, clients, devices, DNS, VPN, QoS, routing, stats…)</td>
+      <td><code>main.py</code>, <code>runtime.py</code>, <code>categories.py</code>, <code>tools/*.py</code>, <code>config/config.yaml</code></td>
+      <td>unifi-core, unifi-mcp-shared</td>
+    </tr>
+    <tr>
+      <td><code>apps/protect</code></td>
+      <td>Protect MCP server: cameras, events, Find Anything search, recordings, recognition, Alarm Manager; MCP resources for event streams + snapshots</td>
+      <td><code>main.py</code>, <code>runtime.py</code>, <code>tools/</code>, <code>resources/</code></td>
+      <td>unifi-core, unifi-mcp-shared, <code>uiprotect</code> (websocket events)</td>
+    </tr>
+    <tr>
+      <td><code>apps/access</code></td>
+      <td>Access MCP server: doors, policies, credentials, visitors; <em>dual-path auth</em> (API key :12445 for reads, proxy session :443 for mutations)</td>
+      <td><code>main.py</code>, <code>runtime.py</code>, <code>tools/</code>, <code>resources/</code></td>
+      <td>unifi-core, unifi-mcp-shared, <code>py-unifi-access</code></td>
+    </tr>
+    <tr>
+      <td><code>apps/api</code></td>
+      <td>Non-MCP REST + GraphQL HTTP API, admin UI, API-key auth with scopes, encrypted SQLite state, alembic migrations</td>
+      <td><code>src/unifi_api/routes/</code>, <code>graphql/</code>, <code>auth/</code>, <code>db/</code>, <code>serializers/</code></td>
+      <td>unifi-core (managers) — <em>not</em> unifi-mcp-shared</td>
+    </tr>
+    <tr>
+      <td><code>apps/worker</code></td>
+      <td>Cloudflare Worker gateway (JSON-RPC over HTTPS → Durable Object → WebSocket to relays) + npm CLI for deploy/token/location management</td>
+      <td><code>worker/src/</code>, <code>bin/cli.mjs</code>, <code>src/commands/</code>, <code>wrangler.toml</code></td>
+      <td>none in-repo (self-contained Node/TS)</td>
+    </tr>
+    <tr>
+      <td><code>packages/unifi-core</code></td>
+      <td>Controller connectivity: auth (local creds, API key, dual), aiohttp connection manager, UniFi-OS detection, retries; per-product <code>managers/</code> + pydantic <code>models/</code></td>
+      <td><code>network/managers/connection_manager.py</code>, <code>{network,protect,access}/managers/</code>, <code>models/</code></td>
+      <td>aiohttp, uiprotect — no MCP SDK</td>
+    </tr>
+    <tr>
+      <td><code>packages/unifi-mcp-shared</code></td>
+      <td>Everything the 3 MCP servers share: permission checks, preview-then-confirm, lazy/meta tools, tool loader &amp; registration, manifest generation, transport</td>
+      <td><code>confirmation.py</code>, <code>permissioned_tool.py</code>, <code>lazy_tools.py</code>, <code>meta_tools.py</code>, <code>tool_index.py</code></td>
+      <td>mcp SDK, omegaconf</td>
+    </tr>
+    <tr>
+      <td><code>packages/unifi-mcp-relay</code></td>
+      <td>Relay sidecar: MCP tool discovery from local servers, WebSocket client to the worker, tool-call forwarding, catalog refresh</td>
+      <td><code>discovery.py</code>, <code>forwarder.py</code>, <code>client.py</code>, <code>protocol.py</code></td>
+      <td>none in-repo (pure MCP client)</td>
+    </tr>
+  </tbody>
+</table></div>
+
+</div>
+<div class="tab-panel" id="tab-deps" role="tabpanel" aria-labelledby="tabbtn-deps">
+<h2><span class="sec-num">03</span>Internal Dependency Graph</h2>
+<p>Dependencies flow strictly downward: apps import packages, packages never import apps, and apps never import each other. Two components are intentionally islands — the relay and the worker talk to the rest of the system only over the network at runtime.</p>
+<div class="diagram-card">
+<svg viewBox="0 0 1100 430" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;" aria-label="Internal module dependency diagram; the key-modules table above is the text equivalent">
+  <defs>
+    <marker id="ah-imp" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#D97757"/></marker>
+    <marker id="ah-rt" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#9a958a"/></marker>
+  </defs>
+
+  <!-- import arrows (drawn first, under boxes) -->
+  <line x1="120" y1="135" x2="230" y2="280" stroke="#D97757" stroke-width="1.5" marker-end="url(#ah-imp)"/>
+  <line x1="145" y1="135" x2="520" y2="280" stroke="#D97757" stroke-width="1.5" marker-end="url(#ah-imp)"/>
+  <line x1="330" y1="135" x2="265" y2="280" stroke="#D97757" stroke-width="1.5" marker-end="url(#ah-imp)"/>
+  <line x1="350" y1="135" x2="545" y2="280" stroke="#D97757" stroke-width="1.5" marker-end="url(#ah-imp)"/>
+  <line x1="530" y1="135" x2="310" y2="280" stroke="#D97757" stroke-width="1.5" marker-end="url(#ah-imp)"/>
+  <line x1="550" y1="135" x2="570" y2="280" stroke="#D97757" stroke-width="1.5" marker-end="url(#ah-imp)"/>
+  <line x1="750" y1="135" x2="610" y2="280" stroke="#D97757" stroke-width="1.5" marker-end="url(#ah-imp)"/>
+  <!-- runtime-only dashed -->
+  <path d="M 880 300 C 940 280 950 200 958 140" fill="none" stroke="#9a958a" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#ah-rt)"/>
+  <rect x="895" y="205" width="150" height="16" rx="3" fill="#FFFFFF"/>
+  <text x="970" y="217" text-anchor="middle" font-size="9.5" fill="#6b6a66" font-family="system-ui,sans-serif">runtime WSS only — no import</text>
+
+  <!-- apps row -->
+  <text x="30" y="45" font-size="9" fill="#6b6a66" font-weight="700" letter-spacing="2" font-family="system-ui,sans-serif">APPS (ENTRY POINTS)</text>
+  <g><rect x="30" y="65" width="180" height="70" rx="10" fill="#FDF3EE" stroke="#D97757" stroke-width="1.5"/>
+    <text x="120" y="93" text-anchor="middle" font-size="13" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">network</text>
+    <text x="120" y="112" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">MCP · 180 tools</text></g>
+  <g><rect x="240" y="65" width="180" height="70" rx="10" fill="#FDF3EE" stroke="#D97757" stroke-width="1.5"/>
+    <text x="330" y="93" text-anchor="middle" font-size="13" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">protect</text>
+    <text x="330" y="112" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">MCP · 59 tools</text></g>
+  <g><rect x="450" y="65" width="180" height="70" rx="10" fill="#FDF3EE" stroke="#D97757" stroke-width="1.5"/>
+    <text x="540" y="93" text-anchor="middle" font-size="13" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">access</text>
+    <text x="540" y="112" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">MCP · 34 tools</text></g>
+  <g><rect x="660" y="65" width="180" height="70" rx="10" fill="#F2F5EE" stroke="#788C5D" stroke-width="1.5"/>
+    <text x="750" y="93" text-anchor="middle" font-size="13" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">api</text>
+    <text x="750" y="112" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">REST + GraphQL</text></g>
+  <g><rect x="870" y="65" width="180" height="70" rx="10" fill="#F5F3F8" stroke="#7B5EA7" stroke-width="1.5"/>
+    <text x="960" y="93" text-anchor="middle" font-size="13" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">worker</text>
+    <text x="960" y="112" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">Cloudflare · Node/TS</text></g>
+
+  <!-- packages row -->
+  <text x="30" y="265" font-size="9" fill="#6b6a66" font-weight="700" letter-spacing="2" font-family="system-ui,sans-serif">PACKAGES (SHARED, NO APP IMPORTS)</text>
+  <g><rect x="150" y="280" width="230" height="74" rx="10" fill="#EFF3F8" stroke="#5B7DB1" stroke-width="1.5"/>
+    <text x="265" y="308" text-anchor="middle" font-size="13" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">unifi-mcp-shared</text>
+    <text x="265" y="327" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">permissions · confirm · lazy tools</text></g>
+  <g><rect x="450" y="280" width="230" height="74" rx="10" fill="#EFF3F8" stroke="#5B7DB1" stroke-width="1.5"/>
+    <text x="565" y="308" text-anchor="middle" font-size="13" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">unifi-core</text>
+    <text x="565" y="327" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">connection · auth · managers · models</text></g>
+  <g><rect x="750" y="280" width="230" height="74" rx="10" fill="#FFFFFF" stroke="#9a958a" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <text x="865" y="308" text-anchor="middle" font-size="13" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">unifi-mcp-relay</text>
+    <text x="865" y="327" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">pure MCP client — imports nothing here</text></g>
+
+  <text x="150" y="405" font-size="11" fill="#6b6a66" font-family="system-ui,sans-serif">apps/network · protect · access → both packages;  apps/api → unifi-core only;  worker &amp; relay have zero in-repo imports.</text>
+</svg>
+<div class="legend-inline">
+  <span class="key"><span class="swatch" style="background:#D97757"></span> Python import dependency</span>
+  <span class="key"><span class="swatch dashed"></span> runtime protocol only (no code dependency)</span>
+</div>
+</div>
+
+<h3>The request path inside every MCP server</h3>
+<p>The same five layers in every app — enforced by <code>AGENTS.md</code>. This is the single most useful mental model for the repo:</p>
+<div class="flow">
+  <div class="box"><b>MCP Client</b> <span class="what">— Claude Desktop / Code, LM Studio, automation → MCP protocol (stdio · streamable HTTP · SSE)</span></div>
+  <div class="arrow">↓</div>
+  <div class="box"><b>FastMCP Server</b> <span class="where">apps/&lt;app&gt;/src/…/main.py</span> <span class="what">— transport dispatch, tool registration via permissioned_tool</span></div>
+  <div class="arrow">↓</div>
+  <div class="box hot"><b>Tool functions</b> <span class="where">tools/*.py</span> <span class="what">— thin wrappers only: validate args, format the response dict, delegate. No business logic.</span></div>
+  <div class="arrow">↓</div>
+  <div class="box hot"><b>Managers</b> <span class="where">packages/unifi-core/src/unifi_core/&lt;product&gt;/managers/</span> <span class="what">— all domain logic; never import from tools</span></div>
+  <div class="arrow">↓</div>
+  <div class="box"><b>ConnectionManager</b> <span class="where">unifi-core</span> <span class="what">— single instance per process; aiohttp session, auto-reconnect, controller detection, retry</span></div>
+  <div class="arrow">↓</div>
+  <div class="box"><b>UniFi Controller</b> <span class="what">— REST APIs; all state lives here, not in this repo</span></div>
+</div>
+<p>Singletons (server, config, managers) come from <code>@lru_cache</code> factories in each app's <code>runtime.py</code> — tools import them from there, never instantiate directly.</p>
+
+</div>
+<div class="tab-panel" id="tab-deploy" role="tabpanel" aria-labelledby="tabbtn-deploy">
+<h2><span class="sec-num">04</span>Deployment &amp; System Context</h2>
+<p>Where things run and what crosses the network. The three MCP servers run on your LAN (Docker :3000–3002, or <code>uvx</code>/stdio directly under an MCP client). Cloud access never opens a port: the relay sidecar dials <em>out</em> to a Cloudflare Worker over WebSocket. Click any box for auth and failure-mode details.</p>
+
+<h3>Actor inventory</h3>
+<div class="tblwrap"><table class="data">
+  <thead><tr><th>Actor</th><th>Role &amp; protocol</th></tr></thead>
+  <tbody>
+    <tr><td><b>MCP Client</b> (Claude Code/Desktop, LM Studio)</td><td>Runs on your machine; speaks MCP over stdio or streamable HTTP to the local servers</td></tr>
+    <tr><td><b>UniFi MCP Servers</b> — focal system</td><td>network :3000 · protect :3001 · access :3002; call the controller over HTTPS REST (+ WSS for Protect events)</td></tr>
+    <tr><td><b>UniFi Controller</b> (UDM, CloudKey, UNVR)</td><td>Source of truth; V2 API (session cookie), Integration API :443 (X-API-Key), Access API :12445, Alarm Manager v2 (SuperAdmin)</td></tr>
+    <tr><td><b>unifi-mcp-relay</b> sidecar</td><td>Discovers local tools via MCP over HTTP; maintains an outbound WSS connection to the worker (relay token)</td></tr>
+    <tr><td><b>Cloudflare Worker</b> + Durable Object</td><td>Receives MCP JSON-RPC over HTTPS from cloud agents; RelayObject persists locations in SQLite and routes to connected relays</td></tr>
+    <tr><td><b>Cloud agents</b> (Claude, ChatGPT, n8n)</td><td>HTTPS POST /mcp with Bearer agent token; read-only calls fan out across locations</td></tr>
+    <tr><td><b>unifi-api-server</b></td><td>Independent REST + GraphQL service :8080 (compose maps :8089); scoped Bearer API keys; encrypted SQLite state volume</td></tr>
+    <tr><td><b>API consumers</b> (dashboards, desktop apps)</td><td>Plain HTTPS REST/GraphQL — for anything that doesn't speak MCP</td></tr>
+  </tbody>
+</table></div>
+
+<div class="diagram-card" style="margin-top:16px">
+<svg viewBox="0 0 1160 660" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;" aria-label="Deployment context map; the actor inventory table above is the text equivalent">
+  <defs>
+    <marker id="ah-mcp" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#D97757"/></marker>
+    <marker id="ah-ctrl" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#5B7DB1"/></marker>
+    <marker id="ah-wss" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#7B5EA7"/></marker>
+    <marker id="ah-pub" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#788C5D"/></marker>
+    <marker id="ah-st" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#9a958a"/></marker>
+    <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+
+  <!-- regions -->
+  <rect x="20" y="30" width="620" height="610" rx="16" fill="#5B7DB1" opacity="0.06"/>
+  <rect x="20" y="30" width="620" height="610" rx="16" fill="none" stroke="#5B7DB1" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="36" y="52" font-size="9" fill="#5B7DB1" font-weight="700" letter-spacing="2" font-family="system-ui,sans-serif">YOUR LAN / HOME NETWORK</text>
+
+  <rect x="680" y="80" width="460" height="240" rx="16" fill="#7B5EA7" opacity="0.06"/>
+  <rect x="680" y="80" width="460" height="240" rx="16" fill="none" stroke="#7B5EA7" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="696" y="102" font-size="9" fill="#7B5EA7" font-weight="700" letter-spacing="2" font-family="system-ui,sans-serif">CLOUDFLARE EDGE</text>
+
+  <rect x="680" y="370" width="460" height="250" rx="16" fill="#788C5D" opacity="0.07"/>
+  <rect x="680" y="370" width="460" height="250" rx="16" fill="none" stroke="#788C5D" stroke-width="1.5" stroke-dasharray="6,4"/>
+  <text x="696" y="392" font-size="9" fill="#788C5D" font-weight="700" letter-spacing="2" font-family="system-ui,sans-serif">CLOUD / EXTERNAL</text>
+
+  <!-- arrows -->
+  <line x1="230" y1="110" x2="332" y2="120" stroke="#D97757" stroke-width="1.5" marker-end="url(#ah-mcp)"/>
+  <rect x="216" y="128" width="152" height="15" rx="3" fill="#FFFFFF"/>
+  <text x="292" y="139" text-anchor="middle" font-size="9.5" fill="#a05236" font-family="system-ui,sans-serif">MCP · stdio / streamable HTTP</text>
+
+  <line x1="368" y1="192" x2="222" y2="298" stroke="#5B7DB1" stroke-width="1.5" marker-end="url(#ah-ctrl)"/>
+  <rect x="200" y="222" width="212" height="15" rx="3" fill="#FFFFFF"/>
+  <text x="306" y="233" text-anchor="middle" font-size="9.5" fill="#41608f" font-family="system-ui,sans-serif">HTTPS REST · cookie / X-API-Key · +WSS (protect)</text>
+
+  <line x1="480" y1="272" x2="480" y2="196" stroke="#D97757" stroke-width="1.5" marker-end="url(#ah-mcp)"/>
+  <rect x="490" y="222" width="105" height="15" rx="3" fill="#FFFFFF"/>
+  <text x="542" y="233" text-anchor="middle" font-size="9.5" fill="#a05236" font-family="system-ui,sans-serif">MCP over HTTP</text>
+
+  <line x1="602" y1="298" x2="736" y2="238" stroke="#7B5EA7" stroke-width="1.5" marker-end="url(#ah-wss)"/>
+  <rect x="596" y="250" width="140" height="15" rx="3" fill="#FFFFFF"/>
+  <text x="666" y="261" text-anchor="middle" font-size="9.5" fill="#634a89" font-family="system-ui,sans-serif">WSS /ws · relay token</text>
+
+  <line x1="838" y1="408" x2="866" y2="266" stroke="#788C5D" stroke-width="1.5" marker-end="url(#ah-pub)"/>
+  <rect x="770" y="330" width="188" height="15" rx="3" fill="#FFFFFF"/>
+  <text x="864" y="341" text-anchor="middle" font-size="9.5" fill="#5b6b45" font-family="system-ui,sans-serif">HTTPS POST /mcp · Bearer agent token</text>
+
+  <line x1="726" y1="548" x2="606" y2="512" stroke="#788C5D" stroke-width="1.5" marker-end="url(#ah-pub)"/>
+  <rect x="560" y="548" width="196" height="15" rx="3" fill="#FFFFFF"/>
+  <text x="658" y="559" text-anchor="middle" font-size="9.5" fill="#5b6b45" font-family="system-ui,sans-serif">HTTPS REST + GraphQL · Bearer API key</text>
+
+  <line x1="378" y1="486" x2="242" y2="402" stroke="#5B7DB1" stroke-width="1.5" marker-end="url(#ah-ctrl)"/>
+  <rect x="252" y="432" width="84" height="15" rx="3" fill="#FFFFFF"/>
+  <text x="294" y="443" text-anchor="middle" font-size="9.5" fill="#41608f" font-family="system-ui,sans-serif">HTTPS REST</text>
+
+  <line x1="378" y1="518" x2="248" y2="518" stroke="#9a958a" stroke-width="1.5" marker-end="url(#ah-st)"/>
+  <rect x="262" y="524" width="104" height="15" rx="3" fill="#FFFFFF"/>
+  <text x="314" y="535" text-anchor="middle" font-size="9.5" fill="#6b6a66" font-family="system-ui,sans-serif">encrypted SQLite</text>
+
+  <!-- actors: LAN -->
+  <g class="actor" data-actor="client" tabindex="0" role="button" aria-label="MCP Client details">
+    <rect x="50" y="70" width="180" height="72" rx="22" fill="#FFFFFF" stroke="#141413" stroke-width="1.5"/>
+    <text x="140" y="98" text-anchor="middle" font-size="12" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">🧑‍💻 MCP Client</text>
+    <text x="140" y="118" text-anchor="middle" font-size="9.5" fill="#6b6a66" font-family="system-ui,sans-serif">Claude Code · Desktop · LM Studio</text>
+  </g>
+  <g class="actor" data-actor="servers" tabindex="0" role="button" aria-label="UniFi MCP servers details">
+    <rect x="332" y="70" width="268" height="122" rx="10" fill="#FDF3EE" stroke="#D97757" stroke-width="2" filter="url(#glow)"/>
+    <text x="466" y="100" text-anchor="middle" font-size="13.5" fill="#a05236" font-weight="700" font-family="system-ui,sans-serif">UniFi MCP Servers</text>
+    <text x="466" y="122" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">network :3000 · protect :3001 · access :3002</text>
+    <text x="466" y="140" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">Docker compose, uvx, or plugin-managed</text>
+    <text x="466" y="162" text-anchor="middle" font-size="9" fill="#a05236" font-family="system-ui,sans-serif">apps/network · apps/protect · apps/access</text>
+  </g>
+  <g class="actor" data-actor="controller" tabindex="0" role="button" aria-label="UniFi Controller details">
+    <rect x="50" y="298" width="200" height="106" rx="10" fill="#FFFFFF" stroke="#5B7DB1" stroke-width="1.5"/>
+    <text x="150" y="326" text-anchor="middle" font-size="12.5" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">UniFi Controller</text>
+    <text x="150" y="346" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">UDM · CloudKey · UNVR</text>
+    <text x="150" y="364" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">:443 · :12445 (Access)</text>
+    <text x="150" y="386" text-anchor="middle" font-size="9" fill="#41608f" font-family="system-ui,sans-serif">all state lives here</text>
+  </g>
+  <g class="actor" data-actor="relay" tabindex="0" role="button" aria-label="Relay sidecar details">
+    <rect x="380" y="272" width="220" height="66" rx="10" fill="#FFFFFF" stroke="#7B5EA7" stroke-width="1.5"/>
+    <text x="490" y="298" text-anchor="middle" font-size="12" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">unifi-mcp-relay</text>
+    <text x="490" y="318" text-anchor="middle" font-size="9.5" fill="#6b6a66" font-family="system-ui,sans-serif">sidecar · outbound WSS · no open ports</text>
+  </g>
+  <g class="actor" data-actor="api" tabindex="0" role="button" aria-label="API server details">
+    <rect x="380" y="460" width="220" height="92" rx="10" fill="#F2F5EE" stroke="#788C5D" stroke-width="1.5"/>
+    <text x="490" y="488" text-anchor="middle" font-size="12" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">unifi-api-server</text>
+    <text x="490" y="508" text-anchor="middle" font-size="9.5" fill="#6b6a66" font-family="system-ui,sans-serif">REST + GraphQL :8080 · admin UI</text>
+    <text x="490" y="528" text-anchor="middle" font-size="9" fill="#5b6b45" font-family="system-ui,sans-serif">apps/api — independent of MCP servers</text>
+  </g>
+  <g class="actor" data-actor="sqlite" tabindex="0" role="button" aria-label="SQLite state volume details">
+    <rect x="90" y="488" width="158" height="60" rx="10" fill="#F3F0E9" stroke="#9a958a" stroke-width="1.5"/>
+    <text x="169" y="512" text-anchor="middle" font-size="11.5" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">🗄 SQLite state</text>
+    <text x="169" y="532" text-anchor="middle" font-size="9.5" fill="#6b6a66" font-family="system-ui,sans-serif">encrypted named volume</text>
+  </g>
+
+  <!-- actors: Cloudflare -->
+  <g class="actor" data-actor="worker" tabindex="0" role="button" aria-label="Cloudflare Worker details">
+    <rect x="740" y="140" width="290" height="120" rx="10" fill="#F5F3F8" stroke="#7B5EA7" stroke-width="1.5"/>
+    <text x="885" y="170" text-anchor="middle" font-size="12.5" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">Cloudflare Worker</text>
+    <text x="885" y="192" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">unifi-mcp-worker · deployed via Wrangler CLI</text>
+    <text x="885" y="212" text-anchor="middle" font-size="10" fill="#6b6a66" font-family="system-ui,sans-serif">Durable Object: RelayObject (SQLite)</text>
+    <text x="885" y="234" text-anchor="middle" font-size="9" fill="#634a89" font-family="system-ui,sans-serif">apps/worker — routes calls, multi-location fan-out</text>
+  </g>
+
+  <!-- actors: External -->
+  <g class="actor" data-actor="agents" tabindex="0" role="button" aria-label="Cloud agents details">
+    <rect x="726" y="408" width="210" height="70" rx="22" fill="#FFFFFF" stroke="#141413" stroke-width="1.5"/>
+    <text x="831" y="436" text-anchor="middle" font-size="12" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">🤖 Cloud Agents</text>
+    <text x="831" y="456" text-anchor="middle" font-size="9.5" fill="#6b6a66" font-family="system-ui,sans-serif">Claude · ChatGPT connectors · n8n</text>
+  </g>
+  <g class="actor" data-actor="consumers" tabindex="0" role="button" aria-label="API consumers details">
+    <rect x="726" y="518" width="210" height="70" rx="22" fill="#FFFFFF" stroke="#141413" stroke-width="1.5"/>
+    <text x="831" y="546" text-anchor="middle" font-size="12" fill="#141413" font-weight="700" font-family="system-ui,sans-serif">📊 API Consumers</text>
+    <text x="831" y="566" text-anchor="middle" font-size="9.5" fill="#6b6a66" font-family="system-ui,sans-serif">dashboards · desktop apps · Pi extensions</text>
+  </g>
+</svg>
+<p class="legend-note">Click (or Tab + Enter) any box for auth mechanism and degradation notes.</p>
+</div>
+
+<h3>Protocol legend</h3>
+<div class="proto-legend">
+  <div class="proto-card">
+    <div class="proto-name"><span class="dot" style="background:#D97757"></span>MCP protocol</div>
+    <div class="svc">Client ↔ servers (stdio / streamable HTTP / SSE); relay ↔ servers (HTTP)</div>
+    <div class="auth"><b>Auth:</b> local trust / allowed-hosts list on HTTP transport</div>
+  </div>
+  <div class="proto-card">
+    <div class="proto-name"><span class="dot" style="background:#5B7DB1"></span>Controller HTTPS / WSS</div>
+    <div class="svc">Servers &amp; API → UniFi controller (V2, Integration, Access, Alarm Manager v2 APIs; uiprotect WSS events)</div>
+    <div class="auth"><b>Auth:</b> local admin session cookie, X-API-Key (env vars) — no SSO/MFA accounts</div>
+  </div>
+  <div class="proto-card">
+    <div class="proto-name"><span class="dot" style="background:#7B5EA7"></span>Relay WebSocket</div>
+    <div class="svc">Relay sidecar → Cloudflare Worker (outbound only, reconnecting)</div>
+    <div class="auth"><b>Auth:</b> relay token (env var), generated by worker admin API</div>
+  </div>
+  <div class="proto-card">
+    <div class="proto-name"><span class="dot" style="background:#788C5D"></span>Public HTTPS</div>
+    <div class="svc">Cloud agents → worker /mcp; API consumers → unifi-api-server REST/GraphQL</div>
+    <div class="auth"><b>Auth:</b> Bearer agent token (worker); scoped Bearer API keys, bootstrap admin key on first boot (API server)</div>
+  </div>
+</div>
+
+</div>
+<div class="tab-panel" id="tab-reading" role="tabpanel" aria-labelledby="tabbtn-reading">
+<h2><span class="sec-num">05</span>Where to Start Reading</h2>
+<div class="steps">
+  <details class="step" open>
+    <summary class="step-summary"><span class="step-num">1</span><span class="step-name">The canonical rules</span><span class="step-file">AGENTS.md</span></summary>
+    <div class="step-body"><p>Non-goals, layering rules, the tool response contract, the confirmation system, and the critical <strong>API surface boundaries</strong> section (three UniFi APIs with disjoint ID spaces). Everything else in the repo is an application of this file. <code>CLAUDE.md</code> and <code>GEMINI.md</code> just point here.</p></div>
+  </details>
+  <details class="step">
+    <summary class="step-summary"><span class="step-num">2</span><span class="step-name">The ecosystem map</span><span class="step-file">docs/ARCHITECTURE.md</span></summary>
+    <div class="step-body"><p>Package responsibilities, the layering diagram, the "adding a new server" recipe, and shared patterns (permissions, confirmation, lazy loading). Short — 200 lines — and current.</p></div>
+  </details>
+  <details class="step">
+    <summary class="step-summary"><span class="step-num">3</span><span class="step-name">One server's spine</span><span class="step-file">apps/network/src/unifi_network_mcp/main.py + runtime.py</span></summary>
+    <div class="step-body"><p><code>main.py</code> shows transport dispatch and tool registration; <code>runtime.py</code> shows the <code>@lru_cache</code> singleton factories every tool module imports from. <code>categories.py</code> holds the permission category map and <code>TOOL_MODULE_MAP</code>. Once you've read one app's spine, you've read all three.</p></div>
+  </details>
+  <details class="step">
+    <summary class="step-summary"><span class="step-num">4</span><span class="step-name">A reference tool family</span><span class="step-file">apps/network/src/unifi_network_mcp/tools/firewall.py</span></summary>
+    <div class="step-body"><p>Named in AGENTS.md as the reference for Integration-API tools (<code>unifi_get_firewall_policy_ordering</code> + <code>unifi_reorder_firewall_policies</code>). Shows the full pattern: thin wrapper, ToolAnnotations, preview-then-confirm, delegation to a manager in <code>unifi-core</code>.</p></div>
+  </details>
+  <details class="step">
+    <summary class="step-summary"><span class="step-num">5</span><span class="step-name">The shared machinery</span><span class="step-file">packages/unifi-mcp-shared/src/unifi_mcp_shared/</span></summary>
+    <div class="step-body"><p>Read <code>confirmation.py</code> (the preview-then-confirm anchor), <code>permissioned_tool.py</code> (how every tool gets permission-gated), and <code>lazy_tools.py</code>/<code>meta_tools.py</code> (why an MCP client sees ~5 meta-tools instead of 180 at startup — the "lazy vs eager" discovery modes).</p></div>
+  </details>
+  <details class="step">
+    <summary class="step-summary"><span class="step-num">6</span><span class="step-name">The cloud path (if relevant)</span><span class="step-file">packages/unifi-mcp-relay/src/unifi_mcp_relay/main.py → apps/worker/worker/src/</span></summary>
+    <div class="step-body"><p>Follow one tool call end-to-end: worker receives HTTPS JSON-RPC → Durable Object picks the location → WSS to the relay → <code>forwarder.py</code> routes to the right local server → result streams back. <code>protocol.py</code> (relay) defines the WSS message types shared with the worker's tests.</p></div>
+  </details>
+</div>
+
+</div>
+<div class="tab-panel" id="tab-gotchas" role="tabpanel" aria-labelledby="tabbtn-gotchas">
+<h2><span class="sec-num">06</span>Conventions &amp; Gotchas</h2>
+<div class="cards">
+  <div class="card rule"><b>Tool response contract</b>Every tool returns <code>{"success": true, "data": …}</code> or <code>{"success": false, "error": "…"}</code>. Exceptions never escape a tool function; error messages name the failed operation. Mutations return <code>requires_confirmation: true</code> with a preview until called with <code>confirm=true</code>.</div>
+  <div class="card"><b>Three API surfaces, disjoint IDs</b>V2 controller API (cookie auth, Mongo ObjectIDs, snake_case), Integration API (X-API-Key, UUIDs, camelCase), and Alarm Manager v2 (SuperAdmin only). IDs are scoped to a "tool family" — passing one family's IDs to another fails at the controller. Silent cross-API ID translation is banned.</div>
+  <div class="card"><b>Access dual-path auth</b>Unique to the Access server: an API-key client on :12445 for reads and a proxy session (cookie + CSRF) on :443 for mutations. Each tool declares which path it needs.</div>
+  <div class="card rule"><b>Singletons via runtime.py</b>All shared objects come from <code>@lru_cache</code> factories. Tests must monkey-patch the factory <em>before</em> importing tool modules. Exactly one ConnectionManager per process.</div>
+  <div class="card"><b>stdout is sacred</b>In stdio mode stdout carries JSON-RPC — all logging goes to stderr, with lazy <code>%s</code> formatting. A stray print will corrupt the protocol stream.</div>
+  <div class="card"><b>No hardcoded config</b>Hosts, ports, credentials, and flags live in <code>config/config.yaml</code> with <code>${oc.env:VAR,default}</code> interpolation or <code>UNIFI_</code>-prefixed env vars. Hardcoding them in Python is a hard ban.</div>
+  <div class="card rule"><b>Validation models are centralized</b>Pydantic models live in <code>packages/unifi-core/…/models/&lt;domain&gt;.py</code> — never inline JSON-schema dicts in tool functions.</div>
+  <div class="card"><b>SuperAdmin blast radius</b>Alarm Manager v2 needs a SuperAdmin credential; on a combined UDM console that credential is broad. Managers must map its 403s to an actionable "requires SuperAdmin" error.</div>
+  <div class="card rule"><b>Worker is a monorepo guest</b><code>apps/worker</code> is excluded from the uv workspace and keeps its own npm graphs (CLI and worker are separate packages). It lives here so relay-protocol changes land in one PR.</div>
+  <div class="card"><b>No SSO accounts</b>MCP servers authenticate with a dedicated local admin account without MFA — Ubiquiti SSO cloud accounts are unsupported for setup.</div>
+</div>
+
+</div>
+<div class="tab-panel" id="tab-glossary" role="tabpanel" aria-labelledby="tabbtn-glossary">
+<h2><span class="sec-num">07</span>Glossary</h2>
+<div class="tblwrap"><table class="data">
+  <thead><tr><th>Term</th><th>Meaning here</th></tr></thead>
+  <tbody>
+    <tr><td><b>MCP</b></td><td>Model Context Protocol — the standard by which AI clients discover (<code>tools/list</code>) and invoke (<code>tools/call</code>) tools.</td></tr>
+    <tr><td><b>Meta-tools / lazy mode</b></td><td>Default discovery mode: only <code>*_tool_index</code>, <code>*_execute</code>, <code>*_batch</code>, <code>*_load_tools</code> register at startup (~200 tokens vs ~5000); domain tools load on demand. <code>eager</code> mode registers everything.</td></tr>
+    <tr><td><b>Tool family</b></td><td>A set of tools whose IDs are mutually portable (same UniFi API surface). Cross-family ID use is prohibited; bridging requires an explicit <code>unifi_resolve_*</code> tool.</td></tr>
+    <tr><td><b>Preview-then-confirm</b></td><td>Every mutating tool defaults to <code>confirm=false</code>, returning a preview payload; the mutation only executes on <code>confirm=true</code>. Bypass mode auto-injects it.</td></tr>
+    <tr><td><b>Manager</b></td><td>A domain-logic class in <code>unifi-core</code> (e.g. <code>FirewallManager</code>) — the only layer that talks to the ConnectionManager.</td></tr>
+    <tr><td><b>Relay / Worker</b></td><td>Relay = the LAN sidecar (Python, outbound WSS). Worker = the Cloudflare gateway (TypeScript, Durable Object). Together they are the "Cloud Relay".</td></tr>
+    <tr><td><b>RelayObject</b></td><td>The Durable Object holding location registrations (SQLite) and live relay WebSockets; routes tool calls and fans out read-only calls across locations.</td></tr>
+    <tr><td><b>uiprotect</b></td><td>Third-party Python client (née pyunifiprotect) the Protect server uses for REST + websocket event streaming, and for reaching Alarm Manager v2 via <code>api_request()</code>.</td></tr>
+    <tr><td><b>tools_manifest.json</b></td><td>Pre-generated per-app tool metadata (names, descriptions, annotations) used for lazy loading and the tool index — regenerate via Makefile when tools change.</td></tr>
+    <tr><td><b>Plugins / skills</b></td><td><code>plugins/</code> ships Claude Code / Codex / OpenClaw bundles (MCP server config + setup skills like <code>unifi-network-setup</code>); <code>plugins/cross-product/</code> has multi-server skills (incident-investigation, security-patrol).</td></tr>
+  </tbody>
+</table></div>
+</div>
+
+</div>
+
+<div class="detail-panel" id="detail-panel" role="dialog" aria-label="Actor details">
+  <button class="detail-close" id="detail-close" aria-label="Close details">✕</button>
+  <h3 id="detail-name"></h3>
+  <table><tbody id="detail-body"></tbody></table>
+</div>
+
+<script>
+// Tab switching
+const tabs = Array.from(document.querySelectorAll('.tab'));
+function activateTab(tab) {
+  tabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  tab.classList.add('active');
+  tab.setAttribute('aria-selected', 'true');
+  document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+}
+tabs.forEach((tab, i) => {
+  tab.addEventListener('click', () => activateTab(tab));
+  tab.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      next.focus();
+      activateTab(next);
+    }
+  });
+});
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Never a resolved secret in `auth` — mechanism names only.
+const ACTORS = {
+  client: {
+    name: 'MCP Client',
+    type: 'User-side application (your machine)',
+    protocols: 'MCP over stdio (uvx / plugin-managed) or streamable HTTP / SSE (:3000–3002)',
+    auth: 'Local process trust; HTTP transport gated by UNIFI_MCP_ALLOWED_HOSTS',
+    degradation: 'Server down → client shows tool errors; stdio servers restart with the client',
+  },
+  servers: {
+    name: 'UniFi MCP Servers (focal system)',
+    type: 'Internal — apps/network, apps/protect, apps/access',
+    protocols: 'Serves MCP (stdio/HTTP/SSE); calls controller HTTPS REST + WSS (protect events)',
+    auth: 'Controller creds via UNIFI_* env vars / config.yaml — dedicated local admin, no SSO/MFA',
+    degradation: 'ConnectionManager auto-reconnects with retry/backoff; tools return {"success": false, error} instead of raising',
+  },
+  controller: {
+    name: 'UniFi Controller',
+    type: 'External appliance (UDM / CloudKey / UNVR) — source of truth for all state',
+    protocols: 'V2 API + Integration API on :443, Access API on :12445, Alarm Manager v2 (/api/v2/alarms/)',
+    auth: 'Session cookie (local admin), X-API-Key (Integration/Access), SuperAdmin for Alarm Manager v2',
+    degradation: 'Unreachable → every tool call fails with actionable error; no local caching layer',
+  },
+  relay: {
+    name: 'unifi-mcp-relay sidecar',
+    type: 'Internal — packages/unifi-mcp-relay (pure MCP client)',
+    protocols: 'MCP over HTTP to local servers; outbound WSS to the worker; periodic catalog refresh',
+    auth: 'UNIFI_RELAY_TOKEN (env var) minted by the worker admin API',
+    degradation: 'Reconnects with capped exponential backoff (UNIFI_RELAY_RECONNECT_MAX_DELAY); cloud access pauses, local MCP unaffected',
+  },
+  worker: {
+    name: 'Cloudflare Worker + RelayObject',
+    type: 'Internal (deployed to your Cloudflare account) — apps/worker',
+    protocols: 'HTTPS POST /mcp inbound; WSS /ws to relay sidecars; Durable Object SQLite for locations',
+    auth: 'Bearer AGENT_TOKEN for agents, relay token for sidecars; CLI rotates both',
+    degradation: 'No relay connected → tool calls for that location error; read-only fan-out skips offline locations',
+  },
+  agents: {
+    name: 'Cloud Agents',
+    type: 'External — Claude, ChatGPT connectors, n8n, MSP automations',
+    protocols: 'MCP JSON-RPC over HTTPS to the worker; reads fan out, writes need explicit __location',
+    auth: 'Bearer agent token (generated at worker install)',
+    degradation: 'N/A — consumers of the system',
+  },
+  api: {
+    name: 'unifi-api-server',
+    type: 'Internal — apps/api; runs independently of the MCP servers',
+    protocols: 'REST (/v1) + GraphQL (/v1/graphql) + admin UI; HTTPS REST to registered controllers',
+    auth: 'Scoped Bearer API keys (read/write/admin); first-boot bootstrap admin key; UNIFI_API_DB_KEY encrypts state',
+    degradation: 'Controller offline → 5xx per resource; own state (keys, controllers, audit log) persists in the volume',
+  },
+  consumers: {
+    name: 'API Consumers',
+    type: 'External — dashboards, desktop apps, Pi extensions (anything non-MCP)',
+    protocols: 'Plain HTTPS REST + GraphQL against unifi-api-server',
+    auth: 'Bearer API key minted per consumer with read/write/admin scope',
+    degradation: 'N/A — consumers of the system',
+  },
+  sqlite: {
+    name: 'SQLite state volume',
+    type: 'Internal storage — unifi-api-state named Docker volume',
+    protocols: 'Local file access from unifi-api-server; alembic migrations',
+    auth: 'Encrypted with UNIFI_API_DB_KEY (auto-generated on first boot if unset)',
+    degradation: 'Volume wipe (down -v) regenerates keys and loses registered controllers + audit log',
+  },
+};
+
+const panel = document.getElementById('detail-panel');
+const panelName = document.getElementById('detail-name');
+const panelBody = document.getElementById('detail-body');
+
+function showActor(el) {
+  const a = ACTORS[el.dataset.actor];
+  if (!a) return;
+  panelName.textContent = a.name;
+  panelBody.innerHTML = Object.entries({
+    Type: a.type, Protocols: a.protocols, Auth: a.auth, Degradation: a.degradation,
+  }).map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`).join('');
+  panel.classList.add('visible');
+}
+
+document.querySelectorAll('.actor').forEach(el => {
+  el.addEventListener('click', e => { e.stopPropagation(); showActor(el); });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); showActor(el); }
+  });
+});
+document.addEventListener('click', () => panel.classList.remove('visible'));
+panel.addEventListener('click', e => e.stopPropagation());
+document.getElementById('detail-close').addEventListener('click', () => panel.classList.remove('visible'));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') panel.classList.remove('visible'); });
+</script>
+</body>
+</html>
