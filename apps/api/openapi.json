@@ -8761,6 +8761,77 @@
         ]
       }
     },
+    "/v1/sites/{site_id}/access-devices/{device_id}/configs": {
+      "get": {
+        "operationId": "get_device_configs_v1_sites__site_id__access_devices__device_id__configs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "device_id",
+            "required": true,
+            "schema": {
+              "title": "Device Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Device Configs V1 Sites  Site Id  Access Devices  Device Id  Configs Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Device Configs",
+        "tags": [
+          "access/devices"
+        ]
+      }
+    },
     "/v1/sites/{site_id}/access/activity-summary": {
       "get": {
         "operationId": "get_access_activity_summary_v1_sites__site_id__access_activity_summary_get",

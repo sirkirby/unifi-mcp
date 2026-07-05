@@ -9,6 +9,7 @@ import pytest
 from unifi_core.access.managers.connection_manager import AccessConnectionManager
 from unifi_core.access.managers.device_manager import DeviceManager
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError
+from unifi_core.redaction import REDACTED
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -335,3 +336,310 @@ class TestApplyRebootDevice:
     async def test_apply_reboot_no_proxy(self, device_mgr_none):
         with pytest.raises(UniFiConnectionError, match="No proxy session"):
             await device_mgr_none.apply_reboot_device("dev-1")
+
+
+# ---------------------------------------------------------------------------
+# Device-config helpers
+# ---------------------------------------------------------------------------
+
+
+def _topology_with(device: dict) -> list:
+    """Wrap a single device dict in the nested topology4 tree shape."""
+    return [
+        {
+            "name": "Site",
+            "unique_id": "site-1",
+            "floors": [
+                {
+                    "name": "1F",
+                    "unique_id": "floor-1",
+                    "doors": [
+                        {
+                            "name": "Front Door",
+                            "unique_id": "door-1",
+                            "device_groups": [[device]],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+
+
+# A camera-class reader carries a 24-hex Protect-style id → is_camera=true.
+_READER_ID = "a1b2c3d4e5f607182930abcd"
+# A hub carries a MAC-style (12-hex) id → is_camera=false.
+_HUB_ID = "aabbccddeeff"
+
+
+def _reader_with_configs(configs: list) -> dict:
+    return {"unique_id": _READER_ID, "name": "Entry Reader", "device_type": "UA-G6", "configs": configs}
+
+
+_GREETING_CONFIGS = [
+    {"device_id": _READER_ID, "key": "show_entry_greet", "value": "yes", "tag": "device_setting"},
+    {"device_id": _READER_ID, "key": "greeting_text", "value": "welcome", "tag": "device_setting"},
+    {"device_id": _READER_ID, "key": "greeting_broadcast_name", "value": "first_name_only", "tag": "device_setting"},
+    {"device_id": _READER_ID, "key": "ssh_password", "value": "s3cr3t", "tag": "credential"},
+]
+
+
+class TestGetDeviceConfigs:
+    @pytest.mark.asyncio
+    async def test_returns_configs_and_identity(self, device_mgr_proxy, cm_proxy):
+        topology = _topology_with(_reader_with_configs(_GREETING_CONFIGS))
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": topology}
+            info = await device_mgr_proxy.get_device_configs(_READER_ID)
+        assert info["device_id"] == _READER_ID
+        assert info["device_name"] == "Entry Reader"
+        assert info["is_camera"] is True
+        assert info["configs"] == _GREETING_CONFIGS
+        mock_req.assert_awaited_once_with("GET", "devices/topology4")
+
+    @pytest.mark.asyncio
+    async def test_hub_is_not_camera(self, device_mgr_proxy, cm_proxy):
+        hub = {"unique_id": _HUB_ID, "name": "Door Hub", "configs": []}
+        topology = _topology_with(hub)
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": topology}
+            info = await device_mgr_proxy.get_device_configs(_HUB_ID)
+        assert info["is_camera"] is False
+        assert info["configs"] == []
+
+    @pytest.mark.asyncio
+    async def test_device_without_configs_key_returns_empty_list(self, device_mgr_proxy, cm_proxy):
+        reader = {"unique_id": _READER_ID, "name": "Reader"}
+        topology = _topology_with(reader)
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": topology}
+            info = await device_mgr_proxy.get_device_configs(_READER_ID)
+        assert info["configs"] == []
+
+    @pytest.mark.asyncio
+    async def test_not_found_raises(self, device_mgr_proxy, cm_proxy):
+        topology = _topology_with(_reader_with_configs([]))
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": topology}
+            with pytest.raises(UniFiNotFoundError):
+                await device_mgr_proxy.get_device_configs("no-such-device")
+
+    @pytest.mark.asyncio
+    async def test_empty_id_raises(self, device_mgr_proxy):
+        with pytest.raises(ValueError, match="device_id is required"):
+            await device_mgr_proxy.get_device_configs("")
+
+    @pytest.mark.asyncio
+    async def test_no_proxy_raises(self, device_mgr_none):
+        with pytest.raises(UniFiConnectionError, match="No proxy session"):
+            await device_mgr_none.get_device_configs(_READER_ID)
+
+
+class TestUpdateDeviceConfigPreview:
+    @pytest.mark.asyncio
+    async def test_preview_shows_current_and_proposed(self, device_mgr_proxy, cm_proxy):
+        topology = _topology_with(_reader_with_configs(_GREETING_CONFIGS))
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": topology}
+            preview = await device_mgr_proxy.update_device_config(_READER_ID, {"show_entry_greet": "no"})
+        assert preview["device_id"] == _READER_ID
+        assert preview["current_state"] == {"show_entry_greet": "yes"}
+        assert preview["proposed_changes"] == {"show_entry_greet": "no"}
+
+    @pytest.mark.asyncio
+    async def test_preview_rejects_unknown_key(self, device_mgr_proxy, cm_proxy):
+        topology = _topology_with(_reader_with_configs(_GREETING_CONFIGS))
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": topology}
+            with pytest.raises(ValueError, match="Unknown config key"):
+                await device_mgr_proxy.update_device_config(_READER_ID, {"bogus_key": "x"})
+
+    @pytest.mark.asyncio
+    async def test_preview_rejects_credential_key(self, device_mgr_proxy, cm_proxy):
+        topology = _topology_with(_reader_with_configs(_GREETING_CONFIGS))
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": topology}
+            with pytest.raises(ValueError, match="credential/secret"):
+                await device_mgr_proxy.update_device_config(_READER_ID, {"ssh_password": "new"})
+
+    @pytest.mark.asyncio
+    async def test_preview_rejects_empty_updates(self, device_mgr_proxy, cm_proxy):
+        topology = _topology_with(_reader_with_configs(_GREETING_CONFIGS))
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": topology}
+            with pytest.raises(ValueError, match="No config updates"):
+                await device_mgr_proxy.update_device_config(_READER_ID, {})
+
+
+class TestApplyUpdateDeviceConfig:
+    @pytest.mark.asyncio
+    async def test_apply_puts_key_tag_value_array_with_is_camera(self, device_mgr_proxy, cm_proxy):
+        topology = _topology_with(_reader_with_configs(_GREETING_CONFIGS))
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.side_effect = [{"data": topology}, {"code": 1, "codeS": "SUCCESS"}]
+            result = await device_mgr_proxy.apply_update_device_config(
+                _READER_ID, {"show_entry_greet": "no", "greeting_text": "hello"}
+            )
+        assert result["result"] == "success"
+        assert result["updated_keys"] == ["show_entry_greet", "greeting_text"]
+        assert result["is_camera"] is True
+        put_call = mock_req.await_args_list[1]
+        assert put_call.args == ("PUT", f"device/{_READER_ID}/configs")
+        assert put_call.kwargs["params"] == {"is_camera": "true"}
+        assert put_call.kwargs["json"] == [
+            {"key": "show_entry_greet", "tag": "device_setting", "value": "no"},
+            {"key": "greeting_text", "tag": "device_setting", "value": "hello"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_apply_hub_uses_is_camera_false(self, device_mgr_proxy, cm_proxy):
+        hub_configs = [{"device_id": _HUB_ID, "key": "led_mode", "value": "on", "tag": "device_setting"}]
+        hub = {"unique_id": _HUB_ID, "name": "Door Hub", "configs": hub_configs}
+        topology = _topology_with(hub)
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.side_effect = [{"data": topology}, {"code": 1}]
+            result = await device_mgr_proxy.apply_update_device_config(_HUB_ID, {"led_mode": "off"})
+        assert result["is_camera"] is False
+        assert mock_req.await_args_list[1].kwargs["params"] == {"is_camera": "false"}
+
+    @pytest.mark.asyncio
+    async def test_apply_is_camera_override_respected(self, device_mgr_proxy, cm_proxy):
+        topology = _topology_with(_reader_with_configs(_GREETING_CONFIGS))
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.side_effect = [{"data": topology}, {"code": 1}]
+            await device_mgr_proxy.apply_update_device_config(_READER_ID, {"show_entry_greet": "no"}, is_camera=False)
+        assert mock_req.await_args_list[1].kwargs["params"] == {"is_camera": "false"}
+
+    @pytest.mark.asyncio
+    async def test_apply_rejects_unknown_key(self, device_mgr_proxy, cm_proxy):
+        topology = _topology_with(_reader_with_configs(_GREETING_CONFIGS))
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": topology}
+            with pytest.raises(ValueError, match="Unknown config key"):
+                await device_mgr_proxy.apply_update_device_config(_READER_ID, {"bogus": "x"})
+
+    @pytest.mark.asyncio
+    async def test_apply_no_proxy_raises(self, device_mgr_none):
+        with pytest.raises(UniFiConnectionError, match="No proxy session"):
+            await device_mgr_none.apply_update_device_config(_READER_ID, {"show_entry_greet": "no"})
+
+
+# ---------------------------------------------------------------------------
+# MCP tool layer: access_get_device_configs / access_update_device_config
+# ---------------------------------------------------------------------------
+
+
+def _configs_info() -> dict:
+    return {
+        "device_id": _READER_ID,
+        "device_name": "Entry Reader",
+        "is_camera": True,
+        "configs": [
+            {"device_id": _READER_ID, "key": "show_entry_greet", "value": "yes", "tag": "device_setting"},
+            {"device_id": _READER_ID, "key": "ssh_password", "value": "s3cr3t", "tag": "credential"},
+            {"device_id": _READER_ID, "key": "nacl_private_key", "value": "AbCd==", "tag": "device_extra"},
+        ],
+    }
+
+
+class TestGetDeviceConfigsTool:
+    @pytest.mark.asyncio
+    async def test_redacts_credential_and_sensitive_values_by_default(self):
+        with patch("unifi_access_mcp.tools.devices.device_manager") as mock_mgr:
+            mock_mgr.get_device_configs = AsyncMock(return_value=_configs_info())
+            from unifi_access_mcp.tools.devices import access_get_device_configs
+
+            result = await access_get_device_configs(_READER_ID)
+
+        configs = result["data"]["configs"]
+        by_key = {c["key"]: c for c in configs}
+        assert result["success"] is True
+        assert by_key["ssh_password"]["value"] == REDACTED
+        assert by_key["nacl_private_key"]["value"] == REDACTED
+        assert by_key["show_entry_greet"]["value"] == "yes"
+
+    @pytest.mark.asyncio
+    async def test_policy_disable_returns_raw_values(self, monkeypatch):
+        with patch("unifi_access_mcp.tools.devices.device_manager") as mock_mgr:
+            mock_mgr.get_device_configs = AsyncMock(return_value=_configs_info())
+            from unifi_access_mcp.tools.devices import access_get_device_configs
+
+            monkeypatch.setenv("UNIFI_ACCESS_REDACT_SENSITIVE_FIELDS", "false")
+            result = await access_get_device_configs(_READER_ID)
+
+        by_key = {c["key"]: c for c in result["data"]["configs"]}
+        assert by_key["ssh_password"]["value"] == "s3cr3t"
+
+    @pytest.mark.asyncio
+    async def test_not_found_returns_error_envelope(self):
+        with patch("unifi_access_mcp.tools.devices.device_manager") as mock_mgr:
+            mock_mgr.get_device_configs = AsyncMock(side_effect=UniFiNotFoundError("device", "x"))
+            from unifi_access_mcp.tools.devices import access_get_device_configs
+
+            result = await access_get_device_configs("x")
+
+        assert result["success"] is False
+        assert "error" in result
+
+
+class TestUpdateDeviceConfigTool:
+    @pytest.mark.asyncio
+    async def test_preview_returns_requires_confirmation(self):
+        with patch("unifi_access_mcp.tools.devices.device_manager") as mock_mgr:
+            mock_mgr.update_device_config = AsyncMock(
+                return_value={
+                    "device_id": _READER_ID,
+                    "device_name": "Entry Reader",
+                    "current_state": {"show_entry_greet": "yes"},
+                    "proposed_changes": {"show_entry_greet": "no"},
+                }
+            )
+            from unifi_access_mcp.tools.devices import access_update_device_config
+
+            result = await access_update_device_config(_READER_ID, {"show_entry_greet": "no"}, confirm=False)
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["current"] == {"show_entry_greet": "yes"}
+        assert result["preview"]["proposed"] == {"show_entry_greet": "no"}
+
+    @pytest.mark.asyncio
+    async def test_confirm_calls_apply_and_returns_success(self):
+        with patch("unifi_access_mcp.tools.devices.device_manager") as mock_mgr:
+            apply_result = {
+                "device_id": _READER_ID,
+                "action": "update_config",
+                "result": "success",
+                "updated_keys": ["show_entry_greet"],
+                "is_camera": True,
+            }
+            mock_mgr.apply_update_device_config = AsyncMock(return_value=apply_result)
+            from unifi_access_mcp.tools.devices import access_update_device_config
+
+            result = await access_update_device_config(_READER_ID, {"show_entry_greet": "no"}, confirm=True)
+
+        assert result["success"] is True
+        assert result["data"] == apply_result
+        mock_mgr.apply_update_device_config.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_confirm_passes_is_camera_override(self):
+        with patch("unifi_access_mcp.tools.devices.device_manager") as mock_mgr:
+            mock_mgr.apply_update_device_config = AsyncMock(return_value={"result": "success"})
+            from unifi_access_mcp.tools.devices import access_update_device_config
+
+            await access_update_device_config(_READER_ID, {"show_entry_greet": "no"}, is_camera=False, confirm=True)
+
+        _, kwargs = mock_mgr.apply_update_device_config.await_args
+        assert kwargs.get("is_camera") is False
+
+    @pytest.mark.asyncio
+    async def test_validation_error_returns_error_envelope(self):
+        with patch("unifi_access_mcp.tools.devices.device_manager") as mock_mgr:
+            mock_mgr.update_device_config = AsyncMock(side_effect=ValueError("Unknown config key(s): ['x']"))
+            from unifi_access_mcp.tools.devices import access_update_device_config
+
+            result = await access_update_device_config(_READER_ID, {"x": "1"}, confirm=False)
+
+        assert result["success"] is False
+        assert "Unknown config key" in result["error"]

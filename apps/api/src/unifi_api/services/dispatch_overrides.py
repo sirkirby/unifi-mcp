@@ -120,6 +120,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "access_create_credential": ("credential_manager", "apply_create_credential"),
     "access_revoke_credential": ("credential_manager", "apply_revoke_credential"),
     "access_reboot_device": ("device_manager", "apply_reboot_device"),
+    "access_update_device_config": ("device_manager", "apply_update_device_config"),
     "access_lock_door": ("door_manager", "apply_lock_door"),
     "access_unlock_door": ("door_manager", "apply_unlock_door"),
     "access_update_policy": ("policy_manager", "apply_update_policy"),

@@ -1,4 +1,4 @@
-# Access Server Tool Reference (34 tools)
+# Access Server Tool Reference (36 tools)
 
 Complete reference for `access_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Access controls physical door locks and building entry.
 
@@ -154,13 +154,15 @@ Always available, regardless of registration mode.
 ## Devices
 
 <!-- AUTO:tools:devices -->
-3 tools.
+5 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
 | `access_get_device` | Read | Returns detailed information for a single Access device including name, type, connection state, firmware version, MAC, and IP address. |
+| `access_get_device_configs` | Read | Returns a device's settings (its configs[] array) — the per-device settings the Access web UI edits, such as the reader voice greeting. |
 | `access_list_devices` | Read | Lists all Access hardware devices (hubs, readers, relays, intercoms) with their name, type, connection state, and firmware version. |
 | `access_reboot_device` | Mutate | Reboot an Access hardware device (hub, reader, relay, intercom). |
+| `access_update_device_config` | Mutate | Update a device's settings (its configs[] entries), e.g. |
 <!-- /AUTO:tools:devices -->
 
 **Tips:**

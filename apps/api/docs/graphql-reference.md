@@ -19,6 +19,24 @@ type AccessDevice {
   location: AccessLocation
 }
 
+"""
+A single per-device config/settings entry (key/value with category tag).
+"""
+type AccessDeviceConfig {
+  deviceId: ID
+  key: String
+  value: String
+  tag: String
+  updateTime: String
+  createTime: String
+}
+
+"""A device's config/settings entries."""
+type AccessDeviceConfigPage {
+  items: [AccessDeviceConfig!]!
+  nextCursor: String
+}
+
 """Paginated page of UniFi Access devices."""
 type AccessDevicePage {
   items: [AccessDevice!]!
@@ -87,6 +105,11 @@ type AccessQuery {
 
   """Look up a single Access device by id."""
   device(controller: ID!, id: ID!): AccessDevice
+
+  """
+  List a device's config/settings entries (e.g. reader voice greeting). Secrets redacted.
+  """
+  deviceConfigs(controller: ID!, deviceId: ID!): AccessDeviceConfigPage!
 
   """List Access users (employees / cardholders, paginated)."""
   users(controller: ID!, limit: Int! = 50, cursor: String = null): UserPage!
@@ -2081,6 +2104,7 @@ Read-only access to UniFi Access resources.
 - `credential: Credential`  — Look up a single Access credential by id.
 - `credentials: CredentialPage!`  — List Access credentials (NFC / PIN / etc., paginated).
 - `device: AccessDevice`  — Look up a single Access device by id.
+- `deviceConfigs: AccessDeviceConfigPage!`  — List a device's config/settings entries (e.g. reader voice greeting). Secrets redacted.
 - `devices: AccessDevicePage!`  — List Access devices (readers / hubs / locks, paginated).
 - `door: Door`  — Look up a single Access door by id.
 - `doorGroups: DoorGroupPage!`  — List Access door groups (paginated).

@@ -31,6 +31,7 @@ from strawberry.types import Info
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
 from unifi_api.graphql.types.access.credentials import Credential
+from unifi_api.graphql.types.access.device_configs import AccessDeviceConfig
 from unifi_api.graphql.types.access.devices import AccessDevice
 from unifi_api.graphql.types.access.doors import Door, DoorGroup, DoorStatus
 from unifi_api.graphql.types.access.events import ActivitySummary, Event
@@ -196,6 +197,27 @@ async def _fetch_devices(ctx: GraphQLContext, controller: str) -> list:
                 "access",
             )
             return list(await mgr.list_devices())
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_device_configs(ctx: GraphQLContext, controller: str, device_id: str) -> dict:
+    key = f"access/device-configs/{controller}/{device_id}"
+
+    async def _do() -> dict:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "access",
+                "device_manager",
+            )
+            await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "access",
+            )
+            return await mgr.get_device_configs(device_id)
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -421,6 +443,12 @@ class AccessDevicePage:
     next_cursor: str | None
 
 
+@strawberry.type(description="A device's config/settings entries.")
+class AccessDeviceConfigPage:
+    items: list[AccessDeviceConfig]
+    next_cursor: str | None
+
+
 @strawberry.type(description="Paginated page of UniFi Access users.")
 class UserPage:
     items: list[User]
@@ -608,6 +636,26 @@ class AccessQuery:
             if _id_of(d) == id:
                 return AccessDevice.from_manager_output(d)
         return None
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="List a device's config/settings entries (e.g. reader voice greeting). Secrets redacted.",
+    )
+    async def device_configs(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        device_id: strawberry.ID,
+    ) -> AccessDeviceConfigPage:
+        ctx: GraphQLContext = info.context
+        info_dict = await _fetch_device_configs(ctx, controller, device_id)
+        return AccessDeviceConfigPage(
+            items=[
+                AccessDeviceConfig.from_manager_output(c, redact_sensitive=ctx.redact_sensitive_fields)
+                for c in info_dict.get("configs", [])
+            ],
+            next_cursor=None,
+        )
 
     # ---- Users -----------------------------------------------------------
 
