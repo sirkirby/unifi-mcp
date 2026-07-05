@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 180 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 181 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`.
 
@@ -91,7 +91,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 
 - `unifi_get_traffic_flows` — Query historical UniFi Traffic Flows from Insights > Flows, with pagination and filters for time range, client, host, port, protocol, application, and direction
 
-## Port Forwarding (6 tools)
+## Port Forwarding (7 tools)
 
 - `unifi_list_port_forwards` — List all port forwarding rules
 - `unifi_get_port_forward` — Get rule details by ID
@@ -99,6 +99,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_create_port_forward` — Create with full schema validation
 - `unifi_create_simple_port_forward` — Create with simplified schema
 - `unifi_update_port_forward` — Update rule fields
+- `unifi_delete_port_forward` — Delete a rule by ID (requires delete permission)
 
 ## QoS / Traffic Shaping (6 tools)
 
