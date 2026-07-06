@@ -217,6 +217,15 @@ published docs stay in sync with the merged code at every point in history.
 **Note:** `docs/index.html` is a static marketing site HTML file, not a generated artifact.
 Marketing site changes must be made and reviewed manually, separate from the tool documentation sweep.
 
+**Static-docs checklist (hand-maintained, not covered by the generator or Gate 3.5's `make check-generated`):**
+When a PR adds a new tool, these five files require a manual edit each and are easy to miss because
+no CI gate catches them — a past PR missed all five and required a follow-up commit:
+- `README.md`
+- `docs/ARCHITECTURE.md`
+- `apps/network/README.md` (or the relevant app's README)
+- `apps/network/docs/tools.md` (or the relevant app's tools doc)
+- `plugins/unifi-network/skills/unifi-network/SKILL.md` (or the relevant app's plugin skill file)
+
 ---
 
 ### Gate 3.5: New-Tool Registration Completeness — Generated Artifact Drift
@@ -415,6 +424,10 @@ Structure your review body with explicit sections:
 Hard blockers are items from Gates 1–4. Use the `comment` review type only when you have zero
 hard blockers and are leaving suggestions.
 
+**Wording preference:** Write maintainer PR comments in first person ("I ran the live smoke tests
+and found...") rather than passive/impersonal phrasing — this reads as direct maintainer accountability
+rather than a generated report.
+
 ---
 
 ## Hard Blockers (must fix before merge)
@@ -461,11 +474,29 @@ git push <contributor> HEAD:<pr-branch>
 
 ### Rebase Before Push — When Branch Is Behind Main
 
+**"N commits behind main" is a branch-protection gate, not proof of a real conflict.** GitHub's
+branch-protection banner ("This branch is out-of-date with the base branch") fires purely on commit
+count and can be satisfied by a clean, non-conflicting rebase. Do not assume actual file-overlap
+conflicts exist until you've checked.
+
+First, trial the rebase on a throwaway local ref so you don't touch the contributor's fork or
+force-push until you know whether real conflicts exist:
+
+```bash
+# From the checked-out review branch, trial on a disposable ref:
+git fetch origin main
+git checkout -b trial/<pr-branch> review/<pr-branch>
+git rebase origin/main
+# Clean rebase (no conflicts) -> gate-blocked-but-clean; proceed to push below.
+# Conflicts reported -> resolve them on this throwaway ref first, or hand back to the
+# contributor if the conflict touches logic you shouldn't resolve unilaterally.
+```
+
 When another PR lands on `main` after the contributor's branch point, the contributor's branch must be rebased before merge to avoid a merge commit. Do this maintainer-side rather than requesting a contributor round-trip:
 
 ```bash
-# From the checked-out review branch:
-git fetch origin main
+# Once the trial rebase is confirmed clean (or conflicts are resolved), repeat on the real review branch:
+git checkout review/<pr-branch>
 git rebase origin/main
 # Resolve any conflicts, then push back with --force-with-lease:
 git push --force-with-lease <contributor> HEAD:<pr-branch>
