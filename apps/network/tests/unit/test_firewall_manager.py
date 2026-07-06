@@ -724,3 +724,43 @@ class TestCreatePortForwardResponseShapes:
         assert result is not None
         assert result["_id"] == "abc123"
         assert result["name"] == "test"
+
+
+# ---------------------------------------------------------------------------
+# delete_port_forward — V1 DELETE endpoint + guards
+# ---------------------------------------------------------------------------
+
+
+class TestDeletePortForward:
+    """Direct manager coverage for delete_port_forward (issued the V1 DELETE and invalidates cache)."""
+
+    @pytest.mark.asyncio
+    async def test_delete_port_forward_success(self, firewall_manager, mock_connection):
+        """Happy path: issues DELETE /rest/portforward/<id>, invalidates cache, returns True."""
+        mock_connection.request = AsyncMock(return_value={})
+
+        result = await firewall_manager.delete_port_forward("pf_001")
+
+        assert result is True
+        api_request = mock_connection.request.call_args[0][0]
+        assert api_request.method == "delete"
+        assert api_request.path == "/rest/portforward/pf_001"
+        mock_connection._invalidate_cache.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_port_forward_not_connected_raises(self, firewall_manager, mock_connection):
+        """When the connection can't be established, raise ConnectionError before any request."""
+        mock_connection.ensure_connected = AsyncMock(return_value=False)
+
+        with pytest.raises(ConnectionError):
+            await firewall_manager.delete_port_forward("pf_001")
+
+        mock_connection.request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_delete_port_forward_reraises_request_error(self, firewall_manager, mock_connection):
+        """A controller/request error propagates (the manager re-raises)."""
+        mock_connection.request = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await firewall_manager.delete_port_forward("pf_001")

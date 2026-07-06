@@ -1,5 +1,5 @@
 {
-  "count": 34,
+  "count": 36,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "access_create_credential": "unifi_access_mcp.tools.credentials",
@@ -8,6 +8,7 @@
     "access_get_activity_summary": "unifi_access_mcp.tools.events",
     "access_get_credential": "unifi_access_mcp.tools.credentials",
     "access_get_device": "unifi_access_mcp.tools.devices",
+    "access_get_device_configs": "unifi_access_mcp.tools.devices",
     "access_get_door": "unifi_access_mcp.tools.doors",
     "access_get_door_status": "unifi_access_mcp.tools.doors",
     "access_get_event": "unifi_access_mcp.tools.events",
@@ -30,6 +31,7 @@
     "access_revoke_credential": "unifi_access_mcp.tools.credentials",
     "access_subscribe_events": "unifi_access_mcp.tools.events",
     "access_unlock_door": "unifi_access_mcp.tools.doors",
+    "access_update_device_config": "unifi_access_mcp.tools.devices",
     "access_update_policy": "unifi_access_mcp.tools.policies"
   },
   "note": "Auto-generated with full schemas from tool decorators. Do not edit manually.",
@@ -793,6 +795,100 @@
         }
       },
       "title": "Get Device"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Returns a device's settings (its configs[] array) \u2014 the per-device settings the Access web UI edits, such as the reader voice greeting. Each entry is a {key, value, tag} record; tags group entries by category (device_setting, device_extra, hub_action, hub_power, wiring_state, credential). Credential-tagged and secret-named values are redacted. Use this to discover the exact keys before calling access_update_device_config. Only available via local proxy session.",
+      "name": "access_get_device_configs",
+      "permission_action": "read",
+      "permission_category": "device",
+      "schema": {
+        "input": {
+          "properties": {
+            "device_id": {
+              "description": "Device UUID (from access_list_devices)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "device_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Device Configs"
     },
     {
       "annotations": {
@@ -2941,6 +3037,115 @@
         }
       },
       "title": "Unlock Door"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Update a device's settings (its configs[] entries), e.g. the reader voice greeting. Pass 'updates' as a {key: value} map; only keys the device already exposes may be set (call access_get_device_configs first to discover them), and credential/secret keys are refused. Requires confirm=true to execute; confirm=false returns a preview of the current\u2192proposed change. Only available via local proxy session.",
+      "name": "access_update_device_config",
+      "permission_action": "update",
+      "permission_category": "device",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, applies the update. When false (default), returns a preview.",
+              "type": "boolean"
+            },
+            "device_id": {
+              "description": "Device UUID (from access_list_devices)",
+              "type": "string"
+            },
+            "is_camera": {
+              "description": "Override the camera-class flag for the config PUT. Omit to auto-derive from the device (camera-class readers vs hubs).",
+              "type": "boolean"
+            },
+            "updates": {
+              "description": "Map of config key \u2192 new value. Keys must already exist on the device.",
+              "type": "object"
+            }
+          },
+          "required": [
+            "device_id",
+            "updates"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Update Device Config"
     },
     {
       "annotations": {

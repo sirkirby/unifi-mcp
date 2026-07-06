@@ -9,7 +9,7 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
-from unifi_core.confirmation import toggle_preview, update_preview
+from unifi_core.confirmation import preview_response, toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import (
     PortForwardCreateInput,
@@ -578,3 +578,78 @@ async def create_simple_port_forward(
         "port_forward_id": created.get("_id"),
         "details": json.loads(json.dumps(created, default=str)),
     }
+
+
+@server.tool(
+    name="unifi_delete_port_forward",
+    description="Delete a port forwarding rule by ID. Requires confirmation. "
+    "WARNING: This permanently removes the rule; external access to the forwarded "
+    "service will stop. It cannot be undone - you must recreate the rule to restore it.",
+    permission_category="port_forwards",
+    permission_action="delete",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def delete_port_forward(
+    port_forward_id: Annotated[
+        str,
+        Field(
+            description="Unique identifier (_id) of the port forwarding rule to delete (from unifi_list_port_forwards)"
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(
+            description="When true, deletes the rule. When false (default), returns a preview. "
+            "WARNING: This permanently removes the rule and cannot be undone"
+        ),
+    ] = False,
+) -> Dict[str, Any]:
+    """Delete a port forwarding rule by its ID. Requires confirmation.
+
+    Args:
+        port_forward_id (str): The unique identifier (_id) of the port forwarding rule to delete.
+        confirm (bool): Must be explicitly set to `True` to execute the deletion. Defaults to `False`,
+            which returns a preview of the delete action.
+
+    Returns:
+        A dictionary containing:
+        - success (bool): Indicates if the operation was successful.
+        - message (str): A confirmation message on success.
+        - error (str, optional): An error message if the operation failed (e.g., rule not found).
+
+    Example response (success):
+    {
+        "success": True,
+        "message": "Port forward '60f5a9b3e4b0f4a7f7d6e8c1' deleted successfully."
+    }
+    """
+    if not port_forward_id:
+        return {"success": False, "error": "port_forward_id is required"}
+
+    if not confirm:
+        return preview_response(
+            action="delete",
+            resource_type="port_forward",
+            resource_id=port_forward_id,
+            current_state={},
+            proposed_changes={"deleted": True},
+            resource_name=port_forward_id,
+            warnings=[
+                "This permanently removes the port forward rule; external access to the forwarded "
+                "service will stop. It cannot be undone - you must recreate the rule to restore it."
+            ],
+        )
+
+    try:
+        success = await firewall_manager.delete_port_forward(port_forward_id)
+        if success:
+            return {
+                "success": True,
+                "message": f"Port forward '{port_forward_id}' deleted successfully.",
+            }
+        return {"success": False, "error": f"Failed to delete port forward '{port_forward_id}'."}
+    except UniFiNotFoundError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error deleting port forward %s: %s", port_forward_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to delete port forward {port_forward_id}: {e}"}

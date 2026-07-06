@@ -1,6 +1,6 @@
 {
   "name": "unifi-access",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "UniFi Access MCP server \u2014 manage door locks, credentials, visitors, and access policies",
   "author": {
     "name": "sirkirby",

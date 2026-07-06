@@ -6,9 +6,10 @@ The ``access_list_devices`` / ``access_get_device`` tools are listed in
 ``PHASE6_TYPE_MIGRATED_TOOLS`` and dispatched via the type_registry by
 both the REST routes and the action endpoint.
 
-This module now only ships ``AccessDeviceMutationAckSerializer`` for the
-``access_reboot_device`` preview-and-confirm tool, which still flows
-through the manager's preview path and produces a dict ack.
+This module ships ``AccessDeviceMutationAckSerializer`` for the
+``access_reboot_device`` and ``access_update_device_config`` preview-and-
+confirm tools, which flow through the manager's preview path and produce a
+dict ack.
 """
 
 from unifi_api.serializers._base import RenderKind, Serializer, register_serializer
@@ -17,11 +18,13 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
 @register_serializer(
     tools={
         "access_reboot_device": {"kind": RenderKind.DETAIL},
+        "access_update_device_config": {"kind": RenderKind.DETAIL},
     },
 )
 class AccessDeviceMutationAckSerializer(Serializer):
-    """DETAIL ack for ``access_reboot_device``. Preview/apply both return
-    dicts; pass through. Bool coerces to ``{"success": bool}``."""
+    """DETAIL ack for ``access_reboot_device`` / ``access_update_device_config``.
+    Preview/apply both return dicts; pass through. Bool coerces to
+    ``{"success": bool}``."""
 
     kind = RenderKind.DETAIL
 

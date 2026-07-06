@@ -3,7 +3,7 @@
   "name": "io.github.sirkirby/unifi-protect-mcp",
   "title": "UniFi Protect MCP",
   "description": "Manage UniFi Protect cameras, events, recordings, and smart detections via MCP.",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "repository": {
     "url": "https://github.com/sirkirby/unifi-mcp",
     "source": "github",
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "unifi-protect-mcp",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "transport": {
         "type": "stdio"
       },

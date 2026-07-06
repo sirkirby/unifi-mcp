@@ -1,4 +1,4 @@
-# Network Server Tool Reference (180 tools)
+# Network Server Tool Reference (181 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 
@@ -205,7 +205,7 @@ Manage static DNS A/AAAA/CNAME/MX/TXT/NS/SRV records on the controller's local D
 ## Port Forwarding
 
 <!-- AUTO:tools:port_forwards -->
-6 tools.
+7 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -213,6 +213,7 @@ Manage static DNS A/AAAA/CNAME/MX/TXT/NS/SRV records on the controller's local D
 | `unifi_get_port_forward` | Read | Get a specific port forwarding rule by ID from your Unifi Network controller. |
 | `unifi_list_port_forwards` | Read | List all port forwarding rules on your Unifi Network controller. |
 | `unifi_create_simple_port_forward` | Mutate | Create a port forward using a simplified schema. |
+| `unifi_delete_port_forward` | Mutate | Delete a port forwarding rule by ID. |
 | `unifi_toggle_port_forward` | Mutate | Toggle a port forwarding rule on or off on your Unifi Network controller. |
 | `unifi_update_port_forward` | Mutate | Update specific fields of an existing port forwarding rule using schema validation. |
 <!-- /AUTO:tools:port_forwards -->

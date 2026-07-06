@@ -12,6 +12,9 @@ from unifi_api.graphql.type_registry import TypeRegistry
 from unifi_api.graphql.types.access.credentials import (
     Credential as AccessCredentialType,
 )
+from unifi_api.graphql.types.access.device_configs import (
+    AccessDeviceConfig as AccessDeviceConfigType,
+)
 from unifi_api.graphql.types.access.devices import (
     AccessDevice as AccessDeviceType,
 )
@@ -694,6 +697,7 @@ def build_type_registry() -> TypeRegistry:
     # access/devices (tool-keyed only)
     reg.register_tool_type("access_list_devices", AccessDeviceType, "list")
     reg.register_tool_type("access_get_device", AccessDeviceType, "detail")
+    reg.register_tool_type("access_get_device_configs", AccessDeviceConfigType, "list")
 
     # access/users
     reg.register_type("access", "users", AccessUserType)

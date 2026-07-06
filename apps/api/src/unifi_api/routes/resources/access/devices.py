@@ -133,3 +133,44 @@ async def get_access_device(
         "data": data,
         "render_hint": hint,
     }
+
+
+@router.get(
+    "/sites/{site_id}/access-devices/{device_id}/configs",
+    dependencies=[Depends(require_scope(Scope.READ))],
+    tags=["access/devices"],
+)
+async def get_device_configs(
+    request: Request,
+    site_id: str,
+    device_id: str,
+    controller=Depends(resolve_controller),
+) -> dict:
+    require_capability(controller, "access")
+    factory = request.app.state.manager_factory
+    sm = request.app.state.sessionmaker
+    try:
+        async with sm() as session:
+            mgr = await factory.get_domain_manager(
+                session,
+                controller.id,
+                "access",
+                "device_manager",
+            )
+            cm = await factory.get_connection_manager(session, controller.id, "access")
+            await _maybe_set_site(cm, site_id)
+            info = await mgr.get_device_configs(device_id)
+    except UniFiNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    redact_sensitive = request.app.state.config.policy.response.redact_sensitive_fields
+    type_registry = request.app.state.type_registry
+    type_class, kind = type_registry.lookup_tool("access_get_device_configs")
+    items_out = [
+        type_class.from_manager_output(c, redact_sensitive=redact_sensitive).to_dict() for c in info.get("configs", [])
+    ]
+    return {
+        "items": items_out,
+        "next_cursor": None,
+        "render_hint": type_class.render_hint(kind),
+    }

@@ -59,6 +59,18 @@
 
 **Returns:** `object`
 
+### `GET /v1/sites/{site_id}/access-devices/{device_id}/configs` — Get Device Configs
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `device_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
 
 ## access/doors
 

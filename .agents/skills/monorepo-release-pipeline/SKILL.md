@@ -50,10 +50,12 @@ that bleed across package boundaries.
 | `unifi-mcp-access` | `apps/access/` | `unifi-access-mcp` | `access/v*` |
 | `unifi-api-server` | `apps/api/` | `unifi-api-server` | `api/v*` |
 | `unifi-mcp-relay` | `packages/unifi-mcp-relay/` | `unifi-mcp-relay` | `relay/v*` |
-| `unifi-mcp-worker` | `apps/worker/` | `@unifi-mcp/worker` (npm) | `worker/v*` |
+| `unifi-mcp-worker` | `apps/worker/` | `unifi-mcp-worker` (npm, unscoped) | `worker/v*` |
 
 **Critical:** PyPI package names differ from directory names. Always reference the PyPI name when
 installing or checking versions. Example: `pip install unifi-network-mcp` (not `unifi-mcp-network`).
+The worker's npm package name is also unscoped: `npm install -g unifi-mcp-worker` (not
+`@unifi-mcp/worker`) — confirmed by `apps/worker/src/commands/upgrade.mjs`'s `npm view unifi-mcp-worker version` call.
 
 When adding a new package, extend this table, update the release-notes path configuration,
 and add a new `release-<package>.yml` workflow before pushing any tag.

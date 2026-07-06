@@ -120,6 +120,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "access_create_credential": ("credential_manager", "apply_create_credential"),
     "access_revoke_credential": ("credential_manager", "apply_revoke_credential"),
     "access_reboot_device": ("device_manager", "apply_reboot_device"),
+    "access_update_device_config": ("device_manager", "apply_update_device_config"),
     "access_lock_door": ("door_manager", "apply_lock_door"),
     "access_unlock_door": ("door_manager", "apply_unlock_door"),
     "access_update_policy": ("policy_manager", "apply_update_policy"),
@@ -310,14 +311,15 @@ def _translate_update_firewall_policy(args: dict[str, Any]) -> tuple[tuple[Any, 
 
 
 # ---------------------------------------------------------------------------
-# Network — toggle_port_forward
+# Network — port forward id rename
 # ---------------------------------------------------------------------------
-# Tool exposes ``port_forward_id``; manager method ``toggle_port_forward``
-# takes ``rule_id``.
+# Port forward tools expose ``port_forward_id``; the firewall_manager methods
+# (``toggle_port_forward`` / ``delete_port_forward``) take ``rule_id``. Shared
+# by both, mirroring ``_rename_mac_address_to_client_mac``.
 
 
-def _translate_toggle_port_forward(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Rename ``port_forward_id`` → ``rule_id`` for firewall_manager.toggle_port_forward."""
+def _rename_port_forward_id_to_rule_id(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Rename ``port_forward_id`` → ``rule_id`` for firewall_manager port-forward methods."""
     out = dict(args)
     if "port_forward_id" in out:
         out["rule_id"] = out.pop("port_forward_id")
@@ -415,8 +417,9 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
     "unifi_list_clients": _translate_list_clients,
     # Network — firewall: kwarg rename
     "unifi_update_firewall_policy": _translate_update_firewall_policy,
-    # Network — port forward toggle: kwarg rename
-    "unifi_toggle_port_forward": _translate_toggle_port_forward,
+    # Network — port forward toggle/delete: kwarg rename (port_forward_id → rule_id)
+    "unifi_toggle_port_forward": _rename_port_forward_id_to_rule_id,
+    "unifi_delete_port_forward": _rename_port_forward_id_to_rule_id,
     # Network — device radio update: flatten → (device_mac, radio_id, updates)
     "unifi_update_device_radio": _translate_update_device_radio,
     # Network — stats: convert duration string to duration_hours integer

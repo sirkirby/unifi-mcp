@@ -1,5 +1,5 @@
 {
-  "count": 180,
+  "count": 181,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -36,6 +36,7 @@
     "unifi_delete_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_delete_firewall_policy": "unifi_network_mcp.tools.firewall",
     "unifi_delete_oon_policy": "unifi_network_mcp.tools.oon",
+    "unifi_delete_port_forward": "unifi_network_mcp.tools.port_forwards",
     "unifi_delete_port_profile": "unifi_network_mcp.tools.switch",
     "unifi_delete_wlan": "unifi_network_mcp.tools.network",
     "unifi_force_provision_device": "unifi_network_mcp.tools.devices",
@@ -3865,6 +3866,106 @@
         }
       },
       "title": "Delete OON Policy"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Delete a port forwarding rule by ID. Requires confirmation. WARNING: This permanently removes the rule; external access to the forwarded service will stop. It cannot be undone - you must recreate the rule to restore it.",
+      "name": "unifi_delete_port_forward",
+      "permission_action": "delete",
+      "permission_category": "port_forwards",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, deletes the rule. When false (default), returns a preview. WARNING: This permanently removes the rule and cannot be undone",
+              "type": "boolean"
+            },
+            "port_forward_id": {
+              "description": "Unique identifier (_id) of the port forwarding rule to delete (from unifi_list_port_forwards)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "port_forward_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Delete Port Forward"
     },
     {
       "annotations": {

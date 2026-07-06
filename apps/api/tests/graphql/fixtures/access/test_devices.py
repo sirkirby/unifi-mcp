@@ -2,6 +2,7 @@
 
 # tool: access_list_devices
 # tool: access_get_device
+# tool: access_get_device_configs
 """
 
 from __future__ import annotations
@@ -106,3 +107,70 @@ async def test_access_device_surfaces_structured_location(tmp_path, monkeypatch)
     assert loc["locationType"] == "door"
     assert loc["fullName"] == "Site - Floor 1 - Front Door"
     assert loc["level"] == 3
+
+
+@pytest.mark.asyncio
+async def test_access_device_configs_list_and_redaction(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="access")
+    stub_managers(
+        monkeypatch,
+        {
+            ("access", "device_manager", "get_device_configs"): {
+                "device_id": "dev1",
+                "device_name": "Entry Reader",
+                "is_camera": True,
+                "configs": [
+                    {"device_id": "dev1", "key": "show_entry_greet", "value": "yes", "tag": "device_setting"},
+                    {"device_id": "dev1", "key": "ssh_password", "value": "s3cr3t", "tag": "credential"},
+                ],
+            },
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        access {{ deviceConfigs(controller: "{cid}", deviceId: "dev1") {{
+            items {{ key value tag }}
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    items = body["data"]["access"]["deviceConfigs"]["items"]
+    by_key = {it["key"]: it for it in items}
+    assert by_key["show_entry_greet"]["value"] == "yes"
+    # Credential-tagged config secrets must be redacted on the GraphQL surface too.
+    assert by_key["ssh_password"]["value"] == "***REDACTED***"
+
+
+@pytest.mark.asyncio
+async def test_access_device_configs_policy_disable_returns_raw(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="access", redact_sensitive_fields=False)
+    stub_managers(
+        monkeypatch,
+        {
+            ("access", "device_manager", "get_device_configs"): {
+                "device_id": "dev1",
+                "device_name": "Entry Reader",
+                "is_camera": True,
+                "configs": [
+                    {"device_id": "dev1", "key": "ssh_password", "value": "s3cr3t", "tag": "credential"},
+                ],
+            },
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        access {{ deviceConfigs(controller: "{cid}", deviceId: "dev1") {{
+            items {{ key value }}
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    items = body["data"]["access"]["deviceConfigs"]["items"]
+    # Operator disabled redaction policy → raw secret surfaces (honors the override).
+    assert items[0]["value"] == "s3cr3t"

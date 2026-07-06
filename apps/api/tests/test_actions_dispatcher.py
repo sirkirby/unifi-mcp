@@ -1337,6 +1337,47 @@ async def test_dispatch_translates_toggle_port_forward_id_to_rule_id() -> None:
     domain_manager.toggle_port_forward.assert_awaited_once_with(rule_id="pf001")
 
 
+@pytest.mark.asyncio
+async def test_dispatch_translates_delete_port_forward_id_to_rule_id() -> None:
+    """unifi_delete_port_forward: tool sends port_forward_id; manager takes rule_id."""
+    entry = ToolEntry(
+        name="unifi_delete_port_forward",
+        product="network",
+        category="port_forwards",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.delete_port_forward = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_delete_port_forward",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"port_forward_id": "pf001"},
+        confirm=True,
+        dispatch_table={
+            "unifi_delete_port_forward": DispatchEntry(manager_attr="firewall_manager", method="delete_port_forward"),
+        },
+    )
+
+    domain_manager.delete_port_forward.assert_awaited_once_with(rule_id="pf001")
+
+
 # ---------------------------------------------------------------------------
 # Network — update_device_radio: flatten to (device_mac, radio_id, updates)
 # ---------------------------------------------------------------------------
