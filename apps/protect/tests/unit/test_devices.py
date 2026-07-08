@@ -2,9 +2,11 @@
 
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from uiprotect.exceptions import BadRequest
 
 from unifi_core.exceptions import UniFiNotFoundError
 
@@ -135,6 +137,31 @@ def _make_sensor(**overrides):
     sensor.stats = stats
 
     return sensor
+
+
+class _FakePublicSetting:
+    def __init__(self, **values):
+        self._values = values
+
+    def model_dump(self, **_kwargs):
+        return dict(self._values)
+
+
+def _make_public_sensor(**overrides):
+    """Build a mock public API Sensor object."""
+    return SimpleNamespace(
+        id=overrides.get("id", "sensor-001"),
+        name=overrides.get("name", "Front Door Sensor"),
+        light_settings=overrides.get("light_settings", _FakePublicSetting(is_enabled=True, low_threshold=10)),
+        humidity_settings=overrides.get("humidity_settings", None),
+        temperature_settings=overrides.get("temperature_settings", None),
+        motion_settings=overrides.get("motion_settings", _FakePublicSetting(is_enabled=True, sensitivity=50)),
+        glass_break_settings=overrides.get("glass_break_settings", None),
+        alarm_settings=overrides.get("alarm_settings", _FakePublicSetting(is_enabled=True)),
+        schedule_mode=overrides.get("schedule_mode", "ALWAYS"),
+        arm_profile_ids=overrides.get("arm_profile_ids", ["profile-1"]),
+        has_custom_sensitivity_when_armed=overrides.get("has_custom_sensitivity_when_armed", False),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -401,6 +428,147 @@ class TestSensorManagerListSensors:
         assert sensors[0]["is_opened"] is True
 
 
+class TestSensorManagerUpdateSettings:
+    @pytest.mark.asyncio
+    async def test_missing_api_key_fails_before_public_update_call(self):
+        from unifi_core.protect.managers.sensor_manager import SensorManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock(
+            side_effect=ValueError(
+                "Cannot update sensor settings: UniFi Protect public Integration API access requires an API key."
+            )
+        )
+        cm.client.update_sensor_public = AsyncMock()
+        mgr = SensorManager(cm)
+
+        with pytest.raises(ValueError, match="requires an API key"):
+            await mgr.apply_sensor_settings("sensor-001", {"name": "Front Door"})
+
+        cm.require_public_api_key.assert_called_once_with("update sensor settings")
+        cm.client.update_sensor_public.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_preview_missing_api_key_fails_before_public_get_call(self):
+        from unifi_core.protect.managers.sensor_manager import SensorManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock(
+            side_effect=ValueError(
+                "Cannot update sensor settings: UniFi Protect public Integration API access requires an API key."
+            )
+        )
+        cm.client.get_sensor_public = AsyncMock()
+        mgr = SensorManager(cm)
+
+        with pytest.raises(ValueError, match="requires an API key"):
+            await mgr.update_sensor_settings("sensor-001", {"name": "Front Door"})
+
+        cm.require_public_api_key.assert_called_once_with("update sensor settings")
+        cm.client.get_sensor_public.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_preview_fetches_current_public_sensor_state(self):
+        from unifi_core.protect.managers.sensor_manager import SensorManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_sensor_public = AsyncMock(
+            return_value=_make_public_sensor(
+                name="Front Door",
+                motion_settings=_FakePublicSetting(is_enabled=True, sensitivity=50),
+                schedule_mode="ALWAYS",
+            )
+        )
+        mgr = SensorManager(cm)
+
+        result = await mgr.update_sensor_settings(
+            "sensor-001",
+            {
+                "motion_settings": {"isEnabled": True, "sensitivity": 80},
+                "schedule_mode": "when_armed",
+            },
+        )
+
+        assert result["sensor_id"] == "sensor-001"
+        assert result["sensor_name"] == "Front Door"
+        assert result["current_state"]["motion_settings"] == {"is_enabled": True, "sensitivity": 50}
+        assert result["current_state"]["schedule_mode"] == "ALWAYS"
+        assert result["proposed_changes"]["motion_settings"] == {"is_enabled": True, "sensitivity": 80}
+        assert result["proposed_changes"]["schedule_mode"] == "when_armed"
+        cm.require_public_api_key.assert_called_once_with("update sensor settings")
+        cm.client.get_sensor_public.assert_awaited_once_with("sensor-001")
+
+    @pytest.mark.asyncio
+    async def test_confirm_calls_public_sensor_update(self):
+        from unifi_core.protect.managers.sensor_manager import SensorManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.update_sensor_public = AsyncMock(
+            return_value=_make_public_sensor(
+                name="Garage Door",
+                motion_settings=_FakePublicSetting(is_enabled=True, sensitivity=80),
+                schedule_mode="NEVER",
+            )
+        )
+        mgr = SensorManager(cm)
+
+        result = await mgr.apply_sensor_settings(
+            "sensor-001",
+            {
+                "motion_settings": {"isEnabled": True, "sensitivity": 80},
+                "schedule_mode": "when_armed",
+            },
+        )
+
+        assert result["sensor_id"] == "sensor-001"
+        assert result["sensor_name"] == "Garage Door"
+        assert result["applied"] == {
+            "motion_settings": {"is_enabled": True, "sensitivity": 80},
+            "schedule_mode": "when_armed",
+        }
+        assert result["updated_state"]["motion_settings"] == {"is_enabled": True, "sensitivity": 80}
+        cm.client.update_sensor_public.assert_awaited_once_with(
+            "sensor-001",
+            motion_settings={"isEnabled": True, "sensitivity": 80},
+            schedule_mode="when_armed",
+        )
+
+    @pytest.mark.asyncio
+    async def test_public_not_found_maps_to_unifi_not_found(self):
+        from unifi_core.protect.managers.sensor_manager import SensorManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_sensor_public = AsyncMock(
+            side_effect=BadRequest("Request failed: /v1/sensors/missing - Status: 404 - Reason: Not Found")
+        )
+        mgr = SensorManager(cm)
+
+        with pytest.raises(UniFiNotFoundError) as exc_info:
+            await mgr.update_sensor_settings("missing", {"name": "Garage"})
+
+        assert "missing" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_public_api_exceptions_map_to_actionable_value_error(self):
+        from unifi_core.protect.managers.sensor_manager import SensorManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.update_sensor_public = AsyncMock(side_effect=BadRequest("invalid public API payload"))
+        mgr = SensorManager(cm)
+
+        with pytest.raises(ValueError) as exc_info:
+            await mgr.apply_sensor_settings("sensor-001", {"name": "Garage"})
+
+        message = str(exc_info.value)
+        assert "Failed to update sensor settings for sensor sensor-001" in message
+        assert "protect_list_sensors" in message
+        assert "UNIFI_PROTECT_API_KEY" in message
+
+
 # ===========================================================================
 # ChimeManager tests
 # ===========================================================================
@@ -634,6 +802,107 @@ class TestProtectListSensorsTool:
         mock_sensor_manager.list_sensors = AsyncMock(side_effect=RuntimeError("fail"))
         result = await protect_list_sensors()
         assert result["success"] is False
+
+
+class TestProtectUpdateSensorSettingsTool:
+    @pytest.mark.asyncio
+    async def test_preview(self, mock_sensor_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_sensor_settings
+
+        mock_sensor_manager.update_sensor_settings = AsyncMock(
+            return_value={
+                "sensor_id": "sensor-001",
+                "sensor_name": "Front Door",
+                "current_state": {"motion_settings": {"is_enabled": True, "sensitivity": 50}},
+                "proposed_changes": {"motion_settings": {"is_enabled": True, "sensitivity": 80}},
+            }
+        )
+
+        result = await protect_update_sensor_settings(
+            "sensor-001",
+            {"motion_settings": {"is_enabled": True, "sensitivity": 80}},
+            confirm=False,
+        )
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["resource_type"] == "sensor_settings"
+        assert result["preview"]["proposed"]["motion_settings"] == {"is_enabled": True, "sensitivity": 80}
+        mock_sensor_manager.update_sensor_settings.assert_awaited_once_with(
+            "sensor-001",
+            {"motion_settings": {"isEnabled": True, "sensitivity": 80}},
+        )
+
+    @pytest.mark.asyncio
+    async def test_confirm(self, mock_sensor_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_sensor_settings
+
+        mock_sensor_manager.apply_sensor_settings = AsyncMock(
+            return_value={
+                "sensor_id": "sensor-001",
+                "sensor_name": "Front Door",
+                "applied": {"name": "Front Door Sensor"},
+            }
+        )
+
+        result = await protect_update_sensor_settings("sensor-001", {"name": "Front Door Sensor"}, confirm=True)
+
+        assert result["success"] is True
+        assert result["data"]["applied"] == {"name": "Front Door Sensor"}
+        mock_sensor_manager.apply_sensor_settings.assert_awaited_once_with("sensor-001", {"name": "Front Door Sensor"})
+
+    @pytest.mark.asyncio
+    async def test_empty_settings(self, mock_sensor_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_sensor_settings
+
+        result = await protect_update_sensor_settings("sensor-001", {}, confirm=False)
+
+        assert result["success"] is False
+        assert "No sensor settings provided" in result["error"]
+        mock_sensor_manager.update_sensor_settings.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unknown_settings(self, mock_sensor_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_sensor_settings
+
+        result = await protect_update_sensor_settings("sensor-001", {"unsupported": True}, confirm=False)
+
+        assert result["success"] is False
+        assert "Unsupported sensor setting fields" in result["error"]
+        mock_sensor_manager.update_sensor_settings.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_read_only_settings(self, mock_sensor_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_sensor_settings
+
+        result = await protect_update_sensor_settings("sensor-001", {"id": "new-id"}, confirm=False)
+
+        assert result["success"] is False
+        assert "read-only sensor fields" in result["error"]
+        mock_sensor_manager.update_sensor_settings.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_invalid_scalar_settings(self, mock_sensor_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_sensor_settings
+
+        result = await protect_update_sensor_settings("sensor-001", {"arm_profile_ids": "profile-1"}, confirm=False)
+
+        assert result["success"] is False
+        assert "arm_profile_ids" in result["error"]
+        mock_sensor_manager.update_sensor_settings.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_manager_error(self, mock_sensor_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_sensor_settings
+
+        mock_sensor_manager.update_sensor_settings = AsyncMock(
+            side_effect=ValueError("Cannot update sensor settings: missing API key")
+        )
+
+        result = await protect_update_sensor_settings("sensor-001", {"name": "Garage"}, confirm=False)
+
+        assert result["success"] is False
+        assert "Cannot update sensor settings" in result["error"]
 
 
 class TestProtectListChimesTool:

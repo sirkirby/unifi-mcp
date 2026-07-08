@@ -26,6 +26,7 @@ from unifi_core.protect.models.lights import (
     to_controller_update as light_to_controller_update,
 )
 from unifi_core.protect.models.sensors import from_controller as sensor_from_controller
+from unifi_core.protect.models.sensors import to_public_update as sensor_to_public_update
 from unifi_protect_mcp.runtime import chime_manager, light_manager, sensor_manager, server
 
 logger = logging.getLogger(__name__)
@@ -147,6 +148,63 @@ async def protect_list_sensors() -> Dict[str, Any]:
     except Exception as e:
         logger.error("Error listing sensors: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list sensors: {e}"}
+
+
+@server.tool(
+    name="protect_update_sensor_settings",
+    description=(
+        "Updates UniFi Protect sensor settings. Get sensor_id values from protect_list_sensors. "
+        "Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. "
+        "Requires confirm=True to apply. Supported keys: name, light_settings, humidity_settings, "
+        "temperature_settings, motion_settings, glass_break_settings, alarm_settings, schedule_mode, "
+        "arm_profile_ids, has_custom_sensitivity_when_armed. Use snake_case inside nested settings, for example "
+        "motion_settings.sensitivity_when_armed or light_settings.low_threshold."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, openWorldHint=False),
+    permission_category="sensor",
+    permission_action="update",
+)
+async def protect_update_sensor_settings(
+    sensor_id: Annotated[str, Field(description="Sensor device UUID from protect_list_sensors")],
+    settings: Annotated[
+        dict,
+        Field(
+            description=(
+                "Dictionary of sensor settings to update. Supported keys: name, light_settings, "
+                "humidity_settings, temperature_settings, motion_settings, glass_break_settings, "
+                "alarm_settings, schedule_mode, arm_profile_ids, has_custom_sensitivity_when_armed. "
+                "Nested setting dictionaries use snake_case keys."
+            )
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, executes the mutation. When false (default), returns a preview of the changes."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Update sensor settings with preview/confirm."""
+    logger.info("protect_update_sensor_settings tool called for %s (confirm=%s)", sensor_id, confirm)
+    try:
+        filtered = sensor_to_public_update(settings)
+
+        if not confirm:
+            preview_data = await sensor_manager.update_sensor_settings(sensor_id, filtered)
+            return preview_response(
+                action="update",
+                resource_type="sensor_settings",
+                resource_id=sensor_id,
+                current_state=preview_data["current_state"],
+                proposed_changes=preview_data["proposed_changes"],
+                resource_name=preview_data["sensor_name"],
+            )
+
+        result = await sensor_manager.apply_sensor_settings(sensor_id, filtered)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error updating sensor settings for %s: %s", sensor_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to update sensor settings: {e}"}
 
 
 # ===========================================================================
@@ -284,5 +342,6 @@ async def protect_trigger_chime(
 
 logger.info(
     "Device tools registered: protect_list_lights, protect_update_light, "
-    "protect_list_sensors, protect_list_chimes, protect_update_chime, protect_trigger_chime"
+    "protect_list_sensors, protect_update_sensor_settings, protect_list_chimes, "
+    "protect_update_chime, protect_trigger_chime"
 )

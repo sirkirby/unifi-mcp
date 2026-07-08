@@ -1,5 +1,5 @@
 {
-  "count": 59,
+  "count": 60,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -55,7 +55,8 @@
     "protect_update_chime": "unifi_protect_mcp.tools.devices",
     "protect_update_known_face": "unifi_protect_mcp.tools.recognition",
     "protect_update_known_license_plate": "unifi_protect_mcp.tools.recognition",
-    "protect_update_light": "unifi_protect_mcp.tools.devices"
+    "protect_update_light": "unifi_protect_mcp.tools.devices",
+    "protect_update_sensor_settings": "unifi_protect_mcp.tools.devices"
   },
   "note": "Auto-generated with full schemas from tool decorators. Do not edit manually.",
   "tools": [
@@ -5673,6 +5674,110 @@
         }
       },
       "title": "Update Light"
+    },
+    {
+      "annotations": {
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Updates UniFi Protect sensor settings. Get sensor_id values from protect_list_sensors. Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Requires confirm=True to apply. Supported keys: name, light_settings, humidity_settings, temperature_settings, motion_settings, glass_break_settings, alarm_settings, schedule_mode, arm_profile_ids, has_custom_sensitivity_when_armed. Use snake_case inside nested settings, for example motion_settings.sensitivity_when_armed or light_settings.low_threshold.",
+      "name": "protect_update_sensor_settings",
+      "permission_action": "update",
+      "permission_category": "sensor",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, executes the mutation. When false (default), returns a preview of the changes.",
+              "type": "boolean"
+            },
+            "sensor_id": {
+              "description": "Sensor device UUID from protect_list_sensors",
+              "type": "string"
+            },
+            "settings": {
+              "description": "Dictionary of sensor settings to update. Supported keys: name, light_settings, humidity_settings, temperature_settings, motion_settings, glass_break_settings, alarm_settings, schedule_mode, arm_profile_ids, has_custom_sensitivity_when_armed. Nested setting dictionaries use snake_case keys.",
+              "type": "object"
+            }
+          },
+          "required": [
+            "sensor_id",
+            "settings"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Update Sensor Settings"
     }
   ]
 }
