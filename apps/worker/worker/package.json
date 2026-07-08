@@ -11,9 +11,9 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260630.1",
-    "@types/node": "^22.20.0",
+    "@types/node": "^22.20.1",
     "typescript": "^5.7.0",
     "vitest": "^4.1.10",
-    "wrangler": "^4.107.0"
+    "wrangler": "^4.107.1"
   }
 }
