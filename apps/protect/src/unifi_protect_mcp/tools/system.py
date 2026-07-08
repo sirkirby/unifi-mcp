@@ -5,10 +5,13 @@ connected viewers, and firmware update status.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Annotated, Any, Dict
 
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
+from unifi_core.confirmation import preview_response
+from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.models.system import (
     firmware_status_from_controller,
     health_from_controller,
@@ -85,6 +88,61 @@ async def protect_list_viewers() -> Dict[str, Any]:
 
 
 @server.tool(
+    name="protect_update_viewer",
+    description=(
+        "Updates a UniFi Protect viewer name or liveview assignment. Get viewer_id values from "
+        "protect_list_viewers and liveview_id values from protect_list_liveviews. These IDs are scoped "
+        "to the Protect viewer/liveview tool family - do not pass them to camera, sensor, or chime tools. "
+        "Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. "
+        "Requires confirm=True to apply. Pass only the fields you want to change - current values are "
+        "automatically preserved. Supported keys: name, liveview_id, clear_liveview. Set clear_liveview=True "
+        "to remove the current liveview assignment."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+    permission_category="system",
+    permission_action="update",
+)
+async def protect_update_viewer(
+    viewer_id: Annotated[str, Field(description="Viewer UUID from protect_list_viewers")],
+    settings: Annotated[
+        dict,
+        Field(
+            description=(
+                "Dictionary of viewer settings to update. Supported keys: name, liveview_id, clear_liveview. "
+                "Use liveview_id to assign a liveview from protect_list_liveviews, or clear_liveview=True "
+                "to remove the current assignment."
+            )
+        ),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, executes the mutation. When false (default), returns a preview of the changes."),
+    ] = False,
+) -> Dict[str, Any]:
+    """Update a Protect viewer with preview/confirm."""
+    logger.info("protect_update_viewer tool called for %s (confirm=%s)", viewer_id, confirm)
+    try:
+        if not confirm:
+            preview_data = await system_manager.update_viewer(viewer_id, settings)
+            return preview_response(
+                action="update",
+                resource_type="viewer_settings",
+                resource_id=viewer_id,
+                current_state=preview_data["current_state"],
+                proposed_changes=preview_data["proposed_changes"],
+                resource_name=preview_data["viewer_name"],
+            )
+
+        result = await system_manager.apply_viewer_update(viewer_id, settings)
+        return {"success": True, "data": result}
+    except (UniFiNotFoundError, ValueError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error updating viewer %s: %s", viewer_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to update viewer: {e}"}
+
+
+@server.tool(
     name="protect_get_firmware_status",
     description=(
         "Returns firmware update availability for the NVR and all adopted devices "
@@ -107,5 +165,5 @@ async def protect_get_firmware_status() -> Dict[str, Any]:
 
 logger.info(
     "System tools registered: protect_get_system_info, protect_get_health, "
-    "protect_list_viewers, protect_get_firmware_status"
+    "protect_list_viewers, protect_update_viewer, protect_get_firmware_status"
 )

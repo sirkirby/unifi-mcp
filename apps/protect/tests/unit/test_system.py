@@ -2,9 +2,13 @@
 
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from uiprotect.exceptions import BadRequest
+
+from unifi_core.exceptions import UniFiNotFoundError
 
 # ---------------------------------------------------------------------------
 # Fixtures: mock pyunifiprotect data models
@@ -86,6 +90,21 @@ def _make_viewer(**overrides):
     v.liveview_id = overrides.get("liveview_id", "lv-001")
     v.latest_firmware_version = overrides.get("latest_firmware_version", "2.0.1")
     return v
+
+
+def _make_public_viewer(**overrides):
+    return SimpleNamespace(
+        id=overrides.get("id", "viewer-001"),
+        name=overrides.get("name", "Office Viewer"),
+        liveview_id=overrides.get("liveview_id", "lv-001"),
+    )
+
+
+def _make_public_liveview(**overrides):
+    return SimpleNamespace(
+        id=overrides.get("id", "lv-002"),
+        name=overrides.get("name", "Lobby Liveview"),
+    )
 
 
 def _make_camera(**overrides):
@@ -240,6 +259,160 @@ class TestSystemManagerListViewers:
         assert viewers[0]["is_connected"] is True
 
 
+class TestSystemManagerUpdateViewer:
+    @pytest.mark.asyncio
+    async def test_missing_api_key_fails_before_public_get_call(self):
+        from unifi_core.protect.managers.system_manager import SystemManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock(
+            side_effect=ValueError(
+                "Cannot update viewer: UniFi Protect public Integration API access requires an API key."
+            )
+        )
+        cm.client.get_viewer_public = AsyncMock()
+        mgr = SystemManager(cm)
+
+        with pytest.raises(ValueError, match="requires an API key"):
+            await mgr.update_viewer("viewer-001", {"name": "Lobby Viewer"})
+
+        cm.require_public_api_key.assert_called_once_with("update viewer")
+        cm.client.get_viewer_public.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_preview_returns_current_and_proposed_name_and_liveview(self):
+        from unifi_core.protect.managers.system_manager import SystemManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_viewer_public = AsyncMock(
+            return_value=_make_public_viewer(name="Office Viewer", liveview_id="lv-001")
+        )
+        cm.client.get_liveview_public = AsyncMock(return_value=_make_public_liveview(id="lv-002"))
+        mgr = SystemManager(cm)
+
+        result = await mgr.update_viewer(
+            "viewer-001",
+            {"name": "Lobby Viewer", "liveview_id": "lv-002"},
+        )
+
+        assert result["viewer_id"] == "viewer-001"
+        assert result["viewer_name"] == "Office Viewer"
+        assert result["current_state"] == {"name": "Office Viewer", "liveview_id": "lv-001"}
+        assert result["proposed_changes"] == {"name": "Lobby Viewer", "liveview_id": "lv-002"}
+        cm.require_public_api_key.assert_called_once_with("update viewer")
+        cm.client.get_viewer_public.assert_awaited_once_with("viewer-001")
+        cm.client.get_liveview_public.assert_awaited_once_with("lv-002")
+
+    @pytest.mark.asyncio
+    async def test_preview_name_only_leaves_liveview_unchanged(self):
+        from unifi_core.protect.managers.system_manager import SystemManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_viewer_public = AsyncMock(
+            return_value=_make_public_viewer(name="Office Viewer", liveview_id="lv-001")
+        )
+        cm.client.get_liveview_public = AsyncMock()
+        mgr = SystemManager(cm)
+
+        result = await mgr.update_viewer("viewer-001", {"name": "Lobby Viewer"})
+
+        assert result["current_state"] == {"name": "Office Viewer"}
+        assert result["proposed_changes"] == {"name": "Lobby Viewer"}
+        cm.client.get_liveview_public.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_confirm_validates_liveview_and_passes_public_liveview_kwarg(self):
+        from unifi_core.protect.managers.system_manager import SystemManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_viewer_public = AsyncMock(
+            return_value=_make_public_viewer(name="Office Viewer", liveview_id="lv-001")
+        )
+        cm.client.get_liveview_public = AsyncMock(return_value=_make_public_liveview(id="lv-002"))
+        cm.client.update_viewer_public = AsyncMock(
+            return_value=_make_public_viewer(name="Office Viewer", liveview_id="lv-002")
+        )
+        mgr = SystemManager(cm)
+
+        result = await mgr.apply_viewer_update("viewer-001", {"liveview_id": "lv-002"})
+
+        assert result["viewer_id"] == "viewer-001"
+        assert result["viewer_name"] == "Office Viewer"
+        assert result["applied"] == {"liveview_id": "lv-002"}
+        assert result["updated_state"] == {"liveview_id": "lv-002"}
+        cm.client.get_viewer_public.assert_awaited_once_with("viewer-001")
+        cm.client.get_liveview_public.assert_awaited_once_with("lv-002")
+        cm.client.update_viewer_public.assert_awaited_once_with("viewer-001", liveview="lv-002")
+
+    @pytest.mark.asyncio
+    async def test_confirm_clear_liveview_passes_null_public_liveview_kwarg(self):
+        from unifi_core.protect.managers.system_manager import SystemManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_viewer_public = AsyncMock(
+            return_value=_make_public_viewer(name="Office Viewer", liveview_id="lv-001")
+        )
+        cm.client.get_liveview_public = AsyncMock()
+        cm.client.update_viewer_public = AsyncMock(
+            return_value=_make_public_viewer(name="Office Viewer", liveview_id=None)
+        )
+        mgr = SystemManager(cm)
+
+        result = await mgr.apply_viewer_update("viewer-001", {"clear_liveview": True})
+
+        assert result["applied"] == {"liveview_id": None}
+        assert result["updated_state"] == {"liveview_id": None}
+        cm.client.get_liveview_public.assert_not_called()
+        cm.client.update_viewer_public.assert_awaited_once_with("viewer-001", liveview=None)
+
+    @pytest.mark.asyncio
+    async def test_empty_settings_fail_cleanly(self):
+        from unifi_core.protect.managers.system_manager import SystemManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        mgr = SystemManager(cm)
+
+        with pytest.raises(ValueError, match="No viewer settings provided"):
+            await mgr.update_viewer("viewer-001", {})
+
+        cm.require_public_api_key.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_conflicting_liveview_args_fail_cleanly(self):
+        from unifi_core.protect.managers.system_manager import SystemManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        mgr = SystemManager(cm)
+
+        with pytest.raises(ValueError, match="liveview_id and clear_liveview=True cannot be used together"):
+            await mgr.update_viewer("viewer-001", {"liveview_id": "lv-002", "clear_liveview": True})
+
+        cm.require_public_api_key.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_missing_liveview_maps_to_not_found(self):
+        from unifi_core.protect.managers.system_manager import SystemManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_viewer_public = AsyncMock(return_value=_make_public_viewer())
+        cm.client.get_liveview_public = AsyncMock(
+            side_effect=BadRequest("Request failed: /v1/liveviews/missing - Status: 404 - Reason: Not Found")
+        )
+        mgr = SystemManager(cm)
+
+        with pytest.raises(UniFiNotFoundError) as exc_info:
+            await mgr.update_viewer("viewer-001", {"liveview_id": "missing"})
+
+        assert "missing" in str(exc_info.value)
+
+
 class TestSystemManagerGetFirmwareStatus:
     @pytest.mark.asyncio
     async def test_no_devices(self, mock_cm):
@@ -373,6 +546,87 @@ class TestProtectListViewersTool:
         mock_system_manager.list_viewers = AsyncMock(side_effect=RuntimeError("x"))
         result = await protect_list_viewers()
         assert result["success"] is False
+
+
+class TestProtectUpdateViewerTool:
+    @pytest.mark.asyncio
+    async def test_preview(self, mock_system_manager):
+        from unifi_protect_mcp.tools.system import protect_update_viewer
+
+        mock_system_manager.update_viewer = AsyncMock(
+            return_value={
+                "viewer_id": "viewer-001",
+                "viewer_name": "Office Viewer",
+                "current_state": {"name": "Office Viewer", "liveview_id": "lv-001"},
+                "proposed_changes": {"name": "Lobby Viewer", "liveview_id": "lv-002"},
+            }
+        )
+
+        result = await protect_update_viewer(
+            "viewer-001",
+            {"name": "Lobby Viewer", "liveview_id": "lv-002"},
+            confirm=False,
+        )
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["resource_type"] == "viewer_settings"
+        assert result["preview"]["current"]["liveview_id"] == "lv-001"
+        assert result["preview"]["proposed"]["liveview_id"] == "lv-002"
+        mock_system_manager.update_viewer.assert_awaited_once_with(
+            "viewer-001",
+            {"name": "Lobby Viewer", "liveview_id": "lv-002"},
+        )
+
+    @pytest.mark.asyncio
+    async def test_confirm(self, mock_system_manager):
+        from unifi_protect_mcp.tools.system import protect_update_viewer
+
+        mock_system_manager.apply_viewer_update = AsyncMock(
+            return_value={
+                "viewer_id": "viewer-001",
+                "viewer_name": "Office Viewer",
+                "applied": {"liveview_id": None},
+                "updated_state": {"liveview_id": None},
+            }
+        )
+
+        result = await protect_update_viewer("viewer-001", {"clear_liveview": True}, confirm=True)
+
+        assert result["success"] is True
+        assert result["data"]["applied"] == {"liveview_id": None}
+        mock_system_manager.apply_viewer_update.assert_awaited_once_with(
+            "viewer-001",
+            {"clear_liveview": True},
+        )
+
+    @pytest.mark.asyncio
+    async def test_validation_error(self, mock_system_manager):
+        from unifi_protect_mcp.tools.system import protect_update_viewer
+
+        mock_system_manager.update_viewer = AsyncMock(
+            side_effect=ValueError("liveview_id and clear_liveview=True cannot be used together")
+        )
+
+        result = await protect_update_viewer(
+            "viewer-001",
+            {"liveview_id": "lv-002", "clear_liveview": True},
+            confirm=False,
+        )
+
+        assert result["success"] is False
+        assert "liveview_id and clear_liveview=True cannot be used together" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_manager_exception_maps_to_operation_error(self, mock_system_manager):
+        from unifi_protect_mcp.tools.system import protect_update_viewer
+
+        mock_system_manager.update_viewer = AsyncMock(side_effect=RuntimeError("network down"))
+
+        result = await protect_update_viewer("viewer-001", {"name": "Lobby Viewer"}, confirm=False)
+
+        assert result["success"] is False
+        assert result["error"] == "Failed to update viewer: network down"
 
 
 class TestProtectGetFirmwareStatusTool:

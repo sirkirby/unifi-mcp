@@ -16,8 +16,10 @@ from unifi_core.protect.models.system import (
     firmware_status_from_controller,
     health_from_controller,
     system_info_from_controller,
+    to_viewer_public_update,
     viewer_from_controller,
     viewer_list_from_controller,
+    viewer_public_update_to_agent,
 )
 
 
@@ -306,6 +308,46 @@ class TestViewerFromController:
         assert "state" in dumped
         assert "firmware_version" not in dumped
         assert "liveview_id" not in dumped
+
+
+class TestViewerUpdateHelpers:
+    def test_to_viewer_public_update_accepts_name_and_liveview_id(self) -> None:
+        update = to_viewer_public_update({"name": "Lobby Viewer", "liveview_id": "liveview-002"})
+
+        assert update == {"name": "Lobby Viewer", "liveview": "liveview-002"}
+        assert viewer_public_update_to_agent(update) == {"name": "Lobby Viewer", "liveview_id": "liveview-002"}
+
+    def test_to_viewer_public_update_maps_clear_liveview_to_null(self) -> None:
+        update = to_viewer_public_update({"clear_liveview": True})
+
+        assert update == {"liveview": None}
+        assert viewer_public_update_to_agent(update) == {"liveview_id": None}
+
+    def test_to_viewer_public_update_rejects_conflicting_liveview_controls(self) -> None:
+        try:
+            to_viewer_public_update({"liveview_id": "liveview-002", "clear_liveview": True})
+        except ValueError as exc:
+            assert "liveview_id and clear_liveview=True cannot be used together" in str(exc)
+        else:
+            raise AssertionError("Expected conflicting liveview controls to fail")
+
+    def test_to_viewer_public_update_rejects_empty_settings(self) -> None:
+        try:
+            to_viewer_public_update({})
+        except ValueError as exc:
+            assert "No viewer settings provided" in str(exc)
+        else:
+            raise AssertionError("Expected empty viewer update to fail")
+
+    def test_to_viewer_public_update_rejects_unknown_fields(self) -> None:
+        try:
+            to_viewer_public_update({"brightness": 4})
+        except ValueError as exc:
+            message = str(exc)
+            assert "Unsupported viewer setting fields" in message
+            assert "clear_liveview, liveview_id, name" in message
+        else:
+            raise AssertionError("Expected unsupported viewer settings to fail")
 
 
 class TestViewerListFromController:

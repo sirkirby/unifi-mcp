@@ -1,22 +1,23 @@
-"""Shared field models for Protect system/health/firmware/viewer (read-only).
+"""Shared field models for Protect system/health/firmware/viewer.
 
-Five read-only classes cover the output shapes for:
+Five classes cover the output shapes for:
 - ``protect_get_system_info``   → ``ProtectSystemInfo``
 - ``protect_get_health``        → ``ProtectHealth``
 - ``protect_get_firmware_status`` → ``FirmwareStatus``
 - ``protect_list_viewers`` per-row → ``Viewer``
 - ``protect_list_viewers`` wrapper → ``ViewerList``
 
-All fields carry ``json_schema_extra={"mutable": False}``.
-``MUTABLE_FIELDS`` is the empty frozenset; ``READ_ONLY_FIELDS`` is the
-union across all five models.
+The read shapes remain read-only. Viewer mutation input is represented by
+``ViewerUpdate`` and translated through ``to_viewer_public_update`` because
+the Protect public API uses ``liveview`` for the nullable assignment field
+while agents use ``liveview_id`` / ``clear_liveview``.
 """
 
 from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, model_validator
 
 
 class ProtectSystemInfo(BaseModel):
@@ -145,7 +146,26 @@ class ViewerList(BaseModel):
     )
 
 
+class ViewerUpdate(BaseModel):
+    """Agent-facing viewer settings accepted by ``protect_update_viewer``."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, min_length=1, description="Viewer display name")
+    liveview_id: Optional[str] = Field(default=None, min_length=1, description="Liveview UUID to assign")
+    clear_liveview: StrictBool = Field(default=False, description="Clear the viewer's current liveview assignment")
+
+    @model_validator(mode="after")
+    def _validate_update(self) -> "ViewerUpdate":
+        if self.liveview_id is not None and self.clear_liveview:
+            raise ValueError("liveview_id and clear_liveview=True cannot be used together.")
+        if self.name is None and self.liveview_id is None and not self.clear_liveview:
+            raise ValueError("No viewer settings provided. Specify at least one setting to update.")
+        return self
+
+
 MUTABLE_FIELDS: frozenset = frozenset()
+VIEWER_UPDATE_FIELDS: frozenset = frozenset(ViewerUpdate.model_fields.keys())
 READ_ONLY_FIELDS: frozenset = (
     frozenset(ProtectSystemInfo.model_fields.keys())
     | frozenset(ProtectHealth.model_fields.keys())
@@ -261,3 +281,52 @@ def viewer_list_from_controller(raw: Any) -> ViewerList:
         viewers=viewers,
         count=_get(raw, "count"),
     )
+
+
+def to_viewer_public_update(fields: dict[str, Any]) -> dict[str, Any]:
+    """Validate viewer update settings and translate to public API kwargs."""
+    if not isinstance(fields, dict):
+        raise ValueError("Viewer settings must be a dictionary for protect_update_viewer.")
+    if not fields:
+        raise ValueError("No viewer settings provided. Specify at least one setting to update.")
+
+    unknown = sorted(set(fields) - VIEWER_UPDATE_FIELDS)
+    if unknown:
+        joined = ", ".join(unknown)
+        supported = ", ".join(sorted(VIEWER_UPDATE_FIELDS))
+        raise ValueError(
+            f"Unsupported viewer setting fields for protect_update_viewer: {joined}. Supported fields: {supported}."
+        )
+
+    try:
+        model = ViewerUpdate(**fields)
+    except ValidationError as exc:
+        raise ValueError(_first_validation_message(exc)) from exc
+
+    update: dict[str, Any] = {}
+    if model.name is not None:
+        update["name"] = model.name
+    if model.clear_liveview:
+        update["liveview"] = None
+    elif model.liveview_id is not None:
+        update["liveview"] = model.liveview_id
+    return update
+
+
+def viewer_public_update_to_agent(fields: dict[str, Any]) -> dict[str, Any]:
+    """Translate public API viewer update kwargs back to agent-facing names."""
+    result: dict[str, Any] = {}
+    if "name" in fields:
+        result["name"] = fields["name"]
+    if "liveview" in fields:
+        result["liveview_id"] = fields["liveview"]
+    return result
+
+
+def _first_validation_message(exc: ValidationError) -> str:
+    first = exc.errors()[0] if exc.errors() else {}
+    location = ".".join(str(part) for part in first.get("loc", ()) if part != "__root__")
+    message = first.get("msg", str(exc))
+    if location:
+        return f"Invalid viewer setting {location}: {message}"
+    return f"Invalid viewer settings: {message}"

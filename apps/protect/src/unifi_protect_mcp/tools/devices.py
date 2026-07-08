@@ -163,7 +163,7 @@ async def protect_list_sensors() -> Dict[str, Any]:
         "arm_profile_ids, has_custom_sensitivity_when_armed. Use snake_case inside nested settings, for example "
         "motion_settings.sensitivity_when_armed or light_settings.low_threshold."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     permission_category="sensor",
     permission_action="update",
 )
@@ -246,7 +246,7 @@ async def protect_list_chimes() -> Dict[str, Any]:
         "UNIFI_API_KEY. Requires confirm=True to apply. Supported global keys: volume, "
         "repeat_times, name. Supported per-camera keys: camera_id, volume, repeat_times."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     permission_category="chime",
     permission_action="update",
 )
