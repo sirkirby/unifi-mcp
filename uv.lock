@@ -1731,7 +1731,7 @@ wheels = [
 
 [[package]]
 name = "uiprotect"
-version = "15.4.2"
+version = "15.4.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -1748,9 +1748,9 @@ dependencies = [
     { name = "pyjwt" },
     { name = "yarl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b3/b1/ca2554d288568b600f6e17513a7d300638c092360d9edbf9c687c7447c3c/uiprotect-15.4.2.tar.gz", hash = "sha256:492ef4d0a921974218e1605efb95bad1daa308b47b5fdbf8a99d98351c900229", size = 199194, upload-time = "2026-07-05T18:22:46.189Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d2/bf/9aa8ea5821a107d765cc8ae24573c58c70aab001deef00a034deadd9490c/uiprotect-15.4.3.tar.gz", hash = "sha256:7291e6fc2116077c86aeb8bfc84d4ddb3a96e12768d3066e1a8a400faf47c668", size = 199357, upload-time = "2026-07-07T08:34:09.291Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0c/25/4faf761523136bfa20565f20a8da82b8dccd75966a69f4595e2f3f4eceba/uiprotect-15.4.2-py3-none-any.whl", hash = "sha256:feb5ed5ddef9f9b4cc809437358f264b838b49c7626940ed561dd285d4929e18", size = 219885, upload-time = "2026-07-05T18:22:44.571Z" },
+    { url = "https://files.pythonhosted.org/packages/5a/2f/7682afb9543c5f0e12a0136086d03b4e319d6199bff46f94097f0e25b46f/uiprotect-15.4.3-py3-none-any.whl", hash = "sha256:6db17320d09ea83d5a4a75b6b35fe50fab0ebbf5f0649d1968b53ecb73c8d775", size = 220057, upload-time = "2026-07-07T08:34:07.883Z" },
 ]
 
 [[package]]
@@ -1891,7 +1891,7 @@ requires-dist = [
     { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.1.1" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=15.4.2" },
+    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=15.4.3" },
 ]
 provides-extras = ["access", "network", "protect"]
 
