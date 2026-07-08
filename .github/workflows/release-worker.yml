@@ -114,7 +114,9 @@ jobs:
       - name: Install worker dependencies
         run: npm ci --prefix apps/worker/worker
       - name: Publish package
-        run: npm publish --provenance --access public
+        # npm 12.0.0 broke provenance publish in this workflow; keep this pinned
+        # until a newer npm version is proven in a Worker release.
+        run: npx npm@11.18.0 publish --provenance --access public
         working-directory: apps/worker
       - name: Publish summary
         env:
