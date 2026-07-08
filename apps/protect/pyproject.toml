@@ -15,7 +15,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "omegaconf>=2.3.0",
     "jsonschema>=4.17.0",
-    "typing-extensions>=4.4.0",
+    "typing-extensions>=4.16.0",
 ]
 
 [tool.uv.sources]

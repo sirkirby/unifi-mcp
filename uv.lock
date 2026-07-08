@@ -153,7 +153,7 @@ wheels = [
 
 [[package]]
 name = "aiounifi"
-version = "91"
+version = "92"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -161,9 +161,9 @@ dependencies = [
     { name = "pyotp" },
     { name = "segno" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/64/1a/977232c87dc91b70bdd5cba4d07e7a469f8d34bbc14de6b17297c9a59db6/aiounifi-91.tar.gz", hash = "sha256:ca0750a839071ac3d001be3734b55ad1426363f09349463f6d36554a41a18f67", size = 66516, upload-time = "2026-05-25T19:40:13.457Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/ab/a7066835ae47ec206707b5d0f467f19f1b7e3654900f91d1bc5f3004896b/aiounifi-92.tar.gz", hash = "sha256:773192640cb5a25b432ed8905bc08929b2403786bb8e9cc6ac7aac14e47555bb", size = 67171, upload-time = "2026-07-06T12:16:52.311Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2d/87/6ae7c0f7e8026eada3558bae51757bb3e2060c80735d96ef88aea34858d7/aiounifi-91-py3-none-any.whl", hash = "sha256:9685695e613b5656b30abdfffe0c4379defd6fa682d8c4d2364a47f30f0ab52d", size = 56274, upload-time = "2026-05-25T19:40:12.106Z" },
+    { url = "https://files.pythonhosted.org/packages/2e/e6/ffb077a9f91288b6c1c689746acd84ff4813ec075b2bce0577057ce8568d/aiounifi-92-py3-none-any.whl", hash = "sha256:016d85b306d62bb617d8f05706fb5e695655c7dc7a3671e06089a2829a8cf22e", size = 56616, upload-time = "2026-07-06T12:16:51.159Z" },
 ]
 
 [[package]]
@@ -552,7 +552,7 @@ wheels = [
 
 [[package]]
 name = "fastapi"
-version = "0.138.2"
+version = "0.139.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -561,9 +561,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0c/a9/9f8f7e00195c29836e9bf58bbbaf579e29878b8a67851efff93d9b6d4eb7/fastapi-0.138.2.tar.gz", hash = "sha256:6432359d067a432134620e7c5e4c6e5063e7f37815bbbbf20acef14b0d2e3fc8", size = 420423, upload-time = "2026-06-29T12:44:12.556Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/af/a5f50ccfa659ec1802cb4ca842c23f06d906a8cc9aef6016a2caeea3d4ed/fastapi-0.139.0.tar.gz", hash = "sha256:99ab7b2d92223c76d6cf10757ab3f89d45b38267fc20b2a136cf02f6beac3145", size = 423016, upload-time = "2026-07-01T16:35:33.436Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f2/b3/38be2c074bdd0c986340db1d72d7b2321b805b1c5a68069aa00b5d31fd02/fastapi-0.138.2-py3-none-any.whl", hash = "sha256:db90c1ffb5517fba5d4a9f80e866daa008747e646310c9ce155c8c535f9d1615", size = 129271, upload-time = "2026-06-29T12:44:13.905Z" },
+    { url = "https://files.pythonhosted.org/packages/9e/7c/8e3c6ad324ea5cb36604fc3f968554887891c316d9dfde57761611d907ad/fastapi-0.139.0-py3-none-any.whl", hash = "sha256:cf15e1e9e667ddb0ad63811e60bd11390d1aac838ca4a7a23f421807b2308189", size = 130339, upload-time = "2026-07-01T16:35:32.19Z" },
 ]
 
 [[package]]
@@ -1664,7 +1664,7 @@ wheels = [
 
 [[package]]
 name = "strawberry-graphql"
-version = "0.320.0"
+version = "0.320.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cross-web" },
@@ -1673,9 +1673,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/44/38/95a72342ba94570a35b8cc7db6a6789378f10b69be1d77e0fb022f5079e0/strawberry_graphql-0.320.0.tar.gz", hash = "sha256:c5ee8abf7f4db00d3515e537578a5c094a4a9f3b732a959d9020c8788d3ac7c7", size = 229231, upload-time = "2026-06-27T23:11:43.262Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/a0/e407e250aa33f58e654e04072e04331af45fd88234736c1e169ae2edc7c4/strawberry_graphql-0.320.2.tar.gz", hash = "sha256:2ae401965db38aac12e09747c5b4e25ffc7d785fafba545b21ac3b9ae74d83b9", size = 229365, upload-time = "2026-07-06T10:32:06.714Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/db/99/f8e8919a73ae466f9740e63115f010a02fac3f2b69c02ea60c9c85d42c1a/strawberry_graphql-0.320.0-py3-none-any.whl", hash = "sha256:8ea27f43f73a1accbfd1599b37234086d26504cf60213ebb521528319ccf2309", size = 332321, upload-time = "2026-06-27T23:11:41.045Z" },
+    { url = "https://files.pythonhosted.org/packages/12/42/f1bd8b88c73a44678100c74b9b803ed7b99187c9e6ef6b7f00b045141657/strawberry_graphql-0.320.2-py3-none-any.whl", hash = "sha256:446bed449476d5200ec17df5924fc3602a50e84ffe8b99e96245102fade2479a", size = 332390, upload-time = "2026-07-06T10:32:04.561Z" },
 ]
 
 [package.optional-dependencies]
@@ -1701,11 +1701,11 @@ wheels = [
 
 [[package]]
 name = "typing-extensions"
-version = "4.15.0"
+version = "4.16.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/72/94/1a15dd82efb362ac84269196e94cf00f187f7ed21c242792a923cdb1c61f/typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466", size = 109391, upload-time = "2025-08-25T13:49:26.313Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz", hash = "sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5", size = 113555, upload-time = "2026-07-02T08:40:05.92Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548", size = 44614, upload-time = "2025-08-25T13:49:24.86Z" },
+    { url = "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl", hash = "sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8", size = 45571, upload-time = "2026-07-02T08:40:04.659Z" },
 ]
 
 [[package]]
@@ -1731,7 +1731,7 @@ wheels = [
 
 [[package]]
 name = "uiprotect"
-version = "15.3.0"
+version = "15.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -1748,9 +1748,9 @@ dependencies = [
     { name = "pyjwt" },
     { name = "yarl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9c/8d/1fb5338414be442cb5065f63c6c8d699982e403e1ea8902f5a5a67a67ca8/uiprotect-15.3.0.tar.gz", hash = "sha256:522e6473ce9a89244acf58c77aaaca86a4d329896e0f7d2907421aa3524eb5ae", size = 198335, upload-time = "2026-06-26T21:34:40.524Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/b1/ca2554d288568b600f6e17513a7d300638c092360d9edbf9c687c7447c3c/uiprotect-15.4.2.tar.gz", hash = "sha256:492ef4d0a921974218e1605efb95bad1daa308b47b5fdbf8a99d98351c900229", size = 199194, upload-time = "2026-07-05T18:22:46.189Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/29/22/2428b94fa0ed1fd2d8d37eaea3b3c36d336fcd6b9ff37eb2ed68a605cc13/uiprotect-15.3.0-py3-none-any.whl", hash = "sha256:dbfe7cc8ad9aa12d1f8d96d9d300b6d67072dd2280a467cf3c66504b893c139e", size = 218947, upload-time = "2026-06-26T21:34:38.889Z" },
+    { url = "https://files.pythonhosted.org/packages/0c/25/4faf761523136bfa20565f20a8da82b8dccd75966a69f4595e2f3f4eceba/uiprotect-15.4.2-py3-none-any.whl", hash = "sha256:feb5ed5ddef9f9b4cc809437358f264b838b49c7626940ed561dd285d4929e18", size = 219885, upload-time = "2026-07-05T18:22:44.571Z" },
 ]
 
 [[package]]
@@ -1786,7 +1786,7 @@ requires-dist = [
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "typing-extensions", specifier = ">=4.4.0" },
+    { name = "typing-extensions", specifier = ">=4.16.0" },
     { name = "unifi-core", extras = ["access"], editable = "packages/unifi-core" },
     { name = "unifi-mcp-shared", editable = "packages/unifi-mcp-shared" },
 ]
@@ -1836,17 +1836,17 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.18.5" },
     { name = "argon2-cffi", specifier = ">=23.1.0" },
     { name = "cryptography", specifier = ">=42.0.0" },
-    { name = "fastapi", specifier = ">=0.138.2" },
+    { name = "fastapi", specifier = ">=0.139.0" },
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.51" },
-    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.320.0,<0.321.0" },
+    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.320.2,<0.321.0" },
     { name = "typer", specifier = ">=0.26.8" },
     { name = "unifi-core", extras = ["access", "network", "protect"], editable = "packages/unifi-core" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.49.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.50.2" },
 ]
 
 [package.metadata.requires-dev]
@@ -1887,11 +1887,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.0" },
-    { name = "aiounifi", marker = "extra == 'network'", specifier = ">=88" },
+    { name = "aiounifi", marker = "extra == 'network'", specifier = ">=92" },
     { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.1.1" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=15.3.0" },
+    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=15.4.2" },
 ]
 provides-extras = ["access", "network", "protect"]
 
@@ -2010,7 +2010,7 @@ requires-dist = [
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "typing-extensions", specifier = ">=4.4.0" },
+    { name = "typing-extensions", specifier = ">=4.16.0" },
     { name = "unifi-core", extras = ["network"], editable = "packages/unifi-core" },
     { name = "unifi-mcp-shared", editable = "packages/unifi-mcp-shared" },
 ]
@@ -2058,7 +2058,7 @@ requires-dist = [
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "typing-extensions", specifier = ">=4.4.0" },
+    { name = "typing-extensions", specifier = ">=4.16.0" },
     { name = "unifi-core", extras = ["protect"], editable = "packages/unifi-core" },
     { name = "unifi-mcp-shared", editable = "packages/unifi-mcp-shared" },
 ]
@@ -2075,15 +2075,15 @@ dev = [
 
 [[package]]
 name = "uvicorn"
-version = "0.49.0"
+version = "0.50.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "h11" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c4/1f/fa18009dea8469069cca78a4e877a008ab78f08b064bfc9ab891579077ff/uvicorn-0.49.0.tar.gz", hash = "sha256:ebf4271aa580d9de97f93192d4595176df6e91f9aae919ca73e4fc07df1e66a3", size = 91284, upload-time = "2026-06-03T22:01:30.448Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/f6/cc9aadc0e481344a42095d222bfa764122fb8cfba708d1922917bd8bfb01/uvicorn-0.50.2.tar.gz", hash = "sha256:b92bf03509b82bcb9d49e7335b4fd364518ad021c2dc18b4e6a2fec8c955a0bb", size = 93716, upload-time = "2026-07-06T10:38:31.984Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/88/fa/e1388bbcf24ef3274f45c0c1c7b501fd14971037c1b6ee23610553307497/uvicorn-0.49.0-py3-none-any.whl", hash = "sha256:ba3d14c3ee7e41c6c654c46c9eb489d33213cdd30aa1696eab1374337c13f68f", size = 71376, upload-time = "2026-06-03T22:01:29.037Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/f0/7c228ee10c7ab8fd3a21d06579a6f7c6075c6ce72594a20fb5d2f206ff24/uvicorn-0.50.2-py3-none-any.whl", hash = "sha256:4ae72a385630bcc17a0adb8290f26c993865e0b43a2114c2aab96420172c056a", size = 72846, upload-time = "2026-07-06T10:38:30.543Z" },
 ]
 
 [package.optional-dependencies]

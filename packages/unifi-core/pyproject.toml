@@ -15,8 +15,8 @@ dependencies = [
 # they need and can't accidentally forget to install one — that failure
 # mode hit prod historically. Versions floor at the lowest tested.
 [project.optional-dependencies]
-network = ["aiounifi>=88"]
-protect = ["uiprotect>=15.3.0"]
+network = ["aiounifi>=92"]
+protect = ["uiprotect>=15.4.2"]
 access = ["py-unifi-access>=1.1.1"]
 
 [dependency-groups]
