@@ -277,20 +277,22 @@ class TestCreateDynamicDns:
         assert "Failed to create" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_create_drops_unknown_fields(self):
+    async def test_create_rejects_unknown_fields(self):
+        """Unknown/read-only keys are rejected with an actionable error, not
+        silently dropped."""
         from unifi_network_mcp.tools.dynamic_dns import create_dynamic_dns
 
         result = await create_dynamic_dns(
             entry_data={
                 "host_name": "home.example.com",
                 "service": "dyndns",
-                "bogus_field": "ignored",
+                "bogus_field": "x",
             },
             confirm=False,
         )
 
-        assert result["success"] is True
-        assert "bogus_field" not in result["preview"]["will_create"]
+        assert result["success"] is False
+        assert "bogus_field" in result["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -301,16 +303,70 @@ class TestCreateDynamicDns:
 class TestUpdateDynamicDns:
     @pytest.mark.asyncio
     async def test_update_preview(self):
+        with patch("unifi_network_mcp.tools.dynamic_dns.dynamic_dns_manager") as mock_mgr:
+            mock_mgr.get_dynamic_dns = AsyncMock(return_value=SAMPLE_ENTRY)
+
+            from unifi_network_mcp.tools.dynamic_dns import update_dynamic_dns
+
+            result = await update_dynamic_dns(
+                entry_id="ddns001",
+                update_data={"service": "noip"},
+                confirm=False,
+            )
+
+        assert result["success"] is True
+        assert result.get("requires_confirmation") is True
+
+    @pytest.mark.asyncio
+    async def test_update_preview_shows_current_state(self):
+        """The preview fetches the current entry so the before/after is real,
+        not an empty current_state."""
+        with patch("unifi_network_mcp.tools.dynamic_dns.dynamic_dns_manager") as mock_mgr:
+            mock_mgr.get_dynamic_dns = AsyncMock(return_value=SAMPLE_ENTRY)
+
+            from unifi_network_mcp.tools.dynamic_dns import update_dynamic_dns
+
+            result = await update_dynamic_dns(
+                entry_id="ddns001",
+                update_data={"service": "noip"},
+                confirm=False,
+            )
+
+        # current reflects the fetched entry (was "dyndns"), proposed the change.
+        assert result["preview"]["current"]["service"] == "dyndns"
+        assert result["preview"]["proposed"]["service"] == "noip"
+
+    @pytest.mark.asyncio
+    async def test_update_preview_not_found(self):
+        """A preview for a missing entry surfaces the not-found error."""
+        with patch("unifi_network_mcp.tools.dynamic_dns.dynamic_dns_manager") as mock_mgr:
+            mock_mgr.get_dynamic_dns = AsyncMock(side_effect=UniFiNotFoundError("dynamic_dns", "nope"))
+
+            from unifi_network_mcp.tools.dynamic_dns import update_dynamic_dns
+
+            result = await update_dynamic_dns(
+                entry_id="nope",
+                update_data={"service": "noip"},
+                confirm=False,
+            )
+
+        assert result["success"] is False
+        assert "not found" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_update_rejects_unknown_fields(self):
+        """Unknown/read-only keys are rejected with an actionable error before
+        any controller call, not silently dropped."""
         from unifi_network_mcp.tools.dynamic_dns import update_dynamic_dns
 
         result = await update_dynamic_dns(
             entry_id="ddns001",
-            update_data={"service": "noip"},
-            confirm=False,
+            update_data={"service": "noip", "bogus_field": "x"},
+            confirm=True,
         )
 
-        assert result["success"] is True
-        assert result.get("requires_confirmation") is True
+        assert result["success"] is False
+        assert "bogus_field" in result["error"]
 
     @pytest.mark.asyncio
     async def test_update_confirm_success(self):
@@ -332,7 +388,12 @@ class TestUpdateDynamicDns:
     @pytest.mark.asyncio
     async def test_update_preview_redacts_secret(self):
         """Preview (confirm=False) must not echo x_password in cleartext."""
-        with patch("unifi_network_mcp.tools.dynamic_dns.should_redact_sensitive_fields", return_value=True):
+        with (
+            patch("unifi_network_mcp.tools.dynamic_dns.dynamic_dns_manager") as mock_mgr,
+            patch("unifi_network_mcp.tools.dynamic_dns.should_redact_sensitive_fields", return_value=True),
+        ):
+            mock_mgr.get_dynamic_dns = AsyncMock(return_value=SAMPLE_ENTRY)
+
             from unifi_network_mcp.tools.dynamic_dns import update_dynamic_dns
 
             result = await update_dynamic_dns(

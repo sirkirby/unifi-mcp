@@ -18,6 +18,7 @@ from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.dynamic_dns import (
     MUTABLE_FIELDS,
     DynamicDns,
+    reject_unknown_fields,
 )
 from unifi_core.network.models.dynamic_dns import (
     from_controller as ddns_from_controller,
@@ -114,6 +115,7 @@ async def create_dynamic_dns(
     logger.info("unifi_create_dynamic_dns tool called (confirm=%s)", confirm)
 
     try:
+        reject_unknown_fields(entry_data)
         model = DynamicDns(**{k: v for k, v in entry_data.items() if k in MUTABLE_FIELDS})
     except Exception as exc:
         return {"success": False, "error": f"Validation error: {exc}"}
@@ -181,17 +183,27 @@ async def update_dynamic_dns(
     if not update_data:
         return {"success": False, "error": "No fields provided to update."}
 
+    try:
+        reject_unknown_fields(update_data)
+    except ValueError as exc:
+        return {"success": False, "error": f"Validation error: {exc}"}
+
     validated_data = ddns_to_update(update_data)
     if not validated_data:
         return {"success": False, "error": "No valid fields to update after validation."}
 
     if not confirm:
+        try:
+            current = await dynamic_dns_manager.get_dynamic_dns(entry_id)
+        except UniFiNotFoundError as e:
+            return {"success": False, "error": str(e)}
+        current_state = ddns_from_controller(current).model_dump(exclude_none=True)
         return redact_sensitive_fields(
             update_preview(
                 resource_type="dynamic_dns",
                 resource_id=entry_id,
-                resource_name=entry_id,
-                current_state={},
+                resource_name=current_state.get("host_name", entry_id),
+                current_state=current_state,
                 updates=validated_data,
             ),
             redact_sensitive=should_redact_sensitive_fields(),

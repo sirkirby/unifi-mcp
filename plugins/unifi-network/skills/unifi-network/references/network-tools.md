@@ -1,4 +1,4 @@
-# Network Server Tool Reference (181 tools)
+# Network Server Tool Reference (186 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 
@@ -199,6 +199,24 @@ Manage static DNS A/AAAA/CNAME/MX/TXT/NS/SRV records on the controller's local D
 | `unifi_delete_dns_record` | Mutate | Delete a static DNS record. |
 | `unifi_update_dns_record` | Mutate | Update an existing DNS record. |
 <!-- /AUTO:tools:dns -->
+
+---
+
+## Dynamic DNS
+
+Manage the controller's native Dynamic DNS provider entries (Settings → Internet → Dynamic DNS).
+
+<!-- AUTO:tools:dynamic_dns -->
+5 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `unifi_get_dynamic_dns_entry_details` | Read | Get details for a specific Dynamic DNS entry by ID. |
+| `unifi_list_dynamic_dns` | Read | List all Dynamic DNS provider entries configured on the controller. |
+| `unifi_create_dynamic_dns` | Mutate | Create a new Dynamic DNS provider entry. |
+| `unifi_delete_dynamic_dns` | Mutate | Delete a Dynamic DNS entry. |
+| `unifi_update_dynamic_dns` | Mutate | Update an existing Dynamic DNS entry. |
+<!-- /AUTO:tools:dynamic_dns -->
 
 ---
 

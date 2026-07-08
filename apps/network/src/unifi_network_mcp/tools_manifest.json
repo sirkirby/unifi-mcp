@@ -1,5 +1,5 @@
 {
-  "count": 181,
+  "count": 186,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -14,6 +14,7 @@
     "unifi_create_backup": "unifi_network_mcp.tools.system",
     "unifi_create_client_group": "unifi_network_mcp.tools.client_groups",
     "unifi_create_dns_record": "unifi_network_mcp.tools.dns",
+    "unifi_create_dynamic_dns": "unifi_network_mcp.tools.dynamic_dns",
     "unifi_create_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_create_firewall_policy": "unifi_network_mcp.tools.firewall",
     "unifi_create_network": "unifi_network_mcp.tools.network",
@@ -33,6 +34,7 @@
     "unifi_delete_client_group": "unifi_network_mcp.tools.client_groups",
     "unifi_delete_content_filter": "unifi_network_mcp.tools.content_filtering",
     "unifi_delete_dns_record": "unifi_network_mcp.tools.dns",
+    "unifi_delete_dynamic_dns": "unifi_network_mcp.tools.dynamic_dns",
     "unifi_delete_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_delete_firewall_policy": "unifi_network_mcp.tools.firewall",
     "unifi_delete_oon_policy": "unifi_network_mcp.tools.oon",
@@ -60,6 +62,7 @@
     "unifi_get_device_stats": "unifi_network_mcp.tools.stats",
     "unifi_get_dns_record_details": "unifi_network_mcp.tools.dns",
     "unifi_get_dpi_stats": "unifi_network_mcp.tools.stats",
+    "unifi_get_dynamic_dns_entry_details": "unifi_network_mcp.tools.dynamic_dns",
     "unifi_get_event_types": "unifi_network_mcp.tools.events",
     "unifi_get_firewall_group_details": "unifi_network_mcp.tools.firewall",
     "unifi_get_firewall_policy_details": "unifi_network_mcp.tools.firewall",
@@ -110,6 +113,7 @@
     "unifi_list_dns_records": "unifi_network_mcp.tools.dns",
     "unifi_list_dpi_applications": "unifi_network_mcp.tools.dpi",
     "unifi_list_dpi_categories": "unifi_network_mcp.tools.dpi",
+    "unifi_list_dynamic_dns": "unifi_network_mcp.tools.dynamic_dns",
     "unifi_list_events": "unifi_network_mcp.tools.events",
     "unifi_list_firewall_groups": "unifi_network_mcp.tools.firewall",
     "unifi_list_firewall_policies": "unifi_network_mcp.tools.firewall",
@@ -161,6 +165,7 @@
     "unifi_update_content_filter": "unifi_network_mcp.tools.content_filtering",
     "unifi_update_device_radio": "unifi_network_mcp.tools.devices",
     "unifi_update_dns_record": "unifi_network_mcp.tools.dns",
+    "unifi_update_dynamic_dns": "unifi_network_mcp.tools.dynamic_dns",
     "unifi_update_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_update_firewall_policy": "unifi_network_mcp.tools.firewall",
     "unifi_update_gateway_settings": "unifi_network_mcp.tools.gateway_settings",
@@ -1558,6 +1563,106 @@
         }
       },
       "title": "Create DNS Record"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Create a new Dynamic DNS provider entry. Required: host_name (hostname to keep updated, e.g. 'home.example.com'), service (provider: 'dyndns'/'noip'/'namecheap'/'cloudflare'/'custom'/...). Optional: interface ('wan' [default] or 'wan2'), login (username), x_password (password/token), server + custom_service (for the 'custom' service), options (list of strings). Requires confirmation.",
+      "name": "unifi_create_dynamic_dns",
+      "permission_action": "create",
+      "permission_category": "dynamic_dns",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, creates the entry. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "entry_data": {
+              "description": "Dynamic DNS entry data. See tool description for required and optional fields.",
+              "type": "object"
+            }
+          },
+          "required": [
+            "entry_data"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Create Dynamic DNS"
     },
     {
       "annotations": {
@@ -3566,6 +3671,106 @@
         }
       },
       "title": "Delete DNS Record"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Delete a Dynamic DNS entry. Use unifi_list_dynamic_dns to find entry IDs. Requires confirmation.",
+      "name": "unifi_delete_dynamic_dns",
+      "permission_action": "delete",
+      "permission_category": "dynamic_dns",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, deletes the entry. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "entry_id": {
+              "description": "The ID of the Dynamic DNS entry to delete (from unifi_list_dynamic_dns)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "entry_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Delete Dynamic DNS"
     },
     {
       "annotations": {
@@ -6170,6 +6375,98 @@
         }
       },
       "title": "Get DPI Stats"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Get details for a specific Dynamic DNS entry by ID. The provider password/token is redacted.",
+      "name": "unifi_get_dynamic_dns_entry_details",
+      "schema": {
+        "input": {
+          "properties": {
+            "entry_id": {
+              "description": "The unique identifier (_id) of the Dynamic DNS entry",
+              "type": "string"
+            }
+          },
+          "required": [
+            "entry_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Dynamic DNS Entry Details"
     },
     {
       "annotations": {
@@ -10769,6 +11066,90 @@
         }
       },
       "title": "List DPI Categories"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "List all Dynamic DNS provider entries configured on the controller. Returns hostname, service/provider, WAN interface, login, and options for each entry. The provider password/token is redacted.",
+      "name": "unifi_list_dynamic_dns",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Dynamic DNS"
     },
     {
       "annotations": {
@@ -15920,6 +16301,111 @@
         }
       },
       "title": "Update DNS Record"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Update an existing Dynamic DNS entry. Pass only the fields you want to change \u2014 current values are automatically preserved. Fields: host_name (str), service (str), server (str), login (str), x_password (str), interface ('wan'/'wan2'), custom_service (str), options (list of strings). Requires confirmation.",
+      "name": "unifi_update_dynamic_dns",
+      "permission_action": "update",
+      "permission_category": "dynamic_dns",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, applies the update. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "entry_id": {
+              "description": "The ID of the Dynamic DNS entry to update (from unifi_list_dynamic_dns)",
+              "type": "string"
+            },
+            "update_data": {
+              "description": "Dictionary of fields to update. See tool description for supported fields.",
+              "type": "object"
+            }
+          },
+          "required": [
+            "entry_id",
+            "update_data"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Update Dynamic DNS"
     },
     {
       "annotations": {

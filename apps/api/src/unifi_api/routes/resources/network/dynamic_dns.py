@@ -19,6 +19,10 @@ from unifi_api.services.pydantic_models import Detail, Page
 router = APIRouter()
 
 
+def _redact_sensitive(request: Request) -> bool:
+    return request.app.state.config.policy.response.redact_sensitive_fields
+
+
 def _id_key(obj) -> tuple:
     raw = obj if isinstance(obj, dict) else getattr(obj, "raw", {}) or {}
     return (0, raw.get("_id") or raw.get("id") or "")
@@ -72,7 +76,8 @@ async def list_dynamic_dns(
     tool_type = type_registry.lookup_tool("unifi_list_dynamic_dns")
     if tool_type is not None:
         type_class, kind = tool_type
-        rows = [type_class.from_manager_output(i).to_dict() for i in page]
+        redact_sensitive = _redact_sensitive(request)
+        rows = [type_class.from_manager_output(i, redact_sensitive=redact_sensitive).to_dict() for i in page]
         hint = type_class.render_hint(kind)
     else:
         registry = request.app.state.serializer_registry
@@ -124,7 +129,7 @@ async def get_dynamic_dns_entry_details(
     tool_type = type_registry.lookup_tool("unifi_get_dynamic_dns_entry_details")
     if tool_type is not None:
         type_class, kind = tool_type
-        data = type_class.from_manager_output(item).to_dict()
+        data = type_class.from_manager_output(item, redact_sensitive=_redact_sensitive(request)).to_dict()
         hint = type_class.render_hint(kind)
     else:
         registry = request.app.state.serializer_registry

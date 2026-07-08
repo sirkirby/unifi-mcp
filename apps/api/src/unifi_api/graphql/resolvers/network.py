@@ -2756,7 +2756,7 @@ class NetworkQuery:
             key_fn=_id_key,
         )
         return DynamicDnsPage(
-            items=[DynamicDns.from_manager_output(d) for d in page],
+            items=[DynamicDns.from_manager_output(d, redact_sensitive=ctx.redact_sensitive_fields) for d in page],
             next_cursor=next_cursor.encode() if next_cursor else None,
         )
 
@@ -2780,7 +2780,7 @@ class NetworkQuery:
             else:
                 did = getattr(r, "_id", None) or getattr(r, "id", None)
             if did == id:
-                return DynamicDns.from_manager_output(d)
+                return DynamicDns.from_manager_output(d, redact_sensitive=ctx.redact_sensitive_fields)
         return None
 
     # ---- Routes domain ---------------------------------------------------

@@ -116,3 +116,55 @@ async def test_dynamic_dns_entry_redacts_secret(tmp_path, monkeypatch):
     )
     assert body.get("errors") is None, body
     assert body["data"]["network"]["dynamicDnsEntry"]["xPassword"] == "***REDACTED***"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_dns_shows_secret_when_policy_off(tmp_path, monkeypatch):
+    """With the redaction policy disabled, the resolver must honor it and return
+    the raw secret (the policy flag has to be threaded into from_manager_output)."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network", redact_sensitive_fields=False)
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "dynamic_dns_manager", "list_dynamic_dns"): [
+                {"_id": "ddns-1", "host_name": "home.example.com", "x_password": "super-secret"},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ dynamicDns(controller: "{cid}", limit: 10) {{
+            items {{ xPassword }}
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    assert body["data"]["network"]["dynamicDns"]["items"][0]["xPassword"] == "super-secret"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_dns_entry_shows_secret_when_policy_off(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network", redact_sensitive_fields=False)
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "dynamic_dns_manager", "list_dynamic_dns"): [
+                {"_id": "ddns-1", "host_name": "home.example.com", "x_password": "super-secret"},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ dynamicDnsEntry(controller: "{cid}", id: "ddns-1") {{
+            xPassword
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    assert body["data"]["network"]["dynamicDnsEntry"]["xPassword"] == "super-secret"

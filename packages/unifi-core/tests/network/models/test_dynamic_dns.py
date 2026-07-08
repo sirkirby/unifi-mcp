@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.network.models.dynamic_dns import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
     DynamicDns,
     from_controller,
+    reject_unknown_fields,
     to_controller_create,
     to_controller_update,
 )
@@ -144,11 +146,32 @@ class TestToControllerUpdate:
         result = to_controller_update(fields)
         assert result == fields
 
-    def test_drops_unrecognised_keys(self) -> None:
-        result = to_controller_update({"unknown": "value", "service": "noip"})
-        assert "unknown" not in result
-        assert result["service"] == "noip"
-
     def test_returns_empty_dict_when_no_mutable_fields(self) -> None:
         result = to_controller_update({"id": "read-only"})
         assert result == {}
+
+
+class TestRejectUnknownFields:
+    """The create/update flow rejects unknown or read-only keys with an
+    actionable error rather than silently dropping them (maintainer request:
+    do not reintroduce the silent-drop class the strict-kwargs protections
+    were added to avoid)."""
+
+    def test_passes_when_all_keys_mutable(self) -> None:
+        # No exception for a dict of accepted fields.
+        reject_unknown_fields({"host_name": "home.example.com", "service": "noip"})
+
+    def test_passes_on_empty(self) -> None:
+        reject_unknown_fields({})
+
+    def test_rejects_unrecognised_key(self) -> None:
+        with pytest.raises(ValueError) as exc:
+            reject_unknown_fields({"service": "noip", "bogus_field": "x"})
+        assert "bogus_field" in str(exc.value)
+        # The message is actionable — it names the allowed fields.
+        assert "host_name" in str(exc.value)
+
+    def test_rejects_read_only_key(self) -> None:
+        with pytest.raises(ValueError) as exc:
+            reject_unknown_fields({"id": "read-only", "service": "noip"})
+        assert "id" in str(exc.value)

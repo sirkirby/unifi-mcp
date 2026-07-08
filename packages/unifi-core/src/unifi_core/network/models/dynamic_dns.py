@@ -132,6 +132,20 @@ def from_controller(raw: Any) -> DynamicDns:
     )
 
 
+def reject_unknown_fields(fields: Dict[str, Any]) -> None:
+    """Raise ``ValueError`` if any key is not an accepted (mutable) field.
+
+    Unknown keys (typos) and read-only keys (``id``, ``site_id``) are rejected
+    with an actionable message rather than silently dropped, so a bad key
+    surfaces to the caller instead of being forwarded to — or filtered before —
+    the controller. Callers run this on the raw ``entry_data`` / ``update_data``
+    dict before translating to a controller payload.
+    """
+    unknown = set(fields) - MUTABLE_FIELDS
+    if unknown:
+        raise ValueError(f"Unknown or read-only fields: {sorted(unknown)}. Allowed fields: {sorted(MUTABLE_FIELDS)}")
+
+
 def to_controller_create(model: DynamicDns) -> Dict[str, Any]:
     """Produce a controller create payload from a DynamicDns."""
     payload: Dict[str, Any] = {}
