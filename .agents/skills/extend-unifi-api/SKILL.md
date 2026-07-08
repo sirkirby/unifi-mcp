@@ -424,6 +424,7 @@ assert payload["name"] == "new-name"   # updated
 
 Network/Access: `{package}_{resource}_{verb}` (e.g., `network_dns_record_create`)
 Protect: `protect_{noun}_{verb}` (e.g., `protect_alarm_arm`)
+**Capability-oriented, not transport-oriented:** Name and design tools around the capability (e.g., `protect_list_sensors`, `protect_update_chime`), not the backend API that serves it. Prefer extending an existing capability tool over adding a parallel `protect_*_public_*` tool tied to a specific backend (e.g., the Public API vs. legacy). Transport-specific naming leaks implementation detail into the tool surface and fragments capability coverage across near-duplicate tools.
 Manager class: `{Resource}Manager`. Factory: `get_{resource}_manager` with `@lru_cache`.
 Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(data)`, `update_{resource}(id, updates)`.
 
@@ -468,6 +469,8 @@ Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(
 **`_coerce_list_result` for kind=list action tools:** `apps/api/src/unifi_api/routes/actions.py` automatically calls `_coerce_list_result()` for any action tool whose type has `kind="list"`. It unwraps single-key dict envelopes to a bare list; bare lists pass through. If your manager returns a multi-key dict, `_coerce_list_result` will raise — ensure output is a bare list or single-key envelope.
 
 **api-actions phase uses a curated 6-tool sample:** `API_ACTIONS_SAMPLE` in `scripts/live_smoke.py` is hardcoded to 6 tools. New tools are NOT automatically included. Explicitly append to `API_ACTIONS_SAMPLE` to add api-actions smoke coverage.
+
+**New capability tools need `scripts/live_smoke.py` coverage, not ad hoc validation:** When a new resource/capability tool is added, fold it into `scripts/live_smoke.py` as `confirm=False` preview coverage using the existing device-inventory cache, rather than writing one-off manual validation scripts.
 
 **Tool description vs. Pydantic Field description:** Keep distinct — do not copy-paste tool description into field descriptions.
 
