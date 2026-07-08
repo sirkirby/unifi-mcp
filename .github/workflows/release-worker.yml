@@ -114,7 +114,7 @@ jobs:
       - name: Install worker dependencies
         run: npm ci --prefix apps/worker/worker
       - name: Publish package
-        run: npx npm@latest publish --provenance --access public
+        run: npm publish --provenance --access public
         working-directory: apps/worker
       - name: Publish summary
         env:
