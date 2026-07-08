@@ -19,6 +19,18 @@ Thanks for helping improve UniFi MCP. Please follow the
 
 For more support routing details, see [SUPPORT.md](SUPPORT.md).
 
+## Where to Start Reading
+
+New to the codebase? Read these in order:
+
+1. **[README.md](README.md)** -- project overview and installation
+2. **[QUICKSTART.md](QUICKSTART.md)** -- get a server running in 5 minutes
+3. **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** -- monorepo layout, package responsibilities, and the tool/manager/connection layering
+4. **[AGENTS.md](AGENTS.md)** -- architecture rules, coding conventions, and permission/confirmation patterns enforced across servers
+5. **[docs/README.md](docs/README.md)** -- full documentation index (tool loading modes, permissions, deployment)
+
+The Monorepo Layout table below and the Development Workflow section are the fastest way to find where a change belongs once you know what you're changing.
+
 ## Prerequisites
 
 - Python 3.13+
