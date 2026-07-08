@@ -151,6 +151,20 @@ class ProtectConnectionManager:
     # ------------------------------------------------------------------
 
     @property
+    def has_api_key(self) -> bool:
+        """Return ``True`` when a non-empty Protect public API key is configured."""
+        return bool(self._api_key and self._api_key.strip())
+
+    def require_public_api_key(self, operation: str) -> None:
+        """Raise an actionable error when a public Integration API call lacks an API key."""
+        if self.has_api_key:
+            return
+        raise ValueError(
+            f"Cannot {operation}: UniFi Protect public Integration API access requires an API key. "
+            "Set UNIFI_PROTECT_API_KEY or UNIFI_API_KEY and restart the server."
+        )
+
+    @property
     def client(self) -> ProtectApiClient:
         """Return the underlying :class:`ProtectApiClient`.
 
