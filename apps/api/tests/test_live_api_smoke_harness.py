@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -113,4 +114,82 @@ def test_live_smoke_known_firewall_policy_rejection_requires_controller_code():
     assert not runner.expected_known_controller_issue(
         "unifi_create_firewall_policy",
         "Failed to create firewall policy: Firewall policy create respond traffic not allowed",
+    )
+
+
+def test_live_smoke_seeds_protect_capability_preview_dependencies():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+    runner.args = SimpleNamespace(tool=["protect_update_chime"])
+    runner.manifest = {
+        "tools": [
+            {"name": "protect_update_chime"},
+            {"name": "protect_list_chimes"},
+        ]
+    }
+
+    assert runner.preview_seed_tool_names() == {"protect_list_chimes"}
+
+
+def test_live_smoke_protect_capability_preview_args_from_seeded_inventory():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = live_smoke.ResourceCache()
+    runner.connection_manager = SimpleNamespace(has_api_key=True)
+
+    runner.cache.remember(
+        "protect_list_sensors",
+        {"success": True, "data": {"sensors": [{"id": "sensor-1", "name": "Garage"}]}},
+    )
+    runner.cache.remember(
+        "protect_list_chimes",
+        {
+            "success": True,
+            "data": {
+                "chimes": [
+                    {
+                        "id": "chime-1",
+                        "name": "Doorbell Chime",
+                        "ring_settings": [{"camera_id": "camera-1", "volume": 75, "repeat_times": 2}],
+                    }
+                ]
+            },
+        },
+    )
+    runner.cache.remember(
+        "protect_list_viewers",
+        {"success": True, "data": {"viewers": [{"id": "viewer-1", "name": "Lobby Viewer"}]}},
+    )
+
+    assert runner.preview_args("protect_update_sensor_settings") == (
+        {"sensor_id": "sensor-1", "settings": {"name": "Garage"}},
+        "",
+    )
+    assert runner.preview_args("protect_update_chime") == (
+        {"chime_id": "chime-1", "settings": {"camera_id": "camera-1", "volume": 75}},
+        "",
+    )
+    assert runner.preview_args("protect_update_viewer") == (
+        {"viewer_id": "viewer-1", "settings": {"name": "Lobby Viewer"}},
+        "",
+    )
+
+
+def test_live_smoke_protect_api_key_preview_skip_when_missing():
+    import live_smoke
+
+    runner = live_smoke.LiveSmokeRunner.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = live_smoke.ResourceCache()
+    runner.connection_manager = SimpleNamespace(has_api_key=False)
+
+    runner.cache.remember(
+        "protect_list_sensors",
+        {"success": True, "data": {"sensors": [{"id": "sensor-1", "name": "Garage"}]}},
+    )
+
+    assert runner.preview_args("protect_update_sensor_settings") == (
+        None,
+        "requires UNIFI_PROTECT_API_KEY or UNIFI_API_KEY",
     )

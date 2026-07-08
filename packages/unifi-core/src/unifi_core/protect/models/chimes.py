@@ -102,7 +102,19 @@ def from_controller(raw: Any) -> Chime:
 
 
 def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
-    """Filter a partial dict to only the mutable, recognised keys."""
+    """Validate and filter a global chime update dict."""
+    if not isinstance(fields, dict):
+        raise ValueError("Chime settings must be a dictionary for protect_update_chime.")
+
+    unsupported = sorted(set(fields) - MUTABLE_FIELDS)
+    if unsupported:
+        joined = ", ".join(unsupported)
+        supported = ", ".join(sorted(MUTABLE_FIELDS))
+        raise ValueError(
+            f"Unsupported chime setting fields for protect_update_chime: {joined}. "
+            f"Supported global fields: {supported}."
+        )
+
     return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
 
 

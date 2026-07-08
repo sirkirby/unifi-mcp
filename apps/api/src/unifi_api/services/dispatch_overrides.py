@@ -106,8 +106,10 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "protect_toggle_recording": ("camera_manager", "apply_toggle_recording"),
     "protect_toggle_rtsp": ("camera_manager", "apply_toggle_rtsp"),
     "protect_update_camera_settings": ("camera_manager", "update_camera_settings"),
+    "protect_update_sensor_settings": ("sensor_manager", "apply_sensor_settings"),
     "protect_update_chime": ("chime_manager", "apply_chime_settings"),
     "protect_update_light": ("light_manager", "apply_light_settings"),
+    "protect_update_viewer": ("system_manager", "apply_viewer_update"),
     "protect_acknowledge_event": ("event_manager", "apply_acknowledge_event"),
     "protect_update_known_face": ("recognition_manager", "apply_update_known_face"),
     "protect_merge_known_faces": ("recognition_manager", "apply_merge_known_faces"),
@@ -135,6 +137,11 @@ CONFIRM_REQUIRED_TOOLS: frozenset[str] = frozenset(
         # still a live reorder operation. Keep the API action path aligned with
         # the MCP tool's explicit confirmation contract.
         "unifi_reorder_firewall_policies",
+        # These Protect capability actions dispatch directly to apply_* manager
+        # methods. Require the same explicit confirmation the MCP tools require.
+        "protect_update_chime",
+        "protect_update_sensor_settings",
+        "protect_update_viewer",
     }
 )
 
@@ -258,6 +265,39 @@ def _translate_delete_recording(args: dict[str, Any]) -> tuple[tuple[Any, ...], 
         "start": _parse_iso_datetime(args["start"]),
         "end": _parse_iso_datetime(args["end"]),
     }
+
+
+# ---------------------------------------------------------------------------
+# Protect — sensor settings update
+# ---------------------------------------------------------------------------
+# The MCP tool validates agent-facing settings and translates nested
+# snake_case keys to the public API payload before calling the manager.
+
+
+def _translate_sensor_settings_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Build (sensor_id, public_update_payload) for SensorManager.apply_sensor_settings."""
+    from unifi_core.protect.models.sensors import to_public_update
+
+    return (args["sensor_id"], to_public_update(args.get("settings") or {})), {}
+
+
+def _translate_chime_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Build (chime_id, filtered_settings) for ChimeManager.apply_chime_settings."""
+    from unifi_core.protect.models.chimes import to_controller_update, to_ring_setting_update
+
+    settings = args.get("settings")
+    if not settings:
+        raise ValueError("No settings provided. Specify at least one setting to update.")
+    if not isinstance(settings, dict):
+        raise ValueError("Chime settings must be a dictionary for protect_update_chime.")
+
+    if "camera_id" in settings:
+        filtered = to_ring_setting_update(settings)
+    else:
+        filtered = to_controller_update(settings)
+    if not filtered:
+        raise ValueError("No supported settings provided.")
+    return (args["chime_id"], filtered), {}
 
 
 # ---------------------------------------------------------------------------
@@ -404,6 +444,8 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
     "unifi_update_gateway_settings": _translate_gateway_settings_update,
     "protect_export_clip": _translate_export_clip,
     "protect_delete_recording": _translate_delete_recording,
+    "protect_update_chime": _translate_chime_update,
+    "protect_update_sensor_settings": _translate_sensor_settings_update,
     # Network — client mutations: tool uses mac_address, manager uses client_mac
     "unifi_block_client": _rename_mac_address_to_client_mac,
     "unifi_unblock_client": _rename_mac_address_to_client_mac,

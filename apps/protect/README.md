@@ -84,7 +84,7 @@ UNIFI_PROTECT_HOST=192.168.1.1      # Controller IP or hostname
 UNIFI_PROTECT_USERNAME=admin         # Local admin username
 UNIFI_PROTECT_PASSWORD=your-password # Admin password
 # Optional:
-# UNIFI_PROTECT_API_KEY=             # UniFi API key (experimental — read-only, subset of tools)
+# UNIFI_PROTECT_API_KEY=             # UniFi Protect API key for selected settings capabilities
 # UNIFI_PROTECT_PORT=443             # Controller HTTPS port
 # UNIFI_PROTECT_VERIFY_SSL=false     # SSL certificate verification
 ```

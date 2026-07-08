@@ -69,7 +69,7 @@ All tools return: `{"success": true, "data": ...}`, `{"success": false, "error":
 
 ## Authentication
 
-Username and password are **required** (local admin credentials, not Ubiquiti SSO). API key support exists but is **experimental** — limited to read-only operations and a subset of tools.
+Username and password are **required** (local admin credentials, not Ubiquiti SSO). A UniFi Protect API key is optional and enables selected capabilities implemented through the Protect Integration API, including sensor settings, per-camera chime ring settings, and viewer liveview assignment.
 
 To configure, run `/unifi-protect:unifi-protect-setup` or set env vars manually:
 ```

@@ -196,7 +196,7 @@ Set these environment variables (or use a `.env` file):
 | `UNIFI_HOST` | Yes | Controller IP or hostname |
 | `UNIFI_USERNAME` | Yes | Local admin/service account username; do not use a Ubiquiti SSO account |
 | `UNIFI_PASSWORD` | Yes | Password for the local account |
-| `UNIFI_API_KEY` | No | UniFi API key (experimental — limited to read-only, subset of tools) |
+| `UNIFI_API_KEY` | No | UniFi API key for selected capabilities, including firewall policy ordering and some Protect settings updates |
 
 ### Multi-controller setups
 

@@ -63,7 +63,7 @@ Username and password are required.
 
 ### Optional API Key
 
-After collecting username and password, explain that UniFi API key support is experimental and limited to read-only operations and a subset of tools. Ask whether to configure an API key too.
+After collecting username and password, explain that a UniFi Protect API key enables selected capabilities implemented through the Protect Integration API, including sensor settings, per-camera chime ring settings, and viewer liveview assignment. Ask whether to configure an API key too.
 
 If yes, ask for the API key and include `UNIFI_PROTECT_API_KEY`. If no, skip it.
 

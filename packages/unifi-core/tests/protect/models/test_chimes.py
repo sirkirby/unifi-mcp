@@ -97,10 +97,16 @@ class TestChimeModel:
         chime = from_controller(raw)
         assert chime.paired_cameras == ["cam-x"]
 
-    def test_to_controller_update_filters_read_only(self) -> None:
-        out = to_controller_update({"id": "chime001", "name": "New Name", "volume": 60})
-        assert "id" not in out
-        assert out == {"name": "New Name", "volume": 60}
+    def test_to_controller_update_rejects_read_only_fields(self) -> None:
+        with pytest.raises(ValueError) as exc_info:
+            to_controller_update({"id": "chime001", "name": "New Name", "volume": 60})
+
+        message = str(exc_info.value)
+        assert "Unsupported chime setting fields" in message
+        assert "id" in message
+        assert "name" in message
+        assert "repeat_times" in message
+        assert "volume" in message
 
     def test_to_controller_update_drops_none_values(self) -> None:
         out = to_controller_update({"name": "New", "volume": None})
@@ -109,23 +115,52 @@ class TestChimeModel:
     def test_to_controller_update_empty_input(self) -> None:
         assert to_controller_update({}) == {}
 
-    def test_to_controller_update_filters_read_only_fields(self) -> None:
-        out = to_controller_update(
-            {
-                "mac": "AA:BB:CC",
-                "state": "CONNECTED",
-                "paired_cameras": ["cam001"],
-                "name": "Porch",
-            }
-        )
-        assert "mac" not in out
-        assert "state" not in out
-        assert "paired_cameras" not in out
-        assert out == {"name": "Porch"}
+    def test_to_controller_update_rejects_read_only_fields_when_mixed(self) -> None:
+        with pytest.raises(ValueError) as exc_info:
+            to_controller_update(
+                {
+                    "mac": "AA:BB:CC",
+                    "state": "CONNECTED",
+                    "paired_cameras": ["cam001"],
+                    "name": "Porch",
+                }
+            )
+
+        message = str(exc_info.value)
+        assert "Unsupported chime setting fields" in message
+        assert "mac" in message
+        assert "paired_cameras" in message
+        assert "state" in message
+
+    def test_to_controller_update_rejects_mixed_unknown_fields(self) -> None:
+        with pytest.raises(ValueError) as exc_info:
+            to_controller_update(
+                {
+                    "volume": 60,
+                    "volumee": 50,
+                }
+            )
+
+        message = str(exc_info.value)
+        assert "Unsupported chime setting fields" in message
+        assert "volumee" in message
+
+    def test_to_controller_update_rejects_non_dict(self) -> None:
+        with pytest.raises(ValueError, match="must be a dictionary"):
+            to_controller_update(["volume"])  # type: ignore[arg-type]
 
     def test_to_controller_update_all_mutable(self) -> None:
         out = to_controller_update({"name": "Side", "volume": 50, "repeat_times": 3})
         assert out == {"name": "Side", "volume": 50, "repeat_times": 3}
+
+    def test_to_controller_update_drops_none_values_after_validation(self) -> None:
+        out = to_controller_update(
+            {
+                "name": "Porch",
+                "volume": None,
+            }
+        )
+        assert out == {"name": "Porch"}
 
     def test_to_ring_setting_update_accepts_per_camera_fields(self) -> None:
         out = to_ring_setting_update({"camera_id": "cam001", "volume": 50, "repeat_times": 3})

@@ -1135,6 +1135,21 @@ class TestProtectUpdateChimeTool:
         assert result["success"] is False
 
     @pytest.mark.asyncio
+    async def test_global_update_rejects_mixed_unknown_fields(self, mock_chime_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_chime
+
+        result = await protect_update_chime(
+            "chime-001",
+            {"volume": 50, "volumee": 60},
+            confirm=False,
+        )
+
+        assert result["success"] is False
+        assert "Unsupported chime setting fields" in result["error"]
+        assert "volumee" in result["error"]
+        mock_chime_manager.update_chime.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_per_camera_preview(self, mock_chime_manager):
         from unifi_protect_mcp.tools.devices import protect_update_chime
 

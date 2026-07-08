@@ -305,6 +305,12 @@ def test_dispatch_overrides_specific_targets() -> None:
     assert table["protect_reboot_camera"].method == "apply_reboot_camera"
     assert table["protect_alarm_arm"].method == "arm"
     assert table["protect_acknowledge_event"].method == "apply_acknowledge_event"
+    assert table["protect_update_sensor_settings"].manager_attr == "sensor_manager"
+    assert table["protect_update_sensor_settings"].method == "apply_sensor_settings"
+    assert table["protect_update_chime"].manager_attr == "chime_manager"
+    assert table["protect_update_chime"].method == "apply_chime_settings"
+    assert table["protect_update_viewer"].manager_attr == "system_manager"
+    assert table["protect_update_viewer"].method == "apply_viewer_update"
     assert table["protect_update_known_face"].method == "apply_update_known_face"
     assert table["protect_merge_known_faces"].method == "apply_merge_known_faces"
     assert table["protect_delete_known_face"].method == "apply_delete_known_face"
@@ -381,6 +387,265 @@ async def test_dispatch_update_traffic_route_routes_to_mutation_with_widened_fie
     # The widened match field is forwarded to update_traffic_route as a kwarg
     # (no arg translator — the manager takes **kwargs; confirm is a separate arg).
     domain_manager.update_traffic_route.assert_awaited_once_with(route_id="tr1", target_devices=target_devices)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_protect_update_sensor_settings_translates_settings_to_public_payload() -> None:
+    entry = ToolEntry(
+        name="protect_update_sensor_settings",
+        product="protect",
+        category="devices",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.update_sensor_settings = AsyncMock(return_value={"preview": True})
+    domain_manager.apply_sensor_settings = AsyncMock(return_value={"sensor_id": "sensor-1"})
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="protect_update_sensor_settings",
+        controller_id="cid",
+        controller_products=["protect"],
+        site="default",
+        args={
+            "sensor_id": "sensor-1",
+            "settings": {
+                "name": "Garage",
+                "motion_settings": {"sensitivity_when_armed": 80},
+            },
+        },
+        confirm=True,
+        dispatch_table=build_dispatch_table(),
+    )
+
+    domain_manager.update_sensor_settings.assert_not_awaited()
+    domain_manager.apply_sensor_settings.assert_awaited_once_with(
+        "sensor-1",
+        {
+            "name": "Garage",
+            "motion_settings": {"sensitivityWhenArmed": 80},
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_protect_update_chime_passes_global_settings() -> None:
+    entry = ToolEntry(
+        name="protect_update_chime",
+        product="protect",
+        category="devices",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.apply_chime_settings = AsyncMock(return_value={"chime_id": "chime-1"})
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="protect_update_chime",
+        controller_id="cid",
+        controller_products=["protect"],
+        site="default",
+        args={"chime_id": "chime-1", "settings": {"volume": 75}},
+        confirm=True,
+        dispatch_table=build_dispatch_table(),
+    )
+
+    domain_manager.apply_chime_settings.assert_awaited_once_with("chime-1", {"volume": 75})
+
+
+@pytest.mark.asyncio
+async def test_dispatch_protect_update_chime_preserves_per_camera_ring_settings() -> None:
+    entry = ToolEntry(
+        name="protect_update_chime",
+        product="protect",
+        category="devices",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.apply_chime_settings = AsyncMock(return_value={"chime_id": "chime-1"})
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="protect_update_chime",
+        controller_id="cid",
+        controller_products=["protect"],
+        site="default",
+        args={"chime_id": "chime-1", "settings": {"camera_id": "cam-1", "repeat_times": 3}},
+        confirm=True,
+        dispatch_table=build_dispatch_table(),
+    )
+
+    domain_manager.apply_chime_settings.assert_awaited_once_with(
+        "chime-1",
+        {"camera_id": "cam-1", "repeat_times": 3},
+    )
+
+
+@pytest.mark.asyncio
+async def test_dispatch_protect_update_chime_rejects_unsupported_only_settings() -> None:
+    entry = ToolEntry(
+        name="protect_update_chime",
+        product="protect",
+        category="devices",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.apply_chime_settings = AsyncMock(return_value={"chime_id": "chime-1"})
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+
+    with pytest.raises(ValueError, match="Unsupported chime setting fields"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="protect_update_chime",
+            controller_id="cid",
+            controller_products=["protect"],
+            site="default",
+            args={"chime_id": "chime-1", "settings": {"unsupported": True}},
+            confirm=True,
+            dispatch_table=build_dispatch_table(),
+        )
+
+    domain_manager.apply_chime_settings.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_protect_update_chime_rejects_mixed_unsupported_global_settings() -> None:
+    entry = ToolEntry(
+        name="protect_update_chime",
+        product="protect",
+        category="devices",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.apply_chime_settings = AsyncMock(return_value={"chime_id": "chime-1"})
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+
+    with pytest.raises(ValueError, match="Unsupported chime setting fields"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="protect_update_chime",
+            controller_id="cid",
+            controller_products=["protect"],
+            site="default",
+            args={"chime_id": "chime-1", "settings": {"volume": 75, "volumee": 20}},
+            confirm=True,
+            dispatch_table=build_dispatch_table(),
+        )
+
+    domain_manager.apply_chime_settings.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_protect_update_viewer_routes_to_apply_viewer_update() -> None:
+    entry = ToolEntry(
+        name="protect_update_viewer",
+        product="protect",
+        category="system",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.update_viewer = AsyncMock(return_value={"preview": True})
+    domain_manager.apply_viewer_update = AsyncMock(return_value={"viewer_id": "viewer-1"})
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="protect_update_viewer",
+        controller_id="cid",
+        controller_products=["protect"],
+        site="default",
+        args={"viewer_id": "viewer-1", "settings": {"liveview_id": "liveview-1"}},
+        confirm=True,
+        dispatch_table=build_dispatch_table(),
+    )
+
+    domain_manager.update_viewer.assert_not_awaited()
+    domain_manager.apply_viewer_update.assert_awaited_once_with(
+        viewer_id="viewer-1",
+        settings={"liveview_id": "liveview-1"},
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_name", "args"),
+    [
+        ("protect_update_sensor_settings", {"sensor_id": "sensor-1", "settings": {"name": "Garage"}}),
+        ("protect_update_chime", {"chime_id": "chime-1", "settings": {"volume": 75}}),
+        ("protect_update_viewer", {"viewer_id": "viewer-1", "settings": {"name": "Lobby"}}),
+    ],
+)
+async def test_dispatch_protect_capability_actions_require_confirm(tool_name: str, args: dict) -> None:
+    entry = ToolEntry(
+        name=tool_name,
+        product="protect",
+        category="devices",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+    factory = MagicMock()
+
+    with pytest.raises(ValueError, match="requires confirm=true"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name=tool_name,
+            controller_id="cid",
+            controller_products=["protect"],
+            site="default",
+            args=args,
+            confirm=False,
+            dispatch_table=build_dispatch_table(),
+        )
+
+    factory.get_domain_manager.assert_not_called()
 
 
 @pytest.mark.asyncio

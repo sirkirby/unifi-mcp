@@ -571,16 +571,36 @@ class LiveSmokeRunner:
         return "mutating_requires_review"
 
     async def seed_read_lists(self) -> None:
-        seed_tools = [
-            tool
-            for tool in self.selected_tools()
-            if is_read_only(tool)
-            and not required_params(tool)
-            and tool["name"] not in STREAM_OR_HEAVY_READS
-            and ("list_" in tool["name"] or tool["name"].endswith("_status") or tool["name"].endswith("_info"))
-        ]
+        seed_names = self.preview_seed_tool_names()
+        manifest_by_name = {tool["name"]: tool for tool in self.manifest["tools"]}
+        candidate_tools = list(self.selected_tools())
+        candidate_tools.extend(manifest_by_name[name] for name in sorted(seed_names) if name in manifest_by_name)
+        seed_tools = []
+        seen: set[str] = set()
+        for tool in candidate_tools:
+            name = tool["name"]
+            if name in seen:
+                continue
+            seen.add(name)
+            if not is_read_only(tool) or required_params(tool) or name in STREAM_OR_HEAVY_READS:
+                continue
+            if name in seed_names or "list_" in name or name.endswith("_status") or name.endswith("_info"):
+                seed_tools.append(tool)
         for tool in seed_tools:
             await self.call(tool["name"], {}, "seed")
+
+    def preview_seed_tool_names(self) -> set[str]:
+        selected_names = {tool["name"] for tool in self.selected_tools()}
+        dependencies = {
+            "protect_update_chime": {"protect_list_chimes"},
+            "protect_update_sensor_settings": {"protect_list_sensors"},
+            "protect_update_viewer": {"protect_list_viewers", "protect_list_liveviews"},
+        }
+        seed_names: set[str] = set()
+        for tool_name, names in dependencies.items():
+            if tool_name in selected_names:
+                seed_names.update(names)
+        return seed_names
 
     async def run_readonly(self) -> None:
         for tool in self.selected_tools():
@@ -744,6 +764,8 @@ class LiveSmokeRunner:
             "liveview_id": ("liveviews",),
             "chime_id": ("chimes",),
             "light_id": ("lights",),
+            "sensor_id": ("sensors",),
+            "viewer_id": ("viewers",),
         }
         if param in collection_by_param:
             return self.cache.id_from(collection_by_param[param], ("id", "_id", "mac", "mac_address"))
@@ -802,6 +824,12 @@ class LiveSmokeRunner:
                     current_name = item.get("name")
                     break
             return {"group_id": group_id, "name": current_name or f"{RUN_PREFIX}-preview"}, ""
+        if name == "protect_update_sensor_settings":
+            return self.protect_sensor_settings_preview_args()
+        if name == "protect_update_chime":
+            return self.protect_chime_preview_args()
+        if name == "protect_update_viewer":
+            return self.protect_viewer_preview_args()
         if name == "protect_update_known_face":
             face = self.protect_known_face()
             if not face:
@@ -871,6 +899,72 @@ class LiveSmokeRunner:
             return mode not in {"never", "disabled", "off"}
         value = detail.get("is_recording")
         return value if isinstance(value, bool) else None
+
+    def protect_has_api_key(self) -> bool:
+        cm = getattr(self, "connection_manager", None)
+        if cm is None:
+            return True
+        return bool(getattr(cm, "has_api_key", True))
+
+    def protect_sensor_settings_preview_args(self) -> tuple[dict[str, Any] | None, str]:
+        if not self.protect_has_api_key():
+            return None, "requires UNIFI_PROTECT_API_KEY or UNIFI_API_KEY"
+        sensors = self.cache.items_from_tool("protect_list_sensors", "sensors") or self.cache.items("sensors")
+        for sensor in sensors:
+            sensor_id = first_value(sensor, ("id", "_id", "sensor_id", "uuid"))
+            current_name = sensor.get("name")
+            if sensor_id and current_name:
+                return {"sensor_id": sensor_id, "settings": {"name": current_name}}, ""
+        return None, "could not discover sensor with current name"
+
+    def protect_chime_preview_args(self) -> tuple[dict[str, Any] | None, str]:
+        chimes = self.cache.items_from_tool("protect_list_chimes", "chimes") or self.cache.items("chimes")
+        for chime in chimes:
+            chime_id = first_value(chime, ("id", "_id", "chime_id", "uuid"))
+            if not chime_id:
+                continue
+            if self.protect_has_api_key():
+                ring_settings = chime.get("ring_settings") or []
+                if isinstance(ring_settings, dict):
+                    ring_settings = list(ring_settings.values())
+                iterable_ring_settings = ring_settings if isinstance(ring_settings, list) else []
+                for setting in iterable_ring_settings:
+                    if not isinstance(setting, dict):
+                        continue
+                    camera_id = first_value(setting, ("camera_id", "cameraId"))
+                    volume = first_value(setting, ("volume",))
+                    repeat_times = first_value(setting, ("repeat_times", "repeatTimes"))
+                    if camera_id and volume is not None:
+                        return {"chime_id": chime_id, "settings": {"camera_id": camera_id, "volume": volume}}, ""
+                    if camera_id and repeat_times is not None:
+                        return {
+                            "chime_id": chime_id,
+                            "settings": {"camera_id": camera_id, "repeat_times": repeat_times},
+                        }, ""
+            current_name = chime.get("name")
+            if current_name:
+                return {"chime_id": chime_id, "settings": {"name": current_name}}, ""
+            volume = first_value(chime, ("volume",))
+            if volume is not None:
+                return {"chime_id": chime_id, "settings": {"volume": volume}}, ""
+            repeat_times = first_value(chime, ("repeat_times", "repeatTimes"))
+            if repeat_times is not None:
+                return {"chime_id": chime_id, "settings": {"repeat_times": repeat_times}}, ""
+        return None, "could not discover chime with safe current setting"
+
+    def protect_viewer_preview_args(self) -> tuple[dict[str, Any] | None, str]:
+        if not self.protect_has_api_key():
+            return None, "requires UNIFI_PROTECT_API_KEY or UNIFI_API_KEY"
+        viewers = self.cache.items_from_tool("protect_list_viewers", "viewers") or self.cache.items("viewers")
+        for viewer in viewers:
+            viewer_id = first_value(viewer, ("id", "_id", "viewer_id", "uuid"))
+            current_name = viewer.get("name")
+            if viewer_id and current_name:
+                return {"viewer_id": viewer_id, "settings": {"name": current_name}}, ""
+            liveview_id = first_value(viewer, ("liveview_id", "liveviewId", "liveview"))
+            if viewer_id and liveview_id:
+                return {"viewer_id": viewer_id, "settings": {"liveview_id": liveview_id}}, ""
+        return None, "could not discover viewer with safe current setting"
 
     def protect_known_face(self) -> dict[str, Any] | None:
         for face in self.cache.items_from_tool("protect_list_known_faces", "faces") or self.cache.items("faces"):
