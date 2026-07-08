@@ -153,6 +153,25 @@ class TestChimeModel:
         out = to_controller_update({"name": "Side", "volume": 50, "repeat_times": 3})
         assert out == {"name": "Side", "volume": 50, "repeat_times": 3}
 
+    def test_to_controller_update_validates_global_ranges(self) -> None:
+        with pytest.raises(ValueError) as exc_info:
+            to_controller_update({"volume": 101})
+
+        message = str(exc_info.value)
+        assert "Invalid chime setting volume" in message
+        assert "less than or equal to 100" in message
+
+        with pytest.raises(ValueError) as exc_info:
+            to_controller_update({"repeat_times": 0})
+
+        message = str(exc_info.value)
+        assert "Invalid chime setting repeat_times" in message
+        assert "greater than or equal to 1" in message
+
+    def test_to_controller_update_normalizes_global_values_through_model(self) -> None:
+        out = to_controller_update({"volume": "50"})
+        assert out == {"volume": 50}
+
     def test_to_controller_update_drops_none_values_after_validation(self) -> None:
         out = to_controller_update(
             {

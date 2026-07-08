@@ -115,7 +115,22 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
             f"Supported global fields: {supported}."
         )
 
-    return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+    update = {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+    if not update:
+        return {}
+
+    try:
+        model = Chime(**update)
+    except ValidationError as exc:
+        raise ValueError(
+            _first_validation_message(
+                exc,
+                field_label="chime setting",
+                aggregate_label="chime settings",
+            )
+        ) from exc
+
+    return {k: getattr(model, k) for k in update if getattr(model, k) is not None}
 
 
 def to_ring_setting_update(fields: Dict[str, Any]) -> Dict[str, Any]:
@@ -149,10 +164,15 @@ def to_ring_setting_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     return model.model_dump(exclude_none=True)
 
 
-def _first_validation_message(exc: ValidationError) -> str:
+def _first_validation_message(
+    exc: ValidationError,
+    *,
+    field_label: str = "chime ring setting",
+    aggregate_label: str = "chime ring settings",
+) -> str:
     first = exc.errors()[0] if exc.errors() else {}
     location = ".".join(str(part) for part in first.get("loc", ()) if part != "__root__")
     message = first.get("msg", str(exc))
     if location:
-        return f"Invalid chime ring setting {location}: {message}"
-    return f"Invalid chime ring settings: {message}"
+        return f"Invalid {field_label} {location}: {message}"
+    return f"Invalid {aggregate_label}: {message}"
