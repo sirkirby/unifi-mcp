@@ -16,6 +16,7 @@ from uiprotect import ProtectApiClient
 from uiprotect.data import WSSubscriptionMessage
 
 from unifi_core.exceptions import UniFiConnectionError
+from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 
 logger = logging.getLogger(__name__)
@@ -162,6 +163,25 @@ class ProtectConnectionManager:
         raise ValueError(
             f"Cannot {operation}: UniFi Protect public Integration API access requires an API key. "
             "Set UNIFI_PROTECT_API_KEY or UNIFI_API_KEY and restart the server."
+        )
+
+    async def validate_public_id_portability(
+        self,
+        *,
+        resource_type: str,
+        bootstrap_collection: str,
+        public_list_method: str,
+    ) -> IdPortabilityReport:
+        """Validate that bootstrap IDs match IDs returned by a public API list call."""
+        self.require_public_api_key(f"validate {resource_type} public API ID portability")
+        bootstrap_items = getattr(self.client.bootstrap, bootstrap_collection, None) or {}
+        public_method = getattr(self.client, public_list_method)
+        public_items = await public_method()
+        return compare_id_portability(
+            resource_type=resource_type,
+            bootstrap_items=bootstrap_items,
+            public_items=public_items,
+            raise_on_mismatch=True,
         )
 
     @property
