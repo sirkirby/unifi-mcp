@@ -164,6 +164,32 @@ def _make_public_sensor(**overrides):
     )
 
 
+def _make_public_ring_setting(**overrides):
+    """Build a mock public API chime ring setting object."""
+    return SimpleNamespace(
+        camera_id=overrides.get("camera_id", "cam-001"),
+        volume=overrides.get("volume", 80),
+        repeat_times=overrides.get("repeat_times", 1),
+        ringtone_id=overrides.get("ringtone_id", None),
+    )
+
+
+def _make_public_chime(**overrides):
+    """Build a mock public API Chime object."""
+    return SimpleNamespace(
+        id=overrides.get("id", "chime-001"),
+        name=overrides.get("name", "Front Door Chime"),
+        camera_ids=overrides.get("camera_ids", ["cam-001", "cam-002"]),
+        ring_settings=overrides.get(
+            "ring_settings",
+            [
+                _make_public_ring_setting(camera_id="cam-001", volume=80, repeat_times=1, ringtone_id="tone-1"),
+                _make_public_ring_setting(camera_id="cam-002", volume=70, repeat_times=2),
+            ],
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Mock factory: Chime
 # ---------------------------------------------------------------------------
@@ -620,6 +646,83 @@ class TestChimeManagerUpdateChime:
         with pytest.raises(UniFiNotFoundError):
             await mgr.update_chime("bad-id", {"volume": 50})
 
+    @pytest.mark.asyncio
+    async def test_global_preview_does_not_require_public_api_key(self, mock_cm_chimes):
+        from unifi_core.protect.managers.chime_manager import ChimeManager
+
+        mock_cm_chimes.require_public_api_key = MagicMock(side_effect=AssertionError("public API not expected"))
+        mock_cm_chimes.client.get_chime_public = AsyncMock()
+        mgr = ChimeManager(mock_cm_chimes)
+
+        result = await mgr.update_chime("chime-001", {"volume": 50})
+
+        assert result["current_state"]["volume"] == 80
+        mock_cm_chimes.require_public_api_key.assert_not_called()
+        mock_cm_chimes.client.get_chime_public.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_per_camera_preview_missing_api_key_fails_before_public_get_call(self):
+        from unifi_core.protect.managers.chime_manager import ChimeManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock(
+            side_effect=ValueError(
+                "Cannot update chime ring settings: UniFi Protect public Integration API access requires an API key."
+            )
+        )
+        cm.client.get_chime_public = AsyncMock()
+        mgr = ChimeManager(cm)
+
+        with pytest.raises(ValueError, match="requires an API key"):
+            await mgr.update_chime("chime-001", {"camera_id": "cam-001", "volume": 50})
+
+        cm.require_public_api_key.assert_called_once_with("update chime ring settings")
+        cm.client.get_chime_public.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_per_camera_preview_rejects_unknown_camera_on_chime(self):
+        from unifi_core.protect.managers.chime_manager import ChimeManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_chime_public = AsyncMock(return_value=_make_public_chime(camera_ids=["cam-001"]))
+        mgr = ChimeManager(cm)
+
+        with pytest.raises(ValueError) as exc_info:
+            await mgr.update_chime("chime-001", {"camera_id": "cam-missing", "volume": 50})
+
+        message = str(exc_info.value)
+        assert "Camera cam-missing is not paired with chime chime-001" in message
+        assert "protect_list_chimes" in message
+
+    @pytest.mark.asyncio
+    async def test_per_camera_preview_includes_current_proposed_and_preserved_settings(self):
+        from unifi_core.protect.managers.chime_manager import ChimeManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_chime_public = AsyncMock(return_value=_make_public_chime())
+        mgr = ChimeManager(cm)
+
+        result = await mgr.update_chime("chime-001", {"camera_id": "cam-001", "volume": 55})
+
+        assert result["chime_id"] == "chime-001"
+        assert result["chime_name"] == "Front Door Chime"
+        assert result["current_state"] == {
+            "camera_id": "cam-001",
+            "volume": 80,
+            "repeat_times": 1,
+            "ringtone_id": "tone-1",
+        }
+        assert result["proposed_changes"] == {
+            "camera_id": "cam-001",
+            "volume": 55,
+            "repeat_times": 1,
+            "ringtone_id": "tone-1",
+        }
+        assert result["preserved_ring_settings"] == [{"camera_id": "cam-002", "volume": 70, "repeat_times": 2}]
+        cm.client.get_chime_public.assert_awaited_once_with("chime-001")
+
 
 class TestChimeManagerApply:
     @pytest.mark.asyncio
@@ -651,6 +754,70 @@ class TestChimeManagerApply:
         mgr = ChimeManager(mock_cm_chimes)
         result = await mgr.apply_chime_settings("chime-001", {"volume": 50})
         assert "errors" in result
+
+    @pytest.mark.asyncio
+    async def test_global_apply_uses_existing_private_helpers(self, mock_cm_chimes):
+        from unifi_core.protect.managers.chime_manager import ChimeManager
+
+        mock_cm_chimes.require_public_api_key = MagicMock(side_effect=AssertionError("public API not expected"))
+        mock_cm_chimes.client.update_chime_public = AsyncMock()
+        mgr = ChimeManager(mock_cm_chimes)
+        chime = mock_cm_chimes.client.bootstrap.chimes["chime-001"]
+
+        result = await mgr.apply_chime_settings("chime-001", {"volume": 50, "repeat_times": 3})
+
+        assert "volume=50" in result["applied"]
+        assert "repeat_times=3" in result["applied"]
+        chime.set_volume.assert_awaited_once_with(50)
+        chime.set_repeat_times.assert_awaited_once_with(3)
+        mock_cm_chimes.require_public_api_key.assert_not_called()
+        mock_cm_chimes.client.update_chime_public.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_per_camera_apply_calls_public_update_with_complete_ring_settings(self, mock_cm_chimes):
+        from unifi_core.protect.managers.chime_manager import ChimeManager
+
+        cm = MagicMock()
+        cm.require_public_api_key = MagicMock()
+        cm.client.get_chime_public = AsyncMock(return_value=_make_public_chime())
+        cm.client.update_chime_public = AsyncMock(
+            return_value=_make_public_chime(
+                ring_settings=[
+                    _make_public_ring_setting(camera_id="cam-001", volume=55, repeat_times=1, ringtone_id="tone-1"),
+                    _make_public_ring_setting(camera_id="cam-002", volume=70, repeat_times=2),
+                ]
+            )
+        )
+        mgr = ChimeManager(cm)
+        private_chime = mock_cm_chimes.client.bootstrap.chimes["chime-001"]
+        cm.client.bootstrap = _make_bootstrap(chimes={"chime-001": private_chime})
+
+        result = await mgr.apply_chime_settings("chime-001", {"camera_id": "cam-001", "volume": 55})
+
+        assert result["chime_id"] == "chime-001"
+        assert result["applied"] == {
+            "camera_id": "cam-001",
+            "volume": 55,
+            "repeat_times": 1,
+            "ringtone_id": "tone-1",
+        }
+        assert result["updated_state"] == {
+            "camera_id": "cam-001",
+            "volume": 55,
+            "repeat_times": 1,
+            "ringtone_id": "tone-1",
+        }
+        cm.require_public_api_key.assert_called_once_with("update chime ring settings")
+        cm.client.get_chime_public.assert_awaited_once_with("chime-001")
+        cm.client.update_chime_public.assert_awaited_once_with(
+            "chime-001",
+            ring_settings=[
+                {"cameraId": "cam-001", "volume": 55, "repeatTimes": 1, "ringtoneId": "tone-1"},
+                {"cameraId": "cam-002", "volume": 70, "repeatTimes": 2},
+            ],
+        )
+        private_chime.set_volume.assert_not_called()
+        private_chime.set_repeat_times.assert_not_called()
 
 
 class TestChimeManagerTrigger:
@@ -966,6 +1133,81 @@ class TestProtectUpdateChimeTool:
 
         result = await protect_update_chime("chime-001", {}, confirm=False)
         assert result["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_per_camera_preview(self, mock_chime_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_chime
+
+        mock_chime_manager.update_chime = AsyncMock(
+            return_value={
+                "chime_id": "chime-001",
+                "chime_name": "Front Door Chime",
+                "current_state": {"camera_id": "cam-001", "volume": 80, "repeat_times": 1},
+                "proposed_changes": {"camera_id": "cam-001", "volume": 55, "repeat_times": 1},
+            }
+        )
+
+        result = await protect_update_chime(
+            "chime-001",
+            {"camera_id": "cam-001", "volume": 55},
+            confirm=False,
+        )
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["proposed"]["camera_id"] == "cam-001"
+        mock_chime_manager.update_chime.assert_awaited_once_with(
+            "chime-001",
+            {"camera_id": "cam-001", "volume": 55},
+        )
+
+    @pytest.mark.asyncio
+    async def test_per_camera_confirm(self, mock_chime_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_chime
+
+        mock_chime_manager.update_chime = AsyncMock(
+            return_value={
+                "chime_id": "chime-001",
+                "chime_name": "Front Door Chime",
+                "current_state": {"camera_id": "cam-001", "volume": 80, "repeat_times": 1},
+                "proposed_changes": {"camera_id": "cam-001", "volume": 55, "repeat_times": 1},
+            }
+        )
+        mock_chime_manager.apply_chime_settings = AsyncMock(
+            return_value={
+                "chime_id": "chime-001",
+                "chime_name": "Front Door Chime",
+                "applied": {"camera_id": "cam-001", "volume": 55, "repeat_times": 1},
+            }
+        )
+
+        result = await protect_update_chime(
+            "chime-001",
+            {"camera_id": "cam-001", "volume": 55},
+            confirm=True,
+        )
+
+        assert result["success"] is True
+        assert result["data"]["applied"]["camera_id"] == "cam-001"
+        mock_chime_manager.apply_chime_settings.assert_awaited_once_with(
+            "chime-001",
+            {"camera_id": "cam-001", "volume": 55},
+        )
+
+    @pytest.mark.asyncio
+    async def test_per_camera_rejects_ringtone_id_until_supported(self, mock_chime_manager):
+        from unifi_protect_mcp.tools.devices import protect_update_chime
+
+        result = await protect_update_chime(
+            "chime-001",
+            {"camera_id": "cam-001", "ringtone_id": "tone-2"},
+            confirm=False,
+        )
+
+        assert result["success"] is False
+        assert "ringtone_id" in result["error"]
+        assert "not currently supported" in result["error"]
+        mock_chime_manager.update_chime.assert_not_called()
 
 
 class TestProtectTriggerChimeTool:

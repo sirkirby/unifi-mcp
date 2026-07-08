@@ -9,6 +9,7 @@ from unifi_core.protect.models.chimes import (
     Chime,
     from_controller,
     to_controller_update,
+    to_ring_setting_update,
 )
 
 SAMPLE = {
@@ -125,6 +126,32 @@ class TestChimeModel:
     def test_to_controller_update_all_mutable(self) -> None:
         out = to_controller_update({"name": "Side", "volume": 50, "repeat_times": 3})
         assert out == {"name": "Side", "volume": 50, "repeat_times": 3}
+
+    def test_to_ring_setting_update_accepts_per_camera_fields(self) -> None:
+        out = to_ring_setting_update({"camera_id": "cam001", "volume": 50, "repeat_times": 3})
+        assert out == {"camera_id": "cam001", "volume": 50, "repeat_times": 3}
+
+    def test_to_ring_setting_update_rejects_global_and_backend_fields(self) -> None:
+        with pytest.raises(ValueError) as exc_info:
+            to_ring_setting_update({"camera_id": "cam001", "name": "Porch"})
+
+        message = str(exc_info.value)
+        assert "Unsupported chime ring setting fields" in message
+        assert "name" in message
+
+        with pytest.raises(ValueError) as exc_info:
+            to_ring_setting_update({"camera_id": "cam001", "ringtone_id": "tone-1"})
+
+        message = str(exc_info.value)
+        assert "ringtone_id" in message
+        assert "not currently supported" in message
+
+    def test_to_ring_setting_update_requires_camera_id_and_change(self) -> None:
+        with pytest.raises(ValueError, match="camera_id"):
+            to_ring_setting_update({"volume": 50})
+
+        with pytest.raises(ValueError, match="at least one"):
+            to_ring_setting_update({"camera_id": "cam001"})
 
     def test_volume_constraint_rejects_out_of_range(self) -> None:
         with pytest.raises(Exception):

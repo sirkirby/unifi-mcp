@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, ValidationError, model_validator
 
 
 class Chime(BaseModel):
@@ -48,6 +48,21 @@ MUTABLE_FIELDS = frozenset(
 READ_ONLY_FIELDS = frozenset(
     name for name, info in Chime.model_fields.items() if (info.json_schema_extra or {}).get("mutable") is False
 )
+RING_SETTING_UPDATE_FIELDS = frozenset({"camera_id", "volume", "repeat_times"})
+
+
+class _ChimeRingSettingUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    camera_id: str = Field(min_length=1)
+    volume: Optional[StrictInt] = Field(default=None, ge=0, le=100)
+    repeat_times: Optional[StrictInt] = Field(default=None, ge=1, le=6)
+
+    @model_validator(mode="after")
+    def _require_change(self) -> "_ChimeRingSettingUpdate":
+        if self.volume is None and self.repeat_times is None:
+            raise ValueError("Chime ring setting updates require at least one of volume or repeat_times.")
+        return self
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -89,3 +104,43 @@ def from_controller(raw: Any) -> Chime:
 def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Filter a partial dict to only the mutable, recognised keys."""
     return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+
+
+def to_ring_setting_update(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a per-camera chime ring setting update in agent-facing shape."""
+    if not isinstance(fields, dict):
+        raise ValueError("Chime ring settings must be a dictionary for protect_update_chime.")
+    if not fields:
+        raise ValueError("No chime ring settings provided. Specify camera_id and at least one setting to update.")
+
+    keys = set(fields)
+    if "ringtone_id" in keys:
+        raise ValueError(
+            "ringtone_id is not currently supported for protect_update_chime ring setting updates. "
+            "Update volume or repeat_times only."
+        )
+
+    unknown = sorted(keys - RING_SETTING_UPDATE_FIELDS)
+    if unknown:
+        joined = ", ".join(unknown)
+        supported = ", ".join(sorted(RING_SETTING_UPDATE_FIELDS))
+        raise ValueError(
+            f"Unsupported chime ring setting fields for protect_update_chime: {joined}. "
+            f"Supported per-camera fields: {supported}."
+        )
+
+    try:
+        model = _ChimeRingSettingUpdate(**fields)
+    except ValidationError as exc:
+        raise ValueError(_first_validation_message(exc)) from exc
+
+    return model.model_dump(exclude_none=True)
+
+
+def _first_validation_message(exc: ValidationError) -> str:
+    first = exc.errors()[0] if exc.errors() else {}
+    location = ".".join(str(part) for part in first.get("loc", ()) if part != "__root__")
+    message = first.get("msg", str(exc))
+    if location:
+        return f"Invalid chime ring setting {location}: {message}"
+    return f"Invalid chime ring settings: {message}"

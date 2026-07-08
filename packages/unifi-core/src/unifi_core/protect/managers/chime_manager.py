@@ -17,8 +17,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
+from uiprotect.exceptions import ClientError
+
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
+from unifi_core.protect.models.chimes import to_ring_setting_update
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +88,122 @@ class ChimeManager:
             "available_tracks": tracks,
         }
 
+    @staticmethod
+    def _get_public_value(obj: Any, key: str) -> Any:
+        if isinstance(obj, dict):
+            return obj.get(key)
+        return getattr(obj, key, None)
+
+    @staticmethod
+    def _get_ring_setting_value(setting: Any, key: str) -> Any:
+        aliases = {
+            "camera_id": "cameraId",
+            "repeat_times": "repeatTimes",
+            "ringtone_id": "ringtoneId",
+        }
+        if isinstance(setting, dict):
+            if key in setting:
+                return setting[key]
+            return setting.get(aliases.get(key, key))
+        value = getattr(setting, key, None)
+        enum_value = getattr(value, "value", None)
+        return enum_value if enum_value is not None else value
+
+    @classmethod
+    def _ring_setting_to_agent(cls, setting: Any) -> Dict[str, Any]:
+        data = {
+            "camera_id": cls._get_ring_setting_value(setting, "camera_id"),
+            "volume": cls._get_ring_setting_value(setting, "volume"),
+            "repeat_times": cls._get_ring_setting_value(setting, "repeat_times"),
+            "ringtone_id": cls._get_ring_setting_value(setting, "ringtone_id"),
+        }
+        return {key: value for key, value in data.items() if value is not None}
+
+    @staticmethod
+    def _raise_public_api_error(operation: str, chime_id: str, exc: Exception) -> None:
+        message = str(exc)
+        message_lower = message.lower()
+        if "404" in message or "not found" in message_lower:
+            raise UniFiNotFoundError("chime", chime_id) from exc
+        raise ValueError(
+            f"Failed to {operation} for chime {chime_id}: {message}. "
+            "Verify the chime ID and camera ID with protect_list_chimes and ensure "
+            "UNIFI_PROTECT_API_KEY or UNIFI_API_KEY has Protect public API access."
+        ) from exc
+
+    @classmethod
+    def _find_ring_setting(cls, ring_settings: List[Dict[str, Any]], camera_id: str) -> Dict[str, Any] | None:
+        for setting in ring_settings:
+            if setting.get("camera_id") == camera_id:
+                return setting
+        return None
+
+    @classmethod
+    def _ring_setting_to_public_request(cls, chime_id: str, setting: Dict[str, Any]) -> Dict[str, Any]:
+        camera_id = setting.get("camera_id")
+        missing = [key for key in ("camera_id", "volume", "repeat_times") if setting.get(key) is None]
+        if missing:
+            joined = ", ".join(missing)
+            raise ValueError(
+                f"Cannot update chime ring settings for chime {chime_id}: current ring setting "
+                f"for camera {camera_id or '<unknown>'} is missing required field(s): {joined}."
+            )
+
+        payload: Dict[str, Any] = {
+            "cameraId": str(camera_id),
+            "volume": int(setting["volume"]),
+            "repeatTimes": int(setting["repeat_times"]),
+        }
+        if setting.get("ringtone_id") is not None:
+            payload["ringtoneId"] = setting["ringtone_id"]
+        return payload
+
+    @classmethod
+    def _prepare_ring_settings_update(
+        cls,
+        chime_id: str,
+        public_chime: Any,
+        settings: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        ring_update = to_ring_setting_update(settings)
+        camera_id = ring_update["camera_id"]
+        camera_ids = cls._get_public_value(public_chime, "camera_ids") or []
+        if camera_ids and camera_id not in camera_ids:
+            raise ValueError(
+                f"Camera {camera_id} is not paired with chime {chime_id}. "
+                "Verify camera_id and chime_id with protect_list_chimes."
+            )
+
+        raw_ring_settings = cls._get_public_value(public_chime, "ring_settings") or []
+        ring_settings = [cls._ring_setting_to_agent(item) for item in raw_ring_settings]
+        current = cls._find_ring_setting(ring_settings, camera_id)
+        if current is None:
+            raise ValueError(
+                f"Camera {camera_id} does not have a ring setting on chime {chime_id}. "
+                "Verify camera_id and chime_id with protect_list_chimes."
+            )
+
+        proposed = dict(current)
+        for key in ("volume", "repeat_times"):
+            if key in ring_update:
+                proposed[key] = ring_update[key]
+
+        request_ring_settings: List[Dict[str, Any]] = []
+        preserved_ring_settings: List[Dict[str, Any]] = []
+        for setting in ring_settings:
+            item = proposed if setting.get("camera_id") == camera_id else setting
+            request_ring_settings.append(cls._ring_setting_to_public_request(chime_id, item))
+            if setting.get("camera_id") != camera_id:
+                preserved_ring_settings.append(setting)
+
+        return {
+            "camera_id": camera_id,
+            "current": current,
+            "proposed": proposed,
+            "request_ring_settings": request_ring_settings,
+            "preserved_ring_settings": preserved_ring_settings,
+        }
+
     # ------------------------------------------------------------------
     # Read-only methods
     # ------------------------------------------------------------------
@@ -105,7 +224,23 @@ class ChimeManager:
         - volume: int (0-100) -- speaker volume
         - repeat_times: int (1-6) -- how many times to repeat ring
         - name: str -- device name
+        - camera_id: str -- when supplied, volume/repeat_times apply to that camera's ring setting
         """
+        if "camera_id" in settings:
+            self._cm.require_public_api_key("update chime ring settings")
+            try:
+                public_chime = await self._cm.client.get_chime_public(chime_id)
+            except ClientError as exc:
+                self._raise_public_api_error("preview chime ring settings update", chime_id, exc)
+            prepared = self._prepare_ring_settings_update(chime_id, public_chime, settings)
+            return {
+                "chime_id": chime_id,
+                "chime_name": self._get_public_value(public_chime, "name") or chime_id,
+                "current_state": prepared["current"],
+                "proposed_changes": prepared["proposed"],
+                "preserved_ring_settings": prepared["preserved_ring_settings"],
+            }
+
         chime = self._get_chime(chime_id)
 
         current_state: Dict[str, Any] = {}
@@ -133,6 +268,37 @@ class ChimeManager:
 
     async def apply_chime_settings(self, chime_id: str, settings: Dict[str, Any]) -> Dict[str, Any]:
         """Apply chime settings after confirmation."""
+        if "camera_id" in settings:
+            self._cm.require_public_api_key("update chime ring settings")
+            try:
+                public_chime = await self._cm.client.get_chime_public(chime_id)
+                prepared = self._prepare_ring_settings_update(chime_id, public_chime, settings)
+                updated = await self._cm.client.update_chime_public(
+                    chime_id,
+                    ring_settings=prepared["request_ring_settings"],
+                )
+            except ClientError as exc:
+                self._raise_public_api_error("update chime ring settings", chime_id, exc)
+
+            updated_ring_settings = [
+                self._ring_setting_to_agent(item) for item in (self._get_public_value(updated, "ring_settings") or [])
+            ]
+            updated_state = (
+                self._find_ring_setting(
+                    updated_ring_settings,
+                    prepared["camera_id"],
+                )
+                or prepared["proposed"]
+            )
+            return {
+                "chime_id": chime_id,
+                "chime_name": self._get_public_value(updated, "name")
+                or self._get_public_value(public_chime, "name")
+                or chime_id,
+                "applied": prepared["proposed"],
+                "updated_state": updated_state,
+            }
+
         chime = self._get_chime(chime_id)
         applied: List[str] = []
         errors: List[str] = []

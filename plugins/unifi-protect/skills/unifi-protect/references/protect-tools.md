@@ -122,7 +122,7 @@ Always available, regardless of registration mode.
 | `protect_list_lights` | Read | Lists all UniFi Protect floodlight devices with their name, connection state, brightness level, PIR motion sensitivity, and paired camera. |
 | `protect_list_sensors` | Read | Lists all UniFi Protect sensor devices (motion, door/window, temperature, humidity, light level, leak detection). |
 | `protect_trigger_chime` | Read | Plays the chime tone on a specific chime device. |
-| `protect_update_chime` | Mutate | Updates chime settings such as speaker volume (0-100), repeat times (1-6), and device name. |
+| `protect_update_chime` | Mutate | Updates chime settings. |
 | `protect_update_light` | Mutate | Updates light settings such as on/off state, LED brightness level (1-6), PIR motion sensitivity (0-100), motion-triggered duration (15-90... |
 | `protect_update_sensor_settings` | Mutate | Updates UniFi Protect sensor settings. |
 <!-- /AUTO:tools:devices -->

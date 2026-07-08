@@ -19,6 +19,9 @@ from unifi_core.protect.models.chimes import (
 from unifi_core.protect.models.chimes import (
     to_controller_update as chime_to_controller_update,
 )
+from unifi_core.protect.models.chimes import (
+    to_ring_setting_update as chime_to_ring_setting_update,
+)
 from unifi_core.protect.models.lights import (
     from_controller as light_from_controller,
 )
@@ -236,11 +239,14 @@ async def protect_list_chimes() -> Dict[str, Any]:
 @server.tool(
     name="protect_update_chime",
     description=(
-        "Updates chime settings such as speaker volume (0-100), repeat times (1-6), "
-        "and device name. Requires confirm=True to apply. "
-        "Supported keys: volume, repeat_times, name."
+        "Updates chime settings. Without camera_id, updates global speaker volume (0-100), "
+        "repeat times (1-6), or device name. With camera_id, updates that camera's ring "
+        "volume or repeat_times while preserving other camera ring settings. Per-camera "
+        "ring settings require a Protect API key configured via UNIFI_PROTECT_API_KEY or "
+        "UNIFI_API_KEY. Requires confirm=True to apply. Supported global keys: volume, "
+        "repeat_times, name. Supported per-camera keys: camera_id, volume, repeat_times."
     ),
-    annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False),
+    annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, openWorldHint=False),
     permission_category="chime",
     permission_action="update",
 )
@@ -251,9 +257,11 @@ async def protect_update_chime(
         Field(
             description=(
                 "Dictionary of settings to update. Supported keys: "
-                "volume (0-100 - speaker volume), "
+                "volume (0-100 - speaker volume or per-camera ring volume), "
                 "repeat_times (1-6 - number of times to repeat the chime tone), "
-                "name (string - device display name)."
+                "name (string - device display name; global updates only), "
+                "camera_id (camera UUID from protect_list_chimes ring settings; when supplied, "
+                "volume/repeat_times apply only to that camera's ring setting)."
             )
         ),
     ],
@@ -268,7 +276,10 @@ async def protect_update_chime(
         if not settings:
             return {"success": False, "error": "No settings provided. Specify at least one setting to update."}
 
-        filtered = chime_to_controller_update(settings)
+        if "camera_id" in settings:
+            filtered = chime_to_ring_setting_update(settings)
+        else:
+            filtered = chime_to_controller_update(settings)
         if not filtered:
             return {"success": False, "error": "No supported settings provided."}
 
