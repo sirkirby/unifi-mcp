@@ -49,11 +49,13 @@ The server auto-detects whether your controller uses UniFi OS proxy paths (`/pro
 
 `UNIFI_NETWORK_MCP_CONTENT_MODE` overrides the global `UNIFI_MCP_CONTENT_MODE`; if neither is set, the YAML value and then the `adaptive` default apply.
 
+The `adaptive` and `compact` modes affect response compaction only for tool results that already provide structured output. Compatibility meta-tools such as `*_execute` and `*_batch_status` remain content-only and return one normalized JSON payload in `content`; their remediation removes nested transport duplication rather than converting them to `structuredContent`.
+
 | Mode | Behavior |
 |------|----------|
-| `adaptive` (default) | Emits concise `content` plus the full result once in `structuredContent` for MCP 2025-06-18+ requests. Pre-2025-06-18 and unknown clients retain full compatibility JSON in `content`. |
+| `adaptive` (default) | For structured tool results, emits concise `content` plus the full result once in `structuredContent` for MCP 2025-06-18+ requests. Pre-2025-06-18 and unknown clients retain full compatibility JSON in `content`. |
 | `compat` | Forces full compatibility JSON in `content` as well as the structured result. Use this to restore older clients. |
-| `compact` | Forces concise `content` plus the full `structuredContent` result even when no capable protocol revision was negotiated. |
+| `compact` | For structured tool results, forces concise `content` plus the full `structuredContent` result even when no capable protocol revision was negotiated. |
 
 Network also bounds high-volume source data before MCP serialization: `unifi_get_dashboard` defaults to `summary=true`, and `unifi_list_rogue_aps` defaults to a summarized page of at most 100 records. Pass `summary=false` for full data within the selected dashboard request or rogue-AP page.
 

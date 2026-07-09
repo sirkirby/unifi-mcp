@@ -52,7 +52,9 @@ The `*_tool_index`, `*_execute`, `*_batch`, and `*_load_tools` surfaces are UniF
 
 ## MCP response size
 
-`adaptive` response mode is the default. Clients that negotiate MCP 2025-06-18 or later receive concise text in `content` and the full result once in `structuredContent`; pre-2025-06-18 and unknown clients retain the full compatibility JSON in `content`. Set `UNIFI_MCP_CONTENT_MODE=compat` to force that duplicated compatibility form, or `UNIFI_MCP_CONTENT_MODE=compact` to force concise text plus the full structured result even outside a negotiated request. Use `compat` whenever an older client needs its full text response restored.
+For tool results that already provide structured output, `adaptive` response mode is the default. Clients that negotiate MCP 2025-06-18 or later receive concise text in `content` and the full result once in `structuredContent`; pre-2025-06-18 and unknown clients retain the full compatibility JSON in `content`. Set `UNIFI_MCP_CONTENT_MODE=compat` to force that duplicated compatibility form, or `UNIFI_MCP_CONTENT_MODE=compact` to force concise text plus the full structured result even outside a negotiated request. Use `compat` whenever an older client needs its full text response restored.
+
+Compatibility meta-tools such as `*_execute` and `*_batch_status` remain content-only and return one normalized JSON payload in `content`. Their remediation removes nested transport duplication; response modes do not convert them to `structuredContent`.
 
 `UNIFI_NETWORK_MCP_CONTENT_MODE`, `UNIFI_PROTECT_MCP_CONTENT_MODE`, and `UNIFI_ACCESS_MCP_CONTENT_MODE` override the global setting for their respective servers. Independently of transport compaction, Network's `unifi_get_dashboard` defaults to `summary=true`, while `unifi_list_rogue_aps` defaults to a summarized page of at most 100 records; pass `summary=false` when the full selected data is required.
 
