@@ -898,6 +898,219 @@ async def test_dispatch_translates_gateway_settings_update_filters_to_mutable() 
     assert positional[0] == {"upnp_enabled": True}
 
 
+def _ddns_factory():
+    domain_manager = MagicMock()
+    domain_manager.update_dynamic_dns = AsyncMock(return_value={"_id": "ddns001"})
+    domain_manager.create_dynamic_dns = AsyncMock(return_value={"_id": "ddns_new"})
+    # get_dynamic_dns is the READ the update tool now pre-fetches for its preview;
+    # stub it so a wrong AST binding fails as a clean assertion, not a TypeError.
+    domain_manager.get_dynamic_dns = AsyncMock(return_value={"_id": "ddns001", "host_name": "old.example.com"})
+    conn_manager = MagicMock(site="default")
+    conn_manager.set_site = AsyncMock()
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+    return factory, domain_manager
+
+
+@pytest.mark.asyncio
+async def test_dispatch_real_table_binds_dynamic_dns_update_to_mutation() -> None:
+    """Regression: update_dynamic_dns pre-fetches the current entry via
+    get_dynamic_dns to render a real current-vs-proposed preview, so the AST
+    dispatcher captures the READ method first. A DISPATCH_OVERRIDES entry must
+    redirect dispatch to the mutation method (update_dynamic_dns).
+
+    Uses the REAL build_dispatch_table() — the hand-built dispatch_table the other
+    DDNS tests use would hide a wrong method binding (which the AST would pick)."""
+    entry = ToolEntry(name="unifi_update_dynamic_dns", product="network", category="dynamic_dns", manager="", method="")
+    registry = _registry_with(entry)
+    factory, domain_manager = _ddns_factory()
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_update_dynamic_dns",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"entry_id": "ddns001", "update_data": {"host_name": "new.example.com"}},
+        confirm=True,
+        dispatch_table=build_dispatch_table(),
+    )
+
+    # Bound to the mutation, NOT the get_dynamic_dns read the AST captures first.
+    domain_manager.update_dynamic_dns.assert_awaited_once_with("ddns001", {"host_name": "new.example.com"})
+    domain_manager.get_dynamic_dns.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_real_table_binds_dynamic_dns_create_to_mutation() -> None:
+    """The create tool has no pre-fetch, so the AST binds it correctly — pin it in
+    the real table too, guarding against a future preview refactor."""
+    entry = ToolEntry(name="unifi_create_dynamic_dns", product="network", category="dynamic_dns", manager="", method="")
+    registry = _registry_with(entry)
+    factory, domain_manager = _ddns_factory()
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_create_dynamic_dns",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"entry_data": {"host_name": "home.example.com", "service": "dyndns"}},
+        confirm=True,
+        dispatch_table=build_dispatch_table(),
+    )
+
+    domain_manager.create_dynamic_dns.assert_awaited_once_with({"host_name": "home.example.com", "service": "dyndns"})
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_dynamic_dns_update_to_entry_id_plus_payload() -> None:
+    """unifi_update_dynamic_dns: the tool exposes ``update_data`` but the manager
+    method is ``update_dynamic_dns(entry_id, entry_data)``. The translator must
+    rename/reshape to positional ``(entry_id, filtered_payload)`` — without it the
+    /v1/actions path calls the manager with an unexpected ``update_data=`` kwarg."""
+    entry = ToolEntry(name="unifi_update_dynamic_dns", product="network", category="dynamic_dns", manager="", method="")
+    registry = _registry_with(entry)
+    factory, domain_manager = _ddns_factory()
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_update_dynamic_dns",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"entry_id": "ddns001", "update_data": {"service": "noip", "interface": "wan2"}},
+        confirm=True,
+        dispatch_table={
+            "unifi_update_dynamic_dns": DispatchEntry(manager_attr="dynamic_dns_manager", method="update_dynamic_dns")
+        },
+    )
+
+    domain_manager.update_dynamic_dns.assert_awaited_once()
+    (positional, keyword) = domain_manager.update_dynamic_dns.await_args
+    assert keyword == {}, f"expected no kwargs; got {keyword}"
+    assert positional == ("ddns001", {"service": "noip", "interface": "wan2"})
+
+
+@pytest.mark.asyncio
+async def test_dispatch_dynamic_dns_update_rejects_unknown_field() -> None:
+    """Unknown keys in update_data must fail with an actionable error, not be
+    silently forwarded/dropped on the /v1/actions path."""
+    entry = ToolEntry(name="unifi_update_dynamic_dns", product="network", category="dynamic_dns", manager="", method="")
+    registry = _registry_with(entry)
+    factory, domain_manager = _ddns_factory()
+
+    with pytest.raises(ValueError, match="Unknown or read-only fields"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="unifi_update_dynamic_dns",
+            controller_id="cid",
+            controller_products=["network"],
+            site="default",
+            args={"entry_id": "ddns001", "update_data": {"bogus_field": "x"}},
+            confirm=True,
+            dispatch_table={
+                "unifi_update_dynamic_dns": DispatchEntry(
+                    manager_attr="dynamic_dns_manager", method="update_dynamic_dns"
+                )
+            },
+        )
+    domain_manager.update_dynamic_dns.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_dynamic_dns_update_rejects_read_only_field() -> None:
+    """Read-only keys (id/site_id) in update_data must fail, not be dropped."""
+    entry = ToolEntry(name="unifi_update_dynamic_dns", product="network", category="dynamic_dns", manager="", method="")
+    registry = _registry_with(entry)
+    factory, domain_manager = _ddns_factory()
+
+    with pytest.raises(ValueError, match="Unknown or read-only fields"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="unifi_update_dynamic_dns",
+            controller_id="cid",
+            controller_products=["network"],
+            site="default",
+            args={"entry_id": "ddns001", "update_data": {"id": "x", "service": "noip"}},
+            confirm=True,
+            dispatch_table={
+                "unifi_update_dynamic_dns": DispatchEntry(
+                    manager_attr="dynamic_dns_manager", method="update_dynamic_dns"
+                )
+            },
+        )
+    domain_manager.update_dynamic_dns.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_translates_dynamic_dns_create_to_controller_payload() -> None:
+    """unifi_create_dynamic_dns: the translator must validate + translate entry_data
+    to the controller create payload (single positional arg), so unknown keys are
+    not forwarded raw to the controller on the /v1/actions path."""
+    entry = ToolEntry(name="unifi_create_dynamic_dns", product="network", category="dynamic_dns", manager="", method="")
+    registry = _registry_with(entry)
+    factory, domain_manager = _ddns_factory()
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_create_dynamic_dns",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"entry_data": {"host_name": "home.example.com", "service": "dyndns", "interface": "wan"}},
+        confirm=True,
+        dispatch_table={
+            "unifi_create_dynamic_dns": DispatchEntry(manager_attr="dynamic_dns_manager", method="create_dynamic_dns")
+        },
+    )
+
+    domain_manager.create_dynamic_dns.assert_awaited_once()
+    (positional, keyword) = domain_manager.create_dynamic_dns.await_args
+    assert keyword == {}, f"expected no kwargs; got {keyword}"
+    assert positional[0] == {"host_name": "home.example.com", "service": "dyndns", "interface": "wan"}
+
+
+@pytest.mark.asyncio
+async def test_dispatch_dynamic_dns_create_rejects_unknown_field() -> None:
+    """Unknown keys in entry_data must fail rather than being forwarded raw to the controller."""
+    entry = ToolEntry(name="unifi_create_dynamic_dns", product="network", category="dynamic_dns", manager="", method="")
+    registry = _registry_with(entry)
+    factory, domain_manager = _ddns_factory()
+
+    with pytest.raises(ValueError, match="Unknown or read-only fields"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="unifi_create_dynamic_dns",
+            controller_id="cid",
+            controller_products=["network"],
+            site="default",
+            args={"entry_data": {"host_name": "home.example.com", "service": "dyndns", "bogus_field": "x"}},
+            confirm=True,
+            dispatch_table={
+                "unifi_create_dynamic_dns": DispatchEntry(
+                    manager_attr="dynamic_dns_manager", method="create_dynamic_dns"
+                )
+            },
+        )
+    domain_manager.create_dynamic_dns.assert_not_awaited()
+
+
 @pytest.mark.asyncio
 async def test_dispatch_acl_update_clears_netmask() -> None:
     """clear_destination_netmask flows through the API translator to a None mac_mask sentinel."""

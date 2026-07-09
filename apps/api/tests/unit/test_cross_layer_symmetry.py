@@ -23,6 +23,7 @@ REGISTERED_PAIRS: list[tuple[str, str, str]] = [
     ("network", "client_group", "UserGroup"),
     ("network", "content_filter", "ContentFilter"),
     ("network", "dns", "DnsRecord"),
+    ("network", "dynamic_dns", "DynamicDns"),
     ("network", "firewall", "FirewallRule"),
     ("network", "firewall", "FirewallGroup"),
     ("network", "firewall", "FirewallZone"),

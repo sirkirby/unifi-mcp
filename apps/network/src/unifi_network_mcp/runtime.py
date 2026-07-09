@@ -41,6 +41,7 @@ from unifi_core.network.managers.content_filter_manager import ContentFilterMana
 from unifi_core.network.managers.device_manager import DeviceManager
 from unifi_core.network.managers.dns_manager import DnsManager
 from unifi_core.network.managers.dpi_manager import DpiManager
+from unifi_core.network.managers.dynamic_dns_manager import DynamicDnsManager
 from unifi_core.network.managers.event_manager import EventManager
 from unifi_core.network.managers.firewall_manager import FirewallManager
 from unifi_core.network.managers.gateway_settings_manager import GatewaySettingsManager
@@ -195,6 +196,11 @@ def get_dns_manager() -> DnsManager:
 
 
 @lru_cache
+def get_dynamic_dns_manager() -> DynamicDnsManager:
+    return DynamicDnsManager(get_connection_manager())
+
+
+@lru_cache
 def get_dpi_manager() -> DpiManager:
     return DpiManager(get_connection_manager(), get_auth())
 
@@ -301,6 +307,7 @@ client_group_manager = get_client_group_manager()
 client_manager = get_client_manager()
 content_filter_manager = get_content_filter_manager()
 dns_manager = get_dns_manager()
+dynamic_dns_manager = get_dynamic_dns_manager()
 dpi_manager = get_dpi_manager()
 device_manager = get_device_manager()
 stats_manager = get_stats_manager()

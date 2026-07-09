@@ -50,6 +50,7 @@ NETWORK_CATEGORY_MAP = {
     "switch": "switch",
     "system": "system",
     "dns": "dns",
+    "dynamic_dns": "dynamic_dns",
     "gateway_settings": "gateway_settings",
 }
 

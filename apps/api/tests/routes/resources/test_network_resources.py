@@ -313,6 +313,96 @@ async def test_list_wlans_policy_disabled_returns_raw_passphrases(tmp_path, monk
 
 
 @pytest.mark.asyncio
+async def test_list_dynamic_dns_redacts_secret(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    async def fake_list(self, *a, **kw):
+        return [{"_id": "ddns-1", "host_name": "home.example.com", "service": "dyndns", "x_password": "ddns-secret"}]
+
+    from unifi_core.network.managers.dynamic_dns_manager import DynamicDnsManager
+
+    monkeypatch.setattr(DynamicDnsManager, "list_dynamic_dns", fake_list)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/dynamic-dns?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    assert r.json()["items"][0]["x_password"] == REDACTED
+
+
+@pytest.mark.asyncio
+async def test_list_dynamic_dns_policy_disabled_returns_raw_secret(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, redact_sensitive_fields=False)
+    _stub_connection(app, cid)
+
+    async def fake_list(self, *a, **kw):
+        return [{"_id": "ddns-1", "host_name": "home.example.com", "service": "dyndns", "x_password": "ddns-secret"}]
+
+    from unifi_core.network.managers.dynamic_dns_manager import DynamicDnsManager
+
+    monkeypatch.setattr(DynamicDnsManager, "list_dynamic_dns", fake_list)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/dynamic-dns?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    assert r.json()["items"][0]["x_password"] == "ddns-secret"
+
+
+@pytest.mark.asyncio
+async def test_get_dynamic_dns_detail_redacts_secret(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    async def fake_get(self, entry_id, *a, **kw):
+        assert entry_id == "ddns-1"
+        return {"_id": "ddns-1", "host_name": "home.example.com", "service": "dyndns", "x_password": "ddns-secret"}
+
+    from unifi_core.network.managers.dynamic_dns_manager import DynamicDnsManager
+
+    monkeypatch.setattr(DynamicDnsManager, "get_dynamic_dns", fake_get)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/dynamic-dns/ddns-1?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["x_password"] == REDACTED
+
+
+@pytest.mark.asyncio
+async def test_get_dynamic_dns_detail_policy_disabled_returns_raw_secret(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, redact_sensitive_fields=False)
+    _stub_connection(app, cid)
+
+    async def fake_get(self, entry_id, *a, **kw):
+        assert entry_id == "ddns-1"
+        return {"_id": "ddns-1", "host_name": "home.example.com", "service": "dyndns", "x_password": "ddns-secret"}
+
+    from unifi_core.network.managers.dynamic_dns_manager import DynamicDnsManager
+
+    monkeypatch.setattr(DynamicDnsManager, "get_dynamic_dns", fake_get)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/dynamic-dns/ddns-1?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["x_password"] == "ddns-secret"
+
+
+@pytest.mark.asyncio
 async def test_list_firewall_rules_happy_path(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)

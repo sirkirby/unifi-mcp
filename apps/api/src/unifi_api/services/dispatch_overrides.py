@@ -84,6 +84,10 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # to render a current-vs-proposed preview, so the AST walker captures the read
     # method first. Pin dispatch to the mutation method.
     "unifi_update_traffic_route": ("traffic_route_manager", "update_traffic_route"),
+    # update_dynamic_dns pre-fetches the entry via get_dynamic_dns to render a
+    # current-vs-proposed preview, so the AST walker captures the read method
+    # first. Pin dispatch to the mutation method.
+    "unifi_update_dynamic_dns": ("dynamic_dns_manager", "update_dynamic_dns"),
     # update_device_radio: tool needs current radio_table to identify target band.
     "unifi_update_device_radio": ("device_manager", "update_device_radio"),
     # Stats: tool combines existence check on client/device with stats fetch.
@@ -226,6 +230,51 @@ def _translate_gateway_settings_update(args: dict[str, Any]) -> tuple[tuple[Any,
 
     update_data = args.get("update_data") or {}
     return (to_controller_update(update_data),), {}
+
+
+def _translate_create_dynamic_dns(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate + translate ``entry_data`` → controller create payload for
+    ``DynamicDnsManager.create_dynamic_dns(entry_data)``.
+
+    Mirrors ``apps/network/src/unifi_network_mcp/tools/dynamic_dns.py:create_dynamic_dns``:
+    reject unknown / read-only keys (so they are not forwarded raw to the
+    controller) and require ``host_name`` + ``service``.
+    """
+    from unifi_core.network.models.dynamic_dns import (
+        MUTABLE_FIELDS,
+        DynamicDns,
+        reject_unknown_fields,
+        to_controller_create,
+    )
+
+    entry_data = args.get("entry_data") or {}
+    reject_unknown_fields(entry_data)
+    model = DynamicDns(**{k: v for k, v in entry_data.items() if k in MUTABLE_FIELDS})
+    if not model.host_name or not model.service:
+        raise ValueError("'host_name' and 'service' are required")
+    return (to_controller_create(model),), {}
+
+
+def _translate_update_dynamic_dns(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Reshape ``(entry_id, update_data)`` → positional ``(entry_id, payload)`` for
+    ``DynamicDnsManager.update_dynamic_dns(entry_id, entry_data)``.
+
+    The tool exposes ``update_data`` but the manager parameter is ``entry_data``,
+    so the default ``method(**args)`` would pass an unexpected ``update_data=``
+    kwarg. Mirrors the MCP tool: reject unknown / read-only keys, then filter to
+    mutable fields.
+    """
+    from unifi_core.network.models.dynamic_dns import reject_unknown_fields, to_controller_update
+
+    entry_id = args["entry_id"]
+    update_data = args.get("update_data") or {}
+    if not update_data:
+        raise ValueError("No fields provided to update.")
+    reject_unknown_fields(update_data)
+    validated = to_controller_update(update_data)
+    if not validated:
+        raise ValueError("No valid fields to update after validation.")
+    return (entry_id, validated), {}
 
 
 def _parse_iso_datetime(value: Any) -> Any:
@@ -442,6 +491,10 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
     "unifi_create_acl_rule": _translate_acl_create,
     "unifi_update_acl_rule": _translate_acl_update,
     "unifi_update_gateway_settings": _translate_gateway_settings_update,
+    # Network — dynamic DNS: create validates+translates entry_data; update reshapes
+    # (entry_id, update_data) → (entry_id, entry_data) and rejects unknown/read-only keys.
+    "unifi_create_dynamic_dns": _translate_create_dynamic_dns,
+    "unifi_update_dynamic_dns": _translate_update_dynamic_dns,
     "protect_export_clip": _translate_export_clip,
     "protect_delete_recording": _translate_delete_recording,
     "protect_update_chime": _translate_chime_update,

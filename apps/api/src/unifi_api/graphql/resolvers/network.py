@@ -48,6 +48,7 @@ from unifi_api.graphql.types.network.device import (
 )
 from unifi_api.graphql.types.network.dns import DnsRecord
 from unifi_api.graphql.types.network.dpi import DpiApplication, DpiCategory
+from unifi_api.graphql.types.network.dynamic_dns import DynamicDns
 from unifi_api.graphql.types.network.event import EventLog
 from unifi_api.graphql.types.network.firewall import (
     FirewallGroup,
@@ -552,6 +553,33 @@ async def _fetch_dns_records(
             if cm.site != site:
                 await cm.set_site(site)
             return list(await mgr.list_dns_records())
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_dynamic_dns(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+) -> list:
+    key = f"network/dynamic-dns/{controller}/{site}"
+
+    async def _do() -> list:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "dynamic_dns_manager",
+            )
+            cm = await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "network",
+            )
+            if cm.site != site:
+                await cm.set_site(site)
+            return list(await mgr.list_dynamic_dns())
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -1792,6 +1820,12 @@ class DnsRecordPage:
     next_cursor: str | None
 
 
+@strawberry.type(description="Paginated page of Dynamic DNS entries.")
+class DynamicDnsPage:
+    items: list[DynamicDns]
+    next_cursor: str | None
+
+
 @strawberry.type(description="Paginated page of static routes.")
 class RoutePage:
     items: list[Route]
@@ -2693,6 +2727,60 @@ class NetworkQuery:
                 did = getattr(r, "_id", None) or getattr(r, "id", None)
             if did == id:
                 return DnsRecord.from_manager_output(d)
+        return None
+
+    # ---- Dynamic DNS domain ----------------------------------------------
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="List Dynamic DNS provider entries on the given controller/site (paginated).",
+    )
+    async def dynamic_dns(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> DynamicDnsPage:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_dynamic_dns(ctx, controller, site)
+
+        from unifi_api.services.pagination import paginate
+
+        cursor_obj = _decode_cursor(cursor)
+        page, next_cursor = paginate(
+            list(raw),
+            limit=limit,
+            cursor=cursor_obj,
+            key_fn=_id_key,
+        )
+        return DynamicDnsPage(
+            items=[DynamicDns.from_manager_output(d, redact_sensitive=ctx.redact_sensitive_fields) for d in page],
+            next_cursor=next_cursor.encode() if next_cursor else None,
+        )
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Look up a single Dynamic DNS entry by id.",
+    )
+    async def dynamic_dns_entry(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        id: strawberry.ID,
+        site: str = "default",
+    ) -> DynamicDns | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_dynamic_dns(ctx, controller, site)
+        for d in raw:
+            r = _raw(d)
+            if isinstance(r, dict):
+                did = r.get("_id") or r.get("id")
+            else:
+                did = getattr(r, "_id", None) or getattr(r, "id", None)
+            if did == id:
+                return DynamicDns.from_manager_output(d, redact_sensitive=ctx.redact_sensitive_fields)
         return None
 
     # ---- Routes domain ---------------------------------------------------

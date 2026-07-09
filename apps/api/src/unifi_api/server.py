@@ -96,6 +96,9 @@ from unifi_api.routes.resources.network import (
     dpi as net_dpi_routes,
 )
 from unifi_api.routes.resources.network import (
+    dynamic_dns as net_dynamic_dns_routes,
+)
+from unifi_api.routes.resources.network import (
     events as net_events_routes,
 )
 from unifi_api.routes.resources.network import (
@@ -504,6 +507,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_routes_routes,
         net_traffic_flows_routes,
         net_dns_routes,
+        net_dynamic_dns_routes,
         net_vpn_routes,
         net_ap_groups_routes,
         net_firewall_groups_routes,

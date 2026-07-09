@@ -51,6 +51,7 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
     from unifi_core.network.managers.device_manager import DeviceManager
     from unifi_core.network.managers.dns_manager import DnsManager
     from unifi_core.network.managers.dpi_manager import DpiManager
+    from unifi_core.network.managers.dynamic_dns_manager import DynamicDnsManager
     from unifi_core.network.managers.event_manager import EventManager
     from unifi_core.network.managers.firewall_manager import FirewallManager
     from unifi_core.network.managers.gateway_settings_manager import GatewaySettingsManager
@@ -79,6 +80,7 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
         # API token is configured for the controller, the auth is unset
         # internally and DpiManager returns None with a clear log line.
         "dpi_manager": lambda cm: DpiManager(cm, getattr(cm, "unifi_auth", None)),
+        "dynamic_dns_manager": lambda cm: DynamicDnsManager(cm),
         "event_manager": lambda cm: EventManager(cm),
         "firewall_manager": lambda cm: FirewallManager(cm),
         "gateway_settings_manager": lambda cm: GatewaySettingsManager(cm),
