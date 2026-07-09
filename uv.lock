@@ -1664,7 +1664,7 @@ wheels = [
 
 [[package]]
 name = "strawberry-graphql"
-version = "0.320.2"
+version = "0.320.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cross-web" },
@@ -1673,9 +1673,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/69/a0/e407e250aa33f58e654e04072e04331af45fd88234736c1e169ae2edc7c4/strawberry_graphql-0.320.2.tar.gz", hash = "sha256:2ae401965db38aac12e09747c5b4e25ffc7d785fafba545b21ac3b9ae74d83b9", size = 229365, upload-time = "2026-07-06T10:32:06.714Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ab/ab/6b3f0ce8d1f77f89446aff8ccaa3f875b23a082111b903a7adc261f99645/strawberry_graphql-0.320.4.tar.gz", hash = "sha256:cd02eb963c63b84a89007c2784704327924d826ca8f4f172e8386701f839416b", size = 229798, upload-time = "2026-07-09T09:29:57.753Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/42/f1bd8b88c73a44678100c74b9b803ed7b99187c9e6ef6b7f00b045141657/strawberry_graphql-0.320.2-py3-none-any.whl", hash = "sha256:446bed449476d5200ec17df5924fc3602a50e84ffe8b99e96245102fade2479a", size = 332390, upload-time = "2026-07-06T10:32:04.561Z" },
+    { url = "https://files.pythonhosted.org/packages/12/ba/ab8323bed6ddc12c218c0e38d9bee02b10fbc6f03da6a05b5af1cf250572/strawberry_graphql-0.320.4-py3-none-any.whl", hash = "sha256:79a0172ecb372cd1855a199b78668629dc7c6e54276554d459ff51678385e389", size = 332789, upload-time = "2026-07-09T09:29:56.186Z" },
 ]
 
 [package.optional-dependencies]
@@ -1731,7 +1731,7 @@ wheels = [
 
 [[package]]
 name = "uiprotect"
-version = "15.4.2"
+version = "15.4.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -1748,9 +1748,9 @@ dependencies = [
     { name = "pyjwt" },
     { name = "yarl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b3/b1/ca2554d288568b600f6e17513a7d300638c092360d9edbf9c687c7447c3c/uiprotect-15.4.2.tar.gz", hash = "sha256:492ef4d0a921974218e1605efb95bad1daa308b47b5fdbf8a99d98351c900229", size = 199194, upload-time = "2026-07-05T18:22:46.189Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/f0/a0031841bd318a700ab0b08954ae5d1448819b3078c148292f3aace0dbd9/uiprotect-15.4.4.tar.gz", hash = "sha256:f3727b9613e678e581d9dfa516ba3cfc330ac50c80ba975495d629012fb63884", size = 200056, upload-time = "2026-07-09T15:27:22.938Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0c/25/4faf761523136bfa20565f20a8da82b8dccd75966a69f4595e2f3f4eceba/uiprotect-15.4.2-py3-none-any.whl", hash = "sha256:feb5ed5ddef9f9b4cc809437358f264b838b49c7626940ed561dd285d4929e18", size = 219885, upload-time = "2026-07-05T18:22:44.571Z" },
+    { url = "https://files.pythonhosted.org/packages/20/9c/a2b1744276039609db6cafa94ea58b7eccf58063c987228b785ea364c9b6/uiprotect-15.4.4-py3-none-any.whl", hash = "sha256:03afb6cd9311c8ef0c3abdf1511db3324e5328341c5ab18b4cb80a81081310c9", size = 220753, upload-time = "2026-07-09T15:27:21.558Z" },
 ]
 
 [[package]]
@@ -1843,10 +1843,10 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.51" },
-    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.320.2,<0.321.0" },
+    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.320.4,<0.321.0" },
     { name = "typer", specifier = ">=0.26.8" },
     { name = "unifi-core", extras = ["access", "network", "protect"], editable = "packages/unifi-core" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.50.2" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.51.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1891,7 +1891,7 @@ requires-dist = [
     { name = "py-unifi-access", marker = "extra == 'access'", specifier = ">=1.1.1" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=15.4.2" },
+    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=15.4.4" },
 ]
 provides-extras = ["access", "network", "protect"]
 
@@ -2075,20 +2075,19 @@ dev = [
 
 [[package]]
 name = "uvicorn"
-version = "0.50.2"
+version = "0.51.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "h11" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9f/f6/cc9aadc0e481344a42095d222bfa764122fb8cfba708d1922917bd8bfb01/uvicorn-0.50.2.tar.gz", hash = "sha256:b92bf03509b82bcb9d49e7335b4fd364518ad021c2dc18b4e6a2fec8c955a0bb", size = 93716, upload-time = "2026-07-06T10:38:31.984Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/65/b7c6c443ccc58678c91e1e973bbe2a878591538655d6e1d47f24ba1c51f3/uvicorn-0.51.0.tar.gz", hash = "sha256:f6f4b69b657c312f516dd2d268ab9ae6f254b11e4bac504f37b2ab58b24dd0b0", size = 94412, upload-time = "2026-07-08T10:59:05.962Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/f0/7c228ee10c7ab8fd3a21d06579a6f7c6075c6ce72594a20fb5d2f206ff24/uvicorn-0.50.2-py3-none-any.whl", hash = "sha256:4ae72a385630bcc17a0adb8290f26c993865e0b43a2114c2aab96420172c056a", size = 72846, upload-time = "2026-07-06T10:38:30.543Z" },
+    { url = "https://files.pythonhosted.org/packages/45/ec/dbb7e5a6b91f86bfb9eb7d2988a2730907b6a729875b949c7f022e8b88fa/uvicorn-0.51.0-py3-none-any.whl", hash = "sha256:5d38af6cd620f2ae3849fb44fd4879e0890aa1febe8d47eb355fb45d93fe6a5b", size = 73219, upload-time = "2026-07-08T10:59:04.44Z" },
 ]
 
 [package.optional-dependencies]
 standard = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
     { name = "httptools" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
