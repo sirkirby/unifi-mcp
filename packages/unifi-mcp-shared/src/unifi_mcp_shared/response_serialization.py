@@ -59,6 +59,34 @@ def compact_content_text(structured: Any, *, tool_name: str) -> str:
     return " ".join(parts)[:_MAX_COMPACT_TEXT_CHARS]
 
 
+def _compact_content(content: list[Any], structured: Any, *, tool_name: str) -> list[Any]:
+    summary = TextContent(
+        type="text",
+        text=compact_content_text(structured, tool_name=tool_name),
+    )
+    compacted: list[Any] = []
+    summary_added = False
+
+    for block in content:
+        matches_structured = False
+        if isinstance(block, TextContent):
+            try:
+                matches_structured = json.loads(block.text) == structured
+            except json.JSONDecodeError:
+                pass
+
+        if matches_structured:
+            if not summary_added:
+                compacted.append(summary)
+                summary_added = True
+            continue
+        compacted.append(block)
+
+    if not summary_added:
+        compacted.insert(0, summary)
+    return compacted
+
+
 def serialize_call_tool_result(
     result: Any,
     *,
@@ -75,26 +103,12 @@ def serialize_call_tool_result(
         structured = result.structuredContent
         if structured is None:
             return result
-        return result.model_copy(
-            update={
-                "content": [
-                    TextContent(
-                        type="text",
-                        text=compact_content_text(structured, tool_name=tool_name),
-                    )
-                ]
-            }
-        )
+        return result.model_copy(update={"content": _compact_content(result.content, structured, tool_name=tool_name)})
 
     if isinstance(result, tuple) and len(result) == 2 and result[1] is not None:
-        structured = result[1]
+        content, structured = result
         return CallToolResult(
-            content=[
-                TextContent(
-                    type="text",
-                    text=compact_content_text(structured, tool_name=tool_name),
-                )
-            ],
+            content=_compact_content(content, structured, tool_name=tool_name),
             structuredContent=structured,
         )
     return result

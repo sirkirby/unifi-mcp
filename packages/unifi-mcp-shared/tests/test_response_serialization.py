@@ -15,6 +15,39 @@ def _structured_tuple(structured):
     return content, structured
 
 
+def _mixed_content():
+    structured = {"success": True, "data": {"id": "abc", "name": "record"}}
+    compatibility_text = TextContent(
+        type="text",
+        text='{"success":true,"data":{"id":"abc","name":"record"}}',
+    )
+    explanatory_text = TextContent(type="text", text="Controller returned the requested record.")
+    image = ImageContent(type="image", data="AA==", mimeType="image/png")
+    duplicate_compatibility_text = TextContent(
+        type="text",
+        text='{"success": true, "data": {"id": "abc", "name": "record"}}',
+    )
+    return (
+        [compatibility_text, explanatory_text, image, duplicate_compatibility_text],
+        structured,
+        explanatory_text,
+        image,
+    )
+
+
+def _assert_mixed_content_compacted(compact, structured, explanatory_text, image):
+    summary = compact_content_text(structured, tool_name="unifi_test")
+
+    assert isinstance(compact, CallToolResult)
+    assert compact.structuredContent == structured
+    assert len(compact.content) == 3
+    assert isinstance(compact.content[0], TextContent)
+    assert compact.content[0].text == summary
+    assert sum(isinstance(block, TextContent) and block.text == summary for block in compact.content) == 1
+    assert compact.content[1] is explanatory_text
+    assert compact.content[2] is image
+
+
 def test_normalize_prefers_structured_tuple():
     content = [TextContent(type="text", text='{"success": true}')]
     structured = {"success": True, "data": {"id": "abc"}}
@@ -126,6 +159,33 @@ def test_content_only_result_is_never_rewritten():
         )
         is content
     )
+
+
+def test_compacting_direct_result_preserves_mixed_content():
+    content, structured, explanatory_text, image = _mixed_content()
+    original = CallToolResult(content=content, structuredContent=structured)
+
+    compact = serialize_call_tool_result(
+        original,
+        mode="compact",
+        protocol_revision=None,
+        tool_name="unifi_test",
+    )
+
+    _assert_mixed_content_compacted(compact, structured, explanatory_text, image)
+
+
+def test_compacting_structured_tuple_preserves_mixed_content():
+    content, structured, explanatory_text, image = _mixed_content()
+
+    compact = serialize_call_tool_result(
+        (content, structured),
+        mode="compact",
+        protocol_revision=None,
+        tool_name="unifi_test",
+    )
+
+    _assert_mixed_content_compacted(compact, structured, explanatory_text, image)
 
 
 def test_compacting_direct_result_preserves_meta_and_error_status():
