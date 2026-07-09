@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Callable, List
 
 from mcp.types import ToolAnnotations
 
+from unifi_mcp_shared.response_serialization import normalize_call_tool_result
+
 if TYPE_CHECKING:
     from unifi_mcp_shared.lazy_tools import LazyToolLoader
 
@@ -201,7 +203,7 @@ def register_meta_tools(
 
         try:
             result = await server.call_tool(tool, arguments)
-            return result
+            return normalize_call_tool_result(result)
         except Exception as e:
             logger.error("Error executing tool '%s': %s", tool, e, exc_info=True)
             return {"error": f"Failed to execute tool: {str(e)}"}
@@ -269,7 +271,8 @@ def register_meta_tools(
                 # Create a closure that captures the current tool and arguments
                 async def _make_executor(t, a):
                     async def _execute():
-                        return await server.call_tool(t, a)
+                        result = await server.call_tool(t, a)
+                        return normalize_call_tool_result(result)
 
                     return _execute
 
