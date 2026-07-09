@@ -68,14 +68,15 @@ def _compact_content(content: list[Any], structured: Any, *, tool_name: str) -> 
     summary_added = False
 
     for block in content:
-        matches_structured = False
+        is_json = False
         if isinstance(block, TextContent):
             try:
-                matches_structured = json.loads(block.text) == structured
+                json.loads(block.text)
+                is_json = True
             except json.JSONDecodeError:
                 pass
 
-        if matches_structured:
+        if is_json:
             if not summary_added:
                 compacted.append(summary)
                 summary_added = True

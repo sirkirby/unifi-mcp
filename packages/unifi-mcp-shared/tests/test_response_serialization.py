@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from mcp.types import CallToolResult, ImageContent, TextContent
 from unifi_mcp_shared.response_serialization import (
     compact_content_text,
@@ -44,6 +46,39 @@ def _assert_mixed_content_compacted(compact, structured, explanatory_text, image
     assert isinstance(compact.content[0], TextContent)
     assert compact.content[0].text == summary
     assert sum(isinstance(block, TextContent) and block.text == summary for block in compact.content) == 1
+    assert compact.content[1] is explanatory_text
+    assert compact.content[2] is image
+
+
+def _json_text_blocks(content):
+    parsed = []
+    for block in content:
+        if isinstance(block, TextContent):
+            try:
+                parsed.append(json.loads(block.text))
+            except json.JSONDecodeError:
+                pass
+    return parsed
+
+
+def _non_identical_json_content():
+    records = [{"id": 1, "name": "record", "description": "large compatibility payload"}]
+    structured = {"success": True, "data": records, "count": 1}
+    compatibility_text = TextContent(type="text", text=json.dumps(records))
+    explanatory_text = TextContent(type="text", text="Controller returned the requested record.")
+    image = ImageContent(type="image", data="AA==", mimeType="image/png")
+    return [compatibility_text, explanatory_text, image], structured, explanatory_text, image
+
+
+def _assert_non_identical_json_compacted(compact, structured, explanatory_text, image):
+    summary = compact_content_text(structured, tool_name="unifi_list_records")
+
+    assert isinstance(compact, CallToolResult)
+    assert compact.structuredContent == structured
+    assert len(compact.content) == 3
+    assert isinstance(compact.content[0], TextContent)
+    assert compact.content[0].text == summary
+    assert _json_text_blocks(compact.content) == []
     assert compact.content[1] is explanatory_text
     assert compact.content[2] is image
 
@@ -95,6 +130,7 @@ def test_adaptive_compacts_supported_revision():
     assert compact.content
     assert "250" in compact.content[0].text
     assert "items" not in compact.content[0].text
+    assert _json_text_blocks(compact.content) == []
 
 
 def test_adaptive_preserves_legacy_revision():
@@ -186,6 +222,33 @@ def test_compacting_structured_tuple_preserves_mixed_content():
     )
 
     _assert_mixed_content_compacted(compact, structured, explanatory_text, image)
+
+
+def test_compacting_direct_result_removes_non_identical_json_collection():
+    content, structured, explanatory_text, image = _non_identical_json_content()
+    original = CallToolResult(content=content, structuredContent=structured)
+
+    compact = serialize_call_tool_result(
+        original,
+        mode="compact",
+        protocol_revision=None,
+        tool_name="unifi_list_records",
+    )
+
+    _assert_non_identical_json_compacted(compact, structured, explanatory_text, image)
+
+
+def test_compacting_structured_tuple_removes_non_identical_json_collection():
+    content, structured, explanatory_text, image = _non_identical_json_content()
+
+    compact = serialize_call_tool_result(
+        (content, structured),
+        mode="compact",
+        protocol_revision=None,
+        tool_name="unifi_list_records",
+    )
+
+    _assert_non_identical_json_compacted(compact, structured, explanatory_text, image)
 
 
 def test_compacting_direct_result_preserves_meta_and_error_status():
