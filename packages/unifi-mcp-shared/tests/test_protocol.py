@@ -10,8 +10,32 @@ from unifi_mcp_shared.protocol import (
     FUTURE_MCP_PROTOCOL_REVISION,
     create_mcp_tool_adapter,
     get_protocol_revision,
+    get_request_protocol_revision,
     is_known_protocol_target,
+    structured_content_supported,
 )
+
+
+@pytest.mark.parametrize("revision", ["2025-06-18", "2025-11-25", "2026-07-28", "2027-01-01"])
+def test_structured_content_supported_for_current_and_future_revisions(revision):
+    assert structured_content_supported(revision) is True
+
+
+@pytest.mark.parametrize("revision", [None, "", "2024-11-05", "2025-03-26", "not-a-date"])
+def test_structured_content_not_assumed_for_old_or_unknown_revisions(revision):
+    assert structured_content_supported(revision) is False
+
+
+def test_request_protocol_revision_reads_current_sdk_session():
+    server = MagicMock()
+    server.get_context.return_value.session.client_params.protocolVersion = "2025-11-25"
+    assert get_request_protocol_revision(server) == "2025-11-25"
+
+
+def test_request_protocol_revision_returns_none_outside_request():
+    server = MagicMock()
+    server.get_context.side_effect = ValueError("Context is not available outside of a request")
+    assert get_request_protocol_revision(server) is None
 
 
 class TestGetProtocolRevision:

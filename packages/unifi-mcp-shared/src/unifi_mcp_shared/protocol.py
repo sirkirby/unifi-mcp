@@ -18,12 +18,14 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import date
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_MCP_PROTOCOL_REVISION = "2025-11-25"
 FUTURE_MCP_PROTOCOL_REVISION = "2026-07-28"
+STRUCTURED_CONTENT_PROTOCOL_REVISION = "2025-06-18"
 
 _KNOWN_REVISIONS = frozenset({DEFAULT_MCP_PROTOCOL_REVISION})
 _KNOWN_PROTOCOL_TARGETS = frozenset(
@@ -72,6 +74,31 @@ def get_protocol_revision() -> str:
 def is_known_protocol_target(value: str) -> bool:
     """Return whether a revision is tracked as a current or future MCP target."""
     return _normalize_protocol_revision(value) in _KNOWN_PROTOCOL_TARGETS
+
+
+def structured_content_supported(protocol_revision: str | None) -> bool:
+    """Return whether a negotiated MCP revision supports structured tool results."""
+    if not protocol_revision:
+        return False
+    try:
+        return date.fromisoformat(protocol_revision) >= date.fromisoformat(STRUCTURED_CONTENT_PROTOCOL_REVISION)
+    except ValueError:
+        return False
+
+
+def get_request_protocol_revision(server: Any) -> str | None:
+    """Read the negotiated revision for the current SDK-v1 request, if any.
+
+    This is the only SDK-v1-specific session metadata read. Replace this helper
+    when SDK v2 exposes protocol metadata through per-request envelopes.
+    """
+    try:
+        context = server.get_context()
+        client_params = context.session.client_params
+        revision = client_params.protocolVersion if client_params is not None else None
+        return str(revision) if revision else None
+    except (AttributeError, LookupError, RuntimeError, ValueError):
+        return None
 
 
 def create_mcp_tool_adapter(
