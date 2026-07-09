@@ -93,7 +93,7 @@ UNIFI_NETWORK_PASSWORD=your-password # Admin password
 
 For tool results that already provide structured output, `adaptive` is the default response mode. MCP 2025-06-18+ clients receive concise `content` plus the full result once in `structuredContent`; older or unknown clients keep full compatibility JSON in `content`. Set `UNIFI_NETWORK_MCP_CONTENT_MODE` to `compat` to force the duplicated compatibility form, or to `compact` to force concise text plus full structured output outside a negotiated request. This server-specific variable overrides `UNIFI_MCP_CONTENT_MODE`, and older clients can always be restored with `compat`.
 
-Compatibility meta-tools such as `*_execute` and `*_batch_status` remain content-only and return one normalized JSON payload in `content`. Their remediation removes nested transport duplication; response modes do not convert them to `structuredContent`.
+Compatibility meta-tools remain content-only. For structured inner results, `*_execute` and `*_batch_status` expose one normalized JSON payload in `content` rather than a nested transport pair; content-only execute results remain unchanged. Response modes do not convert these meta-tools to `structuredContent`.
 
 Network also bounds two large source responses by default: `unifi_get_dashboard` uses `summary=true`, and `unifi_list_rogue_aps` returns a summarized page of at most 100 records. Pass `summary=false` to request the full selected dashboard or rogue-AP data.
 

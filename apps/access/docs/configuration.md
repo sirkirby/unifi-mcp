@@ -61,7 +61,7 @@ When both paths are available, each tool selects the most appropriate one. Most 
 
 `UNIFI_ACCESS_MCP_CONTENT_MODE` overrides the global `UNIFI_MCP_CONTENT_MODE`; if neither is set, the YAML value and then the `adaptive` default apply.
 
-The `adaptive` and `compact` modes affect response compaction only for tool results that already provide structured output. Compatibility meta-tools such as `*_execute` and `*_batch_status` remain content-only and return one normalized JSON payload in `content`; their remediation removes nested transport duplication rather than converting them to `structuredContent`.
+The `adaptive` and `compact` modes affect response compaction only for tool results that already provide structured output. Compatibility meta-tools remain content-only. For structured inner results, `*_execute` and `*_batch_status` expose one normalized JSON payload in `content` rather than a nested transport pair; content-only execute results remain unchanged. Response modes do not convert these meta-tools to `structuredContent`.
 
 | Mode | Behavior |
 |------|----------|
