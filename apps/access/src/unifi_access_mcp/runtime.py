@@ -23,13 +23,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from unifi_access_mcp.bootstrap import load_config, logger
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, configure_mcp_server_metadata
-from unifi_mcp_shared.response_policy import should_redact_response_sensitive_fields
-from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
+from unifi_mcp_shared.response_policy import resolve_mcp_content_mode, should_redact_response_sensitive_fields
+from unifi_mcp_shared.server import UniFiMCPServer
 
 _TOOLS_MANIFEST_PATH = Path(__file__).resolve().parent / "tools_manifest.json"
 from unifi_access_mcp.tool_index import TOOL_REGISTRY
@@ -85,7 +84,7 @@ def _create_permissioned_tool_wrapper(original_tool_decorator):
 
 
 @lru_cache
-def get_server() -> FastMCP:
+def get_server() -> UniFiMCPServer:
     """Create the FastMCP server instance exactly once."""
     # Parse allowed hosts from environment variable for reverse proxy support
     # Default to localhost only for backwards compatibility
@@ -108,12 +107,13 @@ def get_server() -> FastMCP:
         enable_dns_rebinding,
     )
 
-    server = StrictKwargFastMCP(
+    server = UniFiMCPServer(
         name="unifi-access-mcp",
         debug=True,
         website_url=PROJECT_WEBSITE_URL,
         transport_security=transport_security,
         tools_manifest_path=_TOOLS_MANIFEST_PATH,
+        mcp_content_mode=resolve_mcp_content_mode("access", config=get_config()),
     )
     configure_mcp_server_metadata(server, package_name="unifi-access-mcp", icon_family="access")
 

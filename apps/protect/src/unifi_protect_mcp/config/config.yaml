@@ -54,6 +54,7 @@ server:
 policy:
   response:
     redact_sensitive_fields: ${oc.env:UNIFI_PROTECT_REDACT_SENSITIVE_FIELDS,true}
+    mcp_content_mode: ${oc.env:UNIFI_PROTECT_MCP_CONTENT_MODE,adaptive}
 
 protect:
   events:

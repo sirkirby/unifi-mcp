@@ -39,11 +39,13 @@ class TestAllowedHostsParsing:
         # Remove UNIFI_MCP_ALLOWED_HOSTS if set in shell environment
         # (load_dotenv is mocked, so .env won't reload it during import)
         os.environ.pop("UNIFI_MCP_ALLOWED_HOSTS", None)
+        os.environ.pop("UNIFI_MCP_CONTENT_MODE", None)
+        os.environ.pop("UNIFI_NETWORK_MCP_CONTENT_MODE", None)
 
         with (
             patch.dict(os.environ, test_env),
             patch("dotenv.load_dotenv"),  # Prevent .env from being reloaded during import
-            patch("unifi_mcp_shared.strict_dispatch.StrictKwargFastMCP") as mock_fastmcp,
+            patch("unifi_mcp_shared.server.UniFiMCPServer") as mock_fastmcp,
         ):
             try:
                 # Import triggers module-level get_server() call
@@ -58,6 +60,7 @@ class TestAllowedHostsParsing:
                 settings = kwargs.get("transport_security")
 
                 assert settings is not None, "transport_security should be passed to FastMCP"
+                assert kwargs.get("mcp_content_mode") == "adaptive"
                 assert settings.allowed_hosts == expected_hosts, (
                     f"Expected {expected_hosts}, got {settings.allowed_hosts}"
                 )
@@ -132,11 +135,13 @@ class TestDnsRebindingProtection:
         # Remove env vars if set in shell environment
         os.environ.pop("UNIFI_MCP_ALLOWED_HOSTS", None)
         os.environ.pop("UNIFI_MCP_ENABLE_DNS_REBINDING_PROTECTION", None)
+        os.environ.pop("UNIFI_MCP_CONTENT_MODE", None)
+        os.environ.pop("UNIFI_NETWORK_MCP_CONTENT_MODE", None)
 
         with (
             patch.dict(os.environ, test_env),
             patch("dotenv.load_dotenv"),
-            patch("unifi_mcp_shared.strict_dispatch.StrictKwargFastMCP") as mock_fastmcp,
+            patch("unifi_mcp_shared.server.UniFiMCPServer") as mock_fastmcp,
         ):
             try:
                 from unifi_network_mcp.runtime import get_server  # noqa: F401
