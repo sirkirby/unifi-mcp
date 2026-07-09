@@ -91,6 +91,12 @@ UNIFI_PROTECT_PASSWORD=your-password # Admin password
 
 **Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_PROTECT_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
 
+### MCP response size
+
+`adaptive` is the default response mode. MCP 2025-06-18+ clients receive concise `content` plus the full result once in `structuredContent`; older or unknown clients keep full compatibility JSON in `content`. Set `UNIFI_PROTECT_MCP_CONTENT_MODE` to `compat` to force the duplicated compatibility form, or to `compact` to force concise text plus full structured output outside a negotiated request. This server-specific variable overrides `UNIFI_MCP_CONTENT_MODE`, and older clients can always be restored with `compat`.
+
+When Network is enabled alongside Protect, its largest source responses are independently bounded: `unifi_get_dashboard` defaults to `summary=true`, and `unifi_list_rogue_aps` defaults to a summarized page of at most 100 records; `summary=false` restores the full selected data.
+
 > **AI-powered alarms need SuperAdmin.** The alarm-rule tools (`protect_alarm_list_rules` / `protect_alarm_get_rule` / `protect_alarm_create_rule` / `protect_alarm_update_rule` / `protect_alarm_delete_rule`) transparently use the modern UniFi-OS Alarm Manager when the account is **SuperAdmin**, and fall back to the classic automations view otherwise. The modern path surfaces and manages AI-powered alarms (e.g. AI Natural Language); the legacy path cannot see those rules and responses include a standard MCP `_meta` notice when the view is limited. Grant the account SuperAdmin on the console hosting Protect to view/manage AI alarms. Blast radius: on a standalone UNVR this is contained to Protect; on a combined UDM console SuperAdmin also grants Network/UniFi-OS control.
 
 ### Sensitive response fields

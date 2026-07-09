@@ -50,6 +50,12 @@ UniFi MCP keeps the standard MCP path primary: capable clients discover currentl
 
 The `*_tool_index`, `*_execute`, `*_batch`, and `*_load_tools` surfaces are UniFi compatibility extensions for large catalogs, lazy loading, and relay workflows. See [MCP Discovery and UniFi Meta-Tools](docs/tool-index.md) for mode-by-mode behavior.
 
+## MCP response size
+
+`adaptive` response mode is the default. Clients that negotiate MCP 2025-06-18 or later receive concise text in `content` and the full result once in `structuredContent`; pre-2025-06-18 and unknown clients retain the full compatibility JSON in `content`. Set `UNIFI_MCP_CONTENT_MODE=compat` to force that duplicated compatibility form, or `UNIFI_MCP_CONTENT_MODE=compact` to force concise text plus the full structured result even outside a negotiated request. Use `compat` whenever an older client needs its full text response restored.
+
+`UNIFI_NETWORK_MCP_CONTENT_MODE`, `UNIFI_PROTECT_MCP_CONTENT_MODE`, and `UNIFI_ACCESS_MCP_CONTENT_MODE` override the global setting for their respective servers. Independently of transport compaction, Network's `unifi_get_dashboard` defaults to `summary=true`, while `unifi_list_rogue_aps` defaults to a summarized page of at most 100 records; pass `summary=false` when the full selected data is required.
+
 ## Quick Start
 
 ### Claude Code (recommended)

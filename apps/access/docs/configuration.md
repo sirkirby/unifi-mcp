@@ -57,6 +57,18 @@ When both paths are available, each tool selects the most appropriate one. Most 
 | `UNIFI_ENABLED_TOOLS` | -- | Comma-separated tool names to register (eager mode only) |
 | `CONFIG_PATH` | -- | Path to a custom config YAML file |
 
+## MCP Response Content
+
+`UNIFI_ACCESS_MCP_CONTENT_MODE` overrides the global `UNIFI_MCP_CONTENT_MODE`; if neither is set, the YAML value and then the `adaptive` default apply.
+
+| Mode | Behavior |
+|------|----------|
+| `adaptive` (default) | Emits concise `content` plus the full result once in `structuredContent` for MCP 2025-06-18+ requests. Pre-2025-06-18 and unknown clients retain full compatibility JSON in `content`. |
+| `compat` | Forces full compatibility JSON in `content` as well as the structured result. Use this to restore older clients. |
+| `compact` | Forces concise `content` plus the full `structuredContent` result even when no capable protocol revision was negotiated. |
+
+When Network runs alongside Access, its high-volume source defaults remain independently bounded: `unifi_get_dashboard` uses `summary=true`, and `unifi_list_rogue_aps` returns a summarized page of at most 100 records; `summary=false` restores full data within the selected response.
+
 ## Access-Specific Settings
 
 | Variable | Default | Description |

@@ -89,6 +89,12 @@ UNIFI_NETWORK_PASSWORD=your-password # Admin password
 
 **Fallback:** Existing `UNIFI_*` variables (e.g., `UNIFI_HOST`) continue to work. The server checks for `UNIFI_NETWORK_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
 
+### MCP response size
+
+`adaptive` is the default response mode. MCP 2025-06-18+ clients receive concise `content` plus the full result once in `structuredContent`; older or unknown clients keep full compatibility JSON in `content`. Set `UNIFI_NETWORK_MCP_CONTENT_MODE` to `compat` to force the duplicated compatibility form, or to `compact` to force concise text plus full structured output outside a negotiated request. This server-specific variable overrides `UNIFI_MCP_CONTENT_MODE`, and older clients can always be restored with `compat`.
+
+Network also bounds two large source responses by default: `unifi_get_dashboard` uses `summary=true`, and `unifi_list_rogue_aps` returns a summarized page of at most 100 records. Pass `summary=false` to request the full selected dashboard or rogue-AP data.
+
 ### Sensitive response fields
 
 Network tools redact known secret-bearing fields by default before returning data to MCP clients. This includes WLAN passphrases, VPN key material, whole VPN config blobs, and SNMP community strings in raw/detail responses and mutation previews. Disable redaction for a trusted local administration process with `UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false` or the global `UNIFI_REDACT_SENSITIVE_FIELDS=false` policy flag when raw values are required.
