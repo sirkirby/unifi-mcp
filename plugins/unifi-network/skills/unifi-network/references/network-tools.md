@@ -489,7 +489,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_client_sessions` | Read | Get client session history. |
 | `unifi_get_client_stats` | Read | Get statistics for a specific client/device |
 | `unifi_get_client_wifi_details` | Read | Get detailed WiFi statistics for a single wireless client including signal, noise, satisfaction, tx/rx rates, retries, roam count, channe... |
-| `unifi_get_dashboard` | Read | Get the pre-aggregated site dashboard summary (health, device counts, client counts, ISP status). |
+| `unifi_get_dashboard` | Read | Get the pre-aggregated site dashboard. |
 | `unifi_get_device_stats` | Read | Returns historical traffic time-series (rx/tx bytes, client counts) for one device by MAC or _id. |
 | `unifi_get_dpi_stats` | Read | Get Deep Packet Inspection (DPI) statistics (applications and categories) |
 | `unifi_get_gateway_stats` | Read | Get gateway WAN/LAN performance history including bandwidth, CPU, and memory utilization. |

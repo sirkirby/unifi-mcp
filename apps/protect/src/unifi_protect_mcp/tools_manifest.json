@@ -3079,6 +3079,8 @@
             },
             "min_confidence": {
               "description": "Minimum recognition confidence filter used by Protect (0-100, default 30).",
+              "maximum": 100,
+              "minimum": 0,
               "type": "integer"
             },
             "order_by": {
@@ -3095,6 +3097,8 @@
             },
             "page_size": {
               "description": "Maximum number of face groups to return (default 100).",
+              "maximum": 1000,
+              "minimum": 1,
               "type": "integer"
             }
           },
@@ -3192,6 +3196,8 @@
             },
             "min_confidence": {
               "description": "Minimum recognition confidence filter used by Protect (0-100, default 30).",
+              "maximum": 100,
+              "minimum": 0,
               "type": "integer"
             },
             "order_by": {
@@ -3208,6 +3214,8 @@
             },
             "page_size": {
               "description": "Maximum number of license-plate groups to return (default 100).",
+              "maximum": 1000,
+              "minimum": 1,
               "type": "integer"
             }
           },
@@ -4015,6 +4023,8 @@
             },
             "duration_ms": {
               "description": "How long to move before automatically sending a stop command.",
+              "maximum": 5000,
+              "minimum": 0,
               "type": "integer"
             },
             "pan": {
@@ -4232,10 +4242,14 @@
             },
             "duration_ms": {
               "description": "How long to zoom before automatically sending a stop command.",
+              "maximum": 5000,
+              "minimum": 0,
               "type": "integer"
             },
             "zoom_speed": {
               "description": "Zoom speed from -1000 (out) to 1000 (in). Use 0 to stop zoom.",
+              "maximum": 1000,
+              "minimum": -1000,
               "type": "integer"
             }
           },
@@ -4544,6 +4558,8 @@
             },
             "limit": {
               "description": "Maximum number of detections to return (1-1000, default 100).",
+              "maximum": 1000,
+              "minimum": 1,
               "type": "integer"
             },
             "min_confidence": {

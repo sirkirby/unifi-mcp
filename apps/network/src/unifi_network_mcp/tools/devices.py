@@ -36,6 +36,23 @@ logger = logging.getLogger(__name__)
 _POWER_DEVICE_MODELS = {"UP1", "UP6", "USP"}
 
 
+def _rogue_ap_summary(ap: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "bssid": ap.get("bssid"),
+        "ssid": ap.get("essid"),
+        "channel": ap.get("channel"),
+        "signal": ap.get("signal"),
+        "rssi": ap.get("rssi"),
+        "band": ap.get("band"),
+        "bandwidth": ap.get("bw"),
+        "security": ap.get("security"),
+        "ap_mac": ap.get("ap_mac"),
+        "ap_name": ap.get("ap_name"),
+        "last_seen": ap.get("last_seen"),
+        "is_rogue": ap.get("is_rogue"),
+    }
+
+
 def classify_device(device: Dict[str, Any]) -> str:
     """Classify a device into a semantic category.
 
@@ -1117,10 +1134,9 @@ async def get_speedtest_status(
     name="unifi_list_rogue_aps",
     description=(
         "List neighboring/rogue APs detected by your access points. "
-        "Returns BSSID, SSID, channel, RSSI, band, and which of your APs detected each one. "
-        "Useful for RF environment analysis and interference troubleshooting. "
-        "WARNING: This can return hundreds of APs. Use channel and/or min_signal filters "
-        "to reduce the result set."
+        "Defaults to a compact 100-record page; pass summary=false for raw records in the selected page. "
+        "Filters apply before pagination, limit is at most 500, and pagination metadata includes "
+        "total_count, returned_count/count, limit, offset, next_offset, and has_more."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -1137,6 +1153,18 @@ async def list_rogue_aps(
         Optional[int],
         Field(description="Minimum signal strength in dBm (e.g., -70 to only show strong neighbors)"),
     ] = None,
+    limit: Annotated[
+        int,
+        Field(ge=1, le=500, description="Maximum records per page (default 100, max 500)"),
+    ] = 100,
+    offset: Annotated[
+        int,
+        Field(ge=0, description="Zero-based offset into the filtered records (default 0)"),
+    ] = 0,
+    summary: Annotated[
+        bool,
+        Field(description="Return compact AP fields; default true. Set false for raw records in the selected page"),
+    ] = True,
 ) -> Dict[str, Any]:
     """List neighboring/rogue APs detected by your access points."""
     try:
@@ -1148,13 +1176,25 @@ async def list_rogue_aps(
         if min_signal is not None:
             rogue_aps = [ap for ap in rogue_aps if ap.get("signal", -100) >= min_signal]
 
+        total_count = len(rogue_aps)
+        page = rogue_aps[offset : offset + limit]
+        formatted = [_rogue_ap_summary(ap) for ap in page] if summary else page
+        next_offset = offset + len(page) if offset + len(page) < total_count else None
+
         return {
             "success": True,
             "site": device_manager._connection.site,
             "within_hours": within_hours,
             "filters": {"channel": channel, "min_signal": min_signal},
-            "count": len(rogue_aps),
-            "rogue_aps": rogue_aps,
+            "summary_mode": summary,
+            "total_count": total_count,
+            "returned_count": len(formatted),
+            "count": len(formatted),
+            "limit": limit,
+            "offset": offset,
+            "next_offset": next_offset,
+            "has_more": next_offset is not None,
+            "rogue_aps": formatted,
         }
     except Exception as e:
         logger.error("Error listing rogue APs: %s", e, exc_info=True)
