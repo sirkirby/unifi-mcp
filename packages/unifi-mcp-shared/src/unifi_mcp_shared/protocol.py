@@ -81,7 +81,10 @@ def structured_content_supported(protocol_revision: str | None) -> bool:
     if not protocol_revision:
         return False
     try:
-        return date.fromisoformat(protocol_revision) >= date.fromisoformat(STRUCTURED_CONTENT_PROTOCOL_REVISION)
+        parsed_revision = date.fromisoformat(protocol_revision)
+        if parsed_revision.isoformat() != protocol_revision:
+            return False
+        return parsed_revision >= date.fromisoformat(STRUCTURED_CONTENT_PROTOCOL_REVISION)
     except ValueError:
         return False
 

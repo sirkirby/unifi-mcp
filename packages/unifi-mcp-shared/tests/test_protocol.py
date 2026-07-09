@@ -21,7 +21,10 @@ def test_structured_content_supported_for_current_and_future_revisions(revision)
     assert structured_content_supported(revision) is True
 
 
-@pytest.mark.parametrize("revision", [None, "", "2024-11-05", "2025-03-26", "not-a-date"])
+@pytest.mark.parametrize(
+    "revision",
+    [None, "", "2024-11-05", "2025-03-26", "not-a-date", "20250618", "2025-W25-3"],
+)
 def test_structured_content_not_assumed_for_old_or_unknown_revisions(revision):
     assert structured_content_supported(revision) is False
 
