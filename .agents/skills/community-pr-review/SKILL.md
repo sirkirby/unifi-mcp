@@ -204,6 +204,8 @@ Check that each new domain has a corresponding model with `MUTABLE_FIELDS` / `RE
 
 **The `to_controller_update` gotcha:** When a model exists but the tool bypasses it and passes raw caller args directly to the manager, the model's field validation is silently skipped. Confirm the tool calls `to_controller_update(fields)` and passes the result, not the original dict.
 
+**Redaction policy must be threaded, not hardcoded:** When a new resource-type PR introduces a resolver or route that returns sensitive fields, verify `redact_sensitive=True` is passed through the call chain from route to serializer as a parameter — not hardcoded as a local default. A resolver that hardcodes redaction behavior instead of accepting it as an argument silently diverges from callers that need the opposite setting. Check this whenever Gate 2 or Gate 3.5 involves a new resource-type PR.
+
 ---
 
 ### Gate 3: Doc Site Update — Ordering Gate
@@ -236,7 +238,7 @@ A new tool may pass Gates 1–3 while still causing silent failures if it bypass
 
 1. **Serializer projection** — Confirm the tool's response flows through the project's serialization/projection layer. A tool that returns raw internal objects instead of projected response models silently exposes unexpected types to MCP clients.
 
-2. **Dispatch/action registration** — If the tool category participates in the project's action dispatch layer (for routing tool calls), confirm the new tool is registered. A tool missing from the dispatcher is silently unreachable via that path even when correctly listed in the manifest.
+2. **Dispatch/action registration** — If the tool category participates in the project's action dispatch layer (for routing tool calls), confirm the new tool is registered. A tool missing from the dispatcher is silently unreachable via that path even when correctly listed in the manifest. **Dispatch-override translator required for mismatched arg names:** when the tool's argument name differs from the manager's kwarg name (e.g., tool exposes `update_data` but the manager method expects `entry_data`), the dispatch registration must include an explicit translator/mapping — otherwise the dispatcher passes the wrong kwarg and the call fails or silently drops the argument.
 
 3. **Generated artifact regen** — Verify `make generate` was run on the PR branch and all committed generated artifacts (manifest, REST docs, schema files) match. Run `make check-generated` locally to confirm no drift. Artifact drift is a silent correctness failure — it does not fail lint but causes behavioral divergence between the code and what clients discover.
 
@@ -535,6 +537,8 @@ Before merging, confirm the PR body includes: **What changed**, **Why**, and **T
 1. **Tool summary** — List every tool fixed or added, grouped by category.
 2. **Embedded live test output** — Paste raw terminal output (not a prose summary) in a `<details>` block.
 3. **Issue references** — `#N` format in both the commit message and the PR body for reliable auto-close.
+
+**Gotcha — post-merge PR body edits do not trigger GitHub autoclose.** If issue references were missing at merge time and you add `#N` to the PR body afterward, GitHub does NOT retroactively close the linked issue — autoclose only fires from the merge event itself. For retroactive linking, post an explicit closing comment on each affected issue and close it manually.
 
 ### When a PR surfaces broader scope (Principle #5)
 
