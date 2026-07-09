@@ -299,6 +299,12 @@ the harness as follows:
    add a new lifecycle method to the `LiveSmokeRunner` class in `scripts/live_smoke.py` and
    call it from `run_lifecycles()` or `run_approved()`.
 
+   **Building preview args from live values:** When constructing `confirm=False` preview args
+   for a new capability tool, reuse the device-inventory cache already seeded by prior
+   read-only list tools in the same run (device/client lists fetched earlier) to source live
+   current values (device IDs, MACs) instead of hardcoding hardware identifiers. Hardcoded IDs
+   go stale as soon as lab hardware changes; cached live values stay valid across runs.
+
    **Lifecycle completeness checklist — required for every new lifecycle method:**
    - [ ] Follows create → update → get → delete order (NOT create → delete only)
    - [ ] The update step asserts field preservation via a subsequent `get` call
