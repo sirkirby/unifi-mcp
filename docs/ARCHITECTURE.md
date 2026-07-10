@@ -54,7 +54,7 @@ Used by: `apps/network`, `apps/protect`, `apps/access`.
 
 ### apps/network
 
-The UniFi Network MCP server. 181 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
+The UniFi Network MCP server. 186 tools covering firewall, clients, devices, networks, VPNs, routing, stats, Traffic Flows, and more.
 
 - `src/unifi_network_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
@@ -69,7 +69,7 @@ The UniFi Network MCP server. 181 tools covering firewall, clients, devices, net
 
 ### apps/protect
 
-The UniFi Protect MCP server. 59 tools across 8 categories covering cameras, events, Find Anything detection search, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (including AI-powered alarms, which require a SuperAdmin credential). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
+The UniFi Protect MCP server. 61 tools across 8 categories covering cameras, events, Find Anything detection search, recordings, devices (lights/sensors/chimes), liveviews, system status, recognition (faces + license plates), and the Alarm Manager (including AI-powered alarms, which require a SuperAdmin credential). Connects via `uiprotect` (pyunifiprotect) for websocket-based real-time event streaming.
 
 - `src/unifi_protect_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
@@ -85,7 +85,7 @@ The UniFi Protect MCP server. 59 tools across 8 categories covering cameras, eve
 
 ### apps/access
 
-The UniFi Access MCP server. 34 tools across 7 categories covering doors, policies, credentials, visitors, events, devices, and system. Uses a **dual-path authentication** model: API key auth on the dedicated Access port (12445) via `py-unifi-access`, and a local proxy session on port 443 for mutations.
+The UniFi Access MCP server. 36 tools across 7 categories covering doors, policies, credentials, visitors, events, devices, and system. Uses a **dual-path authentication** model: API key auth on the dedicated Access port (12445) via `py-unifi-access`, and a local proxy session on port 443 for mutations.
 
 - `src/unifi_access_mcp/` -- server code
   - `main.py` -- entry point, tool registration, transport dispatch
@@ -101,9 +101,15 @@ The UniFi Access MCP server. 34 tools across 7 categories covering doors, polici
 
 **Dual-path auth** is unique to the Access server. The `AccessConnectionManager` maintains two independent sessions: an API key client for read-heavy queries and a proxy session (cookie + CSRF token) for mutations. Each tool declares which auth path it requires.
 
+### apps/api
+
+The independent `unifi-api-server` HTTP service for applications and automation that do not speak MCP. It provides typed REST resources, read-only GraphQL queries, a REST action endpoint for supported controller operations, SSE streams, scoped API keys, encrypted controller credentials, audit records, and an administrative control plane.
+
+The API app and the MCP apps independently consume the manager layer from `unifi-core`; the API does not proxy or require the MCP servers. It is also not part of the Cloud Relay request path.
+
 ### packages/unifi-mcp-relay
 
-A standalone sidecar that bridges local MCP servers to a Cloudflare Worker relay gateway, enabling cloud agents to access locally-hosted tools without exposing ports. Communicates with local servers via MCP HTTP transport and with the worker via authenticated WebSocket.
+A standalone Relay sidecar that acts as a pure MCP HTTP client and forwarder. It discovers configured local MCP servers over HTTP and maintains an outbound authenticated WebSocket to the Worker gateway, enabling remote MCP access without exposing inbound local ports.
 
 - `src/unifi_mcp_relay/` -- sidecar code
   - `config.py` -- environment variable loading and validation
@@ -115,11 +121,11 @@ A standalone sidecar that bridges local MCP servers to a Cloudflare Worker relay
 - `tests/` -- unit and integration tests (mock WebSocket worker)
 - `Dockerfile` -- container build
 
-The relay has **no dependency** on the MCP server packages (`unifi-core`, `unifi-mcp-shared`, or any `apps/*`). It is a pure MCP client that discovers tools via the standard MCP protocol.
+The Relay has **no dependency** on the MCP server packages (`unifi-core`, `unifi-mcp-shared`, or any `apps/*`). The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
 
 ### apps/worker
 
-The Cloudflare Worker gateway and npm CLI used by cloud agents. The TypeScript Worker receives MCP JSON-RPC over HTTPS, routes tool calls through a Durable Object, and forwards them to connected local relay sidecars over WebSocket. The plain ESM CLI deploys and manages the Worker with Wrangler.
+The Cloudflare Worker gateway is the authenticated edge MCP endpoint and broker used by remote MCP clients. The TypeScript Worker receives MCP JSON-RPC over HTTPS, routes tool calls through a Durable Object, and forwards them to connected local Relay sidecars over WebSocket. The plain ESM CLI deploys and manages the Worker with Wrangler.
 
 - `bin/cli.mjs` -- npm CLI entry point
 - `src/commands/` -- install, upgrade, token rotation, location management, status, and destroy commands
@@ -131,6 +137,14 @@ The Cloudflare Worker gateway and npm CLI used by cloud agents. The TypeScript W
 - `worker/package.json` and `worker/package-lock.json` -- isolated Worker build/test dependencies
 
 The Worker intentionally remains a self-contained Node/TypeScript app. It lives in the monorepo so relay protocol changes, MCP metadata changes, and worker contract tests land in the same PR.
+
+The complete Cloud Relay request path is:
+
+```text
+Remote MCP client → Worker gateway → outbound WebSocket → Relay sidecar → local MCP servers over HTTP
+```
+
+`unifi-api-server` is not in this path.
 
 ## Layering
 

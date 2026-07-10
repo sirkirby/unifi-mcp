@@ -16,10 +16,12 @@ Cloudflare Worker  ────────────────────�
                                                                 |
                                               WebSocket (WSS) /ws  (relay_token)
                                                                 |
-                                                   unifi-mcp-relay (local network)
+                                                   Relay sidecar (local network)
                                                                 |
-                                                    UniFi MCP Server (stdio/HTTP)
+                                                MCP over HTTP to local servers
 ```
+
+The Relay sidecar connects to each configured local MCP server using MCP over HTTP only.
 
 The Durable Object persists location registrations in SQLite and maintains live WebSocket connections to one or more relay clients. When a tool call arrives from a cloud agent, the worker routes it to the appropriate relay client and streams the result back.
 
@@ -151,7 +153,7 @@ Response:
 }
 ```
 
-Store the `token` value securely — it is only returned once. Provide it to `unifi-mcp-relay` as `UNIFI_MCP_RELAY_TOKEN` (see [unifi-mcp](https://github.com/sirkirby/unifi-mcp) for relay client configuration).
+Store the `token` value securely — it is only returned once. Provide it to the Relay sidecar as `UNIFI_RELAY_TOKEN` (see the [Relay sidecar setup](https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay)).
 
 ### List Registered Locations
 

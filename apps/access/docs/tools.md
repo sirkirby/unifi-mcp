@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Access MCP server exposes 34 tools, all prefixed with `access_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Access MCP server exposes 36 tools, all prefixed with `access_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `access_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_access_mcp/tools_manifest.json`.
 

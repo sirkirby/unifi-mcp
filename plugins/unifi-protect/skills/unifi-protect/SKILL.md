@@ -5,7 +5,7 @@ description: How to manage UniFi Protect cameras and NVR — view cameras, smart
 
 # UniFi Protect MCP Server
 
-You have access to a UniFi Protect MCP server that lets you query and manage a UniFi Protect NVR. It provides 59 tools covering cameras, smart detections, Find Anything detection search, recordings, snapshots, lights, sensors, chimes, Known Faces, license plates, and the Alarm Manager (arm/disarm).
+You have access to a UniFi Protect MCP server that lets you query and manage a UniFi Protect NVR. It provides 61 tools covering cameras, smart detections, Find Anything detection search, recordings, snapshots, lights, sensors, chimes, Known Faces, license plates, and the Alarm Manager (arm/disarm).
 
 ## Tool Discovery
 
@@ -88,4 +88,4 @@ Cameras are network clients — if a camera appears offline, the Network server 
 
 ## Tool Reference
 
-For the complete list of all 59 tools organized by category with descriptions, tips, and common scenarios, read `references/protect-tools.md`.
+For the complete list of all 61 tools organized by category with descriptions, tips, and common scenarios, read `references/protect-tools.md`.

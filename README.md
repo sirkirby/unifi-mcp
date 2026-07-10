@@ -19,26 +19,28 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 
 | Server | Status | Tools | Package |
 |--------|--------|-------|---------|
-| [Network](apps/network/) | Stable | 180 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
-| [Protect](apps/protect/) | Beta | 59 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
-| [Access](apps/access/) | Beta | 34 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
+| [Network](apps/network/) | Stable | 186 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
+| [Protect](apps/protect/) | Beta | 61 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
+| [Access](apps/access/) | Beta | 36 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 
 ## Cloud Relay
 
 | Component | Status | Package |
 |-----------|--------|---------|
-| [Relay Sidecar](packages/unifi-mcp-relay/) | Beta | [`unifi-mcp-relay`](https://pypi.org/project/unifi-mcp-relay/) |
-| [Worker Gateway](apps/worker/) | Beta | [`unifi-mcp-worker`](https://www.npmjs.com/package/unifi-mcp-worker) (CLI) |
+| [Relay Sidecar](https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay) | Beta | [`unifi-mcp-relay`](https://pypi.org/project/unifi-mcp-relay/) |
+| [Worker Gateway](https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker) | Beta | [`unifi-mcp-worker`](https://www.npmjs.com/package/unifi-mcp-worker) (CLI) |
 
-The relay bridges your local MCP servers to a Cloudflare Worker, letting cloud agents access your UniFi tools without exposing local ports. Supports multi-location with annotation-based fan-out for read-only tools. Deploy the worker with `npm install -g unifi-mcp-worker && unifi-mcp-worker install`, then see the [relay README](packages/unifi-mcp-relay/) for connecting your local servers.
+Cloud Relay pairs the Cloudflare-hosted Worker gateway with the Relay sidecar on your LAN. The Worker provides the authenticated edge MCP endpoint, Durable Object broker, multi-location routing, token boundary, and deployment/management CLI. The Relay sidecar is a local MCP HTTP client and forwarder: it discovers configured local MCP servers over HTTP and maintains an outbound WebSocket to the Worker. Remote requests follow `MCP client → Worker gateway → outbound WebSocket → Relay sidecar → local MCP servers over HTTP`; the API server is not in this path. Read-only tools support annotation-based multi-location fan-out, while writes require explicit location targeting. Deploy the Worker with `npm install -g unifi-mcp-worker && unifi-mcp-worker install`, then see the [Relay sidecar README](packages/unifi-mcp-relay/) to connect local servers.
 
 ## REST + GraphQL API (non-MCP)
 
 | Component | Status | Package |
 |-----------|--------|---------|
-| [API Server](apps/api/) | Beta | [`unifi-api-server`](https://pypi.org/project/unifi-api-server/) · [GHCR image](https://github.com/sirkirby/unifi-mcp/pkgs/container/unifi-api-server) |
+| [API Server](https://github.com/sirkirby/unifi-mcp/tree/main/apps/api) | Beta | [`unifi-api-server`](https://pypi.org/project/unifi-api-server/) · [GHCR image](https://github.com/sirkirby/unifi-mcp/pkgs/container/unifi-api-server) |
 
-`unifi-api-server` is a standalone HTTP service exposing the same UniFi capabilities as the MCP servers, but as a REST + GraphQL API for desktop apps, dashboards, and any consumer that doesn't speak MCP. It runs **independently** of the MCP servers — both share the `unifi-core` manager packages, neither depends on the other being running. See [`apps/api/README.md`](apps/api/README.md) for quick-start and deployment patterns.
+`unifi-api-server` is an independent HTTP service for consumers that do not speak MCP. It provides typed REST resources, read-only GraphQL queries, SSE streams, scoped API keys and administration, plus a REST action endpoint for supported controller operations. It shares `unifi-core` managers with the MCP servers but does not proxy or require them.
+
+See [`apps/api/README.md`](apps/api/README.md) for quick-start and deployment patterns.
 
 ## What is this?
 
@@ -249,9 +251,10 @@ This is a monorepo with shared packages:
 
 ```
 apps/
-  network/          # UniFi Network MCP server (stable, 181 tools)
-  protect/          # UniFi Protect MCP server (beta, 59 tools)
-  access/           # UniFi Access MCP server (beta, 34 tools)
+  network/          # UniFi Network MCP server (stable, 186 tools)
+  protect/          # UniFi Protect MCP server (beta, 61 tools)
+  access/           # UniFi Access MCP server (beta, 36 tools)
+  api/              # Independent REST + GraphQL API server (beta)
   worker/           # Cloudflare Worker gateway + npm CLI
 packages/
   unifi-core/       # Shared UniFi connectivity (auth, detection, retry)
