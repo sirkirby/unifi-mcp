@@ -307,6 +307,14 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
 
 
 class ContentReconciliationTests(unittest.TestCase):
+    def test_homepage_api_quickstart_link_uses_real_heading_fragment(self):
+        homepage = Path("docs/index.html").read_text(encoding="utf-8")
+        correct_url = "https://github.com/sirkirby/unifi-mcp/tree/main/apps/api#quickstart"
+        incorrect_url = "https://github.com/sirkirby/unifi-mcp/tree/main/apps/api#quick-start"
+
+        self.assertIn(correct_url, homepage)
+        self.assertNotIn(incorrect_url, homepage)
+
     def test_user_facing_count_surfaces_match_manifests(self):
         counts = manifest_counts()
         for product, paths in COUNT_SURFACES.items():
