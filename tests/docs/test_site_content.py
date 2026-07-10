@@ -19,6 +19,14 @@ PRODUCT_LINKS = {
     "unifi-mcp-worker": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker",
 }
 
+MCP_SERVER_LINKS = {
+    "unifi-network-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/network",
+    "unifi-protect-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/protect",
+    "unifi-access-mcp": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/access",
+}
+
+JSON_LD_PRODUCT_LINKS = MCP_SERVER_LINKS | PRODUCT_LINKS
+
 MANIFESTS = {
     "network": Path("apps/network/src/unifi_network_mcp/tools_manifest.json"),
     "protect": Path("apps/protect/src/unifi_protect_mcp/tools_manifest.json"),
@@ -176,6 +184,13 @@ def json_ld_nodes(value: Any) -> list[dict[str, Any]]:
     return nodes
 
 
+def has_json_ld_type(node: dict[str, Any], expected: str) -> bool:
+    node_type = node.get("@type")
+    if isinstance(node_type, list):
+        return expected in node_type
+    return node_type == expected
+
+
 class PublicPageMetadataTests(unittest.TestCase):
     def test_pages_have_one_h1_and_unique_non_empty_titles_and_descriptions(self):
         titles: dict[str, Path] = {}
@@ -225,20 +240,20 @@ class PublicPageMetadataTests(unittest.TestCase):
     def test_homepage_json_ld_describes_site_source_and_products(self):
         parser = inspect_html(Path("docs/index.html"))
         nodes = [node for payload in parser.json_ld for node in json_ld_nodes(payload)]
-        node_types = {
-            item
-            for node in nodes
-            for item in (node.get("@type", []) if isinstance(node.get("@type"), list) else [node.get("@type")])
-        }
-        self.assertIn("WebSite", node_types)
-        self.assertIn("SoftwareSourceCode", node_types)
+        self.assertTrue(any(has_json_ld_type(node, "WebSite") for node in nodes))
 
-        has_part = [part for node in nodes for part in node.get("hasPart", [])]
-        serialized_parts = json.dumps(has_part)
-        for product, url in PRODUCT_LINKS.items():
-            with self.subTest(product=product):
-                self.assertIn(product, serialized_parts)
-                self.assertIn(url, serialized_parts)
+        source_nodes = [node for node in nodes if has_json_ld_type(node, "SoftwareSourceCode")]
+        self.assertEqual(
+            len(source_nodes),
+            1,
+            "Homepage must contain exactly one SoftwareSourceCode JSON-LD node",
+        )
+        has_part = source_nodes[0].get("hasPart")
+        self.assertIsInstance(has_part, list)
+        self.assertEqual(len(has_part), len(JSON_LD_PRODUCT_LINKS))
+        self.assertTrue(all(isinstance(part, dict) for part in has_part))
+        product_links = {part.get("name"): part.get("url") for part in has_part}
+        self.assertEqual(product_links, JSON_LD_PRODUCT_LINKS)
 
 
 class CapabilityAndDiscoveryTests(unittest.TestCase):
@@ -268,7 +283,8 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
             for element in root.findall(".//{http://www.sitemaps.org/schemas/sitemap/0.9}loc")
             if element.text
         ]
-        self.assertEqual(urls, list(PUBLIC_PAGES.values()))
+        self.assertEqual(len(urls), len(PUBLIC_PAGES))
+        self.assertEqual(set(urls), set(PUBLIC_PAGES.values()))
 
     def test_llms_txt_has_summary_and_expected_sections(self):
         path = Path("docs/llms.txt")
