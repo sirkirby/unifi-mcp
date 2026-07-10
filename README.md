@@ -46,15 +46,15 @@ UniFi MCP is a collection of [Model Context Protocol](https://modelcontextprotoc
 
 ## MCP Discovery
 
-UniFi MCP keeps the standard MCP path primary: capable clients discover currently registered tools with `tools/list` and invoke them with `tools/call`. The default `lazy` mode keeps initial context small by exposing UniFi meta-tools first, while `eager` mode registers all selected domain tools directly for clients that prefer a full standard tool list.
+UniFi MCP keeps the standard MCP path primary: capable clients discover currently registered tools with `tools/list` and invoke them with `tools/call`. The default `lazy` mode keeps initial context small by exposing meta-tools first, while `eager` mode registers all selected domain tools directly for clients that prefer a full standard tool list.
 
-The `*_tool_index`, `*_execute`, `*_batch`, and `*_load_tools` surfaces are UniFi compatibility extensions for large catalogs, lazy loading, and relay workflows. See [MCP Discovery and UniFi Meta-Tools](docs/tool-index.md) for mode-by-mode behavior.
+The lazy-loading meta-tools — `*_tool_index`, `*_execute`, `*_batch`, `*_batch_status`, and lazy-only `*_load_tools` — support filtered discovery, indirect execution, batch orchestration, and optional direct registration. They are independent of the protocol-version response compatibility policy below. See [MCP Discovery and Lazy-Loading Meta-Tools](docs/tool-index.md) for mode-by-mode behavior.
 
 ## MCP response size
 
 For tool results that already provide structured output, `adaptive` response mode is the default. It classifies each request by the canonical date-based `protocolVersion` advertised during MCP initialization, not by the client's product name or application version. Requests advertising MCP `2025-06-18` or later receive concise text in `content` and the full result once in `structuredContent`; requests advertising an earlier revision (such as `2024-11-05` or `2025-03-26`), or whose revision metadata is missing or malformed, retain the full compatibility JSON in `content`. Set `UNIFI_MCP_CONTENT_MODE=compat` to force that duplicated compatibility form, or `UNIFI_MCP_CONTENT_MODE=compact` to force concise text plus the full structured result even outside a negotiated request. Use `compat` for any client that consumes the full result only from `content`, regardless of its advertised revision.
 
-Compatibility meta-tools remain content-only. For structured inner results, `*_execute` and `*_batch_status` expose one normalized JSON payload in `content` rather than a nested transport pair; content-only execute results remain unchanged. Response modes do not convert these meta-tools to `structuredContent`.
+The lazy-loading meta-tools remain content-only; they are not the pre-`2025-06-18` protocol category described above. For structured inner results, `*_execute` and `*_batch_status` expose one normalized JSON payload in `content` rather than a nested transport pair; content-only execute results remain unchanged. Response modes do not convert these meta-tools to `structuredContent`.
 
 `UNIFI_NETWORK_MCP_CONTENT_MODE`, `UNIFI_PROTECT_MCP_CONTENT_MODE`, and `UNIFI_ACCESS_MCP_CONTENT_MODE` override the global setting for their respective servers. Independently of transport compaction, Network's `unifi_get_dashboard` defaults to `summary=true`, while `unifi_list_rogue_aps` defaults to a summarized page of at most 100 records; pass `summary=false` when the full selected data is required.
 

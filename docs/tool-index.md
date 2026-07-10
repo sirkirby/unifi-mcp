@@ -1,10 +1,11 @@
-# MCP Discovery and UniFi Meta-Tools
+# MCP Discovery and Lazy-Loading Meta-Tools
 
 UniFi MCP follows the standard MCP tool discovery path first: clients discover
 currently registered tools with `tools/list` and invoke them with `tools/call`.
-The UniFi meta-tools are compatibility and UX extensions layered on top of that
-standard path. They keep large UniFi tool catalogs usable in constrained LLM
-contexts, especially when lazy loading is enabled.
+The meta-tools support lazy loading through filtered discovery, indirect
+execution, batch orchestration, and optional direct registration. They keep the
+initial `tools/list` response small without changing the standard MCP path and
+are unrelated to protocol-version response compatibility.
 
 References:
 
@@ -23,9 +24,9 @@ The canonical MCP discovery flow is:
 Use this path when the client supports the standard tool list well, especially
 in `eager` mode where all selected domain tools are registered directly.
 
-## UniFi Extension Path
+## Lazy-Loading Meta-Tool Path
 
-Each app also exposes a small set of meta-tools:
+Each app exposes the following lazy-loading meta-tools:
 
 | App | Prefix | Meta-tools |
 |-----|--------|------------|
@@ -61,7 +62,8 @@ Use `*_tool_index` when:
 ### Execute and Batch
 
 `*_execute` calls a named domain tool through the server's lazy loader. It is
-the compatibility path for clients that only see meta-tools in `tools/list`.
+the indirect execution path for clients that only see meta-tools in
+`tools/list`.
 
 Example:
 
@@ -75,8 +77,8 @@ Example:
 }
 ```
 
-`*_batch` and `*_batch_status` provide the same compatibility layer for multiple
-parallel operations.
+`*_batch` and `*_batch_status` provide the same indirect execution path
+for multiple parallel operations.
 
 ### Load Tools
 
@@ -103,7 +105,7 @@ registered with MCP.
 
 | Mode | Initial `tools/list` behavior | Full catalog access | Best fit |
 |------|-------------------------------|---------------------|----------|
-| `eager` | Meta-tools plus all selected domain tools are registered directly | Standard `tools/list`; optional `*_tool_index` for compact filtering | Clients that handle large tool lists well, dev consoles, compatibility checks |
+| `eager` | Meta-tools plus all selected domain tools are registered directly | Standard `tools/list`; optional `*_tool_index` for compact filtering | Clients that handle large tool lists well, dev consoles, and parity checks |
 | `lazy` (default) | Meta-tools plus `*_load_tools` are registered initially | `*_tool_index` plus `*_execute`, or `*_load_tools` followed by `tools/list` refresh | Production LLM clients with limited context |
 | `meta_only` | Only the core meta-tools are registered initially | `*_tool_index` plus `*_execute`/`*_batch` | Maximum context control; clients that do not need direct domain tools |
 
@@ -126,11 +128,11 @@ manifest-backed catalog.
   mode; direct MCP `tools/list` remains the source for currently registered
   tools.
 
-## Compatibility Guidance
+## Extension Guidance
 
 Prefer the standard MCP path whenever it is enough. Add or depend on UniFi
 extensions only when they solve a concrete catalog-size, lazy-loading, or relay
-compatibility problem.
+workflow constraint.
 
 When adopting new MCP spec features:
 

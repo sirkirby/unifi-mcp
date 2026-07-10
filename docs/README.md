@@ -19,7 +19,7 @@ Complete documentation for the UniFi MCP ecosystem.
 
 Standard MCP discovery is still `tools/list` followed by `tools/call`. The
 UniFi `*_tool_index`, `*_execute`, `*_batch`, and `*_load_tools` surfaces are
-compatibility extensions for large catalogs and lazy loading, not replacements
+optional lazy-loading extensions for filtered discovery and indirect execution, not replacements
 for the protocol path.
 
 The server now supports three tool registration modes:
@@ -49,7 +49,7 @@ Visual guide comparing eager vs lazy vs meta-only modes:
 
 **TLDR:** Lazy mode = 96% token savings + seamless UX = best of both worlds!
 
-#### [MCP Discovery and UniFi Meta-Tools](tool-index.md)
+#### [MCP Discovery and Lazy-Loading Meta-Tools](tool-index.md)
 Documentation for standard MCP discovery and the UniFi meta-tool extension path:
 - How `tools/list` maps to lazy, eager, and meta-only modes
 - How to query the compatibility tool index

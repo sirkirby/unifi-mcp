@@ -1006,7 +1006,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute multiple UniFi Protect tools in parallel through the UniFi compatibility wrapper. Returns job IDs; use protect_batch_status to check progress.",
+      "description": "Execute multiple UniFi Protect tools in parallel through the indirect execution wrapper. Returns job IDs; use protect_batch_status to check progress.",
       "name": "protect_batch",
       "schema": {
         "input": {
@@ -1725,7 +1725,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute a UniFi Protect tool (security cameras, recordings, snapshots, motion events, live views, and NVR management) by name for lazy/meta-only compatibility workflows.",
+      "description": "Execute a UniFi Protect tool (security cameras, recordings, snapshots, motion events, live views, and NVR management) by name for lazy/meta-only workflows.",
       "name": "protect_execute",
       "schema": {
         "input": {
@@ -4955,7 +4955,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Discover UniFi Protect tools (security cameras, recordings, snapshots, motion events, live views, and NVR management) through the UniFi compatibility index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
+      "description": "Discover UniFi Protect tools (security cameras, recordings, snapshots, motion events, live views, and NVR management) through the manifest-backed tool index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "protect_tool_index",
       "schema": {
         "input": {

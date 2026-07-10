@@ -131,7 +131,7 @@ def register_meta_tools(
         name=idx_name,
         title=idx_title,
         description=(
-            f"Discover {server_label} tools ({hint}) through the UniFi compatibility index. "
+            f"Discover {server_label} tools ({hint}) through the manifest-backed tool index. "
             "Standard MCP clients should prefer tools/list when it exposes the needed tools."
         ),
         input_schema={
@@ -185,7 +185,7 @@ def register_meta_tools(
         description=(
             f"Execute a {server_label} tool discovered via {idx_name}. "
             f"This server manages {hint}. "
-            "This is a UniFi compatibility execution wrapper for lazy/meta-only workflows; "
+            "This is an indirect execution wrapper for lazy/meta-only workflows; "
             "standard MCP clients may call directly registered tools with tools/call. "
             f"For bulk/parallel operations, use {batch_name} instead."
         ),
@@ -211,7 +211,7 @@ def register_meta_tools(
     register_tool(
         name=exec_name,
         title=exec_title,
-        description=(f"Execute a {server_label} tool ({hint}) by name for lazy/meta-only compatibility workflows."),
+        description=(f"Execute a {server_label} tool ({hint}) by name for lazy/meta-only workflows."),
         input_schema={
             "type": "object",
             "required": ["tool"],
@@ -239,7 +239,7 @@ def register_meta_tools(
         name=batch_name,
         title=batch_title,
         description=(
-            f"Execute multiple {server_label} tools in parallel through a UniFi compatibility wrapper. "
+            f"Execute multiple {server_label} tools in parallel through an indirect execution wrapper. "
             f"Use {idx_name} to discover tool names when they are not directly registered. "
             f"Returns job IDs for each operation. Use {status_name} to check progress and get results. "
             f"For single operations, use {exec_name} instead (returns result directly)."
@@ -300,7 +300,7 @@ def register_meta_tools(
         name=batch_name,
         title=batch_title,
         description=(
-            f"Execute multiple {server_label} tools in parallel through the UniFi compatibility wrapper. "
+            f"Execute multiple {server_label} tools in parallel through the indirect execution wrapper. "
             f"Returns job IDs; use {status_name} to check progress."
         ),
         input_schema={

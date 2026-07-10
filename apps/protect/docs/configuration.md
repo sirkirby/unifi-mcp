@@ -36,7 +36,7 @@ The Protect server supports server-specific environment variables with the `UNIF
 
 `UNIFI_PROTECT_MCP_CONTENT_MODE` overrides the global `UNIFI_MCP_CONTENT_MODE`; if neither is set, the YAML value and then the `adaptive` default apply.
 
-The `adaptive` and `compact` modes affect response compaction only for tool results that already provide structured output. Compatibility meta-tools remain content-only. For structured inner results, `*_execute` and `*_batch_status` expose one normalized JSON payload in `content` rather than a nested transport pair; content-only execute results remain unchanged. Response modes do not convert these meta-tools to `structuredContent`.
+The `adaptive` and `compact` modes affect response compaction only for tool results that already provide structured output. The lazy-loading meta-tools (`*_tool_index`, `*_execute`, `*_batch`, `*_batch_status`, and lazy-only `*_load_tools`) remain content-only and are independent of protocol-version response compatibility. For structured inner results, `*_execute` and `*_batch_status` expose one normalized JSON payload in `content` rather than a nested transport pair; content-only execute results remain unchanged. Response modes do not convert these meta-tools to `structuredContent`.
 
 | Mode | Behavior |
 |------|----------|
@@ -113,8 +113,8 @@ Valid values for `UNIFI_ENABLED_CATEGORIES` (eager mode):
 ## Tool Registration Modes
 
 Standard MCP clients discover currently registered tools with `tools/list`.
-UniFi meta-tools are compatibility extensions for lazy loading and compact
-catalog discovery. See [MCP Discovery and UniFi Meta-Tools](../../../docs/tool-index.md).
+The meta-tools support lazy loading through filtered discovery, indirect
+execution, batch orchestration, and optional direct registration. See [MCP Discovery and Lazy-Loading Meta-Tools](../../../docs/tool-index.md).
 
 | Mode | Initial `tools/list` behavior | Best fit |
 |------|-------------------------------|----------|

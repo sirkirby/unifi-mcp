@@ -602,7 +602,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute multiple UniFi Network tools in parallel through the UniFi compatibility wrapper. Returns job IDs; use unifi_batch_status to check progress.",
+      "description": "Execute multiple UniFi Network tools in parallel through the indirect execution wrapper. Returns job IDs; use unifi_batch_status to check progress.",
       "name": "unifi_batch",
       "schema": {
         "input": {
@@ -4379,7 +4379,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute a UniFi Network tool (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) by name for lazy/meta-only compatibility workflows.",
+      "description": "Execute a UniFi Network tool (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) by name for lazy/meta-only workflows.",
       "name": "unifi_execute",
       "schema": {
         "input": {
@@ -15101,7 +15101,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Discover UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) through the UniFi compatibility index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
+      "description": "Discover UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) through the manifest-backed tool index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "unifi_tool_index",
       "schema": {
         "input": {
