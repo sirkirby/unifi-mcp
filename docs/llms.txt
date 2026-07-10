@@ -1,0 +1,52 @@
+# UniFi MCP
+> UniFi MCP is an open-source collection of local-first MCP servers and an independent HTTP API for controlled access to UniFi Network, Protect, and Access infrastructure.
+
+UniFi MCP is an independent project and is not affiliated with Ubiquiti Inc.
+
+The default MCP permission mode previews state-changing operations and requires confirmation before execution. Known secret-bearing response fields are redacted by default at response boundaries; operators remain responsible for controller credentials, policy configuration, and network exposure.
+
+UniFi uses separate API families whose authentication, field schemas, and IDs are not interchangeable: the V2 controller API uses session authentication and controller object IDs; the public Integration API uses X-API-Key authentication and UUIDs; and UniFi OS Alarm Manager v2 uses session authentication with SuperAdmin access and its own UUID namespace. Use IDs only within the tool family that returned them unless an explicit resolver documents a verified bridge.
+
+## Getting Started
+
+- [Quick start](https://github.com/sirkirby/unifi-mcp/blob/main/QUICKSTART.md): Install and configure a local MCP server.
+- [Repository overview](https://github.com/sirkirby/unifi-mcp/blob/main/README.md): Product map, install paths, configuration, and examples.
+
+## MCP Servers
+
+- [Network MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/network/README.md): Network devices, clients, Wi-Fi, routing, firewall, VPN, traffic, and controlled configuration.
+- [Protect MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/protect/README.md): Cameras, events, detections, recordings, and Protect device operations.
+- [Access MCP server](https://github.com/sirkirby/unifi-mcp/blob/main/apps/access/README.md): Doors, credentials, visitors, policies, devices, and access events.
+
+## API Server
+
+- [API server README](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/README.md): Independent non-MCP HTTP service with typed REST resources, read-only GraphQL, REST actions, SSE streams, scoped keys, and administration.
+- [OpenAPI reference](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/docs/openapi-reference.md): Generated REST endpoint reference.
+- [GraphQL reference](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/docs/graphql-reference.md): Generated query and type reference.
+
+## Cloud Relay
+
+- [Relay sidecar](https://github.com/sirkirby/unifi-mcp/blob/main/packages/unifi-mcp-relay/README.md): Local MCP client and forwarder that connects configured MCP servers over HTTP to the Worker gateway.
+- [Worker gateway](https://github.com/sirkirby/unifi-mcp/blob/main/apps/worker/README.md): Cloudflare-hosted MCP endpoint, broker, token boundary, and deployment CLI.
+
+## Safety
+
+- [Permissions and policy gates](https://github.com/sirkirby/unifi-mcp/blob/main/docs/permissions.md): Confirmation mode, bypass mode, and create, update, and delete policy controls.
+- [Security policy](https://github.com/sirkirby/unifi-mcp/blob/main/SECURITY.md): Supported reporting and security guidance.
+
+## Architecture
+
+- [Architecture](https://github.com/sirkirby/unifi-mcp/blob/main/docs/ARCHITECTURE.md): Component responsibilities, dependencies, transports, and request paths.
+- [Tool discovery](https://github.com/sirkirby/unifi-mcp/blob/main/docs/tool-index.md): Lazy tool registration, indexing, execution, and response-size guidance.
+
+## Source and Community
+
+- [Source repository](https://github.com/sirkirby/unifi-mcp): Code, issues, releases, and project history.
+- [Contributing](https://github.com/sirkirby/unifi-mcp/blob/main/CONTRIBUTING.md): Development workflow and contribution requirements.
+
+## Optional Resources
+
+- [Sponsor the project](https://unifimcp.com/sponsor/): Support independent maintenance and compatibility work.
+- [Privacy policy](https://unifimcp.com/privacy.html): Local data flow and optional-service privacy details.
+- [API GraphQL SDL](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/src/unifi_api/graphql/schema.graphql): Generated schema for deeper API inspection.
+- [MCP tool manifests](https://github.com/sirkirby/unifi-mcp/tree/main/apps): Generated server tool catalogs alongside each MCP application.
