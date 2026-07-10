@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
+from mcp.types import CallToolResult
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUN_PREFIX = "codex-smoke"
@@ -139,6 +140,50 @@ RISKY_OPERATION_NAMES = {
 }
 
 
+def _compact_json_bytes(value: Any) -> int:
+    return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+
+
+def _content_bytes(content: Any) -> int:
+    if not isinstance(content, list):
+        return 0
+
+    total = 0
+    for block in content:
+        text = getattr(block, "text", None)
+        if isinstance(text, str):
+            total += len(text.encode("utf-8"))
+            continue
+        data = getattr(block, "data", None)
+        if isinstance(data, str):
+            total += len(data.encode("utf-8"))
+            continue
+        if hasattr(block, "model_dump"):
+            block = block.model_dump(mode="json", exclude_none=True)
+        total += _compact_json_bytes(block)
+    return total
+
+
+def measure_tool_result_sizes(raw: Any) -> dict[str, int]:
+    """Measure content and structured result sizes without altering the result."""
+    if isinstance(raw, CallToolResult):
+        content = raw.content
+        structured = raw.structuredContent
+    elif isinstance(raw, tuple) and len(raw) == 2:
+        content, structured = raw
+    else:
+        content = raw if isinstance(raw, list) else []
+        structured = None
+
+    content_bytes = _content_bytes(content)
+    structured_bytes = _compact_json_bytes(structured) if structured is not None else 0
+    return {
+        "content_bytes": content_bytes,
+        "structured_bytes": structured_bytes,
+        "combined_response_bytes": content_bytes + structured_bytes,
+    }
+
+
 @dataclass
 class SmokeRecord:
     tool: str
@@ -149,6 +194,9 @@ class SmokeRecord:
     success: bool | None = None
     error: str | None = None
     summary: dict[str, Any] = field(default_factory=dict)
+    content_bytes: int | None = None
+    structured_bytes: int | None = None
+    combined_response_bytes: int | None = None
 
 
 @dataclass
@@ -465,6 +513,10 @@ class LiveSmokeRunner:
         record = SmokeRecord(tool=tool, phase=phase, status="error", args=args)
         try:
             raw = await self.server.call_tool(tool, args)
+            sizes = measure_tool_result_sizes(raw)
+            record.content_bytes = sizes["content_bytes"]
+            record.structured_bytes = sizes["structured_bytes"]
+            record.combined_response_bytes = sizes["combined_response_bytes"]
             data = self.unwrap_result(raw)
             record.duration_ms = int((time.perf_counter() - started) * 1000)
             record.success = data.get("success") if isinstance(data, dict) else None
@@ -504,11 +556,17 @@ class LiveSmokeRunner:
         return all(re.search(marker, error) for marker in markers)
 
     def unwrap_result(self, raw: Any) -> dict[str, Any]:
+        if isinstance(raw, CallToolResult):
+            if isinstance(raw.structuredContent, dict):
+                meta_result = raw.structuredContent.get("result")
+                return meta_result if isinstance(meta_result, dict) else raw.structuredContent
+            content = raw.content
+        else:
+            content = raw[0] if isinstance(raw, tuple) and raw else raw
         if isinstance(raw, tuple) and len(raw) > 1 and isinstance(raw[1], dict):
             meta_result = raw[1].get("result")
             if isinstance(meta_result, dict):
                 return meta_result
-        content = raw[0] if isinstance(raw, tuple) and raw else raw
         if isinstance(content, list) and content:
             text = getattr(content[0], "text", None)
             if text:
@@ -1658,6 +1716,15 @@ def summarize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "action",
         "resource_type",
         "resource_name",
+        "summary_mode",
+        "history_seconds",
+        "omitted_sections",
+        "returned_count",
+        "total_count",
+        "limit",
+        "offset",
+        "next_offset",
+        "has_more",
     ):
         if key in data:
             summary[key] = data[key]

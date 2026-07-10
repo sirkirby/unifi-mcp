@@ -602,7 +602,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute multiple UniFi Network tools in parallel through the UniFi compatibility wrapper. Returns job IDs; use unifi_batch_status to check progress.",
+      "description": "Execute multiple UniFi Network tools in parallel through the indirect execution wrapper. Returns job IDs; use unifi_batch_status to check progress.",
       "name": "unifi_batch",
       "schema": {
         "input": {
@@ -4379,7 +4379,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute a UniFi Network tool (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) by name for lazy/meta-only compatibility workflows.",
+      "description": "Execute a UniFi Network tool (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) by name for lazy/meta-only workflows.",
       "name": "unifi_execute",
       "schema": {
         "input": {
@@ -5829,11 +5829,22 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get the pre-aggregated site dashboard summary (health, device counts, client counts, ISP status).",
+      "description": "Get the pre-aggregated site dashboard. Defaults to a compact summary that omits high-volume activity/history series; pass summary=false to preserve raw dashboard entries.",
       "name": "unifi_get_dashboard",
       "schema": {
         "input": {
-          "properties": {},
+          "properties": {
+            "history_seconds": {
+              "description": "Dashboard history window in seconds",
+              "maximum": 2592000,
+              "minimum": 300,
+              "type": "integer"
+            },
+            "summary": {
+              "description": "Omit high-volume activity/history series; default true",
+              "type": "boolean"
+            }
+          },
           "type": "object"
         },
         "output": {
@@ -9132,6 +9143,7 @@
             },
             "page": {
               "description": "0-based page number",
+              "minimum": 0,
               "type": "integer"
             },
             "page_size": {
@@ -9180,6 +9192,8 @@
             },
             "within_hours": {
               "description": "Look-back window in hours (used when time_from/time_to absent)",
+              "maximum": 8760,
+              "minimum": 1,
               "type": "integer"
             }
           },
@@ -11971,7 +11985,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List neighboring/rogue APs detected by your access points. Returns BSSID, SSID, channel, RSSI, band, and which of your APs detected each one. Useful for RF environment analysis and interference troubleshooting. WARNING: This can return hundreds of APs. Use channel and/or min_signal filters to reduce the result set.",
+      "description": "List neighboring/rogue APs detected by your access points. Defaults to a compact 100-record page; pass summary=false for raw records in the selected page. Filters apply before pagination, limit is at most 500, and pagination metadata includes total_count, returned_count/count, limit, offset, next_offset, and has_more.",
       "name": "unifi_list_rogue_aps",
       "schema": {
         "input": {
@@ -11980,9 +11994,24 @@
               "description": "Filter to a specific channel (e.g., 1, 6, 11 for 2.4GHz; 36, 100 for 5GHz)",
               "type": "integer"
             },
+            "limit": {
+              "description": "Maximum records per page (default 100, max 500)",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            },
             "min_signal": {
               "description": "Minimum signal strength in dBm (e.g., -70 to only show strong neighbors)",
               "type": "integer"
+            },
+            "offset": {
+              "description": "Zero-based offset into the filtered records (default 0)",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "summary": {
+              "description": "Return compact AP fields; default true. Set false for raw records in the selected page",
+              "type": "boolean"
             },
             "within_hours": {
               "description": "Hours to look back for detected APs (default 24)",
@@ -15072,7 +15101,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Discover UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) through the UniFi compatibility index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
+      "description": "Discover UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) through the manifest-backed tool index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "unifi_tool_index",
       "schema": {
         "input": {

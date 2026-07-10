@@ -68,6 +68,7 @@ server:
 policy:
   response:
     redact_sensitive_fields: ${oc.env:UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS,true}
+    mcp_content_mode: ${oc.env:UNIFI_NETWORK_MCP_CONTENT_MODE,adaptive}
 
 # Permissions are controlled via environment variables:
 #   UNIFI_TOOL_PERMISSION_MODE=confirm|bypass (default: confirm)

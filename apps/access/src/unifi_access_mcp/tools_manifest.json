@@ -43,7 +43,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute multiple UniFi Access tools in parallel through the UniFi compatibility wrapper. Returns job IDs; use access_batch_status to check progress.",
+      "description": "Execute multiple UniFi Access tools in parallel through the indirect execution wrapper. Returns job IDs; use access_batch_status to check progress.",
       "name": "access_batch",
       "schema": {
         "input": {
@@ -487,7 +487,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Execute a UniFi Access tool (door locks, access readers, credentials, visitors, access policies, and entry events) by name for lazy/meta-only compatibility workflows.",
+      "description": "Execute a UniFi Access tool (door locks, access readers, credentials, visitors, access policies, and entry events) by name for lazy/meta-only workflows.",
       "name": "access_execute",
       "schema": {
         "input": {
@@ -2887,7 +2887,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Discover UniFi Access tools (door locks, access readers, credentials, visitors, access policies, and entry events) through the UniFi compatibility index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
+      "description": "Discover UniFi Access tools (door locks, access readers, credentials, visitors, access policies, and entry events) through the manifest-backed tool index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "access_tool_index",
       "schema": {
         "input": {

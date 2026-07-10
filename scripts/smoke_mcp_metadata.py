@@ -159,7 +159,7 @@ def validate_tool_schema(tool: Any, *, label: str) -> None:
 
 
 def validate_meta_tool_surface(spec: ServerSpec, tools: list[Any]) -> None:
-    """Validate tools/list includes the expected compatibility meta-tools."""
+    """Validate tools/list includes the expected lazy-loading meta-tools."""
     by_name = _tool_by_name(tools)
     tool = by_name.get(spec.index_tool)
     if tool is None:

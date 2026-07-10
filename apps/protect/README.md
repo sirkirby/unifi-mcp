@@ -91,6 +91,14 @@ UNIFI_PROTECT_PASSWORD=your-password # Admin password
 
 **Fallback:** The shared `UNIFI_*` variables (e.g., `UNIFI_HOST`) also work. The server checks for `UNIFI_PROTECT_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
 
+### MCP response size
+
+For tool results that already provide structured output, `adaptive` is the default response mode. It classifies each request by the canonical date-based `protocolVersion` advertised during MCP initialization, not by the client's product name or application version. Requests advertising MCP `2025-06-18` or later receive concise `content` plus the full result once in `structuredContent`; requests advertising an earlier revision (such as `2024-11-05` or `2025-03-26`), or whose revision metadata is missing or malformed, keep full compatibility JSON in `content`. Set `UNIFI_PROTECT_MCP_CONTENT_MODE` to `compat` to force the duplicated compatibility form, or to `compact` to force concise text plus full structured output outside a negotiated request. This server-specific variable overrides `UNIFI_MCP_CONTENT_MODE`; use `compat` for any client that consumes the full result only from `content`, regardless of its advertised revision.
+
+The lazy-loading meta-tools (`*_tool_index`, `*_execute`, `*_batch`, `*_batch_status`, and lazy-only `*_load_tools`) remain content-only; they are not the pre-`2025-06-18` protocol category described above. For structured inner results, `*_execute` and `*_batch_status` expose one normalized JSON payload in `content` rather than a nested transport pair; content-only execute results remain unchanged. Response modes do not convert these meta-tools to `structuredContent`.
+
+When Network is enabled alongside Protect, its largest source responses are independently bounded: `unifi_get_dashboard` defaults to `summary=true`, and `unifi_list_rogue_aps` defaults to a summarized page of at most 100 records; `summary=false` restores the full selected data.
+
 > **AI-powered alarms need SuperAdmin.** The alarm-rule tools (`protect_alarm_list_rules` / `protect_alarm_get_rule` / `protect_alarm_create_rule` / `protect_alarm_update_rule` / `protect_alarm_delete_rule`) transparently use the modern UniFi-OS Alarm Manager when the account is **SuperAdmin**, and fall back to the classic automations view otherwise. The modern path surfaces and manages AI-powered alarms (e.g. AI Natural Language); the legacy path cannot see those rules and responses include a standard MCP `_meta` notice when the view is limited. Grant the account SuperAdmin on the console hosting Protect to view/manage AI alarms. Blast radius: on a standalone UNVR this is contained to Protect; on a combined UDM console SuperAdmin also grants Network/UniFi-OS control.
 
 ### Sensitive response fields

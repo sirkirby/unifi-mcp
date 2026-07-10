@@ -20,6 +20,7 @@ from unifi_mcp_shared.lazy_tools import (
     setup_lazy_loading,
 )
 from unifi_mcp_shared.meta_tools import register_load_tools, register_meta_tools
+from unifi_mcp_shared.server import UniFiMCPServer
 from unifi_mcp_shared.tasks import (
     DEFAULT_TASK_POLL_INTERVAL_MS,
     DEFAULT_TASK_TTL_MS,
@@ -40,6 +41,7 @@ __all__ = [
     "MCP_RELATED_TASK_META",
     "PolicyGateChecker",
     "ResourceValidator",
+    "UniFiMCPServer",
     "DEFAULT_TASK_POLL_INTERVAL_MS",
     "DEFAULT_TASK_TTL_MS",
     "auto_load_tools",

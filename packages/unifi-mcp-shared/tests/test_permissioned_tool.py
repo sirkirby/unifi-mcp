@@ -3,10 +3,12 @@
 import asyncio
 import inspect
 import logging
+from typing import Annotated, Callable
 from unittest.mock import MagicMock, patch
 
 import pytest
 from mcp.server.fastmcp import FastMCP
+from pydantic import Field
 from unifi_mcp_shared.output_schema import (
     UniFiToolResponse,
     get_unifi_tool_response_output_schema,
@@ -409,3 +411,79 @@ class TestInferInputSchema:
 
         schema = _infer_input_schema(tool, "tool", logging.getLogger("test"))
         assert "self" not in schema["properties"]
+
+    def test_infers_numeric_validation_constraints(self):
+        async def tool(
+            limit: Annotated[int, Field(ge=1, le=500)],
+            ratio: Annotated[float, Field(gt=0, lt=1, multiple_of=0.05)],
+        ):
+            pass
+
+        schema = _infer_input_schema(tool, "tool", logging.getLogger("test"))
+
+        assert schema["properties"]["limit"] == {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+        }
+        assert schema["properties"]["ratio"] == {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "exclusiveMaximum": 1,
+            "multipleOf": 0.05,
+        }
+
+    def test_infers_optional_string_validation_constraints(self):
+        async def tool(
+            name: Annotated[
+                str | None,
+                Field(min_length=2, max_length=20, pattern=r"^[a-z]+$"),
+            ] = None,
+        ):
+            pass
+
+        schema = _infer_input_schema(tool, "tool", logging.getLogger("test"))
+
+        assert schema["properties"]["name"] == {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 20,
+            "pattern": "^[a-z]+$",
+        }
+        assert "name" not in schema.get("required", [])
+
+    def test_infers_collection_validation_constraints(self):
+        async def tool(
+            items: Annotated[
+                list[str],
+                Field(min_length=1, max_length=10, json_schema_extra={"uniqueItems": True}),
+            ],
+            metadata: Annotated[dict[str, str], Field(min_length=1, max_length=5)],
+        ):
+            pass
+
+        schema = _infer_input_schema(tool, "tool", logging.getLogger("test"))
+
+        assert schema["properties"]["items"] == {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "uniqueItems": True,
+        }
+        assert schema["properties"]["metadata"] == {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 5,
+        }
+
+    def test_constraint_inference_failure_degrades_per_parameter(self):
+        async def tool(
+            callback: Callable[[int], int],
+            limit: Annotated[int, Field(ge=1)],
+        ):
+            pass
+
+        schema = _infer_input_schema(tool, "tool", logging.getLogger("test"))
+
+        assert schema["properties"]["callback"] == {"type": "string"}
+        assert schema["properties"]["limit"] == {"type": "integer", "minimum": 1}

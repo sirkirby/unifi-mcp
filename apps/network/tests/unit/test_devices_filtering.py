@@ -1,9 +1,11 @@
 """Tests for list_devices compression and get_device_details section selection."""
 
 import os
+from inspect import signature
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import TypeAdapter, ValidationError
 
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")
 os.environ.setdefault("UNIFI_USERNAME", "test")
@@ -45,6 +47,24 @@ GATEWAY_RAW = {
     "network_table": [{"_id": "n1"}, {"_id": "n2"}],
     "system-stats": {"cpu": "12.5", "mem": "40.0"},
 }
+
+ROGUE_APS = [
+    {
+        "_id": f"id-{index}",
+        "bssid": f"00:00:00:00:00:{index:02x}",
+        "essid": f"ssid-{index}",
+        "channel": 36,
+        "signal": -40 - index,
+        "band": 5,
+        "bw": 80,
+        "security": "WPA2",
+        "ap_mac": "aa:bb:cc:dd:ee:ff",
+        "ap_name": "Office AP",
+        "last_seen": 1_700_000_000 + index,
+        "site_id": "private-controller-field",
+    }
+    for index in range(5)
+]
 
 
 def _mock_conn():
@@ -287,3 +307,86 @@ async def test_list_devices_returns_all_by_default():
 
     assert result["total_count"] == 2 and result["returned_count"] == 2
     assert result["limit"] is None
+
+
+@pytest.mark.asyncio
+async def test_rogue_aps_defaults_to_paginated_summary():
+    with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
+        manager.list_rogue_aps = AsyncMock(return_value=ROGUE_APS)
+        manager._connection.site = "default"
+        from unifi_network_mcp.tools.devices import list_rogue_aps
+
+        result = await list_rogue_aps(limit=2)
+
+    assert result["total_count"] == 5
+    assert result["returned_count"] == 2
+    assert result["count"] == 2
+    assert result["offset"] == 0
+    assert result["next_offset"] == 2
+    assert result["has_more"] is True
+    assert result["summary_mode"] is True
+    assert result["rogue_aps"][0]["ssid"] == "ssid-0"
+    assert "site_id" not in result["rogue_aps"][0]
+
+
+@pytest.mark.asyncio
+async def test_rogue_aps_offset_and_full_mode():
+    with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
+        manager.list_rogue_aps = AsyncMock(return_value=ROGUE_APS)
+        manager._connection.site = "default"
+        from unifi_network_mcp.tools.devices import list_rogue_aps
+
+        result = await list_rogue_aps(limit=2, offset=2, summary=False)
+
+    assert result["rogue_aps"] == ROGUE_APS[2:4]
+    assert result["next_offset"] == 4
+    assert result["has_more"] is True
+
+
+@pytest.mark.asyncio
+async def test_rogue_aps_final_page_has_no_continuation():
+    with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
+        manager.list_rogue_aps = AsyncMock(return_value=ROGUE_APS)
+        manager._connection.site = "default"
+        from unifi_network_mcp.tools.devices import list_rogue_aps
+
+        result = await list_rogue_aps(limit=2, offset=4, summary=False)
+
+    assert result["returned_count"] == 1
+    assert result["next_offset"] is None
+    assert result["has_more"] is False
+
+
+@pytest.mark.asyncio
+async def test_rogue_ap_filters_apply_before_pagination():
+    mixed_channels = [{**ap, "channel": 1 if index < 3 else 36} for index, ap in enumerate(ROGUE_APS)]
+    with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
+        manager.list_rogue_aps = AsyncMock(return_value=mixed_channels)
+        manager._connection.site = "default"
+        from unifi_network_mcp.tools.devices import list_rogue_aps
+
+        result = await list_rogue_aps(channel=36, limit=1, offset=1, summary=False)
+
+    assert result["total_count"] == 2
+    assert result["rogue_aps"] == [mixed_channels[4]]
+    assert result["has_more"] is False
+
+
+def test_rogue_ap_pagination_bounds_are_in_schema_and_validate_inputs():
+    from unifi_network_mcp.tools.devices import list_rogue_aps
+
+    parameters = signature(list_rogue_aps).parameters
+    limit_adapter = TypeAdapter(parameters["limit"].annotation)
+    offset_adapter = TypeAdapter(parameters["offset"].annotation)
+
+    assert limit_adapter.json_schema()["minimum"] == 1
+    assert limit_adapter.json_schema()["maximum"] == 500
+    assert offset_adapter.json_schema()["minimum"] == 0
+    assert limit_adapter.validate_python(1) == 1
+    assert limit_adapter.validate_python(500) == 500
+
+    for invalid_limit in (0, 501):
+        with pytest.raises(ValidationError):
+            limit_adapter.validate_python(invalid_limit)
+    with pytest.raises(ValidationError):
+        offset_adapter.validate_python(-1)

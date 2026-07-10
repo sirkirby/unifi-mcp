@@ -12,6 +12,7 @@ import os
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
+from unifi_mcp_shared.server import UniFiMCPServer
 from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
 
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")
@@ -24,6 +25,7 @@ async def test_strict_dispatch_rejects_unknown_kwarg() -> None:
     """server.call_tool with a bogus kwarg surfaces a structured ToolError."""
     from unifi_protect_mcp.runtime import server
 
+    assert isinstance(server, UniFiMCPServer), "runtime.server must use the shared UniFi MCP server boundary"
     assert isinstance(server, StrictKwargFastMCP), (
         "runtime.server must be StrictKwargFastMCP for transport-layer kwarg validation"
     )

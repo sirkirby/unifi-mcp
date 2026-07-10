@@ -37,7 +37,7 @@ def auto_load_tools(
                       (requires *server* parameter).
         server: FastMCP server instance (required if *enabled_tools* is set).
         meta_tools: Set of meta-tool names to always keep when filtering by
-                    *enabled_tools*. Defaults to the standard five UniFi meta-tools.
+                    *enabled_tools*. Defaults to the standard five lazy-loading meta-tools.
     """
     try:
         tools_pkg: ModuleType = importlib.import_module(base_package)

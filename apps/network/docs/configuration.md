@@ -45,11 +45,25 @@ The server auto-detects whether your controller uses UniFi OS proxy paths (`/pro
 | `UNIFI_ENABLED_TOOLS` | — | Comma-separated tool names to register (eager mode only) |
 | `CONFIG_PATH` | — | Path to a custom config YAML file |
 
+## MCP Response Content
+
+`UNIFI_NETWORK_MCP_CONTENT_MODE` overrides the global `UNIFI_MCP_CONTENT_MODE`; if neither is set, the YAML value and then the `adaptive` default apply.
+
+The `adaptive` and `compact` modes affect response compaction only for tool results that already provide structured output. The lazy-loading meta-tools (`*_tool_index`, `*_execute`, `*_batch`, `*_batch_status`, and lazy-only `*_load_tools`) remain content-only and are independent of protocol-version response compatibility. For structured inner results, `*_execute` and `*_batch_status` expose one normalized JSON payload in `content` rather than a nested transport pair; content-only execute results remain unchanged. Response modes do not convert these meta-tools to `structuredContent`.
+
+| Mode | Behavior |
+|------|----------|
+| `adaptive` (default) | Classifies the request by the canonical date-based `protocolVersion` advertised during MCP initialization, not by client product or application version. For structured tool results, MCP `2025-06-18` or later receives concise `content` plus the full result once in `structuredContent`; earlier, missing, or malformed revisions retain full compatibility JSON in `content`. |
+| `compat` | Forces full compatibility JSON in `content` as well as the structured result. Use this for clients that consume the full result only from `content`, regardless of advertised revision. |
+| `compact` | For structured tool results, forces concise `content` plus the full `structuredContent` result even when no capable protocol revision was negotiated. |
+
+Network also bounds high-volume source data before MCP serialization: `unifi_get_dashboard` defaults to `summary=true`, and `unifi_list_rogue_aps` defaults to a summarized page of at most 100 records. Pass `summary=false` for full data within the selected dashboard request or rogue-AP page.
+
 ## Tool Registration Modes
 
 Standard MCP clients discover currently registered tools with `tools/list`.
-UniFi meta-tools are compatibility extensions for lazy loading and compact
-catalog discovery. See [MCP Discovery and UniFi Meta-Tools](../../../docs/tool-index.md).
+The meta-tools support lazy loading through filtered discovery, indirect
+execution, batch orchestration, and optional direct registration. See [MCP Discovery and Lazy-Loading Meta-Tools](../../../docs/tool-index.md).
 
 | Mode | Initial `tools/list` behavior | Best fit |
 |------|-------------------------------|----------|

@@ -6,6 +6,41 @@ import inspect
 import types
 from typing import Annotated, Any, Callable, Union, get_args, get_origin
 
+from pydantic import TypeAdapter
+
+_VALIDATION_SCHEMA_KEYWORDS = frozenset(
+    {
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+        "minLength",
+        "maxLength",
+        "pattern",
+        "minItems",
+        "maxItems",
+        "uniqueItems",
+        "minProperties",
+        "maxProperties",
+    }
+)
+
+
+def _validation_schema_keywords(annotation: Any) -> dict[str, Any]:
+    """Extract only validation keywords supported by the compact manifest dialect."""
+    annotation_schema = TypeAdapter(annotation).json_schema()
+    validation = {key: annotation_schema[key] for key in _VALIDATION_SCHEMA_KEYWORDS if key in annotation_schema}
+
+    any_of = annotation_schema.get("anyOf")
+    if isinstance(any_of, list):
+        non_null_branches = [branch for branch in any_of if isinstance(branch, dict) and branch.get("type") != "null"]
+        if len(non_null_branches) == 1:
+            branch = non_null_branches[0]
+            validation.update({key: branch[key] for key in _VALIDATION_SCHEMA_KEYWORDS if key in branch})
+
+    return validation
+
 
 def _infer_input_schema(func: Callable, tool_name: str, logger: Any) -> dict[str, Any]:
     """Infer JSON Schema input_schema from function type annotations.
@@ -37,6 +72,7 @@ def _infer_input_schema(func: Callable, tool_name: str, logger: Any) -> dict[str
 
             if param.annotation != inspect.Parameter.empty:
                 ann = param.annotation
+                schema_annotation = ann
 
                 # Unwrap Annotated[T, Field(...)]
                 if get_origin(ann) is Annotated:
@@ -69,6 +105,16 @@ def _infer_input_schema(func: Callable, tool_name: str, logger: Any) -> dict[str
             prop: dict[str, Any] = {"type": param_type}
             if param_description:
                 prop["description"] = param_description
+            if param.annotation != inspect.Parameter.empty:
+                try:
+                    prop.update(_validation_schema_keywords(schema_annotation))
+                except Exception as exc:
+                    logger.debug(
+                        "Could not infer validation constraints for %s.%s: %s",
+                        tool_name,
+                        param_name,
+                        exc,
+                    )
             properties[param_name] = prop
 
             if param.default == inspect.Parameter.empty:
