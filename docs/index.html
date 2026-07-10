@@ -1,855 +1,348 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>UniFi MCP — AI agents for your UniFi infrastructure</title>
-<meta name="description" content="Open-source MCP servers that give AI agents safe, structured access to UniFi Network, Protect, and Access controllers. 270+ tools, preview-then-confirm mutations, multi-controller ready.">
-<meta name="theme-color" content="#070a14">
-<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UniFi MCP — Safe, local-first tools for agents and applications</title>
+  <meta name="description" content="Open-source MCP servers and a standalone HTTP API for building safe UniFi automations while keeping controllers on infrastructure you control.">
+  <meta name="theme-color" content="#0b1014">
+  <link rel="canonical" href="https://unifimcp.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="UniFi MCP">
+  <meta property="og:title" content="UniFi MCP — Safe, local-first tools for agents and applications">
+  <meta property="og:description" content="Give agents and applications structured access to UniFi without exposing your controllers to the public internet.">
+  <meta property="og:url" content="https://unifimcp.com/">
+  <meta property="og:image" content="https://unifimcp.com/assets/hero-readme.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="675">
+  <meta property="og:image:alt" content="UniFi MCP product overview">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="UniFi MCP — Safe, local-first tools for agents and applications">
+  <meta name="twitter:description" content="Safe, local-first UniFi interfaces for agents, applications, and remote MCP clients.">
+  <meta name="twitter:image" content="https://unifimcp.com/assets/hero-readme.jpg">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://unifimcp.com/#website",
+        "name": "UniFi MCP",
+        "url": "https://unifimcp.com/"
+      },
+      {
+        "@type": "SoftwareSourceCode",
+        "@id": "https://unifimcp.com/#source",
+        "name": "UniFi MCP",
+        "description": "Open-source interfaces for connecting agents and applications to UniFi controllers.",
+        "url": "https://unifimcp.com/",
+        "codeRepository": "https://github.com/sirkirby/unifi-mcp",
+        "license": "https://opensource.org/license/mit",
+        "programmingLanguage": ["Python", "TypeScript"],
+        "hasPart": [
+          {"@type": "SoftwareApplication", "name": "unifi-network-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/network"},
+          {"@type": "SoftwareApplication", "name": "unifi-protect-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/protect"},
+          {"@type": "SoftwareApplication", "name": "unifi-access-mcp", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/access"},
+          {"@type": "SoftwareApplication", "name": "unifi-api-server", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/api"},
+          {"@type": "SoftwareApplication", "name": "unifi-mcp-relay", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay"},
+          {"@type": "SoftwareApplication", "name": "unifi-mcp-worker", "url": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker"}
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
-
-<!-- ========================== NAV ========================== -->
-<nav class="nav" aria-label="Primary">
-  <div class="nav-inner">
-    <a href="#" class="brand" aria-label="UniFi MCP home">
-      <span class="brand-mark">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M2 8 L6 4 L10 8 L6 12 Z"/><path d="M14 8 L10 4 M14 8 L10 12"/>
-        </svg>
-      </span>
-      <span>UniFi MCP</span>
-    </a>
-    <div class="nav-links">
-      <a href="#servers">Servers</a>
-      <a href="#examples">Ask the agent</a>
-      <a href="#relay">Cloud Relay</a>
-      <a href="#skills">Skills</a>
-      <a href="#install">Install</a>
-      <a href="#faq">FAQ</a>
-    </div>
-    <div class="nav-cta">
-      <a href="https://github.com/sirkirby/unifi-mcp" class="btn btn-ghost" aria-label="Star on GitHub">
-        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        Star on GitHub
-        <span class="star-count" data-stars aria-label="GitHub stars"></span>
-      </a>
-      <a href="sponsor/" class="btn btn-sponsor" aria-label="Sponsor UniFi MCP">
-        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 14.25l-.345-.666C3.612 9.73 1 7.197 1 4.25 1 2.178 2.678.5 4.75.5 6.13.5 7.365 1.31 8 2.476 8.635 1.31 9.87.5 11.25.5 13.322.5 15 2.178 15 4.25c0 2.947-2.612 5.48-6.655 9.334L8 14.25z"/></svg>
-        <span>Sponsor</span>
-      </a>
-      <a href="#install" class="btn btn-primary">
-        Get started
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
-      </a>
-    </div>
-  </div>
-</nav>
-
-<!-- ========================== HERO ========================== -->
-<section class="hero">
-  <div class="shell">
-    <div class="hero-grid">
-      <div class="hero-copy">
-        <span class="eyebrow"><span class="dot"></span>Open source · MIT · Python 3.13+</span>
-        <h1>Give your agents <span class="accent">full access</span> to your UniFi stack — safely.</h1>
-        <p class="lead">
-          <b>UniFi MCP</b> is a suite of Model Context Protocol servers that expose your Network, Protect, and Access controllers to AI agents — <b>270+ tools</b>, preview-then-confirm mutations, and a Cloudflare relay for cloud-hosted agents.
-        </p>
-        <div class="hero-ctas">
-          <a href="#install" class="btn btn-primary btn-lg">
-            Quick install
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
-          </a>
-          <a href="#examples" class="btn btn-ghost btn-lg">
-            See agent examples
-          </a>
-        </div>
-        <div class="hero-meta">
-          <span class="pill">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12v8H2z"/><path d="M5 8h6"/></svg>
-            stdio · HTTP · SSE
-          </span>
-          <span class="pill">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1l6 3v4c0 4-3 6.5-6 7-3-.5-6-3-6-7V4l6-3z"/></svg>
-            Read-only by default
-          </span>
-          <span class="pill">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>
-            ~200 tokens lazy load
-          </span>
-        </div>
-      </div>
-
-      <div class="hero-art">
-        <span class="hero-chip hero-chip-1"><b>INPUT</b> · UniFi controllers</span>
-        <span class="hero-chip hero-chip-2"><b>OUTPUT</b> · MCP tools</span>
-        <span class="hero-chip hero-chip-3">270+ tools wired</span>
-        <span class="hero-chip hero-chip-4">model-agnostic</span>
-        <img src="assets/hero.png" alt="Diagram showing UniFi systems flowing through an MCP gateway into an AI agent">
-      </div>
-    </div>
-  </div>
-
-  <!-- Marquee -->
-  <div class="shell" style="margin-top:72px;">
-    <div class="marquee-label">
-      <span class="ln"></span>
-      <span>Works with any MCP-compatible client</span>
-      <span class="ln"></span>
-    </div>
-  </div>
-  <div class="marquee-band">
-    <div class="marquee" id="marquee">
-      <!-- duplicated in JS for seamless loop -->
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 L2 7v10l10 5 10-5V7Z"/><path d="M2 7l10 5 10-5"/><path d="M12 22V12"/></svg>Claude Desktop</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M8 9h8M8 13h6"/></svg>Claude Code</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Cursor</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 4v16"/></svg>VS Code (MCP)</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l14 7-14 7V5z"/></svg>OpenAI Agents</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0z"/><path d="M9 12l2 2 4-4"/></svg>Gemini CLI</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h12"/></svg>opencode</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12c5-8 15-8 20 0M2 12c5 8 15 8 20 0"/><circle cx="12" cy="12" r="3"/></svg>Codex CLI</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v10H4z"/><path d="M8 19h8M12 15v4"/><path d="M8 9h8M8 12h5"/></svg>OpenClaw</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg>n8n / Zapier</span>
-      <span class="item"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Custom agents</span>
-    </div>
-  </div>
-
-  <!-- Stats -->
-  <div class="shell">
-    <div class="stats">
-      <div class="stat">
-        <div class="num">273<small>+</small></div>
-        <div class="lbl">Tools across 3 servers</div>
-        <div class="sub">network · protect · access</div>
-      </div>
-      <div class="stat">
-        <div class="num">~200<small>tk</small></div>
-        <div class="lbl">Lazy-load context cost</div>
-        <div class="sub">vs ~5,000 eager</div>
-      </div>
-      <div class="stat">
-        <div class="num">3<small>×</small></div>
-        <div class="lbl">Transports supported</div>
-        <div class="sub">stdio · HTTP · SSE</div>
-      </div>
-      <div class="stat">
-        <div class="num">100<small>%</small></div>
-        <div class="lbl">Open source · MIT</div>
-        <div class="sub">runs on your hardware</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ========================== SERVERS ========================== -->
-<section class="block" id="servers">
-  <div class="shell">
-    <div class="section-head">
-      <span class="eyebrow"><span class="dot"></span>The servers</span>
-      <h2>One monorepo. Three controllers. One agent that understands all of them.</h2>
-      <p>Each server is an independent Python package with a tightly-scoped tool surface. Mix and match — point at one controller, or fan out across an entire fleet.</p>
-    </div>
-
-    <div class="servers">
-
-      <!-- NETWORK (featured) -->
-      <article class="server-card featured" style="--ac: var(--c-network);">
-        <span class="tag tag-stable">Stable</span>
-        <div class="sc-mark">
-          <span class="bg"></span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="4" r="2"/><circle cx="4" cy="20" r="2"/><circle cx="20" cy="20" r="2"/><circle cx="12" cy="12" r="2"/>
-            <path d="M12 6v4M10.5 13.5L5.5 18.5M13.5 13.5l5 5M6 20h12"/>
+  <nav class="site-nav" aria-label="Primary">
+    <div class="shell nav-inner">
+      <a class="brand" href="/" aria-label="UniFi MCP home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M2 8 L6 4 L10 8 L6 12 Z"></path><path d="M14 8 L10 4 M14 8 L10 12"></path>
           </svg>
+        </span>
+        <span>UniFi MCP</span>
+      </a>
+      <div class="nav-links">
+        <a href="#products">Products</a><a href="#safety">Safety</a><a href="#install">Install</a>
+      </div>
+      <div class="nav-actions">
+        <a class="github-link" href="https://github.com/sirkirby/unifi-mcp">GitHub <span data-stars></span></a>
+        <a class="sponsor-link" href="sponsor/" aria-label="Sponsor UniFi MCP">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M8 14.25l-.345-.666C3.612 9.73 1 7.197 1 4.25 1 2.178 2.678.5 4.75.5 6.13.5 7.365 1.31 8 2.476 8.635 1.31 9.87.5 11.25.5 13.322.5 15 2.178 15 4.25c0 2.947-2.612 5.48-6.655 9.334L8 14.25z"></path>
+          </svg>
+        </a>
+        <a class="button primary" href="#install">Get started</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <div class="shell hero-inner">
+        <p class="kicker">Open source · MIT licensed</p>
+        <h1>Give agents safe access to your UniFi stack.</h1>
+        <p class="hero-lead">Keep your controllers behind the firewall. Preview changes before they run. Build advanced automation on infrastructure you control.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#install">Get started</a>
+          <a class="button secondary" href="#products">Explore the products</a>
         </div>
-        <h3>Network</h3>
-        <div class="sc-meta">
-          <b>180 tools</b><span class="dot"></span>
-          <span>unifi-network-mcp</span> <span class="ver-chip" data-pkg-version="unifi-network-mcp"></span><span class="dot"></span>
-          <span>PyPI · Docker · Plugin</span>
+        <div class="proof-row" aria-label="Project overview">
+          <div><strong>280+ MCP tools</strong><span>Across Network, Protect, and Access.</span></div>
+          <div><strong>REST + GraphQL</strong><span>A standalone API for apps and automation.</span></div>
+          <div><strong>Local first</strong><span>Optional Cloud Relay for remote MCP access.</span></div>
         </div>
-        <p class="desc">Full UniFi Network controller coverage. Devices, clients, firewall, port-forwards, VLANs, WLANs, DPI stats, Traffic Flows, alarms, and policy templates — all readable, with mutations gated by preview-then-confirm.</p>
-        <div class="sc-tools">
-          <span class="chip acc">unifi.list_clients</span>
-          <span class="chip">unifi.get_firewall_policies</span>
-          <span class="chip acc">unifi.create_port_forward</span>
-          <span class="chip">unifi.dpi_stats</span>
-          <span class="chip acc">unifi.traffic_flows</span>
-          <span class="chip">+172 more</span>
+      </div>
+    </section>
+
+    <section class="section product-section" id="products">
+      <div class="shell">
+        <div class="section-intro">
+          <p class="kicker">Choose an interface</p>
+          <h2>Three product paths, built for different jobs.</h2>
+          <p>Use MCP with an agent, HTTP with an application, or add the Cloud Relay when an MCP client needs a remote route home.</p>
         </div>
 
-        <div class="sc-prompt">
-          <div class="sc-prompt-head">
-            <span class="dots"><i></i><i></i><i></i></span>
-            <span>agent · network</span>
-          </div>
-          <div class="sc-prompt-body">
-            <div class="you">Block IoT devices from the internet between midnight and 6 AM</div>
-            <div class="agent">
-              I'll add a scheduled firewall rule on the IoT VLAN. Preview:
-              <span class="tool">unifi.create_firewall_policy · WAN · IoT VLAN · 00:00-06:00</span>
+        <article class="product-block product-agents">
+          <div class="product-heading">
+            <p class="product-number">01</p>
+            <div>
+              <h3>MCP for agents</h3>
+              <p>Independent servers share a consistent discovery, confirmation, and policy model. Run one or combine all three.</p>
             </div>
           </div>
-        </div>
+          <div class="server-list">
+            <div class="server-row network" data-product="network" data-tool-count="186">
+              <div><h4>Network <span>Stable</span></h4><p>Inventory, clients, routing, Wi-Fi, firewall policy, traffic, and controlled configuration.</p></div>
+              <div class="server-meta"><strong>186 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/network">unifi-network-mcp</a></div>
+            </div>
+            <div class="server-row protect" data-product="protect" data-tool-count="61">
+              <div><h4>Protect <span>Beta</span></h4><p>Cameras, events, detections, recordings, devices, and incident investigation workflows.</p></div>
+              <div class="server-meta"><strong>61 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/protect">unifi-protect-mcp</a></div>
+            </div>
+            <div class="server-row access" data-product="access" data-tool-count="36">
+              <div><h4>Access <span>Beta</span></h4><p>Doors, visitors, credentials, policies, devices, and activity records.</p></div>
+              <div class="server-meta"><strong>36 tools</strong><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/access">unifi-access-mcp</a></div>
+            </div>
+          </div>
+        </article>
 
-        <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/network" class="sc-link" style="margin-top:24px;">
-          Explore Network
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
-        </a>
-      </article>
+        <div class="product-pair">
+          <article class="product-block">
+            <div class="product-heading compact">
+              <p class="product-number">02</p>
+              <div><h3>HTTP API for applications</h3><p><code>unifi-api-server</code> runs independently from the MCP servers while sharing the same <code>unifi-core</code> manager layer.</p></div>
+            </div>
+            <ul class="feature-list">
+              <li>Typed REST reads across Network, Protect, and Access</li>
+              <li>Read-only GraphQL over consumer-facing resource shapes</li>
+              <li>REST actions for supported controller operations</li>
+              <li>SSE streams, scoped API keys, and audit records</li>
+              <li>Encrypted controller credentials and an administrative control-plane UI</li>
+            </ul>
+            <div class="text-links">
+              <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/api">API README</a>
+              <a href="https://github.com/sirkirby/unifi-mcp/pkgs/container/unifi-api-server">Container</a>
+              <a href="https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/docs/openapi-reference.md">OpenAPI</a>
+              <a href="https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/docs/graphql-reference.md">GraphQL</a>
+            </div>
+          </article>
 
-      <!-- PROTECT -->
-      <article class="server-card" style="--ac: var(--c-protect);">
-        <span class="tag tag-beta">Beta</span>
-        <div class="sc-mark">
-          <span class="bg"></span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 7h11l4 3v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
-            <circle cx="9" cy="13" r="3"/>
-            <path d="M3 7l3-3h6l3 3"/>
-          </svg>
-        </div>
-        <h3>Protect</h3>
-        <div class="sc-meta">
-          <b>59 tools</b><span class="dot"></span>
-          <span>unifi-protect-mcp</span> <span class="ver-chip" data-pkg-version="unifi-protect-mcp"></span>
-        </div>
-        <p class="desc">Cameras, snapshots, motion events, smart detections, Find Anything search, recordings, and live event streams. Hand your agent a question — get back a timeline, not 800 frames.</p>
-        <div class="sc-tools">
-          <span class="chip acc">protect.list_cameras</span>
-          <span class="chip acc">protect.smart_detections</span>
-          <span class="chip">protect.search_detections</span>
-          <span class="chip">protect.snapshot</span>
-        </div>
-        <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/protect" class="sc-link">
-          Explore Protect
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
-        </a>
-      </article>
-
-      <!-- ACCESS -->
-      <article class="server-card" style="--ac: var(--c-access);">
-        <span class="tag tag-beta">Beta</span>
-        <div class="sc-mark">
-          <span class="bg"></span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="5" y="3" width="14" height="18" rx="2"/>
-            <path d="M9 21V14a3 3 0 0 1 6 0v7"/>
-            <circle cx="16" cy="11" r="1"/>
-          </svg>
-        </div>
-        <h3>Access</h3>
-        <div class="sc-meta">
-          <b>34 tools</b><span class="dot"></span>
-          <span>unifi-access-mcp</span> <span class="ver-chip" data-pkg-version="unifi-access-mcp"></span>
-        </div>
-        <p class="desc">Doors, hubs, readers, credentials, visitors, and policies. Issue a guest pass, audit a badge timeline, or revoke a credential — in plain English.</p>
-        <div class="sc-tools">
-          <span class="chip acc">access.list_doors</span>
-          <span class="chip acc">access.create_visitor</span>
-          <span class="chip">access.event_stream</span>
-          <span class="chip">access.policies</span>
-        </div>
-        <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/access" class="sc-link">
-          Explore Access
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
-        </a>
-      </article>
-    </div>
-  </div>
-</section>
-
-<!-- ========================== EXAMPLES ========================== -->
-<section class="block" id="examples">
-  <div class="shell">
-    <div class="section-head">
-      <span class="eyebrow"><span class="dot"></span>Talk to your network</span>
-      <h2>Plain-English asks. Real controller actions.</h2>
-      <p>Every prompt routes to one or more tools, with a preview of what will change before it touches your controller.</p>
-    </div>
-
-    <div class="asks-grid">
-      <div class="ask-card" style="--ac: var(--c-network);">
-        <div class="ask-head"><span class="pip"></span>Network</div>
-        <p class="ask-text">Show me every client on the Guest VLAN with signal strength under -70 dBm.</p>
-        <div class="ask-tools">
-          <span class="t">list_clients</span>
-          <span class="t">get_vlan</span>
-          <span class="t">filter_by_rssi</span>
+          <article class="product-block">
+            <div class="product-heading compact">
+              <p class="product-number">03</p>
+              <div><h3>Remote MCP through the Cloud Relay</h3><p>An optional paired path for reaching local MCP servers without opening inbound controller or MCP ports.</p></div>
+            </div>
+            <p class="relay-flow"><span>Remote MCP client</span><b>→</b><span>Worker gateway</span><b>→</b><span>outbound WebSocket</span><b>→</b><span>Relay sidecar</span><b>→</b><span>local MCP servers over HTTP</span></p>
+            <div class="role-list">
+              <p><strong>Worker gateway</strong> exposes the authenticated Cloudflare-hosted MCP endpoint, brokers locations, and is managed by the npm CLI.</p>
+              <p><strong>Relay sidecar</strong> discovers configured local servers and maintains the outbound connection.</p>
+            </div>
+            <p class="muted">Reads can fan out across locations; writes require an explicit location target.</p>
+            <div class="text-links">
+              <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker">unifi-mcp-worker</a>
+              <a href="https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay">unifi-mcp-relay</a>
+            </div>
+          </article>
         </div>
       </div>
+    </section>
 
-      <div class="ask-card" style="--ac: var(--c-network);">
-        <div class="ask-head"><span class="pip"></span>Network</div>
-        <p class="ask-text">Audit my firewall policies — flag redundant or conflicting rules.</p>
-        <div class="ask-tools">
-          <span class="t">get_firewall_policies</span>
-          <span class="t">benchmark_audit</span>
-          <span class="t">topology_analysis</span>
+    <section class="section momentum" aria-labelledby="momentum-title">
+      <div class="shell">
+        <div class="section-intro split-intro">
+          <div><p class="kicker">Open-source momentum</p><h2 id="momentum-title">Used in more places. Improved by more people.</h2></div>
+          <p>Separate windows keep unlike signals honest. Figures come from a committed snapshot rather than page-view tracking.</p>
+        </div>
+        <div data-project-stats>
+          <dl class="metrics">
+            <div><dt>Python downloads</dt><dd data-stat="python">—</dd><p>Trailing 30 days</p></div>
+            <div><dt>Container pulls</dt><dd data-stat="containers">—</dd><p>Lifetime across five GHCR images</p></div>
+            <div><dt>Community pull requests</dt><dd data-stat="community">—</dd><p>Merged in the last 90 days</p></div>
+          </dl>
+          <p class="metrics-note"><span data-stat="contributors">—</span> distinct community contributors in the same 90-day window. Updated <time data-stat="updated">—</time>. Sources: <a href="https://pypistats.org/">PyPI Stats</a> and <a href="https://github.com/sirkirby/unifi-mcp">GitHub</a>.</p>
         </div>
       </div>
+    </section>
 
-      <div class="ask-card" style="--ac: var(--c-protect);">
-        <div class="ask-head"><span class="pip"></span>Protect</div>
-        <p class="ask-text">Summarize smart-detection events from the front-door camera today — people and vehicles only.</p>
-        <div class="ask-tools">
-          <span class="t">smart_detections</span>
-          <span class="t">filter_by_class</span>
-          <span class="t">summarize</span>
+    <section class="section" id="safety">
+      <div class="shell">
+        <div class="section-intro">
+          <p class="kicker">Control and safety</p>
+          <h2>Useful access without giving up the boundary.</h2>
+          <p>UniFi MCP makes the control points explicit. Scope controller credentials appropriately and choose exposure settings that match your environment.</p>
+        </div>
+        <div class="safety-grid">
+          <article><p class="item-label">Private by design</p><h3>Keep controllers local.</h3><p>Local use needs no inbound public port. The controller can remain private on your network.</p></article>
+          <article><p class="item-label">Confirmation mode</p><h3>Review mutations first.</h3><p>The default mode previews a state-changing operation and waits for confirmation before execution.</p></article>
+          <article><p class="item-label">Policy gates</p><h3>Set hard limits.</h3><p>Disable create, update, or delete behavior globally or at server and category scope.</p></article>
+          <article><p class="item-label">Response redaction</p><h3>Protect sensitive fields.</h3><p>Known secret-bearing values are redacted by default when a response leaves the server boundary.</p></article>
         </div>
       </div>
+    </section>
 
-      <div class="ask-card" style="--ac: var(--c-access);">
-        <div class="ask-head"><span class="pip"></span>Access</div>
-        <p class="ask-text">Create a visitor pass for John Smith — main entrance, tomorrow 9 AM to 5 PM.</p>
-        <div class="ask-tools">
-          <span class="t">create_visitor</span>
-          <span class="t">assign_door_policy</span>
-          <span class="t">preview_change</span>
+    <section class="section outcomes" id="build">
+      <div class="shell">
+        <div class="section-intro">
+          <p class="kicker">What users build</p>
+          <h2>Operational work, expressed in plain language.</h2>
+          <p>The tools stay close to real controller capabilities; reusable plugin skills turn them into repeatable workflows.</p>
+        </div>
+        <div class="outcome-grid">
+          <article><h3>Network operations</h3><p>Inventory, health, policy review, and controlled configuration changes.</p></article>
+          <article><h3>Protect investigations</h3><p>Event, detection, recording, and incident workflows grounded in controller data.</p></article>
+          <article><h3>Access workflows</h3><p>Door, visitor, credential, and activity work with explicit mutation controls.</p></article>
+          <article><h3>Cross-product context</h3><p>Join network, camera, and access evidence, with optional remote MCP access.</p></article>
+          <article><h3>Plugin skills</h3><p>Package repeatable operational workflows and domain guidance for an agent.</p></article>
+          <article><h3>Typed applications</h3><p>Build dashboards and integrations on the standalone REST and GraphQL API.</p></article>
         </div>
       </div>
+    </section>
 
-      <div class="ask-card" style="--ac: var(--c-relay);">
-        <div class="ask-head"><span class="pip"></span>Cross-product</div>
-        <p class="ask-text">Everything that happened at the front entrance in the last hour — clients, cameras, doors.</p>
-        <div class="ask-tools">
-          <span class="t">access.events</span>
-          <span class="t">protect.timeline</span>
-          <span class="t">network.clients_at</span>
+    <section class="section install" id="install">
+      <div class="shell">
+        <div class="section-intro">
+          <p class="kicker">Install</p>
+          <h2>Start with the MCP path that fits your client.</h2>
+          <p>The default route includes the server, agent skills, and guided setup. Direct package and container options are here when you want to configure things yourself.</p>
         </div>
-      </div>
+        <div class="install-card">
+          <div class="install-tabs" role="tablist" aria-label="MCP installation methods">
+            <button type="button" role="tab" id="tab-plugin" aria-selected="true" aria-controls="panel-plugin" data-install-tab="plugin">Claude Code</button>
+            <button type="button" role="tab" id="tab-openclaw" aria-selected="false" aria-controls="panel-openclaw" tabindex="-1" data-install-tab="openclaw">OpenClaw</button>
+            <button type="button" role="tab" id="tab-uvx" aria-selected="false" aria-controls="panel-uvx" tabindex="-1" data-install-tab="uvx">uvx</button>
+            <button type="button" role="tab" id="tab-docker" aria-selected="false" aria-controls="panel-docker" tabindex="-1" data-install-tab="docker">Docker</button>
+            <button type="button" role="tab" id="tab-claude" aria-selected="false" aria-controls="panel-claude" tabindex="-1" data-install-tab="claude">Claude Desktop</button>
+            <button type="button" role="tab" id="tab-pip" aria-selected="false" aria-controls="panel-pip" tabindex="-1" data-install-tab="pip">pip / pipx</button>
+          </div>
 
-      <div class="ask-card" style="--ac: var(--c-network);">
-        <div class="ask-head"><span class="pip"></span>Diagnostics</div>
-        <p class="ask-text">A switch went offline at 2 AM — was there physical activity nearby?</p>
-        <div class="ask-tools">
-          <span class="t">device_alarms</span>
-          <span class="t">protect.events_near</span>
-          <span class="t">correlate</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+          <div role="tabpanel" id="panel-plugin" aria-labelledby="tab-plugin" class="install-panel active" data-install-panel="plugin">
+            <button type="button" class="copy-button" data-copy>Copy</button>
+<pre><code><span class="comment"># Add the marketplace, then install one server plugin</span>
+<span class="command">/plugin</span> marketplace add <span class="value">sirkirby/unifi-mcp</span>
+<span class="command">/plugin</span> install <span class="value">unifi-network@unifi-plugins</span>
 
-<!-- ========================== RELAY ========================== -->
-<section class="block" id="relay">
-  <div class="shell">
-    <div class="section-head">
-      <span class="eyebrow"><span class="dot" style="background:var(--rose);box-shadow:0 0 12px var(--rose);"></span>Cloud Relay · Beta</span>
-      <h2>Cloud agents, local controllers — without exposing a single port.</h2>
-      <p>The relay sidecar opens an outbound tunnel to a Cloudflare Worker. Cloud-hosted agents call your local UniFi servers as if they were next door.</p>
-    </div>
-
-    <div class="relay-card">
-      <div>
-        <h3>Multi-location, fan-out by annotation.</h3>
-        <p>Tag each location at the relay. Read-only tools fan out across all of them. Mutations stay scoped to the location you targeted explicitly.</p>
-        <ul class="relay-bullets">
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
-            <span>Outbound-only — no firewall holes, no DDNS, no public IP.</span>
-          </li>
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
-            <span>Per-location annotations let agents target <code style="font-family:var(--ff-mono);font-size:12px;">@office</code> vs <code style="font-family:var(--ff-mono);font-size:12px;">@home</code>.</span>
-          </li>
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
-            <span>Worker installs in one command: <code style="font-family:var(--ff-mono);font-size:12px;">unifi-mcp-worker install</code>.</span>
-          </li>
-          <li>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
-            <span>Same tool surface as local — agents don't know they're remote.</span>
-          </li>
-        </ul>
-        <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
-          <a href="https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay" class="btn btn-ghost">Relay sidecar <span class="ver-chip" data-pkg-version="unifi-mcp-relay" style="margin:0 2px 0 4px;"></span> →</a>
-          <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker" class="btn btn-ghost">Worker gateway <span class="ver-chip" data-npm-version="unifi-mcp-worker" style="margin:0 2px 0 4px;"></span> →</a>
-        </div>
-      </div>
-
-      <div class="relay-diagram" aria-hidden="true">
-        <svg viewBox="0 0 500 400" fill="none">
-          <defs>
-            <linearGradient id="wireA" x1="0" x2="1">
-              <stop offset="0" stop-color="#4ff0d0" stop-opacity="0"/>
-              <stop offset=".5" stop-color="#4ff0d0" stop-opacity=".8"/>
-              <stop offset="1" stop-color="#4ff0d0" stop-opacity="0"/>
-            </linearGradient>
-            <linearGradient id="wireB" x1="0" x2="1">
-              <stop offset="0" stop-color="#ff6b8a" stop-opacity="0"/>
-              <stop offset=".5" stop-color="#ff6b8a" stop-opacity=".8"/>
-              <stop offset="1" stop-color="#ff6b8a" stop-opacity="0"/>
-            </linearGradient>
-            <linearGradient id="wireC" x1="0" x2="1">
-              <stop offset="0" stop-color="#4d7cff" stop-opacity="0"/>
-              <stop offset=".5" stop-color="#4d7cff" stop-opacity=".8"/>
-              <stop offset="1" stop-color="#4d7cff" stop-opacity="0"/>
-            </linearGradient>
-            <radialGradient id="glow" cx=".5" cy=".5" r=".5">
-              <stop offset="0" stop-color="#4ff0d0" stop-opacity=".3"/>
-              <stop offset="1" stop-color="#4ff0d0" stop-opacity="0"/>
-            </radialGradient>
-          </defs>
-
-          <!-- LEFT: locations -->
-          <g>
-            <rect x="20" y="60" width="120" height="56" rx="10" fill="#0f1525" stroke="#243052"/>
-            <text x="80" y="84" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#5b6786" letter-spacing=".08em">@HOME</text>
-            <text x="80" y="102" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#e8edf7">UDM Pro</text>
-
-            <rect x="20" y="172" width="120" height="56" rx="10" fill="#0f1525" stroke="#243052"/>
-            <text x="80" y="196" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#5b6786" letter-spacing=".08em">@OFFICE</text>
-            <text x="80" y="214" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#e8edf7">Dream Machine</text>
-
-            <rect x="20" y="284" width="120" height="56" rx="10" fill="#0f1525" stroke="#243052"/>
-            <text x="80" y="308" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#5b6786" letter-spacing=".08em">@CABIN</text>
-            <text x="80" y="326" text-anchor="middle" font-family="Inter" font-size="13" font-weight="600" fill="#e8edf7">Cloud Gateway</text>
-          </g>
-
-          <!-- wires from locations to relay -->
-          <path d="M140 88 C190 88 200 200 245 200" stroke="url(#wireA)" stroke-width="1.5" fill="none"/>
-          <path d="M140 200 L245 200" stroke="url(#wireA)" stroke-width="1.5" fill="none"/>
-          <path d="M140 312 C190 312 200 200 245 200" stroke="url(#wireA)" stroke-width="1.5" fill="none"/>
-
-          <!-- middle relay node -->
-          <circle cx="250" cy="200" r="60" fill="url(#glow)"/>
-          <rect x="220" y="170" width="60" height="60" rx="14" fill="#0f1525" stroke="#4ff0d0" stroke-width="1.2"/>
-          <text x="250" y="195" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#5b6786" letter-spacing=".08em">RELAY</text>
-          <text x="250" y="212" text-anchor="middle" font-family="Inter Tight" font-size="14" font-weight="700" fill="#4ff0d0">MCP</text>
-          <circle cx="250" cy="200" r="36" fill="none" stroke="#4ff0d0" stroke-width=".6" opacity=".4">
-            <animate attributeName="r" values="36;46;36" dur="3s" repeatCount="indefinite"/>
-            <animate attributeName="opacity" values=".4;0;.4" dur="3s" repeatCount="indefinite"/>
-          </circle>
-
-          <!-- wire to worker -->
-          <path d="M280 200 L355 200" stroke="url(#wireB)" stroke-width="1.5" fill="none"/>
-
-          <!-- worker node -->
-          <rect x="355" y="174" width="60" height="52" rx="12" fill="#0f1525" stroke="#ff6b8a" stroke-width="1.2"/>
-          <text x="385" y="195" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#5b6786" letter-spacing=".08em">CF WORKER</text>
-          <text x="385" y="212" text-anchor="middle" font-family="Inter Tight" font-size="13" font-weight="700" fill="#ff6b8a">Edge</text>
-
-          <!-- wire to agents -->
-          <path d="M415 200 L460 130" stroke="url(#wireC)" stroke-width="1.5" fill="none"/>
-          <path d="M415 200 L460 200" stroke="url(#wireC)" stroke-width="1.5" fill="none"/>
-          <path d="M415 200 L460 270" stroke="url(#wireC)" stroke-width="1.5" fill="none"/>
-
-          <!-- right: agents -->
-          <g font-family="JetBrains Mono" font-size="11" fill="#b8c1d6">
-            <circle cx="466" cy="130" r="6" fill="#0f1525" stroke="#4d7cff" stroke-width="1"/>
-            <text x="478" y="134">claude.ai</text>
-            <circle cx="466" cy="200" r="6" fill="#0f1525" stroke="#4d7cff" stroke-width="1"/>
-            <text x="478" y="204">cursor</text>
-            <circle cx="466" cy="270" r="6" fill="#0f1525" stroke="#4d7cff" stroke-width="1"/>
-            <text x="478" y="274">n8n</text>
-          </g>
-
-          <!-- moving dots -->
-          <circle r="2.5" fill="#4ff0d0">
-            <animateMotion dur="3s" repeatCount="indefinite" path="M140 88 C190 88 200 200 245 200"/>
-          </circle>
-          <circle r="2.5" fill="#4ff0d0">
-            <animateMotion dur="3.4s" repeatCount="indefinite" path="M140 200 L245 200"/>
-          </circle>
-          <circle r="2.5" fill="#ff6b8a">
-            <animateMotion dur="2.4s" repeatCount="indefinite" path="M280 200 L355 200"/>
-          </circle>
-          <circle r="2.5" fill="#4d7cff">
-            <animateMotion dur="2.6s" repeatCount="indefinite" path="M415 200 L460 130"/>
-          </circle>
-          <circle r="2.5" fill="#4d7cff">
-            <animateMotion dur="2.2s" repeatCount="indefinite" path="M415 200 L460 270"/>
-          </circle>
-
-          <!-- labels -->
-          <text x="80" y="40" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#5b6786" letter-spacing=".12em">YOUR LAN</text>
-          <text x="250" y="280" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#5b6786" letter-spacing=".12em">SIDECAR</text>
-          <text x="385" y="250" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#5b6786" letter-spacing=".12em">CLOUDFLARE</text>
-          <text x="475" y="320" text-anchor="middle" font-family="JetBrains Mono" font-size="10" fill="#5b6786" letter-spacing=".12em">CLOUD AGENTS</text>
-        </svg>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ========================== SKILLS ========================== -->
-<section class="block" id="skills">
-  <div class="shell">
-    <div class="section-head">
-      <span class="eyebrow"><span class="dot"></span>Agent Skills</span>
-      <h2>More than tools. Plays your agent already knows how to run.</h2>
-      <p>Each plugin ships with skills — reference docs plus deterministic Python scripts — so common operations are reliable, audit-able, and don't burn context.</p>
-    </div>
-
-    <div class="skills-grid">
-      <div class="skill" style="--ac: var(--c-network);">
-        <div class="skill-meta"><b>unifi-network</b> · 12 references</div>
-        <h4>Network Health Check</h4>
-        <p>Batch diagnostics across devices, health subsystems, and alarms — with reference docs for interpreting alarm types and device states.</p>
-      </div>
-      <div class="skill" style="--ac: var(--c-network);">
-        <div class="skill-meta"><b>unifi-network</b> · templates</div>
-        <h4>Firewall Manager</h4>
-        <p>Natural-language firewall management with policy templates, config snapshots, change tracking, and rollback.</p>
-      </div>
-      <div class="skill" style="--ac: var(--c-network);">
-        <div class="skill-meta"><b>unifi-network</b> · 16 benchmarks</div>
-        <h4>Firewall Auditor</h4>
-        <p>Security audit with 100-point scoring, topology analysis, redundancy detection, and trend tracking over time.</p>
-      </div>
-      <div class="skill" style="--ac: var(--c-protect);">
-        <div class="skill-meta"><b>unifi-protect</b> · cross-product</div>
-        <h4>Security Digest</h4>
-        <p>Summarizes camera, door, and network events with severity classification and correlation rules across products.</p>
-      </div>
-      <div class="skill" style="--ac: var(--c-access);">
-        <div class="skill-meta"><b>unifi-access</b> · streaming</div>
-        <h4>Access Control</h4>
-        <p>Doors, credentials, visitors, and policies — with real-time event streaming and activity summaries.</p>
-      </div>
-      <div class="skill" style="--ac: var(--c-relay);">
-        <div class="skill-meta"><b>cross-product</b> · NEW</div>
-        <h4>Incident Timeline</h4>
-        <p>Correlates Network clients, Protect events, and Access scans into a single timeline for "what happened when" investigations.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ========================== INSTALL ========================== -->
-<section class="block" id="install">
-  <div class="shell">
-    <div class="section-head">
-      <span class="eyebrow"><span class="dot"></span>Quick install</span>
-      <h2>Up and running in under a minute.</h2>
-      <p>Pick the path that fits your client. The plugin route is the most opinionated — it ships an MCP server, agent skills, and a guided setup command.</p>
-    </div>
-
-    <div class="install-card">
-      <div class="install-tabs" role="tablist">
-        <button role="tab" id="tab-plugin" aria-selected="true" aria-controls="panel-plugin" onclick="switchTab('plugin')">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1l6 3v4c0 4-3 6.5-6 7-3-.5-6-3-6-7V4l6-3z"/></svg>
-          Claude Code
-        </button>
-        <button role="tab" id="tab-openclaw" aria-selected="false" aria-controls="panel-openclaw" onclick="switchTab('openclaw')">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="8"/><path d="M5 14h6M8 11v3"/><path d="M5 6h6M5 8.5h4"/></svg>
-          OpenClaw
-        </button>
-        <button role="tab" id="tab-uvx" aria-selected="false" aria-controls="panel-uvx" onclick="switchTab('uvx')">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h12v8H2z"/><path d="M5 7l2 1-2 1M9 9h2"/></svg>
-          uvx
-        </button>
-        <button role="tab" id="tab-docker" aria-selected="false" aria-controls="panel-docker" onclick="switchTab('docker')">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="3" height="3"/><rect x="6" y="6" width="3" height="3"/><rect x="10" y="6" width="3" height="3"/><rect x="6" y="2" width="3" height="3"/><path d="M14 9c0 3-3 5-7 5-3 0-5-1-5-3"/></svg>
-          Docker
-        </button>
-        <button role="tab" id="tab-claude" aria-selected="false" aria-controls="panel-claude" onclick="switchTab('claude')">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M5 7c1-2 5-2 6 0M6 11c1 1 3 1 4 0"/></svg>
-          Claude Desktop
-        </button>
-        <button role="tab" id="tab-pip" aria-selected="false" aria-controls="panel-pip" onclick="switchTab('pip')">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6c0-2 2-3 5-3s5 1 5 3M3 10c0 2 2 3 5 3s5-1 5-3"/><path d="M3 6v4M13 6v4"/></svg>
-          pip / pipx
-        </button>
-      </div>
-
-      <div role="tabpanel" id="panel-plugin" class="install-panel active">
-        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-<pre><code><span class="c"># 1. Add the marketplace (one-time)</span>
-<span class="k">/plugin</span> marketplace add <span class="s">sirkirby/unifi-mcp</span>
-
-<span class="c"># 2. Install the server plugin you want</span>
-<span class="k">/plugin</span> install <span class="s">unifi-network@unifi-plugins</span>
-
-<span class="c"># 3. Run the guided setup</span>
-<span class="k">/unifi-network:unifi-network-setup</span></code></pre>
-      </div>
-      <div role="tabpanel" id="panel-openclaw" class="install-panel" hidden>
-        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-<pre><code><span class="c"># Install the same UniFi bundle marketplace in OpenClaw</span>
-openclaw plugins install <span class="s">unifi-network</span> --marketplace <span class="s">https://github.com/sirkirby/unifi-mcp</span>
+<span class="comment"># Run its guided setup</span>
+<span class="command">/unifi-network:unifi-network-setup</span></code></pre>
+          </div>
+          <div role="tabpanel" id="panel-openclaw" aria-labelledby="tab-openclaw" class="install-panel" data-install-panel="openclaw" hidden>
+            <button type="button" class="copy-button" data-copy>Copy</button>
+<pre><code>openclaw plugins install <span class="value">unifi-network</span> --marketplace <span class="value">https://github.com/sirkirby/unifi-mcp</span>
 openclaw gateway restart
 
-<span class="c"># The unifi-network-setup skill can configure this, or register MCP directly:</span>
-openclaw mcp set <span class="s">unifi-network</span> <span class="v">'{"command":"uvx","args":["--python-preference","system","unifi-network-mcp@latest"],"env":{"UNIFI_NETWORK_HOST":"192.168.1.1","UNIFI_NETWORK_USERNAME":"admin","UNIFI_NETWORK_PASSWORD":"your-password"}}'</span></code></pre>
-      </div>
-      <div role="tabpanel" id="panel-uvx" class="install-panel" hidden>
-        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-<pre><code><span class="c"># Run any server directly — no install step</span>
-uvx <span class="s">unifi-network-mcp@latest</span>
-uvx <span class="s">unifi-protect-mcp@latest</span>
-uvx <span class="s">unifi-access-mcp@latest</span>
+<span class="comment"># Use the setup skill, or register the MCP server directly</span>
+openclaw mcp set <span class="value">unifi-network</span> <span class="value">'{"command":"uvx","args":["unifi-network-mcp@latest"]}'</span></code></pre>
+          </div>
+          <div role="tabpanel" id="panel-uvx" aria-labelledby="tab-uvx" class="install-panel" data-install-panel="uvx" hidden>
+            <button type="button" class="copy-button" data-copy>Copy</button>
+<pre><code><span class="comment"># Run any server directly</span>
+uvx <span class="value">unifi-network-mcp@latest</span>
+uvx <span class="value">unifi-protect-mcp@latest</span>
+uvx <span class="value">unifi-access-mcp@latest</span>
 
-<span class="c"># Required env</span>
-<span class="k">UNIFI_HOST</span>=<span class="v">192.168.1.1</span>
-<span class="k">UNIFI_USERNAME</span>=<span class="v">admin</span>
-<span class="k">UNIFI_PASSWORD</span>=<span class="v">your-password</span></code></pre>
-      </div>
-      <div role="tabpanel" id="panel-docker" class="install-panel" hidden>
-        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-<pre><code><span class="k">docker</span> run -i --rm \
-  -e <span class="k">UNIFI_HOST</span>=<span class="v">192.168.1.1</span> \
-  -e <span class="k">UNIFI_USERNAME</span>=<span class="v">admin</span> \
-  -e <span class="k">UNIFI_PASSWORD</span>=<span class="v">your-password</span> \
-  <span class="s">ghcr.io/sirkirby/unifi-network-mcp:latest</span>
+<span class="comment"># Provide UNIFI_HOST, UNIFI_USERNAME, and UNIFI_PASSWORD</span></code></pre>
+          </div>
+          <div role="tabpanel" id="panel-docker" aria-labelledby="tab-docker" class="install-panel" data-install-panel="docker" hidden>
+            <button type="button" class="copy-button" data-copy>Copy</button>
+<pre><code>docker run -i --rm \
+  -e <span class="command">UNIFI_HOST</span>=<span class="value">192.168.1.1</span> \
+  -e <span class="command">UNIFI_USERNAME</span>=<span class="value">admin</span> \
+  -e <span class="command">UNIFI_PASSWORD</span>=<span class="value">your-password</span> \
+  <span class="value">ghcr.io/sirkirby/unifi-network-mcp:latest</span>
 
-<span class="c"># Or use the bundled docker-compose for all three servers:</span>
-<span class="k">curl</span> -O https://raw.githubusercontent.com/sirkirby/unifi-mcp/main/docker/docker-compose.yml
-<span class="k">docker</span> compose up -d</code></pre>
-      </div>
-      <div role="tabpanel" id="panel-claude" class="install-panel" hidden>
-        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-<pre><code><span class="c">// claude_desktop_config.json</span>
+<span class="comment"># Or start the bundled three-server compose stack</span>
+curl -O https://raw.githubusercontent.com/sirkirby/unifi-mcp/main/docker/docker-compose.yml
+docker compose up -d</code></pre>
+          </div>
+          <div role="tabpanel" id="panel-claude" aria-labelledby="tab-claude" class="install-panel" data-install-panel="claude" hidden>
+            <button type="button" class="copy-button" data-copy>Copy</button>
+<pre><code><span class="comment">// claude_desktop_config.json</span>
 {
-  <span class="s">"mcpServers"</span>: {
-    <span class="s">"unifi-network"</span>: {
-      <span class="s">"command"</span>: <span class="v">"uvx"</span>,
-      <span class="s">"args"</span>: [<span class="v">"unifi-network-mcp@latest"</span>],
-      <span class="s">"env"</span>: {
-        <span class="s">"UNIFI_HOST"</span>: <span class="v">"192.168.1.1"</span>,
-        <span class="s">"UNIFI_USERNAME"</span>: <span class="v">"admin"</span>,
-        <span class="s">"UNIFI_PASSWORD"</span>: <span class="v">"your-password"</span>
-      }
+  <span class="value">"mcpServers"</span>: {
+    <span class="value">"unifi-network"</span>: {
+      <span class="value">"command"</span>: <span class="value">"uvx"</span>,
+      <span class="value">"args"</span>: [<span class="value">"unifi-network-mcp@latest"</span>],
+      <span class="value">"env"</span>: { <span class="value">"UNIFI_HOST"</span>: <span class="value">"192.168.1.1"</span> }
     }
   }
 }</code></pre>
-      </div>
-      <div role="tabpanel" id="panel-pip" class="install-panel" hidden>
-        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-<pre><code><span class="c"># Install with pipx (recommended) or pip</span>
-pipx install <span class="s">unifi-network-mcp</span>
-pipx install <span class="s">unifi-protect-mcp</span>
-pipx install <span class="s">unifi-access-mcp</span>
+          </div>
+          <div role="tabpanel" id="panel-pip" aria-labelledby="tab-pip" class="install-panel" data-install-panel="pip" hidden>
+            <button type="button" class="copy-button" data-copy>Copy</button>
+<pre><code><span class="comment"># Install one or more servers</span>
+pipx install <span class="value">unifi-network-mcp</span>
+pipx install <span class="value">unifi-protect-mcp</span>
+pipx install <span class="value">unifi-access-mcp</span>
 
-<span class="c"># Then point your MCP client at the binary on $PATH:</span>
-<span class="k">unifi-network-mcp</span></code></pre>
-      </div>
-    </div>
-
-    <div class="install-meta">
-      <div class="im-card">
-        <h4>Multi-controller? Use prefixed env.</h4>
-        <p>Each server reads <code style="font-family:var(--ff-mono);font-size:12.5px;color:var(--cyan);">UNIFI_NETWORK_*</code>, <code style="font-family:var(--ff-mono);font-size:12.5px;color:var(--cyan);">UNIFI_PROTECT_*</code>, <code style="font-family:var(--ff-mono);font-size:12.5px;color:var(--cyan);">UNIFI_ACCESS_*</code> first, then falls back to shared <code style="font-family:var(--ff-mono);font-size:12.5px;color:var(--cyan);">UNIFI_*</code>.</p>
-      </div>
-      <div class="im-card">
-        <h4>Read-only by default.</h4>
-        <p>Mutations require an explicit opt-in flag and run preview-then-confirm. Nothing changes on your controller until you say go.</p>
-      </div>
-      <div class="im-card">
-        <h4>Lazy tool loading.</h4>
-        <p>The default mode loads ~200 tokens of meta-tools. Real tools are loaded on demand, by category — keep your context budget for the work.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ========================== PILLARS / WHY ========================== -->
-<section class="block" id="why">
-  <div class="shell">
-    <div class="section-head">
-      <span class="eyebrow"><span class="dot"></span>Why this exists</span>
-      <h2>Built for agents. Designed for your controller's safety.</h2>
-      <p>UniFi MCP is a deliberate design — not a wrapper around an SDK. Every tool is shaped for how LLMs reason about infrastructure.</p>
-    </div>
-
-    <div class="pillars">
-      <div class="pillar">
-        <div class="pillar-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3 8-8 10-5-2-8-5-8-10V6l8-4z"/><path d="M9 12l2 2 4-4"/></svg>
+<span class="comment"># Then point your MCP client at the binary on PATH</span>
+<span class="command">unifi-network-mcp</span></code></pre>
+          </div>
         </div>
-        <div class="pillar-num">01 — Safety</div>
-        <h3>Read-only is the default. Always.</h3>
-        <p>Mutations are opt-in per server, gated by a preview-then-confirm flow. Your agent shows its work and waits for approval before any change touches the controller.</p>
-      </div>
 
-      <div class="pillar">
-        <div class="pillar-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <div class="next-paths">
+          <article><h3>Building an app?</h3><p>Start the independent API server with its <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/api#quick-start">Docker quickstart</a>, then use the <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/api">API README</a> as the operational reference.</p></article>
+          <article><h3>Connecting a remote MCP client?</h3><p>Install the <a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker#quick-start">Worker gateway first</a>, then connect the <a href="https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay#quick-start">Relay sidecar</a> to your local MCP servers.</p></article>
         </div>
-        <div class="pillar-num">02 — Efficiency</div>
-        <h3>Lazy tool loading, by design.</h3>
-        <p>Eager mode dumps ~5,000 tokens of tool definitions into context on connect. Lazy mode starts at ~200 and loads tool groups on demand — the difference between a slow first turn and an instant one.</p>
       </div>
+    </section>
 
-      <div class="pillar">
-        <div class="pillar-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    <section class="section faq" id="faq">
+      <div class="shell faq-layout">
+        <div class="section-intro"><p class="kicker">FAQ</p><h2>Useful context before you connect.</h2></div>
+        <div class="faq-list">
+          <details open><summary>Is this an official Ubiquiti project?</summary><p>No. UniFi MCP is an independent, community-maintained open-source project and is not affiliated with Ubiquiti.</p></details>
+          <details><summary>Does local use require a cloud service?</summary><p>No. MCP servers and the API can run on your network with local controller access. The Cloud Relay is optional and only needed for remote MCP clients.</p></details>
+          <details><summary>How are changes kept under control?</summary><p>Confirmation mode previews mutations by default. Operators can add policy gates that prevent create, update, or delete behavior at multiple scopes.</p></details>
+          <details><summary>Which controllers are supported?</summary><p>The project targets supported UniFi Network, Protect, and Access environments, with compatibility varying by product, controller, firmware, and exposed API surface. Check the component README for current requirements.</p></details>
+          <details><summary>Can I use my own MCP client?</summary><p>Yes. Every server exposes stdio. Optional HTTP transport supports clients that connect through Streamable HTTP or SSE-compatible paths.</p></details>
+          <details><summary>How can I contribute?</summary><p>Start with the <a href="https://github.com/sirkirby/unifi-mcp/blob/main/CONTRIBUTING.md">contributor guide</a>, open an issue, or join a discussion. Documentation, compatibility reports, and focused pull requests all help.</p></details>
         </div>
-        <div class="pillar-num">03 — Composability</div>
-        <h3>Three servers. One coherent surface.</h3>
-        <p>Network, Protect, and Access share the same permission model, the same confirmation flow, and the same naming conventions. An agent that can drive one can drive all of them.</p>
       </div>
+    </section>
+  </main>
 
-      <div class="pillar">
-        <div class="pillar-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h6l3-7 4 14 3-7h4"/></svg>
-        </div>
-        <div class="pillar-num">04 — Transports</div>
-        <h3>stdio, HTTP, SSE — your call.</h3>
-        <p>Run locally next to Claude Desktop, expose over Streamable HTTP for self-hosted automation platforms, or stream over SSE for browser agents.</p>
-      </div>
-
-      <div class="pillar">
-        <div class="pillar-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12c2-4 6-7 9-7s7 3 9 7c-2 4-6 7-9 7s-7-3-9-7z"/><circle cx="12" cy="12" r="3"/></svg>
-        </div>
-        <div class="pillar-num">05 — Observability</div>
-        <h3>Every tool call is logged.</h3>
-        <p>Per-server logs with structured request/response, redaction for secrets, and a CLI for replaying calls — so when an agent does something surprising, you can find out exactly what happened.</p>
-      </div>
-
-      <div class="pillar">
-        <div class="pillar-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
-        </div>
-        <div class="pillar-num">06 — Open</div>
-        <h3>MIT, on your hardware.</h3>
-        <p>No SaaS, no telemetry, no account. Clone the repo, run the server, point an agent at it. Your controllers stay yours.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ========================== FAQ ========================== -->
-<section class="block" id="faq">
-  <div class="shell" style="max-width: 920px;">
-    <div class="section-head">
-      <span class="eyebrow"><span class="dot"></span>FAQ</span>
-      <h2>Common questions, short answers.</h2>
-    </div>
-
-    <div class="faq">
-      <details class="faq-item" open>
-        <summary>
-          <h3>What's the Model Context Protocol (MCP), exactly?</h3>
-          <span class="faq-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8h10M8 3v10"/></svg></span>
-        </summary>
-        <div class="faq-body">MCP is an open protocol that lets AI agents discover and call tools exposed by a server, with structured arguments and structured responses. Anthropic publishes the spec, but it's vendor-neutral — anything that speaks MCP can use these servers.</div>
-      </details>
-      <details class="faq-item">
-        <summary>
-          <h3>Is this affiliated with Ubiquiti?</h3>
-          <span class="faq-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8h10M8 3v10"/></svg></span>
-        </summary>
-        <div class="faq-body">No. UniFi MCP is an independent open-source project. It talks to UniFi controllers' standard APIs the same way the official mobile and web apps do, but it's built and maintained by the community.</div>
-      </details>
-      <details class="faq-item">
-        <summary>
-          <h3>Does it need cloud access or a Ubiquiti account?</h3>
-          <span class="faq-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8h10M8 3v10"/></svg></span>
-        </summary>
-        <div class="faq-body">No. The servers connect directly to your local controller using a local admin account. The optional Cloud Relay is the only piece that talks outbound — and only because <em>you</em> opt in to give a remote agent access.</div>
-      </details>
-      <details class="faq-item">
-        <summary>
-          <h3>How safe is this? Can my agent brick my network?</h3>
-          <span class="faq-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8h10M8 3v10"/></svg></span>
-        </summary>
-        <div class="faq-body">Read-only by default. Mutations require both an explicit opt-in flag <em>and</em> a preview-then-confirm step where you see the exact change before it runs. Nothing happens silently.</div>
-      </details>
-      <details class="faq-item">
-        <summary>
-          <h3>Which UniFi controllers are supported?</h3>
-          <span class="faq-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8h10M8 3v10"/></svg></span>
-        </summary>
-        <div class="faq-body">Anything running modern UniFi OS — UDM, UDM Pro, UDM SE, UCG-Ultra, Cloud Gateways, and standalone CloudKey deployments. The core libraries auto-detect controller type and version.</div>
-      </details>
-      <details class="faq-item">
-        <summary>
-          <h3>Can I run my own MCP client / build agents on top?</h3>
-          <span class="faq-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8h10M8 3v10"/></svg></span>
-        </summary>
-        <div class="faq-body">Absolutely. The servers expose stdio, Streamable HTTP, and SSE. Examples for Python, n8n, and direct OpenAI Agents are in <code>examples/</code>.</div>
-      </details>
-      <details class="faq-item">
-        <summary>
-          <h3>How do I contribute?</h3>
-          <span class="faq-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8h10M8 3v10"/></svg></span>
-        </summary>
-        <div class="faq-body">PRs welcome. Read <code>CONTRIBUTING.md</code> for the monorepo workflow — including how to scaffold a new tool, run the test suite across all three servers, and submit a tool for review.</div>
-      </details>
-    </div>
-  </div>
-</section>
-
-<!-- ========================== CTA ========================== -->
-<section class="block" style="padding-top: 40px;">
-  <div class="shell">
-    <div class="cta-card">
-      <h2>Stop clicking. Start asking.</h2>
-      <p>One command, one config, one agent that actually understands your network.</p>
-      <div class="cta-ctas">
-        <a href="#install" class="btn btn-primary btn-lg">
-          Install in 60 seconds
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
-        </a>
-        <a href="https://github.com/sirkirby/unifi-mcp" class="btn btn-ghost btn-lg">
-          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-          Read the source
-        </a>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ========================== FOOTER ========================== -->
-<footer class="footer">
-  <div class="shell">
-    <div class="footer-grid">
-      <div class="foot-brand">
-        <div class="brand">
-          <span class="brand-mark">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8 L6 4 L10 8 L6 12 Z"/><path d="M14 8 L10 4 M14 8 L10 12"/></svg>
-          </span>
+  <footer class="site-footer">
+    <div class="shell footer-grid">
+      <div class="footer-about">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 8 L6 4 L10 8 L6 12 Z"></path><path d="M14 8 L10 4 M14 8 L10 12"></path></svg></span>
           <span>UniFi MCP</span>
-        </div>
-        <p>An open-source toolkit for giving AI agents safe, structured access to UniFi controllers. Independent project · MIT license.</p>
+        </a>
+        <p>Open-source interfaces for agents and applications working with UniFi infrastructure.</p>
       </div>
-      <div class="foot-col">
-        <h5>Servers</h5>
-        <ul>
-          <li><a href="https://pypi.org/project/unifi-network-mcp/">Network on PyPI</a></li>
-          <li><a href="https://pypi.org/project/unifi-protect-mcp/">Protect on PyPI</a></li>
-          <li><a href="https://pypi.org/project/unifi-access-mcp/">Access on PyPI</a></li>
-          <li><a href="https://pypi.org/project/unifi-mcp-relay/">Cloud Relay</a></li>
-        </ul>
-      </div>
-      <div class="foot-col">
-        <h5>Project</h5>
-        <ul>
-          <li><a href="https://github.com/sirkirby/unifi-mcp">GitHub</a></li>
-          <li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/docs">Docs</a></li>
-          <li><a href="https://github.com/sirkirby/unifi-mcp/blob/main/CONTRIBUTING.md">Contributing</a></li>
-          <li><a href="sponsor/">Sponsor</a></li>
-          <li><a href="privacy.html">Privacy</a></li>
-        </ul>
-      </div>
-      <div class="foot-col">
-        <h5>Community</h5>
-        <ul>
-          <li><a href="https://github.com/sirkirby/unifi-mcp/issues">Issues</a></li>
-          <li><a href="https://github.com/sirkirby/unifi-mcp/discussions">Discussions</a></li>
-          <li><a href="https://github.com/sponsors/sirkirby">GitHub Sponsors</a></li>
-        </ul>
-      </div>
+      <div><h2>MCP servers</h2><ul><li><a href="https://pypi.org/project/unifi-network-mcp/">Network</a></li><li><a href="https://pypi.org/project/unifi-protect-mcp/">Protect</a></li><li><a href="https://pypi.org/project/unifi-access-mcp/">Access</a></li></ul></div>
+      <div><h2>Applications</h2><ul><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/api">API server</a></li><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/packages/unifi-mcp-relay">Relay sidecar</a></li><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/apps/worker">Worker gateway</a></li></ul></div>
+      <div><h2>Project</h2><ul><li><a href="https://github.com/sirkirby/unifi-mcp/tree/main/docs">Documentation</a></li><li><a href="https://github.com/sirkirby/unifi-mcp">GitHub</a></li><li><a href="sponsor/">Sponsor</a></li><li><a href="privacy.html">Privacy</a></li><li><a href="llms.txt">llms.txt</a></li></ul></div>
     </div>
-    <div class="foot-bottom">
-      <span>MIT License · © 2025–2026 contributors</span>
-      <span>Not affiliated with Ubiquiti Inc. UniFi is a trademark of its respective owner.</span>
-    </div>
-  </div>
-</footer>
+    <div class="shell footer-bottom"><span>MIT License · © 2025–2026 contributors</span><span>Independent project. Not affiliated with Ubiquiti Inc. UniFi is a trademark of its respective owner.</span></div>
+  </footer>
 
-<script src="app.js" defer></script>
-
+  <script src="app.js" defer></script>
 </body>
 </html>
