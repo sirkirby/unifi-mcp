@@ -5,11 +5,11 @@ description = "UniFi Access MCP Server"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "unifi-mcp-shared>=0.6.3,<0.7",
+    "unifi-mcp-shared>=0.6.5,<0.7",
     # Access managers in unifi-core import unifi_access_api (PyPI name
     # py-unifi-access); pull it in via the [access] extra rather than
     # declaring py-unifi-access here directly.
-    "unifi-core[access]>=0.4.14,<0.5",
+    "unifi-core[access]>=0.4.17,<0.5",
     "mcp[cli]>=1.28.1,<2",
     "aiohttp>=3.14.0",
     "pyyaml>=6.0",
