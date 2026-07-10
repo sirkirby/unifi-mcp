@@ -29,6 +29,7 @@ function activateTab(tab) {
 }
 
 function copyWithTextarea(text) {
+  var previouslyFocused = document.activeElement;
   var textarea = document.createElement('textarea');
   textarea.value = text;
   textarea.setAttribute('readonly', '');
@@ -42,9 +43,13 @@ function copyWithTextarea(text) {
     copied = document.execCommand('copy');
   } catch (error) {
     copied = false;
+  } finally {
+    textarea.remove();
+    if (previouslyFocused && previouslyFocused.isConnected && typeof previouslyFocused.focus === 'function') {
+      previouslyFocused.focus({ preventScroll: true });
+    }
   }
 
-  textarea.remove();
   return copied;
 }
 
@@ -56,6 +61,15 @@ function getCopyStatus(button) {
   status.setAttribute('data-copy-status', '');
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
+  status.style.position = 'absolute';
+  status.style.width = '1px';
+  status.style.height = '1px';
+  status.style.padding = '0';
+  status.style.margin = '-1px';
+  status.style.overflow = 'hidden';
+  status.style.clip = 'rect(0, 0, 0, 0)';
+  status.style.whiteSpace = 'nowrap';
+  status.style.border = '0';
   button.insertAdjacentElement('afterend', status);
   return status;
 }
@@ -112,9 +126,13 @@ function validProjectStats(snapshot) {
   if (!snapshot.python || !snapshot.containers || !snapshot.community || !snapshot.github) return false;
   if (!hasCompletePackageMap(snapshot.python.packages)) return false;
   if (!hasCompletePackageMap(snapshot.containers.packages)) return false;
+  if (typeof snapshot.generated_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(snapshot.generated_at)) {
+    return false;
+  }
 
   var generatedAt = new Date(snapshot.generated_at);
-  return !Number.isNaN(generatedAt.getTime()) &&
+  var canonicalGeneratedAt = snapshot.generated_at.slice(0, -1) + '.000Z';
+  return !Number.isNaN(generatedAt.getTime()) && generatedAt.toISOString() === canonicalGeneratedAt &&
     isNonNegativeInteger(snapshot.python.total) &&
     isNonNegativeInteger(snapshot.containers.total) &&
     isNonNegativeInteger(snapshot.community.merged_pull_requests) &&
@@ -228,10 +246,14 @@ document.querySelectorAll('[data-copy]').forEach(function (button) {
 
 (async function loadProjectStats() {
   var snapshot = await fetchJSON('data/project-stats.json');
-  if (!validProjectStats(snapshot)) return;
+  var fallbackStars = null;
 
-  renderProjectStats(snapshot);
-  await refreshStars(snapshot.github.stars);
+  if (validProjectStats(snapshot)) {
+    renderProjectStats(snapshot);
+    fallbackStars = snapshot.github.stars;
+  }
+
+  await refreshStars(fallbackStars);
 })();
 
 refreshPackageVersions();
