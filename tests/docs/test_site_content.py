@@ -237,6 +237,18 @@ class PublicPageMetadataTests(unittest.TestCase):
                     ["summary_large_image"],
                 )
 
+    def test_privacy_description_distinguishes_local_first_and_optional_relay(self):
+        parser = inspect_html(Path("docs/privacy.html"))
+        descriptions = meta_content(parser, "name", "description")
+
+        self.assertEqual(len(descriptions), 1)
+        self.assertIn("local-first", descriptions[0])
+        self.assertIn("optional Cloud Relay", descriptions[0])
+        self.assertNotIn(
+            "All communication stays between your AI agent and your local UniFi controller",
+            descriptions[0],
+        )
+
     def test_homepage_json_ld_describes_site_source_and_products(self):
         parser = inspect_html(Path("docs/index.html"))
         nodes = [node for payload in parser.json_ld for node in json_ld_nodes(payload)]
@@ -273,6 +285,24 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
         for path in DISCOVERY_FILES:
             with self.subTest(path=path):
                 self.assertTrue(path.is_file(), f"Missing discovery file: {path}")
+
+    def test_404_uses_root_relative_shared_assets_for_nested_missing_routes(self):
+        parser = inspect_html(Path("docs/404.html"))
+        links = parser.attributes_for("link")
+        favicon_urls = [
+            attributes.get("href", "") for attributes in links if "icon" in attributes.get("rel", "").split()
+        ]
+        stylesheet_urls = [
+            attributes.get("href", "")
+            for attributes in links
+            if "stylesheet" in attributes.get("rel", "").split()
+            and attributes.get("href", "") in {"styles.css", "/styles.css"}
+        ]
+
+        self.assertEqual(favicon_urls, ["/assets/favicon.svg"])
+        self.assertEqual(stylesheet_urls, ["/styles.css"])
+        self.assertNotIn("assets/favicon.svg", favicon_urls)
+        self.assertNotIn("styles.css", stylesheet_urls)
 
     def test_sitemap_contains_exact_public_canonical_urls(self):
         sitemap = Path("docs/sitemap.xml")
