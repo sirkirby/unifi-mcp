@@ -1,0 +1,45 @@
+{
+  "community": {
+    "contributors": 13,
+    "merged_pull_requests": 36,
+    "period": "trailing_90_days",
+    "period_end": "2026-07-10T22:29:09Z",
+    "period_start": "2026-04-11T22:29:09Z",
+    "source": "https://api.github.com/search/issues"
+  },
+  "containers": {
+    "packages": {
+      "unifi-access-mcp": 9566,
+      "unifi-api-server": 2199,
+      "unifi-mcp-relay": 3978,
+      "unifi-network-mcp": 123720,
+      "unifi-protect-mcp": 60578
+    },
+    "period": "lifetime",
+    "source": "https://github.com/sirkirby/unifi-mcp/pkgs/container/",
+    "total": 200041
+  },
+  "generated_at": "2026-07-10T22:29:09Z",
+  "github": {
+    "source": "https://api.github.com/repos/sirkirby/unifi-mcp",
+    "stars": 509,
+    "stars_added_90_days": 272
+  },
+  "npm": {
+    "source": "https://api.npmjs.org/downloads/point/last-month/unifi-mcp-worker",
+    "worker_downloads_30_days": 834
+  },
+  "python": {
+    "packages": {
+      "unifi-access-mcp": 2660,
+      "unifi-api-server": 1200,
+      "unifi-mcp-relay": 543,
+      "unifi-network-mcp": 37724,
+      "unifi-protect-mcp": 6510
+    },
+    "period": "trailing_30_days",
+    "source": "https://pypistats.org/api/",
+    "total": 48637
+  },
+  "schema_version": 1
+}
