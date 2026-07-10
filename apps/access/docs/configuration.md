@@ -65,8 +65,8 @@ The `adaptive` and `compact` modes affect response compaction only for tool resu
 
 | Mode | Behavior |
 |------|----------|
-| `adaptive` (default) | For structured tool results, emits concise `content` plus the full result once in `structuredContent` for MCP 2025-06-18+ requests. Pre-2025-06-18 and unknown clients retain full compatibility JSON in `content`. |
-| `compat` | Forces full compatibility JSON in `content` as well as the structured result. Use this to restore older clients. |
+| `adaptive` (default) | Classifies the request by the canonical date-based `protocolVersion` advertised during MCP initialization, not by client product or application version. For structured tool results, MCP `2025-06-18` or later receives concise `content` plus the full result once in `structuredContent`; earlier, missing, or malformed revisions retain full compatibility JSON in `content`. |
+| `compat` | Forces full compatibility JSON in `content` as well as the structured result. Use this for clients that consume the full result only from `content`, regardless of advertised revision. |
 | `compact` | For structured tool results, forces concise `content` plus the full `structuredContent` result even when no capable protocol revision was negotiated. |
 
 When Network runs alongside Access, its high-volume source defaults remain independently bounded: `unifi_get_dashboard` uses `summary=true`, and `unifi_list_rogue_aps` returns a summarized page of at most 100 records; `summary=false` restores full data within the selected response.
