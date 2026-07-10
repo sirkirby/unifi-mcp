@@ -1,6 +1,6 @@
 .PHONY: help sync build check test lint format format-check format-fix manifest generate server-manifests skill-references \
        check-skill-references check-generated pre-commit ci core-test shared-test protocol-smoke \
-       relay-test worker-install worker-test worker-typecheck worker-build worker-check docker-relay \
+       docs-test relay-test worker-install worker-test worker-typecheck worker-build worker-check docker-relay \
        docker-build docker-up docker-down docker-logs
 
 help:
@@ -21,6 +21,7 @@ help:
 	@echo "  make server-manifests  Regenerate server.json for all apps (MCP Registry)"
 	@echo "  make skill-references  Update skill tool tables from manifests"
 	@echo "  make pre-commit     Format + generate + lint + test + drift checks"
+	@echo "  make docs-test      Run documentation site contract tests"
 	@echo ""
 	@echo "  make docker-build   Build all Docker images"
 	@echo "  make docker-up      Start all servers (docker compose)"
@@ -46,7 +47,10 @@ core-test:
 shared-test:
 	uv run --package unifi-mcp-shared pytest packages/unifi-mcp-shared/tests -v
 
-test: core-test shared-test relay-test protocol-smoke worker-test
+docs-test:
+	uv run python -m unittest discover -s tests/docs -p 'test_*.py' -v
+
+test: core-test shared-test docs-test relay-test protocol-smoke worker-test
 	$(MAKE) -C apps/network test
 	$(MAKE) -C apps/protect test
 	$(MAKE) -C apps/access test
