@@ -106,7 +106,7 @@ h3 { font-size: 1.45rem; }
 .metrics > div + div { padding-left: 28px; border-left: 1px solid var(--border); }
 .metrics dt { color: var(--muted); font-size: .84rem; }
 .metrics dd { margin: 8px 0 2px; font: 600 clamp(2rem, 4vw, 3.5rem)/1 var(--display); letter-spacing: -.04em; }
-.metrics p { margin-bottom: 0; color: var(--muted); font-size: .78rem; }
+.metrics .metric-period { margin: 0; color: var(--muted); font: inherit; font-size: .78rem; letter-spacing: normal; }
 .metrics-note { margin: 19px 0 0; color: var(--muted); font-size: .8rem; }
 .metrics-note a { color: #cdd8d6; }
 

@@ -268,6 +268,34 @@ class PublicPageMetadataTests(unittest.TestCase):
         self.assertEqual(product_links, JSON_LD_PRODUCT_LINKS)
 
 
+class PublicPageAccessibilityContractTests(unittest.TestCase):
+    def test_public_pages_have_one_main_landmark(self):
+        for path in PUBLIC_PAGES:
+            with self.subTest(path=path):
+                parser = inspect_html(path)
+                self.assertEqual(
+                    len(parser.attributes_for("main")),
+                    1,
+                    f"{path} must contain exactly one main landmark",
+                )
+
+    def test_homepage_momentum_definition_list_uses_terms_and_definitions(self):
+        html = Path("docs/index.html").read_text(encoding="utf-8")
+        metrics = html.split('<dl class="metrics">', maxsplit=1)[1].split("</dl>", maxsplit=1)[0]
+
+        self.assertNotIn("<p", metrics)
+        self.assertEqual(metrics.count("<dt>"), 3)
+        self.assertEqual(metrics.count("<dd"), 6)
+
+    def test_privacy_text_links_are_not_distinguished_by_color_alone(self):
+        html = Path("docs/privacy.html").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "a { color: var(--blue-text); text-decoration: underline; }",
+            html,
+        )
+
+
 class CapabilityAndDiscoveryTests(unittest.TestCase):
     def test_homepage_product_tool_counts_match_manifests(self):
         parser = inspect_html(Path("docs/index.html"))
