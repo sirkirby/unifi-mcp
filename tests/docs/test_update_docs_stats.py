@@ -204,6 +204,10 @@ class FakeTextResponse(FakeResponse):
         self.headers = headers or Message()
 
 
+def pypi_package_page(identity: str, statistics: str) -> str:
+    return f"<section><h1>{identity}</h1><hr><p>{statistics}</p></section>"
+
+
 class JsonClientTests(unittest.TestCase):
     def test_request_json_decodes_utf8_json(self):
         request = Request("https://example.test/data")
@@ -289,7 +293,10 @@ class JsonClientTests(unittest.TestCase):
 
     def test_pypi_recent_falls_back_to_package_page_after_exhausted_429(self):
         rate_limit = stats.StatsHTTPError("PyPI Stats package unifi-network-mcp", 429)
-        html = "<p>Downloads last month:\n40,132</p>"
+        html = pypi_package_page(
+            "unifi-network-mcp",
+            "Downloads last month:\n40,132",
+        )
         with (
             mock.patch.object(stats, "request_json", side_effect=rate_limit),
             mock.patch.object(stats, "request_text", return_value=html) as mocked_text,
@@ -328,11 +335,14 @@ class JsonClientTests(unittest.TestCase):
 
     def test_pypi_recent_page_parser_rejects_missing_malformed_or_ambiguous_data(self):
         malformed_pages = {
-            "missing": "<p>Downloads last week: 9,608</p>",
-            "bad grouping": "<p>Downloads last month: 40,13</p>",
-            "negative": "<p>Downloads last month: -1</p>",
-            "decimal": "<p>Downloads last month: 401.32</p>",
-            "ambiguous": ("<p>Downloads last month: 40,132</p><p>Downloads last month: 40,133</p>"),
+            "missing": pypi_package_page("unifi-network-mcp", "Downloads last week: 9,608"),
+            "bad grouping": pypi_package_page("unifi-network-mcp", "Downloads last month: 40,13"),
+            "negative": pypi_package_page("unifi-network-mcp", "Downloads last month: -1"),
+            "decimal": pypi_package_page("unifi-network-mcp", "Downloads last month: 401.32"),
+            "ambiguous": pypi_package_page(
+                "unifi-network-mcp",
+                "Downloads last month: 40,132<br>Downloads last month: 40,133",
+            ),
         }
         for case, html in malformed_pages.items():
             with self.subTest(case=case):
@@ -341,6 +351,61 @@ class JsonClientTests(unittest.TestCase):
                     "PyPI Stats package unifi-network-mcp.*Downloads last month",
                 ):
                     stats.parse_pypi_recent_downloads(html, "unifi-network-mcp")
+
+    def test_pypi_recent_page_parser_requires_exact_package_identity(self):
+        invalid_pages = {
+            "wrong identity": pypi_package_page("another-package", "Downloads last month: 40,132"),
+            "missing identity": ("<section><hr><p>Downloads last month: 40,132</p></section>"),
+            "duplicate identity": (
+                "<section><h1>unifi-network-mcp</h1><h1>unifi-network-mcp</h1>"
+                "<hr><p>Downloads last month: 40,132</p></section>"
+            ),
+        }
+        for case, html in invalid_pages.items():
+            with self.subTest(case=case):
+                with self.assertRaisesRegex(
+                    stats.StatsError,
+                    "PyPI Stats package unifi-network-mcp.*identity",
+                ):
+                    stats.parse_pypi_recent_downloads(html, "unifi-network-mcp")
+
+    def test_pypi_recent_page_parser_requires_metric_in_package_statistics_region(self):
+        invalid_pages = {
+            "unrelated prose in region": pypi_package_page(
+                "unifi-network-mcp",
+                "Marketing copy: Downloads last month: 40,132 users saw this page.",
+            ),
+            "exact phrase in later paragraph": (
+                "<section><h1>unifi-network-mcp</h1><hr><p>Package metadata</p>"
+                "<p>Downloads last month: 40,132</p></section>"
+            ),
+            "script only": pypi_package_page(
+                "unifi-network-mcp",
+                "<script>Downloads last month: 40,132</script>",
+            ),
+            "style only": pypi_package_page(
+                "unifi-network-mcp",
+                "<style>Downloads last month: 40,132</style>",
+            ),
+        }
+        for case, html in invalid_pages.items():
+            with self.subTest(case=case):
+                with self.assertRaisesRegex(
+                    stats.StatsError,
+                    "PyPI Stats package unifi-network-mcp.*Downloads last month",
+                ):
+                    stats.parse_pypi_recent_downloads(html, "unifi-network-mcp")
+
+    def test_pypi_recent_page_parser_accepts_normalized_identity_and_associated_count(self):
+        html = pypi_package_page(
+            "  unifi-network-mcp\n",
+            "Package metadata<br><br>Downloads last month:\n40,132",
+        )
+
+        self.assertEqual(
+            stats.parse_pypi_recent_downloads(html, "unifi-network-mcp"),
+            40_132,
+        )
 
     def test_package_download_parser_reads_exact_associated_title(self):
         html = """
@@ -574,7 +639,10 @@ class OutputTests(unittest.TestCase):
                 mock.patch.object(
                     stats,
                     "request_text",
-                    return_value="<p>Downloads last month: unavailable</p>",
+                    return_value=pypi_package_page(
+                        "unifi-network-mcp",
+                        "Downloads last month: unavailable",
+                    ),
                 ),
             ):
                 result = stats.main(["--output", str(output), "--github-token", "token", "--force"])

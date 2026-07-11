@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -169,38 +168,116 @@ def parse_package_downloads(html: str, package_name: str) -> int:
     return _require_count(int(title), f"GitHub package page {package_name}")
 
 
-class _VisibleTextParser(HTMLParser):
+class _PyPIRecentDownloadsParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.parts: list[str] = []
+        self.identities: list[str] = []
+        self.candidates: list[str] = []
+        self._section_depth = 0
         self._ignored_depth = 0
+        self._heading_parts: list[str] | None = None
+        self._awaiting_rule = False
+        self._awaiting_statistics = False
+        self._statistics_parts: list[str] | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         del attrs
         if tag in {"script", "style"}:
             self._ignored_depth += 1
+            return
+        if self._ignored_depth:
+            return
+        if tag == "section":
+            self._section_depth += 1
+            return
+        if not self._section_depth:
+            return
+        if tag == "h1":
+            self._heading_parts = []
+            return
+        if tag == "hr":
+            self._awaiting_statistics = self._awaiting_rule
+            self._awaiting_rule = False
+            return
+        if tag == "p" and self._awaiting_statistics:
+            self._statistics_parts = []
+            self._awaiting_statistics = False
+            return
+        if tag == "br" and self._statistics_parts is not None:
+            self._finish_statistics_segment()
+            return
+        if self._awaiting_rule:
+            self._awaiting_rule = False
+        if self._awaiting_statistics:
+            self._awaiting_statistics = False
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in {"script", "style"} and self._ignored_depth:
-            self._ignored_depth -= 1
+        if tag in {"script", "style"}:
+            if self._ignored_depth:
+                self._ignored_depth -= 1
+            return
+        if self._ignored_depth:
+            return
+        if tag == "h1" and self._heading_parts is not None:
+            self.identities.append(" ".join("".join(self._heading_parts).split()))
+            self._heading_parts = None
+            self._awaiting_rule = True
+            return
+        if tag == "p" and self._statistics_parts is not None:
+            self._finish_statistics_segment()
+            self._statistics_parts = None
+            return
+        if tag == "section" and self._section_depth:
+            self._section_depth -= 1
+            self._awaiting_rule = False
+            self._awaiting_statistics = False
 
     def handle_data(self, data: str) -> None:
-        if not self._ignored_depth:
-            self.parts.append(data)
+        if self._ignored_depth:
+            return
+        if self._heading_parts is not None:
+            self._heading_parts.append(data)
+        if self._statistics_parts is not None:
+            self._statistics_parts.append(data)
+
+    def _finish_statistics_segment(self) -> None:
+        if self._statistics_parts is None:
+            return
+        segment = " ".join("".join(self._statistics_parts).split())
+        self._statistics_parts = []
+        label = "Downloads last month:"
+        if segment.startswith(label):
+            self.candidates.append(segment.removeprefix(label).strip())
+
+
+def _parse_displayed_count(value: str, source: str) -> int:
+    if not value.isascii():
+        raise StatsError(f"{source} has a malformed count")
+    groups = value.split(",")
+    if len(groups) == 1:
+        valid = bool(groups[0]) and groups[0].isdigit()
+    else:
+        valid = (
+            1 <= len(groups[0]) <= 3
+            and groups[0].isdigit()
+            and all(len(group) == 3 and group.isdigit() for group in groups[1:])
+        )
+    if not valid:
+        raise StatsError(f"{source} has a malformed count")
+    return _require_count(int("".join(groups)), source)
 
 
 def parse_pypi_recent_downloads(html: str, package_name: str) -> int:
-    parser = _VisibleTextParser()
+    parser = _PyPIRecentDownloadsParser()
     parser.feed(html)
-    visible_text = " ".join(" ".join(parser.parts).split())
-    candidates = re.findall(
-        r"(?:^|\s)Downloads last month:\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+))(?=\s|$)",
-        visible_text,
-    )
-    if len(candidates) != 1:
+    parser.close()
+    expected_identity = " ".join(package_name.split())
+    if parser.identities != [expected_identity]:
+        raise StatsError(f"PyPI Stats package {package_name} does not have exactly one matching package identity")
+    if len(parser.candidates) != 1:
         raise StatsError(f"PyPI Stats package {package_name} is missing an unambiguous Downloads last month count")
-    return _require_count(
-        int(candidates[0].replace(",", "")),
+    return _parse_displayed_count(
+        parser.candidates[0],
         f"PyPI Stats package {package_name} Downloads last month",
     )
 
