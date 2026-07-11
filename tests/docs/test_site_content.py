@@ -1,17 +1,26 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urljoin, urlparse
 
 PUBLIC_PAGES = {
     Path("docs/index.html"): "https://unifimcp.com/",
     Path("docs/sponsor/index.html"): "https://unifimcp.com/sponsor/",
     Path("docs/privacy.html"): "https://unifimcp.com/privacy.html",
 }
+
+LINKED_HTML_PAGES = PUBLIC_PAGES | {
+    Path("docs/404.html"): "https://unifimcp.com/404.html",
+}
+
+SITE_ORIGIN = "https://unifimcp.com"
+REPOSITORY_URL = "https://github.com/sirkirby/unifi-mcp"
 
 PRODUCT_LINKS = {
     "unifi-api-server": "https://github.com/sirkirby/unifi-mcp/tree/main/apps/api",
@@ -191,6 +200,83 @@ def has_json_ld_type(node: dict[str, Any], expected: str) -> bool:
     return node_type == expected
 
 
+def site_url_to_path(url: str) -> Path:
+    parsed = urlparse(url)
+    relative = unquote(parsed.path).lstrip("/")
+    if not relative:
+        return Path("docs/index.html")
+    if parsed.path.endswith("/"):
+        return Path("docs") / relative / "index.html"
+    return Path("docs") / relative
+
+
+def markdown_links(content: str) -> list[str]:
+    return re.findall(r"\[[^\]]+\]\(([^)\s]+)\)", content)
+
+
+def _css_selector_matches_link(selector: str, *, ancestors: set[str]) -> bool:
+    selector = selector.strip()
+    if not selector or ":" in selector:
+        return False
+    tokens = [token for token in re.split(r"\s+|\s*>\s*", selector) if token]
+    if not tokens:
+        return False
+    target = tokens[-1]
+    if target not in {"a", "*"}:
+        return False
+    for token in tokens[:-1]:
+        if token.startswith(".") and token[1:] not in ancestors:
+            return False
+        if not token.startswith(".") and token not in ancestors:
+            return False
+    return True
+
+
+def _css_specificity(selector: str) -> tuple[int, int, int]:
+    ids = len(re.findall(r"#[\w-]+", selector))
+    classes = len(re.findall(r"\.[\w-]+|\[[^]]+\]", selector))
+    tags = len(re.findall(r"(?<![.#\w-])[a-zA-Z][\w-]*", selector))
+    return ids, classes, tags
+
+
+def link_has_non_color_cue(css: str, *, ancestors: set[str]) -> bool:
+    winning: dict[str, tuple[tuple[int, int, int, int, int, int], str]] = {}
+    order = 0
+    for rule in re.finditer(r"([^{}]+)\{([^{}]*)\}", css):
+        selectors = rule.group(1).split(",")
+        declarations = rule.group(2).split(";")
+        for selector in selectors:
+            if not _css_selector_matches_link(selector, ancestors=ancestors):
+                continue
+            specificity = _css_specificity(selector)
+            for declaration_order, declaration in enumerate(declarations):
+                if ":" not in declaration:
+                    continue
+                property_name, value = (part.strip().lower() for part in declaration.split(":", 1))
+                important = value.endswith("!important")
+                value = value.removesuffix("!important").strip()
+                if property_name in {"text-decoration", "text-decoration-line"}:
+                    cue = "text-decoration"
+                elif property_name in {"border-bottom", "border-bottom-style"}:
+                    cue = "border-bottom"
+                else:
+                    continue
+                priority = (int(important), *specificity, order, declaration_order)
+                if cue not in winning or priority > winning[cue][0]:
+                    winning[cue] = (priority, value)
+        order += 1
+
+    text_decoration = winning.get("text-decoration", ((0, 0, 0, 0, 0, 0), "none"))[1]
+    border_bottom = winning.get("border-bottom", ((0, 0, 0, 0, 0, 0), "none"))[1]
+    return text_decoration not in {"none", "initial", "unset"} or border_bottom not in {
+        "none",
+        "0",
+        "0px",
+        "initial",
+        "unset",
+    }
+
+
 class PublicPageMetadataTests(unittest.TestCase):
     def test_pages_have_one_h1_and_unique_non_empty_titles_and_descriptions(self):
         titles: dict[str, Path] = {}
@@ -219,6 +305,12 @@ class PublicPageMetadataTests(unittest.TestCase):
                 descriptions[description[0]] = path
 
     def test_pages_have_matching_absolute_canonical_and_social_metadata(self):
+        unique_values: dict[str, dict[str, Path]] = {
+            "og:title": {},
+            "og:description": {},
+            "twitter:title": {},
+            "twitter:description": {},
+        }
         for path, expected_url in PUBLIC_PAGES.items():
             with self.subTest(path=path):
                 parser = inspect_html(path)
@@ -229,13 +321,43 @@ class PublicPageMetadataTests(unittest.TestCase):
                 ]
                 self.assertEqual(canonicals, [expected_url])
                 self.assertEqual(meta_content(parser, "property", "og:url"), [expected_url])
-                og_images = meta_content(parser, "property", "og:image")
-                self.assertEqual(len(og_images), 1)
-                self.assertRegex(og_images[0], r"^https://")
+                for field in (
+                    "og:title",
+                    "og:description",
+                    "og:image",
+                    "og:image:width",
+                    "og:image:height",
+                    "og:image:alt",
+                ):
+                    values = meta_content(parser, "property", field)
+                    self.assertEqual(len(values), 1, f"{path} must have exactly one {field}")
+                    self.assertTrue(values[0], f"{path} {field} must not be empty")
+                self.assertEqual(meta_content(parser, "property", "og:image:width"), ["1200"])
+                self.assertEqual(meta_content(parser, "property", "og:image:height"), ["675"])
+                self.assertRegex(meta_content(parser, "property", "og:image")[0], r"^https://")
                 self.assertEqual(
                     meta_content(parser, "name", "twitter:card"),
                     ["summary_large_image"],
                 )
+                for field in (
+                    "twitter:title",
+                    "twitter:description",
+                    "twitter:image",
+                    "twitter:image:alt",
+                ):
+                    values = meta_content(parser, "name", field)
+                    self.assertEqual(len(values), 1, f"{path} must have exactly one {field}")
+                    self.assertTrue(values[0], f"{path} {field} must not be empty")
+                self.assertEqual(
+                    meta_content(parser, "name", "twitter:image"),
+                    meta_content(parser, "property", "og:image"),
+                )
+
+                for field, values in unique_values.items():
+                    attribute = "property" if field.startswith("og:") else "name"
+                    value = meta_content(parser, attribute, field)[0]
+                    self.assertNotIn(value, values, f"{field} duplicated with {values.get(value)}")
+                    values[value] = path
 
     def test_privacy_description_distinguishes_local_first_and_optional_relay(self):
         parser = inspect_html(Path("docs/privacy.html"))
@@ -287,13 +409,18 @@ class PublicPageAccessibilityContractTests(unittest.TestCase):
         self.assertEqual(metrics.count("<dt>"), 3)
         self.assertEqual(metrics.count("<dd"), 6)
 
-    def test_privacy_text_links_are_not_distinguished_by_color_alone(self):
+    def test_privacy_text_links_have_a_non_color_cue_after_css_cascade(self):
         html = Path("docs/privacy.html").read_text(encoding="utf-8")
+        style = re.search(r"<style>(.*?)</style>", html, flags=re.DOTALL)
+        self.assertIsNotNone(style)
+        css = style.group(1)
 
-        self.assertIn(
-            "a { color: var(--blue-text); text-decoration: underline; }",
-            html,
-        )
+        self.assertTrue(link_has_non_color_cue(css, ancestors={"p"}))
+        self.assertTrue(link_has_non_color_cue(css, ancestors={"footer"}))
+
+        overridden = css + "\np a, .footer a { text-decoration: none; border-bottom: none; }"
+        self.assertFalse(link_has_non_color_cue(overridden, ancestors={"p"}))
+        self.assertFalse(link_has_non_color_cue(overridden, ancestors={"footer"}))
 
 
 class PrivacyDataFlowContractTests(unittest.TestCase):
@@ -358,6 +485,7 @@ class PrivacyDataFlowContractTests(unittest.TestCase):
         for phrase in required:
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, self.privacy_lower)
+        self.assertIn("homepage or sponsor page", self.privacy_lower)
 
     def test_privacy_has_current_revision_date(self):
         self.assertIn("Last updated: July 10, 2026", self.privacy)
@@ -387,6 +515,30 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
         for path in DISCOVERY_FILES:
             with self.subTest(path=path):
                 self.assertTrue(path.is_file(), f"Missing discovery file: {path}")
+
+    def test_all_local_html_links_and_fragments_resolve(self):
+        for source, page_url in LINKED_HTML_PAGES.items():
+            parser = inspect_html(source)
+            for href in parser.links:
+                with self.subTest(source=source, href=href):
+                    resolved = urljoin(page_url, href)
+                    parsed = urlparse(resolved)
+                    if parsed.scheme == "mailto":
+                        continue
+                    if parsed.scheme not in {"http", "https"}:
+                        self.fail(f"Unsupported link scheme in {source}: {href}")
+                    if f"{parsed.scheme}://{parsed.netloc}" != SITE_ORIGIN:
+                        continue
+
+                    target = site_url_to_path(resolved)
+                    self.assertTrue(target.is_file(), f"Local link does not resolve: {href} -> {target}")
+                    if parsed.fragment and target.suffix == ".html":
+                        target_parser = inspect_html(target)
+                        self.assertIn(
+                            unquote(parsed.fragment),
+                            target_parser.ids,
+                            f"Fragment does not exist: {href} -> {target}",
+                        )
 
     def test_404_uses_root_relative_shared_assets_for_nested_missing_routes(self):
         parser = inspect_html(Path("docs/404.html"))
@@ -418,6 +570,21 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
         self.assertEqual(len(urls), len(PUBLIC_PAGES))
         self.assertEqual(set(urls), set(PUBLIC_PAGES.values()))
 
+    def test_robots_has_exact_allow_and_canonical_sitemap_contract(self):
+        self.assertEqual(
+            Path("docs/robots.txt").read_text(encoding="utf-8"),
+            "User-agent: *\nAllow: /\n\nSitemap: https://unifimcp.com/sitemap.xml\n",
+        )
+
+    def test_404_is_noindex_and_excluded_from_sitemap(self):
+        parser = inspect_html(Path("docs/404.html"))
+        robots = meta_content(parser, "name", "robots")
+        self.assertEqual(len(robots), 1)
+        self.assertIn("noindex", {token.strip().lower() for token in robots[0].split(",")})
+
+        sitemap = Path("docs/sitemap.xml").read_text(encoding="utf-8")
+        self.assertNotIn("404", sitemap)
+
     def test_llms_txt_has_summary_and_expected_sections(self):
         path = Path("docs/llms.txt")
         self.assertTrue(path.is_file(), f"Missing discovery file: {path}")
@@ -436,6 +603,64 @@ class CapabilityAndDiscoveryTests(unittest.TestCase):
         ):
             with self.subTest(section=section):
                 self.assertIn(section, sections)
+
+    def test_llms_txt_links_resolve_to_site_or_repository_paths(self):
+        links = markdown_links(Path("docs/llms.txt").read_text(encoding="utf-8"))
+        self.assertGreater(len(links), 0)
+
+        for link in links:
+            with self.subTest(link=link):
+                parsed = urlparse(link)
+                origin = f"{parsed.scheme}://{parsed.netloc}"
+                if origin == SITE_ORIGIN:
+                    target = site_url_to_path(link)
+                    self.assertTrue(target.is_file(), f"Site link does not resolve: {link} -> {target}")
+                    if parsed.fragment and target.suffix == ".html":
+                        self.assertIn(unquote(parsed.fragment), inspect_html(target).ids)
+                    continue
+
+                if link.rstrip("/") == REPOSITORY_URL:
+                    continue
+
+                repository_match = re.fullmatch(
+                    r"https://github\.com/sirkirby/unifi-mcp/(blob|tree)/main/([^?#]+)(?:[?#].*)?",
+                    link,
+                )
+                if repository_match:
+                    kind, repository_path = repository_match.groups()
+                    target = Path(unquote(repository_path))
+                    if kind == "blob":
+                        self.assertTrue(target.is_file(), f"Repository file link does not resolve: {link}")
+                    else:
+                        self.assertTrue(target.is_dir(), f"Repository directory link does not resolve: {link}")
+                    continue
+
+                if parsed.netloc in {"unifimcp.com", "github.com"}:
+                    self.fail(f"Unrecognized project-owned link: {link}")
+
+    def test_sponsor_loads_shared_star_enhancement_without_version_targets(self):
+        sponsor = inspect_html(Path("docs/sponsor/index.html"))
+        scripts = sponsor.attributes_for("script")
+        shared_scripts = [attributes for attributes in scripts if attributes.get("src") == "../app.js"]
+        self.assertEqual(len(shared_scripts), 1)
+        self.assertIn("defer", shared_scripts[0])
+
+        app = Path("docs/app.js").read_text(encoding="utf-8")
+        self.assertIn("fetchJSON('/data/project-stats.json')", app)
+        self.assertIn(
+            "if (!document.querySelector('[data-pkg-version], [data-npm-version]')) return;",
+            app,
+        )
+
+    def test_star_fallbacks_match_the_checked_in_snapshot(self):
+        snapshot = json.loads(Path("docs/data/project-stats.json").read_text(encoding="utf-8"))
+        expected = f"★ {snapshot['github']['stars']:,}"
+
+        for path in (Path("docs/index.html"), Path("docs/sponsor/index.html")):
+            with self.subTest(path=path):
+                html = path.read_text(encoding="utf-8")
+                fallback = re.findall(r"<span data-stars>([^<]*)</span>", html)
+                self.assertEqual(fallback, [expected])
 
 
 class ContentReconciliationTests(unittest.TestCase):

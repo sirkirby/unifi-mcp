@@ -190,6 +190,8 @@ async function refreshStars(fallback) {
 }
 
 async function refreshPackageVersions() {
+  if (!document.querySelector('[data-pkg-version], [data-npm-version]')) return;
+
   var pythonPackages = [
     'unifi-network-mcp',
     'unifi-protect-mcp',
@@ -245,7 +247,7 @@ document.querySelectorAll('[data-copy]').forEach(function (button) {
 });
 
 (async function loadProjectStats() {
-  var snapshot = await fetchJSON('data/project-stats.json');
+  var snapshot = await fetchJSON('/data/project-stats.json');
   var fallbackStars = null;
 
   if (validProjectStats(snapshot)) {
