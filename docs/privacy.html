@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy Policy — UniFi MCP</title>
-  <meta name="description" content="UniFi MCP privacy policy for local-first controller access, optional Cloud Relay routing, credentials, telemetry, and third-party services.">
+  <meta name="description" content="UniFi MCP privacy and data-flow details for local-first MCP servers, the self-hosted API, optional Cloud Relay, and the documentation site.">
   <meta name="theme-color" content="#0a0e1a">
   <link rel="canonical" href="https://unifimcp.com/privacy.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="UniFi MCP">
   <meta property="og:title" content="Privacy Policy — UniFi MCP">
-  <meta property="og:description" content="How UniFi MCP handles controller data, credentials, local operation, optional services, and project website privacy.">
+  <meta property="og:description" content="How local MCP servers, the self-hosted API, optional Cloud Relay, and the documentation site handle data.">
   <meta property="og:url" content="https://unifimcp.com/privacy.html">
   <meta property="og:image" content="https://unifimcp.com/assets/hero-readme.jpg">
   <meta property="og:image:width" content="1200">
@@ -18,7 +18,7 @@
   <meta property="og:image:alt" content="UniFi MCP privacy and local data-flow overview">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Privacy Policy — UniFi MCP">
-  <meta name="twitter:description" content="How UniFi MCP handles controller data, credentials, local operation, optional services, and project website privacy.">
+  <meta name="twitter:description" content="How local MCP servers, the self-hosted API, optional Cloud Relay, and the documentation site handle data.">
   <meta name="twitter:image" content="https://unifimcp.com/assets/hero-readme.jpg">
   <meta name="twitter:image:alt" content="UniFi MCP privacy and local data-flow overview">
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
@@ -163,75 +163,70 @@
     <a href="/" class="back-link">&larr; Back to UniFi MCP</a>
 
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated: March 24, 2026</p>
+    <p class="updated">Last updated: July 10, 2026</p>
 
     <div class="summary">
-      UniFi MCP does not collect, store, or transmit your personal data. All communication stays between your AI agent and your local UniFi controller. We have no servers, no analytics, no telemetry, and no tracking.
+      UniFi MCP has several independently operated surfaces. Local MCP servers can keep controller traffic on infrastructure you control. The optional self-hosted API stores operator-managed state, the optional Cloud Relay passes tool traffic through Cloudflare and stores routing metadata, and this documentation site makes limited third-party requests.
     </div>
 
-    <h2>How UniFi MCP Works</h2>
-    <p>UniFi MCP is a set of <a href="https://modelcontextprotocol.io/">Model Context Protocol</a> servers that run <strong>locally on your machine</strong>. They connect directly to your UniFi controller on your local network. Your AI agent (Claude Code, Claude Cowork, or other MCP clients) communicates with the MCP server over a local stdio or HTTP connection.</p>
+    <h2>Choose the Data Path You Need</h2>
+    <p>UniFi MCP includes local <a href="https://modelcontextprotocol.io/">Model Context Protocol</a> servers, an independent self-hosted API, and an optional Cloud Relay. These paths are not interchangeable and do not have the same storage or network boundaries.</p>
 
-    <pre><code>Your AI Agent &lt;--local--&gt; MCP Server (on your machine) &lt;--your network--&gt; UniFi Controller</code></pre>
+    <h2>Local MCP Servers</h2>
+    <p>The Network, Protect, and Access MCP servers run on an operator-controlled machine and connect directly to configured UniFi controllers. With stdio or local HTTP and no Cloud Relay, the project does not route tool-call payloads through a hosted UniFi MCP service.</p>
 
-    <h2>What We Don't Collect</h2>
+    <pre><code>MCP client &lt;--stdio or local HTTP--&gt; MCP server &lt;--local network--&gt; UniFi controller</code></pre>
+
     <ul>
-      <li><strong>No telemetry.</strong> We do not collect usage data, error reports, or analytics of any kind.</li>
-      <li><strong>No network traffic.</strong> We do not monitor, log, or transmit your network traffic or device data.</li>
-      <li><strong>No credentials.</strong> Your UniFi username, password, and API keys are stored only in your local environment variables or config files. They are never sent to us or any third party.</li>
-      <li><strong>No personal data.</strong> We do not collect names, email addresses, IP addresses, or any identifying information.</li>
-      <li><strong>No cookies or tracking.</strong> There is no web interface, no cookies, no tracking pixels.</li>
+      <li>Controller credentials are supplied through operator-managed environment variables or configuration and are used by the local server to authenticate to the controller.</li>
+      <li>The MCP server applications do not include a database for controller records. Operators can enable diagnostics and choose how local process logs are retained.</li>
+      <li>Your MCP client or agent provider may receive prompts, tool arguments, and tool results under that product's own privacy and retention terms.</li>
+      <li>Known secret-bearing response fields are redacted by default at the project response boundary, but operators remain responsible for credential scope, configuration, and log access.</li>
     </ul>
 
-    <h2>Data Flow</h2>
-
-    <h3>Local Mode (default)</h3>
-    <p>All data stays on your machine and your local network:</p>
-    <ol>
-      <li>Your AI agent sends a tool call to the MCP server (running locally)</li>
-      <li>The MCP server queries your UniFi controller over your local network (HTTPS)</li>
-      <li>The controller responds with the requested data</li>
-      <li>The MCP server formats and returns the result to your AI agent</li>
-    </ol>
-    <p><strong>No data leaves your network.</strong></p>
-
-    <h3>Relay Mode (optional)</h3>
-    <p>If you choose to enable the cloud relay, your tool calls are proxied through a Cloudflare Worker:</p>
+    <h2>Self-Hosted API Server (Optional)</h2>
+    <p><code>unifi-api-server</code> is an independent HTTP service for applications and automation. It includes an administrative UI and uses an operator-controlled SQLite state database. The SQLite file itself is not fully encrypted; controller credential values are stored as encrypted controller credentials using application-layer AES-256-GCM.</p>
     <ul>
-      <li>The Cloudflare Worker processes tool calls in transit but <strong>does not store them</strong></li>
-      <li>Communication is encrypted (WSS/TLS)</li>
-      <li>Access is scoped by a token you generate and control</li>
-      <li>No inbound ports are exposed on your network</li>
-      <li>You can revoke relay access at any time by rotating or deleting your token</li>
+      <li>Persisted API state includes controller registrations, encrypted controller credentials, API-key hashes and scopes, sessions, audit records, and application settings.</li>
+      <li>API clients send requests and receive controller-derived responses through the API endpoint the operator exposes. Operators choose its bind address, network controls, state volume, encryption-key handling, audit retention, and log settings.</li>
+      <li>Known secret-bearing response fields are redacted by default. This response policy does not remove the API's need to persist encrypted credentials for registered controllers.</li>
     </ul>
 
-    <h2>Third-Party Services</h2>
+    <h2>Cloud Relay (Optional)</h2>
+    <p>The Cloud Relay pairs a Cloudflare Worker gateway with a Relay sidecar on the operator's network. Tool-call arguments and results pass through Cloudflare in transit before reaching the sidecar and local MCP server, then return through the same path.</p>
+
+    <pre><code>Remote MCP client &lt;--HTTPS--&gt; Worker gateway &lt;--outbound WebSocket--&gt; Relay sidecar &lt;--HTTP--&gt; local MCP server</code></pre>
+
+    <p>The Worker uses Durable Object SQLite for operational routing state. Persisted records include location metadata (location ID, name, creation time, and last-seen time), hashed relay tokens, and tool catalogs containing tool names, descriptions, input schemas, annotations, and server-origin metadata.</p>
+    <ul>
+      <li>The Worker does not store controller credentials. Controller authentication remains with the local MCP servers.</li>
+      <li>Application code does not persist tool-call arguments or results. It keeps pending calls in memory while forwarding a request and resolving its response.</li>
+      <li>Relay traffic uses HTTPS and WSS/TLS. Transport encryption does not change the fact that Cloudflare handles the payload in transit.</li>
+      <li>Cloudflare's own platform logging, retention, and privacy behavior is outside this application's storage code. Operators should review the <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare Privacy Policy</a> and their <a href="https://developers.cloudflare.com/workers/observability/logs/">Workers logging and observability settings</a>.</li>
+    </ul>
+
+    <h2>Documentation Site Requests</h2>
+    <p>The documentation site has no first-party account system and does not add analytics or advertising scripts. Loading and using its public pages can still send standard request metadata such as IP address, user agent, requested URL, and referrer information to hosting or content providers:</p>
     <table>
       <thead>
-        <tr><th>Service</th><th>When Used</th><th>What It Sees</th></tr>
+        <tr><th>Provider</th><th>When Contacted</th><th>Purpose</th></tr>
       </thead>
       <tbody>
-        <tr><td>Your UniFi Controller</td><td>Always</td><td>Tool requests over your local network</td></tr>
-        <tr><td>Cloudflare Workers</td><td>Only if you enable relay</td><td>Tool calls in transit (encrypted, not stored)</td></tr>
-        <tr><td>PyPI</td><td>During installation</td><td>Standard package download</td></tr>
-        <tr><td>GitHub</td><td>During plugin installation</td><td>Plugin source code download</td></tr>
+        <tr><td>GitHub Pages</td><td>When a documentation page is loaded</td><td>Static-site hosting</td></tr>
+        <tr><td>Google Fonts</td><td>When the homepage or sponsor page loads</td><td>Font stylesheets and font files</td></tr>
+        <tr><td>GitHub API</td><td>When the homepage loads with JavaScript</td><td>Best-effort current repository star count</td></tr>
+        <tr><td>PyPI</td><td>When the homepage loads with JavaScript</td><td>Best-effort Python package version metadata</td></tr>
+        <tr><td>npm registry</td><td>When the homepage loads with JavaScript</td><td>Best-effort Worker package version metadata</td></tr>
       </tbody>
     </table>
-    <p>We do not integrate with any analytics, advertising, or data broker services.</p>
 
-    <h2>Your Controller Credentials</h2>
-    <ul>
-      <li>Credentials are stored in your local environment variables, <code>.env</code> file, or Claude Code <code>settings.json</code></li>
-      <li>They are read at startup and used to authenticate with your controller</li>
-      <li>They are never logged, transmitted externally, or stored in any persistent database</li>
-      <li>API keys (if used) follow the same local-only pattern</li>
-    </ul>
+    <p>The committed project-statistics snapshot is loaded from this site. Live star and package-version requests are optional enhancements; blocking them leaves the static page and snapshot usable. Following external links, installing packages, or using GitHub Sponsors contacts those providers under their own policies.</p>
 
-    <h2>Data Retention</h2>
-    <p>UniFi MCP stores <strong>nothing</strong>. There is no database, no cache, no log files, and no session state. All data lives on your UniFi controller. When the MCP server process stops, no data persists.</p>
+    <h2>Operator Choices and Retention</h2>
+    <p>Retention depends on which components an operator enables. A local MCP-only deployment does not create the API or Worker databases. Enabling the API creates local SQLite state and operator-controlled logs. Enabling Cloud Relay creates Worker routing/catalog records and sends tool traffic through Cloudflare. Operators can remove API state volumes, revoke keys and relay tokens, delete Relay locations, change audit retention, and disable optional components they do not need.</p>
 
     <h2>Changes to This Policy</h2>
-    <p>If we change this privacy policy, we will update the date at the top and commit the change to the <a href="https://github.com/sirkirby/unifi-mcp">repository</a>. Since UniFi MCP has no data collection, changes would only reflect new features or clarifications.</p>
+    <p>Policy changes are dated here and committed to the <a href="https://github.com/sirkirby/unifi-mcp">repository</a>. The repository history is the record of changes to these project-specific descriptions.</p>
 
     <h2>Contact</h2>
     <p>For privacy questions, reach the maintainer via the <a href="https://github.com/sirkirby/unifi-mcp">GitHub repository</a> or the email listed on the <a href="https://github.com/sirkirby">maintainer's profile</a>.</p>

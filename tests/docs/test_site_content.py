@@ -296,6 +296,73 @@ class PublicPageAccessibilityContractTests(unittest.TestCase):
         )
 
 
+class PrivacyDataFlowContractTests(unittest.TestCase):
+    def setUp(self):
+        self.privacy = Path("docs/privacy.html").read_text(encoding="utf-8")
+        self.privacy_lower = self.privacy.lower()
+
+    def test_privacy_rejects_stale_universal_absolutes(self):
+        stale_claims = (
+            "all communication stays between your ai agent and your local unifi controller",
+            "there is no web interface",
+            "they are never logged, transmitted externally, or stored in any persistent database",
+            "unifi mcp stores <strong>nothing</strong>",
+            "there is no database, no cache, no log files, and no session state",
+        )
+
+        for claim in stale_claims:
+            with self.subTest(claim=claim):
+                self.assertNotIn(claim, self.privacy_lower)
+
+    def test_privacy_describes_api_operator_controlled_persistence(self):
+        required = (
+            "unifi-api-server",
+            "operator-controlled sqlite",
+            "encrypted controller credentials",
+            "api-key hashes",
+            "sessions",
+            "audit records",
+            "settings",
+            "administrative ui",
+        )
+
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.privacy_lower)
+
+    def test_privacy_distinguishes_relay_transit_from_persisted_metadata(self):
+        required = (
+            "tool-call arguments and results pass through cloudflare in transit",
+            "durable object sqlite",
+            "location metadata",
+            "hashed relay tokens",
+            "tool catalogs",
+            "does not store controller credentials",
+            "application code does not persist tool-call arguments or results",
+            "cloudflare's own platform logging, retention, and privacy behavior",
+        )
+
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.privacy_lower)
+
+    def test_privacy_discloses_documentation_site_requests(self):
+        required = (
+            "google fonts",
+            "github api",
+            "pypi",
+            "npm registry",
+            "standard request metadata",
+        )
+
+        for phrase in required:
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.privacy_lower)
+
+    def test_privacy_has_current_revision_date(self):
+        self.assertIn("Last updated: July 10, 2026", self.privacy)
+
+
 class CapabilityAndDiscoveryTests(unittest.TestCase):
     def test_homepage_product_tool_counts_match_manifests(self):
         parser = inspect_html(Path("docs/index.html"))
