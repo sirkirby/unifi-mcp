@@ -223,7 +223,7 @@
     <p>The committed project-statistics snapshot is loaded from this site. Live star and package-version requests are optional enhancements; blocking them leaves the static page and snapshot usable. Following external links, installing packages, or using GitHub Sponsors contacts those providers under their own policies.</p>
 
     <h2>Operator Choices and Retention</h2>
-    <p>Retention depends on which components an operator enables. A local MCP-only deployment does not create the API or Worker databases. Enabling the API creates local SQLite state and operator-controlled logs. Enabling Cloud Relay creates Worker routing/catalog records and sends tool traffic through Cloudflare. Operators can remove API state volumes, revoke keys and relay tokens, delete Relay locations, change audit retention, and disable optional components they do not need.</p>
+    <p>Retention depends on which components an operator enables. A local MCP-only deployment does not create the API or Worker databases. Enabling the API creates local SQLite state and any configured logs. Enabling Cloud Relay creates Worker routing/catalog records and sends tool traffic through Cloudflare. Operators can remove API state volumes, revoke API keys, rotate relay tokens, destroy the Worker deployment, change audit retention, and disable optional components they do not need.</p>
 
     <h2>Changes to This Policy</h2>
     <p>Policy changes are dated here and committed to the <a href="https://github.com/sirkirby/unifi-mcp">repository</a>. The repository history is the record of changes to these project-specific descriptions.</p>

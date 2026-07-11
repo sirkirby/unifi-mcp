@@ -362,6 +362,13 @@ class PrivacyDataFlowContractTests(unittest.TestCase):
     def test_privacy_has_current_revision_date(self):
         self.assertIn("Last updated: July 10, 2026", self.privacy)
 
+    def test_privacy_names_only_supported_retention_controls(self):
+        self.assertNotIn("delete relay locations", self.privacy_lower)
+        self.assertNotIn("operator-controlled logs", self.privacy_lower)
+        self.assertIn("local sqlite state and any configured logs", self.privacy_lower)
+        self.assertIn("rotate relay tokens", self.privacy_lower)
+        self.assertIn("destroy the worker deployment", self.privacy_lower)
+
 
 class CapabilityAndDiscoveryTests(unittest.TestCase):
     def test_homepage_product_tool_counts_match_manifests(self):
