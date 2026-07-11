@@ -121,7 +121,7 @@ A standalone Relay sidecar that acts as a pure MCP HTTP client and forwarder. It
 - `tests/` -- unit and integration tests (mock WebSocket worker)
 - `Dockerfile` -- container build
 
-The Relay has **no dependency** on the MCP server packages (`unifi-core`, `unifi-mcp-shared`, or any `apps/*`). The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
+The Relay does not import or depend on the individual MCP server app packages (`apps/network`, `apps/protect`, or `apps/access`). It uses shared MCP protocol and metadata utilities from `unifi-mcp-shared`, plus timeline normalization from `unifi-core`. The Relay-to-local-server leg is MCP over HTTP. The API server is not involved.
 
 ### apps/worker
 

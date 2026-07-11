@@ -379,6 +379,15 @@ class ContentReconciliationTests(unittest.TestCase):
         self.assertRegex(readme, r"(?i)relay[^\n]*(?:MCP over HTTP|MCP HTTP)")
         self.assertNotRegex(readme, r"(?i)relay[^\n]*stdio")
 
+    def test_relay_architecture_names_shared_dependencies_and_excludes_server_apps(self):
+        architecture = Path("docs/ARCHITECTURE.md").read_text(encoding="utf-8")
+        relay_section = architecture.split("### packages/unifi-mcp-relay", 1)[1].split("\n### ", 1)[0]
+
+        self.assertNotIn("`unifi-core`, `unifi-mcp-shared`, or any `apps/*`", relay_section)
+        self.assertIn("`unifi-mcp-shared`", relay_section)
+        self.assertIn("`unifi-core`", relay_section)
+        self.assertRegex(relay_section, r"(?i)does not[^\n]*(?:import|depend)[^\n]*server app packages")
+
     def test_public_pages_do_not_make_outdated_claims(self):
         for path in PUBLIC_PAGES:
             content = path.read_text(encoding="utf-8")
