@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,9 @@ PACKAGE_MAP = {
 USER_AGENT = "unifi-mcp-docs-stats/1"
 RETRYABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
 GITHUB_PACKAGE_BASE = "https://github.com/sirkirby/unifi-mcp/pkgs/container/"
+PYPI_STATS_BASE = "https://pypistats.org/"
+PYPI_STATS_API_BASE = f"{PYPI_STATS_BASE}api/packages/"
+PYPI_STATS_PACKAGE_BASE = f"{PYPI_STATS_BASE}packages/"
 SNAPSHOT_KEYS = {
     "schema_version",
     "generated_at",
@@ -42,6 +46,15 @@ SNAPSHOT_KEYS = {
 
 class StatsError(RuntimeError):
     """Raised when a statistics source cannot produce a complete result."""
+
+
+class StatsHTTPError(StatsError):
+    """Raised when a statistics source returns a terminal HTTP response."""
+
+    def __init__(self, source: str, status_code: int) -> None:
+        self.source = source
+        self.status_code = status_code
+        super().__init__(f"{source} request failed with HTTP {status_code}")
 
 
 def _request_bytes(
@@ -58,8 +71,8 @@ def _request_bytes(
         except HTTPError as exc:
             is_retryable = exc.code in RETRYABLE_STATUS_CODES
             if not is_retryable or attempt == attempts - 1:
-                raise StatsError(f"{source} request failed with HTTP {exc.code}") from exc
-            retry_after = exc.headers.get("Retry-After")
+                raise StatsHTTPError(source, exc.code) from exc
+            retry_after = exc.headers.get("Retry-After") if exc.headers is not None else None
             if retry_after is not None and retry_after.isdigit():
                 delay = int(retry_after)
             else:
@@ -156,12 +169,64 @@ def parse_package_downloads(html: str, package_name: str) -> int:
     return _require_count(int(title), f"GitHub package page {package_name}")
 
 
+class _VisibleTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self._ignored_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        if tag in {"script", "style"}:
+            self._ignored_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style"} and self._ignored_depth:
+            self._ignored_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if not self._ignored_depth:
+            self.parts.append(data)
+
+
+def parse_pypi_recent_downloads(html: str, package_name: str) -> int:
+    parser = _VisibleTextParser()
+    parser.feed(html)
+    visible_text = " ".join(" ".join(parser.parts).split())
+    candidates = re.findall(
+        r"(?:^|\s)Downloads last month:\s*((?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+))(?=\s|$)",
+        visible_text,
+    )
+    if len(candidates) != 1:
+        raise StatsError(f"PyPI Stats package {package_name} is missing an unambiguous Downloads last month count")
+    return _require_count(
+        int(candidates[0].replace(",", "")),
+        f"PyPI Stats package {package_name} Downloads last month",
+    )
+
+
 class JsonClient:
     """Small source-specific client for public project statistics."""
 
     def pypi_recent(self, name: str) -> int:
-        url = f"https://pypistats.org/api/packages/{quote(name, safe='')}/recent"
-        payload = request_json(_request(url), source=f"PyPI Stats package {name}")
+        encoded_name = quote(name, safe="")
+        source = f"PyPI Stats package {name}"
+        try:
+            payload = request_json(
+                _request(f"{PYPI_STATS_API_BASE}{encoded_name}/recent"),
+                source=source,
+            )
+        except StatsHTTPError as exc:
+            if exc.status_code != 429:
+                raise
+            html = request_text(
+                _request(
+                    f"{PYPI_STATS_PACKAGE_BASE}{encoded_name}",
+                    accept="text/html",
+                ),
+                source=f"PyPI Stats package page {name}",
+            )
+            return parse_pypi_recent_downloads(html, name)
         try:
             value = payload["data"]["last_month"]
         except (KeyError, TypeError) as exc:
@@ -333,7 +398,7 @@ def validate_snapshot(snapshot: Any) -> None:
             "python",
             "trailing_30_days",
             expected_python,
-            "https://pypistats.org/api/",
+            PYPI_STATS_BASE,
         ),
         (
             containers,
@@ -429,7 +494,7 @@ def collect_snapshot(client: JsonClient, token: str, now: datetime) -> dict[str,
             "period": "trailing_30_days",
             "total": sum(python_packages.values()),
             "packages": dict(sorted(python_packages.items())),
-            "source": "https://pypistats.org/api/",
+            "source": PYPI_STATS_BASE,
         },
         "containers": {
             "period": "lifetime",

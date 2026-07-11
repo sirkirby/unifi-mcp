@@ -176,6 +176,12 @@ class CollectorContractTests(unittest.TestCase):
         with self.assertRaisesRegex(stats.StatsError, "GitHub stargazers"):
             stats.collect_snapshot(client, "token", datetime(2026, 7, 10, tzinfo=UTC))
 
+    def test_committed_snapshot_passes_the_canonical_validator(self):
+        snapshot_path = Path("docs/data/project-stats.json")
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+
+        stats.validate_snapshot(snapshot)
+
 
 class FakeResponse:
     def __init__(self, payload: Any, headers: Message | None = None) -> None:
@@ -236,6 +242,19 @@ class JsonClientTests(unittest.TestCase):
 
         self.assertEqual(mocked_urlopen.call_count, 1)
 
+    def test_request_json_exposes_terminal_http_status_structurally(self):
+        failure = HTTPError("https://example.test/data", 429, "rate limited", Message(), None)
+        request = Request("https://example.test/data")
+        with (
+            mock.patch.object(stats, "urlopen", side_effect=failure),
+            mock.patch.object(stats.time, "sleep"),
+            self.assertRaises(stats.StatsHTTPError) as raised,
+        ):
+            stats.request_json(request, source="Example")
+
+        self.assertEqual(raised.exception.source, "Example")
+        self.assertEqual(raised.exception.status_code, 429)
+
     def test_request_text_uses_the_same_retry_policy(self):
         failure = HTTPError("https://example.test/page", 503, "unavailable", Message(), None)
         request = Request("https://example.test/page")
@@ -252,6 +271,76 @@ class JsonClientTests(unittest.TestCase):
         self.assertEqual(result, "package page")
         self.assertEqual(mocked_urlopen.call_count, 2)
         mocked_sleep.assert_called_once_with(1)
+
+    def test_pypi_recent_api_success_does_not_fetch_package_page(self):
+        with (
+            mock.patch.object(
+                stats,
+                "request_json",
+                return_value={"data": {"last_month": 40_132}},
+            ) as mocked_json,
+            mock.patch.object(stats, "request_text") as mocked_text,
+        ):
+            result = stats.JsonClient().pypi_recent("unifi-network-mcp")
+
+        self.assertEqual(result, 40_132)
+        mocked_json.assert_called_once()
+        mocked_text.assert_not_called()
+
+    def test_pypi_recent_falls_back_to_package_page_after_exhausted_429(self):
+        rate_limit = stats.StatsHTTPError("PyPI Stats package unifi-network-mcp", 429)
+        html = "<p>Downloads last month:\n40,132</p>"
+        with (
+            mock.patch.object(stats, "request_json", side_effect=rate_limit),
+            mock.patch.object(stats, "request_text", return_value=html) as mocked_text,
+        ):
+            result = stats.JsonClient().pypi_recent("unifi-network-mcp")
+
+        self.assertEqual(result, 40_132)
+        request = mocked_text.call_args.args[0]
+        self.assertEqual(request.full_url, "https://pypistats.org/packages/unifi-network-mcp")
+
+    def test_pypi_recent_does_not_fallback_for_non_429_http_failure(self):
+        unavailable = stats.StatsHTTPError("PyPI Stats package unifi-network-mcp", 503)
+        with (
+            mock.patch.object(stats, "request_json", side_effect=unavailable),
+            mock.patch.object(stats, "request_text") as mocked_text,
+            self.assertRaises(stats.StatsHTTPError) as raised,
+        ):
+            stats.JsonClient().pypi_recent("unifi-network-mcp")
+
+        self.assertEqual(raised.exception.status_code, 503)
+        mocked_text.assert_not_called()
+
+    def test_pypi_recent_does_not_fallback_for_invalid_api_data(self):
+        with (
+            mock.patch.object(
+                stats,
+                "request_json",
+                return_value={"data": {"last_month": "40,132"}},
+            ),
+            mock.patch.object(stats, "request_text") as mocked_text,
+            self.assertRaisesRegex(stats.StatsError, "invalid count"),
+        ):
+            stats.JsonClient().pypi_recent("unifi-network-mcp")
+
+        mocked_text.assert_not_called()
+
+    def test_pypi_recent_page_parser_rejects_missing_malformed_or_ambiguous_data(self):
+        malformed_pages = {
+            "missing": "<p>Downloads last week: 9,608</p>",
+            "bad grouping": "<p>Downloads last month: 40,13</p>",
+            "negative": "<p>Downloads last month: -1</p>",
+            "decimal": "<p>Downloads last month: 401.32</p>",
+            "ambiguous": ("<p>Downloads last month: 40,132</p><p>Downloads last month: 40,133</p>"),
+        }
+        for case, html in malformed_pages.items():
+            with self.subTest(case=case):
+                with self.assertRaisesRegex(
+                    stats.StatsError,
+                    "PyPI Stats package unifi-network-mcp.*Downloads last month",
+                ):
+                    stats.parse_pypi_recent_downloads(html, "unifi-network-mcp")
 
     def test_package_download_parser_reads_exact_associated_title(self):
         html = """
@@ -419,7 +508,7 @@ class OutputTests(unittest.TestCase):
                 "period": "trailing_30_days",
                 "total": sum(python_packages.values()),
                 "packages": python_packages,
-                "source": "https://pypistats.org/api/",
+                "source": stats.PYPI_STATS_BASE,
             },
             "containers": {
                 "period": "lifetime",
@@ -468,6 +557,26 @@ class OutputTests(unittest.TestCase):
             output.write_bytes(previous)
 
             with mock.patch.object(stats, "collect_snapshot", side_effect=stats.StatsError("PyPI failed")):
+                result = stats.main(["--output", str(output), "--github-token", "token", "--force"])
+
+            self.assertEqual(result, 1)
+            self.assertEqual(output.read_bytes(), previous)
+
+    def test_malformed_pypi_fallback_leaves_previous_output_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "project-stats.json"
+            previous = b'{"previous": true}\n'
+            output.write_bytes(previous)
+            rate_limit = stats.StatsHTTPError("PyPI Stats package unifi-network-mcp", 429)
+
+            with (
+                mock.patch.object(stats, "request_json", side_effect=rate_limit),
+                mock.patch.object(
+                    stats,
+                    "request_text",
+                    return_value="<p>Downloads last month: unavailable</p>",
+                ),
+            ):
                 result = stats.main(["--output", str(output), "--github-token", "token", "--force"])
 
             self.assertEqual(result, 1)
