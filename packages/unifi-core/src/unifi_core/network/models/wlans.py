@@ -82,6 +82,26 @@ class Wlan(BaseModel):
         default=None,
         description="Enable 802.11r fast BSS transition",
     )
+    rrm_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable 802.11k Radio Resource Management (neighbour reports for assisted roaming)",
+    )
+    roaming_assistant_na_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable the roaming assistant on 5GHz (disconnects clients below the RSSI threshold)",
+    )
+    roaming_assistant_na_rssi: Optional[int] = Field(
+        default=None,
+        description="5GHz roaming assistant RSSI threshold in dBm (negative, e.g. -77)",
+    )
+    roaming_assistant_6e_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable the roaming assistant on 6GHz (disconnects clients below the RSSI threshold)",
+    )
+    roaming_assistant_6e_rssi: Optional[int] = Field(
+        default=None,
+        description="6GHz roaming assistant RSSI threshold in dBm (negative, e.g. -88)",
+    )
     pmf_mode: Optional[str] = Field(
         default=None,
         description="Protected Management Frames mode: disabled, optional, required",
@@ -230,6 +250,11 @@ def from_controller(raw: Any) -> Wlan:
         vlan_id=_get(raw, "vlan") or _get(raw, "vlan_id"),
         usergroup_id=_get(raw, "usergroup_id"),
         fast_roaming_enabled=_get(raw, "fast_roaming_enabled"),
+        rrm_enabled=_get(raw, "rrm_enabled"),
+        roaming_assistant_na_enabled=_get(raw, "roaming_assistant_na_enabled"),
+        roaming_assistant_na_rssi=_get(raw, "roaming_assistant_na_rssi"),
+        roaming_assistant_6e_enabled=_get(raw, "roaming_assistant_6e_enabled"),
+        roaming_assistant_6e_rssi=_get(raw, "roaming_assistant_6e_rssi"),
         pmf_mode=_get(raw, "pmf_mode"),
         wpa3_support=_get(raw, "wpa3_support"),
         wpa3_transition=_get(raw, "wpa3_transition"),

@@ -42,6 +42,11 @@ class Wlan:
     guest_policy: bool | None
     usergroup_id: str | None
     fast_roaming_enabled: bool | None
+    rrm_enabled: bool | None
+    roaming_assistant_na_enabled: bool | None
+    roaming_assistant_na_rssi: int | None
+    roaming_assistant_6e_enabled: bool | None
+    roaming_assistant_6e_rssi: int | None
     pmf_mode: str | None
     wpa3_support: bool | None
     wpa3_transition: bool | None
@@ -90,6 +95,11 @@ class Wlan:
             guest_policy=raw.get("guest_policy"),
             usergroup_id=raw.get("usergroup_id"),
             fast_roaming_enabled=raw.get("fast_roaming_enabled"),
+            rrm_enabled=raw.get("rrm_enabled"),
+            roaming_assistant_na_enabled=raw.get("roaming_assistant_na_enabled"),
+            roaming_assistant_na_rssi=raw.get("roaming_assistant_na_rssi"),
+            roaming_assistant_6e_enabled=raw.get("roaming_assistant_6e_enabled"),
+            roaming_assistant_6e_rssi=raw.get("roaming_assistant_6e_rssi"),
             pmf_mode=raw.get("pmf_mode"),
             wpa3_support=raw.get("wpa3_support"),
             wpa3_transition=raw.get("wpa3_transition"),
