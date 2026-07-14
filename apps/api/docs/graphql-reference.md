@@ -2083,6 +2083,11 @@ type Wlan {
   guestPolicy: Boolean
   usergroupId: String
   fastRoamingEnabled: Boolean
+  rrmEnabled: Boolean
+  roamingAssistantNaEnabled: Boolean
+  roamingAssistantNaRssi: Int
+  roamingAssistant6eEnabled: Boolean
+  roamingAssistant6eRssi: Int
   pmfMode: String
   wpa3Support: Boolean
   wpa3Transition: Boolean

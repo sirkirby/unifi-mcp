@@ -7862,6 +7862,61 @@
             ],
             "title": "Proxy Arp"
           },
+          "roaming_assistant_6e_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roaming Assistant 6E Enabled"
+          },
+          "roaming_assistant_6e_rssi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roaming Assistant 6E Rssi"
+          },
+          "roaming_assistant_na_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roaming Assistant Na Enabled"
+          },
+          "roaming_assistant_na_rssi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roaming Assistant Na Rssi"
+          },
+          "rrm_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rrm Enabled"
+          },
           "schedule_enabled": {
             "anyOf": [
               {
