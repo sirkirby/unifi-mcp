@@ -1160,7 +1160,7 @@ async def create_wlan(
     wlan_data: Annotated[
         Dict[str, Any],
         Field(
-            description="WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (bool), usergroup_id, networkconf_id (network to associate)"
+            description="WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (bool), usergroup_id, networkconf_id (network to associate). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88)"
         ),
     ],
     confirm: Annotated[
@@ -1187,6 +1187,11 @@ async def create_wlan(
     - guest_policy (boolean): Whether this is a guest network (default: false)
     - usergroup_id (string): User group ID (default: default group)
     - networkconf_id (string): Network configuration ID to associate with (default: default LAN)
+    - rrm_enabled (boolean): Enable 802.11k Radio Resource Management (neighbour reports)
+    - roaming_assistant_na_enabled (boolean): Enable the 5GHz roaming assistant
+    - roaming_assistant_na_rssi (integer): 5GHz roaming assistant RSSI threshold in dBm (e.g. -77)
+    - roaming_assistant_6e_enabled (boolean): Enable the 6GHz roaming assistant
+    - roaming_assistant_6e_rssi (integer): 6GHz roaming assistant RSSI threshold in dBm (e.g. -88)
 
     Example:
     {
