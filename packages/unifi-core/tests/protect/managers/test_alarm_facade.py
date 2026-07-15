@@ -303,6 +303,59 @@ async def test_create_rule_falls_back_to_legacy_when_v2_write_unavailable():
     facade._legacy.create_rule.assert_awaited_once()
 
 
+# --- Legacy create must POST the full raw envelope ----------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_rule_legacy_sends_complete_raw_body():
+    """The legacy POST body must carry the full structural envelope, not just the
+    sparse write subset. The canonical shape can't express historyConditions /
+    schedules / cooldown / isCreatedBySystem, so create scaffolds them — omitting
+    them makes Protect reject the POST with 400 'Failed to parse request-body'."""
+    facade = _facade(service_list=[])  # v2 empty -> route to legacy
+
+    await facade.create_rule(
+        {
+            "title": "New",
+            "enabled": True,
+            "triggers": [{"data": {"condition": {"type": "is", "source": "smartDetectLine", "value": "Arrival"}}}],
+            "actions": [{"action_id": "HTTP_REQUEST", "data": {"type": "HTTP_REQUEST", "metadata": {}, "order": -1}}],
+            "scope": {"sources": [{"device": "AABBCCDDEEFF", "type": "include"}]},
+        }
+    )
+
+    facade._legacy.create_rule.assert_awaited_once()
+    (body,) = facade._legacy.create_rule.await_args.args
+    assert body["name"] == "New"
+    assert body["conditions"] == [{"condition": {"type": "is", "source": "smartDetectLine", "value": "Arrival"}}]
+    assert body["isCreatedBySystem"] is False
+    assert body["historyConditions"] == []
+    assert body["schedules"] == []
+    assert body["cooldown"] == {"enable": False, "timeout": 600000}
+
+
+@pytest.mark.asyncio
+async def test_create_rule_legacy_preserves_license_plate_known_value():
+    """An LPR trigger (license_plate_known + plate-group value) must reach the
+    controller intact through create — the raw API keys off the value."""
+    facade = _facade(service_list=[])
+
+    await facade.create_rule(
+        {
+            "title": "Vehicle Arrival",
+            "triggers": [
+                {"data": {"condition": {"type": "is", "source": "license_plate_known", "value": "plate-group-123"}}}
+            ],
+            "actions": [{"action_id": "HTTP_REQUEST", "data": {"type": "HTTP_REQUEST", "metadata": {}, "order": -1}}],
+        }
+    )
+
+    (body,) = facade._legacy.create_rule.await_args.args
+    condition = body["conditions"][0]["condition"]
+    assert condition["source"] == "license_plate_known"
+    assert condition["value"] == "plate-group-123"
+
+
 # --- Bug 1: legacy ids with a `_new` suffix must route, not be rejected --------
 
 
