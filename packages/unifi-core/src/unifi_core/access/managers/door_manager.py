@@ -34,12 +34,26 @@ _COMPACT_DOOR_KEYS = frozenset({"id", "name", "location_type", "access_method", 
 # Fields to keep per nested device in compact mode.
 _COMPACT_DOOR_DEVICE_KEYS = frozenset({"name", "id", "device_type", "online", "direction"})
 
+_API_DOOR_LIST_KEYS = ("id", "name", "door_position_status", "lock_relay_status")
+
 
 class DoorManager:
     """Reads and mutates door data from the Access controller."""
 
     def __init__(self, connection_manager: AccessConnectionManager) -> None:
         self._cm = connection_manager
+
+    @staticmethod
+    def _api_door_to_dict(door: Any) -> Dict[str, Any]:
+        """Translate a py-unifi-access Door into the manager response dialect."""
+        return {
+            "id": door.id,
+            "name": door.name,
+            "door_position_status": getattr(door, "door_position_status", None),
+            "lock_relay_status": getattr(door, "door_lock_relay_status", None),
+            "camera_resource_id": getattr(door, "camera_resource_id", None),
+            "door_guard": getattr(door, "door_guard", None),
+        }
 
     # ------------------------------------------------------------------
     # Read-only methods
@@ -72,15 +86,11 @@ class DoorManager:
             if self._cm.has_api_client:
                 # API client already returns minimal 4-field dicts; compact is irrelevant.
                 doors = await self._cm.api_client.get_doors()
-                return [
-                    {
-                        "id": d.id,
-                        "name": d.name,
-                        "door_position_status": getattr(d, "door_position_status", None),
-                        "lock_relay_status": getattr(d, "lock_relay_status", None),
-                    }
-                    for d in doors
-                ]
+                result = []
+                for door in doors:
+                    translated = self._api_door_to_dict(door)
+                    result.append({key: translated[key] for key in _API_DOOR_LIST_KEYS})
+                return result
             elif self._cm.has_proxy:
                 data = await self._cm.proxy_request("GET", f"dashboard/locations?{_LOCATIONS_EXPAND}")
                 # Response is {"data": {"locations": [...]}}
@@ -111,15 +121,11 @@ class DoorManager:
             raise ValueError("door_id is required")
         try:
             if self._cm.has_api_client:
-                door = await self._cm.api_client.get_door(door_id)
-                return {
-                    "id": door.id,
-                    "name": door.name,
-                    "door_position_status": getattr(door, "door_position_status", None),
-                    "lock_relay_status": getattr(door, "lock_relay_status", None),
-                    "camera_resource_id": getattr(door, "camera_resource_id", None),
-                    "door_guard": getattr(door, "door_guard", None),
-                }
+                doors = await self._cm.api_client.get_doors()
+                door = next((door for door in doors if door.id == door_id), None)
+                if door is None:
+                    raise UniFiNotFoundError("door", door_id)
+                return self._api_door_to_dict(door)
             elif self._cm.has_proxy:
                 data = await self._cm.proxy_request("GET", f"dashboard/locations?{_LOCATIONS_EXPAND}")
                 # Response is {"data": {"locations": [...]}}
@@ -143,39 +149,13 @@ class DoorManager:
 
         Tries the API client first, then falls back to the proxy path.
         """
-        if not door_id:
-            raise ValueError("door_id is required")
-        try:
-            if self._cm.has_api_client:
-                door = await self._cm.api_client.get_door(door_id)
-                return {
-                    "id": door.id,
-                    "name": door.name,
-                    "door_position_status": getattr(door, "door_position_status", None),
-                    "lock_relay_status": getattr(door, "lock_relay_status", None),
-                }
-            elif self._cm.has_proxy:
-                data = await self._cm.proxy_request("GET", f"dashboard/locations?{_LOCATIONS_EXPAND}")
-                # Response is {"data": {"locations": [...]}}
-                inner = self._cm.extract_data(data)
-                locations = inner.get("locations", inner) if isinstance(inner, dict) else inner
-                if isinstance(locations, list):
-                    for loc in locations:
-                        if isinstance(loc, dict) and loc.get("id") == door_id:
-                            return {
-                                "id": loc.get("id", door_id),
-                                "name": loc.get("name"),
-                                "door_position_status": loc.get("door_position_status"),
-                                "lock_relay_status": loc.get("lock_relay_status"),
-                            }
-                raise UniFiNotFoundError("door", door_id)
-            else:
-                raise UniFiConnectionError("No auth path available for get_door_status")
-        except (UniFiConnectionError, UniFiNotFoundError, ValueError):
-            raise
-        except Exception as e:
-            logger.error("Failed to get door status %s: %s", door_id, e, exc_info=True)
-            raise
+        door = await self.get_door(door_id)
+        return {
+            "id": door.get("id", door_id),
+            "name": door.get("name"),
+            "door_position_status": door.get("door_position_status"),
+            "lock_relay_status": door.get("lock_relay_status"),
+        }
 
     async def list_door_groups(self) -> List[Dict[str, Any]]:
         """Return all access groups (door groupings).
