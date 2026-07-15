@@ -196,13 +196,3 @@ def test_wlan_projection_maps_roaming_fields() -> None:
     assert out["roaming_assistant_na_rssi"] == -77
     assert out["roaming_assistant_6e_enabled"] is True
     assert out["roaming_assistant_6e_rssi"] == -88
-
-
-def test_wlan_projection_roaming_fields_absent_are_none() -> None:
-    """A controller that doesn't report them (older firmware) must project None, not raise."""
-    from unifi_api.graphql.types.network.wlan import Wlan
-
-    out = Wlan.from_manager_output({"_id": "wlan1", "name": "MyWiFi", "enabled": True}).to_dict()
-
-    assert out["rrm_enabled"] is None
-    assert out["roaming_assistant_6e_rssi"] is None

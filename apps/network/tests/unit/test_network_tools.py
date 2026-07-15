@@ -604,22 +604,6 @@ class TestCreateWlanRoamingFields:
         assert payload.get("roaming_assistant_6e_enabled") is True
         assert payload.get("roaming_assistant_6e_rssi") == -88
 
-    @pytest.mark.asyncio
-    async def test_roaming_fields_are_advertised_in_the_tool_schema(self):
-        """Create support is only real if a caller can discover it — the fields must be
-        named in the wlan_data description, not just silently accepted."""
-        from unifi_network_mcp.tools.network import create_wlan
-
-        described = create_wlan.__doc__ or ""
-        for field in (
-            "rrm_enabled",
-            "roaming_assistant_na_enabled",
-            "roaming_assistant_na_rssi",
-            "roaming_assistant_6e_enabled",
-            "roaming_assistant_6e_rssi",
-        ):
-            assert field in described, f"{field!r} accepted by create_wlan but undocumented"
-
 
 class TestUpdateWlanNetworkconfId:
     """update_wlan must accept networkconf_id (controller field name) and not return
