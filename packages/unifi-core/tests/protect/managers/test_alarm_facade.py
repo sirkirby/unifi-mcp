@@ -303,7 +303,7 @@ async def test_create_rule_falls_back_to_legacy_when_v2_write_unavailable():
     facade._legacy.create_rule.assert_awaited_once()
 
 
-# --- issue #2: legacy create must POST the full raw envelope ------------------
+# --- Legacy create must POST the full raw envelope ----------------------------
 
 
 @pytest.mark.asyncio

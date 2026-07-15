@@ -112,7 +112,7 @@ def test_canonical_rule_enabled_defaults_none_for_v2():
     assert rule.enabled is None
 
 
-# --- alarm_rule_to_legacy_create_body: full POST envelope (issue #2) ----------
+# --- alarm_rule_to_legacy_create_body: full POST envelope ---------------------
 #
 # The canonical write shape carries only title/enabled/triggers/actions/scope,
 # but POST /proxy/protect/api/automations rejects an incomplete body with
