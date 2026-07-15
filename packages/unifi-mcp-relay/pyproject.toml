@@ -4,7 +4,7 @@ dynamic = ["version"]
 description = "MCP relay: bridges local MCP servers to a Cloudflare Worker gateway"
 requires-python = ">=3.13"
 dependencies = [
-    "websockets>=13.0",
+    "websockets>=16.1",
     "mcp[cli]>=1.28.1,<2",
     "aiohttp>=3.14.0",
     "python-dotenv>=1.2.2",
