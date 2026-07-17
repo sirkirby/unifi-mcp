@@ -390,3 +390,82 @@ def test_rogue_ap_pagination_bounds_are_in_schema_and_validate_inputs():
             limit_adapter.validate_python(invalid_limit)
     with pytest.raises(ValidationError):
         offset_adapter.validate_python(-1)
+
+
+def _mock_site(name, desc):
+    s = MagicMock()
+    s.name = name
+    s.description = desc
+    return s
+
+
+@pytest.mark.asyncio
+async def test_search_device_by_mac_found_on_later_site():
+    # Iterates all sites and returns the one whose device-basic list contains the MAC.
+    sites = [_mock_site("aaa111", "HQ"), _mock_site("bbb222", "Branch")]
+
+    async def fake_request(req):
+        if "/api/s/bbb222/" in req.path:
+            return [{"mac": "78:45:58:46:2d:7c", "model": "UAL6", "type": "uap", "state": 1, "adopted": True}]
+        return [{"mac": "aa:bb:cc:00:00:01", "model": "US24", "type": "usw", "state": 1}]
+
+    with patch("unifi_network_mcp.tools.devices.system_manager") as mock_sm, patch(
+        "unifi_network_mcp.tools.devices.connection_manager"
+    ) as mock_cm:
+        mock_sm.get_sites = AsyncMock(return_value=sites)
+        mock_cm.request = AsyncMock(side_effect=fake_request)
+
+        from unifi_network_mcp.tools.devices import search_device_by_mac
+
+        result = await search_device_by_mac("78:45:58:46:2D:7C")  # mixed case, must normalise
+
+    assert result["success"] is True
+    assert result["found"] is True
+    assert result["site_name"] == "bbb222"
+    assert result["site_desc"] == "Branch"
+    assert result["device"]["model"] == "UAL6"
+    assert result["device"]["status"] == "online"
+
+
+@pytest.mark.asyncio
+async def test_search_device_by_mac_not_found():
+    sites = [_mock_site("aaa111", "HQ")]
+    with patch("unifi_network_mcp.tools.devices.system_manager") as mock_sm, patch(
+        "unifi_network_mcp.tools.devices.connection_manager"
+    ) as mock_cm:
+        mock_sm.get_sites = AsyncMock(return_value=sites)
+        mock_cm.request = AsyncMock(return_value=[{"mac": "aa:bb:cc:00:00:01"}])
+
+        from unifi_network_mcp.tools.devices import search_device_by_mac
+
+        result = await search_device_by_mac("de:ad:be:ef:00:00")
+
+    assert result["success"] is True
+    assert result["found"] is False
+    assert result["total_sites"] == 1
+    assert result["sites_searched"] == 1
+
+
+@pytest.mark.asyncio
+async def test_search_device_by_mac_skips_failing_site():
+    # A site that errors (e.g. no read permission) must not abort the search.
+    sites = [_mock_site("boom", "Broken"), _mock_site("good", "Working")]
+
+    async def fake_request(req):
+        if "/api/s/boom/" in req.path:
+            raise Exception("403 forbidden")
+        return [{"mac": "11:22:33:44:55:66", "model": "U6-Pro", "type": "uap", "state": 1}]
+
+    with patch("unifi_network_mcp.tools.devices.system_manager") as mock_sm, patch(
+        "unifi_network_mcp.tools.devices.connection_manager"
+    ) as mock_cm:
+        mock_sm.get_sites = AsyncMock(return_value=sites)
+        mock_cm.request = AsyncMock(side_effect=fake_request)
+
+        from unifi_network_mcp.tools.devices import search_device_by_mac
+
+        result = await search_device_by_mac("11:22:33:44:55:66")
+
+    assert result["found"] is True
+    assert result["site_name"] == "good"
+    assert result["sites_searched"] == 1  # only the reachable site counted

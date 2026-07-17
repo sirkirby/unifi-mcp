@@ -1,5 +1,5 @@
 {
-  "count": 186,
+  "count": 187,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -140,6 +140,7 @@
     "unifi_rename_device": "unifi_network_mcp.tools.devices",
     "unifi_reorder_firewall_policies": "unifi_network_mcp.tools.firewall",
     "unifi_revoke_voucher": "unifi_network_mcp.tools.hotspot",
+    "unifi_search_device_by_mac": "unifi_network_mcp.tools.devices",
     "unifi_set_client_ip_settings": "unifi_network_mcp.tools.clients",
     "unifi_set_device_led": "unifi_network_mcp.tools.devices",
     "unifi_set_jumbo_frames": "unifi_network_mcp.tools.switch",
@@ -13659,6 +13660,98 @@
         }
       },
       "title": "Revoke Voucher"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Search EVERY site on the controller for a device by MAC address and report which site adopted it. UniFi's native search is per-site only \u2014 this iterates all sites from /api/self/sites and matches each site's device-basic list, returning the site name/description plus basic device info (model, type, status). Use when you have a MAC but don't know which site the device lives on. Returns found=false if no site has it.",
+      "name": "unifi_search_device_by_mac",
+      "schema": {
+        "input": {
+          "properties": {
+            "mac_address": {
+              "description": "Device MAC address in format AA:BB:CC:DD:EE:FF",
+              "type": "string"
+            }
+          },
+          "required": [
+            "mac_address"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Search Device By Mac"
     },
     {
       "annotations": {

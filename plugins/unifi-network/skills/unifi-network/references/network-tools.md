@@ -1,4 +1,4 @@
-# Network Server Tool Reference (186 tools)
+# Network Server Tool Reference (187 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 
@@ -70,7 +70,7 @@ Always available, regardless of registration mode.
 ## Devices
 
 <!-- AUTO:tools:devices -->
-21 tools.
+22 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -82,6 +82,7 @@ Always available, regardless of registration mode.
 | `unifi_list_available_channels` | Read | List allowed RF channels for the site's regulatory domain. |
 | `unifi_list_devices` | Read | Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_categ... |
 | `unifi_list_rogue_aps` | Read | List neighboring/rogue APs detected by your access points. |
+| `unifi_search_device_by_mac` | Read | Search EVERY site on the controller for a device by MAC address and report which site adopted it. |
 | `unifi_adopt_device` | Mutate | Adopt a pending device into the Unifi Network by MAC address |
 | `unifi_force_provision_device` | Mutate | Force re-provision a device, pushing the current configuration from the controller to the device. |
 | `unifi_locate_device` | Mutate | Toggle device locate mode (LED blinking) to physically identify a device. |

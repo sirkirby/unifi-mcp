@@ -8,6 +8,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Annotated, Any, Dict, List, Optional
 
+from aiounifi.models.api import ApiRequest
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
@@ -27,13 +28,29 @@ from unifi_core.network.models._actions import (
 from unifi_core.network.models.devices import radio_to_controller_update
 
 # Import the global FastMCP server instance, config, and managers
-from unifi_network_mcp.runtime import device_manager, server
+from unifi_network_mcp.runtime import (
+    connection_manager,
+    device_manager,
+    server,
+    system_manager,
+)
 
 logger = logging.getLogger(__name__)
 
 
 # Model prefixes for USP Smart Power devices that may report as 'uap' type
 _POWER_DEVICE_MODELS = {"UP1", "UP6", "USP"}
+
+# Controller device state codes -> human-readable status.
+_DEVICE_STATE_MAP = {
+    0: "offline",
+    1: "online",
+    2: "pending_adoption",
+    4: "managed_by_other/adopting",
+    5: "provisioning",
+    6: "upgrading",
+    11: "error/heartbeat_missed",
+}
 
 
 def _rogue_ap_summary(ap: dict[str, Any]) -> dict[str, Any]:
@@ -203,19 +220,10 @@ async def list_devices(
             devices_raw = devices_raw[:limit]
 
         formatted_devices = []
-        state_map = {
-            0: "offline",
-            1: "online",
-            2: "pending_adoption",
-            4: "managed_by_other/adopting",
-            5: "provisioning",
-            6: "upgrading",
-            11: "error/heartbeat_missed",
-        }
 
         for device in devices_raw:
             device_state = device.get("state", 0)
-            device_status_str = state_map.get(device_state, f"unknown_state ({device_state})")
+            device_status_str = _DEVICE_STATE_MAP.get(device_state, f"unknown_state ({device_state})")
 
             category = classify_device(device)
 
@@ -437,15 +445,6 @@ async def get_device_details(
 
             # Basic — essential device info
             if include_all or "basic" in sections:
-                state_map = {
-                    0: "offline",
-                    1: "online",
-                    2: "pending_adoption",
-                    4: "managed_by_other/adopting",
-                    5: "provisioning",
-                    6: "upgrading",
-                    11: "error/heartbeat_missed",
-                }
                 device_state = device_raw.get("state", 0)
                 device_data.update(
                     {
@@ -454,7 +453,7 @@ async def get_device_details(
                         "model": device_raw.get("model"),
                         "type": device_raw.get("type"),
                         "ip": device_raw.get("ip"),
-                        "status": state_map.get(device_state, f"unknown ({device_state})"),
+                        "status": _DEVICE_STATE_MAP.get(device_state, f"unknown ({device_state})"),
                         "uptime": str(timedelta(seconds=device_raw.get("uptime", 0)))
                         if device_raw.get("uptime")
                         else None,
@@ -546,6 +545,77 @@ async def get_device_details(
     except Exception as e:
         logger.error("Error getting device details for %s: %s", mac_address, e, exc_info=True)
         return {"success": False, "error": f"Failed to get device details for {mac_address}: {e}"}
+
+
+@server.tool(
+    name="unifi_search_device_by_mac",
+    description=(
+        "Search EVERY site on the controller for a device by MAC address and report which site "
+        "adopted it. UniFi's native search is per-site only — this iterates all sites from "
+        "/api/self/sites and matches each site's device-basic list, returning the site "
+        "name/description plus basic device info (model, type, status). Use when you have a MAC "
+        "but don't know which site the device lives on. Returns found=false if no site has it."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def search_device_by_mac(
+    mac_address: Annotated[
+        str,
+        Field(description="Device MAC address in format AA:BB:CC:DD:EE:FF"),
+    ],
+) -> Dict[str, Any]:
+    """Locate a device across all sites by MAC address."""
+    mac = mac_address.strip().lower()
+    if not mac:
+        return {"success": False, "error": "mac_address is required"}
+
+    try:
+        sites = await system_manager.get_sites()
+    except Exception as e:
+        logger.error("search_device_by_mac: failed to list sites: %s", e)
+        return {"success": False, "error": f"Failed to list sites: {e}"}
+
+    sites_searched = 0
+    for site in sites:
+        site_name = getattr(site, "name", None)
+        if not site_name:
+            continue
+        try:
+            request = ApiRequest(method="get", path=f"/api/s/{site_name}/stat/device-basic")
+            devices = await connection_manager.request(request)
+        except Exception as e:
+            # A single unreadable site (e.g. permissions) must not abort the whole search.
+            logger.warning("search_device_by_mac: query for site '%s' failed: %s", site_name, e)
+            continue
+        sites_searched += 1
+        if not isinstance(devices, list):
+            continue
+        for device in devices:
+            if str(device.get("mac", "")).lower() == mac:
+                state = device.get("state", 0)
+                return {
+                    "success": True,
+                    "found": True,
+                    "site_name": site_name,
+                    "site_desc": getattr(site, "description", None),
+                    "sites_searched": sites_searched,
+                    "device": {
+                        "mac": device.get("mac"),
+                        "name": device.get("name") or device.get("model"),
+                        "model": device.get("model"),
+                        "type": device.get("type"),
+                        "status": _DEVICE_STATE_MAP.get(state, f"unknown ({state})"),
+                        "adopted": device.get("adopted", False),
+                    },
+                }
+
+    return {
+        "success": True,
+        "found": False,
+        "mac": mac,
+        "sites_searched": sites_searched,
+        "total_sites": len(sites),
+    }
 
 
 @server.tool(
