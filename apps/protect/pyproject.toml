@@ -10,7 +10,7 @@ dependencies = [
     # [protect] extra rather than declaring uiprotect here directly.
     "unifi-core[protect]>=0.4.17,<0.5",
     "mcp[cli]>=1.28.1,<2",
-    "aiohttp>=3.14.0",
+    "aiohttp>=3.14.2",
     "pyyaml>=6.0",
     "python-dotenv>=1.2.2",
     "omegaconf>=2.3.0",
