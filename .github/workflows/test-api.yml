@@ -26,7 +26,7 @@ jobs:
         fetch-depth: 0  # Full history needed for hatch-vcs to determine version from tags
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ matrix.python-version }}
 
