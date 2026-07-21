@@ -90,7 +90,7 @@ assert_no_crlf() {
 # --- 1. Scripts are byte-identical across all three plugins (drift guard) ---
 echo ""
 echo "== 1. Cross-plugin script parity =="
-for script in check-prereqs.sh set-env.sh check-prereqs.ps1; do
+for script in check-prereqs.sh set-env.sh check-prereqs.ps1 set-env.ps1; do
   reference="$REPO_ROOT/plugins/${PLUGINS[0]}/scripts/$script"
   for plugin in "${PLUGINS[@]:1}"; do
     other="$REPO_ROOT/plugins/$plugin/scripts/$script"
