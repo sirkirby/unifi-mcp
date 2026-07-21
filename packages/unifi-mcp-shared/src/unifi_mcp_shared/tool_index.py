@@ -13,6 +13,7 @@ generated at build time, allowing full tool discovery without runtime imports.
 from __future__ import annotations
 
 import json
+import re
 import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -128,7 +129,7 @@ def get_tool_index(
         manifest_path: Path to the tools_manifest.json file for lazy mode.
         category: Filter to tools in this category (e.g. "clients", "firewall").
                   Derived from the last segment of the tool's module path.
-        search: Case-insensitive substring filter applied to tool name and description.
+        search: Case-insensitive token-overlap match ranked over tool name and description.
         include_schemas: If True, include full input/output schemas per tool.
 
     Returns:
@@ -159,14 +160,29 @@ def get_tool_index(
         cat_lower = category.lower()
         all_tools = [t for t in all_tools if _category(t.get("name", "")).lower() == cat_lower]
 
-    # Apply search filter (name + description)
+    # Apply search filter (tokenized, ranked over name + description).
+    #
+    # Previously this was a whole-string substring match, so a multi-word query
+    # ("update wlan radio tx power") matched nothing unless that exact phrase appeared
+    # verbatim in a single tool. That defeats LLM/agent callers, which naturally issue
+    # semantic multi-word queries and then conclude the capability does not exist. We now
+    # rank tools by how many query tokens appear in name+description, keep any match,
+    # best first, with an exact-phrase boost so precise queries stay precise. Single-token
+    # queries behave as before (just ranked). Return shape is unchanged.
     if search:
         search_lower = search.lower()
-        all_tools = [
-            t
-            for t in all_tools
-            if search_lower in t.get("name", "").lower() or search_lower in t.get("description", "").lower()
-        ]
+        query_tokens = {w for w in re.findall(r"[a-z0-9]+", search_lower) if len(w) >= 2}
+        if query_tokens:
+            scored = []
+            for t in all_tools:
+                haystack = (t.get("name", "") + " " + t.get("description", "")).lower()
+                score = sum(1 for w in query_tokens if w in haystack)
+                if search_lower in haystack:
+                    score += 5  # exact-phrase boost
+                if score:
+                    scored.append((score, t))
+            scored.sort(key=lambda st: -st[0])
+            all_tools = [t for _score, t in scored]
 
     # Strip schemas unless explicitly requested
     if not include_schemas:
@@ -246,7 +262,7 @@ async def tool_index_handler(args: Dict[str, Any] | None = None) -> Dict[str, An
 
     Accepts optional filter args:
         category (str): Filter by tool category (module suffix, e.g. "clients").
-        search (str): Case-insensitive substring match on name/description.
+        search (str): Case-insensitive token-overlap match on name/description.
         include_schemas (bool): Include full schemas per tool. Defaults to False.
 
     Returns:
