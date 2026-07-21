@@ -214,3 +214,7 @@ if ($script:Failures.Count -gt 0) {
     }
     exit 1
 }
+
+# Expected negative child-process cases leave $LASTEXITCODE set to 1 in the
+# calling shell. Declare the successful harness result explicitly for CI.
+exit 0
