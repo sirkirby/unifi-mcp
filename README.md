@@ -1,5 +1,7 @@
 # UniFi MCP
 
+[![MCP Toplist](https://mcptoplist.com/badge/pulsemcp%2Fsirkirby-unifi.svg)](https://mcptoplist.com/server/pulsemcp%2Fsirkirby-unifi)
+
 <p align="center">
   <img src="docs/assets/hero-readme.jpg" alt="UniFi MCP — AI agents for your UniFi infrastructure" width="720">
 </p>
