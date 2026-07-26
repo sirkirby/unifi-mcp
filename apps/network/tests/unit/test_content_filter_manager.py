@@ -180,7 +180,35 @@ class TestContentFilterManager:
         assert put_request.method == "put"
         assert put_request.data["name"] == "Family Filter"
         assert put_request.data["safe_search"] == ["GOOGLE", "YOUTUBE", "BING"]
-        assert put_request.data["blocked_categories"] == ["adult", "gambling"]
+        assert put_request.data["categories"] == ["adult", "gambling"]
+        assert "blocked_categories" not in put_request.data
+
+    @pytest.mark.asyncio
+    async def test_update_content_filter_translates_blocked_categories(self, content_filter_manager, mock_connection):
+        """The public blocked_categories alias becomes categories in the PUT payload."""
+        existing_filter = {
+            "_id": "cf1",
+            "name": "Default",
+            "categories": ["ADVERTISEMENT", "MALWARE", "PHISHING"],
+            "safe_search": ["GOOGLE"],
+        }
+        mock_connection.request.side_effect = [
+            [existing_filter],
+            {},
+        ]
+
+        result = await content_filter_manager.update_content_filter(
+            "cf1", {"blocked_categories": ["MALWARE", "PHISHING"]}
+        )
+
+        put_request = mock_connection.request.call_args_list[1][0][0]
+        assert put_request.data == {
+            "_id": "cf1",
+            "name": "Default",
+            "categories": ["MALWARE", "PHISHING"],
+            "safe_search": ["GOOGLE"],
+        }
+        assert result == put_request.data
 
     @pytest.mark.asyncio
     async def test_update_content_filter_not_found(self, content_filter_manager, mock_connection):

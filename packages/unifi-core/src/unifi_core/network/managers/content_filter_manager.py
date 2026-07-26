@@ -32,6 +32,14 @@ logger = logging.getLogger("unifi-network-mcp")
 CACHE_PREFIX_CONTENT_FILTERS = "content_filters"
 
 
+def _to_controller_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate public content-filter field names to the controller dialect."""
+    payload = dict(data)
+    if "blocked_categories" in payload:
+        payload["categories"] = payload.pop("blocked_categories")
+    return payload
+
+
 class ContentFilterManager:
     """Manages content filtering profiles on the UniFi controller."""
 
@@ -100,7 +108,7 @@ class ContentFilterManager:
         if not update_data:
             return existing
 
-        merged_data = deep_merge(existing, update_data)
+        merged_data = deep_merge(_to_controller_payload(existing), _to_controller_payload(update_data))
         api_request = ApiRequestV2(method="put", path=f"/content-filtering/{filter_id}", data=merged_data)
         await self._connection.request(api_request)
         self._invalidate_cache()
