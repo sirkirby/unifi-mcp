@@ -615,6 +615,81 @@ SAMPLE_LEGACY_ZONES_RESPONSE = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# get_legacy_firewall_rules — legacy v1 REST support
+# ---------------------------------------------------------------------------
+
+
+class TestGetLegacyFirewallRules:
+    """Cover retrieval and caching of legacy firewall rules."""
+
+    @pytest.mark.asyncio
+    async def test_fetches_rules_and_updates_cache(
+        self,
+        firewall_manager,
+        mock_connection,
+    ):
+        """Rules are fetched from /rest/firewallrule and cached for the site."""
+        expected_rules = [
+            {
+                "_id": "rule-001",
+                "name": "Allow established traffic",
+                "ruleset": "LAN_IN",
+                "rule_index": 2000,
+                "action": "accept",
+                "enabled": True,
+            },
+            {
+                "_id": "rule-002",
+                "name": "Block guest access",
+                "ruleset": "GUEST_IN",
+                "rule_index": 2010,
+                "action": "drop",
+                "enabled": True,
+            },
+        ]
+        mock_connection.request = AsyncMock(return_value=expected_rules)
+
+        result = await firewall_manager.get_legacy_firewall_rules()
+
+        assert result == expected_rules
+        mock_connection.ensure_connected.assert_awaited_once()
+        mock_connection.request.assert_awaited_once()
+
+        api_request = mock_connection.request.call_args.args[0]
+        assert api_request.method == "get"
+        assert api_request.path == "/rest/firewallrule"
+
+        mock_connection._update_cache.assert_called_once_with(
+            "legacy_firewall_rules_default",
+            expected_rules,
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_cached_rules_without_controller_request(
+        self,
+        firewall_manager,
+        mock_connection,
+    ):
+        """A cached result bypasses connection and controller requests."""
+        cached_rules = [
+            {
+                "_id": "rule-cached",
+                "name": "Cached legacy rule",
+                "ruleset": "LAN_LOCAL",
+                "action": "accept",
+            }
+        ]
+        mock_connection.get_cached.return_value = cached_rules
+
+        result = await firewall_manager.get_legacy_firewall_rules()
+
+        assert result == cached_rules
+        mock_connection.ensure_connected.assert_not_awaited()
+        mock_connection.request.assert_not_awaited()
+        mock_connection._update_cache.assert_not_called()
+
+
 class TestGetFirewallZones:
     """Cover primary, fallback, and both-fail branches of get_firewall_zones."""
 

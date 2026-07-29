@@ -24,6 +24,7 @@ CACHE_PREFIX_TRAFFIC_ROUTES = "traffic_routes"
 CACHE_PREFIX_PORT_FORWARDS = "port_forwards"
 CACHE_PREFIX_FIREWALL_ZONES = "firewall_zones"
 CACHE_PREFIX_FIREWALL_GROUPS = "firewall_groups"
+CACHE_PREFIX_LEGACY_FIREWALL_RULES = "legacy_firewall_rules"
 
 
 class FirewallManager:
@@ -1037,7 +1038,35 @@ class FirewallManager:
             logger.error("Error fetching firewall zones: %s", e, exc_info=True)
             raise
 
-    # ---- Firewall Groups (v1 REST: address-group, port-group) ----
+    # ---- Legacy Firewall Rules and Groups (v1 REST) ----
+
+    async def get_legacy_firewall_rules(self) -> List[Dict[str, Any]]:
+        """Get legacy pre-zone-based firewall rules for the current UniFi site."""
+        cache_key = f"{CACHE_PREFIX_LEGACY_FIREWALL_RULES}_{self._connection.site}"
+        cached = self._connection.get_cached(cache_key)
+        if cached is not None:
+            return cached
+
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+
+        try:
+            api_request = ApiRequest(method="get", path="/rest/firewallrule")
+            response = await self._connection.request(api_request)
+            data = (
+                response
+                if isinstance(response, list)
+                else response.get("data", [])
+                if isinstance(response, dict)
+                else []
+            )
+            data = [rule for rule in data if isinstance(rule, dict)]
+
+            self._connection._update_cache(cache_key, data)
+            return data
+        except Exception as e:
+            logger.error("Error getting legacy firewall rules: %s", e)
+            raise
 
     async def get_firewall_groups(self) -> List[Dict[str, Any]]:
         """Get all firewall groups (address and port groups).

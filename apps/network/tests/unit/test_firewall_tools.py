@@ -1208,6 +1208,81 @@ class TestDeleteFirewallPolicy:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# list_legacy_firewall_rules — raw rule projection and error surfacing
+# ---------------------------------------------------------------------------
+
+
+class TestListLegacyFirewallRules:
+    """Cover the read-only wrapper for legacy firewall rules."""
+
+    @pytest.mark.asyncio
+    async def test_returns_raw_rules_with_engine_site_and_count(self):
+        """The tool preserves legacy fields and identifies the firewall engine."""
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+        legacy_rules = [
+            {
+                "_id": "rule-001",
+                "name": "Allow established traffic",
+                "ruleset": "LAN_IN",
+                "rule_index": 2000,
+                "action": "accept",
+                "enabled": True,
+            },
+            {
+                "_id": "rule-002",
+                "name": "Block guest access",
+                "ruleset": "GUEST_IN",
+                "rule_index": 2010,
+                "action": "drop",
+                "enabled": True,
+            },
+        ]
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_legacy_firewall_rules = AsyncMock(return_value=legacy_rules)
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import (
+                list_legacy_firewall_rules,
+            )
+
+            result = await list_legacy_firewall_rules()
+
+        assert result["success"] is True
+        assert result["engine"] == "legacy"
+        assert result["site"] == "default"
+        assert result["count"] == 2
+        assert result["rules"] == legacy_rules
+        assert result["rules"][0]["ruleset"] == "LAN_IN"
+        assert result["rules"][0]["rule_index"] == 2000
+
+    @pytest.mark.asyncio
+    async def test_surfaces_manager_exception_as_structured_error(self):
+        """Manager failures are returned as explicit legacy-engine errors."""
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_legacy_firewall_rules = AsyncMock(
+                side_effect=Exception("Controller returned 404")
+            )
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import (
+                list_legacy_firewall_rules,
+            )
+
+            result = await list_legacy_firewall_rules()
+
+        assert result["success"] is False
+        assert result["engine"] == "legacy"
+        assert "Controller returned 404" in result["error"]
+        assert "rules" not in result
+        assert "count" not in result
+
+
 class TestListFirewallZones:
     """Cover the tool wrapper's projection and error-surfacing behavior."""
 

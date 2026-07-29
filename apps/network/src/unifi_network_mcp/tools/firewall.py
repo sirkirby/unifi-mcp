@@ -920,6 +920,44 @@ async def list_firewall_zones() -> Dict[str, Any]:
         return {"success": False, "error": f"Failed to list firewall zones: {exc}"}
 
 
+# ---- Legacy Firewall Rules (v1 REST) ----
+
+
+@server.tool(
+    name="unifi_list_legacy_firewall_rules",
+    description=(
+        "List legacy pre-zone-based firewall rules from the UniFi controller. "
+        "Use this on sites that still use the legacy firewall engine and return no "
+        "V2 zone-based firewall policies. Returns the raw legacy rule configuration, "
+        "including ruleset, rule_index, action, source and destination groups, "
+        "protocol, ports, state matching, logging, and enabled state."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def list_legacy_firewall_rules() -> Dict[str, Any]:
+    """Lists legacy firewall rules for the current UniFi site."""
+    redact_sensitive = should_redact_sensitive_fields()
+    try:
+        rules = await firewall_manager.get_legacy_firewall_rules()
+        return redact_sensitive_fields(
+            {
+                "success": True,
+                "engine": "legacy",
+                "site": firewall_manager._connection.site,
+                "count": len(rules),
+                "rules": json.loads(json.dumps(rules, default=str)),
+            },
+            redact_sensitive=redact_sensitive,
+        )
+    except Exception as e:
+        logger.error("Error listing legacy firewall rules: %s", e, exc_info=True)
+        return {
+            "success": False,
+            "engine": "legacy",
+            "error": f"Failed to list legacy firewall rules: {e}",
+        }
+
+
 # ---- Firewall Groups (address-group, port-group) ----
 
 
