@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict
@@ -63,6 +64,86 @@ class ToolMetadata:
 
 # Global dictionary mapping tool names to their metadata
 TOOL_REGISTRY: Dict[str, ToolMetadata] = {}
+
+_TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
+_MAX_SEARCH_RESULTS = 20
+_SEARCH_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "for",
+        "from",
+        "how",
+        "in",
+        "is",
+        "it",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "this",
+        "to",
+        "with",
+    }
+)
+
+
+def _tokenize(value: str) -> tuple[str, ...]:
+    return tuple(_TOKEN_PATTERN.findall(value.lower()))
+
+
+def _token_matches(query: str, candidate: str) -> bool:
+    return candidate == query or (len(query) >= 4 and candidate.startswith(query))
+
+
+def _contains_exact_phrase(tokens: tuple[str, ...], query_tokens: tuple[str, ...]) -> bool:
+    phrase_length = len(query_tokens)
+    return any(
+        tokens[start : start + phrase_length] == query_tokens for start in range(len(tokens) - phrase_length + 1)
+    )
+
+
+def _rank_tools_by_search(tools: list[Dict[str, Any]], search: str) -> list[Dict[str, Any]]:
+    query_tokens = tuple(
+        dict.fromkeys(token for token in _tokenize(search) if len(token) >= 2 and token not in _SEARCH_STOP_WORDS)
+    )
+    if not query_tokens:
+        return []
+
+    required_matches = 1 if len(query_tokens) == 1 else max(2, (len(query_tokens) + 1) // 2)
+    ranked: list[tuple[tuple[int, int, int], Dict[str, Any]]] = []
+
+    for tool in tools:
+        name_tokens = _tokenize(tool.get("name", ""))
+        description_tokens = _tokenize(tool.get("description", ""))
+        all_tokens = name_tokens + description_tokens
+
+        matched_tokens = tuple(
+            query_token
+            for query_token in query_tokens
+            if any(_token_matches(query_token, candidate) for candidate in all_tokens)
+        )
+        if len(matched_tokens) < required_matches:
+            continue
+
+        name_matches = sum(
+            1 for query_token in query_tokens if any(_token_matches(query_token, c) for c in name_tokens)
+        )
+        exact_phrase = int(
+            _contains_exact_phrase(name_tokens, query_tokens)
+            or _contains_exact_phrase(description_tokens, query_tokens)
+        )
+        ranked.append(((exact_phrase, name_matches, len(matched_tokens)), tool))
+
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return [tool for _score, tool in ranked[:_MAX_SEARCH_RESULTS]]
 
 
 def register_tool(
@@ -128,7 +209,7 @@ def get_tool_index(
         manifest_path: Path to the tools_manifest.json file for lazy mode.
         category: Filter to tools in this category (e.g. "clients", "firewall").
                   Derived from the last segment of the tool's module path.
-        search: Case-insensitive substring filter applied to tool name and description.
+        search: Case-insensitive token search ranked over tool name and description.
         include_schemas: If True, include full input/output schemas per tool.
 
     Returns:
@@ -159,14 +240,9 @@ def get_tool_index(
         cat_lower = category.lower()
         all_tools = [t for t in all_tools if _category(t.get("name", "")).lower() == cat_lower]
 
-    # Apply search filter (name + description)
+    # Apply bounded token search over name + description.
     if search:
-        search_lower = search.lower()
-        all_tools = [
-            t
-            for t in all_tools
-            if search_lower in t.get("name", "").lower() or search_lower in t.get("description", "").lower()
-        ]
+        all_tools = _rank_tools_by_search(all_tools, search)
 
     # Strip schemas unless explicitly requested
     if not include_schemas:
@@ -246,7 +322,7 @@ async def tool_index_handler(args: Dict[str, Any] | None = None) -> Dict[str, An
 
     Accepts optional filter args:
         category (str): Filter by tool category (module suffix, e.g. "clients").
-        search (str): Case-insensitive substring match on name/description.
+        search (str): Case-insensitive token search ranked over name/description.
         include_schemas (bool): Include full schemas per tool. Defaults to False.
 
     Returns:

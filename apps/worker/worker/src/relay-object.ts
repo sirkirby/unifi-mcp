@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { RelayStub } from "./mcp-handler";
 import { handleMcpRequest } from "./mcp-handler";
 import { hashToken, generateToken, extractBearerToken } from "./auth";
-import { toolInputSchema, toolServerOrigin } from "./tool-info";
+import { buildToolIndexEntries, TOOL_INDEX_META_TOOL, toolInputSchema, toolServerOrigin } from "./tool-info";
 import type {
   Env,
   ToolInfo,
@@ -27,42 +27,6 @@ import { PROTOCOL_VERSION, TOOL_CALL_TIMEOUT_MS } from "./types";
 // ---------------------------------------------------------------------------
 
 const MAX_LOCATION_NAME_LENGTH = 128;
-
-const META_TOOL_INDEX: ToolInfo = {
-  name: "unifi_tool_index",
-  title: "UniFi Tool Index",
-  description:
-    "Discover available UniFi tools. Returns names and descriptions by default. " +
-    "Use 'category' to filter by area (e.g. clients, firewall, devices), " +
-    "'search' for keyword matching, or 'include_schemas' for full parameter schemas. " +
-    "Use this to discover tools before calling unifi_execute.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      category: {
-        type: "string",
-        description: "Optional category filter (e.g., 'clients', 'devices', 'firewall')",
-      },
-      search: {
-        type: "string",
-        description: "Optional search term to filter tools by name or description",
-      },
-      include_schemas: {
-        type: "boolean",
-        description:
-          "Include full input schemas per tool. Defaults to false. " +
-          "Set true with a category or search filter to get parameter details for specific tools.",
-        default: false,
-      },
-    },
-  },
-  annotations: {
-    readOnlyHint: true,
-    destructiveHint: false,
-    idempotentHint: true,
-    openWorldHint: false,
-  },
-};
 
 const META_TOOL_EXECUTE: ToolInfo = {
   name: "unifi_execute",
@@ -168,7 +132,12 @@ const META_TOOL_LOCATION_TIMELINE: ToolInfo = {
   },
 };
 
-const META_TOOLS: ToolInfo[] = [META_TOOL_INDEX, META_TOOL_EXECUTE, META_TOOL_BATCH, META_TOOL_LOCATION_TIMELINE];
+const META_TOOLS: ToolInfo[] = [
+  TOOL_INDEX_META_TOOL,
+  META_TOOL_EXECUTE,
+  META_TOOL_BATCH,
+  META_TOOL_LOCATION_TIMELINE,
+];
 
 // ---------------------------------------------------------------------------
 // Relay Durable Object
@@ -773,56 +742,11 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
     const category = args.category as string | undefined;
     const search = args.search as string | undefined;
     const includeSchemas = Boolean(args.include_schemas);
-
-    // Build tool list with location metadata
-    const toolEntries: Array<{
-      name: string;
-      title?: string;
-      description: string;
-      locations: string[];
-      annotations?: ToolAnnotations;
-      inputSchema?: Record<string, unknown>;
-    }> = [];
-
-    const seen = new Set<string>();
-    for (const [locationId, tools] of this.locationTools) {
-      for (const tool of tools) {
-        if (!seen.has(tool.name)) {
-          seen.add(tool.name);
-          const entry: (typeof toolEntries)[number] = {
-            name: tool.name,
-            description: tool.description,
-            locations: this.toolToLocations.get(tool.name) || [locationId],
-            annotations: tool.annotations,
-          };
-          if (tool.title) {
-            entry.title = tool.title;
-          }
-          if (includeSchemas && tool.inputSchema) {
-            entry.inputSchema = tool.inputSchema;
-          }
-          toolEntries.push(entry);
-        }
-      }
-    }
-
-    let filtered = toolEntries;
-
-    // Filter by category (matches tools whose name or description contains the category)
-    if (category) {
-      const cat = category.toLowerCase();
-      filtered = filtered.filter(
-        (t) => t.name.toLowerCase().includes(cat) || t.description.toLowerCase().includes(cat),
-      );
-    }
-
-    // Filter by search term
-    if (search) {
-      const term = search.toLowerCase();
-      filtered = filtered.filter(
-        (t) => t.name.toLowerCase().includes(term) || t.description.toLowerCase().includes(term),
-      );
-    }
+    const filtered = buildToolIndexEntries(this.locationTools, this.toolToLocations, {
+      category,
+      search,
+      includeSchemas,
+    });
 
     return {
       success: true,

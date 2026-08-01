@@ -59,6 +59,25 @@ def _register_test_meta_tools(*, server, prefix, start_async_tool=None, get_job_
     return registered
 
 
+def test_tool_index_schema_describes_ranked_token_search():
+    register_tool = Mock()
+    register_meta_tools(
+        server=SimpleNamespace(),
+        tool_decorator=_capture_tools()[1],
+        tool_index_handler=AsyncMock(return_value={}),
+        start_async_tool=AsyncMock(),
+        get_job_status=AsyncMock(),
+        register_tool=register_tool,
+        prefix="unifi",
+    )
+
+    index_call = next(call for call in register_tool.call_args_list if call.kwargs["name"] == "unifi_tool_index")
+    description = index_call.kwargs["input_schema"]["properties"]["search"]["description"]
+    assert "token search" in description
+    assert "at most 20" in description
+    assert "no usable terms returns no tools" in description
+
+
 @pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
 async def test_execute_normalizes_structured_inner_result(prefix):
     payload = {"success": True, "data": {"id": "abc"}}

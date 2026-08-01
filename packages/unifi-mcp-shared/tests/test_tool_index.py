@@ -1,6 +1,7 @@
 """Tests for the shared tool_index module."""
 
 import json
+from pathlib import Path
 
 import pytest
 from unifi_mcp_shared.tool_index import (
@@ -9,6 +10,8 @@ from unifi_mcp_shared.tool_index import (
     get_tool_index,
     register_tool,
 )
+
+SEARCH_FIXTURE = json.loads((Path(__file__).resolve().parents[3] / "tests/fixtures/tool_search_cases.json").read_text())
 
 
 @pytest.fixture(autouse=True)
@@ -299,6 +302,79 @@ class TestGetToolIndex:
         register_tool(name="unifi_list_clients", description="List clients")
         index = get_tool_index(registration_mode="eager", search="LIST")
         assert index["count"] == 1
+
+    @pytest.mark.parametrize(
+        ("search", "expected"),
+        [(case["search"], case["expected"]) for case in SEARCH_FIXTURE["cases"]],
+        ids=[case["search"] or "empty" for case in SEARCH_FIXTURE["cases"]],
+    )
+    def test_search_contract_matches_shared_fixture(self, search, expected):
+        for tool in SEARCH_FIXTURE["tools"]:
+            register_tool(**tool)
+
+        index = get_tool_index(registration_mode="eager", search=search)
+
+        assert [tool["name"] for tool in index["tools"]] == expected
+
+    def test_search_prioritizes_exact_phrase(self):
+        register_tool(name="unifi_firewall_policy_update", description="Modify policy configuration")
+        register_tool(name="unifi_exact_wall_policy", description="Apply the wall policy update workflow")
+
+        index = get_tool_index(registration_mode="eager", search="wall policy update")
+
+        assert [tool["name"] for tool in index["tools"]] == [
+            "unifi_exact_wall_policy",
+            "unifi_firewall_policy_update",
+        ]
+
+    def test_search_does_not_create_exact_phrase_across_fields(self):
+        register_tool(name="unifi_wall_alpha", description="Configure policy update")
+        register_tool(name="unifi_wall", description="Policy update settings")
+
+        index = get_tool_index(registration_mode="eager", search="wall policy update")
+
+        assert [tool["name"] for tool in index["tools"]] == ["unifi_wall_alpha", "unifi_wall"]
+
+    def test_search_preserves_source_order_for_ties(self):
+        register_tool(name="unifi_alpha", description="Inspect client details")
+        register_tool(name="unifi_beta", description="Inspect client details")
+
+        index = get_tool_index(registration_mode="eager", search="inspect client")
+
+        assert [tool["name"] for tool in index["tools"]] == ["unifi_alpha", "unifi_beta"]
+
+    def test_search_caps_results(self):
+        for index in range(25):
+            register_tool(name=f"unifi_client_{index:02}", description="Inspect a client")
+
+        result = get_tool_index(registration_mode="eager", search="client")
+
+        assert result["count"] == 20
+        assert [tool["name"] for tool in result["tools"]] == [f"unifi_client_{index:02}" for index in range(20)]
+
+    def test_empty_search_applies_no_filter(self):
+        for tool in SEARCH_FIXTURE["tools"]:
+            register_tool(**tool)
+
+        result = get_tool_index(registration_mode="eager", search="")
+
+        assert result["count"] == len(SEARCH_FIXTURE["tools"])
+        assert "filtered" not in result
+
+    def test_search_contract_in_lazy_mode(self, tmp_path):
+        manifest_path = tmp_path / "tools_manifest.json"
+        manifest_path.write_text(json.dumps({"tools": SEARCH_FIXTURE["tools"], "count": len(SEARCH_FIXTURE["tools"])}))
+
+        result = get_tool_index(
+            registration_mode="lazy",
+            manifest_path=manifest_path,
+            search="update tx power",
+        )
+
+        assert [tool["name"] for tool in result["tools"]] == [
+            "unifi_update_device_radio",
+            "unifi_get_device_radio",
+        ]
 
     # --- Categories metadata ---
 

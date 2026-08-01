@@ -18,7 +18,7 @@ import type { ToolInfo, AggregatedResponse } from "../src/types";
 // ---------------------------------------------------------------------------
 
 import { handleMcpRequest, type RelayStub } from "../src/mcp-handler";
-import { toolInputSchema, toolServerOrigin } from "../src/tool-info";
+import { buildToolIndexEntries, toolInputSchema, toolServerOrigin } from "../src/tool-info";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -100,41 +100,11 @@ function createMockRelay(
       args: Record<string, unknown>,
     ): Promise<Record<string, unknown> | AggregatedResponse> {
       if (toolName === "unifi_tool_index") {
-        const allTools = getAggregatedTools();
-        const includeSchemas = Boolean(args.include_schemas);
-        let filtered = allTools.map((t) => {
-          const entry: Record<string, unknown> = {
-            name: t.name,
-            description: t.description,
-            locations: toolToLocations.get(t.name) || [],
-            annotations: t.annotations,
-          };
-          if (t.title) {
-            entry.title = t.title;
-          }
-          if (includeSchemas && t.inputSchema) {
-            entry.inputSchema = t.inputSchema;
-          }
-          return entry;
+        const filtered = buildToolIndexEntries(locationTools, toolToLocations, {
+          category: args.category as string | undefined,
+          search: args.search as string | undefined,
+          includeSchemas: Boolean(args.include_schemas),
         });
-        const category = args.category as string | undefined;
-        const search = args.search as string | undefined;
-        if (category) {
-          const cat = category.toLowerCase();
-          filtered = filtered.filter(
-            (t) =>
-              (t.name as string).toLowerCase().includes(cat) ||
-              (t.description as string).toLowerCase().includes(cat),
-          );
-        }
-        if (search) {
-          const term = search.toLowerCase();
-          filtered = filtered.filter(
-            (t) =>
-              (t.name as string).toLowerCase().includes(term) ||
-              (t.description as string).toLowerCase().includes(term),
-          );
-        }
         return { success: true, data: { tools: filtered, total: filtered.length, multi_location: locationTools.size > 1 } };
       }
       return { success: false, error: `Tool not found: ${toolName}` };

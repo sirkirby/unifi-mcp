@@ -145,7 +145,13 @@ def register_meta_tools(
                 },
                 "search": {
                     "type": "string",
-                    "description": "Case-insensitive substring match against tool name and description.",
+                    "description": (
+                        "Case-insensitive token search over tool names and descriptions. "
+                        "Ignores common words and one-character terms; multi-word queries require at least half "
+                        "of usable terms (minimum two). Terms of four or more characters also match token prefixes. "
+                        "Results are ranked by exact phrase and name matches, with at most 20 returned. "
+                        "An empty string applies no filter; a non-empty query with no usable terms returns no tools."
+                    ),
                 },
                 "include_schemas": {
                     "type": "boolean",

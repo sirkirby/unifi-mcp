@@ -1,0 +1,110 @@
+{
+  "tools": [
+    {
+      "name": "unifi_update_device_radio",
+      "description": "Update radio settings including tx power and channel configuration"
+    },
+    {
+      "name": "unifi_get_device_radio",
+      "description": "Get radio configuration and live tx power statistics"
+    },
+    {
+      "name": "unifi_update_wlan",
+      "description": "Update a WLAN including radio settings"
+    },
+    {
+      "name": "unifi_get_client_wifi_details",
+      "description": "Get WiFi details including power information for a client"
+    },
+    {
+      "name": "unifi_update_firewall_policy",
+      "description": "Update an existing firewall policy"
+    },
+    {
+      "name": "unifi_update_firewall_group",
+      "description": "Update an existing firewall group"
+    },
+    {
+      "name": "unifi_create_firewall_policy",
+      "description": "Create a firewall policy to control traffic"
+    },
+    {
+      "name": "unifi_update_dns_record",
+      "description": "Update a DNS TXT record"
+    },
+    {
+      "name": "unifi_list_clients",
+      "description": "List connected clients"
+    },
+    {
+      "name": "unifi_list_devices",
+      "description": "List network devices"
+    }
+  ],
+  "cases": [
+    {
+      "search": "update wlan radio tx power",
+      "expected": [
+        "unifi_update_device_radio",
+        "unifi_update_wlan",
+        "unifi_get_device_radio"
+      ]
+    },
+    {
+      "search": "update tx power",
+      "expected": [
+        "unifi_update_device_radio",
+        "unifi_get_device_radio"
+      ]
+    },
+    {
+      "search": "wifi update tx power",
+      "expected": [
+        "unifi_update_device_radio",
+        "unifi_get_client_wifi_details",
+        "unifi_get_device_radio"
+      ]
+    },
+    {
+      "search": "tx radio",
+      "expected": [
+        "unifi_update_device_radio",
+        "unifi_get_device_radio"
+      ]
+    },
+    {
+      "search": "to update firewall",
+      "expected": [
+        "unifi_update_firewall_policy",
+        "unifi_update_firewall_group"
+      ]
+    },
+    {
+      "search": "client",
+      "expected": [
+        "unifi_get_client_wifi_details",
+        "unifi_list_clients"
+      ]
+    },
+    {
+      "search": "x",
+      "expected": []
+    },
+    {
+      "search": "   ",
+      "expected": []
+    },
+    {
+      "search": "!!!",
+      "expected": []
+    },
+    {
+      "search": "the and to",
+      "expected": []
+    },
+    {
+      "search": "nonexistent capability",
+      "expected": []
+    }
+  ]
+}
