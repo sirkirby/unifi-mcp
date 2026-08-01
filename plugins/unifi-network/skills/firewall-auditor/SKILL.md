@@ -30,6 +30,7 @@ Dispatch these tool calls in **a single batch** (multiple tool uses in one assis
 
 - `unifi_list_firewall_policies`
 - `unifi_list_firewall_zones`
+- `unifi_list_legacy_firewall_rules`
 - `unifi_list_networks`
 - `unifi_list_firewall_groups`
 - `unifi_list_devices`
@@ -38,6 +39,24 @@ Dispatch these tool calls in **a single batch** (multiple tool uses in one assis
 If a tool returns `success=false`, stop the audit and surface the error. Do not partial-report.
 
 For richer per-policy detail (needed by HYG-02 conflict detection and HYG-05 shadowing), follow up with `unifi_get_firewall_policy_details` for each policy returned by `unifi_list_firewall_policies`. Batch these calls in parallel as well.
+
+### 1a. Determine which firewall engine the site runs
+
+**Do this before evaluating any benchmark.** UniFi has two firewall engines and a site runs exactly one:
+
+| Signal | Engine |
+|---|---|
+| `unifi_list_firewall_policies` and `unifi_list_firewall_zones` return entries | **zone-based** (V2, UniFi Network 9.0+ after migration) |
+| Both return zero entries and `unifi_list_legacy_firewall_rules` returns entries | **legacy** (pre-zone-based) |
+| All three return zero entries | **indeterminate** — see below |
+
+The zone-based tools do not error on a legacy site. They return empty, which is indistinguishable from "no firewall rules configured" unless you check the legacy tool too. Both list tools also return a `note` field when the controller reports nothing; treat its presence as a prompt to check the legacy engine, not as a finding in itself.
+
+Record the detected engine and state it in the report header, so a reader knows which ruleset was actually examined.
+
+**Never score segmentation from an engine you did not read.** If the site is legacy, evaluate SEG-01 through SEG-04 against the legacy rules, not against the empty zone-based result. Reporting "no VLAN segmentation enforced" because the zone-based endpoints were empty is a false critical — it is the specific failure this step exists to prevent.
+
+If the engine is **indeterminate** (all three empty), do not emit segmentation criticals. Emit a single `info` finding stating that no firewall configuration could be retrieved and that segmentation could not be assessed, and continue with the non-segmentation benchmarks. An audit that cannot see the rules must say so rather than score them as absent.
 
 ### 2. Evaluate the 16 benchmarks
 
@@ -139,9 +158,12 @@ Format depends on user intent:
 
 **Default (interactive):** human-readable summary
 - Overall score and status (with the trend)
+- **The firewall engine that was audited** (`zone-based`, `legacy`, or `indeterminate`)
 - Per-category scores
 - Critical findings called out first, then warnings, then info
 - Top 3–5 prioritised recommendations with the `fix` tool name
+
+State the engine explicitly. A reader needs to know which ruleset was examined to trust a segmentation score, and on a legacy site the zone-based remediation templates do not apply.
 
 **On request ("give me JSON" / "machine-readable"):** emit the full report as JSON with this shape:
 
@@ -150,6 +172,7 @@ Format depends on user intent:
   "timestamp": "...",
   "overall_score": 73,
   "overall_status": "needs_attention",
+  "firewall_engine": "zone-based",
   "categories": { ... from CLI ... },
   "findings": [ ... all per-instance findings ... ],
   "trend": { "previous_score": 68, "change": "+5" }
@@ -188,3 +211,5 @@ For each finding, do **not** call mutating tools yourself. The auditor reads; th
 - **Per-instance counting matters.** Five offline devices is five TOP-01 findings, not one.
 - **Severity comes from the benchmark, not the situation.** The reference defines the default severity for each benchmark. Don't downgrade a critical finding because the user "isn't worried about it" — record it accurately and let them decide what to act on.
 - **Skip the trend on rubric changes.** A `rubric_version` mismatch with the prior history entry means the math changed; report the new baseline and explain why no trend is shown.
+- **Empty is not absent.** Zero zone-based policies means either "no policies" or "this site runs the legacy engine". Never resolve that ambiguity by assuming the first — check `unifi_list_legacy_firewall_rules`. Scoring a legacy site as having no segmentation is the single most damaging false positive this audit can produce, because it reports a correctly-segmented network as critically exposed.
+- **Call out an engine change in the trend.** If the detected engine differs from the previous history entry (typically a legacy-to-zone-based migration), the two audits examined different rulesets. Report the new baseline and note the migration rather than presenting a score delta as if the security posture changed.
