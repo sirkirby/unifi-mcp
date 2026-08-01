@@ -42,7 +42,7 @@ build: docker-build worker-build
 check: format-check lint check-generated test worker-typecheck
 
 core-test:
-	uv run --package unifi-core pytest packages/unifi-core/tests -v
+	uv run --package unifi-core --extra protect pytest packages/unifi-core/tests -v
 
 shared-test:
 	uv run --package unifi-mcp-shared pytest packages/unifi-mcp-shared/tests -v

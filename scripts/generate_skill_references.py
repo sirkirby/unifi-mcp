@@ -234,7 +234,13 @@ def main():
 
         print(f"    Updated: {updated} categories, Missing markers: {missing}")
 
-    print(f"\nDone. {'Would update' if check_mode else 'Updated'} {total_updated} sections.")
+    if check_mode:
+        # total_updated counts the sections rendered, not the ones that differ:
+        # has_drift is the real signal. Saying "would update" when nothing would
+        # change reads as drift on a clean checkout.
+        print(f"\nDone. Checked {total_updated} sections; {'drift found' if has_drift else 'no drift'}.")
+    else:
+        print(f"\nDone. Updated {total_updated} sections.")
 
     if total_missing > 0:
         print(f"\n{total_missing} categories missing markers:")
