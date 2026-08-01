@@ -15991,7 +15991,7 @@
               "type": "boolean"
             },
             "filter_data": {
-              "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, enabled (bool), blocked_categories (list), safe_search (list: 'GOOGLE'/'YOUTUBE'/'BING'), client_macs (list of MACs), network_ids (list)",
+              "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, enabled (bool), blocked_categories (list), safe_search (list: 'GOOGLE'/'YOUTUBE'/'BING'), client_macs (list of MACs), network_ids (list), schedule_mode ('ALWAYS'/'EVERY_DAY'/'EVERY_WEEK'/'CUSTOM'/'ONE_TIME_ONLY')",
               "type": "object"
             },
             "filter_id": {

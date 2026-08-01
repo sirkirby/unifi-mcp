@@ -126,7 +126,8 @@ async def update_content_filter(
             "current values are automatically preserved. "
             "Allowed keys: name, enabled (bool), blocked_categories (list), "
             "safe_search (list: 'GOOGLE'/'YOUTUBE'/'BING'), "
-            "client_macs (list of MACs), network_ids (list)"
+            "client_macs (list of MACs), network_ids (list), "
+            "schedule_mode ('ALWAYS'/'EVERY_DAY'/'EVERY_WEEK'/'CUSTOM'/'ONE_TIME_ONLY')"
         ),
     ],
     confirm: Annotated[

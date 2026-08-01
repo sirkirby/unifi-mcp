@@ -214,6 +214,29 @@ class TestContentFilterManager:
         assert result == put_request.data
 
     @pytest.mark.asyncio
+    async def test_update_content_filter_preserves_schedule_siblings(self, content_filter_manager, mock_connection):
+        """A partial schedule update must not drop repeat_on_days / time_all_day."""
+        existing_filter = {
+            "_id": "cf1",
+            "name": "Default",
+            "categories": ["ADVERTISEMENT"],
+            "schedule": {"mode": "ALWAYS", "repeat_on_days": ["mon", "tue"], "time_all_day": False},
+        }
+        mock_connection.request.side_effect = [
+            [existing_filter],
+            {},
+        ]
+
+        await content_filter_manager.update_content_filter("cf1", {"schedule": {"mode": "EVERY_DAY"}})
+
+        put_request = mock_connection.request.call_args_list[1][0][0]
+        assert put_request.data["schedule"] == {
+            "mode": "EVERY_DAY",
+            "repeat_on_days": ["mon", "tue"],
+            "time_all_day": False,
+        }
+
+    @pytest.mark.asyncio
     async def test_update_content_filter_not_found(self, content_filter_manager, mock_connection):
         """Test update_content_filter raises UniFiNotFoundError when filter not found."""
         mock_connection.request.return_value = []

@@ -137,9 +137,28 @@ class TestToControllerUpdate:
         # Since enabled=False is a valid update value:
         assert "enabled" not in result or result.get("enabled") is False
 
-    def test_passes_schedule_mode(self) -> None:
+    def test_nests_schedule_mode_under_schedule(self) -> None:
+        """The controller stores the mode nested; a flat schedule_mode is rejected with a 400."""
         result = to_controller_update({"schedule_mode": "ALWAYS"})
-        assert result["schedule_mode"] == "ALWAYS"
+        assert result["schedule"] == {"mode": "ALWAYS"}
+        assert "schedule_mode" not in result
+
+    def test_nests_every_accepted_schedule_mode(self) -> None:
+        for mode in ("ALWAYS", "CUSTOM", "EVERY_DAY", "EVERY_WEEK", "ONE_TIME_ONLY"):
+            result = to_controller_update({"schedule_mode": mode})
+            assert result["schedule"] == {"mode": mode}
+
+    def test_schedule_mode_nests_alongside_other_fields(self) -> None:
+        result = to_controller_update({"name": "Kids", "schedule_mode": "EVERY_DAY", "blocked_categories": ["ADULT"]})
+        assert result == {"name": "Kids", "schedule": {"mode": "EVERY_DAY"}, "categories": ["ADULT"]}
+
+    def test_schedule_mode_round_trips_from_controller(self) -> None:
+        """A value read off the controller must be writable back unchanged."""
+        raw = {"_id": "cf-rt", "schedule": {"mode": "EVERY_WEEK", "repeat_on_days": ["mon"], "time_all_day": False}}
+        model = from_controller(raw)
+        assert model.schedule_mode == "EVERY_WEEK"
+        result = to_controller_update({"schedule_mode": model.schedule_mode})
+        assert result["schedule"] == {"mode": "EVERY_WEEK"}
 
     def test_maps_blocked_categories_to_categories(self) -> None:
         """The controller rejects the public alias outright, so it must be renamed."""

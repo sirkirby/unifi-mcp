@@ -13,9 +13,12 @@ Factory helpers:
 
 ``MUTABLE_FIELDS`` drives the cross-layer symmetry test.
 
-NOTE: ``schedule_mode`` is included in the mutable set regardless of whether
-it appears in the JSON Schema dict — it was silently dropped by the old
-schema-based path and must be passed through to the controller.
+NOTE: ``schedule_mode`` is included in the mutable set regardless of whether it
+appears in the JSON Schema dict. The controller has no flat ``schedule_mode``
+field — it stores the value as ``schedule.mode`` and rejects unrecognised keys
+outright — so ``to_controller_update`` nests it. The manager deep-merges onto the
+fetched profile, which preserves the ``schedule`` siblings the controller returns
+(``repeat_on_days``, ``time_all_day``).
 """
 
 from __future__ import annotations
@@ -71,7 +74,11 @@ class ContentFilter(BaseModel):
     )
     schedule_mode: Optional[str] = Field(
         default=None,
-        description="Schedule mode for the filter (e.g. ALWAYS)",
+        description=(
+            "When the filter is in force. One of ALWAYS, EVERY_DAY, EVERY_WEEK, CUSTOM, "
+            "ONE_TIME_ONLY. Sent to the controller as schedule.mode; the day/time detail "
+            "of a non-ALWAYS schedule is not settable through this field."
+        ),
     )
 
 
@@ -161,4 +168,8 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     # Map blocked_categories → categories
     if "blocked_categories" in result:
         result["categories"] = result.pop("blocked_categories")
+    # Nest schedule_mode → schedule.mode. The manager deep-merges onto the fetched
+    # profile, so sibling keys (repeat_on_days, time_all_day) are preserved.
+    if "schedule_mode" in result:
+        result["schedule"] = {"mode": result.pop("schedule_mode")}
     return result
