@@ -161,7 +161,7 @@ class TestContentFilterManager:
             "_id": "cf1",
             "name": "Kids Filter",
             "enabled": True,
-            "blocked_categories": ["adult", "gambling"],
+            "categories": ["ADULT", "GAMBLING"],
             "safe_search": ["GOOGLE", "YOUTUBE"],
             "client_macs": ["aa:bb:cc:dd:ee:ff"],
         }
@@ -180,12 +180,17 @@ class TestContentFilterManager:
         assert put_request.method == "put"
         assert put_request.data["name"] == "Family Filter"
         assert put_request.data["safe_search"] == ["GOOGLE", "YOUTUBE", "BING"]
-        assert put_request.data["categories"] == ["adult", "gambling"]
-        assert "blocked_categories" not in put_request.data
+        assert put_request.data["categories"] == ["ADULT", "GAMBLING"]
 
     @pytest.mark.asyncio
-    async def test_update_content_filter_translates_blocked_categories(self, content_filter_manager, mock_connection):
-        """The public blocked_categories alias becomes categories in the PUT payload."""
+    async def test_update_content_filter_puts_controller_dialect_verbatim(
+        self, content_filter_manager, mock_connection
+    ):
+        """The manager is dialect-agnostic: callers hand it a controller payload.
+
+        Field-name translation lives in
+        ``unifi_core.network.models.content_filter.to_controller_update``.
+        """
         existing_filter = {
             "_id": "cf1",
             "name": "Default",
@@ -197,9 +202,7 @@ class TestContentFilterManager:
             {},
         ]
 
-        result = await content_filter_manager.update_content_filter(
-            "cf1", {"blocked_categories": ["MALWARE", "PHISHING"]}
-        )
+        result = await content_filter_manager.update_content_filter("cf1", {"categories": ["MALWARE", "PHISHING"]})
 
         put_request = mock_connection.request.call_args_list[1][0][0]
         assert put_request.data == {

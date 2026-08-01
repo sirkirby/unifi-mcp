@@ -7,7 +7,9 @@ Mirrors the Strawberry type in
 
 Factory helpers:
 - ``from_controller``      — normalise the raw manager dict → ContentFilter
-- ``to_controller_update`` — filter a partial dict to mutable keys only
+- ``to_controller_update`` — filter a partial dict to mutable keys only and map
+  model field names onto the controller dialect (``blocked_categories`` →
+  ``categories``)
 
 ``MUTABLE_FIELDS`` drives the cross-layer symmetry test.
 
@@ -148,5 +150,15 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
 
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
+    Maps model field names to controller API field names.
+    Accepts ``categories`` as an alias for ``blocked_categories`` so callers can
+    pass either the controller field name or the model field name.
     """
-    return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+    if "categories" in fields and "blocked_categories" not in fields:
+        fields = {**fields, "blocked_categories": fields["categories"]}
+        fields = {k: v for k, v in fields.items() if k != "categories"}
+    result = {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+    # Map blocked_categories → categories
+    if "blocked_categories" in result:
+        result["categories"] = result.pop("blocked_categories")
+    return result

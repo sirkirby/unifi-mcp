@@ -20,6 +20,9 @@ from pydantic import Field
 from unifi_core.confirmation import create_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.content_filter import (
+    MUTABLE_FIELDS as CF_MUTABLE_FIELDS,
+)
+from unifi_core.network.models.content_filter import (
     from_controller as cf_from_controller,
 )
 from unifi_core.network.models.content_filter import (
@@ -137,8 +140,10 @@ async def update_content_filter(
     if not filter_data:
         return {"success": False, "error": "filter_data cannot be empty"}
 
-    validated_data = cf_to_update(filter_data)
-    if not validated_data:
+    # Keep the preview in the caller-facing dialect; translate to the controller
+    # dialect only on the write path.
+    public_updates = {k: v for k, v in filter_data.items() if k in CF_MUTABLE_FIELDS and v is not None}
+    if not public_updates:
         return {"success": False, "error": "Update data is effectively empty or invalid."}
 
     if not confirm:
@@ -147,11 +152,11 @@ async def update_content_filter(
             resource_id=filter_id,
             resource_name=filter_id,
             current_state={},
-            updates=validated_data,
+            updates=public_updates,
         )
 
     try:
-        merged = await content_filter_manager.update_content_filter(filter_id, validated_data)
+        merged = await content_filter_manager.update_content_filter(filter_id, cf_to_update(public_updates))
         return {
             "success": True,
             "message": f"Content filter '{merged.get('name', filter_id)}' updated successfully.",

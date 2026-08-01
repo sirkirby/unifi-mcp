@@ -141,9 +141,24 @@ class TestToControllerUpdate:
         result = to_controller_update({"schedule_mode": "ALWAYS"})
         assert result["schedule_mode"] == "ALWAYS"
 
-    def test_passes_blocked_categories(self) -> None:
+    def test_maps_blocked_categories_to_categories(self) -> None:
+        """The controller rejects the public alias outright, so it must be renamed."""
         result = to_controller_update({"blocked_categories": ["ADULT", "GAMBLING"]})
-        assert result["blocked_categories"] == ["ADULT", "GAMBLING"]
+        assert result["categories"] == ["ADULT", "GAMBLING"]
+        assert "blocked_categories" not in result
+
+    def test_accepts_categories_as_inbound_alias(self) -> None:
+        """A raw controller dict round-tripped through the helper keeps its categories."""
+        result = to_controller_update({"categories": ["MALWARE"]})
+        assert result["categories"] == ["MALWARE"]
+
+    def test_blocked_categories_wins_over_categories(self) -> None:
+        result = to_controller_update({"blocked_categories": ["ADULT"], "categories": ["MALWARE"]})
+        assert result["categories"] == ["ADULT"]
+
+    def test_empty_blocked_categories_preserved(self) -> None:
+        result = to_controller_update({"blocked_categories": []})
+        assert result["categories"] == []
 
     def test_empty_list_preserved(self) -> None:
         result = to_controller_update({"client_macs": []})

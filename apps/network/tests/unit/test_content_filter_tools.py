@@ -27,7 +27,8 @@ class TestUpdateContentFilter:
         mock_manager.update_content_filter.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_confirm_passes_public_alias_to_manager(self):
+    async def test_confirm_translates_alias_to_controller_dialect(self):
+        """The controller rejects blocked_categories outright, so the write path must rename it."""
         with patch("unifi_network_mcp.tools.content_filtering.content_filter_manager") as mock_manager:
             mock_manager.update_content_filter = AsyncMock(return_value={"name": "Default"})
             from unifi_network_mcp.tools.content_filtering import update_content_filter
@@ -39,6 +40,19 @@ class TestUpdateContentFilter:
             )
 
         assert result["success"] is True
-        mock_manager.update_content_filter.assert_awaited_once_with(
-            "cf1", {"blocked_categories": ["MALWARE", "PHISHING"]}
-        )
+        mock_manager.update_content_filter.assert_awaited_once_with("cf1", {"categories": ["MALWARE", "PHISHING"]})
+
+    @pytest.mark.asyncio
+    async def test_unknown_fields_are_rejected(self):
+        """The endpoint 400s on unrecognised fields, so they must never reach the controller."""
+        with patch("unifi_network_mcp.tools.content_filtering.content_filter_manager") as mock_manager:
+            from unifi_network_mcp.tools.content_filtering import update_content_filter
+
+            result = await update_content_filter(
+                filter_id="cf1",
+                filter_data={"not_a_real_field": "x"},
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        mock_manager.update_content_filter.assert_not_called()
