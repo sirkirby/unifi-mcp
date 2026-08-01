@@ -302,12 +302,36 @@ class TestStatsManagerEnhanced:
 
     @pytest.mark.asyncio
     async def test_get_ips_events_v2_failure_after_empty_legacy_returns_empty(self, stats_manager, mock_connection):
-        """A failing v2 fallback must not turn an empty result into an exception."""
+        """A failing v2 fallback must not turn an empty result into an exception.
+
+        A controller old enough to have no v2 endpoint answers exactly this way,
+        so raising here would break setups the legacy endpoint still serves.
+        """
         mock_connection.request.side_effect = [[], Exception("v2 unavailable")]
 
         result = await stats_manager.get_ips_events()
 
         assert result == []
+        assert mock_connection.request.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_get_ips_events_v2_failure_is_not_cached(self, stats_manager, mock_connection):
+        """A degraded empty result must not be cached as a confirmed quiet period."""
+        mock_connection.request.side_effect = [[], Exception("v2 unavailable")]
+
+        await stats_manager.get_ips_events()
+
+        mock_connection._update_cache.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_ips_events_non_list_legacy_falls_back_to_v2(self, stats_manager, mock_connection):
+        """A malformed legacy answer must reach v2 rather than be coerced to []."""
+        v2_events = [{"key": "EVT_IPS_IpsAlert"}]
+        mock_connection.request.side_effect = [{"unexpected": "envelope"}, v2_events]
+
+        result = await stats_manager.get_ips_events()
+
+        assert result == v2_events
         assert mock_connection.request.call_count == 2
 
     @pytest.mark.asyncio

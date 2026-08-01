@@ -519,13 +519,18 @@ class StatsManager:
                 # A controller that has moved IPS events to the v2 system log answers
                 # this endpoint 200 with an empty list rather than failing, so the
                 # fallback above never fires on the versions it exists for.
-                if not response:
+                if not isinstance(response, list) or not response:
                     logger.debug("Legacy IPS endpoint returned no events, trying v2 security logs")
                     try:
                         response = await self._get_security_events_v2(start_time, end_time, limit)
                     except Exception as v2_error:
+                        # Deliberately not raising, unlike the branch above: legacy did
+                        # answer here, and a controller old enough to have no v2 endpoint
+                        # answers exactly this way. Returning early leaves the result
+                        # uncached, so a transient v2 outage is retried on the next call
+                        # rather than held as "no threats" for the whole TTL.
                         logger.debug("v2 security log fallback failed: %s", v2_error)
-                        response = []
+                        return []
             result = response if isinstance(response, list) else []
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
