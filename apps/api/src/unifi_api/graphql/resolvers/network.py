@@ -55,6 +55,7 @@ from unifi_api.graphql.types.network.firewall import (
     FirewallPolicyOrdering,
     FirewallRule,
     FirewallZone,
+    LegacyFirewallRule,
 )
 from unifi_api.graphql.types.network.gateway_settings import GatewaySettings
 from unifi_api.graphql.types.network.network import Network
@@ -791,6 +792,33 @@ async def _fetch_firewall_zones(
             if cm.site != site:
                 await cm.set_site(site)
             return list(await mgr.get_firewall_zones())
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_legacy_firewall_rules(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+) -> list:
+    key = f"network/legacy-firewall-rules/{controller}/{site}"
+
+    async def _do() -> list:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "network",
+                "firewall_manager",
+            )
+            cm = await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "network",
+            )
+            if cm.site != site:
+                await cm.set_site(site)
+            return list(await mgr.get_legacy_firewall_rules())
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -3037,6 +3065,24 @@ class NetworkQuery:
         ctx: GraphQLContext = info.context
         raw = await _fetch_firewall_zones(ctx, controller, site)
         return [FirewallZone.from_manager_output(z) for z in raw]
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "List legacy (pre-zone-based) firewall rules. Sites still running the legacy "
+            "engine return no zone-based policies or zones, so an empty firewallPolicies "
+            "result does not mean no firewall rules are configured — check here as well."
+        ),
+    )
+    async def legacy_firewall_rules(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+    ) -> list[LegacyFirewallRule]:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_legacy_firewall_rules(ctx, controller, site)
+        return [LegacyFirewallRule.from_manager_output(r) for r in raw]
 
     @strawberry.field(
         permission_classes=[IsRead],

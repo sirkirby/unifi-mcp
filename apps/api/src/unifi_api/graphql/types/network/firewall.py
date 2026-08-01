@@ -29,6 +29,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
+from unifi_core.network.models.firewall import legacy_firewall_rule_from_controller
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -157,6 +158,68 @@ class FirewallZone:
             networks=_get(obj, "networks") or _get(obj, "network_ids") or [],
             default_policy=_get(obj, "default_policy") or _get(obj, "default_action"),
         )
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@strawberry.type(
+    description=(
+        "A rule from the legacy (pre-zone-based) firewall engine, read from V1 "
+        "/rest/firewallrule. Distinct from FirewallRule, which models the V2 "
+        "zone-based engine: actions are lowercase (accept/drop/reject), rules belong "
+        "to a ruleset rather than a zone pair, and source/destination are flat fields "
+        "rather than nested objects. Read-only."
+    )
+)
+class LegacyFirewallRule:
+    id: strawberry.ID | None
+    name: str | None
+    ruleset: str | None
+    rule_index: int | None
+    action: str | None
+    enabled: bool | None
+    protocol: str | None
+    protocol_v6: str | None
+    protocol_match_excepted: bool | None
+    src_address: str | None
+    src_address_ipv6: str | None
+    src_port: str | None
+    src_mac_address: str | None
+    src_firewallgroup_ids: list[str]
+    src_networkconf_id: str | None
+    src_networkconf_type: str | None
+    dst_address: str | None
+    dst_address_ipv6: str | None
+    dst_port: str | None
+    dst_firewallgroup_ids: list[str]
+    dst_networkconf_id: str | None
+    dst_networkconf_type: str | None
+    state_new: bool | None
+    state_established: bool | None
+    state_related: bool | None
+    state_invalid: bool | None
+    icmp_typename: str | None
+    icmpv6_typename: str | None
+    ipsec: str | None
+    logging: bool | None
+    setting_preference: str | None
+    no_edit: bool | None
+    no_delete: bool | None
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {
+            "kind": kind,
+            "primary_key": "id",
+            "display_columns": ["ruleset", "rule_index", "name", "action", "enabled"],
+            "sort_default": "rule_index:asc",
+        }
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "LegacyFirewallRule":
+        model = legacy_firewall_rule_from_controller(obj)
+        return cls(**model.model_dump())
 
     def to_dict(self) -> dict:
         return asdict(self)

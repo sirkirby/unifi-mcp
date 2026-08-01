@@ -126,6 +126,9 @@ from unifi_api.graphql.types.network.firewall import (
 from unifi_api.graphql.types.network.firewall import (
     FirewallZone as NetworkFirewallZoneType,
 )
+from unifi_api.graphql.types.network.firewall import (
+    LegacyFirewallRule as NetworkLegacyFirewallRuleType,
+)
 from unifi_api.graphql.types.network.gateway_settings import (
     GatewaySettings as NetworkGatewaySettingsType,
 )
@@ -431,6 +434,11 @@ def build_type_registry() -> TypeRegistry:
     reg.register_tool_type(
         "unifi_list_firewall_zones",
         NetworkFirewallZoneType,
+        "list",
+    )
+    reg.register_tool_type(
+        "unifi_list_legacy_firewall_rules",
+        NetworkLegacyFirewallRuleType,
         "list",
     )
     reg.register_tool_type(

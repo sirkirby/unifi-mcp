@@ -1217,8 +1217,8 @@ class TestListLegacyFirewallRules:
     """Cover the read-only wrapper for legacy firewall rules."""
 
     @pytest.mark.asyncio
-    async def test_returns_raw_rules_with_engine_site_and_count(self):
-        """The tool preserves legacy fields and identifies the firewall engine."""
+    async def test_projects_rules_through_the_model_with_engine_site_and_count(self):
+        """The tool projects through LegacyFirewallRule, matching the zone/group tools."""
         mock_conn = MagicMock()
         mock_conn.site = "default"
         legacy_rules = [
@@ -1229,6 +1229,10 @@ class TestListLegacyFirewallRules:
                 "rule_index": 2000,
                 "action": "accept",
                 "enabled": True,
+                "state_established": True,
+                "src_firewallgroup_ids": ["grp-1"],
+                "src_networkconf_id": "net-1",
+                "unmapped_controller_field": "dropped by the model",
             },
             {
                 "_id": "rule-002",
@@ -1254,9 +1258,19 @@ class TestListLegacyFirewallRules:
         assert result["engine"] == "legacy"
         assert result["site"] == "default"
         assert result["count"] == 2
-        assert result["rules"] == legacy_rules
-        assert result["rules"][0]["ruleset"] == "LAN_IN"
-        assert result["rules"][0]["rule_index"] == 2000
+
+        first = result["rules"][0]
+        assert first["id"] == "rule-001"
+        assert first["ruleset"] == "LAN_IN"
+        assert first["rule_index"] == 2000
+        assert first["action"] == "accept"
+        assert first["state_established"] is True
+        assert first["src_firewallgroup_ids"] == ["grp-1"]
+        assert first["src_networkconf_id"] == "net-1"
+        # The model curates the shape: unknown controller keys do not leak through,
+        # and the raw "_id" is normalised to "id".
+        assert "unmapped_controller_field" not in first
+        assert "_id" not in first
 
     @pytest.mark.asyncio
     async def test_surfaces_manager_exception_as_structured_error(self):
@@ -1265,9 +1279,7 @@ class TestListLegacyFirewallRules:
         mock_conn.site = "default"
 
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
-            mock_fm.get_legacy_firewall_rules = AsyncMock(
-                side_effect=Exception("Controller returned 404")
-            )
+            mock_fm.get_legacy_firewall_rules = AsyncMock(side_effect=Exception("Controller returned 404"))
             mock_fm._connection = mock_conn
 
             from unifi_network_mcp.tools.firewall import (
@@ -1281,6 +1293,79 @@ class TestListLegacyFirewallRules:
         assert "Controller returned 404" in result["error"]
         assert "rules" not in result
         assert "count" not in result
+
+
+class TestLegacyEngineHint:
+    """An empty V2 result must not read as 'no firewall rules configured'."""
+
+    @pytest.mark.asyncio
+    async def test_zones_hint_when_empty(self):
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_zones = AsyncMock(return_value=[])
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_zones
+
+            result = await list_firewall_zones()
+
+        assert result["count"] == 0
+        assert "unifi_list_legacy_firewall_rules" in result["note"]
+
+    @pytest.mark.asyncio
+    async def test_zones_no_hint_when_populated(self):
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_zones = AsyncMock(return_value=[{"_id": "z1", "name": "Internal"}])
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_zones
+
+            result = await list_firewall_zones()
+
+        assert result["count"] == 1
+        assert "note" not in result
+
+    @pytest.mark.asyncio
+    async def test_policies_hint_when_controller_returns_none(self):
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[])
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+            result = await list_firewall_policies()
+
+        assert result["total_count"] == 0
+        assert "unifi_list_legacy_firewall_rules" in result["note"]
+
+    @pytest.mark.asyncio
+    async def test_policies_no_hint_when_filter_excludes_everything(self):
+        """A filter matching nothing is not the same as the engine having no policies."""
+        mock_conn = MagicMock()
+        mock_conn.site = "default"
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(
+                return_value=[{"_id": "p1", "name": "Allow LAN", "action": "ALLOW", "enabled": True}]
+            )
+            mock_fm._connection = mock_conn
+
+            from unifi_network_mcp.tools.firewall import list_firewall_policies
+
+            result = await list_firewall_policies(search="no-such-policy-name")
+
+        # total_count is post-filter, so it is legitimately 0 here. The hint must key
+        # off the pre-filter controller result, not this.
+        assert result["returned_count"] == 0
+        assert "note" not in result
 
 
 class TestListFirewallZones:

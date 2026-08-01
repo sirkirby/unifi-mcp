@@ -14,6 +14,7 @@ from unifi_core.confirmation import create_preview, toggle_preview, update_previ
 from unifi_core.network.models.firewall import (
     firewall_group_from_controller,
     firewall_zone_from_controller,
+    legacy_firewall_rule_from_controller,
 )
 from unifi_core.network.models.firewall import (
     from_controller as fw_from_controller,
@@ -23,6 +24,15 @@ from unifi_core.network.models.firewall import (
 )
 from unifi_core.redaction import redact_sensitive_fields
 from unifi_network_mcp.runtime import firewall_manager, server, should_redact_sensitive_fields
+
+#: Emitted when the V2 zone-based endpoints report nothing. On a site still running
+#: the pre-zone-based engine those endpoints are empty rather than absent, which is
+#: indistinguishable from "no rules configured" unless the caller is told otherwise.
+LEGACY_ENGINE_HINT = (
+    "No zone-based firewall configuration was returned. This site may still be running the "
+    "legacy (pre-zone-based) firewall engine, whose rules are not visible here. Call "
+    "unifi_list_legacy_firewall_rules before concluding that no firewall rules are configured."
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +125,9 @@ async def list_firewall_policies(
     try:
         policies = await firewall_manager.get_firewall_policies(include_predefined=include_predefined)
         policies_raw = [p.raw if hasattr(p, "raw") else p for p in policies]
+        # Captured before filtering: "the controller returned nothing" is the legacy-engine
+        # signal, whereas "a filter matched nothing" says nothing about the engine.
+        controller_policy_count = len(policies_raw)
 
         if enabled_only:
             policies_raw = [p for p in policies_raw if p.get("enabled", False)]
@@ -165,7 +178,7 @@ async def list_firewall_policies(
                     entry[direction] = targeting
             formatted_policies.append(entry)
 
-        return {
+        result = {
             "success": True,
             "site": firewall_manager._connection.site,
             "search": search,
@@ -177,6 +190,9 @@ async def list_firewall_policies(
             "limit": limit,
             "policies": formatted_policies,
         }
+        if controller_policy_count == 0:
+            result["note"] = LEGACY_ENGINE_HINT
+        return result
     except Exception as e:
         logger.error("Error listing firewall policies: %s", e, exc_info=True)
         return {"success": False, "error": "Failed to list firewall policies: %s" % e}
@@ -909,12 +925,15 @@ async def list_firewall_zones() -> Dict[str, Any]:
     try:
         zones = await firewall_manager.get_firewall_zones()
         formatted = [firewall_zone_from_controller(z).model_dump(exclude_none=True) for z in zones]
-        return {
+        result = {
             "success": True,
             "site": firewall_manager._connection.site,
             "count": len(formatted),
             "zones": formatted,
         }
+        if not formatted:
+            result["note"] = LEGACY_ENGINE_HINT
+        return result
     except Exception as exc:
         logger.error("Error listing firewall zones: %s", exc, exc_info=True)
         return {"success": False, "error": f"Failed to list firewall zones: {exc}"}
@@ -928,9 +947,10 @@ async def list_firewall_zones() -> Dict[str, Any]:
     description=(
         "List legacy pre-zone-based firewall rules from the UniFi controller. "
         "Use this on sites that still use the legacy firewall engine and return no "
-        "V2 zone-based firewall policies. Returns the raw legacy rule configuration, "
-        "including ruleset, rule_index, action, source and destination groups, "
-        "protocol, ports, state matching, logging, and enabled state."
+        "V2 zone-based firewall policies. Returns ruleset, rule_index, action "
+        "(lowercase accept/drop/reject), source and destination addresses, ports, "
+        "networks and firewall groups, protocol, connection-state matching, "
+        "logging, and enabled state."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -939,13 +959,14 @@ async def list_legacy_firewall_rules() -> Dict[str, Any]:
     redact_sensitive = should_redact_sensitive_fields()
     try:
         rules = await firewall_manager.get_legacy_firewall_rules()
+        formatted = [legacy_firewall_rule_from_controller(r).model_dump(exclude_none=True) for r in rules]
         return redact_sensitive_fields(
             {
                 "success": True,
                 "engine": "legacy",
                 "site": firewall_manager._connection.site,
-                "count": len(rules),
-                "rules": json.loads(json.dumps(rules, default=str)),
+                "count": len(formatted),
+                "rules": formatted,
             },
             redact_sensitive=redact_sensitive,
         )

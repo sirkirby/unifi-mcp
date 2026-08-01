@@ -1,5 +1,5 @@
 {
-  "count": 186,
+  "count": 187,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -118,6 +118,7 @@
     "unifi_list_firewall_groups": "unifi_network_mcp.tools.firewall",
     "unifi_list_firewall_policies": "unifi_network_mcp.tools.firewall",
     "unifi_list_firewall_zones": "unifi_network_mcp.tools.firewall",
+    "unifi_list_legacy_firewall_rules": "unifi_network_mcp.tools.firewall",
     "unifi_list_networks": "unifi_network_mcp.tools.network",
     "unifi_list_oon_policies": "unifi_network_mcp.tools.oon",
     "unifi_list_port_forwards": "unifi_network_mcp.tools.port_forwards",
@@ -11542,6 +11543,90 @@
         }
       },
       "title": "List Firewall Zones"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "List legacy pre-zone-based firewall rules from the UniFi controller. Use this on sites that still use the legacy firewall engine and return no V2 zone-based firewall policies. Returns ruleset, rule_index, action (lowercase accept/drop/reject), source and destination addresses, ports, networks and firewall groups, protocol, connection-state matching, logging, and enabled state.",
+      "name": "unifi_list_legacy_firewall_rules",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "List Legacy Firewall Rules"
     },
     {
       "annotations": {

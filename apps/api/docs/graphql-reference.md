@@ -919,6 +919,45 @@ type KnownLicensePlatePage {
   nextCursor: String
 }
 
+"""
+A rule from the legacy (pre-zone-based) firewall engine, read from V1 /rest/firewallrule. Distinct from FirewallRule, which models the V2 zone-based engine: actions are lowercase (accept/drop/reject), rules belong to a ruleset rather than a zone pair, and source/destination are flat fields rather than nested objects. Read-only.
+"""
+type LegacyFirewallRule {
+  id: ID
+  name: String
+  ruleset: String
+  ruleIndex: Int
+  action: String
+  enabled: Boolean
+  protocol: String
+  protocolV6: String
+  protocolMatchExcepted: Boolean
+  srcAddress: String
+  srcAddressIpv6: String
+  srcPort: String
+  srcMacAddress: String
+  srcFirewallgroupIds: [String!]!
+  srcNetworkconfId: String
+  srcNetworkconfType: String
+  dstAddress: String
+  dstAddressIpv6: String
+  dstPort: String
+  dstFirewallgroupIds: [String!]!
+  dstNetworkconfId: String
+  dstNetworkconfType: String
+  stateNew: Boolean
+  stateEstablished: Boolean
+  stateRelated: Boolean
+  stateInvalid: Boolean
+  icmpTypename: String
+  icmpv6Typename: String
+  ipsec: String
+  logging: Boolean
+  settingPreference: String
+  noEdit: Boolean
+  noDelete: Boolean
+}
+
 """A UniFi Protect light (PIR-triggered floodlight)."""
 type Light {
   id: ID
@@ -1181,6 +1220,11 @@ type NetworkQuery {
 
   """List firewall zones (typically a small flat list — no pagination)."""
   firewallZones(controller: ID!, site: String! = "default"): [FirewallZone!]!
+
+  """
+  List legacy (pre-zone-based) firewall rules. Sites still running the legacy engine return no zone-based policies or zones, so an empty firewallPolicies result does not mean no firewall rules are configured — check here as well.
+  """
+  legacyFirewallRules(controller: ID!, site: String! = "default"): [LegacyFirewallRule!]!
 
   """
   Get user-defined firewall policy ordering for a source/destination zone pair. Returns policy IDs from the UniFi integration API (UUIDs); these IDs are scoped to the ordering tool family and do NOT correspond to the policy IDs returned by firewallPolicies or other controller-API firewall queries. Requires a UniFi API key (UNIFI_API_KEY).
@@ -2222,6 +2266,7 @@ Read-only access to UniFi Network resources.
 - `gatewaySettings: GatewaySettings`  — Get gateway (USG) security / NAT / connection-tracking settings.
 - `gatewayStats: [StatPoint!]!`  — Gateway stats timeseries.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).
+- `legacyFirewallRules: [LegacyFirewallRule!]!`  — List legacy (pre-zone-based) firewall rules. Sites still running the legacy engine return no zone-based policies or zones, so an empty firewallPolicies result does not mean no firewall rules are configured — check here as well.
 - `lldpNeighbors: LldpNeighbors`  — Get LLDP neighbors reported by a switch.
 - `networkDetail: Network`  — Look up a single LAN/VLAN network by id. (Named ``networkDetail`` because ``network`` is reserved for the namespace.)
 - `networkHealth: [NetworkHealth!]!`  — Get the controller's network-health subsystems list.

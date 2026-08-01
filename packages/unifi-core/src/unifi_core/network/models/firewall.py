@@ -8,6 +8,9 @@ Mirrors the Strawberry types in
 - ``FirewallGroup`` — create/delete for firewall address/port groups.
   Mutable fields: name, group_type, members.
 - ``FirewallZone``  — read-only zone shape (no mutable fields).
+- ``LegacyFirewallRule`` — read-only pre-zone-based rule shape. The legacy
+  engine uses different field names, lowercase actions, and flat
+  source/destination fields, so it cannot share ``FirewallRule``.
 
 Factory helpers:
 - ``from_controller``              — raw dict → FirewallRule
@@ -16,6 +19,7 @@ Factory helpers:
 - ``firewall_group_from_controller`` — raw dict → FirewallGroup
 - ``to_group_create``              — FirewallGroup → create payload
 - ``firewall_zone_from_controller`` — raw dict → FirewallZone
+- ``legacy_firewall_rule_from_controller`` — raw dict → LegacyFirewallRule
 
 ``MUTABLE_FIELDS`` is for FirewallRule and drives the cross-layer
 symmetry test. Per-class aliases are provided for FirewallGroup and
@@ -211,6 +215,220 @@ FIREWALLZONE_READ_ONLY_FIELDS: frozenset[str] = frozenset(FirewallZone.model_fie
 
 
 # ---------------------------------------------------------------------------
+# LegacyFirewallRule pydantic model (read-only, pre-zone-based engine)
+# ---------------------------------------------------------------------------
+
+#: Rulesets accepted by the legacy engine, including the IPv6 variants.
+LEGACY_RULESETS: frozenset[str] = frozenset(
+    {
+        "WAN_IN",
+        "WAN_OUT",
+        "WAN_LOCAL",
+        "LAN_IN",
+        "LAN_OUT",
+        "LAN_LOCAL",
+        "GUEST_IN",
+        "GUEST_OUT",
+        "GUEST_LOCAL",
+        "WANv6_IN",
+        "WANv6_OUT",
+        "WANv6_LOCAL",
+        "LANv6_IN",
+        "LANv6_OUT",
+        "LANv6_LOCAL",
+        "GUESTv6_IN",
+        "GUESTv6_OUT",
+        "GUESTv6_LOCAL",
+    }
+)
+
+#: Legacy actions are lowercase, unlike the V2 engine's ALLOW/BLOCK/REJECT.
+LEGACY_ACTIONS: frozenset[str] = frozenset({"accept", "drop", "reject"})
+
+
+class LegacyFirewallRule(BaseModel):
+    """Canonical pre-zone-based (legacy) firewall rule model (read-only).
+
+    Distinct from :class:`FirewallRule`, which models the V2 zone-based engine.
+    The two engines use different field names, different action casing, and
+    different source/destination shapes, so they cannot share a model.
+    """
+
+    id: Optional[str] = Field(
+        default=None,
+        description="Legacy firewall rule ID",
+        json_schema_extra={"mutable": False},
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Rule name",
+        json_schema_extra={"mutable": False},
+    )
+    ruleset: Optional[str] = Field(
+        default=None,
+        description=(
+            "Ruleset the rule belongs to, e.g. WAN_IN, LAN_OUT, GUEST_LOCAL, or an IPv6 variant such as LANv6_IN"
+        ),
+        json_schema_extra={"mutable": False},
+    )
+    rule_index: Optional[int] = Field(
+        default=None,
+        description="Evaluation order within the ruleset (lower runs first)",
+        json_schema_extra={"mutable": False},
+    )
+    action: Optional[str] = Field(
+        default=None,
+        description="Action for matched traffic: accept, drop, or reject (lowercase)",
+        json_schema_extra={"mutable": False},
+    )
+    enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether the rule is active",
+        json_schema_extra={"mutable": False},
+    )
+    protocol: Optional[str] = Field(
+        default=None,
+        description="IPv4 protocol match, e.g. all, tcp, udp, tcp_udp, icmp",
+        json_schema_extra={"mutable": False},
+    )
+    protocol_v6: Optional[str] = Field(
+        default=None,
+        description="IPv6 protocol match",
+        json_schema_extra={"mutable": False},
+    )
+    protocol_match_excepted: Optional[bool] = Field(
+        default=None,
+        description="Invert the protocol match",
+        json_schema_extra={"mutable": False},
+    )
+    src_address: Optional[str] = Field(
+        default=None,
+        description="Source address or CIDR",
+        json_schema_extra={"mutable": False},
+    )
+    src_address_ipv6: Optional[str] = Field(
+        default=None,
+        description="Source IPv6 address or CIDR",
+        json_schema_extra={"mutable": False},
+    )
+    src_port: Optional[str] = Field(
+        default=None,
+        description="Source port or range",
+        json_schema_extra={"mutable": False},
+    )
+    src_mac_address: Optional[str] = Field(
+        default=None,
+        description="Source MAC address match",
+        json_schema_extra={"mutable": False},
+    )
+    src_firewallgroup_ids: List[str] = Field(
+        default_factory=list,
+        description="Source firewall group IDs (address or port groups)",
+        json_schema_extra={"mutable": False},
+    )
+    src_networkconf_id: Optional[str] = Field(
+        default=None,
+        description="Source network (VLAN) ID",
+        json_schema_extra={"mutable": False},
+    )
+    src_networkconf_type: Optional[str] = Field(
+        default=None,
+        description="How the source network is matched: ADDRv4 or NETv4",
+        json_schema_extra={"mutable": False},
+    )
+    dst_address: Optional[str] = Field(
+        default=None,
+        description="Destination address or CIDR",
+        json_schema_extra={"mutable": False},
+    )
+    dst_address_ipv6: Optional[str] = Field(
+        default=None,
+        description="Destination IPv6 address or CIDR",
+        json_schema_extra={"mutable": False},
+    )
+    dst_port: Optional[str] = Field(
+        default=None,
+        description="Destination port or range",
+        json_schema_extra={"mutable": False},
+    )
+    dst_firewallgroup_ids: List[str] = Field(
+        default_factory=list,
+        description="Destination firewall group IDs (address or port groups)",
+        json_schema_extra={"mutable": False},
+    )
+    dst_networkconf_id: Optional[str] = Field(
+        default=None,
+        description="Destination network (VLAN) ID",
+        json_schema_extra={"mutable": False},
+    )
+    dst_networkconf_type: Optional[str] = Field(
+        default=None,
+        description="How the destination network is matched: ADDRv4 or NETv4",
+        json_schema_extra={"mutable": False},
+    )
+    state_new: Optional[bool] = Field(
+        default=None,
+        description="Match connections in the NEW state",
+        json_schema_extra={"mutable": False},
+    )
+    state_established: Optional[bool] = Field(
+        default=None,
+        description="Match connections in the ESTABLISHED state",
+        json_schema_extra={"mutable": False},
+    )
+    state_related: Optional[bool] = Field(
+        default=None,
+        description="Match connections in the RELATED state",
+        json_schema_extra={"mutable": False},
+    )
+    state_invalid: Optional[bool] = Field(
+        default=None,
+        description="Match connections in the INVALID state",
+        json_schema_extra={"mutable": False},
+    )
+    icmp_typename: Optional[str] = Field(
+        default=None,
+        description="ICMP type match",
+        json_schema_extra={"mutable": False},
+    )
+    icmpv6_typename: Optional[str] = Field(
+        default=None,
+        description="ICMPv6 type match",
+        json_schema_extra={"mutable": False},
+    )
+    ipsec: Optional[str] = Field(
+        default=None,
+        description="IPsec match: match-ipsec or match-none",
+        json_schema_extra={"mutable": False},
+    )
+    logging: Optional[bool] = Field(
+        default=None,
+        description="Whether matched traffic is logged",
+        json_schema_extra={"mutable": False},
+    )
+    setting_preference: Optional[str] = Field(
+        default=None,
+        description="Whether the rule is auto-managed or manually configured",
+        json_schema_extra={"mutable": False},
+    )
+    no_edit: Optional[bool] = Field(
+        default=None,
+        description="Controller-defined rule that cannot be edited",
+        json_schema_extra={"mutable": False},
+    )
+    no_delete: Optional[bool] = Field(
+        default=None,
+        description="Controller-defined rule that cannot be deleted",
+        json_schema_extra={"mutable": False},
+    )
+
+
+LEGACYFIREWALLRULE_MUTABLE_FIELDS: frozenset[str] = frozenset()
+
+LEGACYFIREWALLRULE_READ_ONLY_FIELDS: frozenset[str] = frozenset(LegacyFirewallRule.model_fields.keys())
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
@@ -331,4 +549,62 @@ def firewall_zone_from_controller(raw: Any) -> FirewallZone:
         name=_get(raw, "name"),
         networks=list(networks),
         default_policy=_get(raw, "default_policy") or _get(raw, "default_action"),
+    )
+
+
+def _str_list(value: Any) -> List[str]:
+    """Coerce a controller value to a list of strings, dropping anything else."""
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _opt_bool(value: Any) -> Optional[bool]:
+    """Preserve ``False`` while treating a missing or non-bool value as unknown."""
+    return value if isinstance(value, bool) else None
+
+
+def legacy_firewall_rule_from_controller(raw: Any) -> LegacyFirewallRule:
+    """Build a LegacyFirewallRule from a ``/rest/firewallrule`` response entry."""
+    rule_index = _get(raw, "rule_index")
+    if not isinstance(rule_index, int) or isinstance(rule_index, bool):
+        try:
+            rule_index = int(rule_index)
+        except (TypeError, ValueError):
+            rule_index = None
+
+    return LegacyFirewallRule(
+        id=_get(raw, "_id") or _get(raw, "id"),
+        name=_get(raw, "name"),
+        ruleset=_get(raw, "ruleset"),
+        rule_index=rule_index,
+        action=_get(raw, "action"),
+        enabled=_opt_bool(_get(raw, "enabled")),
+        protocol=_get(raw, "protocol"),
+        protocol_v6=_get(raw, "protocol_v6"),
+        protocol_match_excepted=_opt_bool(_get(raw, "protocol_match_excepted")),
+        src_address=_get(raw, "src_address"),
+        src_address_ipv6=_get(raw, "src_address_ipv6"),
+        src_port=_get(raw, "src_port"),
+        src_mac_address=_get(raw, "src_mac_address"),
+        src_firewallgroup_ids=_str_list(_get(raw, "src_firewallgroup_ids")),
+        src_networkconf_id=_get(raw, "src_networkconf_id"),
+        src_networkconf_type=_get(raw, "src_networkconf_type"),
+        dst_address=_get(raw, "dst_address"),
+        dst_address_ipv6=_get(raw, "dst_address_ipv6"),
+        dst_port=_get(raw, "dst_port"),
+        dst_firewallgroup_ids=_str_list(_get(raw, "dst_firewallgroup_ids")),
+        dst_networkconf_id=_get(raw, "dst_networkconf_id"),
+        dst_networkconf_type=_get(raw, "dst_networkconf_type"),
+        state_new=_opt_bool(_get(raw, "state_new")),
+        state_established=_opt_bool(_get(raw, "state_established")),
+        state_related=_opt_bool(_get(raw, "state_related")),
+        state_invalid=_opt_bool(_get(raw, "state_invalid")),
+        icmp_typename=_get(raw, "icmp_typename"),
+        icmpv6_typename=_get(raw, "icmpv6_typename"),
+        ipsec=_get(raw, "ipsec"),
+        logging=_opt_bool(_get(raw, "logging")),
+        setting_preference=_get(raw, "setting_preference"),
+        no_edit=_opt_bool(_get(raw, "attr_no_edit")),
+        no_delete=_opt_bool(_get(raw, "attr_no_delete")),
     )

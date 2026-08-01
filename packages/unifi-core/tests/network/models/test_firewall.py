@@ -7,14 +7,20 @@ from unifi_core.network.models.firewall import (
     FIREWALLGROUP_READ_ONLY_FIELDS,
     FIREWALLZONE_MUTABLE_FIELDS,
     FIREWALLZONE_READ_ONLY_FIELDS,
+    LEGACY_ACTIONS,
+    LEGACY_RULESETS,
+    LEGACYFIREWALLRULE_MUTABLE_FIELDS,
+    LEGACYFIREWALLRULE_READ_ONLY_FIELDS,
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
     FirewallGroup,
     FirewallRule,
     FirewallZone,
+    LegacyFirewallRule,
     firewall_group_from_controller,
     firewall_zone_from_controller,
     from_controller,
+    legacy_firewall_rule_from_controller,
     to_controller_update,
     to_group_create,
 )
@@ -255,3 +261,133 @@ class TestFirewallZoneFromController:
         z = firewall_zone_from_controller({})
         assert z.id is None
         assert z.networks == []
+
+
+# ---------------------------------------------------------------------------
+# LegacyFirewallRule — pre-zone-based engine (V1 /rest/firewallrule)
+# ---------------------------------------------------------------------------
+
+#: A representative rule as the controller returns it. Field names and value
+#: shapes follow the controller-generated schema used by the Terraform/Pulumi
+#: providers, since the V2 zone-based engine uses entirely different names.
+RAW_LEGACY_RULE = {
+    "_id": "60f1a2b3c4d5e6f7a8b9c0d1",
+    "site_id": "5f0000000000000000000001",
+    "name": "Block IoT to LAN",
+    "ruleset": "LAN_IN",
+    "rule_index": 2001,
+    "action": "drop",
+    "enabled": True,
+    "protocol": "all",
+    "protocol_v6": "",
+    "protocol_match_excepted": False,
+    "src_address": "192.168.30.0/24",
+    "src_address_ipv6": "",
+    "src_port": "",
+    "src_mac_address": "",
+    "src_firewallgroup_ids": ["grp-src-1"],
+    "src_networkconf_id": "net-iot",
+    "src_networkconf_type": "NETv4",
+    "dst_address": "192.168.10.0/24",
+    "dst_address_ipv6": "",
+    "dst_port": "443",
+    "dst_firewallgroup_ids": ["grp-dst-1", "grp-dst-2"],
+    "dst_networkconf_id": "net-lan",
+    "dst_networkconf_type": "NETv4",
+    "state_new": True,
+    "state_established": False,
+    "state_related": False,
+    "state_invalid": False,
+    "icmp_typename": "",
+    "icmpv6_typename": "",
+    "ipsec": "match-none",
+    "logging": True,
+    "setting_preference": "manual",
+    "attr_no_edit": False,
+    "attr_no_delete": False,
+}
+
+
+class TestLegacyFirewallRuleModel:
+    def test_is_read_only(self) -> None:
+        assert LEGACYFIREWALLRULE_MUTABLE_FIELDS == frozenset()
+        assert LEGACYFIREWALLRULE_READ_ONLY_FIELDS == frozenset(LegacyFirewallRule.model_fields.keys())
+
+    def test_ruleset_enum_includes_ipv6_variants(self) -> None:
+        assert len(LEGACY_RULESETS) == 18
+        for name in ("WAN_IN", "LAN_OUT", "GUEST_LOCAL", "LANv6_IN", "GUESTv6_OUT", "WANv6_LOCAL"):
+            assert name in LEGACY_RULESETS
+
+    def test_legacy_actions_are_lowercase(self) -> None:
+        """The V2 engine uses ALLOW/BLOCK/REJECT; the legacy engine does not."""
+        assert LEGACY_ACTIONS == {"accept", "drop", "reject"}
+
+
+class TestLegacyFirewallRuleFromController:
+    def test_maps_every_documented_field(self) -> None:
+        r = legacy_firewall_rule_from_controller(RAW_LEGACY_RULE)
+        assert r.id == "60f1a2b3c4d5e6f7a8b9c0d1"
+        assert r.name == "Block IoT to LAN"
+        assert r.ruleset == "LAN_IN"
+        assert r.rule_index == 2001
+        assert r.action == "drop"
+        assert r.enabled is True
+        assert r.src_address == "192.168.30.0/24"
+        assert r.src_firewallgroup_ids == ["grp-src-1"]
+        assert r.src_networkconf_id == "net-iot"
+        assert r.src_networkconf_type == "NETv4"
+        assert r.dst_port == "443"
+        assert r.dst_firewallgroup_ids == ["grp-dst-1", "grp-dst-2"]
+        assert r.ipsec == "match-none"
+        assert r.logging is True
+        assert r.setting_preference == "manual"
+
+    def test_state_flags_preserve_false(self) -> None:
+        """False is a meaningful value here and must not collapse to None."""
+        r = legacy_firewall_rule_from_controller(RAW_LEGACY_RULE)
+        assert r.state_new is True
+        assert r.state_established is False
+        assert r.state_related is False
+        assert r.state_invalid is False
+
+    def test_maps_attr_flags_to_friendly_names(self) -> None:
+        r = legacy_firewall_rule_from_controller({**RAW_LEGACY_RULE, "attr_no_edit": True, "attr_no_delete": True})
+        assert r.no_edit is True
+        assert r.no_delete is True
+
+    def test_drops_site_id_and_unknown_keys(self) -> None:
+        r = legacy_firewall_rule_from_controller({**RAW_LEGACY_RULE, "totally_unknown": "x"})
+        dumped = r.model_dump()
+        assert "site_id" not in dumped
+        assert "totally_unknown" not in dumped
+
+    def test_coerces_string_rule_index(self) -> None:
+        r = legacy_firewall_rule_from_controller({"_id": "r", "rule_index": "2005"})
+        assert r.rule_index == 2005
+
+    def test_non_numeric_rule_index_becomes_none(self) -> None:
+        r = legacy_firewall_rule_from_controller({"_id": "r", "rule_index": "not-a-number"})
+        assert r.rule_index is None
+
+    def test_non_list_firewallgroup_ids_become_empty(self) -> None:
+        r = legacy_firewall_rule_from_controller({"_id": "r", "src_firewallgroup_ids": "grp-1"})
+        assert r.src_firewallgroup_ids == []
+
+    def test_non_string_group_members_are_dropped(self) -> None:
+        r = legacy_firewall_rule_from_controller({"_id": "r", "dst_firewallgroup_ids": ["ok", 7, None]})
+        assert r.dst_firewallgroup_ids == ["ok"]
+
+    def test_non_bool_enabled_becomes_none(self) -> None:
+        r = legacy_firewall_rule_from_controller({"_id": "r", "enabled": "yes"})
+        assert r.enabled is None
+
+    def test_handles_empty_dict(self) -> None:
+        r = legacy_firewall_rule_from_controller({})
+        assert r.id is None
+        assert r.ruleset is None
+        assert r.src_firewallgroup_ids == []
+        assert r.dst_firewallgroup_ids == []
+
+    def test_falls_back_to_id_key(self) -> None:
+        r = legacy_firewall_rule_from_controller({"id": "alt-id"})
+        assert r.id == "alt-id"

@@ -549,6 +549,19 @@ Fetch a user by listing then filtering — no native get_user method.
 
 **Returns:** `Detail_FirewallGroupModel_`
 
+### `GET /v1/sites/{site_id}/firewall/legacy-rules` — List Legacy Firewall Rules
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `limit` (query)
+- `cursor` (query)
+- `controller` (query)
+
+
+**Returns:** `Page_LegacyFirewallRuleModel_`
+
 ### `GET /v1/sites/{site_id}/firewall/policy-ordering` — Get firewall policy ordering for a zone pair (integration API)
 
 

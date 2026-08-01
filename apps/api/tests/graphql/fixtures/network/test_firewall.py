@@ -6,6 +6,7 @@
 # tool: unifi_get_firewall_group_details
 # tool: unifi_list_firewall_zones
 # tool: unifi_get_firewall_policy_ordering
+# tool: unifi_list_legacy_firewall_rules
 """
 
 from __future__ import annotations
@@ -152,6 +153,59 @@ async def test_firewall_zones_list(tmp_path, monkeypatch):
     assert len(zones) == 2
     names = {z["name"] for z in zones}
     assert names == {"LAN", "WAN"}
+
+
+@pytest.mark.asyncio
+async def test_legacy_firewall_rules_list(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network")
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "firewall_manager", "get_legacy_firewall_rules"): [
+                {
+                    "_id": "lfr-1",
+                    "name": "Block IoT to LAN",
+                    "ruleset": "LAN_IN",
+                    "rule_index": 2001,
+                    "action": "drop",
+                    "enabled": True,
+                    "src_firewallgroup_ids": ["grp-1"],
+                    "state_established": False,
+                },
+                {
+                    "_id": "lfr-2",
+                    "name": "Allow established",
+                    "ruleset": "WAN_IN",
+                    "rule_index": 2000,
+                    "action": "accept",
+                    "enabled": True,
+                    "state_established": True,
+                },
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ legacyFirewallRules(controller: "{cid}") {{
+            id name ruleset ruleIndex action enabled srcFirewallgroupIds stateEstablished
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    rules = body["data"]["network"]["legacyFirewallRules"]
+    assert len(rules) == 2
+
+    by_id = {r["id"]: r for r in rules}
+    assert by_id["lfr-1"]["ruleset"] == "LAN_IN"
+    assert by_id["lfr-1"]["ruleIndex"] == 2001
+    # Legacy actions stay lowercase; the V2 engine's ALLOW/BLOCK casing does not apply.
+    assert by_id["lfr-1"]["action"] == "drop"
+    assert by_id["lfr-1"]["srcFirewallgroupIds"] == ["grp-1"]
+    assert by_id["lfr-1"]["stateEstablished"] is False
+    assert by_id["lfr-2"]["stateEstablished"] is True
 
 
 @pytest.mark.asyncio

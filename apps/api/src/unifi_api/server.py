@@ -114,6 +114,9 @@ from unifi_api.routes.resources.network import (
     gateway_settings as net_gateway_settings_routes,
 )
 from unifi_api.routes.resources.network import (
+    legacy_firewall_rules as net_legacy_firewall_rules_routes,
+)
+from unifi_api.routes.resources.network import (
     lldp as net_lldp_routes,
 )
 from unifi_api.routes.resources.network import (
@@ -512,6 +515,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_ap_groups_routes,
         net_firewall_groups_routes,
         net_firewall_zones_routes,
+        net_legacy_firewall_rules_routes,
         net_gateway_settings_routes,
         net_qos_routes,
         net_dpi_routes,

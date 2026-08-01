@@ -251,7 +251,7 @@ This is a monorepo with shared packages:
 
 ```
 apps/
-  network/          # UniFi Network MCP server (stable, 186 tools)
+  network/          # UniFi Network MCP server (stable, 187 tools)
   protect/          # UniFi Protect MCP server (beta, 61 tools)
   access/           # UniFi Access MCP server (beta, 36 tools)
   api/              # Independent REST + GraphQL API server (beta)
