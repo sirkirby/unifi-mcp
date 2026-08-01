@@ -1664,7 +1664,7 @@ wheels = [
 
 [[package]]
 name = "strawberry-graphql"
-version = "0.322.2"
+version = "0.323.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cross-web" },
@@ -1673,9 +1673,9 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3d/8e/268b99664efc125ebe7a7ee0bcdb479a5a931d3a8cf6c24aecfb434aca5c/strawberry_graphql-0.322.2.tar.gz", hash = "sha256:d0040b690777b0e8f375341794576ccb964fcaf90fdecdc3ca5e873bea554841", size = 233734, upload-time = "2026-07-20T20:47:01.509Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d2/6b/81a467a2015506e1fcc305b0b1ef1553419a76f8b4a4294ab9572cdb67f7/strawberry_graphql-0.323.2.tar.gz", hash = "sha256:e3ba1f24596fc5e943a13dc75c8d071befc7c9f471c3b1a5def39ecb483a2f62", size = 234787, upload-time = "2026-07-23T21:59:16.299Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0c/8c/548da181af07af86f4c61c2556de1254700f8101a13019e4fd2f8b8ce8ff/strawberry_graphql-0.322.2-py3-none-any.whl", hash = "sha256:37047d2f801b4b0d22465d31d3cb4ed48a0592bca5941aeeb3adba995bd668f0", size = 337228, upload-time = "2026-07-20T20:46:59.296Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/23/49e17786e496e6e3599aab34992587fb53be931453cd178f9ba523545643/strawberry_graphql-0.323.2-py3-none-any.whl", hash = "sha256:870d00880d9caef454f4364af1c4e5808b1c180d6fef2c0d32de1d095f1b53b2", size = 338288, upload-time = "2026-07-23T21:59:14.831Z" },
 ]
 
 [package.optional-dependencies]
@@ -1843,7 +1843,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.51" },
-    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.322.2,<0.323.0" },
+    { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.323.2,<0.324.0" },
     { name = "typer", specifier = ">=0.26.8" },
     { name = "unifi-core", extras = ["access", "network", "protect"], editable = "packages/unifi-core" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.51.0" },
