@@ -42,7 +42,10 @@ build: docker-build worker-build
 check: format-check lint check-generated test worker-typecheck
 
 core-test:
-	uv run --package unifi-core --extra protect pytest packages/unifi-core/tests -v
+	# --all-extras, not a named extra: the suite spans tests/network (aiounifi),
+	# tests/protect (uiprotect) and tests/access (py-unifi-access), and naming one
+	# installs that extra's deps while leaving the others' collection to fail.
+	uv run --package unifi-core --all-extras pytest packages/unifi-core/tests -v
 
 shared-test:
 	uv run --package unifi-mcp-shared pytest packages/unifi-mcp-shared/tests -v
