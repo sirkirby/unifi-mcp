@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 
 import pytest
+from unifi_access_api import UnifiAccessApiClient
+from unifi_access_api.models.door import Device
 
 from unifi_core.access.managers.connection_manager import AccessConnectionManager
 from unifi_core.access.managers.device_manager import DeviceManager
@@ -20,7 +22,7 @@ from unifi_core.redaction import REDACTED
 def cm_api():
     cm = AccessConnectionManager(host="192.168.1.1", username="", password="", api_key="test-key")
     cm._api_client_available = True
-    cm._api_client = AsyncMock()
+    cm._api_client = create_autospec(UnifiAccessApiClient, instance=True)
     return cm
 
 
@@ -30,6 +32,15 @@ def cm_proxy():
     cm._proxy_available = True
     cm._proxy_session = MagicMock()
     return cm
+
+
+@pytest.fixture
+def cm_both(cm_api):
+    cm_api._proxy_available = True
+    cm_api._proxy_session = MagicMock()
+    cm_api.username = "admin"
+    cm_api.password = "secret"
+    return cm_api
 
 
 @pytest.fixture
@@ -48,6 +59,11 @@ def device_mgr_proxy(cm_proxy):
 
 
 @pytest.fixture
+def device_mgr_both(cm_both):
+    return DeviceManager(cm_both)
+
+
+@pytest.fixture
 def device_mgr_none(cm_none):
     return DeviceManager(cm_none)
 
@@ -60,14 +76,9 @@ def device_mgr_none(cm_none):
 class TestListDevices:
     @pytest.mark.asyncio
     async def test_list_devices_api(self, device_mgr_api, cm_api):
-        mock_device = MagicMock()
-        mock_device.id = "dev-1"
-        mock_device.name = "Hub Pro"
-        mock_device.type = "hub"
-        mock_device.connected = True
-        mock_device.firmware_version = "2.1.0"
+        mock_device = Device(id="dev-1", name="Hub Pro", type="hub", is_online=True)
 
-        cm_api._api_client.get_devices = AsyncMock(return_value=[mock_device])
+        cm_api._api_client.get_devices.return_value = [mock_device]
 
         devices = await device_mgr_api.list_devices()
 
@@ -216,21 +227,47 @@ class TestListDevices:
 class TestGetDevice:
     @pytest.mark.asyncio
     async def test_get_device_api(self, device_mgr_api, cm_api):
-        mock_device = MagicMock()
-        mock_device.id = "dev-1"
-        mock_device.name = "Hub Pro"
-        mock_device.type = "hub"
-        mock_device.connected = True
-        mock_device.firmware_version = "2.1.0"
-        mock_device.mac = "AA:BB:CC:DD:EE:FF"
-        mock_device.ip = "192.168.1.100"
+        devices = [
+            Device(id="dev-2", name="Reader"),
+            Device.model_validate(
+                {
+                    "id": "dev-1",
+                    "name": "Hub Pro",
+                    "type": "hub",
+                    "is_online": True,
+                    "firmware_version": "2.1.0",
+                    "mac": "AA:BB:CC:DD:EE:FF",
+                    "ip": "192.168.1.100",
+                }
+            ),
+        ]
 
-        cm_api._api_client.get_device = AsyncMock(return_value=mock_device)
+        cm_api._api_client.get_devices.return_value = devices
 
         detail = await device_mgr_api.get_device("dev-1")
 
         assert detail["id"] == "dev-1"
+        assert detail["connected"] is True
         assert detail["mac"] == "AA:BB:CC:DD:EE:FF"
+        cm_api._api_client.get_devices.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
+    async def test_get_device_api_not_found(self, device_mgr_api, cm_api):
+        cm_api._api_client.get_devices.return_value = [Device(id="dev-2", name="Reader")]
+
+        with pytest.raises(UniFiNotFoundError):
+            await device_mgr_api.get_device("missing-device")
+
+    @pytest.mark.asyncio
+    async def test_get_device_dual_auth_prefers_api_collection(self, device_mgr_both, cm_both):
+        cm_both._api_client.get_devices.return_value = [Device(id="dev-1", name="Hub Pro")]
+
+        with patch.object(cm_both, "proxy_request", new_callable=AsyncMock) as proxy_request:
+            detail = await device_mgr_both.get_device("dev-1")
+
+        assert detail["id"] == "dev-1"
+        cm_both._api_client.get_devices.assert_awaited_once_with()
+        proxy_request.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_get_device_proxy(self, device_mgr_proxy, cm_proxy):
@@ -294,16 +331,19 @@ class TestGetDevice:
 class TestRebootDevice:
     @pytest.mark.asyncio
     async def test_reboot_device_preview_api(self, device_mgr_api, cm_api):
-        mock_device = MagicMock()
-        mock_device.id = "dev-1"
-        mock_device.name = "Hub Pro"
-        mock_device.type = "hub"
-        mock_device.connected = True
-        mock_device.firmware_version = "2.1.0"
-        mock_device.mac = "AA:BB:CC:DD:EE:FF"
-        mock_device.ip = "192.168.1.100"
+        mock_device = Device.model_validate(
+            {
+                "id": "dev-1",
+                "name": "Hub Pro",
+                "type": "hub",
+                "is_online": True,
+                "firmware_version": "2.1.0",
+                "mac": "AA:BB:CC:DD:EE:FF",
+                "ip": "192.168.1.100",
+            }
+        )
 
-        cm_api._api_client.get_device = AsyncMock(return_value=mock_device)
+        cm_api._api_client.get_devices.return_value = [mock_device]
 
         preview = await device_mgr_api.reboot_device("dev-1")
 

@@ -168,3 +168,31 @@ def test_wlan_projection_redacts_passphrase() -> None:
     ).to_dict()
 
     assert out["x_passphrase"] == REDACTED
+
+
+def test_wlan_projection_maps_roaming_fields() -> None:
+    """802.11k + per-band roaming assistant must survive the controller -> Strawberry
+    projection. The cross-layer symmetry test only proves the attributes exist; it would
+    not catch from_manager_output forgetting to read one out of the raw dict."""
+    from unifi_api.graphql.types.network.wlan import Wlan
+
+    out = Wlan.from_manager_output(
+        {
+            "_id": "wlan1",
+            "name": "MyWiFi",
+            "enabled": True,
+            # False and the negative RSSIs are deliberate: they catch a truthiness
+            # filter or a `or None` that would pass with True/positive values.
+            "rrm_enabled": False,
+            "roaming_assistant_na_enabled": True,
+            "roaming_assistant_na_rssi": -77,
+            "roaming_assistant_6e_enabled": True,
+            "roaming_assistant_6e_rssi": -88,
+        }
+    ).to_dict()
+
+    assert out["rrm_enabled"] is False, "rrm_enabled=False must not be dropped"
+    assert out["roaming_assistant_na_enabled"] is True
+    assert out["roaming_assistant_na_rssi"] == -77
+    assert out["roaming_assistant_6e_enabled"] is True
+    assert out["roaming_assistant_6e_rssi"] == -88

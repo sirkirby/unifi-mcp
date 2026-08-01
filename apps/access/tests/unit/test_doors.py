@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 
 import pytest
+from unifi_access_api import UnifiAccessApiClient
+from unifi_access_api.models.door import Door
 
 from unifi_core.access.managers.connection_manager import AccessConnectionManager
 from unifi_core.access.managers.door_manager import _LOCATIONS_EXPAND, DoorManager
@@ -20,7 +22,7 @@ def cm_api():
     """ConnectionManager with API client available."""
     cm = AccessConnectionManager(host="192.168.1.1", username="", password="", api_key="test-key")
     cm._api_client_available = True
-    cm._api_client = AsyncMock()
+    cm._api_client = create_autospec(UnifiAccessApiClient, instance=True)
     return cm
 
 
@@ -79,21 +81,22 @@ class TestListDoors:
     @pytest.mark.asyncio
     async def test_list_doors_api_client(self, door_mgr_api, cm_api):
         """list_doors uses API client when available."""
-        mock_door = MagicMock()
-        mock_door.id = "door-1"
-        mock_door.name = "Front Door"
-        mock_door.door_position_status = "closed"
-        mock_door.lock_relay_status = "locked"
+        mock_door = Door(
+            id="door-1",
+            name="Front Door",
+            door_position_status="close",
+            door_lock_relay_status="lock",
+        )
 
-        cm_api._api_client.get_doors = AsyncMock(return_value=[mock_door])
+        cm_api._api_client.get_doors.return_value = [mock_door]
 
         doors = await door_mgr_api.list_doors()
 
         assert len(doors) == 1
         assert doors[0]["id"] == "door-1"
         assert doors[0]["name"] == "Front Door"
-        assert doors[0]["door_position_status"] == "closed"
-        assert doors[0]["lock_relay_status"] == "locked"
+        assert doors[0]["door_position_status"] == "close"
+        assert doors[0]["lock_relay_status"] == "lock"
 
     @pytest.mark.asyncio
     async def test_list_doors_proxy(self, door_mgr_proxy, cm_proxy):
@@ -190,13 +193,14 @@ class TestListDoors:
     @pytest.mark.asyncio
     async def test_list_doors_prefers_api_client(self, door_mgr_both, cm_both):
         """list_doors prefers API client over proxy when both available."""
-        mock_door = MagicMock()
-        mock_door.id = "door-1"
-        mock_door.name = "Main Door"
-        mock_door.door_position_status = "open"
-        mock_door.lock_relay_status = "unlocked"
+        mock_door = Door(
+            id="door-1",
+            name="Main Door",
+            door_position_status="open",
+            door_lock_relay_status="unlock",
+        )
 
-        cm_both._api_client.get_doors = AsyncMock(return_value=[mock_door])
+        cm_both._api_client.get_doors.return_value = [mock_door]
 
         doors = await door_mgr_both.list_doors()
 
@@ -213,21 +217,44 @@ class TestListDoors:
 class TestGetDoor:
     @pytest.mark.asyncio
     async def test_get_door_api_client(self, door_mgr_api, cm_api):
-        """get_door returns detailed door info via API client."""
-        mock_door = MagicMock()
-        mock_door.id = "door-1"
-        mock_door.name = "Front Door"
-        mock_door.door_position_status = "closed"
-        mock_door.lock_relay_status = "locked"
-        mock_door.camera_resource_id = "cam-1"
-        mock_door.door_guard = None
+        """get_door filters the API client's supported collection call by ID."""
+        doors = [
+            Door(id="door-2", name="Back Door"),
+            Door(
+                id="door-1",
+                name="Front Door",
+                door_position_status="close",
+                door_lock_relay_status="lock",
+            ),
+        ]
 
-        cm_api._api_client.get_door = AsyncMock(return_value=mock_door)
+        cm_api._api_client.get_doors.return_value = doors
 
         detail = await door_mgr_api.get_door("door-1")
 
         assert detail["id"] == "door-1"
-        assert detail["camera_resource_id"] == "cam-1"
+        assert detail["name"] == "Front Door"
+        assert detail["door_position_status"] == "close"
+        assert detail["lock_relay_status"] == "lock"
+        cm_api._api_client.get_doors.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
+    async def test_get_door_api_client_not_found(self, door_mgr_api, cm_api):
+        cm_api._api_client.get_doors.return_value = [Door(id="door-2", name="Back Door")]
+
+        with pytest.raises(UniFiNotFoundError):
+            await door_mgr_api.get_door("missing-door")
+
+    @pytest.mark.asyncio
+    async def test_get_door_dual_auth_prefers_api_collection(self, door_mgr_both, cm_both):
+        cm_both._api_client.get_doors.return_value = [Door(id="door-1", name="Front Door")]
+
+        with patch.object(cm_both, "proxy_request", new_callable=AsyncMock) as proxy_request:
+            detail = await door_mgr_both.get_door("door-1")
+
+        assert detail["id"] == "door-1"
+        cm_both._api_client.get_doors.assert_awaited_once_with()
+        proxy_request.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_get_door_proxy(self, door_mgr_proxy, cm_proxy):
@@ -274,18 +301,20 @@ class TestGetDoorStatus:
     @pytest.mark.asyncio
     async def test_get_door_status_api(self, door_mgr_api, cm_api):
         """get_door_status extracts status fields via API client."""
-        mock_door = MagicMock()
-        mock_door.id = "door-1"
-        mock_door.name = "Front Door"
-        mock_door.door_position_status = "closed"
-        mock_door.lock_relay_status = "locked"
-
-        cm_api._api_client.get_door = AsyncMock(return_value=mock_door)
+        cm_api._api_client.get_doors.return_value = [
+            Door(
+                id="door-1",
+                name="Front Door",
+                door_position_status="close",
+                door_lock_relay_status="lock",
+            )
+        ]
 
         status = await door_mgr_api.get_door_status("door-1")
 
-        assert status["lock_relay_status"] == "locked"
-        assert status["door_position_status"] == "closed"
+        assert status["lock_relay_status"] == "lock"
+        assert status["door_position_status"] == "close"
+        cm_api._api_client.get_doors.assert_awaited_once_with()
 
     @pytest.mark.asyncio
     async def test_get_door_status_proxy(self, door_mgr_proxy, cm_proxy):
@@ -351,13 +380,14 @@ class TestUnlockDoor:
     @pytest.mark.asyncio
     async def test_unlock_door_preview(self, door_mgr_api, cm_api):
         """unlock_door returns preview data."""
-        mock_door = MagicMock()
-        mock_door.id = "door-1"
-        mock_door.name = "Front Door"
-        mock_door.door_position_status = "closed"
-        mock_door.lock_relay_status = "locked"
-
-        cm_api._api_client.get_door = AsyncMock(return_value=mock_door)
+        cm_api._api_client.get_doors.return_value = [
+            Door(
+                id="door-1",
+                name="Front Door",
+                door_position_status="close",
+                door_lock_relay_status="lock",
+            )
+        ]
 
         preview = await door_mgr_api.unlock_door("door-1", duration=5)
 

@@ -27,6 +27,7 @@ from unifi_core.protect.models.alarm_rules import (
     alarm_rule_from_controller,
     alarm_rule_from_legacy,
     alarm_rule_to_legacy_body,
+    alarm_rule_to_legacy_create_body,
     alarm_rule_to_v2_body,
 )
 
@@ -88,7 +89,7 @@ class AlarmRulesFacade:
             raw = await self._service.create_rule(body)
             return alarm_rule_from_controller(raw).model_dump(exclude_none=True), True
 
-        body = alarm_rule_to_legacy_body(fields)
+        body = alarm_rule_to_legacy_create_body(fields)
         raw = await self._legacy.create_rule(body)
         return alarm_rule_from_legacy(raw).model_dump(exclude_none=True), False
 

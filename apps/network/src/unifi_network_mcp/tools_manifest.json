@@ -2991,7 +2991,7 @@
               "type": "boolean"
             },
             "wlan_data": {
-              "description": "WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (bool), usergroup_id, networkconf_id (network to associate)",
+              "description": "WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (bool), usergroup_id, networkconf_id (network to associate). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88)",
               "type": "object"
             }
           },
@@ -18056,7 +18056,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update specific fields of an existing WLAN (SSID). Pass only the fields you want to change \u2014 current values are automatically preserved. Basic: name (str), security ('open'/'wpapsk'/'wpa2-psk'), x_passphrase (str), enabled (bool), hide_ssid (bool), guest_policy (bool), usergroup_id (str), networkconf_id (str). Security: wpa3_support (bool), wpa3_transition (bool), pmf_mode ('disabled'/'optional'/'required'), fast_roaming_enabled (bool), group_rekey (int seconds, 0=disabled). Access control: mac_filter_enabled (bool), mac_filter_policy ('allow'/'deny'), mac_filter_list (list of MAC strings), l2_isolation (bool). Radio: wlan_band ('both'/'2g'/'5g'), multicast_enhance_enabled (bool), dtim_mode ('default'/'custom'), dtim_na (int 1-255), dtim_ng (int 1-255), minrate_ng_enabled (bool), minrate_ng_data_rate_kbps (int), minrate_na_enabled (bool), minrate_na_data_rate_kbps (int). Other: schedule_enabled (bool), uapsd_enabled (bool), proxy_arp (bool), iapp_enabled (bool). Requires confirmation.",
+      "description": "Update specific fields of an existing WLAN (SSID). Pass only the fields you want to change \u2014 current values are automatically preserved. Basic: name (str), security ('open'/'wpapsk'/'wpa2-psk'), x_passphrase (str), enabled (bool), hide_ssid (bool), guest_policy (bool), usergroup_id (str), networkconf_id (str). Security: wpa3_support (bool), wpa3_transition (bool), pmf_mode ('disabled'/'optional'/'required'), fast_roaming_enabled (bool), group_rekey (int seconds, 0=disabled). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88). Access control: mac_filter_enabled (bool), mac_filter_policy ('allow'/'deny'), mac_filter_list (list of MAC strings), l2_isolation (bool). Radio: wlan_band ('both'/'2g'/'5g'), multicast_enhance_enabled (bool), dtim_mode ('default'/'custom'), dtim_na (int 1-255), dtim_ng (int 1-255), minrate_ng_enabled (bool), minrate_ng_data_rate_kbps (int), minrate_na_enabled (bool), minrate_na_data_rate_kbps (int). Other: schedule_enabled (bool), uapsd_enabled (bool), proxy_arp (bool), iapp_enabled (bool). Requires confirmation.",
       "name": "unifi_update_wlan",
       "permission_action": "update",
       "permission_category": "wlans",

@@ -161,7 +161,7 @@ class TestContentFilterManager:
             "_id": "cf1",
             "name": "Kids Filter",
             "enabled": True,
-            "blocked_categories": ["adult", "gambling"],
+            "categories": ["ADULT", "GAMBLING"],
             "safe_search": ["GOOGLE", "YOUTUBE"],
             "client_macs": ["aa:bb:cc:dd:ee:ff"],
         }
@@ -180,7 +180,38 @@ class TestContentFilterManager:
         assert put_request.method == "put"
         assert put_request.data["name"] == "Family Filter"
         assert put_request.data["safe_search"] == ["GOOGLE", "YOUTUBE", "BING"]
-        assert put_request.data["blocked_categories"] == ["adult", "gambling"]
+        assert put_request.data["categories"] == ["ADULT", "GAMBLING"]
+
+    @pytest.mark.asyncio
+    async def test_update_content_filter_puts_controller_dialect_verbatim(
+        self, content_filter_manager, mock_connection
+    ):
+        """The manager is dialect-agnostic: callers hand it a controller payload.
+
+        Field-name translation lives in
+        ``unifi_core.network.models.content_filter.to_controller_update``.
+        """
+        existing_filter = {
+            "_id": "cf1",
+            "name": "Default",
+            "categories": ["ADVERTISEMENT", "MALWARE", "PHISHING"],
+            "safe_search": ["GOOGLE"],
+        }
+        mock_connection.request.side_effect = [
+            [existing_filter],
+            {},
+        ]
+
+        result = await content_filter_manager.update_content_filter("cf1", {"categories": ["MALWARE", "PHISHING"]})
+
+        put_request = mock_connection.request.call_args_list[1][0][0]
+        assert put_request.data == {
+            "_id": "cf1",
+            "name": "Default",
+            "categories": ["MALWARE", "PHISHING"],
+            "safe_search": ["GOOGLE"],
+        }
+        assert result == put_request.data
 
     @pytest.mark.asyncio
     async def test_update_content_filter_not_found(self, content_filter_manager, mock_connection):

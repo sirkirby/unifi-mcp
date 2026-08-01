@@ -184,3 +184,65 @@ class TestToControllerUpdate:
         result = to_controller_update({"networkconf_id": "alias", "network_id": "explicit"})
         assert result.get("networkconf_id") == "explicit"
         assert "network_id" not in result
+
+
+class TestRoamingFields:
+    """802.11k RRM + the per-band roaming assistant.
+
+    These reach the controller under their own names (no aliasing), so the
+    coverage that matters is that they survive ``to_controller_update``'s
+    MUTABLE_FIELDS filter — before this they were dropped, which left
+    ``validated_data`` empty and surfaced to callers as the misleading
+    "Update data is effectively empty or invalid."
+    """
+
+    def test_roaming_fields_are_mutable(self) -> None:
+        for field in (
+            "rrm_enabled",
+            "roaming_assistant_na_enabled",
+            "roaming_assistant_na_rssi",
+            "roaming_assistant_6e_enabled",
+            "roaming_assistant_6e_rssi",
+        ):
+            assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
+
+    def test_from_controller_reads_roaming_fields(self) -> None:
+        wlan = from_controller(
+            {
+                "_id": "wlan-roam",
+                "rrm_enabled": False,
+                "roaming_assistant_na_enabled": True,
+                "roaming_assistant_na_rssi": -77,
+                "roaming_assistant_6e_enabled": True,
+                "roaming_assistant_6e_rssi": -88,
+            }
+        )
+        assert wlan.rrm_enabled is False
+        assert wlan.roaming_assistant_na_enabled is True
+        assert wlan.roaming_assistant_na_rssi == -77
+        assert wlan.roaming_assistant_6e_enabled is True
+        assert wlan.roaming_assistant_6e_rssi == -88
+
+    def test_rrm_enabled_survives_update_filter(self) -> None:
+        assert to_controller_update({"rrm_enabled": True}) == {"rrm_enabled": True}
+
+    def test_rrm_enabled_false_is_preserved(self) -> None:
+        """False is a meaningful value here — only None is dropped."""
+        assert to_controller_update({"rrm_enabled": False}) == {"rrm_enabled": False}
+
+    def test_roaming_assistant_rssi_survives_update_filter(self) -> None:
+        result = to_controller_update({"roaming_assistant_6e_rssi": -70})
+        assert result == {"roaming_assistant_6e_rssi": -70}
+
+    def test_roaming_assistant_threshold_and_toggle_together(self) -> None:
+        result = to_controller_update({"roaming_assistant_na_enabled": True, "roaming_assistant_na_rssi": -75})
+        assert result == {
+            "roaming_assistant_na_enabled": True,
+            "roaming_assistant_na_rssi": -75,
+        }
+
+    def test_roaming_fields_round_trip_through_create(self) -> None:
+        model = Wlan(name="SSID", security="open", rrm_enabled=True, roaming_assistant_6e_rssi=-70)
+        payload = to_controller_create(model)
+        assert payload["rrm_enabled"] is True
+        assert payload["roaming_assistant_6e_rssi"] == -70

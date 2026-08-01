@@ -1,0 +1,39 @@
+name: "Test: Plugin setup scripts"
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "plugins/*/scripts/**"
+      - "scripts/smoke-plugin-setup.*"
+      - ".github/workflows/test-plugin-setup.yml"
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, develop]
+    paths:
+      - "plugins/*/scripts/**"
+      - "scripts/smoke-plugin-setup.*"
+      - ".github/workflows/test-plugin-setup.yml"
+
+jobs:
+  windows-powershell-51:
+    name: Windows PowerShell 5.1 compatibility
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run with Windows PowerShell 5.1
+        shell: powershell
+        run: .\scripts\smoke-plugin-setup.ps1 -ExpectedVersionPrefix 5.1
+
+  powershell-7:
+    name: PowerShell 7 compatibility
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run with PowerShell 7
+        shell: pwsh
+        run: .\scripts\smoke-plugin-setup.ps1 -ExpectedVersionPrefix 7.

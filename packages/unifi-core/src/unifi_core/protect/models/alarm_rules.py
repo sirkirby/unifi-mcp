@@ -245,6 +245,37 @@ def alarm_rule_to_legacy_body(fields: dict[str, Any]) -> dict[str, Any]:
     return body
 
 
+def alarm_rule_to_legacy_create_body(fields: dict[str, Any]) -> dict[str, Any]:
+    """Serialize canonical write fields to a COMPLETE legacy automations POST body.
+
+    ``POST /proxy/protect/api/automations`` rejects an incomplete body with
+    400 "Failed to parse 'request-body'". :func:`alarm_rule_to_legacy_body`
+    emits only the write subset the canonical shape can express
+    (``name``/``enable``/``sources``/``conditions``/``actions``); create must
+    additionally supply the structural fields the controller requires but the
+    canonical shape has no field for — ``isCreatedBySystem``,
+    ``historyConditions``, ``schedules``, and ``cooldown``. Their defaults match
+    the reference implementation (Hovborg/unifi-protect-bridge
+    ``automation_payloads.py``) and a live Protect 7.0 rule.
+
+    Update does NOT use this: it read-modify-writes the full existing rule, so
+    the structural fields are already present and ``alarm_rule_to_legacy_body``
+    stays sparse for that merge.
+    """
+    body: dict[str, Any] = {
+        "enable": True,  # a newly-created rule defaults to enabled
+        "isCreatedBySystem": False,
+        "sources": [],
+        "conditions": [],
+        "historyConditions": [],
+        "schedules": [],
+        "actions": [],
+        "cooldown": {"enable": False, "timeout": 600000},
+    }
+    body.update(alarm_rule_to_legacy_body(fields))
+    return body
+
+
 ALARM_RULE_MUTABLE_FIELDS: frozenset[str] = frozenset()
 ALARM_RULE_READ_ONLY_FIELDS: frozenset[str] = frozenset(AlarmRule.model_fields.keys())
 # Alias required by the model-symmetry test harness — read-only model pattern.

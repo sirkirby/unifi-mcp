@@ -52,12 +52,27 @@ _COMPACT_DEVICE_KEYS = frozenset(
     }
 )
 
+_API_DEVICE_LIST_KEYS = ("id", "name", "type", "connected", "firmware_version")
+
 
 class DeviceManager:
     """Reads and mutates device data from the Access controller."""
 
     def __init__(self, connection_manager: AccessConnectionManager) -> None:
         self._cm = connection_manager
+
+    @staticmethod
+    def _api_device_to_dict(device: Any) -> Dict[str, Any]:
+        """Translate a py-unifi-access Device into the manager response dialect."""
+        return {
+            "id": device.id,
+            "name": getattr(device, "name", None),
+            "type": getattr(device, "type", None),
+            "connected": getattr(device, "is_online", None),
+            "firmware_version": getattr(device, "firmware_version", None),
+            "mac": getattr(device, "mac", None),
+            "ip": getattr(device, "ip", None),
+        }
 
     # ------------------------------------------------------------------
     # Read-only methods
@@ -120,16 +135,11 @@ class DeviceManager:
             if self._cm.has_api_client:
                 # API client already returns minimal 5-field dicts; compact is irrelevant.
                 devices = await self._cm.api_client.get_devices()
-                return [
-                    {
-                        "id": getattr(d, "id", None),
-                        "name": getattr(d, "name", None),
-                        "type": getattr(d, "type", None),
-                        "connected": getattr(d, "connected", None),
-                        "firmware_version": getattr(d, "firmware_version", None),
-                    }
-                    for d in devices
-                ]
+                result = []
+                for device in devices:
+                    translated = self._api_device_to_dict(device)
+                    result.append({key: translated[key] for key in _API_DEVICE_LIST_KEYS})
+                return result
             elif self._cm.has_proxy:
                 data = await self._cm.proxy_request("GET", "devices/topology4")
                 topology = self._cm.extract_data(data)
@@ -156,16 +166,11 @@ class DeviceManager:
             raise ValueError("device_id is required")
         try:
             if self._cm.has_api_client:
-                device = await self._cm.api_client.get_device(device_id)
-                return {
-                    "id": getattr(device, "id", None),
-                    "name": getattr(device, "name", None),
-                    "type": getattr(device, "type", None),
-                    "connected": getattr(device, "connected", None),
-                    "firmware_version": getattr(device, "firmware_version", None),
-                    "mac": getattr(device, "mac", None),
-                    "ip": getattr(device, "ip", None),
-                }
+                devices = await self._cm.api_client.get_devices()
+                device = next((device for device in devices if device.id == device_id), None)
+                if device is None:
+                    raise UniFiNotFoundError("device", device_id)
+                return self._api_device_to_dict(device)
             elif self._cm.has_proxy:
                 data = await self._cm.proxy_request("GET", "devices/topology4")
                 topology = self._cm.extract_data(data)

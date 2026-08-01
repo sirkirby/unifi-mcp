@@ -566,6 +566,45 @@ class TestCreateWlanNetworkconfId:
         assert payload.get("networkconf_id") == "net-abc"
 
 
+class TestCreateWlanRoamingFields:
+    """Adding the roaming fields to Wlan.MUTABLE_FIELDS also makes create_wlan accept
+    them, since it filters wlan_data through WLAN_MUTABLE_FIELDS. Pin that boundary:
+    the model-conversion tests would still pass if create_wlan dropped them here."""
+
+    @pytest.mark.asyncio
+    async def test_roaming_fields_reach_the_manager(self):
+        created = {"_id": "w99", "name": "HomeSSID"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.create_wlan = AsyncMock(return_value=created)
+            mock_mgr._connection.site = "default"
+
+            from unifi_network_mcp.tools.network import create_wlan
+
+            result = await create_wlan(
+                {
+                    "name": "HomeSSID",
+                    "security": "wpapsk",
+                    "x_passphrase": "password1",
+                    # rrm_enabled False and the negative RSSIs are deliberate: a
+                    # truthiness filter anywhere on this path would silently eat them.
+                    "rrm_enabled": False,
+                    "roaming_assistant_na_enabled": True,
+                    "roaming_assistant_na_rssi": -77,
+                    "roaming_assistant_6e_enabled": True,
+                    "roaming_assistant_6e_rssi": -88,
+                },
+                confirm=True,
+            )
+
+        assert result["success"] is True
+        payload = mock_mgr.create_wlan.call_args[0][0]
+        assert payload.get("rrm_enabled") is False, "rrm_enabled=False dropped before the manager"
+        assert payload.get("roaming_assistant_na_enabled") is True
+        assert payload.get("roaming_assistant_na_rssi") == -77
+        assert payload.get("roaming_assistant_6e_enabled") is True
+        assert payload.get("roaming_assistant_6e_rssi") == -88
+
+
 class TestUpdateWlanNetworkconfId:
     """update_wlan must accept networkconf_id (controller field name) and not return
     'Update data is effectively empty or invalid' when it is the only field passed."""
