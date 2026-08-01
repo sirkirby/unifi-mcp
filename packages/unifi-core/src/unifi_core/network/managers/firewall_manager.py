@@ -11,7 +11,7 @@ from aiounifi.models.port_forward import PortForward
 from aiounifi.models.traffic_route import TrafficRoute
 
 from unifi_core.auth import UniFiAuth
-from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 
@@ -793,7 +793,7 @@ class FirewallManager:
             for key, value in updates.items():
                 updated_data[key] = value
 
-            logger.info("Updating port forward %s with full data: %s", rule_id, updated_data)
+            logger.debug("Updating port forward %s with full data: %s", rule_id, updated_data)
 
             api_request = ApiRequest(
                 method="put",
@@ -806,6 +806,22 @@ class FirewallManager:
             # Invalidate cache
             cache_key = f"{CACHE_PREFIX_PORT_FORWARDS}_{self._connection.site}"
             self._connection._invalidate_cache(cache_key)
+
+            refetched_obj = await self.get_port_forward_by_id(rule_id)
+            refetched = refetched_obj.raw if hasattr(refetched_obj, "raw") else None
+            if not isinstance(refetched, dict):
+                raise UniFiOperationError(f"Could not verify port forward '{rule_id}' after update")
+
+            unpersisted = [
+                key
+                for key, requested in updates.items()
+                if rule_to_update_obj.raw.get(key) != requested
+                and refetched.get(key) == rule_to_update_obj.raw.get(key)
+            ]
+            if unpersisted:
+                raise UniFiOperationError(
+                    f"Controller accepted the request but did not persist field(s): {', '.join(sorted(unpersisted))}"
+                )
 
             logger.info("Successfully submitted update for port forward %s.", rule_id)
             return True
@@ -846,13 +862,13 @@ class FirewallManager:
 
         Args:
             rule_data: Dictionary containing the rule configuration. Expected keys:
-                       name (str), dst_port (str), fwd_port (str), fwd_ip (str),
-                       protocol (str, optional), enabled (bool, optional), etc.
+                       name (str), dst_port (str), fwd_port (str), fwd (str),
+                       proto (str, optional), enabled (bool, optional), etc.
 
         Returns:
             The created rule data dict, or None if creation failed.
         """
-        required_keys = {"name", "dst_port", "fwd_port", "fwd_ip"}
+        required_keys = {"name", "dst_port", "fwd_port", "fwd"}
         if not required_keys.issubset(rule_data.keys()):
             missing = required_keys - rule_data.keys()
             logger.error("Missing required keys for creating port forward: %s", missing)
@@ -868,7 +884,7 @@ class FirewallManager:
             response = await self._connection.request(api_request)
 
             # V1 POST may return either {"data": [{...}]} (older firmware) or a bare
-            # list [{...}] (UDM-SE 8.4.x and similar). Handle both — see #207.
+            # list [{...}] (UDM-SE 8.4.x and similar).
             data = (
                 response
                 if isinstance(response, list)

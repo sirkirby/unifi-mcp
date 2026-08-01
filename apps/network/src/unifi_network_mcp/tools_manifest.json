@@ -16963,7 +16963,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update specific fields of an existing port forwarding rule using schema validation. Requires confirmation.",
+      "description": "Update specific fields of an existing port forwarding rule using schema validation. Pass only the fields you want to change \u2014 current values are automatically preserved. Requires confirmation.",
       "name": "unifi_update_port_forward",
       "permission_action": "update",
       "permission_category": "port_forwards",

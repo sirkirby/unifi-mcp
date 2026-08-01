@@ -679,11 +679,11 @@ class TestGetFirewallZones:
 
 
 # ---------------------------------------------------------------------------
-# create_port_forward — V1 POST response shape handling (issue #207)
+# create_port_forward — V1 POST response shape handling
 #
 # UDM-SE 8.4.x returns a bare list `[{...}]` from POST /rest/portforward
 # while older firmware returns the wrapped shape `{"data": [{...}]}`. The
-# manager must extract the created rule from both shapes — see #207.
+# manager must extract the created rule from both shapes.
 # ---------------------------------------------------------------------------
 
 
@@ -692,12 +692,12 @@ SAMPLE_CREATED_PORT_FORWARD = {
     "name": "test",
     "dst_port": "80",
     "fwd_port": "80",
-    "fwd_ip": "10.0.0.1",
+    "fwd": "10.0.0.1",
 }
 
 
 class TestCreatePortForwardResponseShapes:
-    """Issue #207 — create_port_forward must accept both wrapped and bare-list responses."""
+    """create_port_forward must accept both wrapped and bare-list responses."""
 
     @pytest.mark.asyncio
     async def test_create_port_forward_handles_wrapped_response_shape(self, firewall_manager, mock_connection):
@@ -705,7 +705,7 @@ class TestCreatePortForwardResponseShapes:
         mock_connection.request = AsyncMock(return_value={"data": [copy.deepcopy(SAMPLE_CREATED_PORT_FORWARD)]})
 
         result = await firewall_manager.create_port_forward(
-            {"name": "test", "dst_port": "80", "fwd_port": "80", "fwd_ip": "10.0.0.1"}
+            {"name": "test", "dst_port": "80", "fwd_port": "80", "fwd": "10.0.0.1"}
         )
 
         assert result is not None
@@ -714,16 +714,101 @@ class TestCreatePortForwardResponseShapes:
 
     @pytest.mark.asyncio
     async def test_create_port_forward_handles_bare_list_response_shape(self, firewall_manager, mock_connection):
-        """UDM-SE 8.4.x returns [{...}] — manager must extract the rule (regression test for #207)."""
+        """UDM-SE 8.4.x returns [{...}] and the manager extracts the rule."""
         mock_connection.request = AsyncMock(return_value=[copy.deepcopy(SAMPLE_CREATED_PORT_FORWARD)])
 
         result = await firewall_manager.create_port_forward(
-            {"name": "test", "dst_port": "80", "fwd_port": "80", "fwd_ip": "10.0.0.1"}
+            {"name": "test", "dst_port": "80", "fwd_port": "80", "fwd": "10.0.0.1"}
         )
 
         assert result is not None
         assert result["_id"] == "abc123"
         assert result["name"] == "test"
+
+    @pytest.mark.asyncio
+    async def test_requires_controller_forward_field(self, firewall_manager, mock_connection):
+        result = await firewall_manager.create_port_forward(
+            {"name": "test", "dst_port": "80", "fwd_port": "80", "fwd_ip": "10.0.0.1"}
+        )
+
+        assert result is None
+        mock_connection.request.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# update_port_forward — full-object merge and persistence verification
+# ---------------------------------------------------------------------------
+
+
+class TestUpdatePortForward:
+    @pytest.mark.asyncio
+    async def test_preserves_unmentioned_fields_and_verifies_persistence(self, firewall_manager, mock_connection):
+        before_raw = {
+            "_id": "pf_001",
+            "name": "Web Server",
+            "enabled": True,
+            "fwd": "192.168.1.10",
+            "fwd_port": "443",
+        }
+        after_raw = {**before_raw, "fwd": "192.168.1.20"}
+        before = MagicMock(raw=copy.deepcopy(before_raw))
+        after = MagicMock(raw=after_raw)
+        events = []
+
+        async def get_rule(_rule_id):
+            events.append("lookup")
+            return before if len(events) == 1 else after
+
+        mock_connection._invalidate_cache.side_effect = lambda _key: events.append("invalidate")
+
+        with patch.object(
+            firewall_manager,
+            "get_port_forward_by_id",
+            new=AsyncMock(side_effect=get_rule),
+        ):
+            result = await firewall_manager.update_port_forward("pf_001", {"fwd": "192.168.1.20"})
+
+        assert result is True
+        request = mock_connection.request.call_args[0][0]
+        assert request.path == "/rest/portforward/pf_001"
+        assert request.data["fwd"] == "192.168.1.20"
+        assert request.data["fwd_port"] == "443"
+        assert before.raw == before_raw
+        assert events == ["lookup", "invalidate", "lookup"]
+        mock_connection._invalidate_cache.assert_called_once_with("port_forwards_default")
+
+    @pytest.mark.asyncio
+    async def test_raises_when_controller_does_not_persist_update(self, firewall_manager):
+        from unifi_core.exceptions import UniFiOperationError
+
+        before_raw = {"_id": "pf_001", "name": "Web Server", "fwd": "192.168.1.10"}
+        before = MagicMock(raw=copy.deepcopy(before_raw))
+        unchanged = MagicMock(raw=copy.deepcopy(before_raw))
+
+        with patch.object(
+            firewall_manager,
+            "get_port_forward_by_id",
+            new_callable=AsyncMock,
+            side_effect=[before, unchanged],
+        ):
+            with pytest.raises(UniFiOperationError, match="did not persist field.*fwd"):
+                await firewall_manager.update_port_forward("pf_001", {"fwd": "192.168.1.20"})
+
+    @pytest.mark.asyncio
+    async def test_raises_when_refetched_rule_is_malformed(self, firewall_manager):
+        from unifi_core.exceptions import UniFiOperationError
+
+        before = MagicMock(raw={"_id": "pf_001", "fwd": "192.168.1.10"})
+        malformed = MagicMock(raw=None)
+
+        with patch.object(
+            firewall_manager,
+            "get_port_forward_by_id",
+            new_callable=AsyncMock,
+            side_effect=[before, malformed],
+        ):
+            with pytest.raises(UniFiOperationError, match="Could not verify port forward"):
+                await firewall_manager.update_port_forward("pf_001", {"fwd": "192.168.1.20"})
 
 
 # ---------------------------------------------------------------------------

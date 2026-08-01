@@ -21,6 +21,8 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
+_CONTROLLER_FIELD_NAMES = {"fwd_protocol": "proto", "fwd_ip": "fwd"}
+
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -137,17 +139,24 @@ def to_controller_create(model: PortForward) -> Dict[str, Any]:
     for field_name in MUTABLE_FIELDS:
         value = getattr(model, field_name, None)
         if value is not None:
-            payload[field_name] = value
-    # Map fwd_protocol → proto for controller compatibility
-    if "fwd_protocol" in payload:
-        payload["proto"] = payload.pop("fwd_protocol")
+            if field_name == "fwd_protocol":
+                value = value.replace("_", "/")
+            payload[_CONTROLLER_FIELD_NAMES.get(field_name, field_name)] = value
     return payload
 
 
 def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
-    """Filter a partial dict to only mutable, recognised keys.
+    """Translate a partial canonical dict to controller update fields.
 
     Read-only fields and unrecognised keys are dropped.
-    ``None`` values are dropped; boolean ``False`` is preserved.
+    ``None`` values are dropped except for ``src``, where it removes a source
+    restriction. Boolean ``False`` is preserved.
     """
-    return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+    payload: Dict[str, Any] = {}
+    for key, value in fields.items():
+        if key not in MUTABLE_FIELDS or (value is None and key != "src"):
+            continue
+        if key == "fwd_protocol":
+            value = value.replace("_", "/")
+        payload[_CONTROLLER_FIELD_NAMES.get(key, key)] = value
+    return payload

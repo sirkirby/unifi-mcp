@@ -17,7 +17,13 @@ from unifi_core.network.models._actions import (
     PortForwardUpdateInput,
 )
 from unifi_core.network.models.port_forwards import (
+    PortForward,
+)
+from unifi_core.network.models.port_forwards import (
     from_controller as pf_from_controller,
+)
+from unifi_core.network.models.port_forwards import (
+    to_controller_create as pf_to_create,
 )
 from unifi_core.network.models.port_forwards import (
     to_controller_update as pf_to_update,
@@ -197,6 +203,7 @@ async def toggle_port_forward(
 
         rule_name = rule.get("name", port_forward_id)
         current_enabled = rule.get("enabled", False)
+        normalized = pf_from_controller(rule)
 
         # Return preview when confirm=false
         if not confirm:
@@ -207,7 +214,7 @@ async def toggle_port_forward(
                 current_enabled=current_enabled,
                 additional_info={
                     "dst_port": rule.get("dst_port"),
-                    "fwd_ip": rule.get("fwd_ip"),
+                    "fwd_ip": normalized.fwd_ip,
                     "fwd_port": rule.get("fwd_port"),
                 },
             )
@@ -305,21 +312,19 @@ async def create_port_forward(
         return {"success": False, "error": err}
 
     try:
-        # Prepare data for the manager
-        rule_data = {
-            "name": validated.name,
-            "dst_port": validated.dst_port,
-            "fwd_port": validated.fwd_port,
-            "fwd_ip": validated.fwd_ip,
-            "proto": validated.protocol.replace("_", "/"),  # Manager expects 'tcp/udp'
-            "protocol_match_excepted": False,
-            "enabled": validated.enabled,
-            "log": validated.log,
-        }
-
-        # Handle optional source IP
-        if validated.src_ip:
-            rule_data["src"] = validated.src_ip
+        rule_data = pf_to_create(
+            PortForward(
+                name=validated.name,
+                dst_port=validated.dst_port,
+                fwd_port=validated.fwd_port,
+                fwd_ip=validated.fwd_ip,
+                fwd_protocol=validated.protocol,
+                enabled=validated.enabled,
+                src=validated.src_ip or None,
+                log=validated.log,
+            )
+        )
+        rule_data["protocol_match_excepted"] = False
 
         logger.info(
             "Attempting to create port forward: %s (%s %s -> %s:%s)",
@@ -361,13 +366,16 @@ async def create_port_forward(
             e,
             exc_info=True,
         )
-        return {"success": False, "error": str(e)}
+        return {
+            "success": False,
+            "error": f"Failed to create port forward '{port_forward_data.get('name', 'unknown')}': {e}",
+        }
 
 
 # --- NEW UPDATE TOOL ---
 @server.tool(
     name="unifi_update_port_forward",
-    description="Update specific fields of an existing port forwarding rule using schema validation. Requires confirmation.",
+    description="Update specific fields of an existing port forwarding rule using schema validation. Pass only the fields you want to change — current values are automatically preserved. Requires confirmation.",
     permission_category="port_forwards",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
@@ -460,26 +468,33 @@ async def update_port_forward(
             "error": "Update data is effectively empty or invalid.",
         }
 
-    # Prepare the payload for the manager update function
-    update_payload = {}
-    updated_fields_list = []
-    for key, value in validated_data.items():
-        updated_fields_list.append(key)
-        if key == "protocol":
-            update_payload["proto"] = value.replace("_", "/")
-        elif key == "src_ip":
-            update_payload["src"] = value if value else None
-        elif key == "log":
-            update_payload["log"] = value
-        else:
-            update_payload[key] = value
+    canonical_updates = dict(validated_data)
+    if "protocol" in canonical_updates:
+        canonical_updates["fwd_protocol"] = canonical_updates.pop("protocol")
+    if "src_ip" in canonical_updates:
+        canonical_updates["src"] = canonical_updates.pop("src_ip") or None
+    update_payload = pf_to_update(canonical_updates)
+    updated_fields_list = list(validated_data)
+
+    try:
+        current_obj = await firewall_manager.get_port_forward_by_id(port_forward_id)
+        current_raw = current_obj.raw if hasattr(current_obj, "raw") else current_obj
+        current_state = pf_from_controller(current_raw).model_dump()
+        current_protocol = current_state.pop("fwd_protocol")
+        current_state["protocol"] = current_protocol.replace("/", "_") if current_protocol else None
+        current_state["src_ip"] = current_state.pop("src")
+    except UniFiNotFoundError as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        logger.error("Error getting port forward %s for update: %s", port_forward_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to get port forward {port_forward_id} for update: {e}"}
 
     if not confirm:
         return update_preview(
             resource_type="port_forward",
             resource_id=port_forward_id,
-            resource_name=port_forward_id,
-            current_state={},
+            resource_name=current_state.get("name") or port_forward_id,
+            current_state=current_state,
             updates=validated_data,
         )
 
@@ -540,8 +555,7 @@ async def create_simple_port_forward(
     except ValidationError as exc:
         return {"success": False, "error": exc.errors()[0]["msg"]}
 
-    # Build API payload matching existing V1 schema keys
-    payload: Dict[str, Any] = {
+    preview_payload: Dict[str, Any] = {
         "name": r.name,
         "dst_port": str(r.ext_port),
         "fwd_port": str(r.int_port if r.int_port is not None else r.ext_port),
@@ -557,9 +571,20 @@ async def create_simple_port_forward(
     if not confirm:
         return {
             "success": True,
-            "preview": payload,
+            "preview": preview_payload,
             "message": "Set confirm=true to apply.",
         }
+
+    payload = pf_to_create(
+        PortForward(
+            name=preview_payload["name"],
+            dst_port=preview_payload["dst_port"],
+            fwd_port=preview_payload["fwd_port"],
+            fwd_ip=preview_payload["fwd_ip"],
+            fwd_protocol=preview_payload["protocol"],
+            enabled=preview_payload["enabled"],
+        )
+    )
 
     try:
         created = await firewall_manager.create_port_forward(payload)

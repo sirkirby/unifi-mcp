@@ -98,6 +98,8 @@ class TestToControllerCreate:
         payload = to_controller_create(model)
         assert payload["proto"] == "tcp"
         assert "fwd_protocol" not in payload
+        assert payload["fwd"] == "192.168.1.10"
+        assert "fwd_ip" not in payload
 
     def test_read_only_fields_excluded(self) -> None:
         model = PortForward(id="should-not-appear", site_id="site", name="Test")
@@ -120,6 +122,18 @@ class TestToControllerUpdate:
     def test_toggle_payload(self) -> None:
         result = to_controller_update({"enabled": True})
         assert result == {"enabled": True}
+
+    def test_maps_forward_ip_to_controller_field(self) -> None:
+        result = to_controller_update({"fwd_ip": "192.168.1.20"})
+        assert result == {"fwd": "192.168.1.20"}
+
+    def test_maps_protocol_to_controller_field(self) -> None:
+        result = to_controller_update({"fwd_protocol": "tcp_udp"})
+        assert result == {"proto": "tcp/udp"}
+
+    def test_preserves_none_for_source_removal(self) -> None:
+        result = to_controller_update({"src": None})
+        assert result == {"src": None}
 
     def test_drops_unrecognised_keys(self) -> None:
         result = to_controller_update({"unknown": "value", "name": "Valid"})
