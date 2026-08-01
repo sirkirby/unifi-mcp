@@ -12,7 +12,7 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.dns import (
     DnsRecord,
@@ -209,8 +209,9 @@ async def delete_dns_record(
     """Delete a DNS record."""
     logger.info("unifi_delete_dns_record tool called (record_id=%s, confirm=%s)", record_id, confirm)
     if not confirm:
-        return create_preview(
+        return delete_preview(
             resource_type="dns_record",
+            resource_id=record_id,
             resource_data={"record_id": record_id},
             resource_name=record_id,
             warnings=["This will permanently delete the DNS record."],

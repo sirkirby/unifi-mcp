@@ -185,3 +185,43 @@ def create_preview(
         response["warnings"] = warnings
 
     return response
+
+
+def delete_preview(
+    resource_type: str,
+    resource_id: str,
+    resource_name: Optional[str] = None,
+    resource_data: Optional[Dict[str, Any]] = None,
+    warnings: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Convenience helper for delete operations.
+
+    Args:
+        resource_type: Type of resource being deleted
+        resource_id: Unique identifier of the resource
+        resource_name: Human-readable name if available
+        resource_data: Details of the resource that will be deleted
+        warnings: Any warnings about the delete operation
+
+    Returns:
+        Preview response for delete operation
+    """
+    response: Dict[str, Any] = {
+        "success": True,
+        "requires_confirmation": True,
+        "action": "delete",
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "preview": {
+            "will_delete": resource_data if resource_data is not None else {"resource_id": resource_id},
+        },
+        "message": f"Will delete {resource_type} '{resource_name or resource_id}'. Set confirm=true to execute.",
+    }
+
+    if resource_name:
+        response["resource_name"] = resource_name
+
+    if warnings:
+        response["warnings"] = warnings
+
+    return response

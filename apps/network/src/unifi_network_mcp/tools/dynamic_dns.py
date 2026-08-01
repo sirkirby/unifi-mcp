@@ -13,7 +13,7 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.dynamic_dns import (
     MUTABLE_FIELDS,
@@ -241,8 +241,9 @@ async def delete_dynamic_dns(
     """Delete a Dynamic DNS entry."""
     logger.info("unifi_delete_dynamic_dns tool called (entry_id=%s, confirm=%s)", entry_id, confirm)
     if not confirm:
-        return create_preview(
+        return delete_preview(
             resource_type="dynamic_dns",
+            resource_id=entry_id,
             resource_data={"entry_id": entry_id},
             resource_name=entry_id,
             warnings=["This will permanently delete the Dynamic DNS entry."],

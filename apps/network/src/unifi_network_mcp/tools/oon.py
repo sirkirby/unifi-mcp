@@ -13,7 +13,7 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.oon import (
     from_controller as oon_from_controller,
@@ -333,8 +333,9 @@ async def delete_oon_policy(
         Preview or success/failure status.
     """
     if not confirm:
-        return create_preview(
+        return delete_preview(
             resource_type="oon_policy",
+            resource_id=policy_id,
             resource_data={"policy_id": policy_id},
             resource_name=policy_id,
             warnings=["Deleting an OON policy removes all auto-generated firewall rules associated with it."],

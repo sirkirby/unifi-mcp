@@ -12,7 +12,7 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.client_group import (
     from_controller as cg_from_controller,
@@ -229,8 +229,9 @@ async def delete_client_group(
         Preview or success/failure status.
     """
     if not confirm:
-        return create_preview(
+        return delete_preview(
             resource_type="client_group",
+            resource_id=group_id,
             resource_data={"group_id": group_id},
             resource_name=group_id,
             warnings=["Deleting a group may affect OON policies and firewall rules that reference it."],

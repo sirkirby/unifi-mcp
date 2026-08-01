@@ -12,7 +12,7 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from unifi_core.confirmation import create_preview, toggle_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, toggle_preview, update_preview
 from unifi_core.network.models.ap_group import (
     from_controller as ap_group_from_controller,
 )
@@ -1336,8 +1336,9 @@ async def delete_wlan(
             resource_name = wlan_id
 
         return redact_sensitive_fields(
-            create_preview(
+            delete_preview(
                 resource_type="wlan",
+                resource_id=wlan_id,
                 resource_data=resource_data,
                 resource_name=resource_name,
                 warnings=["All devices using this SSID will be disconnected"],
@@ -1632,8 +1633,9 @@ async def delete_ap_group(
             resource_data = {"group_id": group_id}
             resource_name = group_id
 
-        return create_preview(
+        return delete_preview(
             resource_type="ap_group",
+            resource_id=group_id,
             resource_data=resource_data,
             resource_name=resource_name,
             warnings=["APs in this group may lose their SSID assignments"],

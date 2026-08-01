@@ -2,6 +2,7 @@
 
 from unifi_core.confirmation import (
     create_preview,
+    delete_preview,
     preview_response,
     toggle_preview,
     update_preview,
@@ -181,3 +182,38 @@ class TestCreatePreview:
             warnings=["DHCP range overlaps"],
         )
         assert result["warnings"] == ["DHCP range overlaps"]
+
+
+class TestDeletePreview:
+    """Tests for delete_preview."""
+
+    def test_basic_delete_preview(self):
+        result = delete_preview(
+            resource_type="firewall_policy",
+            resource_id="policy-1",
+            resource_data={"policy_id": "policy-1"},
+        )
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["action"] == "delete"
+        assert result["resource_id"] == "policy-1"
+        assert result["preview"]["will_delete"] == {"policy_id": "policy-1"}
+        assert result["message"] == "Will delete firewall_policy 'policy-1'. Set confirm=true to execute."
+
+    def test_defaults_payload_to_resource_id(self):
+        result = delete_preview(resource_type="network", resource_id="network-1")
+
+        assert result["preview"]["will_delete"] == {"resource_id": "network-1"}
+
+    def test_includes_resource_name_and_warnings(self):
+        result = delete_preview(
+            resource_type="wlan",
+            resource_id="wlan-1",
+            resource_name="Guest WiFi",
+            warnings=["Clients will disconnect"],
+        )
+
+        assert result["resource_name"] == "Guest WiFi"
+        assert "Guest WiFi" in result["message"]
+        assert result["warnings"] == ["Clients will disconnect"]

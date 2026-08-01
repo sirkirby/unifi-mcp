@@ -10,7 +10,7 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from unifi_core.confirmation import create_preview, toggle_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, toggle_preview, update_preview
 from unifi_core.network.models.firewall import (
     firewall_group_from_controller,
     firewall_zone_from_controller,
@@ -1155,8 +1155,9 @@ async def delete_firewall_group(
 ) -> Dict[str, Any]:
     """Deletes a firewall group."""
     if not confirm:
-        return create_preview(
+        return delete_preview(
             resource_type="firewall_group",
+            resource_id=group_id,
             resource_data={"group_id": group_id},
             resource_name=group_id,
             warnings=["Firewall policies referencing this group via ip_group_id or port_group_id may break."],
@@ -1199,8 +1200,9 @@ async def delete_firewall_policy(
 ) -> Dict[str, Any]:
     """Delete a firewall policy by ID."""
     if not confirm:
-        return create_preview(
+        return delete_preview(
             resource_type="firewall_policy",
+            resource_id=policy_id,
             resource_data={"policy_id": policy_id},
             resource_name=policy_id,
             warnings=["Removing an ALLOW rule may block traffic. Removing a BLOCK rule may open access."],

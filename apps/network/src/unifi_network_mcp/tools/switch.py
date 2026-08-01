@@ -14,7 +14,7 @@ from typing import Annotated, Any, Dict, List
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
-from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import (
     ConfigurePortAggregationInput,
@@ -224,8 +224,9 @@ async def delete_port_profile(
 ) -> Dict[str, Any]:
     """Deletes a port profile."""
     if not confirm:
-        return create_preview(
+        return delete_preview(
             resource_type="port_profile",
+            resource_id=profile_id,
             resource_data={"profile_id": profile_id},
             resource_name=profile_id,
             warnings=["Switch ports using this profile will revert to defaults."],

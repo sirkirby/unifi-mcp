@@ -17,7 +17,7 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.confirmation import delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.content_filter import (
     MUTABLE_FIELDS as CF_MUTABLE_FIELDS,
@@ -195,8 +195,9 @@ async def delete_content_filter(
         Preview or success/failure status.
     """
     if not confirm:
-        return create_preview(
+        return delete_preview(
             resource_type="content_filter",
+            resource_id=filter_id,
             resource_data={"filter_id": filter_id},
             resource_name=filter_id,
             warnings=["Deleting a content filter removes DNS-based blocking for all targeted clients/networks."],

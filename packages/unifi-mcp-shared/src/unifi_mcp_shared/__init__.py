@@ -4,6 +4,7 @@ from unifi_core.config import load_yaml_config, setup_logging
 from unifi_core.config_helpers import parse_config_bool
 from unifi_core.confirmation import (
     create_preview,
+    delete_preview,
     preview_response,
     toggle_preview,
     update_preview,
@@ -47,6 +48,7 @@ __all__ = [
     "auto_load_tools",
     "build_tool_module_map",
     "create_preview",
+    "delete_preview",
     "create_response",
     "create_task_result_from_job",
     "error_response",

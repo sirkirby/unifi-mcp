@@ -10,7 +10,7 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.network.models.system import (
     autobackup_to_controller_update,
     backup_from_controller,
@@ -283,8 +283,9 @@ async def delete_backup(
     """Delete a backup file."""
     logger.info("unifi_delete_backup tool called (filename=%s, confirm=%s)", filename, confirm)
     if not confirm:
-        return create_preview(
+        return delete_preview(
             resource_type="backup",
+            resource_id=filename,
             resource_data={"filename": filename},
             resource_name=filename,
             warnings=["This will permanently delete the backup file."],
