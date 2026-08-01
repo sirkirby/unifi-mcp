@@ -464,6 +464,8 @@ Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(
 
 **V2 ObjectID vs. Integration UUID:** ObjectIDs are controller-local; if implementing cross-controller queries, use Integration UUID path instead. Test against multi-controller setups.
 
+**ConnectionManager auto-appends the configured site — pass site-relative paths, not site-prefixed paths:** `ConnectionManager` injects the configured site segment into the request path automatically. Tools/managers must build `ApiRequest` paths relative to the site, not include a full site-prefixed path themselves — doing so double-prefixes the site segment and breaks the request. Found reviewing a community cross-site device-lookup tool contribution that built a fully site-prefixed path manually.
+
 **Pass-through test pattern:** For tools that pass raw manager output to API without transformation, validate shape compatibility with Strawberry type expectations via snapshot or schema-compliance tests.
 
 **`_coerce_list_result` for kind=list action tools:** `apps/api/src/unifi_api/routes/actions.py` automatically calls `_coerce_list_result()` for any action tool whose type has `kind="list"`. It unwraps single-key dict envelopes to a bare list; bare lists pass through. If your manager returns a multi-key dict, `_coerce_list_result` will raise — ensure output is a bare list or single-key envelope.
