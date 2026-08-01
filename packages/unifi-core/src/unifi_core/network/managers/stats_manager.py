@@ -515,6 +515,17 @@ class StatsManager:
             except Exception as legacy_error:
                 logger.debug("Legacy IPS endpoint failed, falling back to v2 security logs: %s", legacy_error)
                 response = await self._get_security_events_v2(start_time, end_time, limit)
+            else:
+                # A controller that has moved IPS events to the v2 system log answers
+                # this endpoint 200 with an empty list rather than failing, so the
+                # fallback above never fires on the versions it exists for.
+                if not response:
+                    logger.debug("Legacy IPS endpoint returned no events, trying v2 security logs")
+                    try:
+                        response = await self._get_security_events_v2(start_time, end_time, limit)
+                    except Exception as v2_error:
+                        logger.debug("v2 security log fallback failed: %s", v2_error)
+                        response = []
             result = response if isinstance(response, list) else []
             self._connection._update_cache(cache_key, result, timeout=300)
             return result

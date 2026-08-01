@@ -265,9 +265,50 @@ class TestStatsManagerEnhanced:
 
         await stats_manager.get_ips_events(limit=10)
 
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
+        # An empty legacy answer now triggers the v2 fallback, so the legacy
+        # request is the first call rather than the last one.
+        api_request = mock_connection.request.call_args_list[0][0][0]
+        assert api_request.path == "/stat/ips/event"
         assert api_request.data["_limit"] == 10
+
+    @pytest.mark.asyncio
+    async def test_get_ips_events_empty_legacy_falls_back_to_v2(self, stats_manager, mock_connection):
+        """An empty legacy response must still reach the v2 security log.
+
+        Controllers that moved IPS events to the v2 system log answer
+        /stat/ips/event with 200 and an empty list rather than failing, so a
+        fallback guarded only by an exception never runs for them.
+        """
+        v2_events = [{"key": "EVT_IPS_IpsAlert"}]
+        mock_connection.request.side_effect = [[], v2_events]
+
+        result = await stats_manager.get_ips_events()
+
+        assert result == v2_events
+        assert mock_connection.request.call_count == 2
+        assert mock_connection.request.call_args_list[0][0][0].path == "/stat/ips/event"
+        assert mock_connection.request.call_args_list[1][0][0].path == "/system-log/critical"
+
+    @pytest.mark.asyncio
+    async def test_get_ips_events_non_empty_legacy_skips_v2(self, stats_manager, mock_connection):
+        """A controller still populating the legacy endpoint must not be double-queried."""
+        legacy_events = [{"event_type": "alert"}]
+        mock_connection.request.return_value = legacy_events
+
+        result = await stats_manager.get_ips_events()
+
+        assert result == legacy_events
+        assert mock_connection.request.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_get_ips_events_v2_failure_after_empty_legacy_returns_empty(self, stats_manager, mock_connection):
+        """A failing v2 fallback must not turn an empty result into an exception."""
+        mock_connection.request.side_effect = [[], Exception("v2 unavailable")]
+
+        result = await stats_manager.get_ips_events()
+
+        assert result == []
+        assert mock_connection.request.call_count == 2
 
     @pytest.mark.asyncio
     async def test_get_client_sessions(self, stats_manager, mock_connection):
