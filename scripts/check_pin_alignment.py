@@ -58,19 +58,42 @@ class Downstream:
     src: Path
     dist_name: str
     smoke_import: str
+    root_module: str
 
 
 DOWNSTREAM_PACKAGES: list[Downstream] = [
-    Downstream(REPO / "apps/network", "unifi-network-mcp", "unifi_network_mcp.main"),
-    Downstream(REPO / "apps/protect", "unifi-protect-mcp", "unifi_protect_mcp.main"),
-    Downstream(REPO / "apps/access", "unifi-access-mcp", "unifi_access_mcp.main"),
-    Downstream(REPO / "apps/api", "unifi-api-server", "unifi_api"),
+    Downstream(REPO / "apps/network", "unifi-network-mcp", "unifi_network_mcp.main", "unifi_network_mcp"),
+    Downstream(REPO / "apps/protect", "unifi-protect-mcp", "unifi_protect_mcp.main", "unifi_protect_mcp"),
+    Downstream(REPO / "apps/access", "unifi-access-mcp", "unifi_access_mcp.main", "unifi_access_mcp"),
+    Downstream(REPO / "apps/api", "unifi-api-server", "unifi_api", "unifi_api"),
     Downstream(
         REPO / "packages/unifi-mcp-relay",
         "unifi-mcp-relay",
         "unifi_mcp_relay.discovery",
+        "unifi_mcp_relay",
     ),
 ]
+
+# Imports every submodule of a package and reports the ones that fail with a
+# missing module. Only ModuleNotFoundError is treated as a failure: that is the
+# signature of an undeclared dependency. Other exceptions at import time are a
+# different problem and are not this gate's business.
+_WALK_IMPORTS = """
+import importlib, pkgutil, sys
+root = importlib.import_module("{root}")
+missing = []
+for mod in pkgutil.walk_packages(root.__path__, root.__name__ + "."):
+    try:
+        importlib.import_module(mod.name)
+    except ModuleNotFoundError as exc:
+        missing.append((mod.name, exc.name))
+    except Exception:
+        pass
+if missing:
+    for mod_name, dep in missing:
+        print("  {{}} -> missing dependency: {{}}".format(mod_name, dep))
+    sys.exit(1)
+"""
 
 
 def run_capture(args: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
@@ -121,6 +144,22 @@ def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, 
             f"resolved to an upstream version that does not contain the imported "
             f"code path.\n\n"
             f"{(exc.stderr or '').strip()[-2000:]}"
+        )
+
+    # Importing one entrypoint only proves that module's imports resolve. An
+    # undeclared dependency used anywhere else in the package stays invisible:
+    # unifi-api-server shipped for three releases importing unifi_mcp_shared
+    # from services/manifest.py without declaring it, because `import unifi_api`
+    # alone succeeds. Walk every submodule so the whole surface is covered.
+    try:
+        run_capture([str(py), "-c", _WALK_IMPORTS.format(root=pkg.root_module)])
+    except subprocess.CalledProcessError as exc:
+        return False, (
+            f"Importing every submodule of `{pkg.root_module}` failed after install. "
+            f"Some module imports a package that is not declared in this package's "
+            f"dependencies, so a fresh PyPI install crashes when that module is "
+            f"first imported.\n\n"
+            f"{(exc.stdout or '').strip()[-2000:]}\n{(exc.stderr or '').strip()[-1000:]}"
         )
 
     return True, "OK"

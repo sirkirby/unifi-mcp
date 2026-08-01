@@ -9,6 +9,9 @@ dependencies = [
     "aiohttp>=3.14.3",
     "python-dotenv>=1.2.2",
     "unifi-mcp-shared>=0.6.6,<0.7",
+    # location_timeline.py imports unifi_core.event_timeline directly. This resolves
+    # today only as a transitive of unifi-mcp-shared; declare it so it does not.
+    "unifi-core>=0.4.21,<0.5",
 ]
 
 [project.scripts]
@@ -41,6 +44,7 @@ packages = ["src/unifi_mcp_relay"]
 
 [tool.uv.sources]
 unifi-mcp-shared = { workspace = true }
+unifi-core = { workspace = true }
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
