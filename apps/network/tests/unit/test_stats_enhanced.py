@@ -610,3 +610,49 @@ class TestDeviceManagerSpeedtest:
 
         with pytest.raises(Exception):
             await device_manager.get_speedtest_status("aa:bb:cc:dd:ee:ff")
+
+
+class TestGetAlertsFallbackDiagnostics:
+    """Both alert paths failing must explain both, not just the legacy 404."""
+
+    @pytest.fixture
+    def mock_connection(self):
+        conn = MagicMock()
+        conn.site = "default"
+        conn.request = AsyncMock()
+        conn.get_cached = MagicMock(return_value=None)
+        conn._update_cache = MagicMock()
+        conn.ensure_connected = AsyncMock(return_value=True)
+        conn.controller = MagicMock()
+        return conn
+
+    @pytest.fixture
+    def stats_manager(self, mock_connection):
+        from unifi_core.network.managers.stats_manager import StatsManager
+
+        return StatsManager(mock_connection, MagicMock())
+
+    @pytest.mark.asyncio
+    async def test_both_paths_failing_surfaces_the_v2_error_too(self, stats_manager, mock_connection):
+        mock_connection.request.side_effect = [
+            Exception("Bad Request: unknown severity LOW"),  # v2 /system-log/critical
+            Exception("received 404 Not Found"),  # legacy /stat/alarm
+        ]
+
+        with pytest.raises(Exception) as exc:
+            await stats_manager.get_alerts()
+
+        message = str(exc.value)
+        assert "404" in message
+        assert "unknown severity LOW" in message, "the v2 failure must not be swallowed"
+
+    @pytest.mark.asyncio
+    async def test_legacy_success_after_v2_failure_still_returns(self, stats_manager, mock_connection):
+        """The fallback still works — this only changes the both-failed case."""
+        mock_connection.request.side_effect = [
+            Exception("v2 unavailable"),
+            [{"_id": "a1", "archived": False}],
+        ]
+
+        result = await stats_manager.get_alerts()
+        assert result == [{"_id": "a1", "archived": False}]

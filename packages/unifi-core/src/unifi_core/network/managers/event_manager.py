@@ -104,6 +104,10 @@ class EventManager:
         self._connection = connection_manager
         self._cm = connection_manager  # alias mirroring protect/access naming
         self._use_v2: bool | None = None  # Auto-detect on first call
+        # Why the v2 probe failed, when it did. Newer controllers have removed the
+        # legacy paths this falls back to, so a failed probe resurfaces later as a
+        # bare 404 from an endpoint the caller never asked for.
+        self._v2_probe_error: str | None = None
         self._buffer = EventBuffer(
             max_size=int(cfg.get("buffer_size", 100)),
             ttl_seconds=int(cfg.get("buffer_ttl_seconds", 300)),
@@ -247,10 +251,34 @@ class EventManager:
             )
             await self._connection.request(api_request)
             logger.info("[events] Using v2 system-log API")
+            self._v2_probe_error = None
             return True
-        except Exception:
-            logger.info("[events] Falling back to legacy /stat/event API")
+        except Exception as probe_error:
+            # Log why, not just that. A probe that fails for a reason other than
+            # "this controller predates v2" sends every later call down a legacy
+            # path that modern controllers answer with 404, and without this the
+            # only visible symptom is that 404.
+            self._v2_probe_error = f"{type(probe_error).__name__}: {probe_error}"
+            logger.warning(
+                "[events] v2 system-log probe failed, falling back to legacy /stat/event API: %s",
+                probe_error,
+            )
             return False
+
+    def _explain_legacy_failure(self, endpoint: str, error: Exception) -> Exception:
+        """Attach the v2 probe failure to a legacy error, when it caused the fallback.
+
+        Returns the original error untouched on a controller that legitimately has
+        no v2 API — there is nothing extra to say about that case.
+        """
+        if not self._v2_probe_error:
+            return error
+        return RuntimeError(
+            f"{endpoint} failed ({error}). This controller was put on the legacy events API "
+            f"because the v2 system-log probe failed: {self._v2_probe_error}. "
+            "On current UniFi Network versions the legacy endpoint no longer exists, so the "
+            "underlying problem is the failed v2 probe, not the missing legacy path."
+        )
 
     async def _ensure_api_version(self) -> None:
         """Detect API version on first call."""
@@ -362,7 +390,7 @@ class EventManager:
             return []
         except Exception as e:
             logger.error("Error getting events (legacy): %s", e)
-            raise
+            raise self._explain_legacy_failure("/stat/event", e) from e
 
     async def get_alarms(
         self,
@@ -437,7 +465,7 @@ class EventManager:
             return alarms[:limit]
         except Exception as e:
             logger.error("Error getting alarms (legacy): %s", e)
-            raise
+            raise self._explain_legacy_failure("/stat/alarm", e) from e
 
     def get_event_type_prefixes(self) -> List[Dict[str, str]]:
         """Get a list of known event type prefixes for filtering."""

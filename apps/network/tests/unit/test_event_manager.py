@@ -245,3 +245,66 @@ class TestEventManagerCommon:
         mock_connection.request.side_effect = Exception("404")
         await event_manager._ensure_api_version()
         assert event_manager._use_v2 is False
+
+    @pytest.mark.asyncio
+    async def test_failed_probe_is_logged_with_the_actual_error(self, event_manager, mock_connection, caplog):
+        """The probe error must reach the log, or a later 404 is undiagnosable."""
+        mock_connection.request.side_effect = Exception("Bad Request: unknown severity LOW")
+
+        with caplog.at_level("WARNING"):
+            await event_manager._ensure_api_version()
+
+        assert event_manager._use_v2 is False
+        assert "unknown severity LOW" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_failed_probe_is_recorded_for_later_diagnosis(self, event_manager, mock_connection):
+        mock_connection.request.side_effect = Exception("Bad Request: unknown severity LOW")
+        await event_manager._ensure_api_version()
+        assert "unknown severity LOW" in event_manager._v2_probe_error
+
+    @pytest.mark.asyncio
+    async def test_successful_probe_records_no_error(self, event_manager, mock_connection):
+        mock_connection.request.return_value = {"count": 1}
+        await event_manager._ensure_api_version()
+        assert event_manager._v2_probe_error is None
+
+    @pytest.mark.asyncio
+    async def test_legacy_events_404_after_failed_probe_explains_both(self, event_manager, mock_connection):
+        """A 404 from a legacy path we only chose because v2 probing failed is not a bare 404."""
+        mock_connection.request.side_effect = [
+            Exception("Bad Request: unknown severity LOW"),  # v2 probe
+            Exception("received 404 Not Found"),  # legacy /stat/event
+        ]
+
+        with pytest.raises(Exception) as exc:
+            await event_manager.get_events()
+
+        message = str(exc.value)
+        assert "404" in message
+        assert "unknown severity LOW" in message, "the v2 probe failure must be surfaced, not swallowed"
+
+    @pytest.mark.asyncio
+    async def test_legacy_alarms_404_after_failed_probe_explains_both(self, event_manager, mock_connection):
+        mock_connection.request.side_effect = [
+            Exception("Bad Request: unknown severity LOW"),  # v2 probe
+            Exception("received 404 Not Found"),  # legacy /stat/alarm
+        ]
+
+        with pytest.raises(Exception) as exc:
+            await event_manager.get_alarms()
+
+        assert "unknown severity LOW" in str(exc.value)
+
+    @pytest.mark.asyncio
+    async def test_legacy_failure_on_a_genuinely_old_controller_is_left_alone(self, event_manager, mock_connection):
+        """No probe error recorded means legacy was a real choice — do not editorialise."""
+        event_manager._use_v2 = False
+        event_manager._v2_probe_error = None
+        mock_connection.request.side_effect = Exception("connection reset")
+
+        with pytest.raises(Exception) as exc:
+            await event_manager.get_events()
+
+        assert "connection reset" in str(exc.value)
+        assert "v2 system-log probe" not in str(exc.value)

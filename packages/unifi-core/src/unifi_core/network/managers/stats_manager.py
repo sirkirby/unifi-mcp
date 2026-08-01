@@ -314,7 +314,17 @@ class StatsManager:
             alerts = await self._get_alerts_v2()
         except Exception as v2_error:
             logger.debug("V2 alert lookup failed, falling back to legacy alarms: %s", v2_error)
-            alerts = await self._get_alerts_legacy(include_archived)
+            try:
+                alerts = await self._get_alerts_legacy(include_archived)
+            except Exception as legacy_error:
+                # Report both. Current controllers have removed /stat/alarm, so the
+                # legacy error is usually a 404 that says nothing about the real
+                # problem — which is whatever made the v2 lookup fail.
+                raise RuntimeError(
+                    f"/stat/alarm failed ({legacy_error}) after the v2 system-log lookup failed "
+                    f"({v2_error}). On current UniFi Network versions the legacy endpoint no longer "
+                    "exists, so the v2 failure is the one to act on."
+                ) from legacy_error
 
         if not include_archived:
             alerts = [a for a in alerts if not a.get("archived", False)]
