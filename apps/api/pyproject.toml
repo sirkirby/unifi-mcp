@@ -12,7 +12,7 @@ dependencies = [
     # services/manifest.py imports unifi_mcp_shared.meta_tools. unifi-core does not
     # depend on shared (import direction is app -> shared -> core), so this must be
     # declared directly or a PyPI install has no unifi_mcp_shared.
-    "unifi-mcp-shared>=0.6.6,<0.7",
+    "unifi-mcp-shared>=0.6.7,<0.7",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.51.0",
     "sqlalchemy[asyncio]>=2.0.51",
