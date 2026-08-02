@@ -7,6 +7,7 @@ from unifi_core.confirmation import (
     toggle_preview,
     update_preview,
 )
+from unifi_mcp_shared import delete_preview as shared_delete_preview
 
 
 class TestPreviewResponse:
@@ -186,6 +187,9 @@ class TestCreatePreview:
 
 class TestDeletePreview:
     """Tests for delete_preview."""
+
+    def test_reexported_from_shared_package(self):
+        assert shared_delete_preview is delete_preview
 
     def test_basic_delete_preview(self):
         result = delete_preview(

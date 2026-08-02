@@ -15,6 +15,14 @@ os.environ.setdefault("UNIFI_PASSWORD", "test")
 
 DELETE_PREVIEW_CASES = [
     (
+        "unifi_network_mcp.tools.acl",
+        "delete_acl_rule",
+        {"rule_id": "acl-1"},
+        "acl_rule",
+        "acl-1",
+        {"rule_id": "acl-1"},
+    ),
+    (
         "unifi_network_mcp.tools.client_groups",
         "delete_client_group",
         {"group_id": "group-1"},
@@ -69,6 +77,14 @@ DELETE_PREVIEW_CASES = [
         "oon_policy",
         "oon-1",
         {"policy_id": "oon-1"},
+    ),
+    (
+        "unifi_network_mcp.tools.port_forwards",
+        "delete_port_forward",
+        {"port_forward_id": "port-forward-1"},
+        "port_forward",
+        "port-forward-1",
+        {"port_forward_id": "port-forward-1"},
     ),
     (
         "unifi_network_mcp.tools.switch",

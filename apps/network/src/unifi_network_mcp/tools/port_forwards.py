@@ -9,7 +9,7 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
-from unifi_core.confirmation import preview_response, toggle_preview, update_preview
+from unifi_core.confirmation import delete_preview, toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import (
     PortForwardCreateInput,
@@ -652,12 +652,10 @@ async def delete_port_forward(
         return {"success": False, "error": "port_forward_id is required"}
 
     if not confirm:
-        return preview_response(
-            action="delete",
+        return delete_preview(
             resource_type="port_forward",
             resource_id=port_forward_id,
-            current_state={},
-            proposed_changes={"deleted": True},
+            resource_data={"port_forward_id": port_forward_id},
             resource_name=port_forward_id,
             warnings=[
                 "This permanently removes the port forward rule; external access to the forwarded "

@@ -17,7 +17,7 @@ from typing import Annotated, Any, Dict, List, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
-from unifi_core.confirmation import create_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.acl import (
     MUTABLE_FIELDS,
@@ -347,15 +347,13 @@ async def delete_acl_rule(
         return {"success": False, "error": "rule_id is required"}
 
     if not confirm:
-        return {
-            "success": True,
-            "requires_confirmation": True,
-            "action": "delete",
-            "resource_type": "acl_rule",
-            "rule_id": rule_id,
-            "message": f"Will delete ACL rule '{rule_id}'. Set confirm=true to execute. "
-            "WARNING: Removing an ALLOW rule may block device communication.",
-        }
+        return delete_preview(
+            resource_type="acl_rule",
+            resource_id=rule_id,
+            resource_data={"rule_id": rule_id},
+            resource_name=rule_id,
+            warnings=["Removing an ALLOW rule may block device communication."],
+        )
 
     try:
         success = await acl_manager.delete_acl_rule(rule_id)
