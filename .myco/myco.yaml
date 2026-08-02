@@ -1,5 +1,5 @@
 version: 3
-config_version: 10
+config_version: 11
 release_provenance:
   enabled: true
   production_refs:
