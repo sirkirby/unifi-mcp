@@ -270,7 +270,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Create a new visitor pass with a name and access time range. Optionally assign specific doors and contact information. Requires confirm=true to execute. Only available via local proxy session.",
+      "description": "Create a visitor pass in the UniFi Access Developer API. The returned UUID is scoped to the Access Developer API visitor tool family \u2014 use it only with access_get_visitor and access_delete_visitor. Requires a UniFi Access API token and confirm=true to execute.",
       "name": "access_create_visitor",
       "permission_action": "create",
       "permission_category": "visitor",
@@ -278,11 +278,15 @@
         "input": {
           "properties": {
             "access_end": {
-              "description": "End of access period as ISO 8601 timestamp (e.g., 2026-03-17T17:00:00Z)",
+              "description": "Backward-compatible alias for valid_until (ISO 8601 with timezone).",
               "type": "string"
             },
             "access_start": {
-              "description": "Start of access period as ISO 8601 timestamp (e.g., 2026-03-17T09:00:00Z)",
+              "description": "Backward-compatible alias for valid_from (ISO 8601 with timezone).",
+              "type": "string"
+            },
+            "company": {
+              "description": "Visitor company. Optional.",
               "type": "string"
             },
             "confirm": {
@@ -293,19 +297,41 @@
               "description": "Visitor email address for notifications. Optional.",
               "type": "string"
             },
+            "first_name": {
+              "description": "Explicit first name. Provide together with last_name to override splitting name.",
+              "type": "string"
+            },
+            "last_name": {
+              "description": "Explicit last name. Provide together with first_name to override splitting name.",
+              "type": "string"
+            },
             "name": {
               "description": "Visitor display name",
               "type": "string"
             },
             "phone": {
-              "description": "Visitor phone number. Optional.",
+              "description": "Visitor mobile phone number. Optional.",
+              "type": "string"
+            },
+            "remarks": {
+              "description": "Operator notes about the visit. Optional.",
+              "type": "string"
+            },
+            "valid_from": {
+              "description": "Start of access period as ISO 8601 timestamp (e.g., 2026-03-17T09:00:00Z).",
+              "type": "string"
+            },
+            "valid_until": {
+              "description": "End of access period as ISO 8601 timestamp (e.g., 2026-03-17T17:00:00Z).",
+              "type": "string"
+            },
+            "visit_reason": {
+              "description": "Reason for the visit. Optional.",
               "type": "string"
             }
           },
           "required": [
-            "name",
-            "access_start",
-            "access_end"
+            "name"
           ],
           "type": "object"
         },
@@ -387,7 +413,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Delete a visitor pass. This permanently removes the visitor's access. Requires confirm=true to execute. Only available via local proxy session.",
+      "description": "Delete a visitor pass through the UniFi Access Developer API, revoking its access; the controller retains a cancelled historical record. The UUID must come from access_list_visitors and is scoped to this visitor tool family \u2014 do not pass IDs from other Access user or credential tools. Requires an Access API token and confirm=true.",
       "name": "access_delete_visitor",
       "permission_action": "delete",
       "permission_category": "visitor",
@@ -399,7 +425,7 @@
               "type": "boolean"
             },
             "visitor_id": {
-              "description": "Visitor UUID (from access_list_visitors)",
+              "description": "Access Developer API visitor UUID from access_list_visitors; visitor-family scoped",
               "type": "string"
             }
           },
@@ -1443,7 +1469,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns detailed information for a single visitor pass including name, access time range, assigned doors, and status.",
+      "description": "Return one visitor pass from the UniFi Access Developer API. The visitor UUID must come from access_list_visitors and is scoped to this visitor tool family \u2014 do not pass IDs from other Access user or credential tools.",
       "name": "access_get_visitor",
       "permission_action": "read",
       "permission_category": "visitor",
@@ -1451,7 +1477,7 @@
         "input": {
           "properties": {
             "visitor_id": {
-              "description": "Visitor UUID (from access_list_visitors)",
+              "description": "Access Developer API visitor UUID from access_list_visitors; visitor-family scoped",
               "type": "string"
             }
           },
@@ -2269,7 +2295,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Lists all visitor passes with their name, status, valid time range, and assigned doors.",
+      "description": "List visitor passes from the UniFi Access Developer API. Returned UUIDs are scoped to the Access Developer API visitor tool family \u2014 pass them only to access_get_visitor and access_delete_visitor; do not pass them to other Access user or credential tools.",
       "name": "access_list_visitors",
       "permission_action": "read",
       "permission_category": "visitor",

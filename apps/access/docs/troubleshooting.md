@@ -36,9 +36,9 @@
 
 **Symptoms:** Some tools work but others return "proxy session required" errors.
 
-**Explanation:** Most mutating tools (lock/unlock, credential management, policies, visitors) require the local proxy session (port 443 with username/password). If only the API key is configured, these tools will be unavailable.
+**Explanation:** Credential management, policies, and other proxy-backed mutations require the local session (port 443 with username/password). Visitor operations are different: list/get/create/delete use the Access Developer API and require `UNIFI_ACCESS_API_KEY` on port 12445.
 
-**Fix:** Ensure both `UNIFI_ACCESS_USERNAME`/`UNIFI_ACCESS_PASSWORD` and `UNIFI_ACCESS_API_KEY` are set for full functionality.
+**Fix:** Configure both `UNIFI_ACCESS_USERNAME`/`UNIFI_ACCESS_PASSWORD` and `UNIFI_ACCESS_API_KEY` for full functionality. For visitor-only failures, verify the Access API token and port 12445 first.
 
 ### "Access application not found" errors
 

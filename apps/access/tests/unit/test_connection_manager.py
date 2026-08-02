@@ -759,6 +759,86 @@ class TestClose:
 
 
 # ---------------------------------------------------------------------------
+# Access Developer API request tests
+# ---------------------------------------------------------------------------
+
+
+def _developer_response(status: int, payload: dict):
+    response = AsyncMock()
+    response.status = status
+    response.json = AsyncMock(return_value=payload)
+    response.__aenter__ = AsyncMock(return_value=response)
+    response.__aexit__ = AsyncMock(return_value=False)
+    return response
+
+
+class TestDeveloperRequest:
+    @pytest.mark.asyncio
+    async def test_success_uses_bearer_auth_on_api_port(self, cm_api_only):
+        response = _developer_response(200, {"code": "SUCCESS", "msg": "succ", "data": [{"id": "v1"}]})
+        session = MagicMock()
+        session.request = MagicMock(return_value=response)
+        cm_api_only._api_session = session
+        cm_api_only._api_client = MagicMock()
+        cm_api_only._api_client_available = True
+
+        result = await cm_api_only.developer_request(
+            "GET",
+            "visitors",
+            operation="List visitors",
+            params={"page_num": 1},
+        )
+
+        assert result == [{"id": "v1"}]
+        args, kwargs = session.request.call_args
+        assert args == ("GET", "https://192.168.1.1:12445/api/v1/developer/visitors")
+        assert kwargs["headers"]["Authorization"] == "Bearer test-api-key-123"
+        assert "X-API-Key" not in kwargs["headers"]
+        assert kwargs["params"] == {"page_num": 1}
+
+    @pytest.mark.asyncio
+    async def test_requires_configured_api_key(self, cm_proxy_only):
+        with pytest.raises(UniFiAuthError, match="UNIFI_ACCESS_API_KEY"):
+            await cm_proxy_only.developer_request("GET", "visitors", operation="List visitors")
+
+    @pytest.mark.asyncio
+    async def test_requires_authenticated_api_client(self, cm_api_only):
+        with pytest.raises(UniFiAuthError, match="did not authenticate on port 12445"):
+            await cm_api_only.developer_request("GET", "visitors", operation="List visitors")
+
+    @pytest.mark.asyncio
+    async def test_maps_unauthorized_to_actionable_auth_error(self, cm_api_only):
+        response = _developer_response(
+            401,
+            {"code": "CODE_UNAUTHORIZED", "msg": "You do not have permission to perform this action."},
+        )
+        session = MagicMock()
+        session.request = MagicMock(return_value=response)
+        cm_api_only._api_session = session
+        cm_api_only._api_client = MagicMock()
+        cm_api_only._api_client_available = True
+
+        with pytest.raises(UniFiAuthError, match="valid UniFi Access API token with visitor access"):
+            await cm_api_only.developer_request("GET", "visitors", operation="List visitors")
+
+    @pytest.mark.asyncio
+    async def test_rejects_application_error_envelope(self, cm_api_only):
+        response = _developer_response(200, {"code": "CODE_NOT_FOUND", "msg": "Visitor not found", "data": None})
+        session = MagicMock()
+        session.request = MagicMock(return_value=response)
+        cm_api_only._api_session = session
+        cm_api_only._api_client = MagicMock()
+        cm_api_only._api_client_available = True
+
+        with pytest.raises(UniFiConnectionError, match="Access API code CODE_NOT_FOUND"):
+            await cm_api_only.developer_request("GET", "visitors/missing", operation="Get visitor")
+
+    def test_has_api_key_reports_configuration(self, cm_api_only, cm_proxy_only):
+        assert cm_api_only.has_api_key is True
+        assert cm_proxy_only.has_api_key is False
+
+
+# ---------------------------------------------------------------------------
 # Websocket tests
 # ---------------------------------------------------------------------------
 

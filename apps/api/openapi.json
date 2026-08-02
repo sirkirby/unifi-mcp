@@ -20158,6 +20158,7 @@
     },
     "/v1/sites/{site_id}/visitors": {
       "get": {
+        "description": "List UniFi Access Developer API visitors. Returned UUIDs are scoped to the Access Developer API visitor family and must not be passed to other Access user or credential operations.",
         "operationId": "list_visitors_v1_sites__site_id__visitors_get",
         "parameters": [
           {
@@ -20248,6 +20249,7 @@
     },
     "/v1/sites/{site_id}/visitors/{visitor_id}": {
       "get": {
+        "description": "Get a UniFi Access Developer API visitor by a UUID returned from the visitor family. Do not pass IDs from other Access user or credential operations.",
         "operationId": "get_visitor_v1_sites__site_id__visitors__visitor_id__get",
         "parameters": [
           {

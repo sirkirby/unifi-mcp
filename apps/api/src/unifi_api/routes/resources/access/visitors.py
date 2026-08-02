@@ -39,6 +39,10 @@ def _decode_cursor(cursor: str | None) -> Cursor | None:
     "/sites/{site_id}/visitors",
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["access/visitors"],
+    description=(
+        "List UniFi Access Developer API visitors. Returned UUIDs are scoped to the Access Developer API "
+        "visitor family and must not be passed to other Access user or credential operations."
+    ),
 )
 async def list_visitors(
     request: Request,
@@ -90,6 +94,10 @@ async def list_visitors(
     "/sites/{site_id}/visitors/{visitor_id}",
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["access/visitors"],
+    description=(
+        "Get a UniFi Access Developer API visitor by a UUID returned from the visitor family. "
+        "Do not pass IDs from other Access user or credential operations."
+    ),
 )
 async def get_visitor(
     request: Request,

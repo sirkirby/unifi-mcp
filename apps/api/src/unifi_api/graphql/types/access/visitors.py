@@ -1,18 +1,7 @@
-"""Strawberry types for access/visitors.
+"""Strawberry projection for the Access Developer API visitor family.
 
-Phase 6 PR4 Task B migration target. The single read serializer
-(``VisitorSerializer``) maps to one Strawberry class:
-
-- ``Visitor`` — access_list_visitors + access_get_visitor
-
-Resource-registered (LIST + DETAIL paths). Mutation acks
-(``access_create_visitor`` / ``access_delete_visitor``) stay in
-``serializers/access/visitors.py``; the API action path dispatches to
-the manager mutation methods and serializes their dict acknowledgements.
-
-VisitorManager surfaces ``valid_from`` / ``valid_until`` (with
-``access_start`` / ``access_end`` fallbacks). ``from_manager_output``
-normalizes across both, mirroring the old serializer byte-for-byte.
+Read tools use this type; create/delete acknowledgement dicts remain in
+``serializers/access/visitors.py``.
 """
 
 from __future__ import annotations
@@ -21,23 +10,22 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
+from unifi_core.access.models.visitors import from_controller as visitor_from_controller
 
 
-def _get(obj: Any, key: str, default: Any = None) -> Any:
-    if isinstance(obj, dict):
-        return obj.get(key, default)
-    raw = getattr(obj, "raw", None)
-    if isinstance(raw, dict):
-        return raw.get(key, default)
-    return getattr(obj, key, default)
-
-
-@strawberry.type(description="A UniFi Access visitor (time-bounded guest pass).")
+@strawberry.type(
+    description=(
+        "A time-bounded UniFi Access Developer API visitor pass. Its UUID is scoped to the "
+        "Access Developer API visitor family and must not be passed to other Access user or credential operations."
+    )
+)
 class Visitor:
-    """Mirrors ``VisitorSerializer.serialize`` projection byte-for-byte."""
+    """Typed projection of the shared visitor field model."""
 
     id: strawberry.ID | None
     name: str | None
+    first_name: str | None
+    last_name: str | None
     host_user_id: str | None
     valid_from: str | None
     valid_until: str | None
@@ -45,6 +33,10 @@ class Visitor:
     credential_count: int | None
     email: str | None
     phone: str | None
+    company: str | None
+    visit_reason: str | None
+    remarks: str | None
+    access_policy_ids: list[str] | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -53,7 +45,7 @@ class Visitor:
             "primary_key": "id",
             "display_columns": [
                 "name",
-                "host_user_id",
+                "company",
                 "valid_from",
                 "valid_until",
                 "status",
@@ -62,17 +54,8 @@ class Visitor:
 
     @classmethod
     def from_manager_output(cls, obj: Any) -> "Visitor":
-        return cls(
-            id=_get(obj, "id"),
-            name=_get(obj, "name"),
-            host_user_id=_get(obj, "host_user_id"),
-            valid_from=_get(obj, "valid_from") or _get(obj, "access_start"),
-            valid_until=_get(obj, "valid_until") or _get(obj, "access_end"),
-            status=_get(obj, "status"),
-            credential_count=_get(obj, "credential_count"),
-            email=_get(obj, "email"),
-            phone=_get(obj, "phone"),
-        )
+        normalized = visitor_from_controller(obj)
+        return cls(**normalized.model_dump())
 
     def to_dict(self) -> dict:
         out = asdict(self)

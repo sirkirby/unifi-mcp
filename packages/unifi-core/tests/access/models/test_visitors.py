@@ -13,15 +13,26 @@ from unifi_core.access.models.visitors import (
 
 class TestFieldSets:
     def test_mutable_fields_contains_expected(self) -> None:
-        for field in ("name", "valid_from", "valid_until", "email", "phone"):
+        for field in (
+            "name",
+            "first_name",
+            "last_name",
+            "valid_from",
+            "valid_until",
+            "email",
+            "phone",
+            "company",
+            "visit_reason",
+            "remarks",
+        ):
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
 
     def test_mutable_fields_excludes_read_only(self) -> None:
-        for field in ("id", "host_user_id", "status", "credential_count"):
+        for field in ("id", "host_user_id", "status", "credential_count", "access_policy_ids"):
             assert field not in MUTABLE_FIELDS, f"{field!r} should NOT be in MUTABLE_FIELDS"
 
     def test_read_only_fields_contains_expected(self) -> None:
-        for field in ("id", "host_user_id", "status", "credential_count"):
+        for field in ("id", "host_user_id", "status", "credential_count", "access_policy_ids"):
             assert field in READ_ONLY_FIELDS, f"Expected {field!r} in READ_ONLY_FIELDS"
 
     def test_read_only_fields_excludes_mutable(self) -> None:
@@ -60,6 +71,40 @@ class TestFromController:
         assert v.credential_count == 2
         assert v.email == "jane@example.com"
         assert v.phone == "+15551234567"
+
+    def test_normalizes_developer_api_shape(self) -> None:
+        raw = {
+            "id": "dev-vis-1",
+            "first_name": "Jane",
+            "last_name": "Doe",
+            "start_time": 1773738000,
+            "end_time": 1773766800,
+            "status": 6,
+            "mobile_phone": "+15551234567",
+            "company": "Example Co",
+            "visit_reason": "Business",
+            "remarks": "Front desk",
+            "access_policy_ids": ["policy-uuid"],
+            "nfc_cards": [{"id": "nfc-1"}],
+            "pin_code": {"token": "secret"},
+            "qr_code": None,
+            "license_plates": [],
+        }
+
+        visitor = from_controller(raw)
+
+        assert visitor.name == "Jane Doe"
+        assert visitor.first_name == "Jane"
+        assert visitor.last_name == "Doe"
+        assert visitor.valid_from == "2026-03-17T09:00:00Z"
+        assert visitor.valid_until == "2026-03-17T17:00:00Z"
+        assert visitor.status == "active"
+        assert visitor.phone == "+15551234567"
+        assert visitor.company == "Example Co"
+        assert visitor.visit_reason == "Business"
+        assert visitor.remarks == "Front desk"
+        assert visitor.access_policy_ids == ["policy-uuid"]
+        assert visitor.credential_count == 2
 
     def test_coalesces_access_start_to_valid_from(self) -> None:
         raw = {"id": "vis-2", "access_start": "2026-04-01T08:00:00Z"}
@@ -118,15 +163,25 @@ class TestToControllerCreate:
             valid_from="2026-03-17T09:00:00Z",
             valid_until="2026-03-17T17:00:00Z",
             email="jane@example.com",
+            first_name="Jane",
+            last_name="Doe",
             phone="+15551234567",
+            company="Example Co",
+            visit_reason="Business",
+            remarks="Disposable",
         )
         payload = to_controller_create(model)
         assert payload == {
             "name": "Jane Doe",
             "access_start": "2026-03-17T09:00:00Z",
             "access_end": "2026-03-17T17:00:00Z",
+            "first_name": "Jane",
+            "last_name": "Doe",
             "email": "jane@example.com",
             "phone": "+15551234567",
+            "company": "Example Co",
+            "visit_reason": "Business",
+            "remarks": "Disposable",
         }
 
     def test_minimal_payload_excludes_email_and_phone(self) -> None:

@@ -19,8 +19,15 @@ async def test_access_visitors_list(tmp_path, monkeypatch):
         monkeypatch,
         {
             ("access", "visitor_manager", "list_visitors"): [
-                {"id": "vis1", "name": "Alice Guest", "status": "active"},
-                {"id": "vis2", "name": "Bob Guest", "status": "expired"},
+                {
+                    "id": "vis1",
+                    "first_name": "Alice",
+                    "last_name": "Guest",
+                    "status": 6,
+                    "start_time": 1773738000,
+                    "end_time": 1773766800,
+                },
+                {"id": "vis2", "first_name": "Bob", "last_name": "Guest", "status": 2},
             ],
         },
     )
@@ -29,7 +36,7 @@ async def test_access_visitors_list(tmp_path, monkeypatch):
         key,
         f'''{{
         access {{ visitors(controller: "{cid}", limit: 10) {{
-            items {{ id name status }}
+            items {{ id name firstName lastName validFrom validUntil status }}
         }} }}
     }}''',
     )
@@ -37,6 +44,16 @@ async def test_access_visitors_list(tmp_path, monkeypatch):
     items = body["data"]["access"]["visitors"]["items"]
     assert len(items) == 2
     assert {it["id"] for it in items} == {"vis1", "vis2"}
+    first = next(item for item in items if item["id"] == "vis1")
+    assert first == {
+        "id": "vis1",
+        "name": "Alice Guest",
+        "firstName": "Alice",
+        "lastName": "Guest",
+        "validFrom": "2026-03-17T09:00:00Z",
+        "validUntil": "2026-03-17T17:00:00Z",
+        "status": "active",
+    }
 
 
 @pytest.mark.asyncio

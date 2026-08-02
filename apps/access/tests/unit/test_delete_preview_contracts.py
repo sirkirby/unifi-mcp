@@ -40,7 +40,9 @@ async def test_delete_visitor_uses_standard_delete_preview() -> None:
         "name": "Smoke Visitor",
         "status": "active",
     }
-    assert result["warnings"] == ["This will permanently remove the visitor pass and revoke all associated access."]
+    assert result["warnings"] == [
+        "This will revoke all associated access. The controller retains the visitor as cancelled history."
+    ]
 
 
 @pytest.mark.asyncio

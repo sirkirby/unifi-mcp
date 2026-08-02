@@ -28,11 +28,15 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="access_list_visitors",
-    description=("Lists all visitor passes with their name, status, valid time range, and assigned doors."),
+    description=(
+        "List visitor passes from the UniFi Access Developer API. Returned UUIDs are scoped to the "
+        "Access Developer API visitor tool family — pass them only to access_get_visitor and "
+        "access_delete_visitor; do not pass them to other Access user or credential tools."
+    ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
     permission_category="visitor",
     permission_action="read",
-    auth="local_only",
+    auth="api_key_only",
 )
 async def access_list_visitors() -> Dict[str, Any]:
     """List all visitors."""
@@ -49,16 +53,20 @@ async def access_list_visitors() -> Dict[str, Any]:
 @server.tool(
     name="access_get_visitor",
     description=(
-        "Returns detailed information for a single visitor pass including "
-        "name, access time range, assigned doors, and status."
+        "Return one visitor pass from the UniFi Access Developer API. The visitor UUID must come "
+        "from access_list_visitors and is scoped to this visitor tool family — do not pass IDs "
+        "from other Access user or credential tools."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
     permission_category="visitor",
     permission_action="read",
-    auth="local_only",
+    auth="api_key_only",
 )
 async def access_get_visitor(
-    visitor_id: Annotated[str, Field(description="Visitor UUID (from access_list_visitors)")],
+    visitor_id: Annotated[
+        str,
+        Field(description="Access Developer API visitor UUID from access_list_visitors; visitor-family scoped"),
+    ],
 ) -> Dict[str, Any]:
     """Get detailed visitor information by ID."""
     logger.info("access_get_visitor tool called for %s", visitor_id)
@@ -76,32 +84,60 @@ async def access_get_visitor(
 @server.tool(
     name="access_create_visitor",
     description=(
-        "Create a new visitor pass with a name and access time range. "
-        "Optionally assign specific doors and contact information. "
-        "Requires confirm=true to execute. Only available via local proxy session."
+        "Create a visitor pass in the UniFi Access Developer API. The returned UUID is scoped to "
+        "the Access Developer API visitor tool family — use it only with access_get_visitor and "
+        "access_delete_visitor. Requires a UniFi Access API token and confirm=true to execute."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False),
     permission_category="visitor",
     permission_action="create",
-    auth="local_only",
+    auth="api_key_only",
 )
 async def access_create_visitor(
     name: Annotated[str, Field(description="Visitor display name")],
     access_start: Annotated[
-        str,
-        Field(description="Start of access period as ISO 8601 timestamp (e.g., 2026-03-17T09:00:00Z)"),
-    ],
+        str | None,
+        Field(description="Backward-compatible alias for valid_from (ISO 8601 with timezone)."),
+    ] = None,
     access_end: Annotated[
-        str,
-        Field(description="End of access period as ISO 8601 timestamp (e.g., 2026-03-17T17:00:00Z)"),
-    ],
+        str | None,
+        Field(description="Backward-compatible alias for valid_until (ISO 8601 with timezone)."),
+    ] = None,
+    valid_from: Annotated[
+        str | None,
+        Field(description="Start of access period as ISO 8601 timestamp (e.g., 2026-03-17T09:00:00Z)."),
+    ] = None,
+    valid_until: Annotated[
+        str | None,
+        Field(description="End of access period as ISO 8601 timestamp (e.g., 2026-03-17T17:00:00Z)."),
+    ] = None,
+    first_name: Annotated[
+        str | None,
+        Field(description="Explicit first name. Provide together with last_name to override splitting name."),
+    ] = None,
+    last_name: Annotated[
+        str | None,
+        Field(description="Explicit last name. Provide together with first_name to override splitting name."),
+    ] = None,
     email: Annotated[
         str | None,
         Field(description="Visitor email address for notifications. Optional."),
     ] = None,
     phone: Annotated[
         str | None,
-        Field(description="Visitor phone number. Optional."),
+        Field(description="Visitor mobile phone number. Optional."),
+    ] = None,
+    company: Annotated[
+        str | None,
+        Field(description="Visitor company. Optional."),
+    ] = None,
+    visit_reason: Annotated[
+        str | None,
+        Field(description="Reason for the visit. Optional."),
+    ] = None,
+    remarks: Annotated[
+        str | None,
+        Field(description="Operator notes about the visit. Optional."),
     ] = None,
     confirm: Annotated[
         bool,
@@ -112,12 +148,25 @@ async def access_create_visitor(
     logger.info("access_create_visitor tool called (name=%s, confirm=%s)", name, confirm)
     try:
         try:
+            if access_start and valid_from and access_start != valid_from:
+                raise ValueError("access_start and valid_from must match when both are provided")
+            if access_end and valid_until and access_end != valid_until:
+                raise ValueError("access_end and valid_until must match when both are provided")
+            resolved_start = valid_from or access_start
+            resolved_end = valid_until or access_end
+            if not resolved_start or not resolved_end:
+                raise ValueError("valid_from and valid_until are required")
             model = Visitor(
                 name=name,
-                valid_from=access_start,
-                valid_until=access_end,
+                valid_from=resolved_start,
+                valid_until=resolved_end,
+                first_name=first_name,
+                last_name=last_name,
                 email=email,
                 phone=phone,
+                company=company,
+                visit_reason=visit_reason,
+                remarks=remarks,
             )
         except Exception as e:
             return {"success": False, "error": f"Invalid visitor input: {e}"}
@@ -144,16 +193,21 @@ async def access_create_visitor(
 @server.tool(
     name="access_delete_visitor",
     description=(
-        "Delete a visitor pass. This permanently removes the visitor's access. "
-        "Requires confirm=true to execute. Only available via local proxy session."
+        "Delete a visitor pass through the UniFi Access Developer API, revoking its access; the "
+        "controller retains a cancelled historical record. The UUID must come from "
+        "access_list_visitors and is scoped to this visitor tool family — do not pass IDs from "
+        "other Access user or credential tools. Requires an Access API token and confirm=true."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
     permission_category="visitor",
     permission_action="delete",
-    auth="local_only",
+    auth="api_key_only",
 )
 async def access_delete_visitor(
-    visitor_id: Annotated[str, Field(description="Visitor UUID (from access_list_visitors)")],
+    visitor_id: Annotated[
+        str,
+        Field(description="Access Developer API visitor UUID from access_list_visitors; visitor-family scoped"),
+    ],
     confirm: Annotated[
         bool,
         Field(description="When true, deletes the visitor pass. When false (default), returns a preview."),
@@ -178,7 +232,9 @@ async def access_delete_visitor(
             resource_id=visitor_id,
             resource_data=preview_data["current_state"],
             resource_name=preview_data.get("visitor_name"),
-            warnings=["This will permanently remove the visitor pass and revoke all associated access."],
+            warnings=[
+                "This will revoke all associated access. The controller retains the visitor as cancelled history."
+            ],
         )
     except (UniFiNotFoundError, ValueError) as e:
         return {"success": False, "error": str(e)}

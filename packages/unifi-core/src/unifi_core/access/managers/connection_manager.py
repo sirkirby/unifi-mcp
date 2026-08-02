@@ -233,6 +233,88 @@ class AccessConnectionManager:
             logger.debug("[access-cm] Proxy login successful, CSRF token obtained.")
 
     # ------------------------------------------------------------------
+    # Access Developer API request helper
+    # ------------------------------------------------------------------
+
+    async def developer_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        operation: str,
+        json: Any = None,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        """Request the official Access Developer API with Bearer auth.
+
+        The Access Developer API is served on ``api_port`` and uses
+        ``Authorization: Bearer``. This differs from Network's public
+        Integration API, which uses ``X-API-Key``.
+        """
+        remediation = (
+            "Create a UniFi Access API token and set UNIFI_ACCESS_API_KEY (or UNIFI_API_KEY) for the Access MCP server."
+        )
+        if not self._api_key:
+            raise UniFiAuthError(f"{operation} requires a UniFi Access API token. {remediation}")
+        if not self.has_api_client or self._api_session is None:
+            raise UniFiAuthError(
+                f"{operation} requires an authenticated UniFi Access Developer API session. "
+                f"The configured token did not authenticate on port {self._api_port}. {remediation}"
+            )
+
+        url = f"https://{self.host}:{self._api_port}/api/v1/developer/{path.lstrip('/')}"
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._api_key}",
+        }
+        try:
+            async with self._api_session.request(
+                method,
+                url,
+                headers=headers,
+                json=json,
+                params=params,
+                ssl=self._ssl_context,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                try:
+                    payload = await resp.json(content_type=None)
+                except (ValueError, aiohttp.ContentTypeError) as exc:
+                    body = await resp.text()
+                    raise UniFiConnectionError(
+                        f"{operation} failed: HTTP {resp.status} {method} {url} — "
+                        f"invalid JSON response{(': ' + body[:200]) if body else ''}"
+                    ) from exc
+
+                message = ""
+                if isinstance(payload, dict):
+                    message = str(payload.get("msg") or payload.get("message") or payload.get("code") or "")
+                if resp.status in (401, 403):
+                    raise UniFiAuthError(
+                        f"{operation} requires a valid UniFi Access API token with visitor access: "
+                        f"HTTP {resp.status}{(' — ' + message) if message else ''}. {remediation}"
+                    )
+                if resp.status != 200:
+                    raise UniFiConnectionError(
+                        f"{operation} failed: HTTP {resp.status} {method} {url}{(' — ' + message) if message else ''}"
+                    )
+                if not isinstance(payload, dict):
+                    raise UniFiConnectionError(f"{operation} failed: unexpected Access API response shape")
+                if payload.get("code") != "SUCCESS":
+                    raise UniFiConnectionError(
+                        f"{operation} failed: Access API code {payload.get('code', 'UNKNOWN')}"
+                        f"{(' — ' + message) if message else ''}"
+                    )
+                if "data" not in payload:
+                    raise UniFiConnectionError(f"{operation} failed: Access API response is missing data")
+                return payload["data"]
+        except (UniFiAuthError, UniFiConnectionError):
+            raise
+        except (TimeoutError, aiohttp.ClientError, OSError) as exc:
+            raise UniFiConnectionError(f"{operation} failed: {exc}") from exc
+
+    # ------------------------------------------------------------------
     # Proxy request helpers
     # ------------------------------------------------------------------
 
@@ -425,6 +507,11 @@ class AccessConnectionManager:
     def api_client(self) -> Any | None:
         """Return the :class:`UnifiAccessApiClient` instance, or ``None``."""
         return self._api_client
+
+    @property
+    def has_api_key(self) -> bool:
+        """Return whether an Access Developer API token is configured."""
+        return bool(self._api_key)
 
     @property
     def has_api_client(self) -> bool:

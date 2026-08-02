@@ -44,7 +44,7 @@ Logs in via `/api/auth/login` on the UniFi OS Console and proxies requests throu
 | `UNIFI_ACCESS_PASSWORD` | Yes | Admin password |
 | `UNIFI_ACCESS_PORT` | No (443) | UniFi OS Console HTTPS port |
 
-When both paths are available, each tool selects the most appropriate one. Most mutating tools (door lock/unlock, credential management, policies, visitors, events) require the local proxy session. See the `auth` metadata on each tool for which path it uses.
+When both paths are available, each tool selects the appropriate one. Visitor list/get/create/delete operations require the Access Developer API token on port 12445; credential management, policies, and other proxy-backed capabilities require the local session. See the `auth` metadata on each tool for its exact requirement.
 
 ## Server Settings
 

@@ -300,6 +300,9 @@ Fetch a user by listing then filtering — no native get_user method.
 ### `GET /v1/sites/{site_id}/visitors` — List Visitors
 
 
+List UniFi Access Developer API visitors. Returned UUIDs are scoped to the Access Developer API visitor family and must not be passed to other Access user or credential operations.
+
+
 **Parameters:**
 
 - `site_id` (path) (required)
@@ -311,6 +314,9 @@ Fetch a user by listing then filtering — no native get_user method.
 **Returns:** `object`
 
 ### `GET /v1/sites/{site_id}/visitors/{visitor_id}` — Get Visitor
+
+
+Get a UniFi Access Developer API visitor by a UUID returned from the visitor family. Do not pass IDs from other Access user or credential operations.
 
 
 **Parameters:**

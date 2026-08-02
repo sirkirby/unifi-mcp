@@ -94,12 +94,6 @@ KNOWN_CONTROLLER_ISSUE_READS = {
 
 KNOWN_CONTROLLER_ISSUE_MARKERS = {
     "access_get_activity_summary": ("CODE_SYSTEM_ERROR", r"API code -3\b"),
-    "access_create_visitor": (
-        "HTTP 404",
-        "CODE_NOT_FOUND",
-        r"/proxy/access/api/v2/visitors\b",
-        "you entered no-man zone",
-    ),
     "unifi_create_firewall_policy": (
         "FirewallPolicyCreateRespondTrafficPolicyNotAllowed",
         "Firewall policy create respond traffic not allowed",
@@ -905,12 +899,12 @@ class LiveSmokeRunner:
         return self.args_for_tool(name, required_params(next(t for t in self.manifest["tools"] if t["name"] == name)))
 
     def visitor_args(self, stamp: str) -> dict[str, Any]:
-        start = datetime.now(UTC) + timedelta(minutes=5)
+        start = (datetime.now(UTC) + timedelta(minutes=5)).replace(microsecond=0)
         end = start + timedelta(minutes=30)
         return {
             "name": f"{RUN_PREFIX}-{stamp}",
-            "access_start": start.isoformat().replace("+00:00", "Z"),
-            "access_end": end.isoformat().replace("+00:00", "Z"),
+            "valid_from": start.isoformat().replace("+00:00", "Z"),
+            "valid_until": end.isoformat().replace("+00:00", "Z"),
         }
 
     def protect_camera_id(self, prefer_ptz: bool = False) -> str | None:
@@ -1752,6 +1746,37 @@ class LiveSmokeRunner:
             self.skip("access_delete_visitor", "lifecycle", "visitor create did not return an id")
             return
         self.report.created_resources.append({"type": "visitor", "id": visitor_id, "name": args["name"]})
+        await self.call("access_list_visitors", {}, "lifecycle:list")
+        listed = any(
+            str(visitor.get("id")) == visitor_id
+            for visitor in self.cache.items_from_tool("access_list_visitors", "visitors")
+        )
+        self.record_check(
+            "access_list_visitors",
+            "lifecycle:verify-list",
+            listed,
+            "disposable visitor is visible in the Developer API family",
+        )
+        detail_call = await self.call(
+            "access_get_visitor",
+            {"visitor_id": visitor_id},
+            "lifecycle:get",
+        )
+        detail_payload = self.cache.by_tool.get("access_get_visitor", {})
+        detail = detail_payload.get("data", {}) if isinstance(detail_payload, dict) else {}
+        fields_match = (
+            detail_call.success is True
+            and detail.get("id") == visitor_id
+            and detail.get("name") == args["name"]
+            and detail.get("valid_from") == args["valid_from"]
+            and detail.get("valid_until") == args["valid_until"]
+        )
+        self.record_check(
+            "access_get_visitor",
+            "lifecycle:verify-fields",
+            fields_match,
+            "name and ISO-8601 validity fields round-trip through the Developer API",
+        )
         preview = await self.call(
             "access_delete_visitor",
             {"visitor_id": visitor_id, "confirm": False},
@@ -1772,7 +1797,20 @@ class LiveSmokeRunner:
             "lifecycle:delete",
         )
         if delete.success:
-            self.report.cleaned_resources.append({"type": "visitor", "id": visitor_id, "name": args["name"]})
+            after = await self.call(
+                "access_get_visitor",
+                {"visitor_id": visitor_id},
+                "lifecycle:verify-cleanup",
+            )
+            cancelled = after.success is True and after.summary.get("resource_status") == "cancelled"
+            self.record_check(
+                "access_delete_visitor",
+                "lifecycle:verify-cleanup-status",
+                cancelled,
+                "Developer API DELETE revokes access and retains the visitor as cancelled history",
+            )
+            if cancelled:
+                self.report.cleaned_resources.append({"type": "visitor", "id": visitor_id, "name": args["name"]})
 
 
 def summarize_payload(data: dict[str, Any]) -> dict[str, Any]:
@@ -1801,6 +1839,9 @@ def summarize_payload(data: dict[str, Any]) -> dict[str, Any]:
     resource_id = find_resource_id(data)
     if resource_id:
         summary["resource_id"] = resource_id
+    resource_status = find_resource_status(data)
+    if resource_status:
+        summary["resource_status"] = resource_status
     for collection, items in collection_items(data).items():
         summary[f"{collection}_count"] = len(items)
     preview = data.get("preview")
@@ -1811,6 +1852,19 @@ def summarize_payload(data: dict[str, Any]) -> dict[str, Any]:
     if "_meta" in data:
         summary["_meta"] = data["_meta"]
     return summary
+
+
+def find_resource_status(data: Any) -> str | None:
+    """Find a bounded scalar resource status in a nested tool response."""
+    if isinstance(data, dict):
+        status = data.get("status")
+        if isinstance(status, (str, int)):
+            return str(status).lower()
+        for key in ("details", "data", "result"):
+            value = find_resource_status(data.get(key))
+            if value:
+                return value
+    return None
 
 
 def find_resource_id(data: Any) -> str | None:
@@ -1886,6 +1940,7 @@ API_ACTIONS_SAMPLE: list[tuple[str, str, dict[str, Any]]] = [
     ("protect", "protect_list_lights", {}),
     ("access", "access_list_doors", {}),
     ("access", "access_list_users", {}),
+    ("access", "access_list_visitors", {}),
 ]
 
 
@@ -2315,7 +2370,7 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
 # Manual-only phase. Same bootstrap as api-actions (spins up unifi-api-server locally,
 # registers .env-configured controllers), then exercises the GET resource
 # endpoints (clients, devices, networks, wlans, firewall rules, cameras,
-# recordings, events, doors, users, credentials). For each resource that has a
+# recordings, events, doors, users, credentials, visitors). For each resource that has a
 # tool equivalent, also calls the matching action endpoint and compares the
 # data payloads — the resource version wraps in {items, next_cursor,
 # render_hint} and the action version wraps in {success: true, data,
@@ -2346,6 +2401,14 @@ API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str,
     ("protect", "/v1/sites/{site}/cameras", {"limit": 10}, "protect_list_cameras", {}, ("cameras", "items")),
     ("access", "/v1/sites/{site}/doors", {"limit": 10}, "access_list_doors", {}, ("doors", "items")),
     ("access", "/v1/sites/{site}/users", {"limit": 10}, "access_list_users", {}, ("users", "items")),
+    (
+        "access",
+        "/v1/sites/{site}/visitors",
+        {"limit": 10},
+        "access_list_visitors",
+        {},
+        ("visitors", "items"),
+    ),
 ]
 
 

@@ -505,7 +505,7 @@ async def test_list_visitors_happy_path(tmp_path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    visitors = [{"id": f"vis-{i}", "name": f"Visitor {i}", "status": "active"} for i in range(3)]
+    visitors = [{"id": f"vis-{i}", "first_name": "Visitor", "last_name": str(i), "status": 6} for i in range(3)]
 
     async def fake_list(self):
         return visitors
@@ -522,6 +522,8 @@ async def test_list_visitors_happy_path(tmp_path, monkeypatch) -> None:
     assert r.status_code == 200, r.text
     body = r.json()
     assert len(body["items"]) == 3
+    assert {item["name"] for item in body["items"]} == {"Visitor 0", "Visitor 1", "Visitor 2"}
+    assert {item["status"] for item in body["items"]} == {"active"}
     assert body["render_hint"]["kind"] == "list"
 
 

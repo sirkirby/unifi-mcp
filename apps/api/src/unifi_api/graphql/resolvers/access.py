@@ -834,7 +834,10 @@ class AccessQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description="List Access visitors (time-bounded guest passes).",
+        description=(
+            "List Access Developer API visitors. Returned UUIDs are scoped to the visitor family "
+            "and must not be passed to other Access user or credential operations."
+        ),
     )
     async def visitors(
         self,
@@ -862,7 +865,10 @@ class AccessQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description="Look up a single Access visitor by id.",
+        description=(
+            "Look up one Access Developer API visitor using a UUID returned by the visitor family; "
+            "IDs from other Access user or credential operations are not accepted."
+        ),
     )
     async def visitor(
         self,

@@ -54,16 +54,16 @@ All tools return: `{"success": true, "data": ...}`, `{"success": false, "error":
 - **Historical events:** `access_list_events` with time/door/user filters. Topics: `admin` or `admin_activity`
 - **Activity summary:** `access_get_activity_summary` aggregates events over a time period — useful for security audits
 - **Credentials:** Create NFC (`{user_id, token}`), PIN (`{user_id, pin_code}`), or mobile (`{user_id}`) credentials
-- **Visitor passes:** Time-bounded with ISO 8601 start/end times, optional email/phone for notifications
+- **Visitor passes:** Developer API family with scoped UUIDs, ISO 8601 `valid_from`/`valid_until`, and optional contact/company metadata
 
 ## Dual Authentication
 
 Access has two independent auth paths:
 
-- **API key (port 12445)** — for read-only operations (listing doors, events, devices)
-- **Username + password (port 443)** — required for mutations (lock/unlock, credentials, visitors)
+- **API key (port 12445)** — official Developer API operations, including visitor list/get/create/delete
+- **Username + password (port 443)** — proxy-backed operations such as credentials and policies
 
-Either can work independently. For full functionality, configure both. If mutations fail with auth errors, the user needs username+password (API key alone is not enough for write operations).
+Either can work independently for its supported tools. For full functionality, configure both. Visitor auth failures require checking `UNIFI_ACCESS_API_KEY`; proxy-backed mutation failures require checking the local username/password.
 
 To configure, run `/unifi-access:unifi-access-setup` or set env vars manually:
 ```

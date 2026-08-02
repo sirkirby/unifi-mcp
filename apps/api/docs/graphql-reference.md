@@ -129,10 +129,14 @@ type AccessQuery {
   """List Access schedules (weekly access windows)."""
   schedules(controller: ID!, limit: Int! = 50, cursor: String = null): SchedulePage!
 
-  """List Access visitors (time-bounded guest passes)."""
+  """
+  List Access Developer API visitors. Returned UUIDs are scoped to the visitor family and must not be passed to other Access user or credential operations.
+  """
   visitors(controller: ID!, limit: Int! = 50, cursor: String = null): VisitorPage!
 
-  """Look up a single Access visitor by id."""
+  """
+  Look up one Access Developer API visitor using a UUID returned by the visitor family; IDs from other Access user or credential operations are not accepted.
+  """
   visitor(controller: ID!, id: ID!): Visitor
 
   """List Access events (paginated, most recent first)."""
@@ -2046,10 +2050,14 @@ type ViewerList {
   count: Int
 }
 
-"""A UniFi Access visitor (time-bounded guest pass)."""
+"""
+A time-bounded UniFi Access Developer API visitor pass. Its UUID is scoped to the Access Developer API visitor family and must not be passed to other Access user or credential operations.
+"""
 type Visitor {
   id: ID
   name: String
+  firstName: String
+  lastName: String
   hostUserId: String
   validFrom: String
   validUntil: String
@@ -2057,6 +2065,10 @@ type Visitor {
   credentialCount: Int
   email: String
   phone: String
+  company: String
+  visitReason: String
+  remarks: String
+  accessPolicyIds: [String!]
 }
 
 """Paginated page of UniFi Access visitors."""
@@ -2195,8 +2207,8 @@ Read-only access to UniFi Access resources.
 - `schedules: SchedulePage!`  — List Access schedules (weekly access windows).
 - `systemInfo: AccessSystemInfo`  — Get the Access application info (name + version + host).
 - `users: UserPage!`  — List Access users (employees / cardholders, paginated).
-- `visitor: Visitor`  — Look up a single Access visitor by id.
-- `visitors: VisitorPage!`  — List Access visitors (time-bounded guest passes).
+- `visitor: Visitor`  — Look up one Access Developer API visitor using a UUID returned by the visitor family; IDs from other Access user or credential operations are not accepted.
+- `visitors: VisitorPage!`  — List Access Developer API visitors. Returned UUIDs are scoped to the visitor family and must not be passed to other Access user or credential operations.
 
 
 ### `query.health`

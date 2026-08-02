@@ -650,6 +650,54 @@ async def test_dispatch_delete_actions_require_confirm(tool_name: str, product: 
 
 
 @pytest.mark.asyncio
+async def test_dispatch_access_create_visitor_preserves_developer_fields() -> None:
+    entry = ToolEntry(
+        name="access_create_visitor",
+        product="access",
+        category="visitor",
+        manager="",
+        method="",
+        permission_action="create",
+    )
+    registry = _registry_with(entry)
+    manager = MagicMock()
+    manager.apply_create_visitor = AsyncMock(
+        return_value={"action": "create", "result": "success", "data": {"id": "visitor-uuid"}}
+    )
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    args = {
+        "name": "Smoke Visitor",
+        "valid_from": "2026-03-17T09:00:00Z",
+        "valid_until": "2026-03-17T17:00:00Z",
+        "first_name": "Smoke",
+        "last_name": "Visitor",
+        "company": "Example Co",
+    }
+
+    result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="access_create_visitor",
+        controller_id="cid",
+        controller_products=["access"],
+        site="default",
+        args=args,
+        confirm=True,
+        dispatch_table={
+            "access_create_visitor": DispatchEntry(
+                manager_attr="visitor_manager",
+                method="apply_create_visitor",
+            )
+        },
+    )
+
+    assert result["data"]["id"] == "visitor-uuid"
+    manager.apply_create_visitor.assert_awaited_once_with(**args)
+
+
+@pytest.mark.asyncio
 async def test_dispatch_confirmed_delete_reaches_manager() -> None:
     entry = ToolEntry(
         name="access_delete_visitor",

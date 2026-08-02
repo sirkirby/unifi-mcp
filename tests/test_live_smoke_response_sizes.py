@@ -148,3 +148,22 @@ def test_summarize_payload_preserves_only_safe_bounded_response_metadata():
         "rogue_aps_count": 1,
     }
     assert "rogue_aps" not in summary
+
+
+def test_summarize_payload_extracts_nested_resource_status():
+    summary = summarize_payload(
+        {
+            "success": True,
+            "data": {
+                "id": "visitor-1",
+                "status": "cancelled",
+                "remarks": "not retained in the report",
+            },
+        }
+    )
+
+    assert summary == {
+        "success": True,
+        "resource_id": "visitor-1",
+        "resource_status": "cancelled",
+    }

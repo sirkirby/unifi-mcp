@@ -50,10 +50,10 @@ In lazy mode, an additional meta-tool is available:
 
 ## Visitors (4 tools)
 
-- `access_list_visitors` -- List all visitor passes with name, status, time range, and doors
-- `access_get_visitor` -- Detailed visitor pass info: name, access period, doors, status
-- `access_create_visitor` -- Create a time-bounded visitor pass with optional doors and contact info. Confirm required. Proxy session only.
-- `access_delete_visitor` -- Permanently remove a visitor pass. Confirm required. Proxy session only.
+- `access_list_visitors` -- List Access Developer API visitor passes with family-scoped UUIDs, names, status, and time range
+- `access_get_visitor` -- Get Developer API visitor details by a UUID returned from the visitor family
+- `access_create_visitor` -- Create a time-bounded visitor with optional contact/company metadata. Confirm and Access API token required.
+- `access_delete_visitor` -- Revoke a Developer API visitor pass; Access retains a cancelled historical record. Confirm and Access API token required.
 
 ## Devices (3 tools)
 
