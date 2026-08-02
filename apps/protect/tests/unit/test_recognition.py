@@ -451,6 +451,11 @@ class TestProtectKnownFaceMutationTools:
 
         assert result["success"] is True
         assert result["requires_confirmation"] is True
+        assert result["action"] == "delete"
+        assert result["resource_type"] == "known_face"
+        assert result["resource_id"] == "face-1"
+        assert result["resource_name"] == "Assigned"
+        assert result["preview"]["will_delete"] == {"id": "face-1", "name": "Assigned"}
         assert result["warnings"] == ["destructive"]
 
     @pytest.mark.asyncio
@@ -759,6 +764,11 @@ class TestProtectKnownLicensePlateMutationTools:
 
         assert result["success"] is True
         assert result["requires_confirmation"] is True
+        assert result["action"] == "delete"
+        assert result["resource_type"] == "known_license_plate"
+        assert result["resource_id"] == "plate-1"
+        assert result["resource_name"] == "Assigned"
+        assert result["preview"]["will_delete"] == {"id": "plate-1", "name": "Assigned"}
         assert result["warnings"] == ["destructive"]
         mock_recognition_manager.apply_delete_known_license_plate.assert_not_called()
 

@@ -19,9 +19,9 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 
 | Server | Status | Tools | Package |
 |--------|--------|-------|---------|
-| [Network](apps/network/) | Stable | 186 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
-| [Protect](apps/protect/) | Beta | 61 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
-| [Access](apps/access/) | Beta | 36 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
+| [Network](apps/network/) | Stable | 187 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
+| [Protect](apps/protect/) | Stable | 61 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
+| [Access](apps/access/) | Stable | 36 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 
 ## Cloud Relay
 
@@ -252,8 +252,8 @@ This is a monorepo with shared packages:
 ```
 apps/
   network/          # UniFi Network MCP server (stable, 187 tools)
-  protect/          # UniFi Protect MCP server (beta, 61 tools)
-  access/           # UniFi Access MCP server (beta, 36 tools)
+  protect/          # UniFi Protect MCP server (stable, 61 tools)
+  access/           # UniFi Access MCP server (stable, 36 tools)
   api/              # Independent REST + GraphQL API server (beta)
   worker/           # Cloudflare Worker gateway + npm CLI
 packages/

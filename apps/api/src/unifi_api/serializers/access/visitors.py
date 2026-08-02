@@ -7,9 +7,9 @@ to a Strawberry type in ``unifi_api.graphql.types.access.visitors``. The
 both the REST routes and the action endpoint.
 
 This module now only ships ``VisitorMutationAckSerializer`` for the
-``access_create_visitor`` / ``access_delete_visitor`` preview-and-
-confirm tools, which still flow through the manager's preview path and
-produce dict acks.
+``access_create_visitor`` / ``access_delete_visitor`` mutation tools.
+The API action dispatcher invokes their manager mutation methods and
+this serializer projects the resulting dict acknowledgements.
 """
 
 from unifi_api.serializers._base import RenderKind, Serializer, register_serializer
@@ -22,7 +22,7 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
     },
 )
 class VisitorMutationAckSerializer(Serializer):
-    """Pass-through ack for visitor preview/apply dicts."""
+    """Pass-through ack for visitor mutation dicts."""
 
     kind = RenderKind.DETAIL
 

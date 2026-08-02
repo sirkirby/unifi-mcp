@@ -1102,6 +1102,20 @@ class LiveSmokeRunner:
             "lifecycle:update",
         )
         await self.call("unifi_get_dns_record_details", {"record_id": record_id}, "lifecycle:get")
+        preview = await self.call(
+            "unifi_delete_dns_record",
+            {"record_id": record_id, "confirm": False},
+            "lifecycle:preview-delete",
+        )
+        self.record_check(
+            "unifi_delete_dns_record",
+            "lifecycle:verify-preview",
+            preview.success is True
+            and preview.summary.get("action") == "delete"
+            and preview.summary.get("resource_id") == record_id
+            and "will_delete" in preview.summary.get("preview_keys", []),
+            "delete preview identifies the disposable DNS record",
+        )
         delete = await self.call(
             "unifi_delete_dns_record",
             {"record_id": record_id, "confirm": True},
@@ -1195,6 +1209,20 @@ class LiveSmokeRunner:
             {"group_id": group_id, "group_data": {"name": f"{name}-updated"}, "confirm": True},
             "lifecycle:update",
         )
+        preview = await self.call(
+            "unifi_delete_client_group",
+            {"group_id": group_id, "confirm": False},
+            "lifecycle:preview-delete",
+        )
+        self.record_check(
+            "unifi_delete_client_group",
+            "lifecycle:verify-preview",
+            preview.success is True
+            and preview.summary.get("action") == "delete"
+            and preview.summary.get("resource_id") == group_id
+            and "will_delete" in preview.summary.get("preview_keys", []),
+            "delete preview identifies the disposable client group",
+        )
         delete = await self.call(
             "unifi_delete_client_group",
             {"group_id": group_id, "confirm": True},
@@ -1228,6 +1256,20 @@ class LiveSmokeRunner:
                 "confirm": True,
             },
             "lifecycle:update",
+        )
+        preview = await self.call(
+            "unifi_delete_firewall_group",
+            {"group_id": group_id, "confirm": False},
+            "lifecycle:preview-delete",
+        )
+        self.record_check(
+            "unifi_delete_firewall_group",
+            "lifecycle:verify-preview",
+            preview.success is True
+            and preview.summary.get("action") == "delete"
+            and preview.summary.get("resource_id") == group_id
+            and "will_delete" in preview.summary.get("preview_keys", []),
+            "delete preview identifies the disposable firewall group",
         )
         delete = await self.call(
             "unifi_delete_firewall_group",
@@ -1610,6 +1652,20 @@ class LiveSmokeRunner:
             "lifecycle:update",
         )
         await self.call("protect_alarm_get_rule", {"rule_id": rule_id}, "lifecycle:get")
+        preview = await self.call(
+            "protect_alarm_delete_rule",
+            {"rule_id": rule_id, "confirm": False},
+            "lifecycle:preview-delete",
+        )
+        self.record_check(
+            "protect_alarm_delete_rule",
+            "lifecycle:verify-preview",
+            preview.success is True
+            and preview.summary.get("action") == "delete"
+            and preview.summary.get("resource_id") == rule_id
+            and "will_delete" in preview.summary.get("preview_keys", []),
+            "delete preview identifies the disposable alarm rule",
+        )
         delete = await self.call(
             "protect_alarm_delete_rule",
             {"rule_id": rule_id, "confirm": True},
@@ -1696,6 +1752,20 @@ class LiveSmokeRunner:
             self.skip("access_delete_visitor", "lifecycle", "visitor create did not return an id")
             return
         self.report.created_resources.append({"type": "visitor", "id": visitor_id, "name": args["name"]})
+        preview = await self.call(
+            "access_delete_visitor",
+            {"visitor_id": visitor_id, "confirm": False},
+            "lifecycle:preview-delete",
+        )
+        self.record_check(
+            "access_delete_visitor",
+            "lifecycle:verify-preview",
+            preview.success is True
+            and preview.summary.get("action") == "delete"
+            and preview.summary.get("resource_id") == visitor_id
+            and "will_delete" in preview.summary.get("preview_keys", []),
+            "delete preview identifies the disposable visitor",
+        )
         delete = await self.call(
             "access_delete_visitor",
             {"visitor_id": visitor_id, "confirm": True},
@@ -1733,6 +1803,9 @@ def summarize_payload(data: dict[str, Any]) -> dict[str, Any]:
         summary["resource_id"] = resource_id
     for collection, items in collection_items(data).items():
         summary[f"{collection}_count"] = len(items)
+    preview = data.get("preview")
+    if isinstance(preview, dict):
+        summary["preview_keys"] = sorted(preview)
     if "error" in data:
         summary["error"] = data["error"]
     if "_meta" in data:
@@ -1743,6 +1816,7 @@ def summarize_payload(data: dict[str, Any]) -> dict[str, Any]:
 def find_resource_id(data: Any) -> str | None:
     if isinstance(data, dict):
         for key in (
+            "resource_id",
             "id",
             "_id",
             "record_id",

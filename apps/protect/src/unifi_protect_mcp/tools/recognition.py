@@ -6,7 +6,7 @@ from typing import Annotated, Any, Dict, List, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
-from unifi_core.confirmation import preview_response, update_preview
+from unifi_core.confirmation import delete_preview, preview_response, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.models._actions import (
     DeleteKnownFaceInput,
@@ -362,12 +362,10 @@ async def protect_delete_known_face(
 
         preview_data = await recognition_manager.delete_known_face(face_id)
         if not confirm:
-            return preview_response(
-                action="delete",
+            return delete_preview(
                 resource_type="known_face",
                 resource_id=face_id,
-                current_state=preview_data["face"],
-                proposed_changes={"deleted": True},
+                resource_data=preview_data["face"],
                 resource_name=preview_data["face"].get("name") or preview_data["face"].get("matched_name"),
                 warnings=preview_data["warnings"],
             )
@@ -491,12 +489,10 @@ async def protect_delete_known_license_plate(
 
         preview_data = await recognition_manager.delete_known_license_plate(plate_id)
         if not confirm:
-            return preview_response(
-                action="delete",
+            return delete_preview(
                 resource_type="known_license_plate",
                 resource_id=plate_id,
-                current_state=preview_data["license_plate"],
-                proposed_changes={"deleted": True},
+                resource_data=preview_data["license_plate"],
                 resource_name=preview_data["license_plate"].get("name")
                 or preview_data["license_plate"].get("matched_name"),
                 warnings=preview_data["warnings"],

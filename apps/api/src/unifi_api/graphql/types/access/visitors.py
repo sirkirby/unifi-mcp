@@ -7,8 +7,8 @@ Phase 6 PR4 Task B migration target. The single read serializer
 
 Resource-registered (LIST + DETAIL paths). Mutation acks
 (``access_create_visitor`` / ``access_delete_visitor``) stay in
-``serializers/access/visitors.py`` — both flow through the manager's
-preview path and produce dict acks.
+``serializers/access/visitors.py``; the API action path dispatches to
+the manager mutation methods and serializes their dict acknowledgements.
 
 VisitorManager surfaces ``valid_from`` / ``valid_until`` (with
 ``access_start`` / ``access_end`` fallbacks). ``from_manager_output``

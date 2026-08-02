@@ -116,6 +116,7 @@ async def test_call_records_sizes_before_unwrapping(monkeypatch):
 def test_summarize_payload_preserves_only_safe_bounded_response_metadata():
     data = {
         "success": True,
+        "resource_id": "resource-1",
         "summary_mode": True,
         "history_seconds": 3_600,
         "omitted_sections": ["radio_activity", "wan_activity", "wan_history", "wifi_activity"],
@@ -125,6 +126,7 @@ def test_summarize_payload_preserves_only_safe_bounded_response_metadata():
         "offset": 2,
         "next_offset": 4,
         "has_more": True,
+        "preview": {"will_delete": {"id": "resource-1"}},
         "rogue_aps": [{"ssid": "controller-value"}],
     }
 
@@ -132,6 +134,7 @@ def test_summarize_payload_preserves_only_safe_bounded_response_metadata():
 
     assert summary == {
         "success": True,
+        "resource_id": "resource-1",
         "summary_mode": True,
         "history_seconds": 3_600,
         "omitted_sections": ["radio_activity", "wan_activity", "wan_history", "wifi_activity"],
@@ -141,6 +144,7 @@ def test_summarize_payload_preserves_only_safe_bounded_response_metadata():
         "offset": 2,
         "next_offset": 4,
         "has_more": True,
+        "preview_keys": ["will_delete"],
         "rogue_aps_count": 1,
     }
     assert "rogue_aps" not in summary

@@ -711,6 +711,23 @@ class ContentReconciliationTests(unittest.TestCase):
                         f"{path} must state the current {product} tool count",
                     )
 
+    def test_server_status_table_matches_manifests_and_current_stability(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        homepage = Path("docs/index.html").read_text(encoding="utf-8")
+        counts = manifest_counts()
+
+        for product in ("Network", "Protect", "Access"):
+            with self.subTest(product=product):
+                self.assertRegex(
+                    readme,
+                    rf"\| \[{product}\][^\n]*\| Stable \| {counts[product.lower()]} \|",
+                )
+
+        for product in ("Protect", "Access"):
+            with self.subTest(product=product):
+                self.assertIn(f"<h4>{product} <span>Stable</span></h4>", homepage)
+                self.assertNotRegex(homepage, rf"<h4>{product} <span>Beta</span></h4>")
+
     def test_readme_and_homepage_link_all_non_server_products(self):
         surfaces = {
             Path("README.md"): Path("README.md").read_text(encoding="utf-8"),

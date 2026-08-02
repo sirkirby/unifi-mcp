@@ -7,9 +7,9 @@ Phase 6 PR3 Task B — the read serializers (``AlarmStatusSerializer``,
 listed in ``PHASE6_TYPE_MIGRATED_TOOLS`` and dispatched via the
 type_registry by both REST routes and the action endpoint.
 
-This module now only ships ``AlarmMutationAckSerializer`` for
-arm/disarm preview-and-confirm tools, which still flow through the
-manager's preview path and produce dict acks.
+This module now only ships ``AlarmMutationAckSerializer`` for alarm
+mutations. The API action dispatcher invokes the manager or facade mutation
+method and this serializer projects the resulting acknowledgement.
 """
 
 from typing import Any

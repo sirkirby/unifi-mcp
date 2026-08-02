@@ -57,8 +57,9 @@ class ToolNotFound(Exception):
 class ToolEntry:
     """Resolved manifest entry for a single tool.
 
-    ``manager`` and ``method`` are intentionally empty strings for now — the
-    manifests do not carry that information. Task 12 will fill the gap.
+    ``manager`` and ``method`` are intentionally empty strings because the
+    manifests do not carry that information. ``permission_action`` is retained
+    so the action dispatcher can enforce confirmation before delete operations.
     """
 
     name: str
@@ -66,6 +67,7 @@ class ToolEntry:
     category: str
     manager: str
     method: str
+    permission_action: str = ""
 
 
 class ManifestRegistry:
@@ -138,12 +140,16 @@ def _parse_manifest(data: Any, product: str) -> dict[str, ToolEntry]:
             category = tool.get("permission_category")
             if not isinstance(category, str) or not category:
                 category = _category_from_module(module_map.get(name, ""))
+            permission_action = tool.get("permission_action")
+            if not isinstance(permission_action, str):
+                permission_action = ""
             entries[name] = ToolEntry(
                 name=name,
                 product=product,
                 category=category,
                 manager="",
                 method="",
+                permission_action=permission_action,
             )
         return entries
 

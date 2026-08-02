@@ -58,6 +58,11 @@ async def test_delete_rule_preview_uses_facade_get_rule():
 
     assert result["success"] is True
     assert result["requires_confirmation"] is True
+    assert result["action"] == "delete"
+    assert result["resource_type"] == "alarm_rule"
+    assert result["resource_id"] == "uuid-1"
+    assert result["resource_name"] == "Rule"
+    assert result["preview"]["will_delete"] == {"rule_id": "uuid-1", "title": "Rule"}
     facade.get_rule.assert_awaited_once_with("uuid-1")
 
 

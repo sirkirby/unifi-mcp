@@ -613,6 +613,82 @@ async def test_dispatch_protect_update_viewer_routes_to_apply_viewer_update() ->
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
+    ("tool_name", "product"),
+    [
+        ("unifi_delete_dns_record", "network"),
+        ("protect_alarm_delete_rule", "protect"),
+        ("access_delete_visitor", "access"),
+    ],
+)
+async def test_dispatch_delete_actions_require_confirm(tool_name: str, product: str) -> None:
+    entry = ToolEntry(
+        name=tool_name,
+        product=product,
+        category="test",
+        manager="",
+        method="",
+        permission_action="delete",
+    )
+    registry = _registry_with(entry)
+    factory = MagicMock()
+
+    with pytest.raises(ValueError, match="requires confirm=true"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name=tool_name,
+            controller_id="cid",
+            controller_products=[product],
+            site="default",
+            args={},
+            confirm=False,
+            dispatch_table={},
+        )
+
+    factory.get_domain_manager.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_confirmed_delete_reaches_manager() -> None:
+    entry = ToolEntry(
+        name="access_delete_visitor",
+        product="access",
+        category="visitor",
+        manager="",
+        method="",
+        permission_action="delete",
+    )
+    registry = _registry_with(entry)
+    manager = MagicMock()
+    manager.apply_delete_visitor = AsyncMock(return_value={"visitor_id": "visitor-1", "result": "success"})
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+
+    result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="access_delete_visitor",
+        controller_id="cid",
+        controller_products=["access"],
+        site="default",
+        args={"visitor_id": "visitor-1"},
+        confirm=True,
+        dispatch_table={
+            "access_delete_visitor": DispatchEntry(
+                manager_attr="visitor_manager",
+                method="apply_delete_visitor",
+            )
+        },
+    )
+
+    assert result == {"visitor_id": "visitor-1", "result": "success"}
+    manager.apply_delete_visitor.assert_awaited_once_with(visitor_id="visitor-1")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
     ("tool_name", "args"),
     [
         ("protect_update_sensor_settings", {"sensor_id": "sensor-1", "settings": {"name": "Garage"}}),

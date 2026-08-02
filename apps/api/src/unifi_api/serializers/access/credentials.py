@@ -7,9 +7,9 @@ listed in ``PHASE6_TYPE_MIGRATED_TOOLS`` and dispatched via the
 type_registry by both the REST routes and the action endpoint.
 
 This module now only ships ``CredentialMutationAckSerializer`` for the
-``access_create_credential`` / ``access_revoke_credential`` preview-and-
-confirm tools, which still flow through the manager's preview path and
-produce dict acks.
+``access_create_credential`` / ``access_revoke_credential`` mutation tools.
+The API action dispatcher invokes their manager mutation methods and
+this serializer projects the resulting dict acknowledgements.
 """
 
 from unifi_api.serializers._base import RenderKind, Serializer, register_serializer
@@ -22,7 +22,7 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
     },
 )
 class CredentialMutationAckSerializer(Serializer):
-    """Pass-through ack for credential preview/apply dicts."""
+    """Pass-through ack for credential mutation dicts."""
 
     kind = RenderKind.DETAIL
 

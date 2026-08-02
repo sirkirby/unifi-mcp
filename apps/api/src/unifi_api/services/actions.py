@@ -282,14 +282,15 @@ async def dispatch_action(
             f"tool '{tool_name}' requires product '{entry.product}', controller supports {controller_products!r}"
         )
 
+    if not confirm and (entry.permission_action == "delete" or tool_name in CONFIRM_REQUIRED_TOOLS):
+        raise ValueError(f"tool '{tool_name}' requires confirm=true")
+
     table = dispatch_table if dispatch_table is not None else _get_table()
     binding = table.get(tool_name)
     if binding is None:
         raise DispatchEntryMissing(
             f"no dispatch entry for tool '{tool_name}' (no manager.method() call discovered in tool body)"
         )
-    if tool_name in CONFIRM_REQUIRED_TOOLS and not confirm:
-        raise ValueError(f"tool '{tool_name}' requires confirm=true")
     if "include_sensitive" in args:
         raise ValueError(INCLUDE_SENSITIVE_UNSUPPORTED_ERROR)
     marker_paths = redaction_marker_paths(args)

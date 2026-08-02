@@ -1,7 +1,7 @@
 """Manifest lookup table tests."""
 
 import pytest
-from unifi_api.services.manifest import ManifestRegistry, ToolNotFound
+from unifi_api.services.manifest import ManifestRegistry, ToolNotFound, _parse_manifest
 
 
 def test_loads_manifests_from_apps() -> None:
@@ -37,6 +37,33 @@ def test_unknown_tool_raises() -> None:
     reg = ManifestRegistry.load_from_apps()
     with pytest.raises(ToolNotFound):
         reg.resolve("definitely_not_a_real_tool_name_xyz")
+
+
+def test_parse_manifest_retains_permission_action() -> None:
+    entries = _parse_manifest(
+        {
+            "module_map": {"access_delete_visitor": "unifi_access_mcp.tools.visitors"},
+            "tools": [
+                {
+                    "name": "access_delete_visitor",
+                    "permission_category": "visitor",
+                    "permission_action": "delete",
+                }
+            ],
+        },
+        "access",
+    )
+
+    assert entries["access_delete_visitor"].permission_action == "delete"
+
+
+def test_module_map_fallback_has_no_permission_action() -> None:
+    entries = _parse_manifest(
+        {"module_map": {"legacy_tool": "unifi_network_mcp.tools.system"}},
+        "network",
+    )
+
+    assert entries["legacy_tool"].permission_action == ""
 
 
 def _some_known_network(reg) -> list[str]:

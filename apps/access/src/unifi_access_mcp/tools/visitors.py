@@ -20,7 +20,7 @@ from unifi_core.access.models.visitors import (
 from unifi_core.access.models.visitors import (
     to_controller_create as visitor_to_controller_create,
 )
-from unifi_core.confirmation import create_preview, preview_response
+from unifi_core.confirmation import create_preview, delete_preview
 from unifi_core.exceptions import UniFiNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -173,12 +173,10 @@ async def access_delete_visitor(
             return {"success": True, "data": result}
 
         preview_data = await visitor_manager.delete_visitor(visitor_id)
-        return preview_response(
-            action="delete",
+        return delete_preview(
             resource_type="visitor_pass",
             resource_id=visitor_id,
-            current_state=preview_data["current_state"],
-            proposed_changes=preview_data["proposed_changes"],
+            resource_data=preview_data["current_state"],
             resource_name=preview_data.get("visitor_name"),
             warnings=["This will permanently remove the visitor pass and revoke all associated access."],
         )

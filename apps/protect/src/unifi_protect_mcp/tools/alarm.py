@@ -15,7 +15,7 @@ from typing import Annotated, Any, Dict, Optional
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
-from unifi_core.confirmation import preview_response, update_preview
+from unifi_core.confirmation import delete_preview, preview_response, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.models._actions import (
     AlarmArmInput,
@@ -393,12 +393,10 @@ async def protect_alarm_delete_rule(
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
         if not confirm:
             current, complete = await alarm_facade.get_rule(rule_id)
-            return preview_response(
-                action="delete",
+            return delete_preview(
                 resource_type="alarm_rule",
                 resource_id=rule_id,
-                current_state={"title": current.get("title")},
-                proposed_changes={"deleted": True},
+                resource_data={"rule_id": rule_id, "title": current.get("title")},
                 resource_name=current.get("title") or rule_id,
             )
 
