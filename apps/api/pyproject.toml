@@ -8,7 +8,7 @@ dependencies = [
     # API server registers controllers across all three products, so it
     # needs every product extra. unifi-core's optional extras pull in
     # aiounifi / uiprotect / py-unifi-access transparently.
-    "unifi-core[network,protect,access]>=0.4.21,<0.5",
+    "unifi-core[network,protect,access]>=0.4.22,<0.5",
     # services/manifest.py imports unifi_mcp_shared.meta_tools. unifi-core does not
     # depend on shared (import direction is app -> shared -> core), so this must be
     # declared directly or a PyPI install has no unifi_mcp_shared.
