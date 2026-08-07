@@ -1978,7 +1978,10 @@ No native ``protect_get_sensor`` tool exists — filter from LIST.
 
 ## untagged
 
-### `POST /v1/actions/{tool_name}` — Post Action
+### `POST /v1/actions/{tool_name}` — Preview or execute a catalog action
+
+
+Read actions execute immediately. Mutations with `confirm=false` validate the request and return a non-mutating preview with `requires_confirmation=true`; no mutation manager is invoked. Send the same request with `confirm=true` to execute it. Capability and argument checks apply to both paths.
 
 
 **Parameters:**

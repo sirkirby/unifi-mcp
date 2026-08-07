@@ -6,7 +6,8 @@ import inspect
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from unifi_core.redaction import redact_sensitive_fields
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -56,15 +57,27 @@ def _coerce_list_result(result: object, tool_name: str, kind: str) -> list:
 
 
 class ActionIn(BaseModel):
-    site: str
-    controller: str
-    args: dict = {}
-    confirm: bool = False
+    site: str = Field(description="Controller site to use for this action.")
+    controller: str = Field(description="Registered controller identifier.")
+    args: dict = Field(default_factory=dict, description="Arguments from the catalog entry's input schema.")
+    confirm: bool = Field(
+        default=False,
+        description=(
+            "For mutations, false validates and returns a non-mutating preview; true executes the action. "
+            "Read actions execute regardless of this value."
+        ),
+    )
 
 
 @router.post(
     "/actions/{tool_name}",
     dependencies=[Depends(require_scope(Scope.WRITE))],
+    summary="Preview or execute a catalog action",
+    description=(
+        "Read actions execute immediately. Mutations with `confirm=false` validate the request and return a "
+        "non-mutating preview with `requires_confirmation=true`; no mutation manager is invoked. Send the same "
+        "request with `confirm=true` to execute it. Capability and argument checks apply to both paths."
+    ),
 )
 async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
     sm = request.app.state.sessionmaker
@@ -106,8 +119,9 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 confirm=body.confirm,
             )
             redact_sensitive = request.app.state.config.policy.response.redact_sensitive_fields
-            tool_type = type_registry.lookup_tool(tool_name)
-            if tool_type is not None:
+            if isinstance(result, actions_svc.MutationPreview):
+                shaped = redact_sensitive_fields(result.payload, redact_sensitive=redact_sensitive)
+            elif (tool_type := type_registry.lookup_tool(tool_name)) is not None:
                 # Phase 6 PR2 — read tool migrated to a Strawberry type. Shape
                 # the manager output through Type.from_manager_output().to_dict()
                 # and wrap with the same {"success", "data", "render_hint"}

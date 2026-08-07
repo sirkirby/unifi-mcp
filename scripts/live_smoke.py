@@ -1950,10 +1950,10 @@ API_ACTION_SENTINELS: dict[str, str] = {
     "access": "access_list_doors",
 }
 
-API_CONFIRMATION_NEGATIVE_CONTROLS: dict[str, tuple[str, dict[str, Any]]] = {
+API_CONFIRMATION_PREVIEW_CONTROLS: dict[str, tuple[str, dict[str, Any]]] = {
     "network": ("unifi_reboot_device", {"mac_address": "00:00:00:00:00:00"}),
     "protect": ("protect_reboot_camera", {"camera_id": "__confirmation_probe__"}),
-    "access": ("access_unlock_door", {"door_id": "__confirmation_probe__"}),
+    "access": ("access_unlock_door", {"door_id": "__confirmation_probe__", "duration": 2}),
 }
 
 
@@ -1976,15 +1976,23 @@ def _validate_api_action_catalog(response: object) -> dict[str, Any]:
     }
 
 
-def _classify_confirmation_negative_control(status: int, response: object) -> dict[str, Any]:
-    error = str(response.get("error") or "") if isinstance(response, dict) else f"HTTP {status}: {response!r}"
+def _classify_confirmation_preview_control(
+    status: int,
+    response: object,
+    *,
+    expected_tool: str,
+) -> dict[str, Any]:
+    tool = str(response.get("tool") or "") if isinstance(response, dict) else ""
     passed = (
         status == 200
         and isinstance(response, dict)
-        and response.get("success") is False
-        and "requires confirm=true" in error
+        and response.get("success") is True
+        and response.get("requires_confirmation") is True
+        and response.get("action") in {"create", "update", "delete"}
+        and isinstance(response.get("preview"), dict)
+        and tool == expected_tool
     )
-    return {"passed": passed, "error": error}
+    return {"passed": passed, "tool_returned": tool, "response": response}
 
 
 def _classify_api_action_result(success: bool | None, shape_match: bool) -> str:
@@ -2207,9 +2215,11 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
         "db_path": str(db_path),
         "controllers": [],
         "catalog_probe": None,
-        "confirmation_negative_controls": [],
+        "confirmation_preview_controls": [],
         "results": [],
         "summary": {
+            "preview_controls_exercised": 0,
+            "preview_controls_passed": 0,
             "tools_exercised": 0,
             "passed": 0,
             "regressions": 0,
@@ -2310,8 +2320,10 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             controller_id = product_to_controller_id.get(product)
             if controller_id is None:
                 continue
-            tool_name, tool_args = API_CONFIRMATION_NEGATIVE_CONTROLS[product]
-            negative_status, negative_response = _http_request(
+            tool_name, tool_args = API_CONFIRMATION_PREVIEW_CONTROLS[product]
+            if args.tool and tool_name not in args.tool:
+                continue
+            preview_status, preview_response = _http_request(
                 "POST",
                 f"{base_url}/v1/actions/{tool_name}",
                 headers=auth_headers,
@@ -2322,20 +2334,27 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
                     "confirm": False,
                 },
             )
-            negative_result = _classify_confirmation_negative_control(negative_status, negative_response)
-            artifact["confirmation_negative_controls"].append(
+            preview_result = _classify_confirmation_preview_control(
+                preview_status,
+                preview_response,
+                expected_tool=tool_name,
+            )
+            artifact["confirmation_preview_controls"].append(
                 {
                     "product": product,
                     "tool": tool_name,
-                    "http_status": negative_status,
-                    **negative_result,
+                    "http_status": preview_status,
+                    **preview_result,
                 }
             )
             print(
-                f"  confirmation negative control: {tool_name} passed={negative_result['passed']}",
+                f"  confirmation preview control: {tool_name} passed={preview_result['passed']}",
                 flush=True,
             )
-            if not negative_result["passed"]:
+            artifact["summary"]["preview_controls_exercised"] += 1
+            if preview_result["passed"]:
+                artifact["summary"]["preview_controls_passed"] += 1
+            else:
                 artifact["summary"]["regressions"] += 1
 
         # Step 2: exercise the sample, comparing to baselines
@@ -2348,6 +2367,8 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
 
         for product, tool_name, tool_args in API_ACTIONS_SAMPLE:
             if product not in product_to_controller_id:
+                continue
+            if args.tool and tool_name not in args.tool:
                 continue
             controller_id = product_to_controller_id[product]
             site = site_for_product[product]

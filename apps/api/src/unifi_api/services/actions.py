@@ -8,6 +8,7 @@ from typing import Any, Iterable
 
 from jsonschema import Draft202012Validator
 from sqlalchemy.ext.asyncio import AsyncSession
+from unifi_core.confirmation import create_preview, delete_preview, preview_response
 from unifi_core.redaction import redaction_marker_paths
 
 from unifi_api.services.dispatch_overrides import (
@@ -33,6 +34,13 @@ class CapabilityMismatch(Exception):
 
 class DispatchEntryMissing(Exception):
     """Raised when a catalog entry has no callable Core manager binding."""
+
+
+@dataclass(frozen=True)
+class MutationPreview:
+    """Validated, non-executed mutation intent for the API response layer."""
+
+    payload: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -68,6 +76,53 @@ def _classify_action(entry: ToolEntry) -> str:
 
 async def _resolve_result(result: Any) -> Any:
     return await result if inspect.isawaitable(result) else result
+
+
+def _preview_resource_id(args: dict[str, Any]) -> str:
+    """Return the first public resource identifier in stable argument order."""
+    for name, value in args.items():
+        if (name in {"id", "mac", "mac_address"} or name.endswith("_id")) and value not in (None, ""):
+            return str(value)
+    return "(not yet assigned)"
+
+
+def _build_mutation_preview(entry: ToolEntry, site: str, args: dict[str, Any]) -> MutationPreview:
+    """Build a Core-standard preview without resolving or invoking a manager."""
+    resource_name = args.get("name")
+    if not isinstance(resource_name, str):
+        resource_name = None
+
+    if entry.permission_action == "create":
+        payload = create_preview(
+            resource_type=entry.category,
+            resource_data=dict(args),
+            resource_name=resource_name,
+        )
+    elif entry.permission_action == "delete":
+        payload = delete_preview(
+            resource_type=entry.category,
+            resource_id=_preview_resource_id(args),
+            resource_name=resource_name,
+            resource_data=dict(args),
+        )
+    else:
+        payload = preview_response(
+            action=entry.permission_action,
+            resource_type=entry.category,
+            resource_id=_preview_resource_id(args),
+            resource_name=resource_name,
+            current_state={},
+            proposed_changes=dict(args),
+        )
+
+    payload.update(
+        {
+            "tool": entry.name,
+            "product": entry.product,
+            "site": site,
+        }
+    )
+    return MutationPreview(payload)
 
 
 def _validate_action_args(entry: ToolEntry, args: dict[str, Any]) -> None:
@@ -110,8 +165,6 @@ async def dispatch_action(
         )
 
     action_kind = _classify_action(entry)
-    if not confirm and action_kind == "mutation":
-        raise ValueError(f"tool '{tool_name}' requires confirm=true")
 
     if dispatch_table is None:
         binding = DispatchEntry(entry.manager_attr, entry.manager_method)
@@ -139,18 +192,21 @@ async def dispatch_action(
             "omit them or use the dedicated resource endpoint."
         )
 
-    direct_adapter = DISPATCH_DIRECT_RESULT_ADAPTERS.get(tool_name)
-    if direct_adapter is not None:
-        handled, direct_result = direct_adapter(dict(args))
-        if handled:
-            return direct_result
-
     manager_args = dict(args)
     translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)
     if translator is not None:
         positional, keyword = translator(manager_args)
     else:
         positional, keyword = (), manager_args
+
+    if action_kind == "mutation" and not confirm:
+        return _build_mutation_preview(entry, site, args)
+
+    direct_adapter = DISPATCH_DIRECT_RESULT_ADAPTERS.get(tool_name)
+    if direct_adapter is not None:
+        handled, direct_result = direct_adapter(dict(args))
+        if handled:
+            return direct_result
 
     manager = await factory.get_domain_manager(
         session=session,

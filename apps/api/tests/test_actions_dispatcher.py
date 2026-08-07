@@ -11,6 +11,7 @@ from unifi_api.services.actions import (
     CapabilityMismatch,
     DispatchEntry,
     DispatchEntryMissing,
+    MutationPreview,
     build_dispatch_table,
     dispatch_action,
 )
@@ -123,14 +124,14 @@ def test_dispatchable_mutations_include_high_impact_sentinels() -> None:
     DISPATCHABLE_MUTATIONS,
     ids=[tool_name for tool_name, _entry in DISPATCHABLE_MUTATIONS],
 )
-async def test_every_dispatchable_mutation_requires_confirm(
+async def test_every_dispatchable_mutation_preview_never_resolves_manager(
     tool_name: str,
     entry: ToolEntry,
 ) -> None:
     factory = MagicMock()
 
-    with pytest.raises(ValueError, match=rf"tool '{tool_name}' requires confirm=true"):
-        await dispatch_action(
+    try:
+        result = await dispatch_action(
             registry=_registry_with(entry),
             factory=factory,
             session=MagicMock(),
@@ -140,8 +141,14 @@ async def test_every_dispatchable_mutation_requires_confirm(
             site="default",
             args={},
             confirm=False,
-            dispatch_table={},
         )
+    except ValueError:
+        # Most production mutations require arguments. Validation may reject
+        # this deliberately minimal probe, but it must still fail before a
+        # controller manager is resolved.
+        pass
+    else:
+        assert isinstance(result, MutationPreview)
 
     factory.get_domain_manager.assert_not_called()
 
@@ -456,19 +463,19 @@ async def test_capability_mismatch_precedes_safety_metadata_validation() -> None
 
 
 @pytest.mark.asyncio
-async def test_confirmation_precedes_argument_validation() -> None:
+async def test_preview_argument_validation_precedes_preview_response() -> None:
     entry = ToolEntry(
         name="access_update_test_resource",
         product="access",
         category="test",
-        manager="",
-        method="",
+        manager="test_manager",
+        method="update_test_resource",
         permission_action="update",
         read_only_hint=False,
     )
     factory = MagicMock()
 
-    with pytest.raises(ValueError, match="requires confirm=true"):
+    with pytest.raises(ValueError, match="include_sensitive is not supported"):
         await dispatch_action(
             registry=_registry_with(entry),
             factory=factory,
@@ -479,7 +486,6 @@ async def test_confirmation_precedes_argument_validation() -> None:
             site="default",
             args={"include_sensitive": True},
             confirm=False,
-            dispatch_table={},
         )
 
     factory.get_domain_manager.assert_not_called()
@@ -956,40 +962,45 @@ async def test_dispatch_protect_update_viewer_routes_to_apply_viewer_update() ->
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("tool_name", "product"),
+    ("tool_name", "product", "args"),
     [
-        ("unifi_delete_dns_record", "network"),
-        ("protect_alarm_delete_rule", "protect"),
-        ("access_delete_visitor", "access"),
+        ("unifi_delete_dns_record", "network", {"dns_record_id": "dns-1"}),
+        ("protect_alarm_delete_rule", "protect", {"rule_id": "rule-1"}),
+        ("access_delete_visitor", "access", {"visitor_id": "visitor-1"}),
     ],
 )
-async def test_dispatch_delete_actions_require_confirm(tool_name: str, product: str) -> None:
+async def test_dispatch_delete_actions_return_preview_without_manager(
+    tool_name: str,
+    product: str,
+    args: dict,
+) -> None:
     entry = ToolEntry(
         name=tool_name,
         product=product,
         category="test",
-        manager="",
-        method="",
+        manager="test_manager",
+        method="delete_resource",
         permission_action="delete",
         read_only_hint=False,
     )
     registry = _registry_with(entry)
     factory = MagicMock()
 
-    with pytest.raises(ValueError, match="requires confirm=true"):
-        await dispatch_action(
-            registry=registry,
-            factory=factory,
-            session=MagicMock(),
-            tool_name=tool_name,
-            controller_id="cid",
-            controller_products=[product],
-            site="default",
-            args={},
-            confirm=False,
-            dispatch_table={},
-        )
+    result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name=tool_name,
+        controller_id="cid",
+        controller_products=[product],
+        site="default",
+        args=args,
+        confirm=False,
+    )
 
+    assert isinstance(result, MutationPreview)
+    assert result.payload["action"] == "delete"
+    assert result.payload["tool"] == tool_name
     factory.get_domain_manager.assert_not_called()
 
 
@@ -1090,7 +1101,7 @@ async def test_dispatch_confirmed_delete_reaches_manager() -> None:
         ("protect_update_viewer", {"viewer_id": "viewer-1", "settings": {"name": "Lobby"}}),
     ],
 )
-async def test_dispatch_protect_capability_actions_require_confirm(tool_name: str, args: dict) -> None:
+async def test_dispatch_protect_capability_actions_return_preview(tool_name: str, args: dict) -> None:
     entry = ToolEntry(
         name=tool_name,
         product="protect",
@@ -1103,25 +1114,27 @@ async def test_dispatch_protect_capability_actions_require_confirm(tool_name: st
     registry = _registry_with(entry)
     factory = MagicMock()
 
-    with pytest.raises(ValueError, match="requires confirm=true"):
-        await dispatch_action(
-            registry=registry,
-            factory=factory,
-            session=MagicMock(),
-            tool_name=tool_name,
-            controller_id="cid",
-            controller_products=["protect"],
-            site="default",
-            args=args,
-            confirm=False,
-            dispatch_table=build_dispatch_table(),
-        )
+    result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name=tool_name,
+        controller_id="cid",
+        controller_products=["protect"],
+        site="default",
+        args=args,
+        confirm=False,
+        dispatch_table=build_dispatch_table(),
+    )
 
+    assert isinstance(result, MutationPreview)
+    assert result.payload["product"] == "protect"
+    assert result.payload["preview"]["proposed"] == args
     factory.get_domain_manager.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_dispatch_reorder_firewall_policies_requires_confirm() -> None:
+async def test_dispatch_reorder_firewall_policies_returns_preview() -> None:
     entry = ToolEntry(
         name="unifi_reorder_firewall_policies",
         product="network",
@@ -1134,32 +1147,35 @@ async def test_dispatch_reorder_firewall_policies_requires_confirm() -> None:
     registry = _registry_with(entry)
     factory = MagicMock()
 
-    with pytest.raises(ValueError, match="requires confirm=true"):
-        await dispatch_action(
-            registry=registry,
-            factory=factory,
-            session=MagicMock(),
-            tool_name="unifi_reorder_firewall_policies",
-            controller_id="cid",
-            controller_products=["network"],
-            site="default",
-            args={
-                "source_firewall_zone_id": "zone-src",
-                "destination_firewall_zone_id": "zone-dst",
-                "ordered_firewall_policy_ids": {
-                    "beforeSystemDefined": ["allow-1"],
-                    "afterSystemDefined": ["block-1"],
-                },
-            },
-            confirm=False,
-            dispatch_table={
-                "unifi_reorder_firewall_policies": DispatchEntry(
-                    manager_attr="firewall_manager",
-                    method="reorder_firewall_policies",
-                ),
-            },
-        )
+    args = {
+        "source_firewall_zone_id": "zone-src",
+        "destination_firewall_zone_id": "zone-dst",
+        "ordered_firewall_policy_ids": {
+            "beforeSystemDefined": ["allow-1"],
+            "afterSystemDefined": ["block-1"],
+        },
+    }
+    result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_reorder_firewall_policies",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args=args,
+        confirm=False,
+        dispatch_table={
+            "unifi_reorder_firewall_policies": DispatchEntry(
+                manager_attr="firewall_manager",
+                method="reorder_firewall_policies",
+            ),
+        },
+    )
 
+    assert isinstance(result, MutationPreview)
+    assert result.payload["preview"]["proposed"] == args
+    assert result.payload["resource_id"] == "zone-src"
     factory.get_domain_manager.assert_not_called()
 
 

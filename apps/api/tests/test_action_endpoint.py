@@ -108,7 +108,14 @@ async def test_action_endpoint_enforces_confirmation_before_manager_interaction(
             },
         )
         assert unconfirmed_response.status_code == 200
-        assert "requires confirm=true" in unconfirmed_response.json()["error"]
+        preview = unconfirmed_response.json()
+        assert preview["success"] is True
+        assert preview["requires_confirmation"] is True
+        assert preview["tool"] == "access_unlock_door"
+        assert preview["product"] == "access"
+        assert preview["action"] == "update"
+        assert preview["resource_id"] == "door-1"
+        assert preview["preview"]["proposed"] == {"door_id": "door-1", "duration": 2}
         factory.get_domain_manager.assert_not_awaited()
         manager.apply_unlock_door.assert_not_awaited()
 
@@ -125,6 +132,85 @@ async def test_action_endpoint_enforces_confirmation_before_manager_interaction(
         assert confirmed_response.status_code == 200
         assert confirmed_response.json()["success"] is True
         manager.apply_unlock_door.assert_awaited_once_with(door_id="door-1", duration=2)
+
+
+@pytest.mark.parametrize(
+    ("product", "tool_name", "args", "manager_method"),
+    [
+        ("network", "unifi_reboot_device", {"mac_address": "aa:bb:cc:dd:ee:ff"}, "reboot_device"),
+        ("protect", "protect_reboot_camera", {"camera_id": "camera-1"}, "apply_reboot_camera"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_action_endpoint_previews_network_and_protect_without_manager_interaction(
+    tmp_path,
+    monkeypatch,
+    product,
+    tool_name,
+    args,
+    manager_method,
+) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds=product)
+    manager = MagicMock()
+    setattr(manager, manager_method, AsyncMock(return_value=True))
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/v1/actions/{tool_name}",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": args, "confirm": False},
+        )
+
+    assert response.status_code == 200
+    preview = response.json()
+    assert preview["success"] is True
+    assert preview["requires_confirmation"] is True
+    assert preview["tool"] == tool_name
+    assert preview["product"] == product
+    assert preview["preview"]["proposed"] == args
+    if product == "network":
+        assert preview["resource_id"] == args["mac_address"]
+    factory.get_domain_manager.assert_not_awaited()
+    getattr(manager, manager_method).assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_redacts_sensitive_preview_fields(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock()
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/actions/unifi_create_wlan",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "site": "default",
+                "controller": cid,
+                "args": {
+                    "wlan_data": {
+                        "name": "Preview only",
+                        "security": "wpa2-psk",
+                        "x_passphrase": "do-not-return-this",
+                    }
+                },
+                "confirm": False,
+            },
+        )
+
+    assert response.status_code == 200
+    preview = response.json()
+    assert preview["success"] is True
+    assert preview["requires_confirmation"] is True
+    assert preview["preview"]["will_create"]["wlan_data"]["x_passphrase"] == "***REDACTED***"
+    assert "do-not-return-this" not in response.text
+    factory.get_domain_manager.assert_not_awaited()
 
 
 @pytest.mark.asyncio

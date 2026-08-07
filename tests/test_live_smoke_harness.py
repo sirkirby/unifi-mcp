@@ -33,18 +33,43 @@ def test_live_api_catalog_probe_reports_exact_parity(monkeypatch, tmp_path):
     assert all(result["sentinels"].values())
 
 
-def test_live_api_confirmation_negative_control_requires_interlock_error():
+def test_live_api_confirmation_preview_control_requires_safe_preview():
     import live_smoke
 
-    assert live_smoke._classify_confirmation_negative_control(
+    response = {
+        "success": True,
+        "requires_confirmation": True,
+        "tool": "unifi_reboot_device",
+        "action": "update",
+        "preview": {"proposed": {"mac_address": "00:00:00:00:00:00"}},
+    }
+    assert live_smoke._classify_confirmation_preview_control(
         200,
-        {"success": False, "error": "tool 'unifi_reboot_device' requires confirm=true"},
-    ) == {"passed": True, "error": "tool 'unifi_reboot_device' requires confirm=true"}
-    assert live_smoke._classify_confirmation_negative_control(200, {"success": True})["passed"] is False
+        response,
+        expected_tool="unifi_reboot_device",
+    ) == {"passed": True, "tool_returned": "unifi_reboot_device", "response": response}
     assert (
-        live_smoke._classify_confirmation_negative_control(200, {"success": False, "error": "device not found"})[
-            "passed"
-        ]
+        live_smoke._classify_confirmation_preview_control(
+            200,
+            {"success": True},
+            expected_tool="unifi_reboot_device",
+        )["passed"]
+        is False
+    )
+    assert (
+        live_smoke._classify_confirmation_preview_control(
+            200,
+            {"success": False, "error": "tool 'unifi_reboot_device' requires confirm=true"},
+            expected_tool="unifi_reboot_device",
+        )["passed"]
+        is False
+    )
+    assert (
+        live_smoke._classify_confirmation_preview_control(
+            200,
+            {**response, "tool": "protect_reboot_camera"},
+            expected_tool="unifi_reboot_device",
+        )["passed"]
         is False
     )
 
