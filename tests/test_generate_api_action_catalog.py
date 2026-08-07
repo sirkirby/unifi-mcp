@@ -37,11 +37,22 @@ def _write_synthetic_repo(root: Path) -> None:
                         "name": "unifi_list_zebras",
                         "permission_category": "widgets",
                         "annotations": {"readOnlyHint": True},
+                        "schema": {
+                            "input": {
+                                "type": "object",
+                                "properties": {
+                                    "query": {"type": "string"},
+                                    "confirm": {"type": "boolean"},
+                                },
+                                "required": ["query", "confirm"],
+                            }
+                        },
                     },
                     {
                         "name": "unifi_list_widgets",
                         "permission_category": "widgets",
                         "annotations": {"readOnlyHint": True},
+                        "schema": {"input": {"type": "object", "properties": {}}},
                     },
                 ],
             }
@@ -130,6 +141,7 @@ def test_render_catalog_is_deterministic_and_normalizes_reads(tmp_path: Path) ->
                 "read_only_hint": True,
                 "manager_attr": "widget_manager",
                 "manager_method": "get_widgets",
+                "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
                 "name": "unifi_list_zebras",
@@ -139,6 +151,12 @@ def test_render_catalog_is_deterministic_and_normalizes_reads(tmp_path: Path) ->
                 "read_only_hint": True,
                 "manager_attr": "widget_manager",
                 "manager_method": "get_zebras",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                    "additionalProperties": False,
+                },
             },
         ],
         "excluded": [],

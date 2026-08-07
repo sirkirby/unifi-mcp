@@ -61,7 +61,9 @@ def test_every_catalog_action_can_invoke_its_core_manager_signature() -> None:
 
     for action in catalog["actions"]:
         name = action["name"]
-        public_parameters = set(manifests[name]["schema"]["input"].get("properties", {})) - {"confirm"}
+        input_schema = manifests[name]["schema"]["input"]
+        public_parameters = set(input_schema.get("properties", {})) - {"confirm"}
+        public_required = set(input_schema.get("required", [])) - {"confirm"}
         manager_type = manager_types[(action["product"], action["manager_attr"])]
         method = getattr(manager_type, action["manager_method"])
         signature = inspect.signature(method)
@@ -87,7 +89,8 @@ def test_every_catalog_action_can_invoke_its_core_manager_signature() -> None:
         translator = DISPATCH_ARG_TRANSLATORS.get(name)
         dispatched = set(translator.manager_parameters) if translator is not None else public_parameters
         unexpected = set() if accepts_kwargs else dispatched - accepted
-        missing = required - dispatched
+        guaranteed = dispatched if translator is not None else public_required
+        missing = required - guaranteed
         if unexpected or missing:
             failures.append(
                 f"{name} -> {action['manager_attr']}.{action['manager_method']} "

@@ -310,7 +310,8 @@ async def protect_update_chime(
     description=(
         "Plays the chime tone on a specific chime device. Optionally override "
         "volume (0-100) and repeat times (1-6) for this playback only. "
-        "The chime's default settings are used if not specified."
+        "The chime's default settings are used if not specified. Requires "
+        "confirm=True to play the chime; otherwise returns a preview."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=False),
     permission_category="chime",
@@ -330,14 +331,37 @@ async def protect_trigger_chime(
             description="Override repeat count for this playback only (1-6). Omit to use the chime's configured repeat setting."
         ),
     ] = None,
+    confirm: Annotated[
+        bool,
+        Field(description="When true, plays the chime. When false (default), returns a preview."),
+    ] = False,
 ) -> Dict[str, Any]:
     """Trigger a chime to play its tone."""
-    logger.info("protect_trigger_chime tool called for %s (volume=%s, repeat=%s)", chime_id, volume, repeat_times)
+    logger.info(
+        "protect_trigger_chime tool called for %s (volume=%s, repeat=%s, confirm=%s)",
+        chime_id,
+        volume,
+        repeat_times,
+        confirm,
+    )
     try:
         try:
             TriggerChimeInput(chime_id=chime_id, volume=volume, repeat_times=repeat_times)
         except ValidationError as e:
             return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+        if not confirm:
+            proposed_changes: Dict[str, Any] = {"triggered": True}
+            if volume is not None:
+                proposed_changes["volume"] = volume
+            if repeat_times is not None:
+                proposed_changes["repeat_times"] = repeat_times
+            return preview_response(
+                action="trigger",
+                resource_type="chime",
+                resource_id=chime_id,
+                current_state={},
+                proposed_changes=proposed_changes,
+            )
         result = await chime_manager.trigger_chime(
             chime_id=chime_id,
             volume=volume,

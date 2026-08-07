@@ -346,7 +346,12 @@ def _translate_gateway_settings_update(args: dict[str, Any]) -> tuple[tuple[Any,
     from unifi_core.network.models.gateway_settings import to_controller_update
 
     update_data = args.get("update_data") or {}
-    return (to_controller_update(update_data),), {}
+    if not update_data:
+        raise ValueError("update_data cannot be empty")
+    payload = to_controller_update(update_data)
+    if not payload:
+        raise ValueError("No valid mutable fields provided for update")
+    return (payload,), {}
 
 
 def _translate_create_dynamic_dns(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -412,16 +417,95 @@ def _parse_iso_datetime(value: Any) -> Any:
 
 def _translate_export_clip(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Parse ISO start/end strings into datetime for recording_manager.export_clip."""
+    from unifi_core.protect.models._actions import ExportClipInput
+
+    model = ExportClipInput(**args)
+    public = model.model_dump(exclude_none=True)
     kwargs: dict[str, Any] = {
-        "camera_id": args["camera_id"],
-        "start": _parse_iso_datetime(args["start"]),
-        "end": _parse_iso_datetime(args["end"]),
+        "camera_id": public["camera_id"],
+        "start": _parse_iso_datetime(public["start"]),
+        "end": _parse_iso_datetime(public["end"]),
     }
-    if "channel_index" in args and args["channel_index"] is not None:
-        kwargs["channel_index"] = args["channel_index"]
-    if "fps" in args and args["fps"] is not None:
-        kwargs["fps"] = args["fps"]
+    if "channel_index" in public:
+        kwargs["channel_index"] = public["channel_index"]
+    if "fps" in public:
+        kwargs["fps"] = public["fps"]
     return (), kwargs
+
+
+def _translate_detection_search(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    out = dict(args)
+    out.setdefault("limit", 100)
+    out.setdefault("order", "desc")
+    out.setdefault("exclude_motion", True)
+    out.setdefault("min_confidence", None)
+    out["start"] = _parse_iso_datetime(out.get("start"))
+    out["end"] = _parse_iso_datetime(out.get("end"))
+    return (), out
+
+
+def _translate_ptz_preset(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.protect.models._actions import PtzPresetInput
+
+    return (), PtzPresetInput(**args).model_dump()
+
+
+def _translate_ptz_move(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.protect.models._actions import PtzMoveInput
+
+    return (), PtzMoveInput(**args).model_dump()
+
+
+def _translate_toggle_rtsp(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.protect.models._actions import ToggleRtspInput
+
+    return (), ToggleRtspInput(**args).model_dump()
+
+
+def _translate_trigger_chime(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.protect.models._actions import TriggerChimeInput
+
+    return (), TriggerChimeInput(**args).model_dump(exclude_none=True)
+
+
+def _translate_alarm_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.protect.models._actions import AlarmCreateRuleInput
+    from unifi_core.protect.models._validators import require_non_empty_actions
+
+    fields = dict(AlarmCreateRuleInput(body=args["body"]).body)
+    require_non_empty_actions(fields.get("actions"))
+    return (), {"fields": fields}
+
+
+def _translate_alarm_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.protect.models._actions import AlarmUpdateRuleInput
+    from unifi_core.protect.models._validators import require_non_empty_actions
+
+    fields = dict(args["fields"])
+    if not fields:
+        raise ValueError("No fields provided. Specify at least one field to update.")
+    validated = AlarmUpdateRuleInput(rule_id=args["rule_id"], body=fields)
+    if "actions" in fields:
+        require_non_empty_actions(fields["actions"])
+    return (), {"rule_id": validated.rule_id, "fields": dict(validated.body)}
+
+
+def _translate_alarm_delete(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.protect.models._actions import AlarmDeleteRuleInput
+
+    return (), AlarmDeleteRuleInput(**args).model_dump()
+
+
+def _translate_access_unlock(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.access.models._actions import UnlockDoorInput
+
+    return (), UnlockDoorInput(**args).model_dump()
+
+
+def _translate_create_voucher(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models._actions import CreateVoucherInput
+
+    return (), CreateVoucherInput(**args).model_dump(exclude_none=True)
 
 
 def _translate_delete_recording(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -431,6 +515,33 @@ def _translate_delete_recording(args: dict[str, Any]) -> tuple[tuple[Any, ...], 
         "start": _parse_iso_datetime(args["start"]),
         "end": _parse_iso_datetime(args["end"]),
     }
+
+
+def _alarm_facade_result(result: Any, _args: dict[str, Any], _manager: Any) -> dict[str, Any]:
+    if not (
+        isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], dict) and isinstance(result[1], bool)
+    ):
+        raise ValueError("Alarm facade returned an invalid mutation result")
+    payload, complete = result
+    out = dict(payload)
+    if not complete:
+        out["_meta"] = {
+            "com.github.sirkirby.unifi-mcp/alarm-coverage": {
+                "complete": False,
+                "reason": (
+                    "Showing legacy Protect automations: the UniFi-OS Alarm Manager "
+                    "(/api/v2/alarms) returned no rules or is unavailable on this console, "
+                    "so AI-powered alarms (where supported) are not included."
+                ),
+            }
+        }
+    return out
+
+
+def _delete_recording_result(result: Any, _args: dict[str, Any], _manager: Any) -> Any:
+    if isinstance(result, dict) and result.get("supported") is False:
+        raise ValueError(str(result.get("message") or "Individual recording deletion is not supported"))
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -602,7 +713,7 @@ def _translate_get_top_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], d
     """Convert ``duration`` string → ``duration_hours`` int for stats_manager.get_top_clients."""
     out = dict(args)
     duration = out.pop("duration", "daily")
-    duration_hours = _DURATION_HOURS.get(str(duration), 24)
+    duration_hours = _DURATION_HOURS.get(str(duration), 1)
     return (), {"duration_hours": duration_hours, "limit": out.get("limit", 10)}
 
 
@@ -618,10 +729,26 @@ def _translate_list_events(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[
 
 def _translate_client_ip_settings(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Rename the MAC and remove the wrapper-only network lookup hint."""
-    out = dict(args)
-    out["client_mac"] = out.pop("mac_address")
-    out.pop("network_id", None)
-    return (), out
+    from unifi_core.network.models._actions import SetClientIpSettingsInput
+
+    model = SetClientIpSettingsInput(**args)
+    public = model.model_dump(exclude_none=True)
+    client_mac = public.pop("mac_address")
+    if not public:
+        raise ValueError(
+            "At least one setting must be provided "
+            "(use_fixedip, fixed_ip, local_dns_record_enabled, or local_dns_record)."
+        )
+    return (), {"client_mac": client_mac, **public}
+
+
+def _translate_authorize_guest(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models._actions import AuthorizeGuestInput
+
+    model = AuthorizeGuestInput(**args)
+    public = model.model_dump(exclude_none=True)
+    public["client_mac"] = public.pop("mac_address")
+    return (), public
 
 
 def _translate_list_alarms(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -723,7 +850,13 @@ def _translate_jumbo_frames(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict
 
 
 def _translate_route_args(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.route import validate_static_route_fields
+
     out = dict(args)
+    route_id = out.pop("route_id", None)
+    out = validate_static_route_fields(out, require_complete=route_id is None)
+    if route_id is not None:
+        out["route_id"] = route_id
     for source, target in {
         "network": "static_route_network",
         "nexthop": "static_route_nexthop",
@@ -804,9 +937,9 @@ def _translate_create_simple_port_forward(args: dict[str, Any]) -> tuple[tuple[A
     model = PortForwardCreateInput(
         name=simple.name,
         dst_port=simple.ext_port,
-        fwd_port=simple.int_port or simple.ext_port,
+        fwd_port=simple.int_port if simple.int_port is not None else simple.ext_port,
         fwd_ip=simple.to_ip,
-        protocol="tcp_udp" if simple.protocol == "both" else simple.protocol,
+        protocol={"tcp": "tcp", "udp": "udp", "both": "tcp_udp"}.get(simple.protocol, "tcp_udp"),
         enabled=simple.enabled,
     )
     return (), {"rule_data": _port_forward_payload(model)}
@@ -962,6 +1095,8 @@ def _translate_access_credential(args: dict[str, Any]) -> tuple[tuple[Any, ...],
     from unifi_core.access.models.credentials import Credential, to_controller_create
 
     data = args.get("credential_data") or {}
+    if not data:
+        raise ValueError("No credential data provided")
     model = Credential(
         type=args["credential_type"],
         user_id=data.get("user_id"),
@@ -973,15 +1108,24 @@ def _translate_access_credential(args: dict[str, Any]) -> tuple[tuple[Any, ...],
 
 
 def _translate_radio_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    from unifi_core.network.models.devices import radio_to_controller_update
+    from unifi_core.network.models.devices import validate_radio_update
 
     out = dict(args)
     device_mac = out.pop("mac_address")
     radio_id = out.pop("radio")
-    updates = radio_to_controller_update({key: value for key, value in out.items() if key in _RADIO_UPDATE_FIELDS})
-    if not updates:
-        raise ValueError("No valid radio settings provided to update")
+    updates = validate_radio_update(
+        radio_id,
+        {key: value for key, value in out.items() if key in _RADIO_UPDATE_FIELDS},
+    )
     return (), {"device_mac": device_mac, "radio_id": radio_id, "updates": updates}
+
+
+def _translate_device_led(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    led_state = args["led_state"]
+    valid_states = ("on", "off", "default")
+    if led_state not in valid_states:
+        raise ValueError(f"Invalid led_state '{led_state}'. Must be one of: {', '.join(valid_states)}")
+    return (), {"device_mac": args["device_mac"], "led_override": led_state}
 
 
 def _snapshot_direct_result(args: dict[str, Any]) -> tuple[bool, Any]:
@@ -1048,13 +1192,17 @@ DISPATCH_DIRECT_RESULT_ADAPTERS: dict[str, DirectResultAdapter] = {
 DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
     "protect_get_snapshot": _snapshot_result,
     "protect_recent_events": _recent_events_result,
+    "protect_alarm_create_rule": _alarm_facade_result,
+    "protect_alarm_update_rule": _alarm_facade_result,
+    "protect_alarm_delete_rule": _alarm_facade_result,
+    "protect_delete_recording": _delete_recording_result,
 }
 
 
 def _translate_access_users(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     out = dict(args)
-    if "limit" in out:
-        out["page_size"] = out.pop("limit")
+    limit = out.pop("limit", None)
+    out["page_size"] = limit if isinstance(limit, int) and limit > 0 else 25
     return (), out
 
 
@@ -1067,6 +1215,21 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_create_dynamic_dns": _spec(_translate_create_dynamic_dns, "entry_data"),
     "unifi_update_dynamic_dns": _spec(_translate_update_dynamic_dns, "entry_id", "entry_data"),
     "protect_export_clip": _spec(_translate_export_clip, "camera_id", "start", "end", "channel_index", "fps"),
+    "protect_search_detections": _spec(
+        _translate_detection_search,
+        "labels",
+        "limit",
+        "order",
+        "exclude_motion",
+        "min_confidence",
+        "start",
+        "end",
+    ),
+    "protect_ptz_preset": _spec(_translate_ptz_preset, "camera_id", "preset_slot"),
+    "protect_ptz_move": _spec(_translate_ptz_move, "camera_id", "pan", "tilt", "duration_ms"),
+    "protect_toggle_rtsp": _spec(_translate_toggle_rtsp, "camera_id", "enabled", "quality"),
+    "protect_trigger_chime": _spec(_translate_trigger_chime, "chime_id", "volume", "repeat_times"),
+    "access_unlock_door": _spec(_translate_access_unlock, "door_id", "duration"),
     "protect_delete_recording": _spec(_translate_delete_recording, "camera_id", "start", "end"),
     "protect_update_chime": _spec(_translate_chime_update, "chime_id", "settings"),
     "protect_update_sensor_settings": _spec(_translate_sensor_settings_update, "sensor_id", "settings"),
@@ -1075,7 +1238,24 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_unblock_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
     "unifi_rename_client": _spec(_rename_mac_address_to_client_mac, "client_mac", "name"),
     "unifi_force_reconnect_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
-    "unifi_authorize_guest": _spec(_rename_mac_address_to_client_mac, "client_mac", "minutes"),
+    "unifi_authorize_guest": _spec(
+        _translate_authorize_guest,
+        "client_mac",
+        "minutes",
+        "up_kbps",
+        "down_kbps",
+        "bytes_quota",
+    ),
+    "unifi_create_voucher": _spec(
+        _translate_create_voucher,
+        "expire_minutes",
+        "count",
+        "quota",
+        "note",
+        "up_limit_kbps",
+        "down_limit_kbps",
+        "bytes_limit_mb",
+    ),
     "unifi_unauthorize_guest": _spec(_rename_mac_address_to_client_mac, "client_mac"),
     "unifi_set_client_ip_settings": _spec(
         _translate_client_ip_settings,
@@ -1106,7 +1286,9 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "access_create_credential": _spec(_translate_access_credential, "credential_type", "data"),
     "access_list_users": _spec(_translate_access_users, "page_num", "page_size", "compact"),
     # Protect wrapper-only aliases and response-shaping switches.
-    "protect_alarm_create_rule": _spec(_rename_payload("body", "fields"), "fields"),
+    "protect_alarm_create_rule": _spec(_translate_alarm_create, "fields"),
+    "protect_alarm_update_rule": _spec(_translate_alarm_update, "rule_id", "fields"),
+    "protect_alarm_delete_rule": _spec(_translate_alarm_delete, "rule_id"),
     "protect_get_snapshot": _spec(_translate_snapshot, "camera_id", "width", "height"),
     "protect_recent_events": _spec(_translate_recent_events, "event_type", "camera_id", "min_confidence", "limit"),
     # Network identifier aliases.
@@ -1231,7 +1413,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     ),
     "unifi_list_wlans": _spec(_rename_and_drop(drop=frozenset({"enabled_only", "limit", "search"}))),
     # Network mutation payload transforms.
-    "unifi_set_device_led": _spec(_rename_and_drop(rename={"led_state": "led_override"}), "device_mac", "led_override"),
+    "unifi_set_device_led": _spec(_translate_device_led, "device_mac", "led_override"),
     "unifi_set_jumbo_frames": _spec(_translate_jumbo_frames, "device_mac", "config_data"),
     "unifi_set_outlet_state": _spec(
         _rename_and_drop(rename={"mac_address": "device_mac"}),

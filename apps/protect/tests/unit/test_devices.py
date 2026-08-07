@@ -845,6 +845,18 @@ class TestChimeManagerTrigger:
         chime.play.assert_awaited_once_with(volume=50, repeat_times=3)
 
     @pytest.mark.asyncio
+    async def test_trigger_rejects_invalid_overrides_before_play(self, mock_cm_chimes):
+        from unifi_core.protect.managers.chime_manager import ChimeManager
+
+        mgr = ChimeManager(mock_cm_chimes)
+        chime = mock_cm_chimes.client.bootstrap.chimes["chime-001"]
+
+        with pytest.raises(ValueError, match="less than or equal to 100"):
+            await mgr.trigger_chime("chime-001", volume=101)
+
+        chime.play.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_trigger_not_found(self, mock_cm_chimes):
         from unifi_core.protect.managers.chime_manager import ChimeManager
 
@@ -1227,13 +1239,23 @@ class TestProtectUpdateChimeTool:
 
 class TestProtectTriggerChimeTool:
     @pytest.mark.asyncio
+    async def test_requires_confirmation(self, mock_chime_manager):
+        from unifi_protect_mcp.tools.devices import protect_trigger_chime
+
+        result = await protect_trigger_chime("chime-001")
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        mock_chime_manager.trigger_chime.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_success(self, mock_chime_manager):
         from unifi_protect_mcp.tools.devices import protect_trigger_chime
 
         mock_chime_manager.trigger_chime = AsyncMock(
             return_value={"chime_id": "chime-001", "triggered": True, "volume": 80}
         )
-        result = await protect_trigger_chime("chime-001")
+        result = await protect_trigger_chime("chime-001", confirm=True)
         assert result["success"] is True
         assert result["data"]["triggered"] is True
 
@@ -1244,7 +1266,7 @@ class TestProtectTriggerChimeTool:
         mock_chime_manager.trigger_chime = AsyncMock(
             return_value={"chime_id": "chime-001", "triggered": True, "volume": 50, "repeat_times": 3}
         )
-        result = await protect_trigger_chime("chime-001", volume=50, repeat_times=3)
+        result = await protect_trigger_chime("chime-001", volume=50, repeat_times=3, confirm=True)
         assert result["success"] is True
         assert result["data"]["volume"] == 50
 
@@ -1253,7 +1275,7 @@ class TestProtectTriggerChimeTool:
         from unifi_protect_mcp.tools.devices import protect_trigger_chime
 
         mock_chime_manager.trigger_chime = AsyncMock(side_effect=ValueError("Chime not found: bad-id"))
-        result = await protect_trigger_chime("bad-id")
+        result = await protect_trigger_chime("bad-id", confirm=True)
         assert result["success"] is False
         assert "Chime not found" in result["error"]
 
@@ -1262,5 +1284,5 @@ class TestProtectTriggerChimeTool:
         from unifi_protect_mcp.tools.devices import protect_trigger_chime
 
         mock_chime_manager.trigger_chime = AsyncMock(side_effect=RuntimeError("network error"))
-        result = await protect_trigger_chime("chime-001")
+        result = await protect_trigger_chime("chime-001", confirm=True)
         assert result["success"] is False

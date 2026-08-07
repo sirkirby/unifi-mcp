@@ -37,11 +37,14 @@ stdout and is intended to be read directly from the CI log.
 
 from __future__ import annotations
 
+import argparse
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import venv
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -93,6 +96,65 @@ if missing:
     for mod_name, dep in missing:
         print("  {{}} -> missing dependency: {{}}".format(mod_name, dep))
     sys.exit(1)
+"""
+
+_API_CATALOG_FLOOR_CONTRACT = """
+import dis, inspect
+from unifi_api.services.dispatch_overrides import DISPATCH_ARG_TRANSLATORS
+from unifi_api.services.managers import _PRODUCT_BUILDERS
+from unifi_api.services.manifest import ManifestRegistry
+
+manager_types = {}
+for product, factory in _PRODUCT_BUILDERS.items():
+    for manager_attr, builder in factory().items():
+        closure = dict(zip(builder.__code__.co_freevars, builder.__closure__ or (), strict=True))
+        target_name = next(
+            instruction.argval
+            for instruction in dis.get_instructions(builder)
+            if instruction.opname == "LOAD_DEREF" and instruction.argval in closure
+        )
+        manager_types[(product, manager_attr)] = closure[target_name].cell_contents
+
+failures = []
+registry = ManifestRegistry.load()
+for name in registry.all_tools():
+    entry = registry.resolve(name)
+    manager_type = manager_types[(entry.product, entry.manager_attr)]
+    method = getattr(manager_type, entry.manager_method, None)
+    if method is None or not callable(method):
+        failures.append(f"{name}: missing {entry.manager_attr}.{entry.manager_method}")
+        continue
+    signature = inspect.signature(method)
+    parameters = {key: value for key, value in signature.parameters.items() if key != "self"}
+    accepts_kwargs = any(value.kind is inspect.Parameter.VAR_KEYWORD for value in parameters.values())
+    accepted = {
+        key for key, value in parameters.items()
+        if value.kind in {
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        }
+    }
+    required = {
+        key for key, value in parameters.items()
+        if value.default is inspect.Parameter.empty
+        and value.kind not in {inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD}
+    }
+    public = set(entry.input_schema.get("properties", {}))
+    public_required = set(entry.input_schema.get("required", []))
+    translator = DISPATCH_ARG_TRANSLATORS.get(name)
+    dispatched = set(translator.manager_parameters) if translator is not None else public
+    guaranteed = dispatched if translator is not None else public_required
+    unexpected = set() if accepts_kwargs else dispatched - accepted
+    missing = required - guaranteed
+    if unexpected or missing:
+        failures.append(
+            f"{name}: {entry.manager_attr}.{entry.manager_method} "
+            f"unexpected={sorted(unexpected)} missing={sorted(missing)}"
+        )
+if failures:
+    raise SystemExit("\n".join(failures))
+print(f"validated {len(registry)} catalog bindings against installed Core floor")
 """
 
 
@@ -165,7 +227,62 @@ def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, 
     return True, "OK"
 
 
+def api_core_floor_from_wheel(wheel: Path) -> str:
+    """Extract the API wheel's declared minimum unifi-core version."""
+    with zipfile.ZipFile(wheel) as archive:
+        metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+        metadata = archive.read(metadata_name).decode()
+    requirement = next(
+        (line for line in metadata.splitlines() if line.lower().startswith("requires-dist: unifi-core")),
+        None,
+    )
+    if requirement is None:
+        raise RuntimeError("API wheel does not declare a unifi-core dependency")
+    match = re.search(r">=\s*([0-9]+(?:\.[0-9]+)*)", requirement)
+    if match is None:
+        raise RuntimeError(f"API unifi-core dependency has no minimum version: {requirement}")
+    return match.group(1)
+
+
+def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
+    """Install and contract-check the API against exactly its published Core floor."""
+    floor = api_core_floor_from_wheel(api_wheel)
+    venv.create(venv_dir, with_pip=True, clear=True, symlinks=True)
+    py = venv_dir / "bin" / "python"
+    try:
+        run_capture(
+            [
+                str(py),
+                "-m",
+                "pip",
+                "install",
+                "--quiet",
+                "--disable-pip-version-check",
+                "--index-url",
+                "https://pypi.org/simple",
+                f"unifi-core[network,protect,access]=={floor}",
+                str(api_wheel),
+            ]
+        )
+        run_capture([str(py), "-m", "pip", "check"])
+        result = run_capture([str(py), "-c", _API_CATALOG_FLOOR_CONTRACT])
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or "").strip()[-3000:]
+        return (
+            False,
+            f"Core floor {floor} is unpublished or contract-incompatible.\n{detail}",
+        )
+    return True, f"Core floor {floor}: {(result.stdout or '').strip()}"
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--api-core-floor-only",
+        action="store_true",
+        help="Verify the API wheel against exactly its published minimum unifi-core version.",
+    )
+    args = parser.parse_args()
     if shutil.which("uv") is None:
         print("error: `uv` is not on PATH", file=sys.stderr)
         return 2
@@ -174,6 +291,12 @@ def main() -> int:
         tmp_path = Path(tmp)
         find_links = tmp_path / "wheels"
         find_links.mkdir()
+
+        if args.api_core_floor_only:
+            api_wheel = build_wheel(REPO / "apps/api", tmp_path / "api")
+            ok, message = check_api_core_floor(api_wheel, tmp_path / "api-floor-venv")
+            print(("PASS: " if ok else "FAIL: ") + message)
+            return 0 if ok else 1
 
         print("Building upstream wheels (workspace) -> --find-links source")
         for name, path in UPSTREAM_PACKAGES.items():
@@ -228,6 +351,14 @@ def main() -> int:
                 "Procedure D for the manual wheel-metadata check this CI gate "
                 "automates."
             )
+            return 1
+
+        api_wheel = build_wheel(REPO / "apps/api", tmp_path / "api-floor")
+        floor_ok, floor_message = check_api_core_floor(api_wheel, tmp_path / "api-floor-venv")
+        print()
+        print(f"  [{'PASS' if floor_ok else 'FAIL'}] API catalog against published Core floor")
+        print(f"  {floor_message}")
+        if not floor_ok:
             return 1
 
         print()

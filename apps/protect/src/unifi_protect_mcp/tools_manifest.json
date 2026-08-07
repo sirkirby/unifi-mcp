@@ -5008,7 +5008,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Plays the chime tone on a specific chime device. Optionally override volume (0-100) and repeat times (1-6) for this playback only. The chime's default settings are used if not specified.",
+      "description": "Plays the chime tone on a specific chime device. Optionally override volume (0-100) and repeat times (1-6) for this playback only. The chime's default settings are used if not specified. Requires confirm=True to play the chime; otherwise returns a preview.",
       "name": "protect_trigger_chime",
       "permission_action": "update",
       "permission_category": "chime",
@@ -5018,6 +5018,10 @@
             "chime_id": {
               "description": "Chime device UUID (from protect_list_chimes)",
               "type": "string"
+            },
+            "confirm": {
+              "description": "When true, plays the chime. When false (default), returns a preview.",
+              "type": "boolean"
             },
             "repeat_times": {
               "description": "Override repeat count for this playback only (1-6). Omit to use the chime's configured repeat setting.",

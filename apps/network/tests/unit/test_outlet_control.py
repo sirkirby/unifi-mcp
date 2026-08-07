@@ -274,6 +274,17 @@ class TestSetOutletState:
         mock_connection.request.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_rejects_outlet_without_controllable_relay(self, device_manager, mock_connection):
+        pdu = _make_pdu_device()
+        pdu.raw["outlet_table"][0]["has_relay"] = False
+        mock_connection.controller.devices.values.return_value = [pdu]
+
+        with pytest.raises(ValueError, match="does not have a controllable relay"):
+            await device_manager.set_outlet_state(pdu.mac, outlet_index=1, relay_state=False)
+
+        mock_connection.request.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_returns_none_for_non_pdu(self, device_manager, mock_connection):
         ap = _make_ap_device()
         mock_connection.controller.devices.values.return_value = [ap]

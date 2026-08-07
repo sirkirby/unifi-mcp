@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.resources import files
 from typing import Any
 
@@ -32,6 +32,7 @@ class ToolEntry:
     method: str
     permission_action: str = ""
     read_only_hint: bool | None = None
+    input_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object"})
 
     @property
     def manager_attr(self) -> str:
@@ -128,6 +129,15 @@ def _parse_catalog(raw: str) -> dict[str, ToolEntry]:
             )
         manager_attr = _require_string(action, "manager_attr", index)
         manager_method = _require_string(action, "manager_method", index)
+        input_schema = action.get("input_schema")
+        if not isinstance(input_schema, dict):
+            raise CatalogLoadError(f"actions[{index}].input_schema must be an object")
+        if input_schema.get("type") != "object":
+            raise CatalogLoadError(f"actions[{index}].input_schema.type must be 'object'")
+        if not isinstance(input_schema.get("properties"), dict):
+            raise CatalogLoadError(f"actions[{index}].input_schema.properties must be an object")
+        if input_schema.get("additionalProperties") is not False:
+            raise CatalogLoadError(f"actions[{index}].input_schema.additionalProperties must be false")
         parsed[name] = ToolEntry(
             name=name,
             product=product,
@@ -136,5 +146,6 @@ def _parse_catalog(raw: str) -> dict[str, ToolEntry]:
             read_only_hint=read_only_hint,
             manager=manager_attr,
             method=manager_method,
+            input_schema=input_schema,
         )
     return parsed

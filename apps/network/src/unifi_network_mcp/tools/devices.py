@@ -24,7 +24,7 @@ from unifi_core.network.models._actions import (
     SetSiteLedsInput,
     UpgradeDeviceInput,
 )
-from unifi_core.network.models.devices import radio_to_controller_update
+from unifi_core.network.models.devices import validate_radio_update
 
 # Import the global FastMCP server instance, config, and managers
 from unifi_network_mcp.runtime import device_manager, server
@@ -757,10 +757,6 @@ async def upgrade_device(
 
 RADIO_BAND_LABELS = {"ng": "2.4GHz", "na": "5GHz", "6e": "6GHz", "wifi6e": "6GHz"}
 
-VALID_RADIOS = {"na", "ng", "6e", "wifi6e"}
-VALID_TX_POWER_MODES = {"auto", "high", "medium", "low", "custom"}
-VALID_HT_VALUES = {"20", "40", "80", "160", "320"}
-
 
 @server.tool(
     name="unifi_get_device_radio",
@@ -873,33 +869,6 @@ async def update_device_radio(
     ] = False,
 ) -> Dict[str, Any]:
     """Implementation for updating AP radio settings."""
-    if radio not in VALID_RADIOS and not radio.startswith("wifi"):
-        return {
-            "success": False,
-            "error": (
-                f"Invalid radio '{radio}'. Must be a band code ({', '.join(sorted(VALID_RADIOS))}) "
-                "or an internal radio name (e.g. 'wifi0', 'wifi1')."
-            ),
-        }
-
-    if tx_power_mode is not None and tx_power_mode not in VALID_TX_POWER_MODES:
-        return {
-            "success": False,
-            "error": f"Invalid tx_power_mode '{tx_power_mode}'. Must be one of: {', '.join(sorted(VALID_TX_POWER_MODES))}",
-        }
-
-    if tx_power is not None and tx_power_mode != "custom":
-        return {"success": False, "error": "tx_power can only be set when tx_power_mode is 'custom'."}
-
-    if ht is not None and ht not in VALID_HT_VALUES:
-        return {"success": False, "error": f"Invalid ht '{ht}'. Must be one of: {', '.join(sorted(VALID_HT_VALUES))}"}
-
-    if min_rssi is not None and min_rssi_enabled is not True:
-        return {"success": False, "error": "min_rssi can only be set when min_rssi_enabled is true."}
-
-    if sens_level is not None and sens_level_enabled is not True:
-        return {"success": False, "error": "sens_level can only be set when sens_level_enabled is true."}
-
     updates: Dict[str, Any] = {}
     if tx_power_mode is not None:
         updates["tx_power_mode"] = tx_power_mode
@@ -924,11 +893,10 @@ async def update_device_radio(
     if sens_level is not None:
         updates["sens_level"] = sens_level
 
-    if not updates:
-        return {"success": False, "error": "No radio settings provided to update."}
-
-    # Filter to known mutable radio fields via pydantic model
-    validated_data = radio_to_controller_update(updates)
+    try:
+        validated_data = validate_radio_update(radio, updates)
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
     try:
         radio_data = await device_manager.get_device_radio(mac_address)

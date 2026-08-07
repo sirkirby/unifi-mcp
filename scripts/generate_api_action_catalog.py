@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import copy
 import difflib
 import dis
 import inspect
@@ -202,6 +203,35 @@ def _source_path(repo_root: Path, product: str, package: str, module: str) -> Pa
     return repo_root / f"apps/{product}/src/{package}" / relative
 
 
+def _api_input_schema(tool: dict[str, Any], *, product: str, name: str, path: Path) -> dict[str, Any]:
+    """Return the strict action-args schema derived from one MCP tool schema.
+
+    The REST action envelope carries ``confirm`` separately, so it is removed
+    from the generated args schema. Unknown top-level kwargs are rejected to
+    preserve the MCP server's strict-dispatch contract.
+    """
+    raw = tool.get("schema", {}).get("input")
+    if not isinstance(raw, dict) or raw.get("type") != "object":
+        raise CatalogGenerationError(f"{product}:{name} in {path}: schema.input must be an object schema")
+    properties = raw.get("properties")
+    if not isinstance(properties, dict):
+        raise CatalogGenerationError(f"{product}:{name} in {path}: schema.input.properties must be an object")
+
+    schema = copy.deepcopy(raw)
+    schema["properties"].pop("confirm", None)
+    required = schema.get("required")
+    if required is not None:
+        if not isinstance(required, list) or not all(isinstance(item, str) for item in required):
+            raise CatalogGenerationError(f"{product}:{name} in {path}: schema.input.required must be a string array")
+        filtered_required = [item for item in required if item != "confirm"]
+        if filtered_required:
+            schema["required"] = filtered_required
+        else:
+            schema.pop("required", None)
+    schema["additionalProperties"] = False
+    return schema
+
+
 def render_catalog(
     repo_root: Path,
     *,
@@ -340,10 +370,12 @@ def render_catalog(
             }
             input_schema = tool.get("schema", {}).get("input", {})
             public_parameters = set(input_schema.get("properties", {})) - {"confirm"}
+            public_required = set(input_schema.get("required", [])) - {"confirm"}
             translator = translator_specs.get(name)
             dispatched = set(translator.manager_parameters) if translator is not None else public_parameters
             unexpected = set() if accepts_kwargs else dispatched - accepted
-            missing = required - dispatched
+            guaranteed = dispatched if translator is not None else public_required
+            missing = required - guaranteed
             if unexpected or missing:
                 raise CatalogGenerationError(
                     f"{product}:{name} in {path}: invocation contract for {manager_attr}.{manager_method} "
@@ -363,6 +395,7 @@ def render_catalog(
                 "read_only_hint": read_only_hint,
                 "manager_attr": manager_attr,
                 "manager_method": manager_method,
+                "input_schema": _api_input_schema(tool, product=product, name=name, path=path),
             }
         )
 

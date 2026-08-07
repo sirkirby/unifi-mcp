@@ -29,6 +29,7 @@ def _action(**changes) -> dict:
         "read_only_hint": True,
         "manager_attr": "client_manager",
         "manager_method": "get_clients",
+        "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
     }
     action.update(changes)
     return action
@@ -45,6 +46,7 @@ def test_loads_packaged_catalog_with_manager_binding(monkeypatch) -> None:
     assert entry.read_only_hint is True
     assert entry.manager_attr == "client_manager"
     assert entry.manager_method == "get_clients"
+    assert entry.input_schema == {"type": "object", "properties": {}, "additionalProperties": False}
 
 
 def test_real_packaged_catalog_has_all_product_sentinels() -> None:
@@ -77,6 +79,8 @@ def test_unknown_tool_raises() -> None:
         (_catalog(_action(permission_action="update", read_only_hint=True)), "conflicting safety metadata"),
         (_catalog(_action(manager_attr="")), r"actions\[0\].manager_attr"),
         (_catalog(_action(manager_method="")), r"actions\[0\].manager_method"),
+        (_catalog(_action(input_schema=[])), r"actions\[0\].input_schema"),
+        (_catalog(_action(input_schema={"type": "array"})), r"actions\[0\].input_schema.type"),
         (_catalog(_action(), _action()), "duplicate action name"),
     ],
 )

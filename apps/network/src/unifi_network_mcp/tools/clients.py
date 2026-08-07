@@ -737,7 +737,13 @@ async def authorize_guest(
 ) -> Dict[str, Any]:
     """Implementation for authorizing a guest."""
     try:
-        AuthorizeGuestInput(mac_address=mac_address, minutes=minutes)
+        AuthorizeGuestInput(
+            mac_address=mac_address,
+            minutes=minutes,
+            up_kbps=up_kbps,
+            down_kbps=down_kbps,
+            bytes_quota=bytes_quota,
+        )
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 

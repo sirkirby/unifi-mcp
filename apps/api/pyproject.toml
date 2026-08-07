@@ -23,6 +23,7 @@ dependencies = [
     "pyyaml>=6.0",
     "omegaconf>=2.3.0",
     "python-dotenv>=1.2.2",
+    "jsonschema>=4.23,<5",
 ]
 
 [project.scripts]

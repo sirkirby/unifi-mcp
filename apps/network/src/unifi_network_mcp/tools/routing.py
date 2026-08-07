@@ -5,7 +5,6 @@ This module provides MCP tools to manage static routes on a UniFi Network Contro
 """
 
 import logging
-import re
 from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
@@ -16,29 +15,11 @@ from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.route import (
     active_route_from_controller,
     route_from_controller,
+    validate_static_route_fields,
 )
 from unifi_network_mcp.runtime import routing_manager, server
 
 logger = logging.getLogger(__name__)
-
-
-def _validate_cidr(network: str) -> bool:
-    """Validate a CIDR network notation."""
-    pattern = r"^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$"
-    if not re.match(pattern, network):
-        return False
-    parts = network.split("/")
-    ip_parts = parts[0].split(".")
-    prefix = int(parts[1])
-    return all(0 <= int(p) <= 255 for p in ip_parts) and 0 <= prefix <= 32
-
-
-def _validate_ip(ip: str) -> bool:
-    """Validate an IP address."""
-    pattern = r"^(\d{1,3}\.){3}\d{1,3}$"
-    if not re.match(pattern, ip):
-        return False
-    return all(0 <= int(p) <= 255 for p in ip.split("."))
 
 
 @server.tool(
@@ -141,44 +122,31 @@ async def create_route(
     ] = False,
 ) -> Dict[str, Any]:
     """Create a new static route."""
-    if not name or not name.strip():
-        return {"success": False, "error": "Name is required."}
-
-    if not _validate_cidr(network):
-        return {
-            "success": False,
-            "error": f"Invalid network format: {network}. Use CIDR notation (e.g., 10.0.0.0/24).",
-        }
-
-    if not _validate_ip(nexthop):
-        return {
-            "success": False,
-            "error": f"Invalid nexthop IP: {nexthop}. Use valid IP address.",
-        }
-
-    if distance < 1 or distance > 255:
-        return {"success": False, "error": "Distance must be between 1 and 255."}
+    try:
+        route_data = validate_static_route_fields(
+            {"name": name, "network": network, "nexthop": nexthop, "distance": distance, "enabled": enabled},
+            require_complete=True,
+        )
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    name = route_data["name"]
 
     if not confirm:
         return create_preview(
             resource_type="static_route",
             resource_data={
-                "name": name.strip(),
-                "network": network,
-                "nexthop": nexthop,
-                "distance": distance,
-                "enabled": enabled,
+                **route_data,
             },
-            resource_name=name.strip(),
+            resource_name=name,
         )
 
     try:
         route = await routing_manager.create_route(
-            name=name.strip(),
-            static_route_network=network,
-            static_route_nexthop=nexthop,
-            static_route_distance=distance,
-            enabled=enabled,
+            name=name,
+            static_route_network=route_data["network"],
+            static_route_nexthop=route_data["nexthop"],
+            static_route_distance=route_data["distance"],
+            enabled=route_data["enabled"],
         )
 
         if route:
@@ -224,40 +192,13 @@ async def update_route(
     ] = False,
 ) -> Dict[str, Any]:
     """Update an existing static route."""
-    # Validate that at least one update is provided
-    if all(v is None for v in [name, network, nexthop, distance, enabled]):
-        return {
-            "success": False,
-            "error": "At least one field must be provided.",
-        }
-
-    # Validate formats if provided
-    if network is not None and not _validate_cidr(network):
-        return {
-            "success": False,
-            "error": f"Invalid network format: {network}. Use CIDR notation.",
-        }
-
-    if nexthop is not None and not _validate_ip(nexthop):
-        return {
-            "success": False,
-            "error": f"Invalid nexthop IP: {nexthop}.",
-        }
-
-    if distance is not None and (distance < 1 or distance > 255):
-        return {"success": False, "error": "Distance must be between 1 and 255."}
-
-    updates = {
-        k: v
-        for k, v in {
-            "name": name.strip() if name else None,
-            "network": network,
-            "nexthop": nexthop,
-            "distance": distance,
-            "enabled": enabled,
-        }.items()
-        if v is not None
-    }
+    try:
+        updates = validate_static_route_fields(
+            {"name": name, "network": network, "nexthop": nexthop, "distance": distance, "enabled": enabled},
+            require_complete=False,
+        )
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
     if not confirm:
         return update_preview(
@@ -271,11 +212,11 @@ async def update_route(
     try:
         success = await routing_manager.update_route(
             route_id=route_id,
-            name=name.strip() if name else None,
-            static_route_network=network,
-            static_route_nexthop=nexthop,
-            static_route_distance=distance,
-            enabled=enabled,
+            name=updates.get("name"),
+            static_route_network=updates.get("network"),
+            static_route_nexthop=updates.get("nexthop"),
+            static_route_distance=updates.get("distance"),
+            enabled=updates.get("enabled"),
         )
 
         if success:

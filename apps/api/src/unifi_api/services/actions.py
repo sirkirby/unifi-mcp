@@ -6,6 +6,7 @@ import inspect
 from dataclasses import dataclass
 from typing import Any, Iterable
 
+from jsonschema import Draft202012Validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from unifi_core.redaction import redaction_marker_paths
 
@@ -69,6 +70,20 @@ async def _resolve_result(result: Any) -> Any:
     return await result if inspect.isawaitable(result) else result
 
 
+def _validate_action_args(entry: ToolEntry, args: dict[str, Any]) -> None:
+    """Validate raw REST args against the generated MCP input contract."""
+    errors = sorted(
+        Draft202012Validator(entry.input_schema).iter_errors(args),
+        key=lambda error: tuple(str(part) for part in error.absolute_path),
+    )
+    if not errors:
+        return
+    error = errors[0]
+    path = ".".join(str(part) for part in error.absolute_path)
+    location = f" at args.{path}" if path else ""
+    raise ValueError(f"Invalid action arguments for '{entry.name}'{location}: {error.message}")
+
+
 async def dispatch_action(
     *,
     registry: ManifestRegistry,
@@ -105,6 +120,8 @@ async def dispatch_action(
     if binding is None or not binding.manager_attr or not binding.method:
         raise DispatchEntryMissing(f"no Core manager binding for tool '{tool_name}'")
 
+    _validate_action_args(entry, args)
+
     if "include_sensitive" in args:
         raise ValueError(INCLUDE_SENSITIVE_UNSUPPORTED_ERROR)
     marker_paths = redaction_marker_paths(args)
@@ -128,6 +145,13 @@ async def dispatch_action(
         if handled:
             return direct_result
 
+    manager_args = dict(args)
+    translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)
+    if translator is not None:
+        positional, keyword = translator(manager_args)
+    else:
+        positional, keyword = (), manager_args
+
     manager = await factory.get_domain_manager(
         session=session,
         controller_id=controller_id,
@@ -149,15 +173,12 @@ async def dispatch_action(
             f"manager '{binding.manager_attr}' has no callable method '{binding.method}' for tool '{tool_name}'"
         )
 
-    manager_args = dict(args)
-    translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)
-    if translator is not None:
-        positional, keyword = translator(manager_args)
-        result = await _resolve_result(method(*positional, **keyword))
-    else:
-        result = await _resolve_result(method(**manager_args))
+    result = await _resolve_result(method(*positional, **keyword))
     result_adapter = DISPATCH_RESULT_ADAPTERS.get(tool_name)
     if result_adapter is not None:
         result = result_adapter(result, dict(args), manager)
         result = await _resolve_result(result)
+    if action_kind == "mutation" and (result is None or result is False):
+        returned = "None" if result is None else "False"
+        raise ValueError(f"tool '{tool_name}' reported failure (Core manager returned {returned})")
     return result

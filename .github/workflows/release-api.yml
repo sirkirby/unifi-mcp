@@ -32,6 +32,24 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/unifi-api-server
 
 jobs:
+  published-core-contract:
+    name: Verify published Core dependency floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Install and verify the exact published Core floor
+        run: python3 scripts/check_pin_alignment.py --api-core-floor-only
+
   generated-contracts:
     name: Verify generated action contracts
     runs-on: ubuntu-latest
@@ -82,7 +100,7 @@ jobs:
   # ----------------------------------------------------------------------- 2a
   publish-pypi:
     name: Build wheel + publish to PyPI
-    needs: [test, generated-contracts]
+    needs: [test, generated-contracts, published-core-contract]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -119,7 +137,7 @@ jobs:
   # ----------------------------------------------------------------------- 2b
   publish-docker:
     name: Build + push Docker image
-    needs: [test, generated-contracts]
+    needs: [test, generated-contracts, published-core-contract]
     runs-on: ubuntu-latest
     permissions:
       contents: read

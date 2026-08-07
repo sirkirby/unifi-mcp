@@ -12,7 +12,7 @@ from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import create_preview, preview_response
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.network.models._actions import RevokeVoucherInput
+from unifi_core.network.models._actions import CreateVoucherInput, RevokeVoucherInput
 from unifi_core.network.models.vouchers import voucher_from_controller
 from unifi_network_mcp.runtime import hotspot_manager, server
 
@@ -129,11 +129,20 @@ async def create_voucher(
     ] = False,
 ) -> Dict[str, Any]:
     """Create one or more hotspot vouchers."""
-    if expire_minutes < 1:
-        return {"success": False, "error": "expire_minutes must be at least 1."}
-
-    if count < 1 or count > 10000:
-        return {"success": False, "error": "count must be between 1 and 10000."}
+    try:
+        validated = CreateVoucherInput(
+            expire_minutes=expire_minutes,
+            count=count,
+            quota=quota,
+            note=note,
+            up_limit_kbps=up_limit_kbps,
+            down_limit_kbps=down_limit_kbps,
+            bytes_limit_mb=bytes_limit_mb,
+        )
+    except ValidationError as e:
+        return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
+    expire_minutes = validated.expire_minutes
+    count = validated.count
 
     if not confirm:
         resource_data = {

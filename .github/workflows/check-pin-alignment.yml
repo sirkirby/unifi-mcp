@@ -10,7 +10,10 @@ on:
     branches: [ main, develop ]
     paths:
       - "apps/*/pyproject.toml"
+      - "apps/*/src/**"
       - "packages/*/pyproject.toml"
+      - "packages/unifi-core/src/**"
+      - "scripts/generate_api_action_catalog.py"
       - "scripts/check_pin_alignment.py"
       - ".github/workflows/check-pin-alignment.yml"
   pull_request:
@@ -18,7 +21,10 @@ on:
     branches: [ main, develop ]
     paths:
       - "apps/*/pyproject.toml"
+      - "apps/*/src/**"
       - "packages/*/pyproject.toml"
+      - "packages/unifi-core/src/**"
+      - "scripts/generate_api_action_catalog.py"
       - "scripts/check_pin_alignment.py"
       - ".github/workflows/check-pin-alignment.yml"
 
