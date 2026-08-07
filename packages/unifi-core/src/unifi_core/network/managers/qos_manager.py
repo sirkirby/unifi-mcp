@@ -84,6 +84,11 @@ class QosManager:
         self._connection._invalidate_cache(f"{CACHE_PREFIX_QOS}_{self._connection.site}")
         return merged_data
 
+    async def toggle_qos_rule_enabled(self, rule_id: str) -> Dict[str, Any]:
+        """Invert a QoS rule's enabled state using the shared fetch-merge-put path."""
+        existing_rule = await self.get_qos_rule_details(rule_id)
+        return await self.update_qos_rule(rule_id, {"enabled": not existing_rule.get("enabled", False)})
+
     async def create_qos_rule(self, rule_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Create a new QoS rule.
 

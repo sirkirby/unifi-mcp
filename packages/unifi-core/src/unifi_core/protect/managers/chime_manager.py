@@ -340,6 +340,12 @@ class ChimeManager:
 
         Uses the Chime.play() API to trigger the sound.
         """
+        from unifi_core.protect.models._actions import TriggerChimeInput
+
+        validated = TriggerChimeInput(chime_id=chime_id, volume=volume, repeat_times=repeat_times)
+        chime_id = validated.chime_id
+        volume = validated.volume
+        repeat_times = validated.repeat_times
         chime = self._get_chime(chime_id)
 
         kwargs: Dict[str, Any] = {}

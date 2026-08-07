@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.network.models.firewall import (
     FIREWALLGROUP_MUTABLE_FIELDS,
     FIREWALLGROUP_READ_ONLY_FIELDS,
@@ -21,6 +22,7 @@ from unifi_core.network.models.firewall import (
     firewall_zone_from_controller,
     from_controller,
     legacy_firewall_rule_from_controller,
+    normalize_policy_update,
     to_controller_update,
     to_group_create,
 )
@@ -160,6 +162,37 @@ class TestToControllerUpdate:
     def test_returns_empty_dict_when_no_mutable_fields(self) -> None:
         result = to_controller_update({"id": "read-only"})
         assert result == {}
+
+
+class TestNormalizePolicyUpdate:
+    def test_normalizes_public_enum_values_and_filters_unknown_fields(self) -> None:
+        result = normalize_policy_update(
+            {
+                "action": "allow",
+                "ip_version": "ipv4",
+                "connection_states": ["established", "related"],
+                "unknown": "drop-me",
+            }
+        )
+
+        assert result == {
+            "action": "ALLOW",
+            "ip_version": "IPV4",
+            "connection_states": ["ESTABLISHED", "RELATED"],
+        }
+
+    @pytest.mark.parametrize(
+        ("fields", "message"),
+        [
+            ({"ruleset": "WAN_IN"}, "Legacy V1 firewall fields"),
+            ({"action": "accept"}, "Legacy V1 firewall fields"),
+            ({"action": "invalid"}, "Invalid action"),
+            ({"id": "read-only"}, "effectively empty"),
+        ],
+    )
+    def test_rejects_legacy_invalid_or_empty_updates(self, fields: dict, message: str) -> None:
+        with pytest.raises(ValueError, match=message):
+            normalize_policy_update(fields)
 
 
 class TestFirewallGroupFieldSets:

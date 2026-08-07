@@ -583,6 +583,8 @@ class DeviceManager:
         Raises:
             UniFiNotFoundError: If the device does not exist.
         """
+        if outlet_index < 1:
+            raise ValueError("outlet_index must be >= 1.")
         device = await self.get_device_details(device_mac)  # raises on miss
         if not self._is_pdu(device.raw):
             return None
@@ -599,6 +601,11 @@ class DeviceManager:
         if sensed is None:
             logger.error("Outlet index %s not found on PDU %s.", outlet_index, device_mac)
             return None
+        if sensed.get("has_relay") is False:
+            raise ValueError(
+                f"Outlet {outlet_index} ('{sensed.get('name')}') on PDU {device_mac} "
+                "does not have a controllable relay (has_relay=false)."
+            )
 
         overrides: List[Dict[str, Any]] = copy.deepcopy(device.raw.get("outlet_overrides", []))
 

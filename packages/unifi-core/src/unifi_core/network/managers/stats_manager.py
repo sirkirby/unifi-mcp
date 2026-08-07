@@ -10,6 +10,7 @@ from aiounifi.models.dpi_restriction_group import (
 
 from unifi_core.network.managers.client_manager import ClientManager  # Needed for get_top_clients
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.managers.device_manager import DeviceManager
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -144,6 +145,22 @@ class StatsManager:
             logger.error("Error getting stats for client %s: %s", client_mac, e)
             raise
 
+    async def get_client_stats_for_identifier(
+        self,
+        client_id: str,
+        duration_hours: int = 1,
+        granularity: str = "hourly",
+    ) -> List[Dict[str, Any]]:
+        """Resolve a public MAC-or-id client identifier before fetching stats."""
+        client = await self._client_manager.get_client_details(client_id)
+        raw = client.raw if hasattr(client, "raw") else client
+        client_mac = raw.get("mac", client_id)
+        return await self.get_client_stats(
+            client_mac,
+            duration_hours=duration_hours,
+            granularity=granularity,
+        )
+
     async def get_device_stats(
         self,
         device_mac: str,
@@ -222,6 +239,25 @@ class StatsManager:
         except Exception as e:
             logger.error("Error getting stats for device %s: %s", device_mac, e)
             raise
+
+    async def get_device_stats_for_identifier(
+        self,
+        device_id: str,
+        duration_hours: int = 1,
+        granularity: str = "hourly",
+    ) -> List[Dict[str, Any]]:
+        """Resolve a public MAC-or-id device identifier and select its report family."""
+        device = await DeviceManager(self._connection).get_device_details(device_id)
+        raw = device.raw if hasattr(device, "raw") else device
+        device_mac = raw.get("mac", device_id)
+        device_type = raw.get("type", "unknown")
+        report_type = {"uap": "ap", "ugw": "gw", "udm": "gw"}.get(device_type, "dev")
+        return await self.get_device_stats(
+            device_mac,
+            duration_hours=duration_hours,
+            granularity=granularity,
+            device_type=report_type,
+        )
 
     async def get_top_clients(self, duration_hours: int = 24, limit: int = 10) -> List[Dict[str, Any]]:
         """Get top clients by usage.

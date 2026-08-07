@@ -95,6 +95,8 @@ class AlarmRulesFacade:
 
     async def update_rule(self, rule_id: str, fields: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         """Update a rule, routing by id family."""
+        if not fields:
+            raise ValueError("No fields provided. Specify at least one field to update.")
         family = self._id_family(rule_id)
         if "actions" in fields:
             self._require_non_empty_canonical_actions(fields)

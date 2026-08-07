@@ -39,6 +39,21 @@ class FirewallManager:
         self._connection = connection_manager
         self._auth = auth
 
+    async def get_firewall_policy_by_id(self, policy_id: str) -> FirewallPolicy:
+        """Return one V2 firewall policy from the complete policy inventory."""
+        policies = await self.get_firewall_policies(include_predefined=True)
+        match = next(
+            (
+                policy
+                for policy in policies
+                if isinstance(getattr(policy, "raw", None), dict) and policy.raw.get("_id") == policy_id
+            ),
+            None,
+        )
+        if match is None:
+            raise UniFiNotFoundError("firewall_policy", policy_id)
+        return match
+
     @staticmethod
     def _requested_firewall_policy_ids(ordered_firewall_policy_ids: Any) -> list[str]:
         if not isinstance(ordered_firewall_policy_ids, dict):

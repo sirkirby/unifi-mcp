@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.network.models.route import (
     ACTIVEROUTE_MUTABLE_FIELDS,
     ACTIVEROUTE_READ_ONLY_FIELDS,
@@ -12,6 +13,7 @@ from unifi_core.network.models.route import (
     Route,
     active_route_from_controller,
     route_from_controller,
+    validate_static_route_fields,
 )
 
 # ---------------------------------------------------------------------------
@@ -109,6 +111,37 @@ class TestRouteFromController:
         for name, field in Route.model_fields.items():
             extra = field.json_schema_extra or {}
             assert extra.get("mutable") is False, f"Field {name!r} is not tagged mutable=False"
+
+
+class TestStaticRouteValidation:
+    def test_create_normalizes_name_and_defaults(self) -> None:
+        assert validate_static_route_fields(
+            {"name": " Office ", "network": "10.0.0.0/24", "nexthop": "192.168.1.1"},
+            require_complete=True,
+        ) == {
+            "name": "Office",
+            "network": "10.0.0.0/24",
+            "nexthop": "192.168.1.1",
+            "distance": 1,
+            "enabled": True,
+        }
+
+    @pytest.mark.parametrize(
+        ("fields", "message"),
+        [
+            ({"name": " ", "network": "10.0.0.0/24", "nexthop": "192.168.1.1"}, "Name is required"),
+            ({"name": "x", "network": "not-cidr", "nexthop": "192.168.1.1"}, "Invalid network"),
+            ({"name": "x", "network": "10.0.0.0/24", "nexthop": "not-ip"}, "Invalid nexthop"),
+            ({"name": "x", "network": "10.0.0.0/24", "nexthop": "192.168.1.1", "distance": 0}, "Distance"),
+        ],
+    )
+    def test_create_rejects_invalid_fields(self, fields: dict, message: str) -> None:
+        with pytest.raises(ValueError, match=message):
+            validate_static_route_fields(fields, require_complete=True)
+
+    def test_update_requires_a_field(self) -> None:
+        with pytest.raises(ValueError, match="At least one field"):
+            validate_static_route_fields({}, require_complete=False)
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ from unifi_core.network.models._actions import (
     BlockClientInput,
     ConfigurePortAggregationInput,
     ConfigurePortMirrorInput,
+    CreateVoucherInput,
     ForceProvisionDeviceInput,
     ForceReconnectClientInput,
     ForgetClientInput,
@@ -515,6 +516,32 @@ class TestSetSiteLedsInput:
     def test_valid_disable(self):
         m = SetSiteLedsInput(enabled=False)
         assert m.enabled is False
+
+
+# ---------------------------------------------------------------------------
+# CreateVoucherInput
+# ---------------------------------------------------------------------------
+
+
+class TestCreateVoucherInput:
+    def test_defaults_match_public_action_contract(self):
+        model = CreateVoucherInput()
+
+        assert model.expire_minutes == 1440
+        assert model.count == 1
+        assert model.quota == 1
+
+    @pytest.mark.parametrize(
+        "fields",
+        [
+            {"expire_minutes": 0},
+            {"count": 0},
+            {"count": 10001},
+        ],
+    )
+    def test_rejects_values_outside_controller_safe_bounds(self, fields):
+        with pytest.raises(ValidationError):
+            CreateVoucherInput(**fields)
 
 
 # ---------------------------------------------------------------------------

@@ -246,6 +246,20 @@ class SetSiteLedsInput(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class CreateVoucherInput(BaseModel):
+    """Input for ``unifi_create_voucher`` with shared defaults and bounds."""
+
+    __action_input__: ClassVar[bool] = True
+
+    expire_minutes: int = Field(default=1440, ge=1, description="Voucher validity after activation")
+    count: int = Field(default=1, ge=1, le=10000, description="Number of vouchers to create")
+    quota: int = Field(default=1, description="Usage quota per voucher")
+    note: Optional[str] = None
+    up_limit_kbps: Optional[int] = None
+    down_limit_kbps: Optional[int] = None
+    bytes_limit_mb: Optional[int] = None
+
+
 class RevokeVoucherInput(BaseModel):
     """Input for ``unifi_revoke_voucher``."""
 

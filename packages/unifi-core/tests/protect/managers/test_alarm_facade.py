@@ -197,6 +197,17 @@ async def test_update_rule_routes_uuid_to_v2_with_full_editable_body():
 
 
 @pytest.mark.asyncio
+async def test_update_rule_rejects_empty_fields_before_backend_access():
+    facade = _facade(service_get=_RAW_V2)
+
+    with pytest.raises(ValueError, match="No fields provided"):
+        await facade.update_rule("019e9f9d-59a1-7ee3-8921-27f84a0086ea", {})
+
+    facade._service.get_rule_raw.assert_not_called()
+    facade._legacy.get_rule.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_update_rule_routes_object_id_to_legacy_with_translated_body():
     facade = _facade(legacy_get=_RAW_LEGACY)
 

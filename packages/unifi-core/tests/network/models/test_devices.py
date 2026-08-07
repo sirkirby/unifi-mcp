@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.network.models.devices import (
     DEVICE_MUTABLE_FIELDS,
     DEVICE_READ_ONLY_FIELDS,
@@ -13,6 +14,7 @@ from unifi_core.network.models.devices import (
     radio_from_controller,
     radio_to_controller_update,
     to_controller_update,
+    validate_radio_update,
 )
 
 
@@ -183,3 +185,29 @@ class TestRadioToControllerUpdate:
         # since False is not None, it should be kept
         assert "min_rssi_enabled" in result
         assert result["min_rssi_enabled"] is False
+
+
+class TestValidateRadioUpdate:
+    def test_accepts_controller_safe_cross_field_values(self) -> None:
+        result = validate_radio_update(
+            "na",
+            {"tx_power_mode": "custom", "tx_power": 20, "channel": 36, "ht": "80"},
+        )
+
+        assert result == {"tx_power_mode": "custom", "tx_power": 20, "channel": 36, "ht": "80"}
+
+    @pytest.mark.parametrize(
+        ("radio", "fields", "message"),
+        [
+            ("invalid", {"channel": 36}, "Invalid radio"),
+            ("na", {"tx_power_mode": "invalid"}, "Invalid tx_power_mode"),
+            ("na", {"tx_power_mode": "auto", "tx_power": 20}, "tx_power can only"),
+            ("na", {"ht": "10"}, "Invalid ht"),
+            ("na", {"min_rssi": -70}, "min_rssi can only"),
+            ("na", {"sens_level": -70}, "sens_level can only"),
+            ("na", {}, "No radio settings"),
+        ],
+    )
+    def test_rejects_invalid_or_incomplete_updates(self, radio: str, fields: dict, message: str) -> None:
+        with pytest.raises(ValueError, match=message):
+            validate_radio_update(radio, fields)

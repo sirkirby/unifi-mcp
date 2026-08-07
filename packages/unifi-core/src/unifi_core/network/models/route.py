@@ -19,6 +19,7 @@ Per-class MUTABLE_FIELDS constants drive the cross-layer symmetry test.
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
@@ -113,6 +114,51 @@ def route_from_controller(raw: Any) -> Route:
         distance=_get(raw, "static-route_distance", "distance"),
         enabled=bool(_get(raw, "enabled", default=True)),
     )
+
+
+def validate_static_route_fields(fields: dict[str, Any], *, require_complete: bool) -> dict[str, Any]:
+    """Validate and normalize public static-route create/update fields."""
+    allowed = {"name", "network", "nexthop", "distance", "enabled"}
+    provided = {key: value for key, value in fields.items() if key in allowed and value is not None}
+    if require_complete:
+        missing = [key for key in ("name", "network", "nexthop") if key not in provided]
+        if missing:
+            raise ValueError(f"Missing required route fields: {', '.join(missing)}")
+        provided.setdefault("distance", 1)
+        provided.setdefault("enabled", True)
+    elif not provided:
+        raise ValueError("At least one field must be provided.")
+
+    if "name" in provided:
+        name = str(provided["name"]).strip()
+        if not name:
+            raise ValueError("Name is required.")
+        provided["name"] = name
+
+    network = provided.get("network")
+    if network is not None:
+        try:
+            parsed_network = ipaddress.ip_network(network, strict=False)
+        except ValueError as exc:
+            raise ValueError(f"Invalid network format: {network}. Use CIDR notation.") from exc
+        if parsed_network.version != 4 or "/" not in str(network):
+            raise ValueError(f"Invalid network format: {network}. Use IPv4 CIDR notation.")
+
+    nexthop = provided.get("nexthop")
+    if nexthop is not None:
+        try:
+            parsed_nexthop = ipaddress.ip_address(nexthop)
+        except ValueError as exc:
+            raise ValueError(f"Invalid nexthop IP: {nexthop}.") from exc
+        if parsed_nexthop.version != 4:
+            raise ValueError(f"Invalid nexthop IP: {nexthop}. Use a valid IPv4 address.")
+
+    distance = provided.get("distance")
+    if distance is not None and (
+        not isinstance(distance, int) or isinstance(distance, bool) or not 1 <= distance <= 255
+    ):
+        raise ValueError("Distance must be between 1 and 255.")
+    return provided
 
 
 # ---------------------------------------------------------------------------

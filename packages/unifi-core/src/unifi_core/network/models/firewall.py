@@ -137,6 +137,15 @@ READ_ONLY_FIELDS: frozenset[str] = frozenset(
     if (field.json_schema_extra or {}).get("mutable", True) is False
 )
 
+_LEGACY_V1_FIREWALL_FIELDS = frozenset({"ruleset", "rule_index", "src_address", "dst_address", "src_port", "dst_port"})
+_LEGACY_V1_ACTIONS = frozenset({"accept", "drop", "reject"})
+_LEGACY_MIGRATION_ERROR = (
+    "Legacy V1 firewall fields are no longer supported (#210). "
+    "Use V2 zone-based fields: action (ALLOW/BLOCK/REJECT), source "
+    "(zone_id + matching_target), destination (zone_id + matching_target). "
+    "See unifi_list_firewall_policies for examples of valid V2 shape."
+)
+
 
 # ---------------------------------------------------------------------------
 # FirewallGroup pydantic model
@@ -503,6 +512,51 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
     return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+
+
+def legacy_policy_error(fields: Dict[str, Any]) -> str | None:
+    """Return the actionable V1-to-V2 migration error when legacy input is detected."""
+    if _LEGACY_V1_FIREWALL_FIELDS & set(fields):
+        return _LEGACY_MIGRATION_ERROR
+    action = fields.get("action")
+    if isinstance(action, str) and action in _LEGACY_V1_ACTIONS:
+        return _LEGACY_MIGRATION_ERROR
+    return None
+
+
+def normalize_policy_enums(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Upper-case the controller's V2 firewall enum values."""
+    normalized = dict(fields)
+    action = normalized.get("action")
+    if isinstance(action, str):
+        upper_action = action.upper()
+        if upper_action not in {"ALLOW", "BLOCK", "REJECT"}:
+            raise ValueError(f"Invalid action '{action}'.")
+        normalized["action"] = upper_action
+    for key in ("ip_version", "connection_state_type"):
+        if isinstance(normalized.get(key), str):
+            normalized[key] = normalized[key].upper()
+    states = normalized.get("connection_states")
+    if isinstance(states, list):
+        normalized["connection_states"] = [state.upper() if isinstance(state, str) else state for state in states]
+    return normalized
+
+
+def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and normalize a public V2 firewall-policy partial update.
+
+    This is the shared mutation boundary for MCP and API callers. It rejects
+    retired V1 fields, normalizes the controller's upper-case enums, and drops
+    unknown/read-only fields through :func:`to_controller_update`.
+    """
+    if error := legacy_policy_error(fields):
+        raise ValueError(error)
+    normalized = normalize_policy_enums(fields)
+
+    payload = to_controller_update(normalized)
+    if not payload:
+        raise ValueError("Update data is effectively empty or invalid.")
+    return payload
 
 
 # ---------------------------------------------------------------------------

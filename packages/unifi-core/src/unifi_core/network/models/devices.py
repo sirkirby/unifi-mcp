@@ -256,3 +256,36 @@ def radio_to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
     return {k: v for k, v in fields.items() if k in DEVICERADIO_MUTABLE_FIELDS and v is not None}
+
+
+VALID_RADIOS: frozenset[str] = frozenset({"na", "ng", "6e", "wifi6e"})
+VALID_TX_POWER_MODES: frozenset[str] = frozenset({"auto", "high", "medium", "low", "custom"})
+VALID_HT_VALUES: frozenset[str] = frozenset({"20", "40", "80", "160", "320"})
+
+
+def validate_radio_update(radio: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate cross-field radio rules and return the controller update payload."""
+    if radio not in VALID_RADIOS and not radio.startswith("wifi"):
+        raise ValueError(
+            f"Invalid radio '{radio}'. Must be a band code ({', '.join(sorted(VALID_RADIOS))}) "
+            "or an internal radio name (e.g. 'wifi0', 'wifi1')."
+        )
+    tx_power_mode = fields.get("tx_power_mode")
+    if tx_power_mode is not None and tx_power_mode not in VALID_TX_POWER_MODES:
+        raise ValueError(
+            f"Invalid tx_power_mode '{tx_power_mode}'. Must be one of: {', '.join(sorted(VALID_TX_POWER_MODES))}"
+        )
+    if fields.get("tx_power") is not None and tx_power_mode != "custom":
+        raise ValueError("tx_power can only be set when tx_power_mode is 'custom'.")
+    ht = fields.get("ht")
+    if ht is not None and ht not in VALID_HT_VALUES:
+        raise ValueError(f"Invalid ht '{ht}'. Must be one of: {', '.join(sorted(VALID_HT_VALUES))}")
+    if fields.get("min_rssi") is not None and fields.get("min_rssi_enabled") is not True:
+        raise ValueError("min_rssi can only be set when min_rssi_enabled is true.")
+    if fields.get("sens_level") is not None and fields.get("sens_level_enabled") is not True:
+        raise ValueError("sens_level can only be set when sens_level_enabled is true.")
+
+    updates = radio_to_controller_update(fields)
+    if not updates:
+        raise ValueError("No radio settings provided to update.")
+    return updates
