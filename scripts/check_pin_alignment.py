@@ -153,7 +153,7 @@ for name in registry.all_tools():
             f"unexpected={sorted(unexpected)} missing={sorted(missing)}"
         )
 if failures:
-    raise SystemExit("\n".join(failures))
+    raise SystemExit("\\n".join(failures))
 print(f"validated {len(registry)} catalog bindings against installed Core floor")
 """
 

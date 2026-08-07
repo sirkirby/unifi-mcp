@@ -43,3 +43,9 @@ def test_missing_core_floor_fails_closed(tmp_path: Path, requirement: str | None
 
     with pytest.raises(RuntimeError):
         module.api_core_floor_from_wheel(wheel)
+
+
+def test_api_floor_contract_is_valid_python() -> None:
+    module = _module()
+
+    compile(module._API_CATALOG_FLOOR_CONTRACT, "<api-catalog-floor-contract>", "exec")
