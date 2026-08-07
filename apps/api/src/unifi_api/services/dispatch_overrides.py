@@ -40,6 +40,7 @@ model.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable
 
 # Format: tool_name -> (manager_attr, method_name)
@@ -94,6 +95,14 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_get_device_stats": ("stats_manager", "get_device_stats"),
     "unifi_get_client_stats": ("stats_manager", "get_client_stats"),
     "unifi_get_top_clients": ("stats_manager", "get_top_clients"),
+    # Event tools obtain their Core manager through a lazy helper rather than
+    # importing a runtime singleton, so the source AST has no direct binding.
+    "unifi_list_events": ("event_manager", "get_events"),
+    "unifi_list_alarms": ("event_manager", "get_alarms"),
+    "unifi_recent_events": ("event_manager", "get_recent_from_buffer"),
+    "unifi_get_event_types": ("event_manager", "get_event_type_prefixes"),
+    "unifi_archive_alarm": ("event_manager", "archive_alarm"),
+    "unifi_archive_all_alarms": ("event_manager", "archive_all_alarms"),
     # =========================================================================
     # Protect — preview/execute split (preview_X + X, X + apply_X patterns)
     # =========================================================================
@@ -132,6 +141,58 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "access_update_policy": ("policy_manager", "apply_update_policy"),
     "access_create_visitor": ("visitor_manager", "apply_create_visitor"),
     "access_delete_visitor": ("visitor_manager", "apply_delete_visitor"),
+}
+
+
+@dataclass(frozen=True)
+class DispatchBindingOverride:
+    """Build-time manager binding that explains why AST discovery is insufficient."""
+
+    manager_attr: str
+    manager_method: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class ActionExclusion:
+    """An MCP-only tool deliberately omitted from request/response actions."""
+
+    product: str
+    reason: str
+
+
+_NON_EVENT_OVERRIDE_REASON = (
+    "the tool wrapper previews, branches, or reshapes arguments before the Core call; "
+    "REST dispatch must bind directly to the authoritative manager method"
+)
+_EVENT_OVERRIDE_REASON = "the tool resolves EventManager through a lazy helper, so no runtime singleton call exists"
+_EVENT_OVERRIDE_NAMES = frozenset(
+    {
+        "unifi_list_events",
+        "unifi_list_alarms",
+        "unifi_recent_events",
+        "unifi_get_event_types",
+        "unifi_archive_alarm",
+        "unifi_archive_all_alarms",
+    }
+)
+
+DISPATCH_BINDING_OVERRIDES: dict[str, DispatchBindingOverride] = {
+    name: DispatchBindingOverride(
+        manager_attr=manager_attr,
+        manager_method=manager_method,
+        reason=_EVENT_OVERRIDE_REASON if name in _EVENT_OVERRIDE_NAMES else _NON_EVENT_OVERRIDE_REASON,
+    )
+    for name, (manager_attr, manager_method) in DISPATCH_OVERRIDES.items()
+}
+
+_MCP_SUBSCRIPTION_EXCLUSION_REASON = (
+    "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
+)
+API_ACTION_EXCLUSIONS: dict[str, ActionExclusion] = {
+    "access_subscribe_events": ActionExclusion("access", _MCP_SUBSCRIPTION_EXCLUSION_REASON),
+    "protect_subscribe_events": ActionExclusion("protect", _MCP_SUBSCRIPTION_EXCLUSION_REASON),
+    "unifi_subscribe_events": ActionExclusion("network", _MCP_SUBSCRIPTION_EXCLUSION_REASON),
 }
 
 # Format: tool_name -> callable(args_dict) -> (positional_args, keyword_args)
@@ -471,6 +532,22 @@ def _translate_get_top_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], d
     return (), {"duration_hours": duration_hours, "limit": out.get("limit", 10)}
 
 
+def _translate_list_events(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Rename the tool's within_hours filter to EventManager's within argument."""
+    out = dict(args)
+    if "within_hours" in out:
+        out["within"] = out.pop("within_hours")
+    return (), out
+
+
+def _translate_list_alarms(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Rename the tool's include_archived filter to EventManager's archived argument."""
+    out = dict(args)
+    if "include_archived" in out:
+        out["archived"] = out.pop("include_archived")
+    return (), out
+
+
 DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
     "unifi_create_acl_rule": _translate_acl_create,
     "unifi_update_acl_rule": _translate_acl_update,
@@ -503,4 +580,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
     "unifi_update_device_radio": _translate_update_device_radio,
     # Network — stats: convert duration string to duration_hours integer
     "unifi_get_top_clients": _translate_get_top_clients,
+    # Network — event tool names differ from the Core manager signatures.
+    "unifi_list_events": _translate_list_events,
+    "unifi_list_alarms": _translate_list_alarms,
 }

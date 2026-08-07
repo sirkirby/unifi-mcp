@@ -1,0 +1,2417 @@
+{
+  "schema_version": 1,
+  "generated_by": "scripts/generate_api_action_catalog.py",
+  "actions": [
+    {
+      "name": "access_create_credential",
+      "product": "access",
+      "category": "credential",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "credential_manager",
+      "manager_method": "apply_create_credential"
+    },
+    {
+      "name": "access_create_visitor",
+      "product": "access",
+      "category": "visitor",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "visitor_manager",
+      "manager_method": "apply_create_visitor"
+    },
+    {
+      "name": "access_delete_visitor",
+      "product": "access",
+      "category": "visitor",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "visitor_manager",
+      "manager_method": "apply_delete_visitor"
+    },
+    {
+      "name": "access_get_activity_summary",
+      "product": "access",
+      "category": "event",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_activity_summary"
+    },
+    {
+      "name": "access_get_credential",
+      "product": "access",
+      "category": "credential",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "credential_manager",
+      "manager_method": "get_credential"
+    },
+    {
+      "name": "access_get_device",
+      "product": "access",
+      "category": "device",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "get_device"
+    },
+    {
+      "name": "access_get_device_configs",
+      "product": "access",
+      "category": "device",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "get_device_configs"
+    },
+    {
+      "name": "access_get_door",
+      "product": "access",
+      "category": "door",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "door_manager",
+      "manager_method": "get_door"
+    },
+    {
+      "name": "access_get_door_status",
+      "product": "access",
+      "category": "door",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "door_manager",
+      "manager_method": "get_door_status"
+    },
+    {
+      "name": "access_get_event",
+      "product": "access",
+      "category": "event",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_event"
+    },
+    {
+      "name": "access_get_health",
+      "product": "access",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_health"
+    },
+    {
+      "name": "access_get_policy",
+      "product": "access",
+      "category": "policy",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "policy_manager",
+      "manager_method": "get_policy"
+    },
+    {
+      "name": "access_get_system_info",
+      "product": "access",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_system_info"
+    },
+    {
+      "name": "access_get_visitor",
+      "product": "access",
+      "category": "visitor",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "visitor_manager",
+      "manager_method": "get_visitor"
+    },
+    {
+      "name": "access_list_credentials",
+      "product": "access",
+      "category": "credential",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "credential_manager",
+      "manager_method": "list_credentials"
+    },
+    {
+      "name": "access_list_devices",
+      "product": "access",
+      "category": "device",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "list_devices"
+    },
+    {
+      "name": "access_list_door_groups",
+      "product": "access",
+      "category": "door",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "door_manager",
+      "manager_method": "list_door_groups"
+    },
+    {
+      "name": "access_list_doors",
+      "product": "access",
+      "category": "door",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "door_manager",
+      "manager_method": "list_doors"
+    },
+    {
+      "name": "access_list_events",
+      "product": "access",
+      "category": "event",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "list_events"
+    },
+    {
+      "name": "access_list_policies",
+      "product": "access",
+      "category": "policy",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "policy_manager",
+      "manager_method": "list_policies"
+    },
+    {
+      "name": "access_list_schedules",
+      "product": "access",
+      "category": "schedule",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "policy_manager",
+      "manager_method": "list_schedules"
+    },
+    {
+      "name": "access_list_users",
+      "product": "access",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "list_users"
+    },
+    {
+      "name": "access_list_visitors",
+      "product": "access",
+      "category": "visitor",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "visitor_manager",
+      "manager_method": "list_visitors"
+    },
+    {
+      "name": "access_lock_door",
+      "product": "access",
+      "category": "door",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "door_manager",
+      "manager_method": "apply_lock_door"
+    },
+    {
+      "name": "access_reboot_device",
+      "product": "access",
+      "category": "device",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "apply_reboot_device"
+    },
+    {
+      "name": "access_recent_events",
+      "product": "access",
+      "category": "event",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_recent_from_buffer"
+    },
+    {
+      "name": "access_revoke_credential",
+      "product": "access",
+      "category": "credential",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "credential_manager",
+      "manager_method": "apply_revoke_credential"
+    },
+    {
+      "name": "access_unlock_door",
+      "product": "access",
+      "category": "door",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "door_manager",
+      "manager_method": "apply_unlock_door"
+    },
+    {
+      "name": "access_update_device_config",
+      "product": "access",
+      "category": "device",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "apply_update_device_config"
+    },
+    {
+      "name": "access_update_policy",
+      "product": "access",
+      "category": "policy",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "policy_manager",
+      "manager_method": "apply_update_policy"
+    },
+    {
+      "name": "protect_acknowledge_event",
+      "product": "protect",
+      "category": "event",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "event_manager",
+      "manager_method": "apply_acknowledge_event"
+    },
+    {
+      "name": "protect_alarm_arm",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "alarm_manager",
+      "manager_method": "arm"
+    },
+    {
+      "name": "protect_alarm_create_rule",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "alarm_facade",
+      "manager_method": "create_rule"
+    },
+    {
+      "name": "protect_alarm_delete_rule",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "alarm_facade",
+      "manager_method": "delete_rule"
+    },
+    {
+      "name": "protect_alarm_disarm",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "alarm_manager",
+      "manager_method": "disarm"
+    },
+    {
+      "name": "protect_alarm_get_rule",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "alarm_facade",
+      "manager_method": "get_rule"
+    },
+    {
+      "name": "protect_alarm_get_status",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "alarm_manager",
+      "manager_method": "get_arm_state"
+    },
+    {
+      "name": "protect_alarm_list_profiles",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "alarm_manager",
+      "manager_method": "list_arm_profiles"
+    },
+    {
+      "name": "protect_alarm_list_rules",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "alarm_facade",
+      "manager_method": "list_rules"
+    },
+    {
+      "name": "protect_alarm_update_rule",
+      "product": "protect",
+      "category": "alarm",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "alarm_facade",
+      "manager_method": "update_rule"
+    },
+    {
+      "name": "protect_create_liveview",
+      "product": "protect",
+      "category": "liveview",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "liveview_manager",
+      "manager_method": "create_liveview"
+    },
+    {
+      "name": "protect_delete_known_face",
+      "product": "protect",
+      "category": "recognition",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "recognition_manager",
+      "manager_method": "apply_delete_known_face"
+    },
+    {
+      "name": "protect_delete_known_license_plate",
+      "product": "protect",
+      "category": "recognition",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "recognition_manager",
+      "manager_method": "apply_delete_known_license_plate"
+    },
+    {
+      "name": "protect_delete_liveview",
+      "product": "protect",
+      "category": "liveview",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "liveview_manager",
+      "manager_method": "delete_liveview"
+    },
+    {
+      "name": "protect_delete_recording",
+      "product": "protect",
+      "category": "recording",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "recording_manager",
+      "manager_method": "delete_recording"
+    },
+    {
+      "name": "protect_detection_search_labels",
+      "product": "protect",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_detection_search_labels"
+    },
+    {
+      "name": "protect_export_clip",
+      "product": "protect",
+      "category": "recordings",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "recording_manager",
+      "manager_method": "export_clip"
+    },
+    {
+      "name": "protect_get_camera",
+      "product": "protect",
+      "category": "cameras",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "camera_manager",
+      "manager_method": "get_camera"
+    },
+    {
+      "name": "protect_get_camera_analytics",
+      "product": "protect",
+      "category": "cameras",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "camera_manager",
+      "manager_method": "get_camera_analytics"
+    },
+    {
+      "name": "protect_get_camera_streams",
+      "product": "protect",
+      "category": "cameras",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "camera_manager",
+      "manager_method": "get_camera_streams"
+    },
+    {
+      "name": "protect_get_event",
+      "product": "protect",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_event"
+    },
+    {
+      "name": "protect_get_event_thumbnail",
+      "product": "protect",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_event_thumbnail"
+    },
+    {
+      "name": "protect_get_firmware_status",
+      "product": "protect",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_firmware_status"
+    },
+    {
+      "name": "protect_get_health",
+      "product": "protect",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_health"
+    },
+    {
+      "name": "protect_get_recording_status",
+      "product": "protect",
+      "category": "recordings",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "recording_manager",
+      "manager_method": "get_recording_status"
+    },
+    {
+      "name": "protect_get_snapshot",
+      "product": "protect",
+      "category": "cameras",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "camera_manager",
+      "manager_method": "get_snapshot"
+    },
+    {
+      "name": "protect_get_system_info",
+      "product": "protect",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_system_info"
+    },
+    {
+      "name": "protect_list_cameras",
+      "product": "protect",
+      "category": "cameras",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "camera_manager",
+      "manager_method": "list_cameras"
+    },
+    {
+      "name": "protect_list_chimes",
+      "product": "protect",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "chime_manager",
+      "manager_method": "list_chimes"
+    },
+    {
+      "name": "protect_list_events",
+      "product": "protect",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "list_events"
+    },
+    {
+      "name": "protect_list_known_faces",
+      "product": "protect",
+      "category": "recognition",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "recognition_manager",
+      "manager_method": "list_known_faces"
+    },
+    {
+      "name": "protect_list_known_license_plates",
+      "product": "protect",
+      "category": "recognition",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "recognition_manager",
+      "manager_method": "list_known_license_plates"
+    },
+    {
+      "name": "protect_list_lights",
+      "product": "protect",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "light_manager",
+      "manager_method": "list_lights"
+    },
+    {
+      "name": "protect_list_liveviews",
+      "product": "protect",
+      "category": "liveviews",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "liveview_manager",
+      "manager_method": "list_liveviews"
+    },
+    {
+      "name": "protect_list_recordings",
+      "product": "protect",
+      "category": "recordings",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "recording_manager",
+      "manager_method": "list_recordings"
+    },
+    {
+      "name": "protect_list_sensors",
+      "product": "protect",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "sensor_manager",
+      "manager_method": "list_sensors"
+    },
+    {
+      "name": "protect_list_smart_detections",
+      "product": "protect",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "list_smart_detections"
+    },
+    {
+      "name": "protect_list_viewers",
+      "product": "protect",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "list_viewers"
+    },
+    {
+      "name": "protect_merge_known_faces",
+      "product": "protect",
+      "category": "recognition",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "recognition_manager",
+      "manager_method": "apply_merge_known_faces"
+    },
+    {
+      "name": "protect_ptz_move",
+      "product": "protect",
+      "category": "camera",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "camera_manager",
+      "manager_method": "ptz_move"
+    },
+    {
+      "name": "protect_ptz_preset",
+      "product": "protect",
+      "category": "camera",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "camera_manager",
+      "manager_method": "ptz_goto_preset"
+    },
+    {
+      "name": "protect_ptz_zoom",
+      "product": "protect",
+      "category": "camera",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "camera_manager",
+      "manager_method": "ptz_zoom"
+    },
+    {
+      "name": "protect_reboot_camera",
+      "product": "protect",
+      "category": "camera",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "camera_manager",
+      "manager_method": "apply_reboot_camera"
+    },
+    {
+      "name": "protect_recent_events",
+      "product": "protect",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_recent_from_buffer"
+    },
+    {
+      "name": "protect_search_detections",
+      "product": "protect",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "search_detections"
+    },
+    {
+      "name": "protect_toggle_recording",
+      "product": "protect",
+      "category": "camera",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "camera_manager",
+      "manager_method": "apply_toggle_recording"
+    },
+    {
+      "name": "protect_toggle_rtsp",
+      "product": "protect",
+      "category": "camera",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "camera_manager",
+      "manager_method": "apply_toggle_rtsp"
+    },
+    {
+      "name": "protect_trigger_chime",
+      "product": "protect",
+      "category": "chime",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "chime_manager",
+      "manager_method": "trigger_chime"
+    },
+    {
+      "name": "protect_update_camera_settings",
+      "product": "protect",
+      "category": "camera",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "camera_manager",
+      "manager_method": "update_camera_settings"
+    },
+    {
+      "name": "protect_update_chime",
+      "product": "protect",
+      "category": "chime",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "chime_manager",
+      "manager_method": "apply_chime_settings"
+    },
+    {
+      "name": "protect_update_known_face",
+      "product": "protect",
+      "category": "recognition",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "recognition_manager",
+      "manager_method": "apply_update_known_face"
+    },
+    {
+      "name": "protect_update_known_license_plate",
+      "product": "protect",
+      "category": "recognition",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "recognition_manager",
+      "manager_method": "apply_update_known_license_plate"
+    },
+    {
+      "name": "protect_update_light",
+      "product": "protect",
+      "category": "light",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "light_manager",
+      "manager_method": "apply_light_settings"
+    },
+    {
+      "name": "protect_update_sensor_settings",
+      "product": "protect",
+      "category": "sensor",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "sensor_manager",
+      "manager_method": "apply_sensor_settings"
+    },
+    {
+      "name": "protect_update_viewer",
+      "product": "protect",
+      "category": "system",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "system_manager",
+      "manager_method": "apply_viewer_update"
+    },
+    {
+      "name": "unifi_adopt_device",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "adopt_device"
+    },
+    {
+      "name": "unifi_archive_alarm",
+      "product": "network",
+      "category": "events",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "event_manager",
+      "manager_method": "archive_alarm"
+    },
+    {
+      "name": "unifi_archive_all_alarms",
+      "product": "network",
+      "category": "events",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "event_manager",
+      "manager_method": "archive_all_alarms"
+    },
+    {
+      "name": "unifi_authorize_guest",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "client_manager",
+      "manager_method": "authorize_guest"
+    },
+    {
+      "name": "unifi_block_client",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "client_manager",
+      "manager_method": "block_client"
+    },
+    {
+      "name": "unifi_configure_port_aggregation",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "switch_manager",
+      "manager_method": "set_port_overrides"
+    },
+    {
+      "name": "unifi_configure_port_mirror",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "switch_manager",
+      "manager_method": "set_port_overrides"
+    },
+    {
+      "name": "unifi_create_acl_rule",
+      "product": "network",
+      "category": "acl_rules",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "acl_manager",
+      "manager_method": "create_acl_rule"
+    },
+    {
+      "name": "unifi_create_ap_group",
+      "product": "network",
+      "category": "wlans",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "create_ap_group"
+    },
+    {
+      "name": "unifi_create_backup",
+      "product": "network",
+      "category": "system",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "system_manager",
+      "manager_method": "create_backup"
+    },
+    {
+      "name": "unifi_create_client_group",
+      "product": "network",
+      "category": "client_group",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "client_group_manager",
+      "manager_method": "create_client_group"
+    },
+    {
+      "name": "unifi_create_dns_record",
+      "product": "network",
+      "category": "dns",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "dns_manager",
+      "manager_method": "create_dns_record"
+    },
+    {
+      "name": "unifi_create_dynamic_dns",
+      "product": "network",
+      "category": "dynamic_dns",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "dynamic_dns_manager",
+      "manager_method": "create_dynamic_dns"
+    },
+    {
+      "name": "unifi_create_firewall_group",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "create_firewall_group"
+    },
+    {
+      "name": "unifi_create_firewall_policy",
+      "product": "network",
+      "category": "firewall_policies",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "create_firewall_policy"
+    },
+    {
+      "name": "unifi_create_network",
+      "product": "network",
+      "category": "networks",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "create_network"
+    },
+    {
+      "name": "unifi_create_oon_policy",
+      "product": "network",
+      "category": "oon_policy",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "oon_manager",
+      "manager_method": "create_oon_policy"
+    },
+    {
+      "name": "unifi_create_port_forward",
+      "product": "network",
+      "category": "port_forwards",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "create_port_forward"
+    },
+    {
+      "name": "unifi_create_port_profile",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "switch_manager",
+      "manager_method": "create_port_profile"
+    },
+    {
+      "name": "unifi_create_qos_rule",
+      "product": "network",
+      "category": "qos_rules",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "qos_manager",
+      "manager_method": "create_qos_rule"
+    },
+    {
+      "name": "unifi_create_route",
+      "product": "network",
+      "category": "routes",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "routing_manager",
+      "manager_method": "create_route"
+    },
+    {
+      "name": "unifi_create_simple_port_forward",
+      "product": "network",
+      "category": "port_forwards",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "create_port_forward"
+    },
+    {
+      "name": "unifi_create_simple_qos_rule",
+      "product": "network",
+      "category": "qos_rules",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "qos_manager",
+      "manager_method": "create_qos_rule"
+    },
+    {
+      "name": "unifi_create_usergroup",
+      "product": "network",
+      "category": "usergroups",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "usergroup_manager",
+      "manager_method": "create_usergroup"
+    },
+    {
+      "name": "unifi_create_voucher",
+      "product": "network",
+      "category": "vouchers",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "hotspot_manager",
+      "manager_method": "create_voucher"
+    },
+    {
+      "name": "unifi_create_wlan",
+      "product": "network",
+      "category": "wlans",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "create_wlan"
+    },
+    {
+      "name": "unifi_delete_acl_rule",
+      "product": "network",
+      "category": "acl_rules",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "acl_manager",
+      "manager_method": "delete_acl_rule"
+    },
+    {
+      "name": "unifi_delete_ap_group",
+      "product": "network",
+      "category": "wlans",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "delete_ap_group"
+    },
+    {
+      "name": "unifi_delete_backup",
+      "product": "network",
+      "category": "system",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "system_manager",
+      "manager_method": "delete_backup"
+    },
+    {
+      "name": "unifi_delete_client_group",
+      "product": "network",
+      "category": "client_group",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "client_group_manager",
+      "manager_method": "delete_client_group"
+    },
+    {
+      "name": "unifi_delete_content_filter",
+      "product": "network",
+      "category": "content_filter",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "content_filter_manager",
+      "manager_method": "delete_content_filter"
+    },
+    {
+      "name": "unifi_delete_dns_record",
+      "product": "network",
+      "category": "dns",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "dns_manager",
+      "manager_method": "delete_dns_record"
+    },
+    {
+      "name": "unifi_delete_dynamic_dns",
+      "product": "network",
+      "category": "dynamic_dns",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "dynamic_dns_manager",
+      "manager_method": "delete_dynamic_dns"
+    },
+    {
+      "name": "unifi_delete_firewall_group",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "delete_firewall_group"
+    },
+    {
+      "name": "unifi_delete_firewall_policy",
+      "product": "network",
+      "category": "firewall_policies",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "delete_firewall_policy"
+    },
+    {
+      "name": "unifi_delete_oon_policy",
+      "product": "network",
+      "category": "oon_policy",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "oon_manager",
+      "manager_method": "delete_oon_policy"
+    },
+    {
+      "name": "unifi_delete_port_forward",
+      "product": "network",
+      "category": "port_forwards",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "delete_port_forward"
+    },
+    {
+      "name": "unifi_delete_port_profile",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "switch_manager",
+      "manager_method": "delete_port_profile"
+    },
+    {
+      "name": "unifi_delete_wlan",
+      "product": "network",
+      "category": "wlans",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "delete_wlan"
+    },
+    {
+      "name": "unifi_force_provision_device",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "force_provision"
+    },
+    {
+      "name": "unifi_force_reconnect_client",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "client_manager",
+      "manager_method": "force_reconnect_client"
+    },
+    {
+      "name": "unifi_forget_client",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "client_manager",
+      "manager_method": "forget_client"
+    },
+    {
+      "name": "unifi_get_acl_rule_details",
+      "product": "network",
+      "category": "acl",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "acl_manager",
+      "manager_method": "get_acl_rule_by_id"
+    },
+    {
+      "name": "unifi_get_alerts",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_alerts"
+    },
+    {
+      "name": "unifi_get_anomalies",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_anomalies"
+    },
+    {
+      "name": "unifi_get_ap_group_details",
+      "product": "network",
+      "category": "network",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "network_manager",
+      "manager_method": "get_ap_group_details"
+    },
+    {
+      "name": "unifi_get_autobackup_settings",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_autobackup_settings"
+    },
+    {
+      "name": "unifi_get_client_details",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "client_manager",
+      "manager_method": "get_client_details"
+    },
+    {
+      "name": "unifi_get_client_dpi_traffic",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_client_dpi_traffic"
+    },
+    {
+      "name": "unifi_get_client_group_details",
+      "product": "network",
+      "category": "client_groups",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "client_group_manager",
+      "manager_method": "get_client_group_by_id"
+    },
+    {
+      "name": "unifi_get_client_sessions",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_client_sessions"
+    },
+    {
+      "name": "unifi_get_client_stats",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_client_stats"
+    },
+    {
+      "name": "unifi_get_client_wifi_details",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_client_wifi_details"
+    },
+    {
+      "name": "unifi_get_content_filter_details",
+      "product": "network",
+      "category": "content_filtering",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "content_filter_manager",
+      "manager_method": "get_content_filter_by_id"
+    },
+    {
+      "name": "unifi_get_dashboard",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_dashboard"
+    },
+    {
+      "name": "unifi_get_device_details",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "get_device_details"
+    },
+    {
+      "name": "unifi_get_device_radio",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "get_device_radio"
+    },
+    {
+      "name": "unifi_get_device_stats",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_device_stats"
+    },
+    {
+      "name": "unifi_get_dns_record_details",
+      "product": "network",
+      "category": "dns",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "dns_manager",
+      "manager_method": "get_dns_record"
+    },
+    {
+      "name": "unifi_get_dpi_stats",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_dpi_stats"
+    },
+    {
+      "name": "unifi_get_dynamic_dns_entry_details",
+      "product": "network",
+      "category": "dynamic_dns",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "dynamic_dns_manager",
+      "manager_method": "get_dynamic_dns"
+    },
+    {
+      "name": "unifi_get_event_types",
+      "product": "network",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_event_type_prefixes"
+    },
+    {
+      "name": "unifi_get_firewall_group_details",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_firewall_group_by_id"
+    },
+    {
+      "name": "unifi_get_firewall_policy_details",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_firewall_policies"
+    },
+    {
+      "name": "unifi_get_firewall_policy_ordering",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_firewall_policy_ordering"
+    },
+    {
+      "name": "unifi_get_gateway_settings",
+      "product": "network",
+      "category": "gateway_settings",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "gateway_settings_manager",
+      "manager_method": "get_gateway_settings"
+    },
+    {
+      "name": "unifi_get_gateway_stats",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_gateway_stats"
+    },
+    {
+      "name": "unifi_get_ips_events",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_ips_events"
+    },
+    {
+      "name": "unifi_get_lldp_neighbors",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "switch_manager",
+      "manager_method": "get_lldp_neighbors"
+    },
+    {
+      "name": "unifi_get_network_details",
+      "product": "network",
+      "category": "network",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "network_manager",
+      "manager_method": "get_network_details"
+    },
+    {
+      "name": "unifi_get_network_health",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_network_health"
+    },
+    {
+      "name": "unifi_get_network_stats",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_network_stats"
+    },
+    {
+      "name": "unifi_get_oon_policy_details",
+      "product": "network",
+      "category": "oon",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "oon_manager",
+      "manager_method": "get_oon_policy_by_id"
+    },
+    {
+      "name": "unifi_get_pdu_outlets",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "get_pdu_outlets"
+    },
+    {
+      "name": "unifi_get_port_forward",
+      "product": "network",
+      "category": "port_forwards",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_port_forward_by_id"
+    },
+    {
+      "name": "unifi_get_port_profile_details",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "switch_manager",
+      "manager_method": "get_port_profile_by_id"
+    },
+    {
+      "name": "unifi_get_port_stats",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "switch_manager",
+      "manager_method": "get_port_stats"
+    },
+    {
+      "name": "unifi_get_qos_rule_details",
+      "product": "network",
+      "category": "qos",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "qos_manager",
+      "manager_method": "get_qos_rule_details"
+    },
+    {
+      "name": "unifi_get_rf_scan_results",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "get_rf_scan_results"
+    },
+    {
+      "name": "unifi_get_route_details",
+      "product": "network",
+      "category": "routing",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "routing_manager",
+      "manager_method": "get_route_details"
+    },
+    {
+      "name": "unifi_get_site_dpi_traffic",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_site_dpi_traffic"
+    },
+    {
+      "name": "unifi_get_site_settings",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_site_settings"
+    },
+    {
+      "name": "unifi_get_snmp_settings",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_settings"
+    },
+    {
+      "name": "unifi_get_speedtest_results",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_speedtest_results"
+    },
+    {
+      "name": "unifi_get_speedtest_status",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "get_speedtest_status"
+    },
+    {
+      "name": "unifi_get_switch_capabilities",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "switch_manager",
+      "manager_method": "get_switch_capabilities"
+    },
+    {
+      "name": "unifi_get_switch_ports",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "switch_manager",
+      "manager_method": "get_switch_ports"
+    },
+    {
+      "name": "unifi_get_system_info",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_system_info"
+    },
+    {
+      "name": "unifi_get_top_clients",
+      "product": "network",
+      "category": "stats",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "stats_manager",
+      "manager_method": "get_top_clients"
+    },
+    {
+      "name": "unifi_get_traffic_flow_statistics",
+      "product": "network",
+      "category": "traffic_flows",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "traffic_flow_manager",
+      "manager_method": "get_traffic_flow_statistics"
+    },
+    {
+      "name": "unifi_get_traffic_flows",
+      "product": "network",
+      "category": "traffic_flows",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "traffic_flow_manager",
+      "manager_method": "get_traffic_flows"
+    },
+    {
+      "name": "unifi_get_traffic_route_details",
+      "product": "network",
+      "category": "traffic_routes",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "traffic_route_manager",
+      "manager_method": "get_traffic_route_details"
+    },
+    {
+      "name": "unifi_get_usergroup_details",
+      "product": "network",
+      "category": "usergroups",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "usergroup_manager",
+      "manager_method": "get_usergroup_details"
+    },
+    {
+      "name": "unifi_get_voucher_details",
+      "product": "network",
+      "category": "hotspot",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "hotspot_manager",
+      "manager_method": "get_voucher_details"
+    },
+    {
+      "name": "unifi_get_vpn_client_details",
+      "product": "network",
+      "category": "vpn",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "vpn_manager",
+      "manager_method": "get_vpn_client_details"
+    },
+    {
+      "name": "unifi_get_vpn_server_details",
+      "product": "network",
+      "category": "vpn",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "vpn_manager",
+      "manager_method": "get_vpn_server_details"
+    },
+    {
+      "name": "unifi_get_wlan_details",
+      "product": "network",
+      "category": "network",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "network_manager",
+      "manager_method": "get_wlan_details"
+    },
+    {
+      "name": "unifi_list_acl_rules",
+      "product": "network",
+      "category": "acl",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "acl_manager",
+      "manager_method": "get_acl_rules"
+    },
+    {
+      "name": "unifi_list_active_routes",
+      "product": "network",
+      "category": "routing",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "routing_manager",
+      "manager_method": "get_active_routes"
+    },
+    {
+      "name": "unifi_list_alarms",
+      "product": "network",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_alarms"
+    },
+    {
+      "name": "unifi_list_ap_groups",
+      "product": "network",
+      "category": "network",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "network_manager",
+      "manager_method": "list_ap_groups"
+    },
+    {
+      "name": "unifi_list_available_channels",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "list_available_channels"
+    },
+    {
+      "name": "unifi_list_backups",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "list_backups"
+    },
+    {
+      "name": "unifi_list_blocked_clients",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "client_manager",
+      "manager_method": "get_blocked_clients"
+    },
+    {
+      "name": "unifi_list_client_groups",
+      "product": "network",
+      "category": "client_groups",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "client_group_manager",
+      "manager_method": "get_client_groups"
+    },
+    {
+      "name": "unifi_list_clients",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "client_manager",
+      "manager_method": "get_clients"
+    },
+    {
+      "name": "unifi_list_content_filters",
+      "product": "network",
+      "category": "content_filtering",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "content_filter_manager",
+      "manager_method": "get_content_filters"
+    },
+    {
+      "name": "unifi_list_devices",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "get_devices"
+    },
+    {
+      "name": "unifi_list_dns_records",
+      "product": "network",
+      "category": "dns",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "dns_manager",
+      "manager_method": "list_dns_records"
+    },
+    {
+      "name": "unifi_list_dpi_applications",
+      "product": "network",
+      "category": "dpi",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "dpi_manager",
+      "manager_method": "get_dpi_applications"
+    },
+    {
+      "name": "unifi_list_dpi_categories",
+      "product": "network",
+      "category": "dpi",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "dpi_manager",
+      "manager_method": "get_dpi_categories"
+    },
+    {
+      "name": "unifi_list_dynamic_dns",
+      "product": "network",
+      "category": "dynamic_dns",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "dynamic_dns_manager",
+      "manager_method": "list_dynamic_dns"
+    },
+    {
+      "name": "unifi_list_events",
+      "product": "network",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_events"
+    },
+    {
+      "name": "unifi_list_firewall_groups",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_firewall_groups"
+    },
+    {
+      "name": "unifi_list_firewall_policies",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_firewall_policies"
+    },
+    {
+      "name": "unifi_list_firewall_zones",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_firewall_zones"
+    },
+    {
+      "name": "unifi_list_legacy_firewall_rules",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_legacy_firewall_rules"
+    },
+    {
+      "name": "unifi_list_networks",
+      "product": "network",
+      "category": "network",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "network_manager",
+      "manager_method": "get_networks"
+    },
+    {
+      "name": "unifi_list_oon_policies",
+      "product": "network",
+      "category": "oon",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "oon_manager",
+      "manager_method": "get_oon_policies"
+    },
+    {
+      "name": "unifi_list_port_forwards",
+      "product": "network",
+      "category": "port_forwards",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_port_forwards"
+    },
+    {
+      "name": "unifi_list_port_profiles",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "switch_manager",
+      "manager_method": "get_port_profiles"
+    },
+    {
+      "name": "unifi_list_qos_rules",
+      "product": "network",
+      "category": "qos",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "qos_manager",
+      "manager_method": "get_qos_rules"
+    },
+    {
+      "name": "unifi_list_rogue_aps",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "device_manager",
+      "manager_method": "list_rogue_aps"
+    },
+    {
+      "name": "unifi_list_routes",
+      "product": "network",
+      "category": "routing",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "routing_manager",
+      "manager_method": "get_routes"
+    },
+    {
+      "name": "unifi_list_traffic_routes",
+      "product": "network",
+      "category": "traffic_routes",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "traffic_route_manager",
+      "manager_method": "get_traffic_routes"
+    },
+    {
+      "name": "unifi_list_usergroups",
+      "product": "network",
+      "category": "usergroups",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "usergroup_manager",
+      "manager_method": "get_usergroups"
+    },
+    {
+      "name": "unifi_list_vouchers",
+      "product": "network",
+      "category": "hotspot",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "hotspot_manager",
+      "manager_method": "get_vouchers"
+    },
+    {
+      "name": "unifi_list_vpn_clients",
+      "product": "network",
+      "category": "vpn",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "vpn_manager",
+      "manager_method": "get_vpn_clients"
+    },
+    {
+      "name": "unifi_list_vpn_servers",
+      "product": "network",
+      "category": "vpn",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "vpn_manager",
+      "manager_method": "get_vpn_servers"
+    },
+    {
+      "name": "unifi_list_wlans",
+      "product": "network",
+      "category": "network",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "network_manager",
+      "manager_method": "get_wlans"
+    },
+    {
+      "name": "unifi_locate_device",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "locate_device"
+    },
+    {
+      "name": "unifi_lookup_by_ip",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "client_manager",
+      "manager_method": "get_client_by_ip"
+    },
+    {
+      "name": "unifi_power_cycle_port",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "switch_manager",
+      "manager_method": "power_cycle_port"
+    },
+    {
+      "name": "unifi_reboot_device",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "reboot_device"
+    },
+    {
+      "name": "unifi_recent_events",
+      "product": "network",
+      "category": "events",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "event_manager",
+      "manager_method": "get_recent_from_buffer"
+    },
+    {
+      "name": "unifi_rename_client",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "client_manager",
+      "manager_method": "rename_client"
+    },
+    {
+      "name": "unifi_rename_device",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "rename_device"
+    },
+    {
+      "name": "unifi_reorder_firewall_policies",
+      "product": "network",
+      "category": "firewall_policies",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "reorder_firewall_policies"
+    },
+    {
+      "name": "unifi_revoke_voucher",
+      "product": "network",
+      "category": "vouchers",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "hotspot_manager",
+      "manager_method": "revoke_voucher"
+    },
+    {
+      "name": "unifi_set_client_ip_settings",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "client_manager",
+      "manager_method": "set_client_ip_settings"
+    },
+    {
+      "name": "unifi_set_device_led",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "set_device_led_override"
+    },
+    {
+      "name": "unifi_set_jumbo_frames",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "switch_manager",
+      "manager_method": "update_device_config"
+    },
+    {
+      "name": "unifi_set_outlet_state",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "get_pdu_outlets"
+    },
+    {
+      "name": "unifi_set_site_leds",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "set_site_led_enabled"
+    },
+    {
+      "name": "unifi_set_switch_port_profile",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "switch_manager",
+      "manager_method": "set_port_overrides"
+    },
+    {
+      "name": "unifi_toggle_device",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "set_device_disabled"
+    },
+    {
+      "name": "unifi_toggle_firewall_policy",
+      "product": "network",
+      "category": "firewall_policies",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "toggle_firewall_policy"
+    },
+    {
+      "name": "unifi_toggle_oon_policy",
+      "product": "network",
+      "category": "oon_policy",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "oon_manager",
+      "manager_method": "toggle_oon_policy"
+    },
+    {
+      "name": "unifi_toggle_port_forward",
+      "product": "network",
+      "category": "port_forwards",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "toggle_port_forward"
+    },
+    {
+      "name": "unifi_toggle_qos_rule_enabled",
+      "product": "network",
+      "category": "qos_rules",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "qos_manager",
+      "manager_method": "update_qos_rule"
+    },
+    {
+      "name": "unifi_toggle_traffic_route",
+      "product": "network",
+      "category": "traffic_routes",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "traffic_route_manager",
+      "manager_method": "toggle_traffic_route"
+    },
+    {
+      "name": "unifi_toggle_wlan",
+      "product": "network",
+      "category": "wlans",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "toggle_wlan"
+    },
+    {
+      "name": "unifi_trigger_rf_scan",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "trigger_rf_scan"
+    },
+    {
+      "name": "unifi_trigger_speedtest",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "trigger_speedtest"
+    },
+    {
+      "name": "unifi_unauthorize_guest",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "client_manager",
+      "manager_method": "unauthorize_guest"
+    },
+    {
+      "name": "unifi_unblock_client",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "client_manager",
+      "manager_method": "unblock_client"
+    },
+    {
+      "name": "unifi_update_acl_rule",
+      "product": "network",
+      "category": "acl_rules",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "acl_manager",
+      "manager_method": "update_acl_rule"
+    },
+    {
+      "name": "unifi_update_ap_group",
+      "product": "network",
+      "category": "wlans",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "update_ap_group"
+    },
+    {
+      "name": "unifi_update_autobackup_settings",
+      "product": "network",
+      "category": "system",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "system_manager",
+      "manager_method": "update_autobackup_settings"
+    },
+    {
+      "name": "unifi_update_client_group",
+      "product": "network",
+      "category": "client_group",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "client_group_manager",
+      "manager_method": "update_client_group"
+    },
+    {
+      "name": "unifi_update_content_filter",
+      "product": "network",
+      "category": "content_filter",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "content_filter_manager",
+      "manager_method": "update_content_filter"
+    },
+    {
+      "name": "unifi_update_device_radio",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "update_device_radio"
+    },
+    {
+      "name": "unifi_update_dns_record",
+      "product": "network",
+      "category": "dns",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "dns_manager",
+      "manager_method": "update_dns_record"
+    },
+    {
+      "name": "unifi_update_dynamic_dns",
+      "product": "network",
+      "category": "dynamic_dns",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "dynamic_dns_manager",
+      "manager_method": "update_dynamic_dns"
+    },
+    {
+      "name": "unifi_update_firewall_group",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "update_firewall_group"
+    },
+    {
+      "name": "unifi_update_firewall_policy",
+      "product": "network",
+      "category": "firewall_policies",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "update_firewall_policy"
+    },
+    {
+      "name": "unifi_update_gateway_settings",
+      "product": "network",
+      "category": "gateway_settings",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "gateway_settings_manager",
+      "manager_method": "update_gateway_settings"
+    },
+    {
+      "name": "unifi_update_network",
+      "product": "network",
+      "category": "networks",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "update_network"
+    },
+    {
+      "name": "unifi_update_oon_policy",
+      "product": "network",
+      "category": "oon_policy",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "oon_manager",
+      "manager_method": "update_oon_policy"
+    },
+    {
+      "name": "unifi_update_port_forward",
+      "product": "network",
+      "category": "port_forwards",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "get_port_forward_by_id"
+    },
+    {
+      "name": "unifi_update_port_profile",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "switch_manager",
+      "manager_method": "update_port_profile"
+    },
+    {
+      "name": "unifi_update_qos_rule",
+      "product": "network",
+      "category": "qos_rules",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "qos_manager",
+      "manager_method": "update_qos_rule"
+    },
+    {
+      "name": "unifi_update_route",
+      "product": "network",
+      "category": "routes",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "routing_manager",
+      "manager_method": "update_route"
+    },
+    {
+      "name": "unifi_update_snmp_settings",
+      "product": "network",
+      "category": "snmp",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "system_manager",
+      "manager_method": "update_settings"
+    },
+    {
+      "name": "unifi_update_switch_stp",
+      "product": "network",
+      "category": "switch",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "switch_manager",
+      "manager_method": "update_device_config"
+    },
+    {
+      "name": "unifi_update_traffic_route",
+      "product": "network",
+      "category": "traffic_routes",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "traffic_route_manager",
+      "manager_method": "update_traffic_route"
+    },
+    {
+      "name": "unifi_update_usergroup",
+      "product": "network",
+      "category": "usergroups",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "usergroup_manager",
+      "manager_method": "update_usergroup"
+    },
+    {
+      "name": "unifi_update_vpn_client_state",
+      "product": "network",
+      "category": "vpn_clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "vpn_manager",
+      "manager_method": "update_vpn_client_state"
+    },
+    {
+      "name": "unifi_update_vpn_server_state",
+      "product": "network",
+      "category": "vpn_servers",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "vpn_manager",
+      "manager_method": "update_vpn_server_state"
+    },
+    {
+      "name": "unifi_update_wlan",
+      "product": "network",
+      "category": "wlans",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "update_wlan"
+    },
+    {
+      "name": "unifi_upgrade_device",
+      "product": "network",
+      "category": "devices",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "device_manager",
+      "manager_method": "upgrade_device"
+    }
+  ],
+  "excluded": [
+    {
+      "name": "access_subscribe_events",
+      "product": "access",
+      "reason": "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
+    },
+    {
+      "name": "protect_subscribe_events",
+      "product": "protect",
+      "reason": "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
+    },
+    {
+      "name": "unifi_subscribe_events",
+      "product": "network",
+      "reason": "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
+    }
+  ]
+}
