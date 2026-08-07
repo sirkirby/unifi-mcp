@@ -1836,6 +1836,8 @@ type Snapshot {
   contentType: String
   capturedAt: String
   url: String
+  snapshotUrl: String
+  imageBase64: String
 }
 
 """Controller SNMP settings."""

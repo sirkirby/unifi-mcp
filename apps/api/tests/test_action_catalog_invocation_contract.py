@@ -7,7 +7,12 @@ import inspect
 import json
 from pathlib import Path
 
-from unifi_api.services.dispatch_overrides import DISPATCH_ARG_TRANSLATORS
+from unifi_api.services.dispatch_overrides import (
+    DISPATCH_ARG_TRANSLATORS,
+    DISPATCH_DIRECT_RESULT_ADAPTERS,
+    DISPATCH_RESULT_ADAPTERS,
+    UNSUPPORTED_ACTION_PARAMETERS,
+)
 from unifi_api.services.managers import _PRODUCT_BUILDERS
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -45,6 +50,14 @@ def test_every_catalog_action_can_invoke_its_core_manager_signature() -> None:
     stale_translators = sorted(set(DISPATCH_ARG_TRANSLATORS) - catalog_names)
     if stale_translators:
         failures.append(f"stale translators: {stale_translators}")
+    for label, mapping in {
+        "direct-result adapters": DISPATCH_DIRECT_RESULT_ADAPTERS,
+        "result adapters": DISPATCH_RESULT_ADAPTERS,
+        "unsupported-parameter declarations": UNSUPPORTED_ACTION_PARAMETERS,
+    }.items():
+        stale = sorted(set(mapping) - catalog_names)
+        if stale:
+            failures.append(f"stale {label}: {stale}")
 
     for action in catalog["actions"]:
         name = action["name"]
@@ -81,4 +94,19 @@ def test_every_catalog_action_can_invoke_its_core_manager_signature() -> None:
                 f"unexpected={sorted(unexpected)} missing={sorted(missing)}"
             )
 
+    assert failures == []
+
+
+def test_unsupported_action_parameters_are_real_public_contract_fields() -> None:
+    manifests: dict[str, dict] = {}
+    for product, package in PRODUCT_PACKAGES.items():
+        payload = json.loads((REPO_ROOT / f"apps/{product}/src/{package}/tools_manifest.json").read_text())
+        manifests.update({tool["name"]: tool for tool in payload["tools"]})
+
+    failures: list[str] = []
+    for tool_name, unsupported in UNSUPPORTED_ACTION_PARAMETERS.items():
+        public = set(manifests[tool_name]["schema"]["input"].get("properties", {})) - {"confirm"}
+        unknown = unsupported - public
+        if unknown:
+            failures.append(f"{tool_name}: unknown unsupported parameters {sorted(unknown)}")
     assert failures == []

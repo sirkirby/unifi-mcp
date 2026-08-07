@@ -130,7 +130,13 @@ worker-check: worker-typecheck worker-test
 docker-relay:
 	docker build -f packages/unifi-mcp-relay/Dockerfile -t unifi-mcp-relay .
 
-pre-commit: format generate lint test check-generated worker-typecheck
+pre-commit:
+	$(MAKE) format
+	$(MAKE) generate
+	$(MAKE) lint
+	$(MAKE) test
+	$(MAKE) check-generated
+	$(MAKE) worker-typecheck
 
 ci: check
 

@@ -245,6 +245,8 @@ class Snapshot:
     content_type: str | None
     captured_at: str | None
     url: str | None = None
+    snapshot_url: str | None = None
+    image_base64: str | None = None
 
     # Tracks which branch produced the instance so to_dict() can re-emit the
     # exact original dict shape — bytes -> {size,content_type,captured_at};
@@ -263,15 +265,22 @@ class Snapshot:
                 content_type="image/jpeg",
                 captured_at=datetime.now(timezone.utc).isoformat(),
                 url=None,
+                snapshot_url=None,
+                image_base64=None,
             )
             inst._source = "bytes"
             return inst
         if isinstance(obj, dict):
+            content_type = obj.get("content_type")
+            if content_type is None and "snapshot_url" not in obj:
+                content_type = "image/jpeg"
             inst = cls(
                 size_bytes=obj.get("size_bytes"),
-                content_type=obj.get("content_type", "image/jpeg"),
+                content_type=content_type,
                 captured_at=obj.get("captured_at"),
                 url=obj.get("url"),
+                snapshot_url=obj.get("snapshot_url"),
+                image_base64=obj.get("image_base64"),
             )
             inst._source = "dict"
             return inst
@@ -280,6 +289,8 @@ class Snapshot:
             content_type=None,
             captured_at=None,
             url=None,
+            snapshot_url=None,
+            image_base64=None,
         )
         inst._source = "other"
         return inst
@@ -292,12 +303,15 @@ class Snapshot:
                 "captured_at": self.captured_at,
             }
         if self._source == "dict":
-            return {
+            payload = {
                 "size_bytes": self.size_bytes,
                 "content_type": self.content_type,
                 "captured_at": self.captured_at,
                 "url": self.url,
+                "snapshot_url": self.snapshot_url,
+                "image_base64": self.image_base64,
             }
+            return {key: value for key, value in payload.items() if value is not None}
         return {
             "size_bytes": None,
             "content_type": None,

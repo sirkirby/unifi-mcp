@@ -15,12 +15,12 @@ from unifi_core.network.models.firewall import (
     firewall_group_from_controller,
     firewall_zone_from_controller,
     legacy_firewall_rule_from_controller,
+    legacy_policy_error,
+    normalize_policy_enums,
+    normalize_policy_update,
 )
 from unifi_core.network.models.firewall import (
     from_controller as fw_from_controller,
-)
-from unifi_core.network.models.firewall import (
-    to_controller_update as fw_to_update,
 )
 from unifi_core.redaction import redact_sensitive_fields
 from unifi_network_mcp.runtime import firewall_manager, server, should_redact_sensitive_fields
@@ -35,40 +35,6 @@ LEGACY_ENGINE_HINT = (
 )
 
 logger = logging.getLogger(__name__)
-
-
-# Legacy V1 firewall fields removed in #210. The V1 endpoint is dead on
-# modern firmware (UDM-SE 8.4.x); the V1 schema branch always shipped V1-shaped
-# payloads to the V2 endpoint, which rejected them. Detect these fields and
-# return an actionable migration error instead of a silent failure.
-_LEGACY_V1_FIREWALL_FIELDS = frozenset(
-    {
-        "ruleset",
-        "rule_index",
-        "src_address",
-        "dst_address",
-        "src_port",
-        "dst_port",
-    }
-)
-_LEGACY_V1_ACTIONS = frozenset({"accept", "drop", "reject"})
-
-_LEGACY_MIGRATION_ERROR = (
-    "Legacy V1 firewall fields are no longer supported (#210). "
-    "Use V2 zone-based fields: action (ALLOW/BLOCK/REJECT), source "
-    "(zone_id + matching_target), destination (zone_id + matching_target). "
-    "See unifi_list_firewall_policies for examples of valid V2 shape."
-)
-
-
-def _detect_legacy_fields(data: Dict[str, Any]) -> str | None:
-    """Return the migration error string if legacy V1 fields are detected."""
-    if _LEGACY_V1_FIREWALL_FIELDS & set(data.keys()):
-        return _LEGACY_MIGRATION_ERROR
-    action = data.get("action")
-    if isinstance(action, str) and action in _LEGACY_V1_ACTIONS:
-        return _LEGACY_MIGRATION_ERROR
-    return None
 
 
 @server.tool(
@@ -452,14 +418,17 @@ async def create_firewall_policy(
         }
 
     # Reject legacy V1 fields up front with an actionable migration error (#210).
-    legacy_error = _detect_legacy_fields(policy_data)
+    legacy_error = legacy_policy_error(policy_data)
     if legacy_error:
         return {"success": False, "error": legacy_error}
 
     # Controller's V2 enums are strictly upper-case. Normalize common
     # mixed-case input before validation so users can pass natural forms
     # like "IPv4" or lowercase state names.
-    policy_data = _normalize_v2_policy_casing(policy_data)
+    try:
+        policy_data = normalize_policy_enums(policy_data)
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
     # Validate required fields and apply schema defaults directly.
     _required = ("name", "action", "source", "destination")
@@ -571,29 +540,6 @@ async def create_firewall_policy(
         return {"success": False, "error": "Failed to create firewall policy '%s': %s" % (policy_name, e)}
 
 
-# Controller-side V2 firewall enums are Java-style and strictly upper-case.
-# Live-controller probe (issue #203 follow-up) confirmed the accepted values:
-#   ip_version            → BOTH | IPV4 | IPV6
-#   connection_state_type → ALL | RESPOND_ONLY | CUSTOM
-#   connection_states[]   → NEW | RELATED | INVALID | ESTABLISHED
-# Normalize to upper-case so users can pass natural forms ("IPv4", "new").
-def _normalize_v2_policy_casing(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a shallow copy of ``data`` with V2 firewall enum fields upper-cased.
-
-    Only normalizes string values; non-string input is left for schema validation
-    to flag with its own error.
-    """
-    out = dict(data)
-    if isinstance(out.get("ip_version"), str):
-        out["ip_version"] = out["ip_version"].upper()
-    if isinstance(out.get("connection_state_type"), str):
-        out["connection_state_type"] = out["connection_state_type"].upper()
-    states = out.get("connection_states")
-    if isinstance(states, list):
-        out["connection_states"] = [s.upper() if isinstance(s, str) else s for s in states]
-    return out
-
-
 @server.tool(
     name="unifi_update_firewall_policy",
     description=(
@@ -635,27 +581,10 @@ async def update_firewall_policy(
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Reject legacy V1 fields up front with an actionable migration error (#210).
-    legacy_error = _detect_legacy_fields(update_data)
-    if legacy_error:
-        return {"success": False, "error": legacy_error}
-
-    # Normalize V2 action casing if provided.
-    if "action" in update_data:
-        action = update_data["action"]
-        if isinstance(action, str):
-            upper = action.upper()
-            if upper in ("ALLOW", "BLOCK", "REJECT"):
-                update_data["action"] = upper
-            else:
-                return {"success": False, "error": "Invalid action '%s'." % action}
-
-    # Normalize V2 enum casing before filtering so common mixed-case input
-    # ("IPv4", "custom", ["new"]) is preserved.
-    update_data = _normalize_v2_policy_casing(update_data)
-    validated_data = fw_to_update(update_data)
-    if not validated_data:
-        return {"success": False, "error": "Update data is effectively empty or invalid."}
+    try:
+        validated_data = normalize_policy_update(update_data)
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
     updated_fields_list = list(validated_data.keys())
 

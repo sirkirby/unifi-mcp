@@ -32,6 +32,29 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/unifi-api-server
 
 jobs:
+  generated-contracts:
+    name: Verify generated action contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install all generation inputs
+        run: uv sync --all-packages
+
+      - name: Verify catalog tests and committed artifacts
+        run: make catalog-test check-generated
+
   # ----------------------------------------------------------------------- 1
   test:
     name: Run unifi-api-server tests
@@ -59,7 +82,7 @@ jobs:
   # ----------------------------------------------------------------------- 2a
   publish-pypi:
     name: Build wheel + publish to PyPI
-    needs: test
+    needs: [test, generated-contracts]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -96,7 +119,7 @@ jobs:
   # ----------------------------------------------------------------------- 2b
   publish-docker:
     name: Build + push Docker image
-    needs: test
+    needs: [test, generated-contracts]
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -1233,7 +1233,7 @@
       "permission_action": "read",
       "read_only_hint": true,
       "manager_attr": "stats_manager",
-      "manager_method": "get_client_stats"
+      "manager_method": "get_client_stats_for_identifier"
     },
     {
       "name": "unifi_get_client_wifi_details",
@@ -1287,7 +1287,7 @@
       "permission_action": "read",
       "read_only_hint": true,
       "manager_attr": "stats_manager",
-      "manager_method": "get_device_stats"
+      "manager_method": "get_device_stats_for_identifier"
     },
     {
       "name": "unifi_get_dns_record_details",

@@ -145,6 +145,17 @@ def test_snapshot_serializer_bytes_shape() -> None:
     assert Snapshot.render_hint("detail")["kind"] == "detail"
 
 
+def test_snapshot_action_shapes_reference_or_inline_image() -> None:
+    from unifi_api.graphql.types.protect.cameras import Snapshot
+
+    assert Snapshot.from_manager_output(
+        {"snapshot_url": "protect://cameras/camera-1/snapshot"}
+    ).to_dict() == {"snapshot_url": "protect://cameras/camera-1/snapshot"}
+    assert Snapshot.from_manager_output(
+        {"image_base64": "anBlZw==", "content_type": "image/jpeg"}
+    ).to_dict() == {"image_base64": "anBlZw==", "content_type": "image/jpeg"}
+
+
 def test_camera_mutation_ack_ptz_move() -> None:
     reg = _registry()
     s = reg.serializer_for_tool("protect_ptz_move")

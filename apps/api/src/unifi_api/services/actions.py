@@ -9,7 +9,12 @@ from typing import Any, Iterable
 from sqlalchemy.ext.asyncio import AsyncSession
 from unifi_core.redaction import redaction_marker_paths
 
-from unifi_api.services.dispatch_overrides import DISPATCH_ARG_TRANSLATORS
+from unifi_api.services.dispatch_overrides import (
+    DISPATCH_ARG_TRANSLATORS,
+    DISPATCH_DIRECT_RESULT_ADAPTERS,
+    DISPATCH_RESULT_ADAPTERS,
+    UNSUPPORTED_ACTION_PARAMETERS,
+)
 from unifi_api.services.managers import ManagerFactory
 from unifi_api.services.manifest import ManifestRegistry, ToolEntry
 
@@ -109,6 +114,20 @@ async def dispatch_action(
             f"Failed to dispatch {tool_name}: omit {field} to keep the current value; do not pass the redaction marker."
         )
 
+    unsupported = sorted(set(args) & UNSUPPORTED_ACTION_PARAMETERS.get(tool_name, frozenset()))
+    if unsupported:
+        names = ", ".join(unsupported)
+        raise ValueError(
+            f"Action parameter(s) {names} are not supported by the typed API action endpoint; "
+            "omit them or use the dedicated resource endpoint."
+        )
+
+    direct_adapter = DISPATCH_DIRECT_RESULT_ADAPTERS.get(tool_name)
+    if direct_adapter is not None:
+        handled, direct_result = direct_adapter(dict(args))
+        if handled:
+            return direct_result
+
     manager = await factory.get_domain_manager(
         session=session,
         controller_id=controller_id,
@@ -134,5 +153,11 @@ async def dispatch_action(
     translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)
     if translator is not None:
         positional, keyword = translator(manager_args)
-        return await _resolve_result(method(*positional, **keyword))
-    return await _resolve_result(method(**manager_args))
+        result = await _resolve_result(method(*positional, **keyword))
+    else:
+        result = await _resolve_result(method(**manager_args))
+    result_adapter = DISPATCH_RESULT_ADAPTERS.get(tool_name)
+    if result_adapter is not None:
+        result = result_adapter(result, dict(args), manager)
+        result = await _resolve_result(result)
+    return result

@@ -380,3 +380,21 @@ def test_makefile_generates_catalog_after_product_manifests_and_checks_drift() -
         text=True,
     ).stdout
     assert "scripts/generate_api_action_catalog.py --check" in check_generated
+
+    pre_commit = subprocess.run(
+        ["make", "-n", "-j4", "pre-commit"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    stages = [
+        "make format",
+        "make generate",
+        "make lint",
+        "make test",
+        "make check-generated",
+        "make worker-typecheck",
+    ]
+    stage_positions = [pre_commit.index(stage) for stage in stages]
+    assert stage_positions == sorted(stage_positions)
