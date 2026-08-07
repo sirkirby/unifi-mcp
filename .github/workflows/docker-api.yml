@@ -30,6 +30,9 @@ jobs:
         with:
           fetch-depth: 0  # Full history needed for hatch-vcs to determine version from tags
 
+      - name: Start and smoke-test the API image
+        run: ./scripts/smoke-api-image.sh
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
 

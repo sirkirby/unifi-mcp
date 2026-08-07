@@ -35,8 +35,8 @@ jobs:
       with:
         enable-cache: true
 
-    - name: Install workspace
-      run: uv sync --all-packages
+    - name: Install standalone API dependency closure
+      run: uv sync --package unifi-api-server
 
     - name: Run tests with coverage
       # -n auto parallelizes across runner cores (xdist). 702 tests run in ~20s

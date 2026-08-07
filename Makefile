@@ -1,6 +1,6 @@
 .PHONY: help sync build check test lint format format-check format-fix manifest generate api-action-catalog \
        check-api-action-catalog server-manifests skill-references check-skill-references check-generated \
-       pre-commit ci core-test shared-test protocol-smoke \
+       pre-commit ci core-test shared-test catalog-test protocol-smoke \
        docs-test relay-test worker-install worker-test worker-typecheck worker-build worker-check docker-relay \
        docker-build docker-up docker-down docker-logs
 
@@ -32,6 +32,7 @@ help:
 	@echo ""
 	@echo "  make core-test      Run unifi-core tests only"
 	@echo "  make shared-test    Run unifi-mcp-shared tests only"
+	@echo "  make catalog-test   Run generated-catalog and live-harness contract tests"
 	@echo "  make protocol-smoke Run MCP protocol conformance smoke tests"
 	@echo "  make worker-build   Install worker deps + typecheck Worker app"
 	@echo "  make worker-check   Run worker CLI tests + TypeScript checks"
@@ -52,10 +53,13 @@ core-test:
 shared-test:
 	uv run --package unifi-mcp-shared pytest packages/unifi-mcp-shared/tests -v
 
+catalog-test:
+	uv run pytest tests/test_generate_api_action_catalog.py tests/test_live_smoke_harness.py -v
+
 docs-test:
 	uv run python -m unittest discover -s tests/docs -p 'test_*.py' -v
 
-test: core-test shared-test docs-test relay-test protocol-smoke worker-test
+test: core-test shared-test catalog-test docs-test relay-test protocol-smoke worker-test
 	$(MAKE) -C apps/network test
 	$(MAKE) -C apps/protect test
 	$(MAKE) -C apps/access test

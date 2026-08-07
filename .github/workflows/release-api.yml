@@ -50,8 +50,8 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install workspace
-        run: uv sync --all-packages
+      - name: Install standalone API dependency closure
+        run: uv sync --package unifi-api-server
 
       - name: Run tests
         run: uv run --package unifi-api-server pytest apps/api/tests -n auto -q
@@ -107,6 +107,9 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Start and smoke-test the release image
+        run: ./scripts/smoke-api-image.sh
 
       - uses: docker/setup-qemu-action@v4
 

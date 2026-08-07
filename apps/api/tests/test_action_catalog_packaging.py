@@ -34,20 +34,30 @@ def test_built_wheel_contains_and_loads_catalog_without_sibling_apps(tmp_path: P
         archive.extractall(unpacked)
 
     probe = """
-import importlib.util
+import importlib.abc
 import sys
+
+blocked = ('unifi_network_mcp', 'unifi_protect_mcp', 'unifi_access_mcp')
+
+class BlockSiblingApps(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname in blocked or fullname.startswith(tuple(name + '.' for name in blocked)):
+            raise ImportError(f'forbidden sibling-app import: {fullname}')
+        return None
+
 sys.path.insert(0, sys.argv[1])
+sys.meta_path.insert(0, BlockSiblingApps())
 from unifi_api.services.manifest import ManifestRegistry
 registry = ManifestRegistry.load()
 assert len(registry) == 266
 assert registry.has('unifi_list_clients')
 assert registry.has('protect_list_cameras')
 assert registry.has('access_list_doors')
-for package in ('unifi_network_mcp', 'unifi_protect_mcp', 'unifi_access_mcp'):
-    assert importlib.util.find_spec(package) is None, package
+from unifi_api.server import create_app
+assert create_app is not None
 """
     subprocess.run(
-        [sys._base_executable, "-I", "-c", probe, str(unpacked)],
+        [sys.executable, "-I", "-c", probe, str(unpacked)],
         cwd=tmp_path,
         check=True,
         capture_output=True,

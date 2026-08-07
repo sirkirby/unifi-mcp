@@ -1987,6 +1987,11 @@ def _classify_confirmation_negative_control(status: int, response: object) -> di
     return {"passed": passed, "error": error}
 
 
+def _classify_api_action_result(success: bool | None, shape_match: bool) -> str:
+    """Require current live success; historical baselines are diagnostic only."""
+    return "pass" if success is True and shape_match else "regression"
+
+
 def _api_actions_baseline_dirs() -> dict[str, str]:
     """Map product -> baseline artifact directory under live-smoke-results/."""
     return {
@@ -2177,9 +2182,8 @@ def _live_count(summary: dict[str, Any]) -> int | None:
 def run_api_actions_phase(args: argparse.Namespace) -> int:
     """Manual-only phase: exercise read-only tools through POST /v1/actions/{name}.
 
-    Returns 0 on parity (every exercised tool succeeds AND matches the baseline
-    success flag). Returns non-zero when a NEW failure is observed compared to
-    the MCP-direct baseline.
+    Returns 0 only when every exercised tool succeeds. Baselines provide
+    comparison context, but can never convert a live API failure into a pass.
     """
     print("\n=== api-actions: spinning up unifi-api-server locally ===", flush=True)
     tmp_dir = Path(tempfile.mkdtemp(prefix="unifi-api-smoke-"))
@@ -2203,13 +2207,12 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
         "db_path": str(db_path),
         "controllers": [],
         "catalog_probe": None,
-        "confirmation_negative_control": None,
+        "confirmation_negative_controls": [],
         "results": [],
         "summary": {
             "tools_exercised": 0,
             "passed": 0,
             "regressions": 0,
-            "preexisting_failures": 0,
         },
     }
 
@@ -2320,19 +2323,20 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
                 },
             )
             negative_result = _classify_confirmation_negative_control(negative_status, negative_response)
-            artifact["confirmation_negative_control"] = {
-                "product": product,
-                "tool": tool_name,
-                "http_status": negative_status,
-                **negative_result,
-            }
+            artifact["confirmation_negative_controls"].append(
+                {
+                    "product": product,
+                    "tool": tool_name,
+                    "http_status": negative_status,
+                    **negative_result,
+                }
+            )
             print(
                 f"  confirmation negative control: {tool_name} passed={negative_result['passed']}",
                 flush=True,
             )
             if not negative_result["passed"]:
                 artifact["summary"]["regressions"] += 1
-            break
 
         # Step 2: exercise the sample, comparing to baselines
         baselines = {p: _load_api_actions_baseline(p) for p in product_to_controller_id}
@@ -2389,17 +2393,9 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             if isinstance(baseline_count, int) and isinstance(live_count, int):
                 count_delta = live_count - baseline_count
 
-            # Classification:
-            #   pass:          live success matches baseline (both True), shape matches.
-            #   preexisting:   baseline already failed (success != True). Not a regression.
-            #   regression:    baseline succeeded, but live failed.
-            classification: str
-            if success is True and (baseline_success is True or baseline_success is None):
-                classification = "pass"
-            elif baseline_success in (False, None) and success is not True:
-                classification = "preexisting" if baseline_success is False else "no_baseline"
-            else:
-                classification = "regression"
+            # A historical baseline is diagnostic context, not an exemption:
+            # every live API action exercised in this phase must work now.
+            classification = _classify_api_action_result(success, shape_match)
 
             artifact["results"].append(
                 {
@@ -2426,8 +2422,6 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
                 artifact["summary"]["passed"] += 1
             elif classification == "regression":
                 artifact["summary"]["regressions"] += 1
-            elif classification in {"preexisting", "no_baseline"}:
-                artifact["summary"]["preexisting_failures"] += 1
 
             print(
                 f"  api-actions {classification}: {tool_name} "

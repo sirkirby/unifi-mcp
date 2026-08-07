@@ -49,6 +49,15 @@ def test_live_api_confirmation_negative_control_requires_interlock_error():
     )
 
 
+def test_api_actions_have_no_baseline_failure_exemption():
+    import live_smoke
+
+    assert live_smoke._classify_api_action_result(True, True) == "pass"
+    assert live_smoke._classify_api_action_result(False, True) == "regression"
+    assert live_smoke._classify_api_action_result(None, True) == "regression"
+    assert live_smoke._classify_api_action_result(True, False) == "regression"
+
+
 def test_live_smoke_known_controller_issue_matches_exact_error_code():
     import live_smoke
 

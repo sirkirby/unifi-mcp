@@ -1,25 +1,15 @@
-name: "Skill: Check References"
+name: "Generated Artifacts: Check Drift"
 
 on:
   push:
     branches: [main, develop]
-    paths:
-      - 'apps/*/src/*/tools_manifest.json'
-      - 'plugins/*/skills/*/references/*.md'
-      - 'scripts/generate_skill_references.py'
-      - 'Makefile'
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main, develop]
-    paths:
-      - 'apps/*/src/*/tools_manifest.json'
-      - 'plugins/*/skills/*/references/*.md'
-      - 'scripts/generate_skill_references.py'
-      - 'Makefile'
 
 jobs:
   check-drift:
-    name: Check skill references match tool manifests
+    name: Check generated files and generation contracts
     runs-on: ubuntu-latest
 
     steps:
@@ -30,5 +20,11 @@ jobs:
       with:
         python-version: "3.13"
 
-    - name: Check generated files for drift
-      run: make check-generated
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+
+    - name: Install generation dependencies
+      run: uv sync --all-packages
+
+    - name: Check generated files and harness contracts
+      run: make catalog-test check-generated
