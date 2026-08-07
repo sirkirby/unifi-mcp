@@ -7,6 +7,7 @@ from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from unifi_api.services.action_results import ShapedReadResult
 from unifi_api.services.actions import (
     CapabilityMismatch,
     DispatchEntry,
@@ -241,9 +242,10 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
     )
     registry = _registry_with(entry)
 
-    # Mock domain manager whose `get_clients` returns a sentinel response.
-    expected_response = {"success": True, "data": {"clients": []}}
+    # Mock domain manager whose `get_clients` returns controller rows.
+    expected_response: list[dict[str, object]] = []
     domain_manager = MagicMock()
+    domain_manager._connection.site = "default"
     domain_manager.get_clients = AsyncMock(return_value=expected_response)
 
     # Mock connection manager — supports site updates.
@@ -272,7 +274,26 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
         },
     )
 
-    assert result is expected_response
+    assert result == ShapedReadResult(
+        payload={
+            "success": True,
+            "site": "default",
+            "filter_type": "all",
+            "search": None,
+            "fields": None,
+            "total_count": 0,
+            "returned_count": 0,
+            "count": 0,
+            "limit": 100,
+            "clients": [],
+        },
+        data_key="clients",
+        render_hint={
+            "primary_key": "mac",
+            "display_columns": ["name", "ip", "connection_type", "status"],
+            "sort_default": "name:asc",
+        },
+    )
     factory.get_domain_manager.assert_awaited_once_with(
         session=session,
         controller_id="cid",
@@ -280,7 +301,7 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
         attr_name="client_manager",
         site="default",
     )
-    domain_manager.get_clients.assert_awaited_once_with()
+    domain_manager.get_clients.assert_awaited_once_with(include_offline=False)
     factory.get_connection_manager.assert_not_awaited()
 
 
@@ -545,7 +566,7 @@ async def test_dispatch_scopes_manager_to_requested_site_without_mutating_connec
     registry = _registry_with(entry)
 
     domain_manager = MagicMock()
-    domain_manager.get_clients = AsyncMock(return_value={"ok": True})
+    domain_manager.get_clients = AsyncMock(return_value=[])
 
     factory = MagicMock()
     factory.get_domain_manager = AsyncMock(return_value=domain_manager)
@@ -575,8 +596,7 @@ async def test_dispatch_scopes_manager_to_requested_site_without_mutating_connec
         site="upstairs",
     )
     factory.get_connection_manager.assert_not_awaited()
-    # The list_clients translator strips filter kwargs; get_clients() takes no args.
-    domain_manager.get_clients.assert_awaited_once_with()
+    domain_manager.get_clients.assert_awaited_once_with(include_offline=False)
 
 
 def test_build_dispatch_table_finds_real_tools() -> None:
@@ -2165,53 +2185,6 @@ async def test_dispatch_translates_set_client_ip_settings_mac_address_to_client_
 
 
 # ---------------------------------------------------------------------------
-# Network — list_clients: manager get_clients() takes no arguments
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_dispatch_rejects_list_clients_wrapper_only_kwargs() -> None:
-    """The typed action endpoint must not silently discard MCP-only filters."""
-    entry = ToolEntry(
-        name="unifi_list_clients",
-        product="network",
-        category="clients",
-        manager="",
-        method="",
-    )
-    registry = _registry_with(entry)
-
-    domain_manager = MagicMock()
-    domain_manager.get_clients = AsyncMock(return_value=[])
-
-    conn_manager = MagicMock()
-    conn_manager.site = "default"
-    conn_manager.set_site = AsyncMock()
-
-    factory = MagicMock()
-    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
-    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
-
-    with pytest.raises(ValueError, match="filter_type.*include_offline.*limit.*not supported"):
-        await dispatch_action(
-            registry=registry,
-            factory=factory,
-            session=MagicMock(),
-            tool_name="unifi_list_clients",
-            controller_id="cid",
-            controller_products=["network"],
-            site="default",
-            args={"filter_type": "wireless", "include_offline": False, "limit": 50},
-            confirm=False,
-            dispatch_table={
-                "unifi_list_clients": DispatchEntry(manager_attr="client_manager", method="get_clients"),
-            },
-        )
-
-    domain_manager.get_clients.assert_not_awaited()
-
-
-# ---------------------------------------------------------------------------
 # Network — update_firewall_policy: update_data → updates rename
 # ---------------------------------------------------------------------------
 
@@ -2687,37 +2660,188 @@ async def test_reviewed_catalog_mutations_preserve_wrapper_semantics(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("tool_name", "args", "parameter"),
+    (
+        "tool_name",
+        "args",
+        "method_name",
+        "manager_result",
+        "expected_manager_kwargs",
+        "data_key",
+        "expected_payload",
+    ),
     [
-        ("unifi_list_clients", {"include_offline": True}, "include_offline"),
-        ("unifi_list_devices", {"limit": 5}, "limit"),
-        ("unifi_get_client_details", {"mac_address": "aa:bb:cc:dd:ee:ff", "summary": True}, "summary"),
-        ("unifi_list_firewall_policies", {"search": "guest"}, "search"),
-        ("unifi_list_networks", {"fields": "id,name"}, "fields"),
+        (
+            "unifi_list_clients",
+            {
+                "filter_type": "wireless",
+                "include_offline": True,
+                "search": "phone",
+                "limit": 1,
+                "fields": "mac,connection_type",
+            },
+            "get_clients",
+            [{"mac": "aa", "name": "Phone", "is_wired": False}],
+            {"include_offline": True},
+            "clients",
+            {"filter_type": "wireless", "search": "phone", "limit": 1, "returned_count": 1},
+        ),
+        (
+            "unifi_get_alerts",
+            {"limit": 1, "include_archived": True},
+            "get_alerts",
+            [{"id": "a1"}, {"id": "a2"}],
+            {"include_archived": True},
+            "alerts",
+            {"limit": 1, "include_archived": True},
+        ),
+        (
+            "unifi_get_client_details",
+            {"mac_address": "aa", "include": "wireless", "summary": True},
+            "get_client_details",
+            {"mac": "aa", "is_wired": False, "signal": -42},
+            {"client_mac": "aa"},
+            "client",
+            {"include": "wireless", "summary_mode": True},
+        ),
+        (
+            "unifi_get_dashboard",
+            {"history_seconds": 3600, "summary": False},
+            "get_dashboard",
+            [{"wan_activity": [1], "num_sta": 2}],
+            {"history_seconds": 3600},
+            "dashboard",
+            {"history_seconds": 3600, "summary_mode": False, "omitted_sections": []},
+        ),
+        (
+            "unifi_get_device_details",
+            {"mac_address": "bb", "include": "ports", "summary": True},
+            "get_device_details",
+            {"mac": "bb", "type": "usw", "port_table": []},
+            {"device_mac": "bb"},
+            "device",
+            {"include": "ports", "summary_mode": True},
+        ),
+        (
+            "unifi_get_network_details",
+            {"network_id": "n1", "include": "dhcp", "summary": True},
+            "get_network_details",
+            {"_id": "n1", "name": "LAN", "dhcpd_enabled": True},
+            {"network_id": "n1"},
+            "details",
+            {"network_id": "n1", "include": "dhcp", "summary_mode": True},
+        ),
+        (
+            "unifi_list_devices",
+            {
+                "device_type": "switch",
+                "status": "online",
+                "search": "office",
+                "limit": 1,
+                "include_details": True,
+                "summary": False,
+            },
+            "get_devices",
+            [{"mac": "cc", "name": "Office", "type": "usw", "state": 1, "port_table": []}],
+            {},
+            "devices",
+            {
+                "filter_type": "switch",
+                "filter_status": "online",
+                "search": "office",
+                "limit": 1,
+                "returned_count": 1,
+            },
+        ),
+        (
+            "unifi_list_firewall_policies",
+            {
+                "search": "guest",
+                "action": "allow",
+                "enabled_only": True,
+                "limit": 1,
+                "summary": False,
+                "include_predefined": True,
+            },
+            "get_firewall_policies",
+            [{"_id": "p1", "name": "Guest", "enabled": True, "action": "ALLOW", "index": 1}],
+            {"include_predefined": True},
+            "policies",
+            {"search": "guest", "action_filter": "allow", "enabled_only": True, "limit": 1},
+        ),
+        (
+            "unifi_list_networks",
+            {"search": "20", "purpose": "guest", "limit": 1, "fields": "_id,name"},
+            "get_networks",
+            [{"_id": "n1", "name": "Guest", "purpose": "guest", "vlan": 20}],
+            {},
+            "networks",
+            {"search": "20", "purpose_filter": "guest", "fields": "_id,name", "limit": 1},
+        ),
+        (
+            "unifi_list_rogue_aps",
+            {"within_hours": 12, "channel": 36, "min_signal": -70, "limit": 1, "offset": 1, "summary": False},
+            "list_rogue_aps",
+            [
+                {"bssid": "one", "channel": 36, "signal": -60},
+                {"bssid": "two", "channel": 36, "signal": -50},
+            ],
+            {"within_hours": 12},
+            "rogue_aps",
+            {"within_hours": 12, "summary_mode": False, "limit": 1, "offset": 1},
+        ),
+        (
+            "unifi_list_wlans",
+            {"search": "guest", "enabled_only": True, "limit": 1},
+            "get_wlans",
+            [{"_id": "w1", "name": "Guest", "enabled": True}],
+            {},
+            "wlans",
+            {"search": "guest", "enabled_only": True, "limit": 1, "returned_count": 1},
+        ),
     ],
 )
-async def test_wrapper_only_action_parameters_fail_explicitly(
+async def test_read_action_non_default_parameters_share_core_view_contract(
     tool_name: str,
     args: dict,
-    parameter: str,
+    method_name: str,
+    manager_result: object,
+    expected_manager_kwargs: dict,
+    data_key: str,
+    expected_payload: dict,
 ) -> None:
     entry = PRODUCTION_REGISTRY.resolve(tool_name)
+    manager = MagicMock()
+    manager._connection.site = "default"
+    method = AsyncMock(return_value=manager_result)
+    setattr(manager, method_name, method)
     factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
 
-    with pytest.raises(ValueError, match=rf"{parameter}.*not supported"):
-        await dispatch_action(
-            registry=PRODUCTION_REGISTRY,
-            factory=factory,
-            session=MagicMock(),
-            tool_name=tool_name,
-            controller_id="cid",
-            controller_products=[entry.product],
-            site="default",
-            args=args,
-            confirm=False,
-        )
+    result = await dispatch_action(
+        registry=PRODUCTION_REGISTRY,
+        factory=factory,
+        session=MagicMock(),
+        tool_name=tool_name,
+        controller_id="cid",
+        controller_products=[entry.product],
+        site="default",
+        args=args,
+        confirm=False,
+    )
 
-    factory.get_domain_manager.assert_not_called()
+    assert isinstance(result, ShapedReadResult)
+    assert result.data_key == data_key
+    assert result.payload["success"] is True
+    assert data_key in result.payload
+    for key, value in expected_payload.items():
+        assert result.payload[key] == value
+    if tool_name == "unifi_list_firewall_policies":
+        assert result.render_hint["display_columns"][-1] == "index"
+        assert result.render_hint["sort_default"] == "index:asc"
+    if tool_name == "unifi_list_rogue_aps":
+        assert "essid" in result.render_hint["display_columns"]
+        assert "ssid" not in result.render_hint["display_columns"]
+    method.assert_awaited_once_with(**expected_manager_kwargs)
 
 
 @pytest.mark.asyncio

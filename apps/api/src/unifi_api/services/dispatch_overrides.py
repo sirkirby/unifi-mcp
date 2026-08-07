@@ -44,6 +44,22 @@ import base64
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from unifi_core.network.read_views import (
+    shape_alerts,
+    shape_client_details,
+    shape_client_list,
+    shape_dashboard,
+    shape_device_details,
+    shape_device_list,
+    shape_firewall_policy_list,
+    shape_network_details,
+    shape_network_list,
+    shape_rogue_ap_list,
+    shape_wlan_list,
+)
+
+from unifi_api.services.action_results import ShapedReadResult
+
 # Format: tool_name -> (manager_attr, method_name)
 DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # =========================================================================
@@ -602,15 +618,13 @@ def _rename_mac_address_to_client_mac(args: dict[str, Any]) -> tuple[tuple[Any, 
 # ---------------------------------------------------------------------------
 # Network — list_clients
 # ---------------------------------------------------------------------------
-# ``get_clients()`` takes no arguments.  The tool exposes ``filter_type``,
-# ``include_offline``, and ``limit`` to the LLM for its own filtering logic,
-# but since the dispatcher bypasses the tool body we must strip those kwargs
-# before invoking the no-arg manager method.
+# Core owns the online-vs-historical selection; the remaining public options
+# are applied by the shared result view after the manager returns.
 
 
 def _translate_list_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Strip tool-only filter kwargs; ``get_clients()`` accepts no arguments."""
-    return (), {}
+    """Pass only the Core client-source selector to ``get_clients``."""
+    return (), {"include_offline": args.get("include_offline", False)}
 
 
 # ---------------------------------------------------------------------------
@@ -1168,19 +1182,200 @@ def _recent_events_result(result: Any, args: dict[str, Any], manager: Any) -> di
     }
 
 
-UNSUPPORTED_ACTION_PARAMETERS: dict[str, frozenset[str]] = {
-    "unifi_list_clients": frozenset({"filter_type", "include_offline", "search", "limit", "fields"}),
-    "unifi_get_alerts": frozenset({"limit"}),
-    "unifi_get_client_details": frozenset({"include", "summary"}),
-    "unifi_get_dashboard": frozenset({"summary"}),
-    "unifi_get_device_details": frozenset({"include", "summary"}),
-    "unifi_get_network_details": frozenset({"include", "summary"}),
-    "unifi_list_devices": frozenset({"device_type", "status", "search", "limit", "include_details", "summary"}),
-    "unifi_list_firewall_policies": frozenset({"search", "action", "enabled_only", "limit", "summary"}),
-    "unifi_list_networks": frozenset({"fields", "limit", "purpose", "search"}),
-    "unifi_list_rogue_aps": frozenset({"channel", "limit", "min_signal", "offset", "summary"}),
-    "unifi_list_wlans": frozenset({"enabled_only", "limit", "search"}),
-}
+def _manager_site(manager: Any) -> str:
+    return str(manager._connection.site)
+
+
+def _list_clients_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    payload = shape_client_list(
+        result,
+        site=_manager_site(manager),
+        filter_type=args.get("filter_type", "all"),
+        search=args.get("search"),
+        limit=args.get("limit", 100),
+        fields=args.get("fields"),
+    )
+    return ShapedReadResult(
+        payload,
+        "clients",
+        {
+            "primary_key": "mac",
+            "display_columns": ["name", "ip", "connection_type", "status"],
+            "sort_default": "name:asc",
+        },
+    )
+
+
+def _alerts_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    payload = shape_alerts(
+        result,
+        site=_manager_site(manager),
+        limit=args.get("limit", 10),
+        include_archived=args.get("include_archived", False),
+    )
+    return ShapedReadResult(
+        payload,
+        "alerts",
+        {
+            "primary_key": "_id",
+            "display_columns": ["timestamp", "key", "msg", "mac"],
+            "sort_default": "timestamp:desc",
+        },
+    )
+
+
+def _client_details_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    payload = shape_client_details(
+        result,
+        site=_manager_site(manager),
+        mac_address=args["mac_address"],
+        include=args.get("include", "basic"),
+        summary=args.get("summary", False),
+    )
+    return ShapedReadResult(payload, "client")
+
+
+def _dashboard_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    payload = shape_dashboard(
+        result,
+        site=_manager_site(manager),
+        summary=args.get("summary", True),
+        history_seconds=args.get("history_seconds", 86400),
+    )
+    return ShapedReadResult(payload, "dashboard", {"sort_default": "time:desc"})
+
+
+def _device_details_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    payload = shape_device_details(
+        result,
+        site=_manager_site(manager),
+        mac_address=args["mac_address"],
+        include=args.get("include", "basic,ports"),
+        summary=args.get("summary", False),
+    )
+    return ShapedReadResult(payload, "device")
+
+
+def _network_details_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    payload = shape_network_details(
+        result,
+        site=_manager_site(manager),
+        network_id=args["network_id"],
+        include=args.get("include", "basic"),
+        summary=args.get("summary", False),
+    )
+    return ShapedReadResult(payload, "details")
+
+
+def _list_devices_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    payload = shape_device_list(
+        result,
+        site=_manager_site(manager),
+        device_type=args.get("device_type", "all"),
+        status=args.get("status", "all"),
+        search=args.get("search"),
+        limit=args.get("limit"),
+        include_details=args.get("include_details", False),
+        summary=args.get("summary", True),
+    )
+    return ShapedReadResult(
+        payload,
+        "devices",
+        {
+            "primary_key": "mac",
+            "display_columns": ["name", "model", "type", "status", "ip"],
+            "sort_default": "name:asc",
+        },
+    )
+
+
+def _firewall_policies_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    summary = args.get("summary", True)
+    payload = shape_firewall_policy_list(
+        result,
+        site=_manager_site(manager),
+        search=args.get("search"),
+        action=args.get("action"),
+        enabled_only=args.get("enabled_only", False),
+        limit=args.get("limit", 50),
+        summary=summary,
+    )
+    index_field = "rule_index" if summary else "index"
+    return ShapedReadResult(
+        payload,
+        "policies",
+        {
+            "primary_key": "id",
+            "display_columns": ["name", "action", "enabled", index_field],
+            "sort_default": f"{index_field}:asc",
+        },
+    )
+
+
+def _list_networks_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    payload = shape_network_list(
+        result,
+        site=_manager_site(manager),
+        search=args.get("search"),
+        purpose=args.get("purpose"),
+        limit=args.get("limit", 25),
+        fields=args.get("fields"),
+    )
+    return ShapedReadResult(
+        payload,
+        "networks",
+        {
+            "primary_key": "_id",
+            "display_columns": ["name", "purpose", "vlan", "ip_subnet", "enabled"],
+            "sort_default": "name:asc",
+        },
+    )
+
+
+def _rogue_aps_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    summary = args.get("summary", True)
+    payload = shape_rogue_ap_list(
+        result,
+        site=_manager_site(manager),
+        within_hours=args.get("within_hours", 24),
+        channel=args.get("channel"),
+        min_signal=args.get("min_signal"),
+        limit=args.get("limit", 100),
+        offset=args.get("offset", 0),
+        summary=summary,
+    )
+    ssid_field = "ssid" if summary else "essid"
+    return ShapedReadResult(
+        payload,
+        "rogue_aps",
+        {
+            "primary_key": "bssid",
+            "display_columns": ["bssid", ssid_field, "channel", "signal", "last_seen"],
+            "sort_default": "signal:desc",
+        },
+    )
+
+
+def _wlans_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedReadResult:
+    payload = shape_wlan_list(
+        result,
+        site=_manager_site(manager),
+        search=args.get("search"),
+        enabled_only=args.get("enabled_only", False),
+        limit=args.get("limit", 25),
+    )
+    return ShapedReadResult(
+        payload,
+        "wlans",
+        {
+            "primary_key": "id",
+            "display_columns": ["name", "security", "enabled", "network_id"],
+            "sort_default": "name:asc",
+        },
+    )
+
+
+UNSUPPORTED_ACTION_PARAMETERS: dict[str, frozenset[str]] = {}
 
 DirectResultAdapter = Callable[[dict[str, Any]], tuple[bool, Any]]
 ResultAdapter = Callable[[Any, dict[str, Any], Any], Any]
@@ -1196,6 +1391,17 @@ DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
     "protect_alarm_update_rule": _alarm_facade_result,
     "protect_alarm_delete_rule": _alarm_facade_result,
     "protect_delete_recording": _delete_recording_result,
+    "unifi_list_clients": _list_clients_result,
+    "unifi_get_alerts": _alerts_result,
+    "unifi_get_client_details": _client_details_result,
+    "unifi_get_dashboard": _dashboard_result,
+    "unifi_get_device_details": _device_details_result,
+    "unifi_get_network_details": _network_details_result,
+    "unifi_list_devices": _list_devices_result,
+    "unifi_list_firewall_policies": _firewall_policies_result,
+    "unifi_list_networks": _list_networks_result,
+    "unifi_list_rogue_aps": _rogue_aps_result,
+    "unifi_list_wlans": _wlans_result,
 }
 
 
@@ -1266,8 +1472,8 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         "local_dns_record",
     ),
     "unifi_forget_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
-    # Network — list clients: manager get_clients() takes no args
-    "unifi_list_clients": _spec(_translate_list_clients),
+    # Network — list clients: Core selects online or all/historical clients.
+    "unifi_list_clients": _spec(_translate_list_clients, "include_offline"),
     # Network — firewall: kwarg rename
     "unifi_update_firewall_policy": _spec(_translate_update_firewall_policy, "policy_id", "updates"),
     # Network — port forward toggle/delete: kwarg rename (port_forward_id → rule_id)

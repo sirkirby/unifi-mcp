@@ -26,9 +26,6 @@ from unifi_core.network.models.networks import (
     READ_ONLY_FIELDS as NETWORK_READ_ONLY_FIELDS,
 )
 from unifi_core.network.models.networks import (
-    from_controller as network_from_controller,
-)
-from unifi_core.network.models.networks import (
     to_controller_update as network_to_update,
 )
 from unifi_core.network.models.wlans import (
@@ -40,6 +37,7 @@ from unifi_core.network.models.wlans import (
 from unifi_core.network.models.wlans import (
     to_controller_update as wlan_to_update,
 )
+from unifi_core.network.read_views import shape_network_details, shape_network_list, shape_wlan_list
 from unifi_core.redaction import redact_sensitive_fields
 from unifi_network_mcp.runtime import network_manager, server, should_redact_sensitive_fields
 
@@ -140,78 +138,14 @@ async def list_networks(
     """
     try:
         networks_data = await network_manager.get_networks()
-        if purpose and purpose.strip():
-            networks_data = [n for n in networks_data if n.get("purpose") == purpose.strip().lower()]
-
-        if search and search.strip():
-            search_lower = search.strip().lower()
-            networks_data = [
-                n
-                for n in networks_data
-                if search_lower in (n.get("name") or "").lower() or search_lower == str(n.get("vlan") or "")
-            ]
-
-        total_count = len(networks_data)
-        networks_data = networks_data[:limit]
-
-        known_fields = {
-            "_id",
-            "name",
-            "enabled",
-            "purpose",
-            "ip_subnet",
-            "vlan_enabled",
-            "vlan",
-            "dhcpd_enabled",
-            "dhcpd_start",
-            "dhcpd_stop",
-        }
-        requested_fields = None
-        unknown_fields: list[str] = []
-        if fields and fields.strip():
-            requested_fields = set(f.strip() for f in fields.split(","))
-            unknown_fields = sorted(requested_fields - known_fields)
-
-        formatted_networks = []
-        for network in networks_data:
-            # Source values through the typed model (validation/coercion); the list view
-            # then narrows to a curated subset and honors the optional `fields` selector.
-            shaped = network_from_controller(network)
-            full_data = {
-                "_id": shaped.id,
-                "name": shaped.name,
-                "enabled": shaped.enabled,
-                "purpose": shaped.purpose,
-                "ip_subnet": shaped.ip_subnet,
-                "vlan_enabled": shaped.vlan_enabled,
-                "vlan": shaped.vlan,
-                "dhcpd_enabled": shaped.dhcpd_enabled,
-                "dhcpd_start": shaped.dhcpd_start,
-                "dhcpd_stop": shaped.dhcpd_stop,
-            }
-
-            if requested_fields:
-                formatted = {k: v for k, v in full_data.items() if k in requested_fields}
-            else:
-                formatted = full_data
-
-            formatted_networks.append(formatted)
-
-        response = {
-            "success": True,
-            "site": network_manager._connection.site,
-            "search": search,
-            "purpose_filter": purpose,
-            "fields": fields,
-            "total_count": total_count,
-            "returned_count": len(formatted_networks),
-            "count": len(formatted_networks),  # back-compat alias for returned_count
-            "limit": limit,
-            "networks": formatted_networks,
-        }
-        if unknown_fields:
-            response["unknown_fields"] = unknown_fields
-        return response
+        return shape_network_list(
+            networks_data,
+            site=network_manager._connection.site,
+            search=search,
+            purpose=purpose,
+            limit=limit,
+            fields=fields,
+        )
     except Exception as e:
         logger.error("Error listing networks in tool: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list networks: {e}"}
@@ -289,118 +223,14 @@ async def get_network_details(
         if not network_id:
             return {"success": False, "error": "network_id is required"}
         network = await network_manager.get_network_details(network_id)
-        if network:
-            if not summary:
-                return redact_sensitive_fields(
-                    {
-                        "success": True,
-                        "site": network_manager._connection.site,
-                        "network_id": network_id,
-                        "include": "all",
-                        "summary_mode": False,
-                        "details": json.loads(json.dumps(network, default=str)),
-                    },
-                    redact_sensitive=redact_sensitive,
-                )
-
-            known_sections = {"basic", "dhcp", "ipv6", "vpn", "wan", "all"}
-            sections = set(s.strip().lower() for s in include.split(","))
-            unknown_sections = sorted(sections - known_sections)
-            include_all = "all" in sections
-
-            network_data: Dict[str, Any] = {}
-
-            if include_all or "basic" in sections:
-                network_data.update(
-                    {
-                        "_id": network.get("_id"),
-                        "name": network.get("name"),
-                        "enabled": network.get("enabled"),
-                        "purpose": network.get("purpose"),
-                        "ip_subnet": network.get("ip_subnet"),
-                        "vlan_enabled": network.get("vlan_enabled"),
-                        "vlan": network.get("vlan"),
-                        "domain_name": network.get("domain_name"),
-                        "is_nat": network.get("is_nat"),
-                        "network_isolation_enabled": network.get("network_isolation_enabled"),
-                    }
-                )
-
-            if include_all or "dhcp" in sections:
-                network_data.update(
-                    {
-                        "dhcpd_enabled": network.get("dhcpd_enabled"),
-                        "dhcpd_start": network.get("dhcpd_start"),
-                        "dhcpd_stop": network.get("dhcpd_stop"),
-                        "dhcpd_leasetime": network.get("dhcpd_leasetime"),
-                        "dhcpd_dns_enabled": network.get("dhcpd_dns_enabled"),
-                        "dhcpd_gateway_enabled": network.get("dhcpd_gateway_enabled"),
-                        "dhcpd_unifi_controller": network.get("dhcpd_unifi_controller"),
-                    }
-                )
-
-            if include_all or "ipv6" in sections:
-                network_data.update(
-                    {
-                        "ipv6_interface_type": network.get("ipv6_interface_type"),
-                        "ipv6_pd_start": network.get("ipv6_pd_start"),
-                        "ipv6_pd_stop": network.get("ipv6_pd_stop"),
-                        "ipv6_ra_enabled": network.get("ipv6_ra_enabled"),
-                    }
-                )
-
-            if include_all or "vpn" in sections:
-                network_data.update(
-                    {
-                        "vpn_type": network.get("vpn_type"),
-                        "remote_site_id": network.get("remote_site_id"),
-                        "remote_site_subnets": network.get("remote_site_subnets"),
-                    }
-                )
-
-            if include_all or "wan" in sections:
-                network_data.update(
-                    {
-                        "wan_networkgroup": network.get("wan_networkgroup"),
-                        "wan_type": network.get("wan_type"),
-                        "wan_dns_preference": network.get("wan_dns_preference"),
-                        "wan_load_balance_type": network.get("wan_load_balance_type"),
-                        "wan_load_balance_weight": network.get("wan_load_balance_weight"),
-                        "wan_failover_priority": network.get("wan_failover_priority"),
-                        "wan_smartq_enabled": network.get("wan_smartq_enabled"),
-                        "wan_vlan_enabled": network.get("wan_vlan_enabled"),
-                        "igmp_proxy_upstream": network.get("igmp_proxy_upstream"),
-                        "igmp_proxy_for": network.get("igmp_proxy_for"),
-                        "mac_override_enabled": network.get("mac_override_enabled"),
-                        "wan_ip_aliases": network.get("wan_ip_aliases"),
-                        "ipv6_enabled": network.get("ipv6_enabled"),
-                        "wan_type_v6": network.get("wan_type_v6"),
-                        "ipv6_setting_preference": network.get("ipv6_setting_preference"),
-                        "ipv6_wan_delegation_type": network.get("ipv6_wan_delegation_type"),
-                        "wan_dhcpv6_pd_size": network.get("wan_dhcpv6_pd_size"),
-                        "wan_dhcpv6_pd_size_auto": network.get("wan_dhcpv6_pd_size_auto"),
-                        "wan_ipv6_dns_preference": network.get("wan_ipv6_dns_preference"),
-                        "wan_ipv6_dns1": network.get("wan_ipv6_dns1"),
-                        "wan_ipv6_dns2": network.get("wan_ipv6_dns2"),
-                    }
-                )
-
-            response = {
-                "success": True,
-                "site": network_manager._connection.site,
-                "network_id": network_id,
-                "include": include,
-                "summary_mode": True,
-                "details": network_data,
-            }
-            if unknown_sections:
-                response["unknown_sections"] = unknown_sections
-            return redact_sensitive_fields(response, redact_sensitive=redact_sensitive)
-        else:
-            return {
-                "success": False,
-                "error": f"Network with ID '{network_id}' not found.",
-            }
+        response = shape_network_details(
+            network,
+            site=network_manager._connection.site,
+            network_id=network_id,
+            include=include,
+            summary=summary,
+        )
+        return redact_sensitive_fields(response, redact_sensitive=redact_sensitive)
     except Exception as e:
         logger.error("Error getting network details for %s: %s", network_id, e, exc_info=True)
         return {"success": False, "error": f"Failed to get network details for {network_id}: {e}"}
@@ -912,43 +742,13 @@ async def list_wlans(
     """
     try:
         wlans = await network_manager.get_wlans()
-        # Ensure wlans are dictionaries
-        wlans_raw = [w.raw if hasattr(w, "raw") else w for w in wlans]
-
-        # Filter by enabled_only
-        if enabled_only:
-            wlans_raw = [w for w in wlans_raw if w.get("enabled", False)]
-
-        # Filter by search term (SSID name)
-        if search and search.strip():
-            search_lower = search.strip().lower()
-            wlans_raw = [w for w in wlans_raw if search_lower in (w.get("name") or "").lower()]
-
-        total_count = len(wlans_raw)
-        wlans_raw = wlans_raw[:limit]
-
-        formatted_wlans = [
-            {
-                "id": w.get("_id"),
-                "name": w.get("name"),
-                "enabled": w.get("enabled"),
-                "security": w.get("security"),
-                "network_id": w.get("networkconf_id"),  # Map internal key
-                "usergroup_id": w.get("usergroup_id"),
-            }
-            for w in wlans_raw
-        ]
-        return {
-            "success": True,
-            "site": network_manager._connection.site,
-            "search": search,
-            "enabled_only": enabled_only,
-            "total_count": total_count,
-            "returned_count": len(formatted_wlans),
-            "count": len(formatted_wlans),  # back-compat alias for returned_count
-            "limit": limit,
-            "wlans": formatted_wlans,
-        }
+        return shape_wlan_list(
+            wlans,
+            site=network_manager._connection.site,
+            search=search,
+            enabled_only=enabled_only,
+            limit=limit,
+        )
     except Exception as e:
         logger.error("Error listing WLANs: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list WLANs: {e}"}

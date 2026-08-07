@@ -21,12 +21,8 @@ from unifi_core.network.models._actions import (
     UnauthorizeGuestInput,
     UnblockClientInput,
 )
-from unifi_core.network.models.clients import (
-    _is_online,
-    blocked_client_from_controller,
-    client_from_controller,
-    client_lookup_from_controller,
-)
+from unifi_core.network.models.clients import blocked_client_from_controller, client_lookup_from_controller
+from unifi_core.network.read_views import shape_client_details, shape_client_list
 
 # Import the global FastMCP server instance, config, and managers
 from unifi_network_mcp.runtime import client_manager, server
@@ -106,90 +102,15 @@ async def list_clients(
 ) -> Dict[str, Any]:
     """Implementation for listing clients."""
     try:
-        clients = await client_manager.get_all_clients() if include_offline else await client_manager.get_clients()
-
-        def _raw(c):
-            return c.raw if hasattr(c, "raw") else c  # c might already be a dict
-
-        clients_raw = [_raw(c) for c in clients]
-
-        if filter_type == "wireless":
-            clients_raw = [c for c in clients_raw if not c.get("is_wired", False)]
-        elif filter_type == "wired":
-            clients_raw = [c for c in clients_raw if c.get("is_wired", False)]
-
-        # Filter by search term (name, hostname, IP, or MAC)
-        if search and search.strip():
-            search_lower = search.strip().lower()
-            clients_raw = [
-                c
-                for c in clients_raw
-                if search_lower in (c.get("name") or "").lower()
-                or search_lower in (c.get("hostname") or "").lower()
-                or search_lower in (c.get("ip") or "").lower()
-                or search_lower in (c.get("mac") or "").lower()
-            ]
-
-        total_count = len(clients_raw)
-        clients_raw = clients_raw[:limit]
-
-        # Parse requested fields for selective return + surface unknown tokens
-        # so LLM callers can self-correct typos (e.g. fields="mac,naame").
-        known_fields = {
-            "mac",
-            "name",
-            "hostname",
-            "ip",
-            "connection_type",
-            "status",
-            "last_seen",
-            "_id",
-            "essid",
-            "signal_dbm",
-            "channel",
-            "radio",
-        }
-        requested_fields = None
-        unknown_fields: list[str] = []
-        if fields and fields.strip():
-            requested_fields = set(f.strip() for f in fields.split(","))
-            unknown_fields = sorted(requested_fields - known_fields)
-
-        formatted_clients = []
-        for client in clients_raw:
-            shaped = client_from_controller(client)
-            full_data = shaped.model_dump(exclude_none=True)
-            # Preserve wired/wireless display fields not in the base model
-            full_data["connection_type"] = "Wired" if client.get("is_wired", False) else "Wireless"
-            full_data["_id"] = client.get("_id")
-            if not client.get("is_wired", False):
-                full_data["essid"] = client.get("essid", "Unknown")
-                full_data["signal_dbm"] = client.get("signal")
-                full_data["channel"] = client.get("channel", "Unknown")
-                full_data["radio"] = client.get("radio", "Unknown")
-
-            if requested_fields:
-                formatted = {k: v for k, v in full_data.items() if k in requested_fields}
-            else:
-                formatted = full_data
-
-            formatted_clients.append(formatted)
-
-        response = {
-            "success": True,
-            "site": client_manager._connection.site,
-            "filter_type": filter_type,
-            "search": search,
-            "fields": fields,
-            "total_count": total_count,
-            "returned_count": len(formatted_clients),
-            "count": len(formatted_clients),  # back-compat alias for returned_count
-            "limit": limit,
-            "clients": formatted_clients,
-        }
-        if unknown_fields:
-            response["unknown_fields"] = unknown_fields
-        return response
+        clients = await client_manager.get_clients(include_offline=include_offline)
+        return shape_client_list(
+            clients,
+            site=client_manager._connection.site,
+            filter_type=filter_type,
+            search=search,
+            limit=limit,
+            fields=fields,
+        )
     except Exception as e:
         logger.error("Error listing clients: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list clients: {e}"}
@@ -233,120 +154,13 @@ async def get_client_details(
     """Implementation for getting client details."""
     try:
         client_obj = await client_manager.get_client_details(mac_address)
-        if client_obj:
-            raw = (
-                client_obj.raw
-                if hasattr(client_obj, "raw") and isinstance(client_obj.raw, dict)
-                else (client_obj if isinstance(client_obj, dict) else {})
-            )
-
-            if not summary:
-                shaped = client_from_controller(client_obj).model_dump(exclude_none=True)
-                # Honor the "full raw client object" promise: deliver all controller-reported
-                # fields. Selectively layer the typed/normalized shape on top only for fields
-                # where the shape adds value (ISO timestamps, derived status, null-safe alias).
-                # Leave raw fields like `ip`/`last_ip` distinct so the current-vs-historical
-                # distinction is preserved.
-                merged: Dict[str, Any] = dict(raw)
-                for key in ("last_seen", "first_seen", "status", "name", "hostname"):
-                    if key in shaped:
-                        merged[key] = shaped[key]
-                return {
-                    "success": True,
-                    "site": client_manager._connection.site,
-                    "client": merged,
-                }
-
-            # summary=true: opt-in section-trimmed view. The default path above is the
-            # full raw object; this branch only runs when the caller explicitly asks to trim.
-            known_sections = {"basic", "network", "wireless", "traffic", "fingerprint", "all"}
-            sections = set(s.strip().lower() for s in include.split(","))
-            unknown_sections = sorted(sections - known_sections)
-            include_all = "all" in sections
-            client_data: Dict[str, Any] = {}
-
-            if include_all or "basic" in sections:
-                client_data.update(
-                    {
-                        "mac": raw.get("mac"),
-                        "name": raw.get("name") or raw.get("hostname", "Unknown"),
-                        "hostname": raw.get("hostname"),
-                        "ip": raw.get("ip"),
-                        "connection_type": "Wired" if raw.get("is_wired", False) else "Wireless",
-                        "status": "Online" if _is_online(raw) else "Offline",
-                        "last_seen": raw.get("last_seen"),
-                        "uptime": raw.get("uptime"),
-                        "first_seen": raw.get("first_seen"),
-                    }
-                )
-
-            if include_all or "network" in sections:
-                client_data.update(
-                    {
-                        "network_id": raw.get("network_id"),
-                        "network": raw.get("network"),
-                        "vlan": raw.get("vlan"),
-                        "use_fixedip": raw.get("use_fixedip", False),
-                        "fixed_ip": raw.get("fixed_ip"),
-                        "local_dns_record": raw.get("local_dns_record"),
-                    }
-                )
-
-            if (include_all or "wireless" in sections) and not raw.get("is_wired", False):
-                client_data.update(
-                    {
-                        "essid": raw.get("essid"),
-                        "bssid": raw.get("bssid"),
-                        "channel": raw.get("channel"),
-                        "radio": raw.get("radio"),
-                        "radio_proto": raw.get("radio_proto"),
-                        "signal": raw.get("signal"),
-                        "rssi": raw.get("rssi"),
-                        "noise": raw.get("noise"),
-                        "satisfaction": raw.get("satisfaction"),
-                        "ap_mac": raw.get("ap_mac"),
-                    }
-                )
-
-            if include_all or "traffic" in sections:
-                client_data.update(
-                    {
-                        "tx_bytes": raw.get("tx_bytes"),
-                        "rx_bytes": raw.get("rx_bytes"),
-                        "tx_packets": raw.get("tx_packets"),
-                        "rx_packets": raw.get("rx_packets"),
-                        "tx_rate": raw.get("tx_rate"),
-                        "rx_rate": raw.get("rx_rate"),
-                    }
-                )
-
-            if include_all or "fingerprint" in sections:
-                client_data.update(
-                    {
-                        "oui": raw.get("oui"),
-                        "os_name": raw.get("os_name"),
-                        "dev_cat": raw.get("dev_cat"),
-                        "dev_family": raw.get("dev_family"),
-                        "dev_vendor": raw.get("dev_vendor"),
-                        "dev_id": raw.get("dev_id"),
-                        "fingerprint_source": raw.get("fingerprint_source"),
-                    }
-                )
-
-            response = {
-                "success": True,
-                "site": client_manager._connection.site,
-                "include": include,
-                "summary_mode": True,
-                "client": client_data,
-            }
-            if unknown_sections:
-                response["unknown_sections"] = unknown_sections
-            return response
-        return {
-            "success": False,
-            "error": f"Client not found with MAC address: {mac_address}",
-        }
+        return shape_client_details(
+            client_obj,
+            site=client_manager._connection.site,
+            mac_address=mac_address,
+            include=include,
+            summary=summary,
+        )
     except Exception as e:
         logger.error("Error getting client details for %s: %s", mac_address, e, exc_info=True)
         return {"success": False, "error": f"Failed to get client details for {mac_address}: {e}"}

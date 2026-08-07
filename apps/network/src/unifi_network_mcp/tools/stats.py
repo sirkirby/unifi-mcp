@@ -16,26 +16,10 @@ from unifi_core.network.models.sessions import (
 )
 from unifi_core.network.models.stats import dpi_stats_from_controller
 from unifi_core.network.models.system import speedtest_result_from_controller, top_client_from_controller
+from unifi_core.network.read_views import shape_alerts, shape_dashboard
 from unifi_network_mcp.runtime import client_manager, device_manager, server, stats_manager
 
 logger = logging.getLogger(__name__)
-
-_DASHBOARD_TIMESERIES_SECTIONS = frozenset(
-    {
-        "radio_activity",
-        "wan_activity",
-        "wan_history",
-        "wifi_activity",
-    }
-)
-
-
-def _dashboard_summary(entries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
-    omitted = sorted({key for entry in entries for key in _DASHBOARD_TIMESERIES_SECTIONS if key in entry})
-    summarized = [
-        {key: value for key, value in entry.items() if key not in _DASHBOARD_TIMESERIES_SECTIONS} for entry in entries
-    ]
-    return summarized, omitted
 
 
 @server.tool(
@@ -312,14 +296,12 @@ async def get_alerts(
     """Implementation for getting alerts."""
     try:
         alerts = await stats_manager.get_alerts(include_archived=include_archived)
-        alerts = alerts[:limit]
-        return {
-            "success": True,
-            "site": stats_manager._connection.site,
-            "limit": limit,
-            "include_archived": include_archived,
-            "alerts": alerts,
-        }
+        return shape_alerts(
+            alerts,
+            site=stats_manager._connection.site,
+            limit=limit,
+            include_archived=include_archived,
+        )
     except Exception as e:
         logger.error("Error getting alerts: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to get alerts: {e}"}
@@ -564,15 +546,12 @@ async def get_dashboard(
     """Implementation for getting the site dashboard summary."""
     try:
         dashboard = await stats_manager.get_dashboard(history_seconds=history_seconds)
-        formatted, omitted_sections = _dashboard_summary(dashboard) if summary else (dashboard, [])
-        return {
-            "success": True,
-            "site": stats_manager._connection.site,
-            "summary_mode": summary,
-            "history_seconds": history_seconds,
-            "omitted_sections": omitted_sections,
-            "dashboard": formatted,
-        }
+        return shape_dashboard(
+            dashboard,
+            site=stats_manager._connection.site,
+            summary=summary,
+            history_seconds=history_seconds,
+        )
     except Exception as e:
         logger.error("Error getting dashboard: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to get dashboard: {e}"}

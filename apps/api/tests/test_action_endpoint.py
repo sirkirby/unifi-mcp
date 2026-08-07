@@ -267,6 +267,98 @@ async def test_action_endpoint_dispatches_and_audits(tmp_path, monkeypatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_action_endpoint_preserves_shared_read_view_metadata(tmp_path, monkeypatch) -> None:
+    """Shared read views keep the typed action envelope and expose their metadata."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+    from unifi_api.services.action_results import ShapedReadResult
+
+    shaped = ShapedReadResult(
+        payload={
+            "success": True,
+            "site": "default",
+            "filter_type": "wired",
+            "fields": "mac,connection_type",
+            "total_count": 2,
+            "returned_count": 1,
+            "limit": 1,
+            "clients": [{"mac": "aa:bb", "connection_type": "Wired"}],
+        },
+        data_key="clients",
+        render_hint={
+            "primary_key": "mac",
+            "display_columns": ["name", "connection_type"],
+            "sort_default": "name:asc",
+        },
+    )
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=shaped))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.post(
+            "/v1/actions/unifi_list_clients",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "site": "default",
+                "controller": cid,
+                "args": {"filter_type": "wired", "limit": 1, "fields": "mac,connection_type"},
+                "confirm": False,
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"] == [{"mac": "aa:bb", "connection_type": "Wired"}]
+    assert body["render_hint"] == {
+        "kind": "list",
+        "primary_key": "mac",
+        "display_columns": ["connection_type"],
+    }
+    assert body["meta"] == {
+        "site": "default",
+        "filter_type": "wired",
+        "fields": "mac,connection_type",
+        "total_count": 2,
+        "returned_count": 1,
+        "limit": 1,
+    }
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_rejects_malformed_shared_read_shape(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+    from unifi_api.services.action_results import ShapedReadResult
+
+    monkeypatch.setattr(
+        actions_svc,
+        "dispatch_action",
+        AsyncMock(
+            return_value=ShapedReadResult(
+                payload={"success": True, "clients": {"mac": "aa:bb"}},
+                data_key="clients",
+                render_hint={"primary_key": "mac"},
+            )
+        ),
+    )
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        response = await c.post(
+            "/v1/actions/unifi_list_clients",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {}, "confirm": False},
+        )
+
+    assert response.status_code == 500
+    assert response.json()["detail"]["kind"] == "serializer_contract_error"
+    assert "shared read view returned dict" in response.json()["detail"]["detail"]
+
+
+@pytest.mark.asyncio
 async def test_action_endpoint_serializer_contract_error(tmp_path, monkeypatch) -> None:
     """When manager returns wrong type for declared kind, endpoint returns 500."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")

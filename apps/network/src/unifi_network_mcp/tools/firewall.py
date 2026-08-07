@@ -19,20 +19,9 @@ from unifi_core.network.models.firewall import (
     normalize_policy_enums,
     normalize_policy_update,
 )
-from unifi_core.network.models.firewall import (
-    from_controller as fw_from_controller,
-)
+from unifi_core.network.read_views import LEGACY_ENGINE_HINT, shape_firewall_policy_list
 from unifi_core.redaction import redact_sensitive_fields
 from unifi_network_mcp.runtime import firewall_manager, server, should_redact_sensitive_fields
-
-#: Emitted when the V2 zone-based endpoints report nothing. On a site still running
-#: the pre-zone-based engine those endpoints are empty rather than absent, which is
-#: indistinguishable from "no rules configured" unless the caller is told otherwise.
-LEGACY_ENGINE_HINT = (
-    "No zone-based firewall configuration was returned. This site may still be running the "
-    "legacy (pre-zone-based) firewall engine, whose rules are not visible here. Call "
-    "unifi_list_legacy_firewall_rules before concluding that no firewall rules are configured."
-)
 
 logger = logging.getLogger(__name__)
 
@@ -90,75 +79,15 @@ async def list_firewall_policies(
     """
     try:
         policies = await firewall_manager.get_firewall_policies(include_predefined=include_predefined)
-        policies_raw = [p.raw if hasattr(p, "raw") else p for p in policies]
-        # Captured before filtering: "the controller returned nothing" is the legacy-engine
-        # signal, whereas "a filter matched nothing" says nothing about the engine.
-        controller_policy_count = len(policies_raw)
-
-        if enabled_only:
-            policies_raw = [p for p in policies_raw if p.get("enabled", False)]
-
-        if action and action.strip():
-            policies_raw = [p for p in policies_raw if p.get("action") == action.strip().upper()]
-
-        if search and search.strip():
-            search_lower = search.strip().lower()
-            policies_raw = [p for p in policies_raw if search_lower in (p.get("name") or "").lower()]
-
-        total_count = len(policies_raw)
-        policies_raw = policies_raw[:limit]
-
-        formatted_policies = []
-        for p in policies_raw:
-            shaped = fw_from_controller(p)
-            if not summary:
-                # Legacy/full shape: complete model dump (protocol, schedule, logging, ip_version,
-                # index, full source/destination dicts).
-                formatted_policies.append(shaped.model_dump(exclude_none=True))
-                continue
-            # Curated shape (default): narrow to the 6 most useful keys plus targeting subset.
-            # `description` is not a model field, so it stays read from raw.
-            entry = {
-                "id": shaped.id,
-                "name": shaped.name,
-                "enabled": shaped.enabled,
-                "action": shaped.action,
-                "rule_index": shaped.index,
-                "description": p.get("description", p.get("desc", "")),
-            }
-            for direction in ("source", "destination"):
-                ep = getattr(shaped, direction)
-                if ep and isinstance(ep, dict):
-                    targeting = {
-                        "zone_id": ep.get("zone_id"),
-                        "matching_target": ep.get("matching_target"),
-                    }
-                    if ep.get("matching_target_type"):
-                        targeting["matching_target_type"] = ep["matching_target_type"]
-                    if ep.get("ips"):
-                        targeting["ips"] = ep["ips"]
-                    if ep.get("network_ids"):
-                        targeting["network_ids"] = ep["network_ids"]
-                    if ep.get("client_macs"):
-                        targeting["client_macs"] = ep["client_macs"]
-                    entry[direction] = targeting
-            formatted_policies.append(entry)
-
-        result = {
-            "success": True,
-            "site": firewall_manager._connection.site,
-            "search": search,
-            "action_filter": action,
-            "enabled_only": enabled_only,
-            "total_count": total_count,
-            "returned_count": len(formatted_policies),
-            "count": len(formatted_policies),  # back-compat alias for returned_count
-            "limit": limit,
-            "policies": formatted_policies,
-        }
-        if controller_policy_count == 0:
-            result["note"] = LEGACY_ENGINE_HINT
-        return result
+        return shape_firewall_policy_list(
+            policies,
+            site=firewall_manager._connection.site,
+            search=search,
+            action=action,
+            enabled_only=enabled_only,
+            limit=limit,
+            summary=summary,
+        )
     except Exception as e:
         logger.error("Error listing firewall policies: %s", e, exc_info=True)
         return {"success": False, "error": "Failed to list firewall policies: %s" % e}

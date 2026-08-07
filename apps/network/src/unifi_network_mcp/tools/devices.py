@@ -5,7 +5,6 @@ This module provides MCP tools to manage devices in a Unifi Network Controller.
 """
 
 import logging
-from datetime import datetime, timedelta
 from typing import Annotated, Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
@@ -25,84 +24,12 @@ from unifi_core.network.models._actions import (
     UpgradeDeviceInput,
 )
 from unifi_core.network.models.devices import validate_radio_update
+from unifi_core.network.read_views import shape_device_details, shape_device_list, shape_rogue_ap_list
 
 # Import the global FastMCP server instance, config, and managers
 from unifi_network_mcp.runtime import device_manager, server
 
 logger = logging.getLogger(__name__)
-
-
-# Model prefixes for USP Smart Power devices that may report as 'uap' type
-_POWER_DEVICE_MODELS = {"UP1", "UP6", "USP"}
-
-
-def _rogue_ap_summary(ap: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "bssid": ap.get("bssid"),
-        "ssid": ap.get("essid"),
-        "channel": ap.get("channel"),
-        "signal": ap.get("signal"),
-        "rssi": ap.get("rssi"),
-        "band": ap.get("band"),
-        "bandwidth": ap.get("bw"),
-        "security": ap.get("security"),
-        "ap_mac": ap.get("ap_mac"),
-        "ap_name": ap.get("ap_name"),
-        "last_seen": ap.get("last_seen"),
-        "is_rogue": ap.get("is_rogue"),
-    }
-
-
-def classify_device(device: Dict[str, Any]) -> str:
-    """Classify a device into a semantic category.
-
-    Uses the controller's ``is_access_point`` flag as the primary signal
-    for distinguishing real APs from other ``uap``-typed devices (e.g.,
-    USP Smart Power strips that connect via wireless mesh).  Falls back
-    to model-prefix matching when the flag is absent.
-
-    Returns one of: 'ap', 'switch', 'gateway', 'pdu', 'unknown'
-    """
-    device_type = device.get("type", "")
-    model = device.get("model", "")
-
-    # Explicit power device types
-    if device_type.startswith("usp"):
-        return "pdu"
-
-    # For uap-typed devices, use the controller's is_access_point flag
-    if device_type.startswith("uap"):
-        is_ap = device.get("is_access_point")
-        if is_ap is not None:
-            if not is_ap:
-                return "pdu"
-            return "ap"
-        # Fallback: check model prefix when flag is missing (older firmware)
-        if any(model.upper().startswith(prefix) for prefix in _POWER_DEVICE_MODELS):
-            return "pdu"
-        return "ap"
-
-    if device_type[:3] in ("usw", "usk"):
-        return "switch"
-    if device_type[:3] in ("ugw", "udm", "uxg"):
-        return "gateway"
-    if device_type == "uci":
-        return "wan"
-
-    return "unknown"
-
-
-def get_wifi_bands(device: Dict[str, Any]) -> List[str]:
-    """Extract active WiFi bands from device radio table."""
-    bands = set()
-    for radio in device.get("radio_table", []):
-        if radio.get("radio") == "na":
-            bands.add("5GHz")
-        elif radio.get("radio") == "ng":
-            bands.add("2.4GHz")
-        elif radio.get("radio") == "wifi6e":
-            bands.add("6GHz")
-    return sorted(list(bands))
 
 
 @server.tool(
@@ -162,213 +89,16 @@ async def list_devices(
     """Implementation for listing devices."""
     try:
         devices = await device_manager.get_devices()
-
-        # Convert Device objects to plain dictionaries for easier filtering
-        devices_raw = [d.raw if hasattr(d, "raw") else d for d in devices]
-
-        # Filter by device type using semantic classification
-        if device_type != "all":
-            devices_raw = [d for d in devices_raw if classify_device(d) == device_type]
-
-        # Filter by status
-        if status != "all":
-            status_map = {
-                "online": 1,
-                "offline": 0,
-                "pending": 2,
-                "adopting": 4,
-                "provisioning": 5,
-                "upgrading": 6,
-            }
-            target_state = status_map.get(status)
-            if target_state is not None:
-                devices_raw = [d for d in devices_raw if d.get("state") == target_state]
-            else:
-                logger.warning("Unknown status filter: %s", status)
-
-        # Filter by search term (name, IP, or MAC)
-        if search and search.strip():
-            search_lower = search.strip().lower()
-            devices_raw = [
-                d
-                for d in devices_raw
-                if search_lower in (d.get("name") or "").lower()
-                or search_lower in (d.get("ip") or "").lower()
-                or search_lower in (d.get("mac") or "").lower()
-            ]
-
-        # Capture total before applying limit
-        total_count = len(devices_raw)
-        if limit is not None:
-            devices_raw = devices_raw[:limit]
-
-        formatted_devices = []
-        state_map = {
-            0: "offline",
-            1: "online",
-            2: "pending_adoption",
-            4: "managed_by_other/adopting",
-            5: "provisioning",
-            6: "upgrading",
-            11: "error/heartbeat_missed",
-        }
-
-        for device in devices_raw:
-            device_state = device.get("state", 0)
-            device_status_str = state_map.get(device_state, f"unknown_state ({device_state})")
-
-            category = classify_device(device)
-
-            # Extract per-device resource stats (available on all device types)
-            sys_stats = device.get("sys_stats", {})
-            mem_total = sys_stats.get("mem_total", 0)
-            mem_used = sys_stats.get("mem_used", 0)
-            mem_pct = round((mem_used / mem_total) * 100, 1) if mem_total else None
-
-            # Uplink topology
-            uplink = device.get("uplink", device.get("last_uplink", {}))
-            uplink_info = None
-            if uplink:
-                uplink_info = {
-                    "type": uplink.get("type", "unknown"),
-                    "speed": uplink.get("speed", 0),
-                    "uplink_device": uplink.get("uplink_device_name"),
-                    "uplink_port": uplink.get("uplink_remote_port"),
-                }
-
-            device_info = {
-                "mac": device.get("mac", ""),
-                "name": device.get("name", device.get("model", "Unknown")),
-                "model": device.get("model", ""),
-                "type": device.get("type", ""),
-                "device_category": category,
-                "ip": device.get("ip", ""),
-                "status": device_status_str,
-                "uptime": str(timedelta(seconds=device.get("uptime", 0))) if device.get("uptime") else "N/A",
-                "last_seen": (
-                    datetime.fromtimestamp(device.get("last_seen", 0)).isoformat() if device.get("last_seen") else "N/A"
-                ),
-                "firmware": device.get("version", ""),
-                "upgradable": device.get("upgradable", False),
-                "adopted": device.get("adopted", False),
-                "connection_network": device.get("connection_network_name", ""),
-                "uplink": uplink_info,
-                "load_avg_1": sys_stats.get("loadavg_1"),
-                "mem_pct": mem_pct,
-                "model_eol": device.get("model_in_eol", False),
-                "_id": device.get("_id", ""),
-            }
-
-            if include_details:
-                details_to_add = {
-                    "serial": device.get("serial", ""),
-                    "hw_revision": device.get("hw_rev", ""),
-                    "model_display": device.get("model_display", device.get("model")),
-                    "clients": device.get("num_sta", 0),
-                }
-
-                if summary:
-                    # Compressed shape (default): summaries + counts, no raw tables.
-                    if category == "ap":
-                        radio_table = device.get("radio_table", [])
-                        vap_table = device.get("vap_table", [])
-                        details_to_add.update(
-                            {
-                                "radio_count": len(radio_table),
-                                "radios": [
-                                    {"band": r.get("radio"), "channel": r.get("channel"), "tx_power": r.get("tx_power")}
-                                    for r in radio_table
-                                ],
-                                "vap_count": len(vap_table),
-                                "wifi_bands": get_wifi_bands(device),
-                                "experience_score": device.get("satisfaction", 0),
-                                "num_clients": device.get("num_sta", 0),
-                            }
-                        )
-                    elif category == "switch":
-                        port_table = device.get("port_table", [])
-                        ports_up = sum(1 for p in port_table if p.get("up", False))
-                        ports_poe = sum(1 for p in port_table if p.get("poe_enable", False))
-                        details_to_add.update(
-                            {
-                                "total_ports": len(port_table),
-                                "ports_up": ports_up,
-                                "ports_poe_enabled": ports_poe,
-                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
-                                "poe_power": device.get("poe_power"),
-                                "poe_voltage": device.get("poe_voltage"),
-                            }
-                        )
-                    elif category == "gateway":
-                        network_table = device.get("network_table", [])
-                        wan1 = device.get("wan1", {})
-                        wan2 = device.get("wan2", {})
-                        system_stats = device.get("system-stats", {})
-                        details_to_add.update(
-                            {
-                                "wan1_ip": wan1.get("ip") if wan1 else None,
-                                "wan1_up": wan1.get("up", False) if wan1 else None,
-                                "wan2_ip": wan2.get("ip") if wan2 else None,
-                                "wan2_up": wan2.get("up", False) if wan2 else None,
-                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
-                                "network_count": len(network_table),
-                                "cpu_usage": system_stats.get("cpu"),
-                                "mem_usage": system_stats.get("mem"),
-                            }
-                        )
-                else:
-                    # Legacy raw shape (pre-PR upstream): full tables passthrough.
-                    if category == "ap":
-                        details_to_add.update(
-                            {
-                                "radio_table": device.get("radio_table", []),
-                                "vap_table": device.get("vap_table", []),
-                                "wifi_bands": get_wifi_bands(device),
-                                "experience_score": device.get("satisfaction", 0),
-                                "num_clients": device.get("num_sta", 0),
-                            }
-                        )
-                    elif category == "switch":
-                        details_to_add.update(
-                            {
-                                "ports": device.get("port_table", []),
-                                "total_ports": len(device.get("port_table", [])),
-                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
-                                "poe_info": {
-                                    "poe_current": device.get("poe_current"),
-                                    "poe_power": device.get("poe_power"),
-                                    "poe_voltage": device.get("poe_voltage"),
-                                },
-                            }
-                        )
-                    elif category == "gateway":
-                        details_to_add.update(
-                            {
-                                "wan1": device.get("wan1", {}),
-                                "wan2": device.get("wan2", {}),
-                                "num_clients": device.get("user-num_sta", 0) + device.get("guest-num_sta", 0),
-                                "network_table": device.get("network_table", []),
-                                "system_stats": device.get("system-stats", {}),
-                                "speedtest_status": device.get("speedtest-status", {}),
-                            }
-                        )
-
-                device_info.update(details_to_add)
-
-            formatted_devices.append(device_info)
-
-        return {
-            "success": True,
-            "site": device_manager._connection.site,
-            "filter_type": device_type,
-            "filter_status": status,
-            "search": search,
-            "total_count": total_count,
-            "returned_count": len(formatted_devices),
-            "count": len(formatted_devices),  # back-compat alias for returned_count
-            "limit": limit,
-            "devices": formatted_devices,
-        }
+        return shape_device_list(
+            devices,
+            site=device_manager._connection.site,
+            device_type=device_type,
+            status=status,
+            search=search,
+            limit=limit,
+            include_details=include_details,
+            summary=summary,
+        )
     except Exception as e:
         logger.error("Error listing devices: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list devices: {e}"}
@@ -416,131 +146,13 @@ async def get_device_details(
     """Implementation for getting device details."""
     try:
         device = await device_manager.get_device_details(mac_address)
-        if device:
-            device_raw = device.raw if hasattr(device, "raw") else device
-
-            if not summary:
-                return {
-                    "success": True,
-                    "site": device_manager._connection.site,
-                    "include": "all",
-                    "summary_mode": False,
-                    "device": device_raw,
-                }
-
-            known_sections = {"basic", "ports", "radios", "stats", "uplink", "lldp", "all"}
-            sections = set(s.strip().lower() for s in include.split(","))
-            unknown_sections = sorted(sections - known_sections)
-            include_all = "all" in sections
-
-            device_data: Dict[str, Any] = {}
-
-            # Basic — essential device info
-            if include_all or "basic" in sections:
-                state_map = {
-                    0: "offline",
-                    1: "online",
-                    2: "pending_adoption",
-                    4: "managed_by_other/adopting",
-                    5: "provisioning",
-                    6: "upgrading",
-                    11: "error/heartbeat_missed",
-                }
-                device_state = device_raw.get("state", 0)
-                device_data.update(
-                    {
-                        "mac": device_raw.get("mac"),
-                        "name": device_raw.get("name", device_raw.get("model", "Unknown")),
-                        "model": device_raw.get("model"),
-                        "type": device_raw.get("type"),
-                        "ip": device_raw.get("ip"),
-                        "status": state_map.get(device_state, f"unknown ({device_state})"),
-                        "uptime": str(timedelta(seconds=device_raw.get("uptime", 0)))
-                        if device_raw.get("uptime")
-                        else None,
-                        "firmware": device_raw.get("version"),
-                        "adopted": device_raw.get("adopted", False),
-                    }
-                )
-
-            # Ports — compressed port table (switches)
-            if (include_all or "ports" in sections) and "port_table" in device_raw:
-                # Build LLDP lookup by local port for accurate neighbor detection
-                lldp_by_port: Dict[int, Dict[str, Any]] = {}
-                for lldp_entry in device_raw.get("lldp_table", []):
-                    local_port = lldp_entry.get("local_port_idx")
-                    if local_port is not None:
-                        lldp_by_port[local_port] = {
-                            "mac": lldp_entry.get("chassis_id"),
-                            "name": lldp_entry.get("chassis_name"),
-                            "port": lldp_entry.get("port_id"),
-                        }
-
-                device_data["port_summary"] = [
-                    {
-                        "port_idx": p.get("port_idx"),
-                        "name": p.get("name"),
-                        "up": p.get("up"),
-                        "speed": p.get("speed"),
-                        "poe_enable": p.get("poe_enable"),
-                        "poe_power": p.get("poe_power"),
-                        # last_seen_mac: last MAC that sent traffic on this port (may be wireless client traffic)
-                        "last_seen_mac": p.get("last_connection", {}).get("mac"),
-                        # lldp_neighbor: actual directly connected device (infrastructure only)
-                        "lldp_neighbor": lldp_by_port.get(p.get("port_idx")),
-                    }
-                    for p in device_raw["port_table"]
-                ]
-                device_data["port_count"] = len(device_raw["port_table"])
-
-            # Radios — compressed radio table (APs)
-            if (include_all or "radios" in sections) and "radio_table" in device_raw:
-                device_data["radio_summary"] = [
-                    {
-                        "radio": r.get("radio"),
-                        "channel": r.get("channel"),
-                        "tx_power": r.get("tx_power"),
-                    }
-                    for r in device_raw["radio_table"]
-                ]
-                device_data["radio_count"] = len(device_raw["radio_table"])
-                if "vap_table" in device_raw:
-                    device_data["vap_count"] = len(device_raw["vap_table"])
-
-            if include_all or "stats" in sections:
-                if "system-stats" in device_raw:
-                    device_data["system_stats"] = device_raw["system-stats"]
-
-            if include_all or "uplink" in sections:
-                if "uplink" in device_raw:
-                    uplink = device_raw["uplink"]
-                    device_data["uplink"] = {
-                        "type": uplink.get("type"),
-                        "uplink_mac": uplink.get("uplink_mac"),
-                        "uplink_device_name": uplink.get("uplink_device_name"),
-                        "uplink_remote_port": uplink.get("uplink_remote_port"),
-                        "speed": uplink.get("speed"),
-                        "ip": uplink.get("ip"),
-                    }
-
-            if include_all or "lldp" in sections:
-                if "lldp_table" in device_raw:
-                    device_data["lldp_table"] = device_raw["lldp_table"]
-
-            response = {
-                "success": True,
-                "site": device_manager._connection.site,
-                "include": include,
-                "summary_mode": True,
-                "device": device_data,
-            }
-            if unknown_sections:
-                response["unknown_sections"] = unknown_sections
-            return response
-        return {
-            "success": False,
-            "error": f"Device not found with MAC address: {mac_address}",
-        }
+        return shape_device_details(
+            device,
+            site=device_manager._connection.site,
+            mac_address=mac_address,
+            include=include,
+            summary=summary,
+        )
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
@@ -1137,33 +749,16 @@ async def list_rogue_aps(
     """List neighboring/rogue APs detected by your access points."""
     try:
         rogue_aps = await device_manager.list_rogue_aps(within_hours)
-
-        # Apply client-side filters
-        if channel is not None:
-            rogue_aps = [ap for ap in rogue_aps if ap.get("channel") == channel]
-        if min_signal is not None:
-            rogue_aps = [ap for ap in rogue_aps if ap.get("signal", -100) >= min_signal]
-
-        total_count = len(rogue_aps)
-        page = rogue_aps[offset : offset + limit]
-        formatted = [_rogue_ap_summary(ap) for ap in page] if summary else page
-        next_offset = offset + len(page) if offset + len(page) < total_count else None
-
-        return {
-            "success": True,
-            "site": device_manager._connection.site,
-            "within_hours": within_hours,
-            "filters": {"channel": channel, "min_signal": min_signal},
-            "summary_mode": summary,
-            "total_count": total_count,
-            "returned_count": len(formatted),
-            "count": len(formatted),
-            "limit": limit,
-            "offset": offset,
-            "next_offset": next_offset,
-            "has_more": next_offset is not None,
-            "rogue_aps": formatted,
-        }
+        return shape_rogue_ap_list(
+            rogue_aps,
+            site=device_manager._connection.site,
+            within_hours=within_hours,
+            channel=channel,
+            min_signal=min_signal,
+            limit=limit,
+            offset=offset,
+            summary=summary,
+        )
     except Exception as e:
         logger.error("Error listing rogue APs: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list rogue APs: {e}"}

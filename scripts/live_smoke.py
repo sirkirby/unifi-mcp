@@ -1944,6 +1944,13 @@ API_ACTIONS_SAMPLE: list[tuple[str, str, dict[str, Any]]] = [
     ("access", "access_list_visitors", {}),
 ]
 
+# Non-default, read-only probes derive a guaranteed match from the corresponding
+# default read. A missing seed is inconclusive and therefore cannot make this
+# release-readiness phase green.
+API_ACTION_READ_CONTRACT_PROBES: list[tuple[str, str]] = [
+    ("network", "unifi_list_clients"),
+]
+
 API_ACTION_SENTINELS: dict[str, str] = {
     "network": "unifi_list_clients",
     "protect": "protect_list_cameras",
@@ -1998,6 +2005,66 @@ def _classify_confirmation_preview_control(
 def _classify_api_action_result(success: bool | None, shape_match: bool) -> str:
     """Require current live success; historical baselines are diagnostic only."""
     return "pass" if success is True and shape_match else "regression"
+
+
+def _validate_api_read_contract_probe(
+    response: object,
+    *,
+    expected_meta: dict[str, Any],
+    projected_fields: set[str] | None,
+    require_non_empty: bool = False,
+    expected_empty: bool = False,
+    expected_item_values: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Validate a non-default read response without assuming live inventory."""
+    errors: list[str] = []
+    if not isinstance(response, dict) or response.get("success") is not True:
+        return {"passed": False, "errors": ["response was not a successful action envelope"]}
+
+    data = response.get("data")
+    meta = response.get("meta")
+    if not isinstance(data, list):
+        errors.append("response data was not a list")
+    if not isinstance(meta, dict):
+        errors.append("response meta was not an object")
+        meta = {}
+
+    for key, expected in expected_meta.items():
+        actual = meta.get(key)
+        if actual != expected:
+            errors.append(f"meta.{key} expected {expected!r}, got {actual!r}")
+
+    limit = expected_meta.get("limit")
+    if isinstance(data, list) and isinstance(limit, int) and len(data) > limit:
+        errors.append(f"data length {len(data)} exceeds limit {limit}")
+
+    if isinstance(data, list):
+        if require_non_empty and not data:
+            errors.append("positive control returned no rows")
+        if expected_empty and data:
+            errors.append(f"negative control returned {len(data)} rows")
+        returned_count = meta.get("returned_count")
+        if returned_count != len(data):
+            errors.append(f"meta.returned_count expected {len(data)}, got {returned_count!r}")
+        if "count" in meta and meta["count"] != len(data):
+            errors.append(f"meta.count expected {len(data)}, got {meta['count']!r}")
+        total_count = meta.get("total_count")
+        if not isinstance(total_count, int) or total_count < len(data):
+            errors.append(f"meta.total_count must be an integer >= {len(data)}, got {total_count!r}")
+
+    if isinstance(data, list) and projected_fields is not None:
+        for index, item in enumerate(data):
+            if not isinstance(item, dict):
+                errors.append(f"data[{index}] was not an object")
+                continue
+            unexpected = sorted(set(item) - projected_fields)
+            if unexpected:
+                errors.append(f"data[{index}] contains fields outside projection: {', '.join(unexpected)}")
+            for key, expected in (expected_item_values or {}).items():
+                if item.get(key) != expected:
+                    errors.append(f"data[{index}].{key} expected {expected!r}, got {item.get(key)!r}")
+
+    return {"passed": not errors, "errors": errors}
 
 
 def _api_actions_baseline_dirs() -> dict[str, str]:
@@ -2216,10 +2283,13 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
         "controllers": [],
         "catalog_probe": None,
         "confirmation_preview_controls": [],
+        "read_contract_probes": [],
         "results": [],
         "summary": {
             "preview_controls_exercised": 0,
             "preview_controls_passed": 0,
+            "read_contract_probes_exercised": 0,
+            "read_contract_probes_passed": 0,
             "tools_exercised": 0,
             "passed": 0,
             "regressions": 0,
@@ -2364,6 +2434,7 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             "protect": "default",
             "access": "default",
         }
+        live_action_responses: dict[str, dict[str, Any]] = {}
 
         for product, tool_name, tool_args in API_ACTIONS_SAMPLE:
             if product not in product_to_controller_id:
@@ -2400,6 +2471,8 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
                 if success is False:
                     error = str(response.get("error") or "")
                 summary = _summarize_action_response(response)
+                if success is True:
+                    live_action_responses[tool_name] = response
             else:
                 success = False
                 error = f"HTTP {status}: {response!r}"
@@ -2452,6 +2525,129 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
             )
             if args.delay:
                 time.sleep(args.delay)
+
+        # Step 3: prove representative non-default read behavior through the
+        # running action endpoint. The positive control derives an exact search
+        # key from the default read; the negative control proves filtering is
+        # actually applied. Neither call mutates controller state.
+        for product, tool_name in API_ACTION_READ_CONTRACT_PROBES:
+            if product not in product_to_controller_id:
+                continue
+            if args.tool and tool_name not in args.tool:
+                continue
+            controller_id = product_to_controller_id[product]
+            site = site_for_product[product]
+            seed = live_action_responses.get(tool_name, {})
+            seed_rows = seed.get("data") if isinstance(seed, dict) else None
+            candidate = next(
+                (
+                    row
+                    for row in seed_rows or []
+                    if isinstance(row, dict) and isinstance(row.get("mac"), str) and row["mac"]
+                ),
+                None,
+            )
+            if candidate is None:
+                error = "default live read returned no client with a MAC; contract probe is inconclusive"
+                artifact["read_contract_probes"].append(
+                    {
+                        "product": product,
+                        "tool": tool_name,
+                        "controller_id": controller_id,
+                        "site": site,
+                        "control": "seed",
+                        "passed": False,
+                        "errors": [error],
+                    }
+                )
+                artifact["summary"]["read_contract_probes_exercised"] += 1
+                artifact["summary"]["regressions"] += 1
+                print(f"  api-actions read contract: {tool_name} inconclusive ({error})", flush=True)
+                continue
+
+            mac = candidate["mac"]
+            connection_type = str(candidate.get("connection_type") or "Wireless")
+            filter_type = "wired" if connection_type.lower() == "wired" else "wireless"
+            common_args = {
+                "filter_type": filter_type,
+                "include_offline": True,
+                "limit": 1,
+                "fields": "mac,connection_type",
+            }
+            controls = [
+                (
+                    "positive",
+                    {**common_args, "search": mac},
+                    {**common_args, "search": mac},
+                    True,
+                    False,
+                    {"mac": mac, "connection_type": connection_type},
+                ),
+                (
+                    "negative",
+                    {**common_args, "search": "__unifi_live_smoke_no_match__"},
+                    {**common_args, "search": "__unifi_live_smoke_no_match__"},
+                    False,
+                    True,
+                    None,
+                ),
+            ]
+            for control, tool_args, expected_meta, require_non_empty, expected_empty, item_values in controls:
+                expected_meta.pop("include_offline")
+                t0 = time.perf_counter()
+                try:
+                    status, response = _http_request(
+                        "POST",
+                        f"{base_url}/v1/actions/{tool_name}",
+                        headers=auth_headers,
+                        body={
+                            "site": site,
+                            "controller": controller_id,
+                            "args": tool_args,
+                            "confirm": False,
+                        },
+                        timeout=120.0,
+                    )
+                except Exception as exc:
+                    status = 0
+                    response = f"{type(exc).__name__}: {exc}"
+                duration_ms = int((time.perf_counter() - t0) * 1000)
+                validation = _validate_api_read_contract_probe(
+                    response,
+                    expected_meta=expected_meta,
+                    projected_fields={"mac", "connection_type"},
+                    require_non_empty=require_non_empty,
+                    expected_empty=expected_empty,
+                    expected_item_values=item_values,
+                )
+                passed = status == 200 and validation["passed"]
+                artifact["read_contract_probes"].append(
+                    {
+                        "product": product,
+                        "tool": tool_name,
+                        "controller_id": controller_id,
+                        "site": site,
+                        "control": control,
+                        "args": tool_args,
+                        "http_status": status,
+                        "passed": passed,
+                        "errors": validation["errors"],
+                        "duration_ms": duration_ms,
+                        "summary": _summarize_action_response(response),
+                    }
+                )
+                artifact["summary"]["read_contract_probes_exercised"] += 1
+                if passed:
+                    artifact["summary"]["read_contract_probes_passed"] += 1
+                else:
+                    artifact["summary"]["regressions"] += 1
+                print(
+                    f"  api-actions read contract {control}: {tool_name} "
+                    f"passed={passed} http={status} ({duration_ms}ms)",
+                    flush=True,
+                )
+                if args.delay:
+                    time.sleep(args.delay)
 
     finally:
         artifact["finished_at"] = datetime.now(UTC).isoformat()

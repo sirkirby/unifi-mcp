@@ -14,6 +14,7 @@ from unifi_api.auth.scopes import Scope
 from unifi_api.serializers._base import SerializerContractError
 from unifi_api.serializers._registry import SerializerRegistryError
 from unifi_api.services import actions as actions_svc
+from unifi_api.services.action_results import ShapedReadResult
 from unifi_api.services.audit import write_audit
 from unifi_api.services.controllers import ControllerNotFound, get_controller
 from unifi_api.services.manifest import ToolNotFound
@@ -54,6 +55,69 @@ def _coerce_list_result(result: object, tool_name: str, kind: str) -> list:
     raise SerializerContractError(
         f"tool '{tool_name}' declared kind={kind} but manager returned {type(result).__name__}"
     )
+
+
+def _shape_shared_read_result(
+    result: ShapedReadResult,
+    *,
+    tool_name: str,
+    type_registry: object,
+    redact_sensitive: bool,
+) -> dict:
+    """Preserve the action envelope while returning a Core-shaped read view."""
+    payload = redact_sensitive_fields(result.payload, redact_sensitive=redact_sensitive)
+    if payload.get("success") is False:
+        return payload
+    if result.data_key not in payload:
+        raise SerializerContractError(f"tool '{tool_name}' shared read view omitted primary field '{result.data_key}'")
+    tool_type = type_registry.lookup_tool(tool_name)
+    if tool_type is None:
+        raise SerializerContractError(f"tool '{tool_name}' shared read view has no registered render type")
+    _, kind = tool_type
+    data = payload[result.data_key]
+    if kind in ("list", "timeseries", "event_log"):
+        if not isinstance(data, list):
+            raise SerializerContractError(
+                f"tool '{tool_name}' declared kind={kind} but shared read view returned {type(data).__name__}"
+            )
+    elif not isinstance(data, dict):
+        raise SerializerContractError(
+            f"tool '{tool_name}' declared kind={kind} but shared read view returned {type(data).__name__}"
+        )
+
+    hint = {"kind": kind, **result.render_hint}
+    projected_fields = payload.get("fields")
+    if isinstance(projected_fields, str) and projected_fields.strip():
+        selected = {field.strip() for field in projected_fields.split(",")}
+        if hint.get("primary_key") not in selected:
+            hint.pop("primary_key", None)
+        if isinstance(hint.get("display_columns"), list):
+            hint["display_columns"] = [field for field in hint["display_columns"] if field in selected]
+        sort_field = str(hint.get("sort_default", "")).partition(":")[0]
+        if sort_field and sort_field not in selected:
+            hint.pop("sort_default", None)
+
+    if isinstance(data, list):
+        item_fields = [set(item) for item in data if isinstance(item, dict)]
+        available = set().union(*item_fields) if item_fields else set()
+        guaranteed = set.intersection(*item_fields) if item_fields else set()
+        if hint.get("primary_key") not in guaranteed:
+            hint.pop("primary_key", None)
+        if isinstance(hint.get("display_columns"), list):
+            hint["display_columns"] = [field for field in hint["display_columns"] if field in available]
+        sort_field = str(hint.get("sort_default", "")).partition(":")[0]
+        if sort_field and sort_field not in available:
+            hint.pop("sort_default", None)
+
+    metadata = {key: value for key, value in payload.items() if key not in {"success", result.data_key}}
+    shaped = {
+        "success": True,
+        "data": data,
+        "render_hint": hint,
+    }
+    if metadata:
+        shaped["meta"] = metadata
+    return shaped
 
 
 class ActionIn(BaseModel):
@@ -121,6 +185,13 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
             redact_sensitive = request.app.state.config.policy.response.redact_sensitive_fields
             if isinstance(result, actions_svc.MutationPreview):
                 shaped = redact_sensitive_fields(result.payload, redact_sensitive=redact_sensitive)
+            elif isinstance(result, ShapedReadResult):
+                shaped = _shape_shared_read_result(
+                    result,
+                    tool_name=tool_name,
+                    type_registry=type_registry,
+                    redact_sensitive=redact_sensitive,
+                )
             elif (tool_type := type_registry.lookup_tool(tool_name)) is not None:
                 # Phase 6 PR2 — read tool migrated to a Strawberry type. Shape
                 # the manager output through Type.from_manager_output().to_dict()

@@ -83,6 +83,63 @@ def test_api_actions_have_no_baseline_failure_exemption():
     assert live_smoke._classify_api_action_result(True, False) == "regression"
 
 
+def test_live_api_non_default_read_contract_requires_projection_limit_and_metadata():
+    import live_smoke
+
+    response = {
+        "success": True,
+        "data": [{"mac": "aa:bb", "connection_type": "Wireless"}],
+        "meta": {
+            "filter_type": "wireless",
+            "search": "phone",
+            "fields": "mac,connection_type",
+            "limit": 1,
+            "total_count": 2,
+            "returned_count": 1,
+        },
+    }
+    assert live_smoke._validate_api_read_contract_probe(
+        response,
+        expected_meta={
+            "filter_type": "wireless",
+            "search": "phone",
+            "fields": "mac,connection_type",
+            "limit": 1,
+        },
+        projected_fields={"mac", "connection_type"},
+    ) == {"passed": True, "errors": []}
+
+    broken = {
+        **response,
+        "data": [{"mac": "aa:bb", "name": "Phone"}, {"mac": "cc:dd"}],
+        "meta": {**response["meta"], "limit": 100},
+    }
+    result = live_smoke._validate_api_read_contract_probe(
+        broken,
+        expected_meta={"limit": 1},
+        projected_fields={"mac", "connection_type"},
+    )
+    assert result["passed"] is False
+    assert result["errors"] == [
+        "meta.limit expected 1, got 100",
+        "data length 2 exceeds limit 1",
+        "meta.returned_count expected 2, got 1",
+        "data[0] contains fields outside projection: name",
+    ]
+
+    empty_positive = live_smoke._validate_api_read_contract_probe(
+        {
+            "success": True,
+            "data": [],
+            "meta": {"limit": 1, "returned_count": 0, "total_count": 0},
+        },
+        expected_meta={"limit": 1},
+        projected_fields={"mac"},
+        require_non_empty=True,
+    )
+    assert empty_positive == {"passed": False, "errors": ["positive control returned no rows"]}
+
+
 def test_live_smoke_known_controller_issue_matches_exact_error_code():
     import live_smoke
 
