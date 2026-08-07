@@ -1,108 +1,120 @@
-"""Manifest lookup table tests."""
+"""Packaged API action catalog registry tests."""
+
+from __future__ import annotations
+
+import json
 
 import pytest
-from unifi_api.services.manifest import ManifestRegistry, ToolNotFound, _parse_manifest
+from unifi_api.services import manifest
+from unifi_api.services.manifest import CatalogLoadError, ManifestRegistry, ToolNotFound
 
 
-def test_loads_manifests_from_apps() -> None:
-    reg = ManifestRegistry.load_from_apps()
-    assert reg.has("unifi_list_clients") or reg.has("list_clients")
-    # At least one well-known tool from each product should be present
-    has_network = reg.has("unifi_list_clients") or reg.has("unifi_list_devices")
-    has_protect = reg.has("protect_list_cameras") or reg.has("list_cameras")
-    has_access = reg.has("access_list_doors") or reg.has("list_doors")
-    assert has_network, "expected at least one network tool"
-    assert has_protect, "expected at least one protect tool"
-    assert has_access, "expected at least one access tool"
+def _catalog(*actions: dict, schema_version: int = 1) -> str:
+    return json.dumps(
+        {
+            "schema_version": schema_version,
+            "generated_by": "scripts/generate_api_action_catalog.py",
+            "actions": list(actions),
+            "excluded": [],
+        }
+    )
 
 
-def test_resolves_returns_tool_entry() -> None:
-    reg = ManifestRegistry.load_from_apps()
-    name = "unifi_list_clients" if reg.has("unifi_list_clients") else _some_known_network(reg)[0]
-    entry = reg.resolve(name)
-    assert entry.name == name
+def _action(**changes) -> dict:
+    action = {
+        "name": "unifi_list_clients",
+        "product": "network",
+        "category": "clients",
+        "permission_action": "read",
+        "read_only_hint": True,
+        "manager_attr": "client_manager",
+        "manager_method": "get_clients",
+    }
+    action.update(changes)
+    return action
+
+
+def test_loads_packaged_catalog_with_manager_binding(monkeypatch) -> None:
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(_action()))
+
+    registry = ManifestRegistry.load()
+
+    entry = registry.resolve("unifi_list_clients")
     assert entry.product == "network"
+    assert entry.permission_action == "read"
+    assert entry.read_only_hint is True
+    assert entry.manager_attr == "client_manager"
+    assert entry.manager_method == "get_clients"
 
 
-def test_skips_mcp_meta_tools_from_api_registry() -> None:
-    reg = ManifestRegistry.load_from_apps()
-    assert not reg.has("unifi_tool_index")
-    assert not reg.has("unifi_execute")
-    assert not reg.has("unifi_batch")
-    assert not reg.has("unifi_batch_status")
-    assert not reg.has("unifi_load_tools")
+def test_real_packaged_catalog_has_all_product_sentinels() -> None:
+    registry = ManifestRegistry.load()
+
+    assert len(registry) == 266
+    assert registry.has("unifi_list_clients")
+    assert registry.has("protect_list_cameras")
+    assert registry.has("access_list_doors")
+    assert not registry.has("unifi_subscribe_events")
 
 
 def test_unknown_tool_raises() -> None:
-    reg = ManifestRegistry.load_from_apps()
+    registry = ManifestRegistry({})
+
     with pytest.raises(ToolNotFound):
-        reg.resolve("definitely_not_a_real_tool_name_xyz")
-
-
-def test_parse_manifest_retains_permission_action() -> None:
-    entries = _parse_manifest(
-        {
-            "module_map": {"access_delete_visitor": "unifi_access_mcp.tools.visitors"},
-            "tools": [
-                {
-                    "name": "access_delete_visitor",
-                    "permission_category": "visitor",
-                    "permission_action": "delete",
-                    "annotations": {"readOnlyHint": False},
-                }
-            ],
-        },
-        "access",
-    )
-
-    assert entries["access_delete_visitor"].permission_action == "delete"
-    assert entries["access_delete_visitor"].read_only_hint is False
-
-
-def test_module_map_fallback_has_no_permission_action() -> None:
-    entries = _parse_manifest(
-        {"module_map": {"legacy_tool": "unifi_network_mcp.tools.system"}},
-        "network",
-    )
-
-    assert entries["legacy_tool"].permission_action == ""
-    assert entries["legacy_tool"].read_only_hint is None
+        registry.resolve("definitely_not_a_real_tool_name_xyz")
 
 
 @pytest.mark.parametrize(
-    ("annotations", "expected"),
+    ("raw", "expected"),
     [
-        ({"readOnlyHint": True}, True),
-        ({"readOnlyHint": False}, False),
-        ({}, None),
-        ({"readOnlyHint": "false"}, None),
-        (None, None),
+        ("not json", "invalid JSON"),
+        (json.dumps([]), "top level must be an object"),
+        (_catalog(_action(), schema_version=2), "unsupported schema_version"),
+        (json.dumps({"schema_version": 1, "actions": {}}), "actions must be an array"),
+        (_catalog(_action(name="")), r"actions\[0\].name"),
+        (_catalog(_action(product="wireless")), r"actions\[0\].product"),
+        (_catalog(_action(read_only_hint="true")), r"actions\[0\].read_only_hint"),
+        (_catalog(_action(permission_action="update", read_only_hint=True)), "conflicting safety metadata"),
+        (_catalog(_action(manager_attr="")), r"actions\[0\].manager_attr"),
+        (_catalog(_action(manager_method="")), r"actions\[0\].manager_method"),
+        (_catalog(_action(), _action()), "duplicate action name"),
     ],
 )
-def test_parse_manifest_retains_only_boolean_read_only_hint(
-    annotations: object,
-    expected: bool | None,
-) -> None:
-    entries = _parse_manifest(
-        {
-            "tools": [
-                {
-                    "name": "test_tool",
-                    "permission_category": "test",
-                    "permission_action": "read",
-                    "annotations": annotations,
-                }
-            ]
-        },
-        "network",
-    )
+def test_invalid_catalog_fails_closed(monkeypatch, raw: str, expected: str) -> None:
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: raw)
 
-    assert entries["test_tool"].read_only_hint is expected
+    with pytest.raises(CatalogLoadError, match=expected):
+        ManifestRegistry.load()
 
 
-def _some_known_network(reg) -> list[str]:
-    """Helper: fall back to any tool that resolves and has product=network."""
-    for name in ("unifi_list_clients", "unifi_list_devices", "list_clients", "list_devices"):
-        if reg.has(name):
-            return [name]
-    raise RuntimeError("no recognizable network tool in manifest")
+def test_missing_packaged_catalog_fails_closed(monkeypatch) -> None:
+    def missing() -> str:
+        raise FileNotFoundError("action_catalog.json")
+
+    monkeypatch.setattr(manifest, "_read_catalog_resource", missing)
+
+    with pytest.raises(CatalogLoadError, match="action_catalog.json"):
+        ManifestRegistry.load()
+
+
+def test_loader_reads_only_the_unifi_api_package(monkeypatch) -> None:
+    requested: list[str] = []
+
+    class FakeResource:
+        def __truediv__(self, name: str):
+            assert name == "action_catalog.json"
+            return self
+
+        def read_text(self) -> str:
+            return _catalog(_action())
+
+    def fake_files(package: str):
+        requested.append(package)
+        return FakeResource()
+
+    monkeypatch.setattr(manifest, "files", fake_files)
+
+    registry = ManifestRegistry.load()
+
+    assert len(registry) == 1
+    assert requested == ["unifi_api"]

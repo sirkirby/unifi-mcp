@@ -29,7 +29,7 @@ def _read_tools_by_product() -> dict[str, list[str]]:
     timeseries/event_log shapes are nested inside Query fields rather than
     top-level fields and don't participate in this naming gate.
     """
-    reg = ManifestRegistry.load_from_apps()
+    reg = ManifestRegistry.load()
     type_registry = build_type_registry()
     out: dict[str, list[str]] = {"network": [], "protect": [], "access": []}
     for tool_name in reg.all_tools():

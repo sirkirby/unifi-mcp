@@ -23,7 +23,7 @@ def test_naming_convention_no_collisions_in_manifest() -> None:
     Phase 6 close: read-tool kinds come from the type_registry now that all
     read serializers have been migrated to Strawberry types.
     """
-    manifest = ManifestRegistry.load_from_apps()
+    manifest = ManifestRegistry.load()
     type_registry = build_type_registry()
 
     # Build per-product LIST stem set first (collision-aware DETAIL mapping needs this).

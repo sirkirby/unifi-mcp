@@ -16,7 +16,7 @@ from unifi_api.services.actions import (
 from unifi_api.services.manifest import ManifestRegistry, ToolEntry, ToolNotFound
 from unifi_core.redaction import REDACTED
 
-PRODUCTION_REGISTRY = ManifestRegistry.load_from_apps()
+PRODUCTION_REGISTRY = ManifestRegistry.load()
 
 
 def _registry_with(tool: ToolEntry) -> ManifestRegistry:
@@ -24,10 +24,53 @@ def _registry_with(tool: ToolEntry) -> ManifestRegistry:
         production_entry = PRODUCTION_REGISTRY.resolve(tool.name)
         tool = replace(
             tool,
+            manager=production_entry.manager,
+            method=production_entry.method,
             permission_action=production_entry.permission_action,
             read_only_hint=production_entry.read_only_hint,
         )
     return ManifestRegistry({tool.name: tool})
+
+
+@pytest.mark.asyncio
+async def test_catalog_binding_is_authoritative_and_accepts_sync_result() -> None:
+    entry = ToolEntry(
+        name="unifi_get_event_types",
+        product="network",
+        category="events",
+        manager="event_manager",
+        method="get_event_type_prefixes",
+        permission_action="read",
+        read_only_hint=True,
+    )
+    manager = MagicMock()
+    manager.get_event_type_prefixes.return_value = {"EVT_WU_": "wireless"}
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    connection = MagicMock(site="default")
+    factory.get_connection_manager = AsyncMock(return_value=connection)
+    session = MagicMock()
+
+    result = await dispatch_action(
+        registry=ManifestRegistry({entry.name: entry}),
+        factory=factory,
+        session=session,
+        tool_name=entry.name,
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={},
+        confirm=False,
+    )
+
+    assert result == {"EVT_WU_": "wireless"}
+    factory.get_domain_manager.assert_awaited_once_with(
+        session=session,
+        controller_id="cid",
+        product="network",
+        attr_name="event_manager",
+    )
+    manager.get_event_type_prefixes.assert_called_once_with()
 
 
 def _dispatchable_entries() -> list[tuple[str, ToolEntry]]:

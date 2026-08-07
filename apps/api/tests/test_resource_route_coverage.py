@@ -68,7 +68,7 @@ def test_every_read_tool_has_a_resource_route(tmp_path) -> None:
     routes = collect_resource_routes(app)
     route_names = {r.name for r in routes}
 
-    manifest = ManifestRegistry.load_from_apps()
+    manifest = ManifestRegistry.load()
     read_tools = [t for t in manifest.all_tools() if is_read_tool(t)]
 
     missing: list[tuple[str, str | None]] = []

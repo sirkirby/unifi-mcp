@@ -256,7 +256,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         # available even when the lifespan isn't run (e.g. ASGITransport tests).
         # Loading is idempotent and fast (file reads), so re-loading here keeps
         # the lifespan as the canonical startup hook.
-        app.state.manifest_registry = ManifestRegistry.load_from_apps()
+        app.state.manifest_registry = ManifestRegistry.load()
 
         # Phase 4B: eagerly start event listening for every (controller, product)
         # pair so SSE subscribers see a warm buffer on first connect. Failures
@@ -468,7 +468,7 @@ def create_app(config: ApiConfig) -> FastAPI:
     app.state.started_at = datetime.now(timezone.utc)
     app.state.log_file_path = None  # Task 11 may override this if log file is enabled
     app.state.log_reader = LogReader(Path("/dev/null"))  # Task 11 may override
-    app.state.manifest_registry = ManifestRegistry.load_from_apps()
+    app.state.manifest_registry = ManifestRegistry.load()
     manifest_tool_names = set(app.state.manifest_registry.all_tools())
 
     # Phase 6 close — every read tool/resource is projected via a Strawberry

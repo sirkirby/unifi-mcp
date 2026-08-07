@@ -21,7 +21,7 @@ from unifi_api.services.manifest import ManifestRegistry
 
 def test_every_tool_has_a_serializer() -> None:
     _reset_registry_for_tests()
-    manifest = ManifestRegistry.load_from_apps()
+    manifest = ManifestRegistry.load()
     type_registry = build_type_registry()
     # Will raise SerializerRegistryError if any tool lacks both a serializer
     # and a type.
