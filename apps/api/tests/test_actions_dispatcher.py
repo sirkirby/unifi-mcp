@@ -2390,3 +2390,94 @@ async def test_dispatch_translates_get_top_clients_duration_to_hours() -> None:
     )
 
     domain_manager.get_top_clients.assert_awaited_once_with(duration_hours=168, limit=5)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_name", "args", "expected_method", "expected_kwargs"),
+    [
+        (
+            "unifi_reboot_device",
+            {"mac_address": "aa:bb:cc:dd:ee:ff"},
+            "reboot_device",
+            {"device_mac": "aa:bb:cc:dd:ee:ff"},
+        ),
+        (
+            "access_create_credential",
+            {"credential_type": "pin", "credential_data": {"pin": "1234"}},
+            "apply_create_credential",
+            {"credential_type": "pin", "data": {"pin": "1234"}},
+        ),
+        (
+            "protect_alarm_create_rule",
+            {"body": {"name": "Front door"}},
+            "create_rule",
+            {"fields": {"name": "Front door"}},
+        ),
+        (
+            "unifi_set_outlet_state",
+            {
+                "mac_address": "aa:bb:cc:dd:ee:ff",
+                "outlet_index": 2,
+                "relay_state": False,
+                "cycle_enabled": True,
+            },
+            "set_outlet_state",
+            {
+                "device_mac": "aa:bb:cc:dd:ee:ff",
+                "outlet_index": 2,
+                "relay_state": False,
+                "cycle_enabled": True,
+            },
+        ),
+        (
+            "unifi_update_port_forward",
+            {"port_forward_id": "pf-1", "update_data": {"enabled": False}},
+            "update_port_forward",
+            {"rule_id": "pf-1", "updates": {"enabled": False}},
+        ),
+        (
+            "unifi_toggle_qos_rule_enabled",
+            {"rule_id": "qos-1"},
+            "toggle_qos_rule_enabled",
+            {"rule_id": "qos-1"},
+        ),
+    ],
+    ids=[
+        "network-identifier-alias",
+        "access-payload-alias",
+        "protect-payload-alias",
+        "outlet-mutation-binding",
+        "port-forward-mutation-binding",
+        "qos-toggle-bridge",
+    ],
+)
+async def test_reviewed_catalog_mutations_reach_the_intended_core_signature(
+    tool_name: str,
+    args: dict,
+    expected_method: str,
+    expected_kwargs: dict,
+) -> None:
+    """Regression coverage for failures found by the independent catalog review."""
+    entry = PRODUCTION_REGISTRY.resolve(tool_name)
+    manager = MagicMock()
+    manager_method = AsyncMock(return_value={"ok": True})
+    setattr(manager, expected_method, manager_method)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    factory.get_connection_manager = AsyncMock(return_value=MagicMock(site="default"))
+
+    result = await dispatch_action(
+        registry=PRODUCTION_REGISTRY,
+        factory=factory,
+        session=MagicMock(),
+        tool_name=tool_name,
+        controller_id="cid",
+        controller_products=[entry.product],
+        site="default",
+        args=args,
+        confirm=True,
+    )
+
+    assert result == {"ok": True}
+    manager_method.assert_awaited_once_with(**expected_kwargs)

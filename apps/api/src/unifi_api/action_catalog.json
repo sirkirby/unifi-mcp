@@ -1341,7 +1341,7 @@
       "permission_action": "read",
       "read_only_hint": true,
       "manager_attr": "firewall_manager",
-      "manager_method": "get_firewall_policies"
+      "manager_method": "get_firewall_policy_by_id"
     },
     {
       "name": "unifi_get_firewall_policy_ordering",
@@ -2052,7 +2052,7 @@
       "permission_action": "update",
       "read_only_hint": false,
       "manager_attr": "device_manager",
-      "manager_method": "get_pdu_outlets"
+      "manager_method": "set_outlet_state"
     },
     {
       "name": "unifi_set_site_leds",
@@ -2115,7 +2115,7 @@
       "permission_action": "update",
       "read_only_hint": false,
       "manager_attr": "qos_manager",
-      "manager_method": "update_qos_rule"
+      "manager_method": "toggle_qos_rule_enabled"
     },
     {
       "name": "unifi_toggle_traffic_route",
@@ -2295,7 +2295,7 @@
       "permission_action": "update",
       "read_only_hint": false,
       "manager_attr": "firewall_manager",
-      "manager_method": "get_port_forward_by_id"
+      "manager_method": "update_port_forward"
     },
     {
       "name": "unifi_update_port_profile",

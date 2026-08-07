@@ -74,11 +74,12 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_update_gateway_settings": ("gateway_settings_manager", "update_gateway_settings"),
     # Firewall: tool layer pre-fetches list to find policy by id.
     "unifi_toggle_firewall_policy": ("firewall_manager", "toggle_firewall_policy"),
+    "unifi_get_firewall_policy_details": ("firewall_manager", "get_firewall_policy_by_id"),
     "unifi_update_firewall_policy": ("firewall_manager", "update_firewall_policy"),
     "unifi_reorder_firewall_policies": ("firewall_manager", "reorder_firewall_policies"),
     # Toggle tools: tool body needs current enabled flag to compute new state.
     "unifi_toggle_port_forward": ("firewall_manager", "toggle_port_forward"),
-    "unifi_toggle_qos_rule_enabled": ("qos_manager", "update_qos_rule"),
+    "unifi_toggle_qos_rule_enabled": ("qos_manager", "toggle_qos_rule_enabled"),
     "unifi_toggle_oon_policy": ("oon_manager", "toggle_oon_policy"),
     "unifi_toggle_traffic_route": ("traffic_route_manager", "toggle_traffic_route"),
     # update_traffic_route now pre-fetches the route via get_traffic_route_details
@@ -91,6 +92,9 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_update_dynamic_dns": ("dynamic_dns_manager", "update_dynamic_dns"),
     # update_device_radio: tool needs current radio_table to identify target band.
     "unifi_update_device_radio": ("device_manager", "update_device_radio"),
+    # PDU and port-forward updates both pre-fetch current state for preview.
+    "unifi_set_outlet_state": ("device_manager", "set_outlet_state"),
+    "unifi_update_port_forward": ("firewall_manager", "update_port_forward"),
     # Stats: tool combines existence check on client/device with stats fetch.
     "unifi_get_device_stats": ("stats_manager", "get_device_stats"),
     "unifi_get_client_stats": ("stats_manager", "get_client_stats"),
@@ -203,6 +207,73 @@ API_ACTION_EXCLUSIONS: dict[str, ActionExclusion] = {
 # layer does meaningful shape translation (e.g., flat kwargs -> controller-
 # nested payload) that the dispatcher would otherwise skip.
 ArgTranslator = Callable[[dict[str, Any]], tuple[tuple[Any, ...], dict[str, Any]]]
+
+
+@dataclass(frozen=True)
+class ArgTranslatorSpec:
+    """Callable argument adapter with a machine-checkable manager contract."""
+
+    translate: ArgTranslator
+    manager_parameters: frozenset[str]
+
+    def __call__(self, args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        return self.translate(args)
+
+
+def _spec(translate: ArgTranslator, *manager_parameters: str) -> ArgTranslatorSpec:
+    return ArgTranslatorSpec(translate, frozenset(manager_parameters))
+
+
+def _rename_and_drop(
+    *,
+    rename: dict[str, str] | None = None,
+    drop: frozenset[str] = frozenset(),
+    constants: dict[str, Any] | None = None,
+) -> ArgTranslator:
+    """Build a simple keyword adapter without silently retaining tool-only args."""
+
+    def translate(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        out = {key: value for key, value in args.items() if key not in drop}
+        for source, target in (rename or {}).items():
+            if source in out:
+                out[target] = out.pop(source)
+        out.update(constants or {})
+        return (), out
+
+    return translate
+
+
+def _pack_fields(
+    target: str,
+    fields: frozenset[str],
+    *,
+    passthrough: frozenset[str] = frozenset(),
+    field_renames: dict[str, str] | None = None,
+) -> ArgTranslator:
+    """Pack flat tool fields into one manager payload argument."""
+
+    def translate(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        payload = {
+            (field_renames or {}).get(key, key): value
+            for key, value in args.items()
+            if key in fields and value is not None
+        }
+        out = {key: args[key] for key in passthrough if key in args}
+        out[target] = payload
+        return (), out
+
+    return translate
+
+
+def _rename_payload(source: str, target: str, *, passthrough: frozenset[str] = frozenset()) -> ArgTranslator:
+    """Rename one nested payload while retaining explicitly named identifiers."""
+
+    def translate(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        out = {key: args[key] for key in passthrough if key in args}
+        out[target] = args.get(source) or {}
+        return (), out
+
+    return translate
 
 
 def _translate_acl_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -537,6 +608,16 @@ def _translate_list_events(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[
     out = dict(args)
     if "within_hours" in out:
         out["within"] = out.pop("within_hours")
+    # The wrapper applies the optional absolute end bound after fetching.
+    out.pop("end", None)
+    return (), out
+
+
+def _translate_client_ip_settings(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Rename the MAC and remove the wrapper-only network lookup hint."""
+    out = dict(args)
+    out["client_mac"] = out.pop("mac_address")
+    out.pop("network_id", None)
     return (), out
 
 
@@ -548,39 +629,344 @@ def _translate_list_alarms(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[
     return (), out
 
 
-DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslator] = {
-    "unifi_create_acl_rule": _translate_acl_create,
-    "unifi_update_acl_rule": _translate_acl_update,
-    "unifi_update_gateway_settings": _translate_gateway_settings_update,
+def _translate_duration(
+    args: dict[str, Any],
+    *,
+    default_hours: int,
+    rename: dict[str, str] | None = None,
+    drop: frozenset[str] = frozenset(),
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Convert the shared duration enum and apply any identifier renames."""
+    out = {key: value for key, value in args.items() if key not in drop}
+    duration = out.pop("duration", None)
+    if duration is not None:
+        out["duration_hours"] = _DURATION_HOURS.get(str(duration), default_hours)
+    for source, target in (rename or {}).items():
+        if source in out:
+            out[target] = out.pop(source)
+    return (), out
+
+
+def _translate_traffic_flows(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Build the Core TrafficFlowQuery used by the MCP wrapper."""
+    import time
+
+    from unifi_core.network.models.traffic_flows import TrafficFlowQuery
+
+    def as_list(value: Any) -> list[str] | None:
+        if value is None:
+            return None
+        if isinstance(value, list):
+            return [str(item) for item in value]
+        return [str(value)]
+
+    time_from = args.get("time_from")
+    time_to = args.get("time_to")
+    if (time_from is None) != (time_to is None):
+        raise ValueError("provide both time_from and time_to, or use within_hours")
+    if time_from is None:
+        within_hours = int(args.get("within_hours", 24))
+        if within_hours <= 0:
+            raise ValueError("within_hours must be a positive integer")
+        time_to = int(time.time() * 1000)
+        time_from = time_to - within_hours * 3_600_000
+
+    query = TrafficFlowQuery(
+        time_from=time_from,
+        time_to=time_to,
+        page_number=args.get("page", 0),
+        page_size=max(1, min(args.get("page_size", 100), 1000)),
+        search_text=args.get("search_text"),
+        risk=as_list(args.get("risk")),
+        action=as_list(args.get("action")),
+        direction=as_list(args.get("direction")),
+        protocol=as_list(args.get("protocol")),
+        service=as_list(args.get("service")),
+        source_mac=as_list(args.get("source_mac")),
+        source_ip=as_list(args.get("source_ip")),
+        source_host=as_list(args.get("source_name")),
+        source_network_id=as_list(args.get("source_network_id")),
+        destination_domain=as_list(args.get("destination_domain")),
+        destination_ip=as_list(args.get("destination_ip")),
+        destination_region=as_list(args.get("destination_region")),
+    )
+    return (), {"query": query}
+
+
+def _translate_snmp_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.system import snmp_to_controller_update
+
+    updates = {"enabled": args["enabled"]}
+    if args.get("community") is not None:
+        updates["community"] = args["community"]
+    return (), {"section": "snmp", "settings_data": snmp_to_controller_update(updates)}
+
+
+def _translate_switch_stp(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    return (), {
+        "device_mac": args["device_mac"],
+        "config_data": {
+            "stp_priority": str(args.get("stp_priority", 32768)),
+            "stp_version": args.get("stp_version", "rstp"),
+        },
+    }
+
+
+def _translate_jumbo_frames(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    return (), {
+        "device_mac": args["device_mac"],
+        "config_data": {"jumboframe_enabled": args["enabled"]},
+    }
+
+
+def _translate_route_args(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    out = dict(args)
+    for source, target in {
+        "network": "static_route_network",
+        "nexthop": "static_route_nexthop",
+        "distance": "static_route_distance",
+    }.items():
+        if source in out:
+            out[target] = out.pop(source)
+    return (), out
+
+
+def _translate_update_port_forward(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    return (), {"rule_id": args["port_forward_id"], "updates": args.get("update_data") or {}}
+
+
+def _translate_snapshot(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    out = dict(args)
+    out.pop("include_image", None)
+    return (), out
+
+
+def _translate_recent_events(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    out = dict(args)
+    out.pop("metadata_fields", None)
+    return (), out
+
+
+def _translate_access_users(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    out = dict(args)
+    if "limit" in out:
+        out["page_size"] = out.pop("limit")
+    return (), out
+
+
+DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
+    "unifi_create_acl_rule": _spec(_translate_acl_create, "rule_data"),
+    "unifi_update_acl_rule": _spec(_translate_acl_update, "rule_id", "update_data"),
+    "unifi_update_gateway_settings": _spec(_translate_gateway_settings_update, "update_data"),
     # Network — dynamic DNS: create validates+translates entry_data; update reshapes
     # (entry_id, update_data) → (entry_id, entry_data) and rejects unknown/read-only keys.
-    "unifi_create_dynamic_dns": _translate_create_dynamic_dns,
-    "unifi_update_dynamic_dns": _translate_update_dynamic_dns,
-    "protect_export_clip": _translate_export_clip,
-    "protect_delete_recording": _translate_delete_recording,
-    "protect_update_chime": _translate_chime_update,
-    "protect_update_sensor_settings": _translate_sensor_settings_update,
+    "unifi_create_dynamic_dns": _spec(_translate_create_dynamic_dns, "entry_data"),
+    "unifi_update_dynamic_dns": _spec(_translate_update_dynamic_dns, "entry_id", "entry_data"),
+    "protect_export_clip": _spec(_translate_export_clip, "camera_id", "start", "end", "channel_index", "fps"),
+    "protect_delete_recording": _spec(_translate_delete_recording, "camera_id", "start", "end"),
+    "protect_update_chime": _spec(_translate_chime_update, "chime_id", "settings"),
+    "protect_update_sensor_settings": _spec(_translate_sensor_settings_update, "sensor_id", "settings"),
     # Network — client mutations: tool uses mac_address, manager uses client_mac
-    "unifi_block_client": _rename_mac_address_to_client_mac,
-    "unifi_unblock_client": _rename_mac_address_to_client_mac,
-    "unifi_rename_client": _rename_mac_address_to_client_mac,
-    "unifi_force_reconnect_client": _rename_mac_address_to_client_mac,
-    "unifi_authorize_guest": _rename_mac_address_to_client_mac,
-    "unifi_unauthorize_guest": _rename_mac_address_to_client_mac,
-    "unifi_set_client_ip_settings": _rename_mac_address_to_client_mac,
-    "unifi_forget_client": _rename_mac_address_to_client_mac,
+    "unifi_block_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
+    "unifi_unblock_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
+    "unifi_rename_client": _spec(_rename_mac_address_to_client_mac, "client_mac", "name"),
+    "unifi_force_reconnect_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
+    "unifi_authorize_guest": _spec(_rename_mac_address_to_client_mac, "client_mac", "minutes"),
+    "unifi_unauthorize_guest": _spec(_rename_mac_address_to_client_mac, "client_mac"),
+    "unifi_set_client_ip_settings": _spec(
+        _translate_client_ip_settings,
+        "client_mac",
+        "use_fixedip",
+        "fixed_ip",
+        "local_dns_record_enabled",
+        "local_dns_record",
+    ),
+    "unifi_forget_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
     # Network — list clients: manager get_clients() takes no args
-    "unifi_list_clients": _translate_list_clients,
+    "unifi_list_clients": _spec(_translate_list_clients),
     # Network — firewall: kwarg rename
-    "unifi_update_firewall_policy": _translate_update_firewall_policy,
+    "unifi_update_firewall_policy": _spec(_translate_update_firewall_policy, "policy_id", "updates"),
     # Network — port forward toggle/delete: kwarg rename (port_forward_id → rule_id)
-    "unifi_toggle_port_forward": _rename_port_forward_id_to_rule_id,
-    "unifi_delete_port_forward": _rename_port_forward_id_to_rule_id,
+    "unifi_toggle_port_forward": _spec(_rename_port_forward_id_to_rule_id, "rule_id"),
+    "unifi_delete_port_forward": _spec(_rename_port_forward_id_to_rule_id, "rule_id"),
     # Network — device radio update: flatten → (device_mac, radio_id, updates)
-    "unifi_update_device_radio": _translate_update_device_radio,
+    "unifi_update_device_radio": _spec(_translate_update_device_radio, "device_mac", "radio_id", "updates"),
     # Network — stats: convert duration string to duration_hours integer
-    "unifi_get_top_clients": _translate_get_top_clients,
+    "unifi_get_top_clients": _spec(_translate_get_top_clients, "duration_hours", "limit"),
     # Network — event tool names differ from the Core manager signatures.
-    "unifi_list_events": _translate_list_events,
-    "unifi_list_alarms": _translate_list_alarms,
+    "unifi_list_events": _spec(
+        _translate_list_events, "event_type", "within", "limit", "start", "categories", "severities"
+    ),
+    "unifi_list_alarms": _spec(_translate_list_alarms, "archived"),
+    # Access public names and pagination aliases.
+    "access_create_credential": _spec(
+        _rename_payload("credential_data", "data", passthrough=frozenset({"credential_type"})),
+        "credential_type",
+        "data",
+    ),
+    "access_list_users": _spec(_translate_access_users, "page_num", "page_size", "compact"),
+    # Protect wrapper-only aliases and response-shaping switches.
+    "protect_alarm_create_rule": _spec(_rename_payload("body", "fields"), "fields"),
+    "protect_get_snapshot": _spec(_translate_snapshot, "camera_id", "width", "height"),
+    "protect_recent_events": _spec(_translate_recent_events, "event_type", "camera_id", "min_confidence", "limit"),
+    # Network identifier aliases.
+    "unifi_adopt_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_reboot_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_rename_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "name"),
+    "unifi_upgrade_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_get_device_radio": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_get_pdu_outlets": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_get_port_forward": _spec(_rename_and_drop(rename={"port_forward_id": "rule_id"}), "rule_id"),
+    # Network create/update payload packing.
+    "unifi_create_client_group": _spec(_pack_fields("group_data", frozenset({"name", "members"})), "group_data"),
+    "unifi_create_firewall_group": _spec(
+        _pack_fields("group_data", frozenset({"name", "group_type", "group_members"})), "group_data"
+    ),
+    "unifi_create_oon_policy": _spec(
+        _pack_fields(
+            "policy_data",
+            frozenset({"name", "target_type", "targets", "route", "qos", "secure", "enabled"}),
+        ),
+        "policy_data",
+    ),
+    "unifi_create_port_forward": _spec(_rename_payload("port_forward_data", "rule_data"), "rule_data"),
+    "unifi_create_simple_port_forward": _spec(_rename_payload("rule", "rule_data"), "rule_data"),
+    "unifi_create_qos_rule": _spec(_rename_payload("qos_data", "rule_data"), "rule_data"),
+    "unifi_create_simple_qos_rule": _spec(_rename_payload("rule", "rule_data"), "rule_data"),
+    "unifi_create_port_profile": _spec(
+        _pack_fields(
+            "profile_data",
+            frozenset(
+                {
+                    "name",
+                    "forward",
+                    "native_networkconf_id",
+                    "voice_networkconf_id",
+                    "poe_mode",
+                    "dot1x_ctrl",
+                    "isolation",
+                    "stp_port_mode",
+                }
+            ),
+        ),
+        "profile_data",
+    ),
+    "unifi_create_route": _spec(
+        _translate_route_args,
+        "name",
+        "static_route_network",
+        "static_route_nexthop",
+        "static_route_distance",
+        "enabled",
+        "route_type",
+    ),
+    "unifi_update_route": _spec(
+        _translate_route_args,
+        "route_id",
+        "name",
+        "static_route_network",
+        "static_route_nexthop",
+        "static_route_distance",
+        "enabled",
+    ),
+    "unifi_update_autobackup_settings": _spec(_rename_payload("update_data", "settings"), "settings"),
+    "unifi_update_client_group": _spec(
+        _rename_payload("group_data", "update_data", passthrough=frozenset({"group_id"})),
+        "group_id",
+        "update_data",
+    ),
+    "unifi_update_content_filter": _spec(
+        _rename_payload("filter_data", "update_data", passthrough=frozenset({"filter_id"})),
+        "filter_id",
+        "update_data",
+    ),
+    "unifi_update_dns_record": _spec(
+        _rename_payload("update_data", "record_data", passthrough=frozenset({"record_id"})),
+        "record_id",
+        "record_data",
+    ),
+    "unifi_update_oon_policy": _spec(
+        _rename_payload("policy_data", "update_data", passthrough=frozenset({"policy_id"})),
+        "policy_id",
+        "update_data",
+    ),
+    "unifi_update_port_forward": _spec(
+        _translate_update_port_forward,
+        "rule_id",
+        "updates",
+    ),
+    "unifi_update_port_profile": _spec(
+        _rename_payload("profile_data", "update_data", passthrough=frozenset({"profile_id"})),
+        "profile_id",
+        "update_data",
+    ),
+    # Network read aliases, duration conversion, and wrapper-only filters.
+    "unifi_get_alerts": _spec(_rename_and_drop(drop=frozenset({"limit"})), "include_archived"),
+    "unifi_get_anomalies": _spec(lambda args: _translate_duration(args, default_hours=24), "duration_hours"),
+    "unifi_get_client_details": _spec(
+        _rename_and_drop(rename={"mac_address": "client_mac"}, drop=frozenset({"include", "summary"})),
+        "client_mac",
+    ),
+    "unifi_get_client_dpi_traffic": _spec(_rename_and_drop(rename={"group_by": "by"}), "client_mac", "by"),
+    "unifi_get_client_sessions": _spec(
+        lambda args: _translate_duration(args, default_hours=24),
+        "client_mac",
+        "duration_hours",
+        "limit",
+    ),
+    "unifi_get_client_stats": _spec(
+        lambda args: _translate_duration(args, default_hours=1, rename={"client_id": "client_mac"}),
+        "client_mac",
+        "duration_hours",
+        "granularity",
+    ),
+    "unifi_get_dashboard": _spec(_rename_and_drop(drop=frozenset({"summary"})), "history_seconds"),
+    "unifi_get_device_details": _spec(
+        _rename_and_drop(rename={"mac_address": "device_mac"}, drop=frozenset({"include", "summary"})),
+        "device_mac",
+    ),
+    "unifi_get_device_stats": _spec(
+        lambda args: _translate_duration(args, default_hours=1, rename={"device_id": "device_mac"}),
+        "device_mac",
+        "duration_hours",
+        "granularity",
+        "device_type",
+    ),
+    "unifi_get_gateway_stats": _spec(
+        lambda args: _translate_duration(args, default_hours=24), "duration_hours", "granularity"
+    ),
+    "unifi_get_ips_events": _spec(lambda args: _translate_duration(args, default_hours=24), "duration_hours", "limit"),
+    "unifi_get_network_details": _spec(_rename_and_drop(drop=frozenset({"include", "summary"})), "network_id"),
+    "unifi_get_network_stats": _spec(
+        lambda args: _translate_duration(args, default_hours=1), "duration_hours", "granularity"
+    ),
+    "unifi_get_site_dpi_traffic": _spec(_rename_and_drop(rename={"group_by": "by"}), "by"),
+    "unifi_get_snmp_settings": _spec(_rename_and_drop(constants={"section": "snmp"}), "section"),
+    "unifi_get_speedtest_results": _spec(lambda args: _translate_duration(args, default_hours=24), "duration_hours"),
+    "unifi_get_traffic_flows": _spec(_translate_traffic_flows, "query"),
+    "unifi_list_devices": _spec(
+        _rename_and_drop(drop=frozenset({"device_type", "status", "search", "limit", "include_details", "summary"}))
+    ),
+    "unifi_list_firewall_policies": _spec(
+        _rename_and_drop(drop=frozenset({"search", "action", "enabled_only", "limit", "summary"})),
+        "include_predefined",
+    ),
+    "unifi_list_networks": _spec(_rename_and_drop(drop=frozenset({"fields", "limit", "purpose", "search"}))),
+    "unifi_list_rogue_aps": _spec(
+        _rename_and_drop(drop=frozenset({"channel", "limit", "min_signal", "offset", "summary"})),
+        "within_hours",
+    ),
+    "unifi_list_wlans": _spec(_rename_and_drop(drop=frozenset({"enabled_only", "limit", "search"}))),
+    # Network mutation payload transforms.
+    "unifi_set_device_led": _spec(_rename_and_drop(rename={"led_state": "led_override"}), "device_mac", "led_override"),
+    "unifi_set_jumbo_frames": _spec(_translate_jumbo_frames, "device_mac", "config_data"),
+    "unifi_set_outlet_state": _spec(
+        _rename_and_drop(rename={"mac_address": "device_mac"}),
+        "device_mac",
+        "outlet_index",
+        "relay_state",
+        "cycle_enabled",
+    ),
+    "unifi_update_snmp_settings": _spec(_translate_snmp_update, "section", "settings_data"),
+    "unifi_update_switch_stp": _spec(_translate_switch_stp, "device_mac", "config_data"),
 }

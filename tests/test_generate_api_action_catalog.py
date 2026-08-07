@@ -285,13 +285,14 @@ def test_check_mode_does_not_write_stale_output(tmp_path: Path) -> None:
     output = tmp_path / "catalog.json"
     output.write_text("stale\n")
 
-    original_loader = generator._load_api_configuration
-    generator._load_api_configuration = lambda _root: ({}, {})
+    rendered = generator.render_catalog(tmp_path, binding_overrides={}, exclusions={})
+    original_render = generator.render_catalog
+    generator.render_catalog = lambda _root: rendered
     try:
         with pytest.raises(generator.CatalogGenerationError, match="catalog is stale"):
             generator.generate_catalog(tmp_path, output, check=True)
     finally:
-        generator._load_api_configuration = original_loader
+        generator.render_catalog = original_render
 
     assert output.read_text() == "stale\n"
 

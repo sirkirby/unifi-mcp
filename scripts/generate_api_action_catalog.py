@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import ast
 import difflib
+import dis
+import inspect
 import json
 import sys
 from pathlib import Path
@@ -40,7 +42,7 @@ def _is_meta_tool(name: str) -> bool:
     return name.endswith(META_TOOL_SUFFIXES)
 
 
-def _load_api_configuration(repo_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+def _load_api_configuration(repo_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any], Mapping[str, Any]]:
     api_src = repo_root / "apps/api/src"
     sys.path.insert(0, str(api_src))
     try:
@@ -52,7 +54,30 @@ def _load_api_configuration(repo_root: Path) -> tuple[Mapping[str, Any], Mapping
             getattr(dispatch_overrides, "DISPATCH_OVERRIDES", {}),
         )
         exclusions = getattr(dispatch_overrides, "API_ACTION_EXCLUSIONS", {})
-        return bindings, exclusions
+        translators = getattr(dispatch_overrides, "DISPATCH_ARG_TRANSLATORS", {})
+        return bindings, exclusions, translators
+    finally:
+        sys.path.remove(str(api_src))
+
+
+def _manager_types(repo_root: Path) -> dict[tuple[str, str], type]:
+    """Resolve registered Core manager classes without constructing managers."""
+    api_src = repo_root / "apps/api/src"
+    sys.path.insert(0, str(api_src))
+    try:
+        from unifi_api.services.managers import _PRODUCT_BUILDERS
+
+        manager_types: dict[tuple[str, str], type] = {}
+        for product, factory in _PRODUCT_BUILDERS.items():
+            for manager_attr, builder in factory().items():
+                closure = dict(zip(builder.__code__.co_freevars, builder.__closure__ or (), strict=True))
+                target_name = next(
+                    instruction.argval
+                    for instruction in dis.get_instructions(builder)
+                    if instruction.opname == "LOAD_DEREF" and instruction.argval in closure
+                )
+                manager_types[(product, manager_attr)] = closure[target_name].cell_contents
+        return manager_types
     finally:
         sys.path.remove(str(api_src))
 
@@ -185,12 +210,16 @@ def render_catalog(
 ) -> str:
     """Render a deterministic catalog from manifests and product tool source."""
     repo_root = repo_root.resolve()
+    validate_invocations = binding_overrides is None and exclusions is None
+    translator_specs: Mapping[str, Any] = {}
     if binding_overrides is None or exclusions is None:
         defaults = _load_api_configuration(repo_root)
         binding_overrides = defaults[0] if binding_overrides is None else binding_overrides
         exclusions = defaults[1] if exclusions is None else exclusions
+        translator_specs = defaults[2]
 
     registered_managers = _manager_attributes(repo_root)
+    manager_types = _manager_types(repo_root) if validate_invocations else {}
     source_tools: dict[str, tuple[str, dict[str, Any], Path]] = {}
     discovered_bindings: dict[str, tuple[str, str]] = {}
 
@@ -283,6 +312,44 @@ def render_catalog(
                 f"{product}:{name} in {path}: manager attribute {manager_attr!r} is not registered by ManagerFactory"
             )
 
+        if validate_invocations:
+            manager_type = manager_types[(product, manager_attr)]
+            method = getattr(manager_type, manager_method, None)
+            if method is None or not callable(method):
+                raise CatalogGenerationError(
+                    f"{product}:{name} in {path}: manager method {manager_attr}.{manager_method} does not exist"
+                )
+            signature = inspect.signature(method)
+            parameters = {key: value for key, value in signature.parameters.items() if key != "self"}
+            accepts_kwargs = any(value.kind is inspect.Parameter.VAR_KEYWORD for value in parameters.values())
+            accepted = {
+                key
+                for key, value in parameters.items()
+                if value.kind
+                in {
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    inspect.Parameter.KEYWORD_ONLY,
+                }
+            }
+            required = {
+                key
+                for key, value in parameters.items()
+                if value.default is inspect.Parameter.empty
+                and value.kind not in {inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD}
+            }
+            input_schema = tool.get("schema", {}).get("input", {})
+            public_parameters = set(input_schema.get("properties", {})) - {"confirm"}
+            translator = translator_specs.get(name)
+            dispatched = set(translator.manager_parameters) if translator is not None else public_parameters
+            unexpected = set() if accepts_kwargs else dispatched - accepted
+            missing = required - dispatched
+            if unexpected or missing:
+                raise CatalogGenerationError(
+                    f"{product}:{name} in {path}: invocation contract for {manager_attr}.{manager_method} "
+                    f"has unexpected={sorted(unexpected)} missing={sorted(missing)}; add a tested argument translator"
+                )
+
         category = tool.get("permission_category")
         if not isinstance(category, str) or not category:
             module = path.stem
@@ -303,6 +370,9 @@ def render_catalog(
         {"name": name, "product": product, "reason": reason}
         for name, (product, reason) in normalized_exclusions.items()
     ]
+    stale_translators = sorted(set(translator_specs) - set(source_tools))
+    if stale_translators:
+        raise CatalogGenerationError(f"argument translators reference missing source tools: {stale_translators}")
     payload = {
         "schema_version": SCHEMA_VERSION,
         "generated_by": GENERATED_BY,
