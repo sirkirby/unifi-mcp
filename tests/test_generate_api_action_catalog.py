@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import dis
 import importlib.util
 import json
@@ -142,6 +143,21 @@ def test_render_catalog_is_deterministic_and_normalizes_reads(tmp_path: Path) ->
         ],
         "excluded": [],
     }
+
+
+def test_generator_meta_tool_suffixes_match_shared_contract() -> None:
+    generator = _load_generator()
+    source = REPO_ROOT / "packages/unifi-mcp-shared/src/unifi_mcp_shared/meta_tools.py"
+    tree = ast.parse(source.read_text(), filename=str(source))
+    assignment = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.AnnAssign)
+        and isinstance(node.target, ast.Name)
+        and node.target.id == "META_TOOL_SUFFIXES"
+    )
+
+    assert tuple(ast.literal_eval(assignment.value)) == generator.META_TOOL_SUFFIXES
 
 
 @pytest.mark.parametrize(

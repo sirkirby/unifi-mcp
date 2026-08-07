@@ -11,8 +11,6 @@ import sys
 from pathlib import Path
 from typing import Any, Mapping
 
-from unifi_mcp_shared.meta_tools import is_meta_tool
-
 PRODUCTS: tuple[tuple[str, str], ...] = (
     ("network", "unifi_network_mcp"),
     ("protect", "unifi_protect_mcp"),
@@ -22,10 +20,24 @@ SCHEMA_VERSION = 1
 GENERATED_BY = "scripts/generate_api_action_catalog.py"
 DEFAULT_OUTPUT = Path("apps/api/src/unifi_api/action_catalog.json")
 MUTATION_ACTIONS = frozenset({"create", "update", "delete"})
+# Kept local so the drift checker remains runnable after the standalone API
+# test target removes MCP packages from the workspace environment. A contract
+# test keeps this tuple synchronized with unifi_mcp_shared.meta_tools.
+META_TOOL_SUFFIXES: tuple[str, ...] = (
+    "_tool_index",
+    "_execute",
+    "_batch",
+    "_batch_status",
+    "_load_tools",
+)
 
 
 class CatalogGenerationError(ValueError):
     """Raised when source metadata cannot produce a safe complete catalog."""
+
+
+def _is_meta_tool(name: str) -> bool:
+    return name.endswith(META_TOOL_SUFFIXES)
 
 
 def _load_api_configuration(repo_root: Path) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
@@ -198,7 +210,7 @@ def render_catalog(
             if not isinstance(raw_tool, dict) or not isinstance(raw_tool.get("name"), str):
                 raise CatalogGenerationError(f"{product}: malformed tool entry in {manifest_path}")
             name = raw_tool["name"]
-            if is_meta_tool(name):
+            if _is_meta_tool(name):
                 continue
             if name in source_tools:
                 previous_product = source_tools[name][0]
