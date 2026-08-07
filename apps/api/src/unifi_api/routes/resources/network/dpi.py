@@ -112,11 +112,10 @@ async def list_dpi_applications(
             controller.id,
             "network",
             "dpi_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
+        cm = await factory.get_connection_manager(session, controller.id, "network", site=site_id)
         _require_dpi_auth(cm, controller.id)
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         # Manager returns the integration-API wrapper. Ask for a wide page so
         # cursor-based pagination on the client side has the full set.
         result = await mgr.get_dpi_applications(limit=2500, offset=0)
@@ -169,11 +168,10 @@ async def list_dpi_categories(
             controller.id,
             "network",
             "dpi_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
+        cm = await factory.get_connection_manager(session, controller.id, "network", site=site_id)
         _require_dpi_auth(cm, controller.id)
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         result = await mgr.get_dpi_categories(limit=500, offset=0)
 
     items_raw = _unwrap(result)

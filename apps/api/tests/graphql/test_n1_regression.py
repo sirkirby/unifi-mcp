@@ -120,14 +120,14 @@ async def test_deep_network_query_makes_constant_manager_calls(
     fake_cm.site = "default"
     fake_cm.set_site = AsyncMock()
 
-    async def _fake_get_domain_manager(self, session, controller_id, product, attr_name):
+    async def _fake_get_domain_manager(self, session, controller_id, product, attr_name, *, site=None):
         if attr_name == "client_manager":
             return fake_client_mgr
         if attr_name == "device_manager":
             return fake_device_mgr
         return MagicMock()
 
-    async def _fake_get_connection_manager(self, session, controller_id, product):
+    async def _fake_get_connection_manager(self, session, controller_id, product, *, site=None):
         return fake_cm
 
     monkeypatch.setattr(

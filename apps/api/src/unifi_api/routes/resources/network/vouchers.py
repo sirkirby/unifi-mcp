@@ -62,10 +62,8 @@ async def list_vouchers(
             controller.id,
             "network",
             "hotspot_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_vouchers()
 
     cursor_obj = _decode_cursor(cursor)
@@ -115,10 +113,8 @@ async def get_voucher_details(
                 controller.id,
                 "network",
                 "hotspot_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             voucher = await mgr.get_voucher_details(voucher_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

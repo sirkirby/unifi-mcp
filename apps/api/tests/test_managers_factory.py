@@ -1,5 +1,6 @@
 """Manager factory tests — caching + invalidation."""
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
@@ -22,10 +23,14 @@ class _FakeCM:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
         self.init_calls = 0
+        self.close_calls = 0
 
     async def initialize(self) -> bool:
         self.init_calls += 1
         return True
+
+    async def close(self) -> None:
+        self.close_calls += 1
 
 
 def _patch_network_cm(monkeypatch) -> list[_FakeCM]:
@@ -128,4 +133,78 @@ async def test_factory_calls_initialize_on_construction(tmp_path: Path, monkeypa
         cm2 = await factory.get_connection_manager(session, cid, "network")
     assert cm2 is cm
     assert instances[0].init_calls == 1
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_network_connection_cache_is_scoped_by_site(tmp_path: Path, monkeypatch) -> None:
+    instances = _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+
+    async with sm() as session:
+        site_a = await factory.get_connection_manager(session, cid, "network", site="site-a")
+        site_b = await factory.get_connection_manager(session, cid, "network", site="site-b")
+        site_a_again = await factory.get_connection_manager(session, cid, "network", site="site-a")
+
+    assert site_a is site_a_again
+    assert site_a is not site_b
+    assert [cm.kwargs["site"] for cm in instances] == ["site-a", "site-b"]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_network_domain_managers_remain_isolated_under_forced_interleaving(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    both_started = asyncio.Event()
+    started: list[str] = []
+
+    class _SiteManager:
+        def __init__(self, cm: _FakeCM) -> None:
+            self.cm = cm
+
+        async def observe_site(self) -> str:
+            started.append(self.cm.kwargs["site"])
+            if len(started) == 2:
+                both_started.set()
+            await both_started.wait()
+            await asyncio.sleep(0)
+            return self.cm.kwargs["site"]
+
+    factory._builder_cache["network"] = {"site_manager": _SiteManager}
+
+    async def _call(site: str) -> str:
+        async with sm() as session:
+            manager = await factory.get_domain_manager(
+                session,
+                cid,
+                "network",
+                "site_manager",
+                site=site,
+            )
+        return await manager.observe_site()
+
+    assert await asyncio.gather(_call("site-a"), _call("site-b")) == ["site-a", "site-b"]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_invalidate_closes_every_site_connection(tmp_path: Path, monkeypatch) -> None:
+    instances = _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+
+    async with sm() as session:
+        await factory.get_connection_manager(session, cid, "network", site="site-a")
+        await factory.get_connection_manager(session, cid, "network", site="site-b")
+
+    await factory.invalidate_controller(cid)
+
+    assert len(instances) == 2
+    assert [cm.close_calls for cm in instances] == [1, 1]
     await engine.dispose()

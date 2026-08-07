@@ -71,6 +71,7 @@ async def test_catalog_binding_is_authoritative_and_accepts_sync_result() -> Non
         controller_id="cid",
         product="network",
         attr_name="event_manager",
+        site="default",
     )
     manager.get_event_type_prefixes.assert_called_once_with()
 
@@ -270,10 +271,10 @@ async def test_dispatch_happy_path_invokes_manager() -> None:
         controller_id="cid",
         product="network",
         attr_name="client_manager",
+        site="default",
     )
     domain_manager.get_clients.assert_awaited_once_with()
-    # Same site -> no set_site call.
-    conn_manager.set_site.assert_not_awaited()
+    factory.get_connection_manager.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -527,7 +528,7 @@ async def test_dispatch_rejects_include_sensitive_arg_before_manager_invocation(
 
 
 @pytest.mark.asyncio
-async def test_dispatch_updates_site_when_changed() -> None:
+async def test_dispatch_scopes_manager_to_requested_site_without_mutating_connection() -> None:
     entry = ToolEntry(
         name="unifi_list_clients",
         product="network",
@@ -540,18 +541,15 @@ async def test_dispatch_updates_site_when_changed() -> None:
     domain_manager = MagicMock()
     domain_manager.get_clients = AsyncMock(return_value={"ok": True})
 
-    conn_manager = MagicMock()
-    conn_manager.site = "default"
-    conn_manager.set_site = AsyncMock()
-
     factory = MagicMock()
     factory.get_domain_manager = AsyncMock(return_value=domain_manager)
-    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+    factory.get_connection_manager = AsyncMock()
+    session = MagicMock()
 
     await dispatch_action(
         registry=registry,
         factory=factory,
-        session=MagicMock(),
+        session=session,
         tool_name="unifi_list_clients",
         controller_id="cid",
         controller_products=["network"],
@@ -563,7 +561,14 @@ async def test_dispatch_updates_site_when_changed() -> None:
         },
     )
 
-    conn_manager.set_site.assert_awaited_once_with("upstairs")
+    factory.get_domain_manager.assert_awaited_once_with(
+        session=session,
+        controller_id="cid",
+        product="network",
+        attr_name="client_manager",
+        site="upstairs",
+    )
+    factory.get_connection_manager.assert_not_awaited()
     # The list_clients translator strips filter kwargs; get_clients() takes no args.
     domain_manager.get_clients.assert_awaited_once_with()
 
@@ -720,6 +725,7 @@ async def test_dispatch_update_traffic_route_routes_to_mutation_with_widened_fie
         controller_id="cid",
         product="network",
         attr_name="traffic_route_manager",
+        site="default",
     )
     # The widened match field is forwarded to update_traffic_route as a kwarg
     # (no arg translator — the manager takes **kwargs; confirm is a separate arg).

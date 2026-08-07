@@ -70,7 +70,7 @@ class _FakeCM:
 
 def _stub_connection(app, cid: str) -> _FakeCM:
     fake = _FakeCM()
-    app.state.manager_factory._connection_cache[(cid, "network")] = fake
+    app.state.manager_factory._connection_cache[(cid, "network", "default")] = fake
     return fake
 
 

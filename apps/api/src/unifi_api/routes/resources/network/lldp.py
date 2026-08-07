@@ -57,10 +57,8 @@ async def list_lldp_neighbors(
             controller.id,
             "network",
             "switch_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         wrapper = await mgr.get_lldp_neighbors(device_mac)
     if wrapper is None:
         raise HTTPException(status_code=404, detail=f"switch '{device_mac}' not found")

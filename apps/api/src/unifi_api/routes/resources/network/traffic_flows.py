@@ -85,10 +85,8 @@ async def get_traffic_flows(
             controller.id,
             "network",
             "traffic_flow_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         result = await mgr.get_traffic_flows(query)
 
     type_registry = request.app.state.type_registry
@@ -131,10 +129,8 @@ async def get_traffic_flow_statistics(
             controller.id,
             "network",
             "traffic_flow_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         try:
             result = await mgr.get_traffic_flow_statistics(period=period, top=top)
         except ValueError as exc:

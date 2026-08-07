@@ -37,10 +37,8 @@ async def get_gateway_settings(
             controller.id,
             "network",
             "gateway_settings_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         settings = await mgr.get_gateway_settings()
 
     type_class = request.app.state.type_registry.lookup("network", "gateway_settings")

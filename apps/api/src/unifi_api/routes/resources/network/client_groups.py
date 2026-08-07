@@ -58,10 +58,8 @@ async def list_client_groups(
             controller.id,
             "network",
             "client_group_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         all_groups = await mgr.get_client_groups()
 
     cursor_obj = _decode_cursor(cursor)
@@ -112,10 +110,8 @@ async def get_client_group_details(
                 controller.id,
                 "network",
                 "client_group_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             group = await mgr.get_client_group_by_id(group_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

@@ -59,10 +59,8 @@ async def list_dynamic_dns(
             controller.id,
             "network",
             "dynamic_dns_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.list_dynamic_dns()
 
     cursor_obj = _decode_cursor(cursor)
@@ -113,10 +111,8 @@ async def get_dynamic_dns_entry_details(
                 controller.id,
                 "network",
                 "dynamic_dns_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             item = await mgr.get_dynamic_dns(entry_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

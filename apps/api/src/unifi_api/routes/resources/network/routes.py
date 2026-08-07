@@ -62,10 +62,8 @@ async def list_active_routes(
             controller.id,
             "network",
             "routing_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_active_routes()
 
     cursor_obj = _decode_cursor(cursor)
@@ -118,10 +116,8 @@ async def list_routes(
             controller.id,
             "network",
             "routing_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_routes()
 
     cursor_obj = _decode_cursor(cursor)
@@ -171,10 +167,8 @@ async def get_route_details(
                 controller.id,
                 "network",
                 "routing_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             item = await mgr.get_route_details(route_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -219,10 +213,8 @@ async def list_traffic_routes(
             controller.id,
             "network",
             "traffic_route_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_traffic_routes()
 
     cursor_obj = _decode_cursor(cursor)
@@ -272,10 +264,8 @@ async def get_traffic_route_details(
                 controller.id,
                 "network",
                 "traffic_route_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             item = await mgr.get_traffic_route_details(route_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

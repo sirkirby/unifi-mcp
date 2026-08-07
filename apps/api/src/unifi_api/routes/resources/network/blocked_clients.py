@@ -57,10 +57,8 @@ async def list_blocked_clients(
             controller.id,
             "network",
             "client_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         all_blocked = await mgr.get_blocked_clients()
 
     cursor_obj = _decode_cursor(cursor)

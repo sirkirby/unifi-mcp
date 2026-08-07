@@ -58,10 +58,8 @@ async def list_oon_policies(
             controller.id,
             "network",
             "oon_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_oon_policies()
 
     cursor_obj = _decode_cursor(cursor)
@@ -111,10 +109,8 @@ async def get_oon_policy_details(
                 controller.id,
                 "network",
                 "oon_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             item = await mgr.get_oon_policy_by_id(policy_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

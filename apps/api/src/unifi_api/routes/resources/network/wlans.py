@@ -52,10 +52,8 @@ async def list_wlans(
             controller.id,
             "network",
             "network_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         all_wlans = await mgr.get_wlans()
 
     cursor_obj = None
@@ -106,10 +104,8 @@ async def get_wlan(
                 controller.id,
                 "network",
                 "network_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             wlan = await mgr.get_wlan_details(wlan_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

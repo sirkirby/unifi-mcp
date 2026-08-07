@@ -6,9 +6,15 @@ construction prevents concurrent-cache-miss races.
 
 Public surface:
 - ManagerFactory(sessionmaker, cipher)
-- get_connection_manager(session, controller_id, product) -> ConnectionManager
-- get_domain_manager(session, controller_id, product, attr_name) -> domain manager
+- get_connection_manager(session, controller_id, product, site=...) -> ConnectionManager
+- get_domain_manager(session, controller_id, product, attr_name, site=...) -> domain manager
 - invalidate_controller(controller_id)
+
+Network connection and domain-manager caches include the site. A cached
+Network manager therefore never changes site after construction, so
+concurrent requests for different sites cannot race through mutable shared
+ConnectionManager state. Protect and Access have no Network site namespace;
+their cache identity remains controller + product.
 """
 
 from __future__ import annotations
@@ -172,13 +178,34 @@ class ManagerFactory:
     ) -> None:
         self._sm = sessionmaker
         self._cipher = cipher
-        self._connection_cache: dict[tuple[str, str], Any] = {}
-        self._domain_cache: dict[tuple[str, str, str], Any] = {}
+        self._connection_cache: dict[tuple[str, str, str | None], Any] = {}
+        self._domain_cache: dict[tuple[str, str, str, str | None], Any] = {}
         self._locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         self._builder_cache: dict[str, dict[str, Callable[[Any], Any]]] = {}
 
-    async def get_connection_manager(self, session: AsyncSession, controller_id: str, product: str) -> Any:
-        key = (controller_id, product)
+    @staticmethod
+    def _site_scope(product: str, site: str | None) -> str | None:
+        """Return the cache scope for a product.
+
+        Only Network has a controller-side site namespace. Treat an omitted
+        Network site as ``default`` so existing non-site-specific control
+        paths keep their historical behavior without sharing an instance
+        with an explicitly selected site.
+        """
+        if product == "network":
+            return site or "default"
+        return None
+
+    async def get_connection_manager(
+        self,
+        session: AsyncSession,
+        controller_id: str,
+        product: str,
+        *,
+        site: str | None = None,
+    ) -> Any:
+        site_scope = self._site_scope(product, site)
+        key = (controller_id, product, site_scope)
         cm = self._connection_cache.get(key)
         if cm is not None:
             return cm
@@ -186,11 +213,23 @@ class ManagerFactory:
             cm = self._connection_cache.get(key)
             if cm is not None:
                 return cm
-            cm = await self._construct_connection_manager(session, controller_id, product)
+            cm = await self._construct_connection_manager(
+                session,
+                controller_id,
+                product,
+                site=site_scope,
+            )
             self._connection_cache[key] = cm
             return cm
 
-    async def _construct_connection_manager(self, session: AsyncSession, controller_id: str, product: str) -> Any:
+    async def _construct_connection_manager(
+        self,
+        session: AsyncSession,
+        controller_id: str,
+        product: str,
+        *,
+        site: str | None = None,
+    ) -> Any:
         controller = await session.get(Controller, controller_id)
         if controller is None:
             raise ValueError(f"controller {controller_id} not found")
@@ -222,6 +261,7 @@ class ManagerFactory:
                 username=creds["username"],
                 password=creds["password"],
                 port=port,
+                site=site or "default",
                 verify_ssl=controller.verify_tls,
             )
             # Stash a UniFiAuth carrying the controller's API token (if any)
@@ -282,23 +322,28 @@ class ManagerFactory:
         controller_id: str,
         product: str,
         attr_name: str,
+        *,
+        site: str | None = None,
     ) -> Any:
         """Resolve a per-controller domain manager by its runtime attribute name.
 
         ``attr_name`` matches the singleton attribute used by the MCP runtime
         modules (e.g. ``client_manager`` from ``unifi_network_mcp.runtime``).
 
-        Cached on (controller_id, product, attr_name). Does NOT take the
-        per-controller lock here — get_connection_manager already serializes
-        the slow path (initialize()), and the rest of this function is a
-        synchronous builder call where a brief race on first-use produces
-        last-writer-wins on the cache, which is harmless because builders
-        are pure and share the cached connection manager.
+        Network managers are cached on
+        (controller_id, product, attr_name, site). Other products use a null
+        site scope. Does NOT take the per-controller lock here —
+        get_connection_manager already serializes the slow path
+        (initialize()), and the rest of this function is a synchronous builder
+        call where a brief race on first-use produces last-writer-wins on the
+        cache, which is harmless because builders are pure and share the
+        cached connection manager for the same site.
 
         Acquiring the lock here would deadlock — it's non-reentrant and
         get_connection_manager acquires the same lock.
         """
-        key = (controller_id, product, attr_name)
+        site_scope = self._site_scope(product, site)
+        key = (controller_id, product, attr_name, site_scope)
         cached = self._domain_cache.get(key)
         if cached is not None:
             return cached
@@ -306,7 +351,12 @@ class ManagerFactory:
         builder = builders.get(attr_name)
         if builder is None:
             raise UnknownManager(f"product '{product}' has no domain manager named '{attr_name}'")
-        cm = await self.get_connection_manager(session, controller_id, product)
+        cm = await self.get_connection_manager(
+            session,
+            controller_id,
+            product,
+            site=site_scope,
+        )
         instance = builder(cm)
         self._domain_cache[key] = instance
         return instance

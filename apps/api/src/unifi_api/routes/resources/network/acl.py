@@ -58,10 +58,8 @@ async def list_acl_rules(
             controller.id,
             "network",
             "acl_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_acl_rules()
 
     cursor_obj = _decode_cursor(cursor)
@@ -111,10 +109,8 @@ async def get_acl_rule_details(
                 controller.id,
                 "network",
                 "acl_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             item = await mgr.get_acl_rule_by_id(rule_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

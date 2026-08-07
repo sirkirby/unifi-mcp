@@ -157,15 +157,8 @@ async def dispatch_action(
         controller_id=controller_id,
         product=entry.product,
         attr_name=binding.manager_attr,
+        site=site,
     )
-
-    if entry.product == "network":
-        connection_manager = await factory.get_connection_manager(session, controller_id, "network")
-        current_site = getattr(connection_manager, "site", None)
-        if site and current_site != site:
-            set_site = getattr(connection_manager, "set_site", None)
-            if callable(set_site):
-                await _resolve_result(set_site(site))
 
     method = getattr(manager, binding.method, None)
     if method is None or not callable(method):

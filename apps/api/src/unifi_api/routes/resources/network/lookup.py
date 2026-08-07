@@ -41,10 +41,8 @@ async def lookup_client_by_ip(
                 controller.id,
                 "network",
                 "client_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             client = await mgr.get_client_by_ip(ip)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

@@ -40,11 +40,6 @@ def _event_key(obj) -> tuple:
     return (ts, eid)
 
 
-async def _maybe_set_site(cm, site_id: str) -> None:
-    if getattr(cm, "site", None) != site_id:
-        await cm.set_site(site_id)
-
-
 def _list_response(request, items, tool_name, *, limit, cursor):
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
@@ -134,9 +129,8 @@ async def _list_network_events(
             controller.id,
             "network",
             "event_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         events = await mgr.get_events(limit=max(limit, 100))
     return _list_response(
         request,
@@ -211,9 +205,8 @@ async def get_alerts(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         events = await mgr.get_alerts()
     return _list_response(
         request,
@@ -245,9 +238,8 @@ async def get_anomalies(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         events = await mgr.get_anomalies()
     return _list_response(
         request,
@@ -279,9 +271,8 @@ async def get_ips_events(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         events = await mgr.get_ips_events()
     return _list_response(
         request,

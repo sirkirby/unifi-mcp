@@ -168,14 +168,14 @@ def _stub_access_managers(
         ("access", "system_manager"): fake_system_mgr,
     }
 
-    async def _fake_get_domain_manager(self, session, controller_id, product, attr_name):
+    async def _fake_get_domain_manager(self, session, controller_id, product, attr_name, *, site=None):
         return domain_mgrs.get((product, attr_name), MagicMock())
 
     fake_cm = MagicMock()
     fake_cm.site = "default"
     fake_cm.set_site = AsyncMock()
 
-    async def _fake_get_connection_manager(self, session, controller_id, product):
+    async def _fake_get_connection_manager(self, session, controller_id, product, *, site=None):
         return fake_cm
 
     monkeypatch.setattr(

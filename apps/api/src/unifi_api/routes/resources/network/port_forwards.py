@@ -59,10 +59,8 @@ async def list_port_forwards(
             controller.id,
             "network",
             "firewall_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_port_forwards()
 
     cursor_obj = _decode_cursor(cursor)
@@ -112,10 +110,8 @@ async def get_port_forward(
                 controller.id,
                 "network",
                 "firewall_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             item = await mgr.get_port_forward_by_id(port_forward_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

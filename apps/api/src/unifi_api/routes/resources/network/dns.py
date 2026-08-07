@@ -58,10 +58,8 @@ async def list_dns_records(
             controller.id,
             "network",
             "dns_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.list_dns_records()
 
     cursor_obj = _decode_cursor(cursor)
@@ -111,10 +109,8 @@ async def get_dns_record_details(
                 controller.id,
                 "network",
                 "dns_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             # dns_manager exposes get_dns_record (no `_by_id` suffix); the manifest
             # tool name is unifi_get_dns_record_details.
             item = await mgr.get_dns_record(record_id)

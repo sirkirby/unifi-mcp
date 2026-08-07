@@ -60,10 +60,8 @@ async def list_ap_groups(
             controller.id,
             "network",
             "network_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.list_ap_groups()
 
     cursor_obj = _decode_cursor(cursor)
@@ -113,10 +111,8 @@ async def get_ap_group_details(
                 controller.id,
                 "network",
                 "network_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             item = await mgr.get_ap_group_details(group_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

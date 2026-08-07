@@ -46,10 +46,8 @@ async def list_available_channels(
             controller.id,
             "network",
             "device_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         rows = await mgr.list_available_channels()
 
     cursor_obj: Cursor | None = None

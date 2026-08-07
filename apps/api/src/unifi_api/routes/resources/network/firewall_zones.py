@@ -60,10 +60,8 @@ async def list_firewall_zones(
             controller.id,
             "network",
             "firewall_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_firewall_zones()
 
     cursor_obj = _decode_cursor(cursor)

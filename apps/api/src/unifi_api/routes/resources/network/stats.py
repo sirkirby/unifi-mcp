@@ -102,11 +102,6 @@ def _stats_response(
     return {"data": serializer.serialize(payload), "render_hint": hint}
 
 
-async def _maybe_set_site(cm, site_id: str) -> None:
-    if getattr(cm, "site", None) != site_id:
-        await cm.set_site(site_id)
-
-
 # ---------- TIMESERIES — flat /stats/* paths ----------
 
 
@@ -131,9 +126,8 @@ async def get_dashboard_stats(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_dashboard()
     return _stats_response(
         request,
@@ -165,9 +159,8 @@ async def get_network_stats(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_network_stats()
     return _stats_response(
         request,
@@ -199,9 +192,8 @@ async def get_gateway_stats(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_gateway_stats()
     return _stats_response(
         request,
@@ -233,9 +225,8 @@ async def get_site_dpi_traffic(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_site_dpi_traffic()
     return _stats_response(
         request,
@@ -268,9 +259,8 @@ async def get_client_dpi_traffic(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_client_dpi_traffic(mac)
     return _stats_response(
         request,
@@ -306,9 +296,8 @@ async def get_dpi_stats(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_dpi_stats()
     return _stats_response(
         request,
@@ -343,9 +332,8 @@ async def get_device_stats(
                 controller.id,
                 "network",
                 "stats_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            await _maybe_set_site(cm, site_id)
             payload = await mgr.get_device_stats(mac)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -382,9 +370,8 @@ async def get_client_stats(
                 controller.id,
                 "network",
                 "stats_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            await _maybe_set_site(cm, site_id)
             payload = await mgr.get_client_stats(mac)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

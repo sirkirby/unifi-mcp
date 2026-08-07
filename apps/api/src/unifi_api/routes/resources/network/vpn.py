@@ -61,10 +61,8 @@ async def list_vpn_clients(
             controller.id,
             "network",
             "vpn_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_vpn_clients()
 
     cursor_obj = _decode_cursor(cursor)
@@ -114,10 +112,8 @@ async def get_vpn_client_details(
                 controller.id,
                 "network",
                 "vpn_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             item = await mgr.get_vpn_client_details(client_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -165,10 +161,8 @@ async def list_vpn_servers(
             controller.id,
             "network",
             "vpn_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         items = await mgr.get_vpn_servers()
 
     cursor_obj = _decode_cursor(cursor)
@@ -218,10 +212,8 @@ async def get_vpn_server_details(
                 controller.id,
                 "network",
                 "vpn_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             item = await mgr.get_vpn_server_details(server_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

@@ -41,11 +41,6 @@ def _id_key(obj) -> tuple:
     return (ts, eid)
 
 
-async def _maybe_set_site(cm, site_id: str) -> None:
-    if getattr(cm, "site", None) != site_id:
-        await cm.set_site(site_id)
-
-
 def _list_response(request, items, tool_name, *, limit, cursor):
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
@@ -111,9 +106,8 @@ async def list_alarms(
             controller.id,
             "network",
             "event_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         items = await mgr.get_alarms()
     return _list_response(
         request,
@@ -145,9 +139,8 @@ async def list_backups(
             controller.id,
             "network",
             "system_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         items = await mgr.list_backups()
     return _list_response(
         request,
@@ -179,9 +172,8 @@ async def get_top_clients(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         items = await mgr.get_top_clients()
     return _list_response(
         request,
@@ -213,9 +205,8 @@ async def get_client_sessions(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         items = await mgr.get_client_sessions()
     return _list_response(
         request,
@@ -248,9 +239,8 @@ async def get_network_health(
             controller.id,
             "network",
             "system_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         items = await mgr.get_network_health()
     return _list_response(
         request,
@@ -282,9 +272,8 @@ async def get_speedtest_results(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         items = await mgr.get_speedtest_results()
     return _list_response(
         request,
@@ -318,9 +307,8 @@ async def get_event_types(
             controller.id,
             "network",
             "event_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         result = mgr.get_event_type_prefixes()
         if inspect.isawaitable(result):
             result = await result
@@ -346,9 +334,8 @@ async def get_autobackup_settings(
             controller.id,
             "network",
             "system_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_autobackup_settings()
     return _detail_response(request, payload, "unifi_get_autobackup_settings")
 
@@ -372,9 +359,8 @@ async def get_site_settings(
             controller.id,
             "network",
             "system_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_site_settings()
     return _detail_response(request, payload, "unifi_get_site_settings")
 
@@ -398,9 +384,8 @@ async def get_system_info(
             controller.id,
             "network",
             "system_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_system_info()
     return _detail_response(request, payload, "unifi_get_system_info")
 
@@ -425,9 +410,8 @@ async def get_client_wifi_details(
             controller.id,
             "network",
             "stats_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        await _maybe_set_site(cm, site_id)
         payload = await mgr.get_client_wifi_details(mac)
     if payload is None:
         raise HTTPException(

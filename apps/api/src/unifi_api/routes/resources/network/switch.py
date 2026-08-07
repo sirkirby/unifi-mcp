@@ -73,10 +73,8 @@ async def list_port_profiles(
             controller.id,
             "network",
             "switch_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         all_profiles = await mgr.get_port_profiles()
 
     cursor_obj = _decode_cursor(cursor)
@@ -127,10 +125,8 @@ async def get_port_profile_details(
                 controller.id,
                 "network",
                 "switch_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             profile = await mgr.get_port_profile_by_id(profile_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -186,10 +182,8 @@ async def list_switch_ports(
             controller.id,
             "network",
             "switch_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         wrapper = await mgr.get_switch_ports(device_mac)
     if wrapper is None:
         raise HTTPException(status_code=404, detail=f"switch '{device_mac}' not found")
@@ -266,10 +260,8 @@ async def list_port_stats(
             controller.id,
             "network",
             "switch_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         wrapper = await mgr.get_port_stats(device_mac)
     if wrapper is None:
         raise HTTPException(status_code=404, detail=f"switch '{device_mac}' not found")
@@ -324,10 +316,8 @@ async def get_switch_capabilities(
             controller.id,
             "network",
             "switch_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         caps = await mgr.get_switch_capabilities(device_mac)
     if caps is None:
         raise HTTPException(status_code=404, detail=f"switch '{device_mac}' not found")

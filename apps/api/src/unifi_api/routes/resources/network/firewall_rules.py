@@ -47,10 +47,8 @@ async def list_firewall_rules(
             controller.id,
             "network",
             "firewall_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         all_rules = await mgr.get_firewall_policies()
 
     cursor_obj = None
@@ -100,10 +98,8 @@ async def get_firewall_rule(
                 controller.id,
                 "network",
                 "firewall_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             # firewall_manager exposes get_firewall_policies (list) but not a
             # singular get_firewall_policy_details. Fetch the list and filter
             # by id; the manager already caches/normalizes the response.
@@ -161,10 +157,8 @@ async def get_firewall_policy_ordering(
             controller.id,
             "network",
             "firewall_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         ordering = await mgr.get_firewall_policy_ordering(
             source_firewall_zone_id,
             destination_firewall_zone_id,

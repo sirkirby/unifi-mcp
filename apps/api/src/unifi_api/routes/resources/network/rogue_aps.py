@@ -76,10 +76,8 @@ async def list_rogue_aps(
             controller.id,
             "network",
             "device_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         rows = await mgr.list_rogue_aps(within_hours)
 
     cursor_obj = _decode_cursor(cursor)
@@ -129,10 +127,8 @@ async def list_rf_scan_results(
             controller.id,
             "network",
             "device_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         rows = await mgr.get_rf_scan_results(ap_mac)
 
     cursor_obj = _decode_cursor(cursor)

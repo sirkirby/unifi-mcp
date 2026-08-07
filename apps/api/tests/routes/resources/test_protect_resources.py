@@ -65,7 +65,7 @@ class _FakeProtectCM:
 
 def _stub_connection(app, cid: str) -> _FakeProtectCM:
     fake = _FakeProtectCM()
-    app.state.manager_factory._connection_cache[(cid, "protect")] = fake
+    app.state.manager_factory._connection_cache[(cid, "protect", None)] = fake
     return fake
 
 

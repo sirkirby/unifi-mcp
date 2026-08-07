@@ -82,7 +82,7 @@ class _FakeAccessCM:
 
 def _stub_connection(app, cid: str) -> _FakeAccessCM:
     fake = _FakeAccessCM()
-    app.state.manager_factory._connection_cache[(cid, "access")] = fake
+    app.state.manager_factory._connection_cache[(cid, "access", None)] = fake
     return fake
 
 

@@ -47,10 +47,8 @@ async def list_networks(
             controller.id,
             "network",
             "network_manager",
+            site=site_id,
         )
-        cm = await factory.get_connection_manager(session, controller.id, "network")
-        if cm.site != site_id:
-            await cm.set_site(site_id)
         all_networks = await mgr.get_networks()
 
     cursor_obj = None
@@ -100,10 +98,8 @@ async def get_network(
                 controller.id,
                 "network",
                 "network_manager",
+                site=site_id,
             )
-            cm = await factory.get_connection_manager(session, controller.id, "network")
-            if cm.site != site_id:
-                await cm.set_site(site_id)
             network = await mgr.get_network_details(network_id)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

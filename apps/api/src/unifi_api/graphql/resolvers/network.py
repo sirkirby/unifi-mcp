@@ -115,14 +115,8 @@ async def _fetch_clients(ctx: GraphQLContext, controller: str, site: str) -> lis
                 controller,
                 "network",
                 "client_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_clients())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -138,14 +132,8 @@ async def _fetch_devices(ctx: GraphQLContext, controller: str, site: str) -> lis
                 controller,
                 "network",
                 "device_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_devices())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -161,14 +149,8 @@ async def _fetch_networks(ctx: GraphQLContext, controller: str, site: str) -> li
                 controller,
                 "network",
                 "network_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_networks())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -188,14 +170,8 @@ async def _fetch_blocked_clients(
                 controller,
                 "network",
                 "client_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_blocked_clients())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -216,14 +192,8 @@ async def _fetch_client_by_ip(
                 controller,
                 "network",
                 "client_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await mgr.get_client_by_ip(ip)
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -244,14 +214,8 @@ async def _fetch_device_radio(
                 controller,
                 "network",
                 "device_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await mgr.get_device_radio(mac)
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -272,14 +236,8 @@ async def _fetch_lldp_neighbors(
                 controller,
                 "network",
                 "switch_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await mgr.get_lldp_neighbors(device_mac)
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -300,14 +258,8 @@ async def _fetch_pdu_outlets(
                 controller,
                 "network",
                 "device_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await mgr.get_pdu_outlets(mac)
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -328,14 +280,8 @@ async def _fetch_rogue_aps(
                 controller,
                 "network",
                 "device_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.list_rogue_aps(within_hours))
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -356,14 +302,8 @@ async def _fetch_rf_scan_results(
                 controller,
                 "network",
                 "device_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_rf_scan_results(ap_mac) or [])
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -383,14 +323,8 @@ async def _fetch_available_channels(
                 controller,
                 "network",
                 "device_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.list_available_channels() or [])
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -411,14 +345,8 @@ async def _fetch_speedtest_status(
                 controller,
                 "network",
                 "device_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await mgr.get_speedtest_status(gateway_mac)
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -438,14 +366,8 @@ async def _fetch_network_health(
                 controller,
                 "network",
                 "system_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_network_health() or [])
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -464,14 +386,8 @@ async def _fetch_wlans(ctx: GraphQLContext, controller: str, site: str) -> list:
                 controller,
                 "network",
                 "network_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_wlans())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -491,14 +407,8 @@ async def _fetch_vpn_clients(
                 controller,
                 "network",
                 "vpn_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_vpn_clients())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -518,14 +428,8 @@ async def _fetch_vpn_servers(
                 controller,
                 "network",
                 "vpn_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_vpn_servers())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -545,14 +449,8 @@ async def _fetch_dns_records(
                 controller,
                 "network",
                 "dns_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.list_dns_records())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -572,14 +470,8 @@ async def _fetch_dynamic_dns(
                 controller,
                 "network",
                 "dynamic_dns_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.list_dynamic_dns())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -595,14 +487,8 @@ async def _fetch_routes(ctx: GraphQLContext, controller: str, site: str) -> list
                 controller,
                 "network",
                 "routing_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_routes())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -622,14 +508,8 @@ async def _fetch_active_routes(
                 controller,
                 "network",
                 "routing_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_active_routes())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -649,14 +529,8 @@ async def _fetch_traffic_routes(
                 controller,
                 "network",
                 "traffic_route_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_traffic_routes())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -677,14 +551,8 @@ async def _fetch_traffic_flows(
             controller,
             "network",
             "traffic_flow_manager",
+            site=site,
         )
-        cm = await ctx.manager_factory.get_connection_manager(
-            session,
-            controller,
-            "network",
-        )
-        if cm.site != site:
-            await cm.set_site(site)
         return await mgr.get_traffic_flows(query)
 
 
@@ -701,14 +569,8 @@ async def _fetch_traffic_flow_statistics(
             controller,
             "network",
             "traffic_flow_manager",
+            site=site,
         )
-        cm = await ctx.manager_factory.get_connection_manager(
-            session,
-            controller,
-            "network",
-        )
-        if cm.site != site:
-            await cm.set_site(site)
         return await mgr.get_traffic_flow_statistics(period=period, top=top)
 
 
@@ -729,14 +591,8 @@ async def _fetch_firewall_policies(
                 controller,
                 "network",
                 "firewall_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_firewall_policies(include_predefined=True))
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -756,14 +612,8 @@ async def _fetch_firewall_groups(
                 controller,
                 "network",
                 "firewall_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_firewall_groups())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -783,14 +633,8 @@ async def _fetch_firewall_zones(
                 controller,
                 "network",
                 "firewall_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_firewall_zones())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -810,14 +654,8 @@ async def _fetch_legacy_firewall_rules(
                 controller,
                 "network",
                 "firewall_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_legacy_firewall_rules())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -841,14 +679,8 @@ async def _fetch_firewall_policy_ordering(
                 controller,
                 "network",
                 "firewall_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return dict(
                 await mgr.get_firewall_policy_ordering(
                     source_firewall_zone_id,
@@ -873,14 +705,8 @@ async def _fetch_qos_rules(
                 controller,
                 "network",
                 "qos_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_qos_rules())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -910,14 +736,8 @@ async def _fetch_dpi_applications(
                 controller,
                 "network",
                 "dpi_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             result = await mgr.get_dpi_applications(limit=2500, offset=0)
             return _unwrap_dpi(result)
 
@@ -938,14 +758,8 @@ async def _fetch_dpi_categories(
                 controller,
                 "network",
                 "dpi_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             result = await mgr.get_dpi_categories(limit=500, offset=0)
             return _unwrap_dpi(result)
 
@@ -966,14 +780,8 @@ async def _fetch_content_filters(
                 controller,
                 "network",
                 "content_filter_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_content_filters())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -993,14 +801,8 @@ async def _fetch_acl_rules(
                 controller,
                 "network",
                 "acl_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_acl_rules())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1020,14 +822,8 @@ async def _fetch_oon_policies(
                 controller,
                 "network",
                 "oon_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_oon_policies())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1047,14 +843,8 @@ async def _fetch_port_forwards(
                 controller,
                 "network",
                 "firewall_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_port_forwards())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1078,14 +868,8 @@ async def _stats_mgr_fetch(
                 controller,
                 "network",
                 "stats_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await getattr(mgr, method)(*args)
 
     return await ctx.cache.get_or_fetch(cache_key, _do)
@@ -1327,14 +1111,8 @@ async def _event_mgr_fetch(
                 controller,
                 "network",
                 "event_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await getattr(mgr, method)(*args)
 
     return await ctx.cache.get_or_fetch(cache_key, _do)
@@ -1355,14 +1133,8 @@ async def _fetch_event_log(
                 controller,
                 "network",
                 "event_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_events(limit=fetch_limit))
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1391,14 +1163,8 @@ async def _fetch_event_types(
                 controller,
                 "network",
                 "event_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             import inspect as _inspect
 
             result = mgr.get_event_type_prefixes()
@@ -1424,14 +1190,8 @@ async def _system_mgr_fetch(
                 controller,
                 "network",
                 "system_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await getattr(mgr, method)(*args)
 
     return await ctx.cache.get_or_fetch(cache_key, _do)
@@ -1500,14 +1260,8 @@ async def _fetch_gateway_settings(
                 controller,
                 "network",
                 "gateway_settings_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await mgr.get_gateway_settings()
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1537,14 +1291,8 @@ async def _hotspot_mgr_fetch(
                 controller,
                 "network",
                 "hotspot_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await getattr(mgr, method)(*args)
 
     return await ctx.cache.get_or_fetch(cache_key, _do)
@@ -1564,14 +1312,8 @@ async def _fetch_vouchers(
                 controller,
                 "network",
                 "hotspot_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_vouchers())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1611,14 +1353,8 @@ async def _fetch_port_profiles(
                 controller,
                 "network",
                 "switch_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_port_profiles())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1639,14 +1375,8 @@ async def _fetch_switch_ports(
                 controller,
                 "network",
                 "switch_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await mgr.get_switch_ports(device_mac)
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1667,14 +1397,8 @@ async def _fetch_port_stats(
                 controller,
                 "network",
                 "switch_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await mgr.get_port_stats(device_mac)
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1695,14 +1419,8 @@ async def _fetch_switch_capabilities(
                 controller,
                 "network",
                 "switch_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return await mgr.get_switch_capabilities(device_mac)
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1722,14 +1440,8 @@ async def _fetch_ap_groups(
                 controller,
                 "network",
                 "network_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.list_ap_groups())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1749,14 +1461,8 @@ async def _fetch_client_groups(
                 controller,
                 "network",
                 "client_group_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_client_groups())
 
     return await ctx.cache.get_or_fetch(key, _do)
@@ -1776,14 +1482,8 @@ async def _fetch_user_groups(
                 controller,
                 "network",
                 "usergroup_manager",
+                site=site,
             )
-            cm = await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "network",
-            )
-            if cm.site != site:
-                await cm.set_site(site)
             return list(await mgr.get_usergroups())
 
     return await ctx.cache.get_or_fetch(key, _do)
