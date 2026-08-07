@@ -43,7 +43,7 @@ SENTINEL = "__none__"
 CATALOG_PATH = Path(__file__).resolve().parents[1] / "apps/api/src/unifi_api/action_catalog.json"
 
 
-def _hit(url: str, key: str) -> tuple[int, str, float]:
+def _hit(url: str, key: str, *, max_bytes: int | None = 8192) -> tuple[int, str, float]:
     req = urllib.request.Request(
         url,
         headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
@@ -51,10 +51,12 @@ def _hit(url: str, key: str) -> tuple[int, str, float]:
     start = time.perf_counter()
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            body = resp.read(8192).decode("utf-8", errors="replace")
+            body = resp.read() if max_bytes is None else resp.read(max_bytes)
+            body = body.decode("utf-8", errors="replace")
             return resp.status, body, (time.perf_counter() - start) * 1000
     except urllib.error.HTTPError as e:
-        body = e.read(8192).decode("utf-8", errors="replace")
+        body = e.read() if max_bytes is None else e.read(max_bytes)
+        body = body.decode("utf-8", errors="replace")
         return e.code, body, (time.perf_counter() - start) * 1000
     except Exception as e:
         return 0, f"{type(e).__name__}: {e}", (time.perf_counter() - start) * 1000
@@ -142,7 +144,7 @@ def main(argv: list[str]) -> int:
         print(f"FAIL: could not fetch OpenAPI schema from {BASE}: {e}", file=sys.stderr)
         return 2
 
-    catalog_status, catalog_body, _catalog_ms = _hit(f"{BASE}/v1/catalog/tools", key)
+    catalog_status, catalog_body, _catalog_ms = _hit(f"{BASE}/v1/catalog/tools", key, max_bytes=None)
     try:
         catalog_response = json.loads(catalog_body) if isinstance(catalog_body, str) else catalog_body
         catalog_result = _validate_catalog_response(catalog_response, _expected_catalog_names())

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import sys
 from pathlib import Path
 
@@ -84,3 +85,26 @@ def test_api_image_catalog_validation_reports_drift():
         "missing": ["protect_list_cameras"],
         "unexpected": ["obsolete_tool"],
     }
+
+
+def test_api_image_catalog_fetch_can_read_response_larger_than_default_limit(monkeypatch):
+    import api_image_smoke
+
+    body = b'{"items":[' + (b'{"name":"unifi_list_clients"},' * 300) + b'{"name":"last"}]}'
+
+    class Response(io.BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.close()
+
+    monkeypatch.setattr(api_image_smoke.urllib.request, "urlopen", lambda *_args, **_kwargs: Response(body))
+
+    status, fetched, _elapsed = api_image_smoke._hit("http://example.test/catalog", "key", max_bytes=None)
+
+    assert status == 200
+    assert fetched.encode() == body
+    assert len(fetched) > 8192
