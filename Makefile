@@ -1,5 +1,6 @@
-.PHONY: help sync build check test lint format format-check format-fix manifest generate server-manifests skill-references \
-       check-skill-references check-generated pre-commit ci core-test shared-test protocol-smoke \
+.PHONY: help sync build check test lint format format-check format-fix manifest generate api-action-catalog \
+       check-api-action-catalog server-manifests skill-references check-skill-references check-generated \
+       pre-commit ci core-test shared-test protocol-smoke \
        docs-test relay-test worker-install worker-test worker-typecheck worker-build worker-check docker-relay \
        docker-build docker-up docker-down docker-logs
 
@@ -16,6 +17,7 @@ help:
 	@echo "  make format-fix     Auto-fix lint issues in the full workspace"
 	@echo "  make generate       Regenerate committed generated artifacts"
 	@echo "  make manifest       Regenerate tool manifests + skill references"
+	@echo "  make api-action-catalog  Regenerate the API action catalog"
 	@echo "  make check-generated  Check generated artifacts for drift"
 	@echo "  make ci             Lint + generated drift checks + tests"
 	@echo "  make server-manifests  Regenerate server.json for all apps (MCP Registry)"
@@ -78,8 +80,15 @@ manifest:
 	$(MAKE) -C apps/network manifest
 	$(MAKE) -C apps/protect manifest
 	$(MAKE) -C apps/access manifest
+	$(MAKE) api-action-catalog
 	$(MAKE) skill-references
 	$(MAKE) server-manifests
+
+api-action-catalog:
+	uv run python scripts/generate_api_action_catalog.py
+
+check-api-action-catalog:
+	uv run python scripts/generate_api_action_catalog.py --check
 
 server-manifests:
 	$(MAKE) -C apps/network server-manifest
@@ -92,7 +101,7 @@ skill-references:
 check-skill-references:
 	python3 scripts/generate_skill_references.py --check
 
-check-generated: check-skill-references
+check-generated: check-skill-references check-api-action-catalog
 
 relay-test:
 	uv run --package unifi-mcp-relay pytest packages/unifi-mcp-relay/tests -v

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -302,3 +303,32 @@ def test_repository_catalog_is_complete_with_only_streaming_exclusions() -> None
     assert by_name["unifi_get_event_types"]["manager_method"] == "get_event_type_prefixes"
     assert by_name["unifi_archive_alarm"]["manager_method"] == "archive_alarm"
     assert by_name["unifi_archive_all_alarms"]["manager_method"] == "archive_all_alarms"
+
+
+def test_makefile_generates_catalog_after_product_manifests_and_checks_drift() -> None:
+    manifest = subprocess.run(
+        ["make", "-n", "manifest"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    commands = [
+        "make -C apps/network manifest",
+        "make -C apps/protect manifest",
+        "make -C apps/access manifest",
+        "scripts/generate_api_action_catalog.py",
+        "make skill-references",
+        "make server-manifests",
+    ]
+    positions = [manifest.index(command) for command in commands]
+    assert positions == sorted(positions)
+
+    check_generated = subprocess.run(
+        ["make", "-n", "check-generated"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "scripts/generate_api_action_catalog.py --check" in check_generated
