@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dis
 import importlib.util
 import json
 import subprocess
@@ -303,6 +304,36 @@ def test_repository_catalog_is_complete_with_only_streaming_exclusions() -> None
     assert by_name["unifi_get_event_types"]["manager_method"] == "get_event_type_prefixes"
     assert by_name["unifi_archive_alarm"]["manager_method"] == "archive_alarm"
     assert by_name["unifi_archive_all_alarms"]["manager_method"] == "archive_all_alarms"
+
+
+def test_repository_catalog_bindings_resolve_to_core_manager_methods() -> None:
+    """Keep generated dispatch bindings synchronized with the Core bridge."""
+    generator = _load_generator()
+    payload = json.loads(generator.render_catalog(REPO_ROOT))
+
+    from unifi_api.services.managers import _PRODUCT_BUILDERS
+
+    manager_types: dict[tuple[str, str], type] = {}
+    for product, factory in _PRODUCT_BUILDERS.items():
+        for manager_attr, builder in factory().items():
+            closure = dict(zip(builder.__code__.co_freevars, builder.__closure__ or (), strict=True))
+            target_name = next(
+                instruction.argval
+                for instruction in dis.get_instructions(builder)
+                if instruction.opname == "LOAD_DEREF" and instruction.argval in closure
+            )
+            manager_types[(product, manager_attr)] = closure[target_name].cell_contents
+
+    missing = [
+        f"{action['name']} -> {action['product']}.{action['manager_attr']}.{action['manager_method']}"
+        for action in payload["actions"]
+        if not hasattr(
+            manager_types[(action["product"], action["manager_attr"])],
+            action["manager_method"],
+        )
+    ]
+
+    assert missing == []
 
 
 def test_makefile_generates_catalog_after_product_manifests_and_checks_drift() -> None:
