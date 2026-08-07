@@ -35,10 +35,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 BASE = os.environ.get("UNIFI_API_BASE", "http://localhost:8089")
 SITE = os.environ.get("UNIFI_API_SITE", "default")
 SENTINEL = "__none__"
+CATALOG_PATH = Path(__file__).resolve().parents[1] / "apps/api/src/unifi_api/action_catalog.json"
 
 
 def _hit(url: str, key: str) -> tuple[int, str, float]:
@@ -101,6 +103,26 @@ def _classify(status: int, body: str) -> str:
     return f"{status} ok"
 
 
+def _expected_catalog_names() -> set[str]:
+    payload = json.loads(CATALOG_PATH.read_text())
+    return {item["name"] for item in payload["actions"]}
+
+
+def _validate_catalog_response(response: object, expected_names: set[str]) -> dict[str, object]:
+    if not isinstance(response, dict) or not isinstance(response.get("items"), list):
+        raise ValueError("catalog response must contain an items array")
+    actual_names: set[str] = set()
+    for index, item in enumerate(response["items"]):
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            raise ValueError(f"catalog items[{index}].name must be a string")
+        actual_names.add(item["name"])
+    return {
+        "count": len(actual_names),
+        "missing": sorted(expected_names - actual_names),
+        "unexpected": sorted(actual_names - expected_names),
+    }
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print(__doc__, file=sys.stderr)
@@ -119,6 +141,23 @@ def main(argv: list[str]) -> int:
     except Exception as e:
         print(f"FAIL: could not fetch OpenAPI schema from {BASE}: {e}", file=sys.stderr)
         return 2
+
+    catalog_status, catalog_body, _catalog_ms = _hit(f"{BASE}/v1/catalog/tools", key)
+    try:
+        catalog_response = json.loads(catalog_body) if isinstance(catalog_body, str) else catalog_body
+        catalog_result = _validate_catalog_response(catalog_response, _expected_catalog_names())
+    except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
+        print(f"FAIL: invalid action catalog response: HTTP {catalog_status}: {exc}", file=sys.stderr)
+        return 1
+    if catalog_status != 200 or catalog_result["missing"] or catalog_result["unexpected"]:
+        print(
+            "FAIL: standalone action catalog drift: "
+            f"HTTP {catalog_status}, count={catalog_result['count']}, "
+            f"missing={catalog_result['missing']}, unexpected={catalog_result['unexpected']}",
+            file=sys.stderr,
+        )
+        return 1
+    print(f"Catalog preflight: {catalog_result['count']} actions, exact generated parity")
 
     rows: list[dict] = []
     for path, ops in schema["paths"].items():

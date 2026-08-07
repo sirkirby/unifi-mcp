@@ -24,14 +24,13 @@ COPY apps/network/pyproject.toml apps/network/pyproject.toml
 COPY apps/protect/pyproject.toml apps/protect/pyproject.toml
 COPY apps/access/pyproject.toml apps/access/pyproject.toml
 
-# Copy api source and its workspace dependencies (unifi-core, unifi-mcp-shared).
+# Copy API source and its only internal runtime dependency (unifi-core).
 # Their source is REQUIRED — without it, hatch-vcs fails with
 # FileNotFoundError writing _version.py.
 COPY apps/api/src apps/api/src
 COPY apps/api/alembic.ini apps/api/alembic.ini
 COPY apps/api/alembic apps/api/alembic
 COPY packages/unifi-core/src packages/unifi-core/src
-COPY packages/unifi-mcp-shared/src packages/unifi-mcp-shared/src
 
 # Install all packages using uv sync (respects lockfile for reproducible builds)
 RUN uv sync --frozen --no-dev --package unifi-api-server
@@ -58,7 +57,6 @@ COPY --from=builder /build/apps/api/src /build/apps/api/src
 COPY --from=builder /build/apps/api/alembic /build/apps/api/alembic
 COPY --from=builder /build/apps/api/alembic.ini /build/apps/api/alembic.ini
 COPY --from=builder /build/packages/unifi-core/src /build/packages/unifi-core/src
-COPY --from=builder /build/packages/unifi-mcp-shared/src /build/packages/unifi-mcp-shared/src
 
 ENV PATH="/build/.venv/bin:$PATH"
 ENV UNIFI_API_STATE_DIR=/var/lib/unifi-api

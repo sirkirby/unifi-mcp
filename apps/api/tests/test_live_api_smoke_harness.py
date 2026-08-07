@@ -59,6 +59,76 @@ def test_report_counters():
     assert r.failed == 1
 
 
+def test_api_image_catalog_validation_requires_exact_generated_names():
+    import api_image_smoke
+
+    expected = {"unifi_list_clients", "protect_list_cameras", "access_list_doors"}
+
+    result = api_image_smoke._validate_catalog_response(
+        {"items": [{"name": name} for name in sorted(expected)]},
+        expected,
+    )
+
+    assert result == {"count": 3, "missing": [], "unexpected": []}
+
+
+def test_api_image_catalog_validation_reports_drift():
+    import api_image_smoke
+
+    result = api_image_smoke._validate_catalog_response(
+        {"items": [{"name": "unifi_list_clients"}, {"name": "obsolete_tool"}]},
+        {"unifi_list_clients", "protect_list_cameras"},
+    )
+
+    assert result == {
+        "count": 2,
+        "missing": ["protect_list_cameras"],
+        "unexpected": ["obsolete_tool"],
+    }
+
+
+def test_live_api_catalog_probe_reports_exact_parity(monkeypatch, tmp_path):
+    import json
+
+    import live_smoke
+
+    catalog = {
+        "actions": [
+            {"name": "unifi_list_clients", "product": "network"},
+            {"name": "protect_list_cameras", "product": "protect"},
+            {"name": "access_list_doors", "product": "access"},
+        ]
+    }
+    catalog_path = tmp_path / "action_catalog.json"
+    catalog_path.write_text(json.dumps(catalog))
+    monkeypatch.setattr(live_smoke, "API_ACTION_CATALOG", catalog_path)
+
+    result = live_smoke._validate_api_action_catalog({"items": [{"name": item["name"]} for item in catalog["actions"]]})
+
+    assert result["expected_count"] == 3
+    assert result["actual_count"] == 3
+    assert result["missing"] == []
+    assert result["unexpected"] == []
+    assert all(result["sentinels"].values())
+
+
+def test_live_api_confirmation_negative_control_requires_interlock_error():
+    import live_smoke
+
+    assert live_smoke._classify_confirmation_negative_control(
+        200,
+        {"success": False, "error": "tool 'unifi_reboot_device' requires confirm=true"},
+    ) == {"passed": True, "error": "tool 'unifi_reboot_device' requires confirm=true"}
+
+    assert live_smoke._classify_confirmation_negative_control(200, {"success": True})["passed"] is False
+    assert (
+        live_smoke._classify_confirmation_negative_control(200, {"success": False, "error": "device not found"})[
+            "passed"
+        ]
+        is False
+    )
+
+
 def test_live_smoke_known_controller_issue_matches_exact_error_code():
     import live_smoke
 

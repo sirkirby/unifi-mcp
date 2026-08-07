@@ -1819,7 +1819,6 @@ dependencies = [
     { name = "strawberry-graphql", extra = ["fastapi"] },
     { name = "typer" },
     { name = "unifi-core", extra = ["access", "network", "protect"] },
-    { name = "unifi-mcp-shared" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1847,7 +1846,6 @@ requires-dist = [
     { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.323.2,<0.324.0" },
     { name = "typer", specifier = ">=0.26.8" },
     { name = "unifi-core", extras = ["access", "network", "protect"], editable = "packages/unifi-core" },
-    { name = "unifi-mcp-shared", editable = "packages/unifi-mcp-shared" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.51.0" },
 ]
 

@@ -120,6 +120,27 @@ The HTTP layer is FastAPI; GraphQL is Strawberry on top of the same projection
 types REST uses, so consumer-facing field names are identical across the two
 surfaces. Pagination is cursor-based on REST, slice-based on GraphQL.
 
+The REST action surface is loaded from the packaged
+`unifi_api/action_catalog.json`. Product MCP manifests and tool source are
+inputs only when that catalog is generated in a repository checkout; at
+runtime the API depends on the shared managers and models in `unifi-core`, not
+on the Network, Protect, or Access MCP app packages.
+
+Regenerate all product manifests and the API projection together:
+
+```bash
+make manifest
+```
+
+Check the committed catalog without rewriting it:
+
+```bash
+uv run python scripts/generate_api_action_catalog.py --check
+```
+
+Do not edit the catalog directly. Root generation and CI fail when its safety
+metadata, manager bindings, exclusions, or bytes drift from the product source.
+
 ### Sensitive response fields
 
 REST, GraphQL, and action responses redact known controller secret fields by default. Disable redaction for a trusted local API process with `UNIFI_API_REDACT_SENSITIVE_FIELDS=false` or the global `UNIFI_REDACT_SENSITIVE_FIELDS=false` policy flag when raw values are required. The action endpoint (`POST /v1/actions/{tool}`) rejects `include_sensitive`; response redaction is process policy, not a request argument.
