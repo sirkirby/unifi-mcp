@@ -10,11 +10,15 @@ Example:
 
 import asyncio
 import logging
+import math
 import secrets
 import time
 from typing import Any, Callable, Coroutine, Dict
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_JOB_RETENTION_SECONDS = 60 * 60
+DEFAULT_MAX_COMPLETED_JOBS = 1_000
 
 
 class JobStore:
@@ -29,10 +33,55 @@ class JobStore:
         _lock: Asyncio lock for thread-safe access to the job store
     """
 
-    def __init__(self) -> None:
-        """Initialize an empty job store with a lock for concurrent access."""
+    def __init__(
+        self,
+        *,
+        retention_seconds: float = DEFAULT_JOB_RETENTION_SECONDS,
+        max_completed_jobs: int = DEFAULT_MAX_COMPLETED_JOBS,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        """Initialize an empty job store with bounded terminal-job retention.
+
+        Completed and failed jobs remain queryable for at most
+        ``retention_seconds`` and are additionally capped at
+        ``max_completed_jobs``. Running jobs are never evicted. The clock is
+        injectable so retention behavior can be tested without sleeping.
+        """
+        if not math.isfinite(retention_seconds) or retention_seconds < 0:
+            raise ValueError("retention_seconds must be finite and non-negative")
+        if isinstance(max_completed_jobs, bool) or not isinstance(max_completed_jobs, int) or max_completed_jobs < 0:
+            raise ValueError("max_completed_jobs must be a non-negative integer")
+
         self._jobs: Dict[str, Dict[str, Any]] = {}
         self._lock: asyncio.Lock = asyncio.Lock()
+        self._retention_seconds = retention_seconds
+        self._max_completed_jobs = max_completed_jobs
+        self._clock = clock
+
+    def _prune_locked(self, now: float) -> None:
+        """Evict expired and excess terminal jobs while ``_lock`` is held."""
+        terminal = [(job_id, job) for job_id, job in self._jobs.items() if job["status"] in {"done", "error"}]
+
+        expired_ids = {job_id for job_id, job in terminal if now - job["completed"] >= self._retention_seconds}
+        for job_id in expired_ids:
+            del self._jobs[job_id]
+
+        retained_terminal = [(job_id, job) for job_id, job in terminal if job_id not in expired_ids]
+        excess = len(retained_terminal) - self._max_completed_jobs
+        if excess > 0:
+            retained_terminal.sort(
+                key=lambda item: (
+                    item[1]["completed"],
+                    item[1]["started"],
+                    item[0],
+                )
+            )
+            for job_id, _job in retained_terminal[:excess]:
+                del self._jobs[job_id]
+
+        removed = len(expired_ids) + max(excess, 0)
+        if removed:
+            logger.debug("Pruned %s completed background jobs", removed)
 
     async def start(self, coro: Coroutine[Any, Any, Any]) -> str:
         """Start a background job and return its unique identifier.
@@ -50,9 +99,11 @@ class JobStore:
         job_id = secrets.token_hex(8)
 
         async with self._lock:
+            now = self._clock()
+            self._prune_locked(now)
             self._jobs[job_id] = {
                 "status": "running",
-                "started": time.time(),
+                "started": now,
                 "result": None,
                 "error": None,
             }
@@ -65,16 +116,20 @@ class JobStore:
                 result = await coro
                 async with self._lock:
                     if job_id in self._jobs:
+                        completed = self._clock()
                         self._jobs[job_id]["status"] = "done"
                         self._jobs[job_id]["result"] = result
-                        self._jobs[job_id]["completed"] = time.time()
+                        self._jobs[job_id]["completed"] = completed
+                        self._prune_locked(completed)
                 logger.info("Background job %s completed successfully", job_id)
             except Exception as e:
                 async with self._lock:
                     if job_id in self._jobs:
+                        completed = self._clock()
                         self._jobs[job_id]["status"] = "error"
                         self._jobs[job_id]["error"] = str(e)
-                        self._jobs[job_id]["completed"] = time.time()
+                        self._jobs[job_id]["completed"] = completed
+                        self._prune_locked(completed)
                 logger.error("Background job %s failed with error: %s", job_id, e, exc_info=True)
 
         # Launch the runner as a background task
@@ -97,6 +152,7 @@ class JobStore:
             - error: Error message (if failed)
         """
         async with self._lock:
+            self._prune_locked(self._clock())
             if job_id not in self._jobs:
                 logger.warning("Status requested for unknown job ID: %s", job_id)
                 return {"status": "unknown"}
