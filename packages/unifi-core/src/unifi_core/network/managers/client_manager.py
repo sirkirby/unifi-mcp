@@ -24,8 +24,16 @@ class ClientManager:
         """
         self._connection = connection_manager
 
-    async def get_clients(self) -> List[Client]:
-        """Get list of currently online clients for the current site."""
+    async def get_clients(self, include_offline: bool = False) -> List[Client]:
+        """Get clients for the current site.
+
+        The default preserves the online-only ``/stat/sta`` contract.  Set
+        ``include_offline`` to select the authoritative all/historical client
+        path used by public list views without duplicating that branch in each
+        application surface.
+        """
+        if include_offline:
+            return await self.get_all_clients()
         if not await self._connection.ensure_connected() or not self._connection.controller:
             raise ConnectionError("Not connected to controller")
         cache_key = f"{CACHE_PREFIX_CLIENTS}_online_{self._connection.site}"
