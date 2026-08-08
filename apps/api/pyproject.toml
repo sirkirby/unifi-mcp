@@ -12,7 +12,7 @@ dependencies = [
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.51.0",
     "sqlalchemy[asyncio]>=2.0.51",
-    "alembic>=1.18.5",
+    "alembic>=1.19.0",
     "aiosqlite>=0.20.0",
     # Published wheels do not consume uv.lock; keep security floors exposed by
     # FastAPI, Strawberry, Uvicorn, and uiprotect explicit at this boundary.
