@@ -99,3 +99,33 @@ def test_security_floor_check_honors_extra_markers_and_higher_floors(tmp_path: P
     ok, _ = module.check_security_floors("unifi-core", wheel)
 
     assert ok is True
+
+
+def test_security_floor_check_rejects_inapplicable_marker(tmp_path: Path) -> None:
+    module = _module()
+    requirements = [f'{name}>={floor}; python_version < "3"' for name, floor in module.MCP_SECURITY_FLOORS.items()]
+    wheel = _wheel_with_requirements(tmp_path, requirements)
+
+    ok, message = module.check_security_floors("unifi-mcp-shared", wheel)
+
+    assert ok is False
+    assert "missing unconditional" in message
+
+
+def test_security_floor_check_rejects_prerelease_below_final_floor(tmp_path: Path) -> None:
+    module = _module()
+    wheel = _wheel_with_requirements(
+        tmp_path,
+        [
+            "cryptography>=50.0.0rc1",
+            "PyJWT>=2.13.0",
+            "python-multipart>=0.0.31",
+            "starlette>=1.3.1",
+            "click>=8.3.3",
+        ],
+    )
+
+    ok, message = module.check_security_floors("unifi-api-server", wheel)
+
+    assert ok is False
+    assert "cryptography>=50.0.0" in message

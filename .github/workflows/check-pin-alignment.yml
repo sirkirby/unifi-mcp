@@ -55,4 +55,6 @@ jobs:
           enable-cache: true
 
       - name: Run pin-alignment check
-        run: python3 scripts/check_pin_alignment.py
+        # `uv run` resolves the script's PEP 723 dependency on packaging, which
+        # provides standards-compliant PEP 508 requirement and PEP 440 version parsing.
+        run: uv run scripts/check_pin_alignment.py

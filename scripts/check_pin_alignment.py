@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run
+# /// script
+# requires-python = ">=3.13"
+# dependencies = ["packaging>=26.0"]
+# ///
 """Verify that each downstream wheel's declared pin permits an importable upstream.
 
 The failure this catches
@@ -28,8 +32,8 @@ How this script catches it
    not falsely fail.
 4. Assert every built wheel explicitly declares the advisory-safe floors for
    vulnerable transitives exposed at its published install boundary.
-5. Preinstall the prior vulnerable workspace resolutions before each downstream
-   wheel, then prove the wheel metadata upgrades them to safe versions.
+5. Preinstall the prior vulnerable workspace resolutions before every wheel,
+   then prove its metadata upgrades them to safe versions.
 6. Attempt a smoke import of the downstream's runtime entrypoint. If the import
    succeeds, the declared pin permits a working upstream version. If it fails
    with ``ModuleNotFoundError`` (or pip itself fails with no matching version),
@@ -51,6 +55,9 @@ import venv
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.version import InvalidVersion, Version
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -217,10 +224,7 @@ def _normalize_distribution_name(name: str) -> str:
 
 
 def _version_at_least(version: str, floor: str) -> bool:
-    version_parts = tuple(int(part) for part in version.split("."))
-    floor_parts = tuple(int(part) for part in floor.split("."))
-    width = max(len(version_parts), len(floor_parts))
-    return version_parts + (0,) * (width - len(version_parts)) >= floor_parts + (0,) * (width - len(floor_parts))
+    return Version(version) >= Version(floor)
 
 
 def wheel_requirements(wheel: Path) -> list[str]:
@@ -231,34 +235,61 @@ def wheel_requirements(wheel: Path) -> list[str]:
     return [line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.lower().startswith(prefix)]
 
 
+def _requirement_enforces_floor(requirement: Requirement, floor: str, allowed_marker: str | None) -> bool:
+    marker = str(requirement.marker) if requirement.marker is not None else None
+    if marker != allowed_marker:
+        return False
+
+    floor_version = Version(floor)
+    for specifier in requirement.specifier:
+        if specifier.operator not in {">=", ">", "==", "~="} or "*" in specifier.version:
+            continue
+        try:
+            bound = Version(specifier.version)
+        except InvalidVersion:
+            continue
+        if bound >= floor_version:
+            return True
+    return False
+
+
 def check_security_floors(dist_name: str, wheel: Path) -> tuple[bool, str]:
     expected = SECURITY_FLOORS[dist_name]
-    declared: dict[str, list[tuple[str, str]]] = {}
-    for requirement in wheel_requirements(wheel):
-        requirement_without_marker = requirement.split(";", 1)[0].strip()
-        match = re.match(r"([A-Za-z0-9_.-]+)(?:\[[^]]+\])?\s*(.*)", requirement_without_marker)
-        if match is None:
+    declared: dict[str, list[Requirement]] = {}
+    invalid: list[str] = []
+    for raw_requirement in wheel_requirements(wheel):
+        try:
+            requirement = Requirement(raw_requirement)
+        except InvalidRequirement:
+            invalid.append(raw_requirement)
             continue
-        name = _normalize_distribution_name(match.group(1))
-        bounds = re.findall(r"(>=|>|==)\s*([0-9]+(?:\.[0-9]+)*)", match.group(2))
-        declared.setdefault(name, []).extend(bounds)
+        name = _normalize_distribution_name(requirement.name)
+        declared.setdefault(name, []).append(requirement)
 
     failures: list[str] = []
     for name, floor in expected.items():
-        bounds = declared.get(name, [])
-        safe = any(_version_at_least(version, floor) and operator in {">=", ">", "=="} for operator, version in bounds)
-        if not safe:
+        allowed_marker = 'extra == "protect"' if dist_name == "unifi-core" and name == "pyjwt" else None
+        if not any(
+            _requirement_enforces_floor(requirement, floor, allowed_marker) for requirement in declared.get(name, [])
+        ):
             failures.append(f"{name}>={floor}")
 
+    if invalid:
+        return False, "invalid Requires-Dist entries: " + ", ".join(invalid)
     if failures:
-        return False, "missing advisory-safe Requires-Dist floors: " + ", ".join(failures)
+        return False, "missing unconditional advisory-safe Requires-Dist floors: " + ", ".join(failures)
     return True, "all advisory-safe Requires-Dist floors are explicit"
 
 
-def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, venv_dir: Path) -> tuple[bool, str]:
+def install_security_upgrade(
+    dist_name: str,
+    install_target: str,
+    find_links: Path,
+    venv_dir: Path,
+) -> tuple[bool, str, Path]:
     venv.create(venv_dir, with_pip=True, clear=True, symlinks=True)
     py = venv_dir / "bin" / "python"
-    expected_floors = SECURITY_FLOORS[pkg.dist_name]
+    expected_floors = SECURITY_FLOORS[dist_name]
 
     try:
         run_capture(
@@ -285,14 +316,16 @@ def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, 
                 str(find_links),
                 "--index-url",
                 "https://pypi.org/simple",
-                str(downstream_wheel),
+                install_target,
             ]
         )
     except subprocess.CalledProcessError as exc:
-        return False, (
+        return (
+            False,
             "pip install failed — the declared dependency metadata cannot upgrade "
             "the vulnerable baseline using PyPI plus workspace-built upstream wheels.\n\n"
-            f"{(exc.stderr or '').strip()[-2000:]}"
+            f"{(exc.stderr or '').strip()[-2000:]}",
+            py,
         )
 
     version_script = "\n".join(
@@ -307,7 +340,19 @@ def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, 
         if not _version_at_least(installed_versions[name], floor)
     ]
     if unsafe:
-        return False, "vulnerable packages remained installed: " + ", ".join(unsafe)
+        return False, "vulnerable packages remained installed: " + ", ".join(unsafe), py
+    return True, "vulnerable baseline upgraded to advisory-safe versions", py
+
+
+def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, venv_dir: Path) -> tuple[bool, str]:
+    upgrade_ok, upgrade_message, py = install_security_upgrade(
+        pkg.dist_name,
+        str(downstream_wheel),
+        find_links,
+        venv_dir,
+    )
+    if not upgrade_ok:
+        return False, upgrade_message
 
     try:
         run_capture([str(py), "-c", f"import {pkg.smoke_import}"])
@@ -335,7 +380,7 @@ def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, 
             f"{(exc.stdout or '').strip()[-2000:]}\n{(exc.stderr or '').strip()[-1000:]}"
         )
 
-    return True, "OK"
+    return True, upgrade_message
 
 
 def api_core_floor_from_wheel(wheel: Path) -> str:
@@ -410,13 +455,32 @@ def main() -> int:
             return 0 if ok else 1
 
         failures: list[tuple[str, str]] = []
+        upstream_wheels: dict[str, Path] = {}
         print("Building upstream wheels (workspace) -> --find-links source")
         for name, path in UPSTREAM_PACKAGES.items():
             wheel = build_wheel(path, find_links)
+            upstream_wheels[name] = wheel
             metadata_ok, metadata_msg = check_security_floors(name, wheel)
             print(f"  [{'PASS' if metadata_ok else 'FAIL'}] {name}: {wheel.name} — {metadata_msg}")
             if not metadata_ok:
                 failures.append((name, metadata_msg))
+
+        print()
+        print("Checking upstream wheels over vulnerable baselines against PyPI")
+        upstream_targets = {
+            "unifi-mcp-shared": str(upstream_wheels["unifi-mcp-shared"]),
+            "unifi-core": f"{upstream_wheels['unifi-core']}[protect]",
+        }
+        for name, target in upstream_targets.items():
+            ok, message, _ = install_security_upgrade(
+                name,
+                target,
+                find_links,
+                tmp_path / "venvs" / name,
+            )
+            print(f"  [{'PASS' if ok else 'FAIL'}] {name} — {message}")
+            if not ok:
+                failures.append((name, message))
 
         print()
         print("Checking each downstream wheel over a vulnerable baseline against PyPI")
