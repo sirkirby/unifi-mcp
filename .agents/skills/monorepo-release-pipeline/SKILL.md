@@ -212,6 +212,20 @@ Before creating release tags, inspect every downstream `pyproject.toml` for pack
 
 Workspace `[tool.uv.sources]` overrides take precedence over the version range during `uv sync`/`uv lock` — every CI job passes cleanly even when the published wheel's `requires_dist` will reject the just-released upstream package. The pin only fails when pip/uv resolves the published wheel against PyPI on a user's machine. Docker images also bypass the failure. This is a **PyPI-only** failure mode.
 
+### check_pin_alignment.py Coverage Limit
+
+`scripts/check_pin_alignment.py` validates the direct dependency bounds declared in each package's own `pyproject.toml` — it does not walk the full transitive/nested dependency chain (e.g., relay → shared → core, multiple hops deep). A downstream package can pass the gate while a deeper transitive package in the chain is still misaligned. When releasing a change that touches a multi-hop dependency chain, manually trace and verify bounds at each hop rather than trusting a single green run of this script.
+
+### `--api-core-floor-only` Flag — Cross-Package Bridge-Method Validation
+
+When a downstream package (e.g., `unifi-api-server`) is changed to call new bridge methods added to an upstream shared package (`unifi-core`), run:
+
+```bash
+python3 scripts/check_pin_alignment.py --api-core-floor-only
+```
+
+This mode enforces that the downstream package's declared `unifi-core` floor bound in `pyproject.toml` is actually high enough to guarantee the new bridge methods exist — catching the case where code was written against an unreleased Core API before the floor bound was raised to match. Run this whenever a PR adds calls to newly-added `unifi-core` methods, in addition to the standard (no-flag) pin-alignment check.
+
 ### Pre-tag wheel-metadata check
 
 ```bash
@@ -262,6 +276,8 @@ git push origin relay/v0.1.0
 > **Floor-bump sequencing gotcha:** Open downstream `pyproject.toml` floor-bump PRs (raising the minimum version bound on an upstream package) **only after** the upstream tag is confirmed on PyPI. Committing the floor-bump PR before the upstream version exists on PyPI causes the pin-alignment CI gate on that PR to fail — the gate tries to resolve the declared lower bound but the version does not yet exist.
 
 > **Floor-bump local staging:** While waiting for PyPI to confirm the upstream version, stage the floor-bump work locally — create the branch, update downstream `pyproject.toml` version floors, and commit locally. Hold `git push` and PR creation until PyPI confirms the version exists. This decouples preparation from the PyPI propagation gate and eliminates idle waiting between confirmation and branch push.
+
+> **Post-hoc branch-split at package boundary:** If a shared/core change was developed inline inside a larger feature branch that also touches a downstream package (e.g., `unifi-api-server`), split the reviewed core change into its own clean branch and PR before merging the downstream work. Verify the core PR independently, squash-merge and tag it first, then continue the downstream package's PR on top of the merged core change. This preserves the dependency-ordered tag sequence above even when development didn't originally follow package boundaries.
 
 ---
 
@@ -388,5 +404,7 @@ PR checklist trigger: any PR modifying shared-package protocol must include a "r
 **Relay protocol drift is silent.** The relay implementation files (`packages/unifi-mcp-relay/src/unifi_mcp_relay/discovery.py` and `packages/unifi-mcp-relay/src/unifi_mcp_relay/protocol.py`) have no import from `unifi-mcp-shared` — protocol changes fail silently until a real client exercises the changed path. Manual review on every protocol-touching PR is the only protection (see Procedure J-3).
 
 **Backwards-coupling enforcement.** Import direction must stay: app servers → `unifi-mcp-shared` → `unifi-core`. Direct imports from app packages inside shared or core break at import time but no test catches it until the import is exercised. Grep before committing.
+
+**Docker builds must COPY transitive workspace dependencies, not just direct ones.** `packages/unifi-mcp-relay/Dockerfile` once copied only its direct dependency's source, and broke when `unifi-core` became a transitive dependency of `unifi-mcp-shared` and was never added to the COPY steps. Any Dockerfile for a package with workspace dependencies must COPY the full transitive dependency source tree, not just direct dependencies — verify after any change to the shared/core dependency graph.
 
 **Diagnostics direct-import pattern.** When debugging shared-package behavior from an app server, write diagnostic logic in the app server's namespace — do not import shared internals directly for inline inspection. Direct imports of shared internals count for cycle-checking.

@@ -386,6 +386,14 @@ You cannot execute `.ps1` scripts directly from macOS, but these three checks ca
 
 ## Step 1.5b — AI-Bot vs Human Contributor Handling
 
+### Mass-Submission / Spam Signal Check
+
+Before judging a PR on its own merits, check the contributor's overall GitHub PR history
+(`gh api "search/issues?q=author:<user>+type:pr"`) for a mass-submission pattern — hundreds of
+near-identical PRs opened across unrelated repos. A high mass-submission ratio is a spam/low-trust
+signal that should raise scrutiny, but it does not by itself block a well-formed PR — still run the
+full gate checklist on the PR's own content.
+
 ### AI-Bot PRs: Close in Favor of In-House Work
 
 When an AI-Bot submits a fix to an area with parallel in-house work, close it with:
@@ -515,6 +523,11 @@ When a first-time contributor is **historically unresponsive** (72+ hours no res
 is **trivial and mechanical** (ruff format, logger replacement, simple doc fix), apply fork-edit
 instead of requesting changes.
 
+**Substantive-gap exception:** When the unresolved blockers are substantive rather than trivial
+(e.g., missing platform parity, unaddressed architecture feedback), do not fork-edit even if the
+contributor is unresponsive. Close the PR, credit the contributor, and open a linked in-house
+issue instead (Principle #6) — fork-edit is reserved for trivial/mechanical fixes only.
+
 ### Org Forks — Push Limitation
 
 **The fork-edit model only works for personal forks.** Org forks block `git push` back even when
@@ -539,6 +552,8 @@ Before merging, confirm the PR body includes: **What changed**, **Why**, and **T
 3. **Issue references** — `#N` format in both the commit message and the PR body for reliable auto-close.
 
 **Gotcha — post-merge PR body edits do not trigger GitHub autoclose.** If issue references were missing at merge time and you add `#N` to the PR body afterward, GitHub does NOT retroactively close the linked issue — autoclose only fires from the merge event itself. For retroactive linking, post an explicit closing comment on each affected issue and close it manually.
+
+**Gotcha — closing keywords only auto-close issues, never other PRs.** `Closes #NNN` in a merge commit or PR body auto-closes issues but does NOT auto-close superseded pull requests, even when the merged PR consolidates or replaces them (e.g., a consolidated Dependabot PR listing `Closes #444`, `Closes #445` for redundant bot PRs). Close superseded PRs manually.
 
 ### When a PR surfaces broader scope (Principle #5)
 
@@ -576,6 +591,8 @@ gh pr view <PR-number> --json mergeStateStatus,reviewDecision,mergeable
 
 `mergeStateStatus: BLOCKED` means the PR cannot be merged regardless of `mergeable`. Resolve
 the blocking condition (get missing approvals, wait for pending checks) before proceeding.
+
+**Admin-bypass precedent:** When the sole block is a missing-approval requirement that cannot be satisfied because the maintainer authored the PR (GitHub blocks self-approval) and all CI checks are green, `gh pr merge <PR-number> --squash --admin` is an accepted owner-bypass. Use it only when the block is purely the self-approval gate, not an unresolved review concern.
 
 ```bash
 # Squash-merge is the repo standard — one clean commit per PR on main
