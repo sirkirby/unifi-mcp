@@ -16,7 +16,12 @@ dependencies = [
 # mode hit prod historically. Versions floor at the lowest tested.
 [project.optional-dependencies]
 network = ["aiounifi>=92"]
-protect = ["uiprotect>=15.12.2"]
+protect = [
+    "uiprotect>=15.12.2",
+    # uiprotect permits older PyJWT releases; published Core wheels must enforce
+    # the advisory-safe floor even when installed over an existing environment.
+    "PyJWT>=2.13.0",
+]
 access = ["py-unifi-access>=1.1.1"]
 
 [dependency-groups]

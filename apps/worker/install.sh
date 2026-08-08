@@ -18,10 +18,10 @@ if ! command -v node &>/dev/null; then
     exit 1
 fi
 
-# Check minimum Node version (18+)
+# Check minimum Node version (22+)
 NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-if [ "$NODE_VERSION" -lt 18 ]; then
-    echo "  Error: Node.js 18+ required. Found: $(node -v)"
+if [ "$NODE_VERSION" -lt 22 ]; then
+    echo "  Error: Node.js 22+ required. Found: $(node -v)"
     echo "  Update from https://nodejs.org/"
     exit 1
 fi

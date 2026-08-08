@@ -1,6 +1,18 @@
 #!/usr/bin/env node
 
 import { parseArgs } from "node:util";
+import {
+  getNodeVersion,
+  isNodeVersionSupported,
+  MIN_NODE_MAJOR,
+} from "../src/lib/prerequisites.mjs";
+
+if (!isNodeVersionSupported()) {
+  console.error(
+    `Node.js ${MIN_NODE_MAJOR}+ is required. Found Node.js ${getNodeVersion()}.`,
+  );
+  process.exit(1);
+}
 
 const COMMANDS = {
   install: () => import("../src/commands/install.mjs"),

@@ -26,7 +26,11 @@ How this script catches it
    resolution path a user hits, except that workspace upstream wheels are
    available as an additional source so coordinated upstream-downstream PRs do
    not falsely fail.
-4. Attempt a smoke import of the downstream's runtime entrypoint. If the import
+4. Assert every built wheel explicitly declares the advisory-safe floors for
+   vulnerable transitives exposed at its published install boundary.
+5. Preinstall the prior vulnerable workspace resolutions before each downstream
+   wheel, then prove the wheel metadata upgrades them to safe versions.
+6. Attempt a smoke import of the downstream's runtime entrypoint. If the import
    succeeds, the declared pin permits a working upstream version. If it fails
    with ``ModuleNotFoundError`` (or pip itself fails with no matching version),
    the pin is stale and a fresh PyPI install would crash.
@@ -53,6 +57,43 @@ REPO = Path(__file__).resolve().parent.parent
 UPSTREAM_PACKAGES: dict[str, Path] = {
     "unifi-mcp-shared": REPO / "packages/unifi-mcp-shared",
     "unifi-core": REPO / "packages/unifi-core",
+}
+
+MCP_SECURITY_FLOORS: dict[str, str] = {
+    "cryptography": "50.0.0",
+    "pydantic-settings": "2.14.2",
+    "pyjwt": "2.13.0",
+    "python-multipart": "0.0.31",
+    "starlette": "1.3.1",
+    "click": "8.3.3",
+}
+
+SECURITY_FLOORS: dict[str, dict[str, str]] = {
+    "unifi-core": {"pyjwt": "2.13.0"},
+    "unifi-mcp-shared": MCP_SECURITY_FLOORS,
+    "unifi-network-mcp": MCP_SECURITY_FLOORS,
+    "unifi-protect-mcp": MCP_SECURITY_FLOORS,
+    "unifi-access-mcp": MCP_SECURITY_FLOORS,
+    "unifi-mcp-relay": MCP_SECURITY_FLOORS,
+    "unifi-api-server": {
+        "cryptography": "50.0.0",
+        "pyjwt": "2.13.0",
+        "python-multipart": "0.0.31",
+        "starlette": "1.3.1",
+        "click": "8.3.3",
+    },
+}
+
+# These were the vulnerable workspace resolutions before the security update.
+# Preinstalling them proves a published wheel upgrades an existing environment,
+# rather than merely resolving safely in a fresh environment.
+VULNERABLE_BASELINES: dict[str, str] = {
+    "cryptography": "49.0.0",
+    "pydantic-settings": "2.12.0",
+    "pyjwt": "2.12.1",
+    "python-multipart": "0.0.27",
+    "starlette": "0.50.0",
+    "click": "8.3.1",
 }
 
 
@@ -171,11 +212,67 @@ def build_wheel(src: Path, out_dir: Path) -> Path:
     return wheels[-1]
 
 
+def _normalize_distribution_name(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _version_at_least(version: str, floor: str) -> bool:
+    version_parts = tuple(int(part) for part in version.split("."))
+    floor_parts = tuple(int(part) for part in floor.split("."))
+    width = max(len(version_parts), len(floor_parts))
+    return version_parts + (0,) * (width - len(version_parts)) >= floor_parts + (0,) * (width - len(floor_parts))
+
+
+def wheel_requirements(wheel: Path) -> list[str]:
+    with zipfile.ZipFile(wheel) as archive:
+        metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+        metadata = archive.read(metadata_name).decode()
+    prefix = "requires-dist:"
+    return [line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.lower().startswith(prefix)]
+
+
+def check_security_floors(dist_name: str, wheel: Path) -> tuple[bool, str]:
+    expected = SECURITY_FLOORS[dist_name]
+    declared: dict[str, list[tuple[str, str]]] = {}
+    for requirement in wheel_requirements(wheel):
+        requirement_without_marker = requirement.split(";", 1)[0].strip()
+        match = re.match(r"([A-Za-z0-9_.-]+)(?:\[[^]]+\])?\s*(.*)", requirement_without_marker)
+        if match is None:
+            continue
+        name = _normalize_distribution_name(match.group(1))
+        bounds = re.findall(r"(>=|>|==)\s*([0-9]+(?:\.[0-9]+)*)", match.group(2))
+        declared.setdefault(name, []).extend(bounds)
+
+    failures: list[str] = []
+    for name, floor in expected.items():
+        bounds = declared.get(name, [])
+        safe = any(_version_at_least(version, floor) and operator in {">=", ">", "=="} for operator, version in bounds)
+        if not safe:
+            failures.append(f"{name}>={floor}")
+
+    if failures:
+        return False, "missing advisory-safe Requires-Dist floors: " + ", ".join(failures)
+    return True, "all advisory-safe Requires-Dist floors are explicit"
+
+
 def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, venv_dir: Path) -> tuple[bool, str]:
     venv.create(venv_dir, with_pip=True, clear=True, symlinks=True)
     py = venv_dir / "bin" / "python"
+    expected_floors = SECURITY_FLOORS[pkg.dist_name]
 
     try:
+        run_capture(
+            [
+                str(py),
+                "-m",
+                "pip",
+                "install",
+                "--quiet",
+                "--disable-pip-version-check",
+                "--no-deps",
+                *(f"{name}=={VULNERABLE_BASELINES[name]}" for name in expected_floors),
+            ]
+        )
         run_capture(
             [
                 str(py),
@@ -193,10 +290,24 @@ def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, 
         )
     except subprocess.CalledProcessError as exc:
         return False, (
-            "pip install failed — the declared pin range cannot be satisfied by "
-            "PyPI plus workspace-built upstream wheels.\n\n"
+            "pip install failed — the declared dependency metadata cannot upgrade "
+            "the vulnerable baseline using PyPI plus workspace-built upstream wheels.\n\n"
             f"{(exc.stderr or '').strip()[-2000:]}"
         )
+
+    version_script = "\n".join(
+        ["from importlib.metadata import version"]
+        + [f'print("{name}=" + version("{name}"))' for name in expected_floors]
+    )
+    installed = run_capture([str(py), "-c", version_script]).stdout.splitlines()
+    installed_versions = dict(line.split("=", 1) for line in installed)
+    unsafe = [
+        f"{name}=={installed_versions[name]} (<{floor})"
+        for name, floor in expected_floors.items()
+        if not _version_at_least(installed_versions[name], floor)
+    ]
+    if unsafe:
+        return False, "vulnerable packages remained installed: " + ", ".join(unsafe)
 
     try:
         run_capture([str(py), "-c", f"import {pkg.smoke_import}"])
@@ -298,27 +409,35 @@ def main() -> int:
             print(("PASS: " if ok else "FAIL: ") + message)
             return 0 if ok else 1
 
+        failures: list[tuple[str, str]] = []
         print("Building upstream wheels (workspace) -> --find-links source")
         for name, path in UPSTREAM_PACKAGES.items():
             wheel = build_wheel(path, find_links)
-            print(f"  {name}: {wheel.name}")
+            metadata_ok, metadata_msg = check_security_floors(name, wheel)
+            print(f"  [{'PASS' if metadata_ok else 'FAIL'}] {name}: {wheel.name} — {metadata_msg}")
+            if not metadata_ok:
+                failures.append((name, metadata_msg))
 
         print()
-        print("Checking each downstream wheel in a clean venv against PyPI")
-        failures: list[tuple[str, str]] = []
+        print("Checking each downstream wheel over a vulnerable baseline against PyPI")
         for pkg in DOWNSTREAM_PACKAGES:
             wheel = build_wheel(pkg.src, tmp_path / "downstream" / pkg.dist_name)
+            metadata_ok, metadata_msg = check_security_floors(pkg.dist_name, wheel)
+            if not metadata_ok:
+                print(f"  [FAIL] {pkg.dist_name} ({wheel.name}) — {metadata_msg}")
+                failures.append((pkg.dist_name, metadata_msg))
+                continue
             venv_dir = tmp_path / "venvs" / pkg.dist_name
             ok, msg = check_downstream(pkg, wheel, find_links, venv_dir)
             status = "PASS" if ok else "FAIL"
-            print(f"  [{status}] {pkg.dist_name} ({wheel.name})")
+            print(f"  [{status}] {pkg.dist_name} ({wheel.name}) — {metadata_msg}")
             if not ok:
                 failures.append((pkg.dist_name, msg))
 
         if failures:
             print()
             print("=" * 70)
-            print("PIN ALIGNMENT CHECK FAILED")
+            print("DEPENDENCY METADATA / PIN ALIGNMENT CHECK FAILED")
             print("=" * 70)
             for name, msg in failures:
                 print()
@@ -362,7 +481,7 @@ def main() -> int:
             return 1
 
         print()
-        print("All downstream wheels install and import cleanly with their declared pins.")
+        print("All wheels enforce security floors; downstream upgrades, installs, and imports pass.")
         return 0
 
 

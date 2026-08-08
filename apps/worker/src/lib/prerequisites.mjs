@@ -3,6 +3,8 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
+export const MIN_NODE_MAJOR = 22;
+
 export async function checkCommand(cmd, args = ["--version"]) {
   try {
     const { stdout } = await execFileAsync(cmd, args, { timeout: 10_000 });
@@ -15,6 +17,10 @@ export async function checkCommand(cmd, args = ["--version"]) {
 
 export function getNodeVersion() {
   return parseInt(process.version.replace("v", "").split(".")[0], 10);
+}
+
+export function isNodeVersionSupported(version = getNodeVersion()) {
+  return Number.isInteger(version) && version >= MIN_NODE_MAJOR;
 }
 
 export async function ensureWrangler() {

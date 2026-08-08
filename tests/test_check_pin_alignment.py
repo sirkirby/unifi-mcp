@@ -19,14 +19,17 @@ def _module():
     return module
 
 
-def _wheel(tmp_path: Path, requirement: str | None) -> Path:
+def _wheel_with_requirements(tmp_path: Path, requirements: list[str]) -> Path:
     wheel = tmp_path / "unifi_api_server-1.0.0-py3-none-any.whl"
     lines = ["Metadata-Version: 2.4", "Name: unifi-api-server", "Version: 1.0.0"]
-    if requirement is not None:
-        lines.append(f"Requires-Dist: {requirement}")
+    lines.extend(f"Requires-Dist: {requirement}" for requirement in requirements)
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr("unifi_api_server-1.0.0.dist-info/METADATA", "\n".join(lines) + "\n")
     return wheel
+
+
+def _wheel(tmp_path: Path, requirement: str | None) -> Path:
+    return _wheel_with_requirements(tmp_path, [] if requirement is None else [requirement])
 
 
 def test_extracts_api_core_lower_bound_from_wheel_metadata(tmp_path: Path) -> None:
@@ -49,3 +52,50 @@ def test_api_floor_contract_is_valid_python() -> None:
     module = _module()
 
     compile(module._API_CATALOG_FLOOR_CONTRACT, "<api-catalog-floor-contract>", "exec")
+
+
+def test_security_floor_check_accepts_explicit_safe_wheel_metadata(tmp_path: Path) -> None:
+    module = _module()
+    wheel = _wheel_with_requirements(
+        tmp_path,
+        [
+            "cryptography>=50.0.0",
+            "PyJWT>=2.13.0",
+            "python-multipart>=0.0.31",
+            "starlette>=1.3.1",
+            "click>=8.3.3",
+        ],
+    )
+
+    ok, message = module.check_security_floors("unifi-api-server", wheel)
+
+    assert ok is True
+    assert "all advisory-safe" in message
+
+
+def test_security_floor_check_rejects_missing_or_vulnerable_floor(tmp_path: Path) -> None:
+    module = _module()
+    wheel = _wheel_with_requirements(
+        tmp_path,
+        [
+            "cryptography>=49.0.0",
+            "PyJWT>=2.13.0",
+            "python-multipart>=0.0.31",
+            "starlette>=1.3.1",
+        ],
+    )
+
+    ok, message = module.check_security_floors("unifi-api-server", wheel)
+
+    assert ok is False
+    assert "cryptography>=50.0.0" in message
+    assert "click>=8.3.3" in message
+
+
+def test_security_floor_check_honors_extra_markers_and_higher_floors(tmp_path: Path) -> None:
+    module = _module()
+    wheel = _wheel_with_requirements(tmp_path, ['PyJWT>=2.14.0; extra == "protect"'])
+
+    ok, _ = module.check_security_floors("unifi-core", wheel)
+
+    assert ok is True

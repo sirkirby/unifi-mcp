@@ -33,6 +33,8 @@ The Durable Object persists location registrations in SQLite and maintains live 
 
 ### Install
 
+Node.js 22 or newer is required.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sirkirby/unifi-mcp/main/apps/worker/install.sh | bash
 ```
