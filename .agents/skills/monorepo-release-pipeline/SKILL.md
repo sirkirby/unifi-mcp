@@ -221,7 +221,7 @@ Workspace `[tool.uv.sources]` overrides take precedence over the version range d
 When a downstream package (e.g., `unifi-api-server`) is changed to call new bridge methods added to an upstream shared package (`unifi-core`), run:
 
 ```bash
-python3 scripts/check_pin_alignment.py --api-core-floor-only
+uv run scripts/check_pin_alignment.py --api-core-floor-only
 ```
 
 This mode enforces that the downstream package's declared `unifi-core` floor bound in `pyproject.toml` is actually high enough to guarantee the new bridge methods exist — catching the case where code was written against an unreleased Core API before the floor bound was raised to match. Run this whenever a PR adds calls to newly-added `unifi-core` methods, in addition to the standard (no-flag) pin-alignment check.
