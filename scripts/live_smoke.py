@@ -1350,7 +1350,10 @@ class LiveSmokeRunner:
         used_vlans = {
             int(item["vlan"]) for item in networks if isinstance(item, dict) and str(item.get("vlan", "")).isdigit()
         }
-        vlan = next((candidate for candidate in range(4093, 3999, -1) if candidate not in used_vlans), None)
+        # UniFi reserves the top of the VLAN range (>=4010) for internal use and
+        # rejects creates there with a detail-less api.err.InvalidValue; scan
+        # below 4000 for a disposable ID.
+        vlan = next((candidate for candidate in range(3999, 3899, -1) if candidate not in used_vlans), None)
         if vlan is None:
             self.skip("unifi_create_network/unifi_delete_network", "approved", "no disposable VLAN ID available")
             return
@@ -1441,7 +1444,9 @@ class LiveSmokeRunner:
             return
 
         stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-        name = f"{RUN_PREFIX}-ssid-{stamp}-{secrets.token_hex(4)}"
+        # SSIDs are capped at 32 bytes; use a compact stamp so the disposable
+        # name stays inside the limit while remaining unique and recognizable.
+        name = f"{RUN_PREFIX}-ssid-{datetime.now(UTC).strftime('%H%M%S')}-{secrets.token_hex(3)}"
         create = await self.call(
             "unifi_create_wlan",
             {

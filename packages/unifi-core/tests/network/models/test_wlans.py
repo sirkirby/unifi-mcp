@@ -115,6 +115,19 @@ class TestStrictValidation:
         with pytest.raises(ValueError, match="x_passphrase"):
             validate_create({"name": "SSID", "security": "wpa2-psk"})
 
+    def test_rejects_ssid_longer_than_32_bytes(self) -> None:
+        # 802.11 SSID limit; the controller rejects longer names with a
+        # detail-less api.err.InvalidValue, so validation fails loudly first.
+        long_name = "s" * 33
+        with pytest.raises(ValueError, match="32 bytes"):
+            validate_create({"name": long_name, "security": "open"})
+        with pytest.raises(ValueError, match="32 bytes"):
+            validate_update({"name": long_name})
+        multibyte = "é" * 17  # 17 chars but 34 UTF-8 bytes
+        with pytest.raises(ValueError, match="32 bytes"):
+            validate_update({"name": multibyte})
+        assert validate_update({"name": "s" * 32}) == {"name": "s" * 32}
+
     def test_update_expands_minrate_dependencies_before_translation(self) -> None:
         assert apply_update_dependencies({"minrate_ng_data_rate_kbps": 6000}) == {
             "minrate_ng_data_rate_kbps": 6000,

@@ -21,8 +21,10 @@ CACHE_PREFIX_AP_GROUPS = "ap_groups"
 # on read-back means enabled, not that the write was dropped.
 _ABSENT_VALUE_DEFAULTS = {"enabled": True}
 
-# Fields the controller never echoes back verbatim (write-only / redacted), so a
-# re-read cannot confirm them. Excluded from post-write persistence verification.
+# Fields the controller never echoes back verbatim, so a re-read cannot confirm
+# them: write-only/redacted secrets, plus ap_group_mode, which the controller
+# derives from the ap_group_ids selection (a "groups" request covering every AP
+# is echoed back as "all"). Excluded from post-write persistence verification.
 _UNVERIFIABLE_UPDATE_KEYS = frozenset(
     {
         "x_passphrase",
@@ -31,6 +33,7 @@ _UNVERIFIABLE_UPDATE_KEYS = frozenset(
         "private_preshared_keys",
         "x_iapp_key",
         "password",
+        "ap_group_mode",
     }
 )
 

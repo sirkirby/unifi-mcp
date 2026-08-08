@@ -373,6 +373,10 @@ def _validate_payload(fields: Dict[str, Any], *, operation: str) -> tuple[Wlan, 
         model = Wlan(**normalized)
     except ValidationError as error:
         raise ValueError(f"Invalid WLAN {operation} data: {error.errors()[0]['msg']}") from None
+    # 802.11 caps SSIDs at 32 bytes; the controller rejects longer names with a
+    # detail-less api.err.InvalidValue, so fail loudly here instead.
+    if model.name is not None and len(model.name.encode("utf-8")) > 32:
+        raise ValueError("WLAN 'name' (SSID) must be at most 32 bytes")
     return model, set(normalized)
 
 

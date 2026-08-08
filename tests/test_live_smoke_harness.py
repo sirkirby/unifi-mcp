@@ -320,7 +320,7 @@ def test_network_lifecycle_creates_updates_reads_and_deletes_disposable_vlan() -
     import live_smoke
 
     runner = object.__new__(live_smoke.LiveSmokeRunner)
-    cache = SimpleNamespace(items_from_tool=lambda *_args: [{"vlan": 4093}], by_tool={})
+    cache = SimpleNamespace(items_from_tool=lambda *_args: [{"vlan": 3999}], by_tool={})
     runner.cache = cache
     runner.report = SimpleNamespace(created_resources=[], cleaned_resources=[], records=[])
     runner.server_key = "network"
@@ -334,7 +334,7 @@ def test_network_lifecycle_creates_updates_reads_and_deletes_disposable_vlan() -
                     "name": calls[-2][1]["update_data"]["name"],
                     "enabled": False,
                     "purpose": "vlan-only",
-                    "vlan": 4092,
+                    "vlan": 3998,
                 }
             }
         summary = {"resource_id": "network-smoke-1"} if tool == "unifi_create_network" else {}
@@ -354,7 +354,7 @@ def test_network_lifecycle_creates_updates_reads_and_deletes_disposable_vlan() -
     create_args = calls[0][1]["network_data"]
     assert create_args["purpose"] == "vlan-only"
     assert create_args["enabled"] is False
-    assert create_args["vlan"] == 4092
+    assert create_args["vlan"] == 3998
     assert calls[-1][1] == {"network_id": "network-smoke-1", "confirm": True}
     assert runner.report.created_resources == [
         {"type": "network", "id": "network-smoke-1", "name": create_args["name"]}
