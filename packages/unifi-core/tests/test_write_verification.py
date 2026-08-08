@@ -34,6 +34,55 @@ def test_verify_write_classifies_json_type_changes_as_coercion() -> None:
         assert result.coerced_fields == ("value",)
 
 
+def test_verify_write_treats_numeric_string_round_trip_as_persisted() -> None:
+    for wanted, actual in (("100", 100), (100, "100"), ("1.5", 1.5)):
+        result = verify_write(
+            operation="update",
+            requested={"vlan": wanted},
+            before={"vlan": "40"},
+            after={"vlan": actual},
+        )
+
+        assert result.success is True, (wanted, actual)
+        assert result.persisted_fields == ("vlan",)
+        assert result.coerced_fields == ()
+
+
+def test_verify_write_numeric_string_equivalence_stays_exact() -> None:
+    for wanted, actual in (("0100", 100), ("true", True), (True, "True"), ("1", True)):
+        result = verify_write(operation="update", requested={"value": wanted}, after={"value": actual})
+
+        assert result.success is False, (wanted, actual)
+        assert result.coerced_fields == ("value",)
+
+
+def test_verify_write_absent_default_true_enabled_is_not_dropped() -> None:
+    result = verify_write(
+        operation="update",
+        requested={"enabled": True},
+        before={"_id": "vpn1", "enabled": False},
+        after={"_id": "vpn1"},
+        absent_value_defaults={"enabled": True},
+    )
+
+    assert result.success is True
+    assert result.persisted_fields == ("enabled",)
+    assert result.dropped_fields == ()
+
+
+def test_verify_write_absent_default_does_not_mask_real_drop() -> None:
+    result = verify_write(
+        operation="update",
+        requested={"enabled": False},
+        before={"_id": "vpn1"},
+        after={"_id": "vpn1"},
+        absent_value_defaults={"enabled": True},
+    )
+
+    assert result.success is False
+    assert result.dropped_fields == ("enabled",)
+
+
 def test_verify_write_reports_already_satisfied_field_as_unchanged() -> None:
     result = verify_write(
         operation="update",

@@ -241,6 +241,30 @@ class TestStrictValidation:
         with pytest.raises(ValueError, match="must be an integer"):
             validate_update({"wan_load_balance_weight": value})
 
+    @pytest.mark.parametrize("value", [-1, 101, 500])
+    def test_update_rejects_out_of_range_wan_load_balance_weight(self, value: int) -> None:
+        with pytest.raises(ValueError, match="between 0 and 100"):
+            validate_update({"wan_load_balance_weight": value})
+
+    @pytest.mark.parametrize("value", [-1, 150])
+    def test_read_path_tolerates_out_of_range_wan_load_balance_weight(self, value: int) -> None:
+        # The shared model also parses controller reads; a legacy out-of-range
+        # weight on one row must not break whole-site listings.
+        n = from_controller({"_id": "n1", "name": "WAN", "wan_load_balance_weight": value})
+        assert n.wan_load_balance_weight == value
+
+    def test_update_accepts_real_controller_fields_missing_from_early_allowlist(self) -> None:
+        # Real networkconf fields that REST callers wrote successfully before
+        # strict validation; the allowlist must keep a write path for them.
+        assert validate_update({"ipv6_ra_enabled": False}) == {"ipv6_ra_enabled": False}
+        assert validate_update({"auto_scale_enabled": True}) == {"auto_scale_enabled": True}
+
+    def test_update_normalizes_string_vlan_to_controller_int(self) -> None:
+        # Callers may send vlan as a string (the documented tool format); the
+        # payload is normalized to the controller-native int so exact
+        # verification does not misread the echoed int as a coercion.
+        assert validate_update({"vlan": "100"}) == {"vlan": 100}
+
     @pytest.mark.parametrize(
         ("field", "value"),
         [

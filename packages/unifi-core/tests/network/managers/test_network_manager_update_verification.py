@@ -261,16 +261,28 @@ async def test_create_wlan_rereads_and_reports_partial_persistence():
 async def test_delete_network_fails_closed_on_malformed_verification_read():
     conn = _make_connection()
     mgr = NetworkManager(conn)
-    conn.request.side_effect = [[_network()], {}, {"unexpected": "shape"}]
+    conn.request.side_effect = [[_network(purpose="corporate")], {}, {"unexpected": "shape"}]
 
     with pytest.raises(RuntimeError, match="invalid network list response"):
         await mgr.delete_network(NETWORK_ID)
 
 
+@pytest.mark.parametrize("purpose", ["wan", "vpn-client", "vpn-server", None])
+async def test_delete_network_refuses_non_lan_purposes(purpose):
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.side_effect = [[_network(**({"purpose": purpose} if purpose else {}))]]
+
+    with pytest.raises(ValueError, match="not a LAN/VLAN network"):
+        await mgr.delete_network(NETWORK_ID)
+    # Only the existence read happened; no DELETE was issued.
+    assert conn.request.await_count == 1
+
+
 async def test_delete_network_verifies_absence():
     conn = _make_connection()
     mgr = NetworkManager(conn)
-    conn.request.side_effect = [[_network()], {}, []]
+    conn.request.side_effect = [[_network(purpose="corporate")], {}, []]
 
     assert await mgr.delete_network(NETWORK_ID) is True
     delete_request = conn.request.call_args_list[1].args[0]

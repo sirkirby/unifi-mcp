@@ -22,26 +22,17 @@ from unifi_core.network.models.ap_group import (
 from unifi_core.network.models.ap_group import (
     to_controller_update as ap_group_to_update,
 )
+from unifi_core.network.models.networks import DELETABLE_PURPOSES as NETWORK_DELETABLE_PURPOSES
 from unifi_core.network.models.networks import validate_create as validate_network_create
 from unifi_core.network.models.networks import validate_update as validate_network_update
 from unifi_core.network.models.wlans import validate_create as validate_wlan_create
 from unifi_core.network.models.wlans import validate_update as validate_wlan_update
 from unifi_core.network.read_views import shape_network_details, shape_network_list, shape_wlan_list
 from unifi_core.redaction import redact_sensitive_fields
+from unifi_core.write_verification import format_tool_payload
 from unifi_network_mcp.runtime import network_manager, server, should_redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
-
-
-def _write_result_payload(result: Any, *, site: str, success_message: str) -> Dict[str, Any]:
-    """Format a Core write-verification result for the MCP response contract."""
-    payload = result.to_dict()
-    payload["site"] = site
-    if result.success:
-        if "details_after_attempt" in payload:
-            payload["details"] = payload.pop("details_after_attempt")
-        payload["message"] = success_message
-    return payload
 
 
 @server.tool(
@@ -259,7 +250,7 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "Basic: name, purpose ('corporate'/'vlan-only'), vlan_enabled (bool), vlan (str), "
     "ip_subnet (CIDR), enabled (bool), network_isolation_enabled (bool, corporate only), "
     "internet_access_enabled (bool), upnp_lan_enabled (bool). "
-    "DHCP: dhcpd_enabled (bool), dhcpd_start (IP), dhcpd_stop (IP), dhcpd_leasetime (int seconds), "
+    "DHCP: dhcpd_enabled (bool), dhcpd_start (IP), dhcpd_stop (IP), dhcpd_leasetime (int seconds), auto_scale_enabled (bool), "
     "dhcpd_gateway (IP), dhcpd_gateway_enabled (bool), dhcp_relay_enabled (bool), "
     "dhcpd_conflict_checking (bool), dhcpguard_enabled (bool, requires dhcpd_ip_1), dhcpd_ip_1 (IP, trusted DHCP server for guard), dhcpd_boot_enabled (bool), dhcpd_boot_server (IP), dhcpd_boot_filename (str), dhcpd_tftp_server (str, DHCP opt 150). "
     "DHCP options: dhcpd_dns_1 (IP), dhcpd_dns_2 (IP), dhcpd_dns_enabled (bool), "
@@ -275,7 +266,7 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "igmp_proxy_upstream (bool), igmp_proxy_for (JSON: 'none' or list of network refs), "
     "mac_override_enabled (bool), wan_ip_aliases (list). "
     "WAN IPv6 (dual-stack; does not affect IPv4 internet): ipv6_enabled (bool), wan_type_v6 (str), "
-    "ipv6_setting_preference ('auto'/'manual'), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), "
+    "ipv6_setting_preference ('auto'/'manual'), ipv6_ra_enabled (bool), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), "
     "wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). "
     "WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. "
     "Confirmed writes are read back exactly; responses list persisted, unchanged, dropped, and controller-coerced fields. "
@@ -396,14 +387,6 @@ async def update_network(
     except ValueError as e:
         return {"success": False, "error": str(e)}
 
-    if "wan_load_balance_weight" in validated_data:
-        try:
-            _weight = int(validated_data["wan_load_balance_weight"])
-        except (TypeError, ValueError):
-            return {"success": False, "error": "'wan_load_balance_weight' must be an integer between 0 and 100."}
-        if _weight < 0 or _weight > 100:
-            return {"success": False, "error": "'wan_load_balance_weight' must be between 0 and 100."}
-
     # Fetch current state for preview and confirmed-update validation.
     try:
         current = await network_manager.get_network_details(network_id)
@@ -440,7 +423,7 @@ async def update_network(
     logger.info("Attempting to update network '%s' with fields: %s", network_id, ", ".join(updated_fields_list))
     try:
         write_result = await network_manager.update_network(network_id, validated_data)
-        payload = _write_result_payload(
+        payload = format_tool_payload(
             write_result,
             site=network_manager._connection.site,
             success_message=f"Network '{network_id}' updated successfully.",
@@ -462,8 +445,9 @@ async def update_network(
 @server.tool(
     name="unifi_delete_network",
     description=(
-        "Delete a LAN/VLAN network by ID. Requires confirmation. WARNING: dependent WLANs, clients, routes, "
-        "and firewall policies may lose connectivity or become invalid."
+        "Delete a LAN/VLAN network by ID. Requires confirmation. Only LAN-class networks (purpose corporate/"
+        "guest/vlan-only) are deletable; WAN uplinks and VPN networkconf entries are refused. WARNING: dependent "
+        "WLANs, clients, routes, and firewall policies may lose connectivity or become invalid."
     ),
     permission_category="networks",
     permission_action="delete",
@@ -482,6 +466,16 @@ async def delete_network(
     redact_sensitive = should_redact_sensitive_fields()
     try:
         current = await network_manager.get_network_details(network_id)
+        purpose = current.get("purpose")
+        if purpose not in NETWORK_DELETABLE_PURPOSES:
+            hint = " Use unifi_delete_vpn_client for VPN client configurations." if purpose == "vpn-client" else ""
+            return {
+                "success": False,
+                "error": (
+                    f"Refusing to delete network {network_id}: purpose '{purpose}' is not a LAN/VLAN network. "
+                    "Deleting WAN or VPN networkconf entries can sever gateway connectivity." + hint
+                ),
+            }
         if not confirm:
             return redact_sensitive_fields(
                 delete_preview(
@@ -610,7 +604,7 @@ async def create_network(
     logger.info("Attempting to create network '%s' with purpose '%s'", validated_data["name"], purpose)
     try:
         write_result = await network_manager.create_network(validated_data)
-        payload = _write_result_payload(
+        payload = format_tool_payload(
             write_result,
             site=network_manager._connection.site,
             success_message=f"Network '{validated_data['name']}' created successfully.",
@@ -866,7 +860,7 @@ async def update_wlan(
     logger.info("Attempting to update WLAN '%s' with fields: %s", wlan_id, ", ".join(updated_fields_list))
     try:
         write_result = await network_manager.update_wlan(wlan_id, validated_data)
-        payload = _write_result_payload(
+        payload = format_tool_payload(
             write_result,
             site=network_manager._connection.site,
             success_message=f"WLAN '{wlan_id}' updated successfully.",
@@ -968,7 +962,7 @@ async def create_wlan(
     logger.info("Attempting to create WLAN '%s' with security '%s'", validated_data["name"], validated_data["security"])
     try:
         write_result = await network_manager.create_wlan(validated_data)
-        payload = _write_result_payload(
+        payload = format_tool_payload(
             write_result,
             site=network_manager._connection.site,
             success_message=f"WLAN '{validated_data['name']}' created successfully.",

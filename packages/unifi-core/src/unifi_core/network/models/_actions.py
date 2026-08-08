@@ -300,7 +300,10 @@ class QosRuleSimpleInput(BaseModel):
 class PortForwardCreateInput(BaseModel):
     """Input for the full port-forward create path (``unifi_create_port_forward``)."""
 
-    model_config = ConfigDict(extra="forbid", strict=True)
+    # extra="forbid" fails loudly on unknown keys (the silent-drop class this
+    # module exists to prevent); lax field coercion is kept so long-accepted
+    # payloads like {"enabled": "true"} keep working.
+    model_config = ConfigDict(extra="forbid")
     __action_input__: ClassVar[bool] = True
 
     name: str = Field(description="Descriptive name for the port-forward rule")
@@ -319,7 +322,10 @@ class PortForwardUpdateInput(BaseModel):
     All fields are optional — only supplied fields are applied.
     """
 
-    model_config = ConfigDict(extra="forbid", strict=True)
+    # extra="forbid" fails loudly on unknown keys (the silent-drop class this
+    # module exists to prevent); lax field coercion is kept so long-accepted
+    # payloads like {"enabled": "true"} keep working.
+    model_config = ConfigDict(extra="forbid")
     __action_input__: ClassVar[bool] = True
 
     name: Optional[str] = Field(default=None, description="New name for the rule")
@@ -335,7 +341,10 @@ class PortForwardUpdateInput(BaseModel):
 class PortForwardSimpleInput(BaseModel):
     """Input for the simplified port-forward create path (``unifi_create_simple_port_forward``)."""
 
-    model_config = ConfigDict(extra="forbid", strict=True)
+    # extra="forbid" fails loudly on unknown keys (the silent-drop class this
+    # module exists to prevent); lax field coercion is kept so long-accepted
+    # payloads like {"enabled": "true"} keep working.
+    model_config = ConfigDict(extra="forbid")
     __action_input__: ClassVar[bool] = True
 
     name: str = Field(description="User-friendly name of the port forward rule")

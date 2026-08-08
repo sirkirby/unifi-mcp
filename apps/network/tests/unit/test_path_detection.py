@@ -495,6 +495,50 @@ class TestPathDetection:
         await manager.cleanup()
 
     @pytest.mark.asyncio
+    async def test_auth_circuit_half_opens_after_cooldown_and_success_resets(self):
+        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=1)
+        controller = MagicMock()
+        controller.connectivity = MagicMock()
+        controller.connectivity.is_unifi_os = False
+        rate_limited = AuthenticationRateLimitError("429: login attempt limit")
+        controller.login = AsyncMock(side_effect=[rate_limited, None])
+
+        with patch("unifi_core.network.managers.connection_manager.Controller", return_value=controller):
+            with patch("unifi_core.network.controller_type.resolve_controller_type", return_value="direct"):
+                with patch(
+                    "unifi_core.network.managers.connection_manager.detect_unifi_os_pre_login", return_value=False
+                ):
+                    assert await manager.initialize() is False
+                    assert manager.reconnect_blocked is True
+                    # Within the cool-down: no second login attempt.
+                    assert await manager.initialize() is False
+                    controller.login.assert_awaited_once()
+
+                    # After the cool-down expires the circuit half-opens and a
+                    # successful login clears the block entirely.
+                    manager._reconnect_block_until = 0.0
+                    assert await manager.initialize() is True
+
+        assert manager.reconnect_blocked is False
+        assert manager._reconnect_block_count == 0
+        assert controller.login.await_count == 2
+        await manager.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_auth_circuit_relatch_escalates_cooldown(self):
+        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=1)
+        first = manager._block_automatic_reconnect(AuthenticationRateLimitError("429"))
+        first_deadline = manager._reconnect_block_until
+        manager._reconnect_block_until = 0.0
+        second = manager._block_automatic_reconnect(AuthenticationRateLimitError("429"))
+
+        assert first == second == "429"
+        assert manager._reconnect_block_count == 2
+        # The second cool-down is double the first (base*2), measured from now.
+        assert manager._reconnect_block_until > first_deadline
+        await manager.cleanup()
+
+    @pytest.mark.asyncio
     async def test_expired_session_explicitly_reauthenticates_and_retries_request(self):
         manager = ConnectionManager("192.168.1.1", "admin", "secret")
         session = MagicMock()
@@ -647,7 +691,8 @@ class TestPathDetection:
             await manager.request(ApiRequest(method="get", path="/stat/sysinfo"))
 
         assert manager.controller is None
-        assert manager._automatic_reconnect_blocked_error == "still expired"
+        assert manager.reconnect_blocked is True
+        assert manager._reconnect_block_error == "still expired"
         controller.login.assert_awaited_once()
         assert await manager.ensure_connected() is False
         controller.login.assert_awaited_once()
@@ -674,7 +719,7 @@ class TestPathDetection:
 
         assert manager.controller is controller
         assert manager._initialized is True
-        assert manager._automatic_reconnect_blocked_error is None
+        assert manager.reconnect_blocked is False
         await manager.cleanup()
 
     @pytest.mark.asyncio

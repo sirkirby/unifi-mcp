@@ -68,6 +68,7 @@ class Network:
     dhcpd_ip_1: str | None
     dhcpguard_enabled: bool | None
     # Multicast / mDNS
+    auto_scale_enabled: bool | None
     igmp_snooping: bool | None
     igmp_querier_switches: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     igmp_flood_unknown_multicast: bool | None
@@ -93,6 +94,7 @@ class Network:
     ipv6_enabled: bool | None
     wan_type_v6: str | None
     ipv6_setting_preference: str | None
+    ipv6_ra_enabled: bool | None
     ipv6_wan_delegation_type: str | None
     wan_dhcpv6_pd_size: int | None
     wan_dhcpv6_pd_size_auto: bool | None
@@ -152,6 +154,7 @@ class Network:
             dhcp_relay_enabled=raw.get("dhcp_relay_enabled"),
             dhcpd_ip_1=raw.get("dhcpd_ip_1"),
             dhcpguard_enabled=raw.get("dhcpguard_enabled"),
+            auto_scale_enabled=raw.get("auto_scale_enabled"),
             igmp_snooping=raw.get("igmp_snooping"),
             igmp_querier_switches=raw.get("igmp_querier_switches"),
             igmp_flood_unknown_multicast=raw.get("igmp_flood_unknown_multicast"),
@@ -174,6 +177,7 @@ class Network:
             ipv6_enabled=raw.get("ipv6_enabled"),
             wan_type_v6=raw.get("wan_type_v6"),
             ipv6_setting_preference=raw.get("ipv6_setting_preference"),
+            ipv6_ra_enabled=raw.get("ipv6_ra_enabled"),
             ipv6_wan_delegation_type=raw.get("ipv6_wan_delegation_type"),
             wan_dhcpv6_pd_size=raw.get("wan_dhcpv6_pd_size"),
             wan_dhcpv6_pd_size_auto=raw.get("wan_dhcpv6_pd_size_auto"),

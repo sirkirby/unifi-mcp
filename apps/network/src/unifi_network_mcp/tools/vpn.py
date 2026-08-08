@@ -14,6 +14,7 @@ from pydantic import Field
 from unifi_core.confirmation import delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.redaction import redact_sensitive_fields
+from unifi_core.write_verification import format_tool_payload
 from unifi_network_mcp.runtime import server, should_redact_sensitive_fields, vpn_manager
 
 logger = logging.getLogger(__name__)
@@ -107,11 +108,13 @@ async def update_vpn_client_state(
             )
 
         write_result = await vpn_manager.update_vpn_client_state(client_id, enabled)
-        payload = write_result.to_dict()
+        payload = format_tool_payload(
+            write_result,
+            site=vpn_manager._connection.site,
+            success_message=f"VPN client '{client_id}' {'enabled' if enabled else 'disabled'}.",
+        )
         payload["client_id"] = client_id
-        if write_result.success:
-            payload["message"] = f"VPN client '{client_id}' {'enabled' if enabled else 'disabled'}."
-        else:
+        if not write_result.success:
             payload["error"] = f"Failed to update state for VPN client {client_id}: {write_result.error}"
         return redact_sensitive_fields(payload, redact_sensitive=redact_sensitive)
     except UniFiNotFoundError as e:
@@ -252,11 +255,13 @@ async def update_vpn_server_state(
             )
 
         write_result = await vpn_manager.update_vpn_server_state(server_id, enabled)
-        payload = write_result.to_dict()
+        payload = format_tool_payload(
+            write_result,
+            site=vpn_manager._connection.site,
+            success_message=f"VPN server '{server_id}' {'enabled' if enabled else 'disabled'}.",
+        )
         payload["server_id"] = server_id
-        if write_result.success:
-            payload["message"] = f"VPN server '{server_id}' {'enabled' if enabled else 'disabled'}."
-        else:
+        if not write_result.success:
             payload["error"] = f"Failed to update state for VPN server {server_id}: {write_result.error}"
         return redact_sensitive_fields(payload, redact_sensitive=redact_sensitive)
     except UniFiNotFoundError as e:

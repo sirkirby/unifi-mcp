@@ -70,10 +70,25 @@ def _verification_error(operation: str, dropped: Collection[str], coerced: Colle
     )
 
 
+def _numeric_string_equal(actual: Any, wanted: Any) -> bool:
+    """Whether one side is the exact string form of the other's number.
+
+    Controllers normalize numeric strings on persist (a requested vlan of
+    ``"100"`` is echoed back as ``100``); that round-trip is persistence, not
+    coercion. Booleans stay strict — ``True`` echoed as ``1`` is a real type
+    change.
+    """
+    if isinstance(actual, str) and isinstance(wanted, (int, float)) and not isinstance(wanted, bool):
+        return actual == str(wanted)
+    if isinstance(wanted, str) and isinstance(actual, (int, float)) and not isinstance(actual, bool):
+        return wanted == str(actual)
+    return False
+
+
 def _exact_equal(actual: Any, wanted: Any) -> bool:
     """Compare JSON-like values without Python's bool/int numeric coercion."""
     if type(actual) is not type(wanted):
-        return False
+        return _numeric_string_equal(actual, wanted)
     if isinstance(actual, dict):
         return actual.keys() == wanted.keys() and all(_exact_equal(actual[key], wanted[key]) for key in actual)
     if isinstance(actual, list):
@@ -88,6 +103,7 @@ def verify_write(
     after: Mapping[str, Any],
     before: Mapping[str, Any] | None = None,
     unverifiable_fields: Collection[str] = (),
+    absent_value_defaults: Mapping[str, Any] | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> WriteVerificationResult:
     """Classify requested top-level fields against the post-write resource.
@@ -96,8 +112,18 @@ def verify_write(
     equal to the pre-write value is classified as dropped; a different but still
     non-requested value is classified as coerced.  For creates, missing values
     are dropped and present-but-different values are coerced.
+
+    ``absent_value_defaults`` maps field names to the value the controller
+    means when it omits the key entirely (UniFi drops default-true ``enabled``
+    flags on persist); an absent key then compares as that value instead of
+    being classified as dropped.
     """
     unverifiable_set = set(unverifiable_fields)
+    defaults = dict(absent_value_defaults or {})
+    if defaults:
+        after = {**{k: v for k, v in defaults.items() if k in requested}, **after}
+        if before is not None:
+            before = {**{k: v for k, v in defaults.items() if k in requested}, **before}
     persisted: list[str] = []
     unchanged: list[str] = []
     dropped: list[str] = []
@@ -141,6 +167,28 @@ def verify_write(
         unverifiable_fields=tuple(skipped),
         metadata=dict(metadata or {}),
     )
+
+
+def format_tool_payload(
+    result: WriteVerificationResult,
+    *,
+    site: str,
+    success_message: str,
+) -> dict[str, Any]:
+    """Format a verification result for the MCP tool response contract.
+
+    One canonical envelope for every verified-write tool: adds ``site``, and on
+    success renames ``details_after_attempt`` to ``details`` and attaches the
+    success message. Callers add resource identifiers and failure ``error``
+    text, which stay tool-specific.
+    """
+    payload = result.to_dict()
+    payload["site"] = site
+    if result.success:
+        if "details_after_attempt" in payload:
+            payload["details"] = payload.pop("details_after_attempt")
+        payload["message"] = success_message
+    return payload
 
 
 def noop_write(

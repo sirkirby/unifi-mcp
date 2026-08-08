@@ -78,6 +78,24 @@ async def test_partial_wlan_write_lists_persisted_and_dropped_fields() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("purpose", ["wan", "vpn-client", "vpn-server"])
+async def test_delete_network_refuses_non_lan_purposes_before_preview_or_delete(purpose: str) -> None:
+    current = {"_id": "net001", "name": "Uplink", "purpose": purpose}
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        mock_mgr.get_network_details = AsyncMock(return_value=current)
+        mock_mgr.delete_network = AsyncMock()
+        from unifi_network_mcp.tools.network import delete_network
+
+        preview = await delete_network("net001", confirm=False)
+        confirmed = await delete_network("net001", confirm=True)
+
+    for result in (preview, confirmed):
+        assert result["success"] is False
+        assert "not a LAN/VLAN network" in result["error"]
+    mock_mgr.delete_network.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_delete_network_preview_and_confirm_use_live_resource() -> None:
     current = {"_id": "net001", "name": "Disposable", "purpose": "corporate"}
     with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:

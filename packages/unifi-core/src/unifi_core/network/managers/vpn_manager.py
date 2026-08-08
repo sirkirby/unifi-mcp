@@ -258,6 +258,9 @@ class VpnManager:
                 requested=update_data,
                 before=existing,
                 after=refetched,
+                # Legacy networkconf omits default-true 'enabled' on persist;
+                # absent means enabled, not a dropped write.
+                absent_value_defaults={"enabled": True},
                 metadata={"vpn_id": config_id},
             )
 

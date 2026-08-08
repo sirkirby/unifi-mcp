@@ -418,9 +418,11 @@ class ManagerFactory:
             {"ok": False, "error_kind": "not_found", "products": {},
              "latency_ms": 0, "last_probed_at": iso8601}
 
-        This method does NOT cache the constructed connection and does not
-        invalidate existing cached sessions. This is intentional: a health probe
-        must not interrupt in-flight production requests.
+        This method does NOT cache the constructed connection and leaves
+        healthy cached sessions untouched — a health probe must not interrupt
+        in-flight production requests. The one exception: cached connections
+        whose auth circuit latched are dropped after their product probes ok,
+        so production traffic recovers as soon as credentials work again.
         """
         async with self._sm() as session:
             controller = await session.get(Controller, controller_id)
@@ -467,6 +469,8 @@ class ManagerFactory:
                         }
                         all_ok = False
 
+        await self._heal_blocked_connections(controller_id, per_product)
+
         return {
             "ok": all_ok,
             "products": per_product,
@@ -475,17 +479,56 @@ class ManagerFactory:
             "last_probed_at": datetime.now(timezone.utc).isoformat(),
         }
 
+    async def _heal_blocked_connections(self, controller_id: str, per_product: dict[str, dict]) -> None:
+        """Drop cached connections whose auth circuit latched once a probe proves auth works.
+
+        A successful isolated probe means credentials and reachability are good
+        again; keeping a cached connection that latched its reconnect block
+        would leave production requests failing until the block's cool-down
+        expires. Healthy cached connections are left untouched.
+        """
+        async with self._locks[controller_id]:
+            healable = [
+                key
+                for key, cached in self._connection_cache.items()
+                if key[0] == controller_id
+                and getattr(cached, "reconnect_blocked", False)
+                and per_product.get(key[1], {}).get("ok")
+            ]
+            if not healable:
+                return
+            # Domain managers may be bound to the blocked connections; sweep
+            # them synchronously with the pops (same invariant as
+            # invalidate_controller). Survivors rebuild from cached healthy
+            # connections on next use.
+            for k in [k for k in self._domain_cache if k[0] == controller_id]:
+                self._domain_cache.pop(k, None)
+            removed = [self._connection_cache.pop(k) for k in healable]
+            logger.info(
+                "Probe succeeded; dropping %d auth-blocked cached connection(s) for controller %s",
+                len(removed),
+                controller_id,
+            )
+            for cm in removed:
+                try:
+                    await self._close_connection_manager(cm)
+                except Exception as exc:
+                    logger.warning("Failed to close auth-blocked connection for controller %s: %s", controller_id, exc)
+
     async def invalidate_controller(self, controller_id: str) -> None:
         """Drop all cached managers for a controller and dispose their sessions."""
         async with self._locks[controller_id]:
-            # Remove domain managers before the first awaited close so a
-            # concurrent cache hit cannot obtain one bound to a closing session.
-            keys_domain = [k for k in self._domain_cache if k[0] == controller_id]
-            for k in keys_domain:
+            # Sweep both caches synchronously (no awaits between the sweeps) so
+            # the lock-free read paths can never observe a half-invalidated
+            # state: a domain-cache miss followed by a connection-cache hit on
+            # an entry still awaiting close would rebuild a domain manager
+            # around a disposed session and its pre-rotation credentials.
+            for k in [k for k in self._domain_cache if k[0] == controller_id]:
                 self._domain_cache.pop(k, None)
-            keys_conn = [k for k in self._connection_cache if k[0] == controller_id]
-            for k in keys_conn:
-                cm = self._connection_cache.pop(k)
+            removed = [
+                self._connection_cache.pop(k) for k in [k for k in self._connection_cache if k[0] == controller_id]
+            ]
+            for cm in removed:
                 try:
                     await self._close_connection_manager(cm)
                 except Exception as exc:

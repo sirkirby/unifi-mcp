@@ -175,6 +175,10 @@ class Network(BaseModel):
         default=None,
         description="Enable DHCP guard (blocks rogue DHCP servers)",
     )
+    auto_scale_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable automatic DHCP range scaling for this network",
+    )
     # Multicast / mDNS
     igmp_snooping: Optional[bool] = Field(
         default=None,
@@ -231,8 +235,9 @@ class Network(BaseModel):
     )
     wan_load_balance_weight: Optional[int] = Field(
         default=None,
-        ge=0,
-        le=100,
+        # Range (0-100) is enforced on the write path only (_validate_payload):
+        # this model also parses controller reads, and an out-of-range legacy
+        # value must not break whole-site listings.
         description="Load-balance weight for this WAN (0-100; used when type is 'weighted')",
     )
     wan_failover_priority: Optional[int] = Field(
@@ -275,6 +280,10 @@ class Network(BaseModel):
     ipv6_setting_preference: Optional[str] = Field(
         default=None,
         description="IPv6 settings source: 'auto' or 'manual'",
+    )
+    ipv6_ra_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable IPv6 router advertisements on this network",
     )
     ipv6_wan_delegation_type: Optional[str] = Field(
         default=None,
@@ -369,6 +378,7 @@ def from_controller(raw: Any) -> Network:
         dhcp_relay_enabled=_get(raw, "dhcp_relay_enabled"),
         dhcpd_ip_1=_get(raw, "dhcpd_ip_1"),
         dhcpguard_enabled=_get(raw, "dhcpguard_enabled"),
+        auto_scale_enabled=_get(raw, "auto_scale_enabled"),
         igmp_snooping=_get(raw, "igmp_snooping"),
         igmp_querier_switches=_get(raw, "igmp_querier_switches"),
         igmp_flood_unknown_multicast=_get(raw, "igmp_flood_unknown_multicast"),
@@ -391,6 +401,7 @@ def from_controller(raw: Any) -> Network:
         ipv6_enabled=_get(raw, "ipv6_enabled"),
         wan_type_v6=_get(raw, "wan_type_v6"),
         ipv6_setting_preference=_get(raw, "ipv6_setting_preference"),
+        ipv6_ra_enabled=_get(raw, "ipv6_ra_enabled"),
         ipv6_wan_delegation_type=_get(raw, "ipv6_wan_delegation_type"),
         wan_dhcpv6_pd_size=_get(raw, "wan_dhcpv6_pd_size"),
         wan_dhcpv6_pd_size_auto=_get(raw, "wan_dhcpv6_pd_size_auto"),
@@ -421,6 +432,10 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
 
 
 _ALLOWED_PURPOSES = frozenset({"corporate", "wan", "vlan-only", "vpn-client", "vpn-server"})
+
+# /rest/networkconf holds WAN uplinks and VPN configs alongside LANs; only
+# LAN-class purposes are deletable through the network lifecycle path.
+DELETABLE_PURPOSES = frozenset({"corporate", "guest", "vlan-only"})
 _WRITE_ENUM_VALUES = {
     "wan_type": frozenset({"dhcp", "static", "pppoe", "disabled"}),
     "wan_dns_preference": frozenset({"auto", "manual"}),
@@ -433,7 +448,13 @@ _WRITE_ENUM_VALUES = {
 _CONTROLLER_READ_ONLY_FIELDS = READ_ONLY_FIELDS | {"_id"}
 
 
-def _validate_payload(fields: Dict[str, Any], *, operation: str) -> tuple[Network, Any]:
+def _normalize_vlan_payload(payload: Dict[str, Any]) -> None:
+    """Emit vlan as the controller-native int regardless of caller input type."""
+    if "vlan" in payload:
+        payload["vlan"] = int(payload["vlan"])
+
+
+def _validate_payload(fields: Dict[str, Any], *, operation: str) -> Network:
     if not isinstance(fields, dict) or not fields:
         payload_name = "network_data" if operation == "create" else "update_data"
         raise ValueError(f"{payload_name} cannot be empty")
@@ -491,12 +512,12 @@ def _validate_payload(fields: Dict[str, Any], *, operation: str) -> tuple[Networ
             ip_interface(model.ip_subnet)
         except ValueError:
             raise ValueError("'ip_subnet' must be a valid IPv4 or IPv6 CIDR.") from None
-    return model, original_vlan
+    return model
 
 
 def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Validate a public Network create dictionary and return controller fields."""
-    model, original_vlan = _validate_payload(fields, operation="create")
+    model = _validate_payload(fields, operation="create")
     missing = [name for name in ("name", "purpose") if getattr(model, name) in (None, "")]
     if missing:
         raise ValueError(f"Missing required fields: {', '.join(missing)}")
@@ -514,18 +535,16 @@ def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
             )
 
     payload = to_controller_create(model)
-    if isinstance(original_vlan, int) and "vlan" in payload:
-        payload["vlan"] = original_vlan
+    _normalize_vlan_payload(payload)
     payload.setdefault("enabled", True)
     return payload
 
 
 def validate_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Validate a public partial Network update dictionary and return controller fields."""
-    model, original_vlan = _validate_payload(fields, operation="update")
+    model = _validate_payload(fields, operation="update")
     payload = to_controller_update(model.model_dump(include=set(fields), exclude_none=True))
-    if isinstance(original_vlan, int) and "vlan" in payload:
-        payload["vlan"] = original_vlan
+    _normalize_vlan_payload(payload)
     if not payload:
         raise ValueError("No valid mutable fields provided for update.")
     return payload

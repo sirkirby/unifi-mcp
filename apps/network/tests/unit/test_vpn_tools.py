@@ -167,13 +167,17 @@ async def test_update_vpn_client_state_confirm_returns_verified_outcome() -> Non
     with patch("unifi_network_mcp.tools.vpn.vpn_manager") as mock_mgr:
         mock_mgr.get_vpn_client_details = AsyncMock(return_value=current)
         mock_mgr.update_vpn_client_state = AsyncMock(return_value=write_result)
+        mock_mgr._connection.site = "default"
         from unifi_network_mcp.tools.vpn import update_vpn_client_state
 
         result = await update_vpn_client_state("vpn-1", False, confirm=True)
 
     assert result["success"] is True
     assert result["persisted_fields"] == ["enabled"]
-    assert result["details_after_attempt"]["enabled"] is False
+    # Unified verified-write envelope: same contract as network/WLAN tools.
+    assert result["site"] == "default"
+    assert result["details"]["enabled"] is False
+    assert "details_after_attempt" not in result
 
 
 @pytest.mark.asyncio

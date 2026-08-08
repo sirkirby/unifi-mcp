@@ -22,6 +22,13 @@ from aiounifi.models.configuration import Configuration
 
 logger = logging.getLogger("unifi-network-mcp")
 
+# Auth-circuit cool-down: first terminal failure blocks reconnects for the base
+# interval, doubling per consecutive failure up to the cap. Rate-limit lockouts
+# clear on the controller in minutes, so the circuit half-opens instead of
+# requiring a process restart.
+_RECONNECT_BLOCK_BASE_SECONDS = 60.0
+_RECONNECT_BLOCK_MAX_SECONDS = 900.0
+
 # aiounifi v92 logs the complete login JSON (including password) at DEBUG.
 # Keep that dependency logger at INFO even when application diagnostics use DEBUG.
 _aiounifi_connectivity_logger = logging.getLogger("aiounifi.interfaces.connectivity")
@@ -257,7 +264,9 @@ class ConnectionManager:
         self._cache: Dict[str, Any] = {}
         self._last_cache_update: Dict[str, float] = {}
         self._last_connection_error: Optional[str] = None
-        self._automatic_reconnect_blocked_error: Optional[str] = None
+        self._reconnect_block_error: Optional[str] = None
+        self._reconnect_block_until: float = 0.0
+        self._reconnect_block_count: int = 0
         self._auth_generation = 0
 
         # Path detection state
@@ -321,16 +330,48 @@ class ConnectionManager:
         return False
 
     def _block_automatic_reconnect(self, error: BaseException) -> str:
+        """Open the auth circuit with an escalating cool-down (half-open after expiry).
+
+        Terminal auth failures (bad credentials, 2FA required, controller login
+        rate-limits) must not trigger per-request login retries — that is the
+        retry-storm this circuit exists to prevent — but rate-limit lockouts and
+        proxy-boot 403s clear on their own, so the block expires and the next
+        caller gets one half-open attempt instead of requiring a process restart.
+        """
         connection_error = self._record_connection_error(error)
-        self._automatic_reconnect_blocked_error = connection_error
+        self._reconnect_block_error = connection_error
+        self._reconnect_block_count += 1
+        cooldown = min(
+            _RECONNECT_BLOCK_BASE_SECONDS * (2 ** (self._reconnect_block_count - 1)),
+            _RECONNECT_BLOCK_MAX_SECONDS,
+        )
+        self._reconnect_block_until = _time.monotonic() + cooldown
         self._initialized = False
         self._invalidate_cache()
         logger.error(
             "Automatic reconnect blocked after terminal authentication failure: %s. "
-            "Correct the credentials or wait for the controller lockout to clear, then restart the process.",
+            "Correct the credentials or wait for the controller lockout to clear; "
+            "the next reconnect attempt is allowed in %.0f seconds.",
             connection_error,
+            cooldown,
         )
         return connection_error
+
+    def _reconnect_block_active(self) -> Optional[str]:
+        """Return the block error while the cool-down is running, else None."""
+        if self._reconnect_block_error and _time.monotonic() < self._reconnect_block_until:
+            return self._reconnect_block_error
+        return None
+
+    def _clear_reconnect_block(self) -> None:
+        self._reconnect_block_error = None
+        self._reconnect_block_until = 0.0
+        self._reconnect_block_count = 0
+
+    @property
+    def reconnect_blocked(self) -> bool:
+        """Whether the last authentication attempt failed terminally with no success since."""
+        return self._reconnect_block_error is not None
 
     async def _discard_connection(self) -> None:
         if self._aiohttp_session and not self._aiohttp_session.closed:
@@ -341,17 +382,18 @@ class ConnectionManager:
 
     async def initialize(self) -> bool:
         """Initialize the controller connection (correct for attached aiounifi version)."""
-        if self._automatic_reconnect_blocked_error:
+        blocked = self._reconnect_block_active()
+        if blocked:
             logger.error(
                 "Automatic reconnect remains blocked after authentication failure: %s",
-                self._automatic_reconnect_blocked_error,
+                blocked,
             )
             return False
         if self._initialized and self.controller and self._aiohttp_session and not self._aiohttp_session.closed:
             return True
 
         async with self._connect_lock:
-            if self._automatic_reconnect_blocked_error:
+            if self._reconnect_block_active():
                 return False
             if self._initialized and self.controller and self._aiohttp_session and not self._aiohttp_session.closed:
                 return True
@@ -458,6 +500,7 @@ class ConnectionManager:
                     self._initialized = True
                     self._auth_generation += 1
                     self._last_connection_error = None
+                    self._clear_reconnect_block()
                     logger.info("Successfully connected to Unifi controller at %s for site '%s'", self.host, self.site)
                     self._invalidate_cache()
                     return True
@@ -520,11 +563,11 @@ class ConnectionManager:
 
     async def _reauthenticate(self, expected_generation: int) -> bool:
         """Refresh an expired controller login once, deduplicating concurrent attempts."""
-        if self._automatic_reconnect_blocked_error:
+        if self._reconnect_block_active():
             return False
 
         async with self._connect_lock:
-            if self._automatic_reconnect_blocked_error:
+            if self._reconnect_block_active():
                 return False
             if (
                 self._auth_generation != expected_generation
@@ -552,6 +595,7 @@ class ConnectionManager:
             self._initialized = True
             self._auth_generation += 1
             self._last_connection_error = None
+            self._clear_reconnect_block()
             logger.info("Controller session re-authenticated successfully")
             return True
 
@@ -565,7 +609,7 @@ class ConnectionManager:
             self._cache = {}
             self._last_cache_update = {}
             self._last_connection_error = None
-            self._automatic_reconnect_blocked_error = None
+            self._clear_reconnect_block()
             self._auth_generation = 0
             logger.info("Unifi connection manager resources cleared.")
 

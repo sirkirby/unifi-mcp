@@ -25,12 +25,16 @@ class _FakeCM:
         self.kwargs = kwargs
         self.init_calls = 0
         self.close_calls = 0
+        self.reconnect_blocked = False
+        self.close_gate: "asyncio.Event | None" = None
 
     async def initialize(self) -> bool:
         self.init_calls += 1
         return True
 
     async def close(self) -> None:
+        if self.close_gate is not None:
+            await self.close_gate.wait()
         self.close_calls += 1
 
 
@@ -302,6 +306,70 @@ async def test_probe_preserves_cached_production_connection(tmp_path: Path, monk
     assert instances[0].close_calls == 0
     assert instances[1].close_calls == 1
     assert factory._connection_cache[(cid, "network", "default")] is cached
+    await factory.invalidate_controller(cid)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_probe_heals_auth_blocked_cached_connection(tmp_path: Path, monkeypatch) -> None:
+    instances = _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    async with sm() as session:
+        cached = await factory.get_connection_manager(session, cid, "network")
+    cached.reconnect_blocked = True
+
+    result = await factory.probe_controller(cid)
+
+    assert result["ok"] is True
+    # The blocked cached connection was dropped and closed; the next request
+    # reconstructs instead of failing until the auth-circuit cool-down expires.
+    assert (cid, "network", "default") not in factory._connection_cache
+    assert cached.close_calls == 1
+    async with sm() as session:
+        fresh = await factory.get_connection_manager(session, cid, "network")
+    assert fresh is not cached
+    assert len(instances) == 3  # cached + isolated probe + reconstructed
+    await factory.invalidate_controller(cid)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_invalidate_sweeps_connection_cache_before_awaiting_closes(tmp_path: Path, monkeypatch) -> None:
+    """A domain-manager rebuild racing invalidate must not grab a closing connection."""
+    _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    async with sm() as session:
+        cm_a = await factory.get_connection_manager(session, cid, "network", site="site-a")
+        cm_b = await factory.get_connection_manager(session, cid, "network", site="site-b")
+    gate = asyncio.Event()
+    cm_a.close_gate = gate
+    cm_b.close_gate = gate
+
+    invalidate = asyncio.create_task(factory.invalidate_controller(cid))
+    for _ in range(10):
+        await asyncio.sleep(0)  # let invalidate suspend inside the first close()
+
+    # Both entries must already be gone even though closes are still pending.
+    assert not [k for k in factory._connection_cache if k[0] == cid]
+
+    async def rebuild():
+        async with sm() as session:
+            return await factory.get_domain_manager(session, cid, "network", "client_manager", site="site-b")
+
+    rebuild_task = asyncio.create_task(rebuild())
+    for _ in range(10):
+        await asyncio.sleep(0)
+    # The rebuild is parked on the per-controller lock, not bound to cm_b.
+    assert not rebuild_task.done()
+
+    gate.set()
+    await invalidate
+    manager = await rebuild_task
+    rebuilt_cm = factory._connection_cache[(cid, "network", "site-b")]
+    assert rebuilt_cm is not cm_b
+    assert manager is factory._domain_cache[(cid, "network", "client_manager", "site-b")]
     await factory.invalidate_controller(cid)
     await engine.dispose()
 

@@ -7,7 +7,7 @@ from aiounifi.models.wlan import Wlan
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
-from unifi_core.network.models.networks import UNSAFE_GUEST_PURPOSE_ERROR
+from unifi_core.network.models.networks import DELETABLE_PURPOSES, UNSAFE_GUEST_PURPOSE_ERROR
 from unifi_core.network.models.wlans import apply_update_dependencies as apply_wlan_update_dependencies
 from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
 
@@ -16,6 +16,10 @@ logger = logging.getLogger("unifi-network-mcp")
 CACHE_PREFIX_NETWORKS = "networks"
 CACHE_PREFIX_WLANS = "wlans"
 CACHE_PREFIX_AP_GROUPS = "ap_groups"
+
+# Legacy configs omit default-true flags on persist: an absent 'enabled' key
+# on read-back means enabled, not that the write was dropped.
+_ABSENT_VALUE_DEFAULTS = {"enabled": True}
 
 # Fields the controller never echoes back verbatim (write-only / redacted), so a
 # re-read cannot confirm them. Excluded from post-write persistence verification.
@@ -181,6 +185,7 @@ class NetworkManager:
                 requested=network_data,
                 after=refetched,
                 unverifiable_fields=_UNVERIFIABLE_UPDATE_KEYS,
+                absent_value_defaults=_ABSENT_VALUE_DEFAULTS,
                 metadata={"network_id": network_id},
             )
         except Exception as e:
@@ -241,6 +246,7 @@ class NetworkManager:
                 before=existing_network,
                 after=refetched,
                 unverifiable_fields=_UNVERIFIABLE_UPDATE_KEYS,
+                absent_value_defaults=_ABSENT_VALUE_DEFAULTS,
                 metadata={"network_id": network_id},
             )
         except Exception as e:
@@ -248,9 +254,16 @@ class NetworkManager:
             raise
 
     async def delete_network(self, network_id: str) -> bool:
-        """Delete a network and verify it is absent afterward."""
+        """Delete a LAN/VLAN network and verify it is absent afterward."""
         try:
-            await self.get_network_details(network_id)
+            existing = await self.get_network_details(network_id)
+            purpose = existing.get("purpose")
+            if purpose not in DELETABLE_PURPOSES:
+                hint = " Use unifi_delete_vpn_client for VPN client configurations." if purpose == "vpn-client" else ""
+                raise ValueError(
+                    f"Refusing to delete network {network_id}: purpose '{purpose}' is not a LAN/VLAN network. "
+                    "Deleting WAN or VPN networkconf entries can sever gateway connectivity." + hint
+                )
             api_request = ApiRequest(method="delete", path=f"/rest/networkconf/{network_id}")
             await self._connection.request(api_request)
             logger.info("Delete command sent for network %s", network_id)
@@ -349,6 +362,7 @@ class NetworkManager:
                 requested=wlan_data,
                 after=refetched,
                 unverifiable_fields=_UNVERIFIABLE_UPDATE_KEYS,
+                absent_value_defaults=_ABSENT_VALUE_DEFAULTS,
                 metadata={"wlan_id": wlan_id},
             )
         except Exception as e:
@@ -412,6 +426,7 @@ class NetworkManager:
                 before=existing_wlan,
                 after=refetched,
                 unverifiable_fields=_UNVERIFIABLE_UPDATE_KEYS,
+                absent_value_defaults=_ABSENT_VALUE_DEFAULTS,
                 metadata={"wlan_id": wlan_id},
             )
         except Exception as e:

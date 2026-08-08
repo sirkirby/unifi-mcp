@@ -1057,6 +1057,7 @@ type Network {
   dhcpRelayEnabled: Boolean
   dhcpdIp1: String
   dhcpguardEnabled: Boolean
+  autoScaleEnabled: Boolean
   igmpSnooping: Boolean
   igmpQuerierSwitches: JSON
   igmpFloodUnknownMulticast: Boolean
@@ -1079,6 +1080,7 @@ type Network {
   ipv6Enabled: Boolean
   wanTypeV6: String
   ipv6SettingPreference: String
+  ipv6RaEnabled: Boolean
   ipv6WanDelegationType: String
   wanDhcpv6PdSize: Int
   wanDhcpv6PdSizeAuto: Boolean
