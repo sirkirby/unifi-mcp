@@ -7,8 +7,41 @@ import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+
+def test_live_smoke_setup_aborts_before_registration_when_authentication_fails(monkeypatch):
+    import live_smoke
+
+    connection_manager = SimpleNamespace(
+        initialize=AsyncMock(return_value=False),
+        last_connection_error="429: login attempt limit reached",
+    )
+    register_tools = AsyncMock()
+    modules = {
+        "unifi_network_mcp.main": SimpleNamespace(_original_tool_decorator=object()),
+        "unifi_network_mcp.runtime": SimpleNamespace(
+            server=object(), connection_manager=connection_manager, config=object()
+        ),
+        "unifi_network_mcp.bootstrap": SimpleNamespace(UNIFI_TOOL_REGISTRATION_MODE="lazy", logger=object()),
+        "unifi_network_mcp.categories": SimpleNamespace(TOOL_MODULE_MAP={}, setup_lazy_loading=object()),
+        "unifi_network_mcp.jobs": SimpleNamespace(start_async_tool=object(), get_job_status=object()),
+        "unifi_network_mcp.tool_index": SimpleNamespace(tool_index_handler=object(), register_tool=object()),
+        "unifi_mcp_shared.tool_registration": SimpleNamespace(register_tools_for_mode=register_tools),
+    }
+    monkeypatch.setattr(live_smoke, "configure_environment", lambda: None)
+    monkeypatch.setattr(live_smoke.importlib, "import_module", modules.__getitem__)
+    runner = live_smoke.LiveSmokeRunner("network", SimpleNamespace())
+
+    with pytest.raises(ConnectionError, match="aborting before tool execution.*429"):
+        asyncio.run(runner.setup())
+
+    assert runner.report.connected is False
+    register_tools.assert_not_awaited()
 
 
 def test_live_api_catalog_probe_reports_exact_parity(monkeypatch, tmp_path):
@@ -256,6 +289,36 @@ def test_network_lifecycle_creates_updates_reads_and_deletes_disposable_vlan() -
     assert runner.report.created_resources == [
         {"type": "network", "id": "network-smoke-1", "name": create_args["name"]}
     ]
+    assert runner.report.cleaned_resources == runner.report.created_resources
+
+
+def test_wlan_lifecycle_reads_back_and_cleans_up_disposable_wlan() -> None:
+    import live_smoke
+
+    runner = object.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = SimpleNamespace(id_from_tool=lambda *_args: "ap-group-1")
+    runner.report = SimpleNamespace(created_resources=[], cleaned_resources=[])
+    calls: list[tuple[str, dict, str]] = []
+
+    async def call(tool: str, args: dict, phase: str):
+        calls.append((tool, args, phase))
+        summary = {"resource_id": "wlan-smoke-1"} if tool == "unifi_create_wlan" else {}
+        return SimpleNamespace(summary=summary, success=True)
+
+    runner.call = call
+    runner.skip = lambda *_args: None
+
+    asyncio.run(runner.lifecycle_network_wlan())
+
+    assert [tool for tool, _args, _phase in calls] == [
+        "unifi_create_wlan",
+        "unifi_update_wlan",
+        "unifi_update_wlan",
+        "unifi_get_wlan_details",
+        "unifi_delete_wlan",
+    ]
+    assert calls[0][1]["wlan_data"]["enabled"] is False
+    assert calls[-1][1] == {"wlan_id": "wlan-smoke-1", "confirm": True}
     assert runner.report.cleaned_resources == runner.report.created_resources
 
 

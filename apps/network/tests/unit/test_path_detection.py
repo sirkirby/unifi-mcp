@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 from aioresponses import CallbackResult, aioresponses
-from aiounifi.errors import RequestError
+from aiounifi.errors import AuthenticationRateLimitError, LoginRequired, RequestError, Unauthorized
 from aiounifi.models.api import ApiRequest
 from yarl import URL
 
@@ -456,6 +456,86 @@ class TestPathDetection:
 
         assert "Not connected to controller" in str(exc_info.value)
         assert "SSO MFA required but no totp_secret configured" in str(exc_info.value)
+        await manager.cleanup()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "error",
+        [
+            AuthenticationRateLimitError("429: You've reached the login attempt limit"),
+            Unauthorized("api.err.Invalid"),
+        ],
+    )
+    async def test_terminal_auth_failure_blocks_automatic_reconnects(self, error):
+        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=3)
+        controller = MagicMock()
+        controller.connectivity = MagicMock()
+        controller.connectivity.is_unifi_os = False
+        controller.login = AsyncMock(side_effect=error)
+
+        with patch("unifi_core.network.managers.connection_manager.Controller", return_value=controller) as factory:
+            with patch("unifi_core.network.controller_type.resolve_controller_type", return_value="direct"):
+                assert await manager.initialize() is False
+                assert await manager.initialize() is False
+
+        factory.assert_called_once()
+        controller.login.assert_awaited_once()
+        assert manager.last_connection_error == str(error)
+        await manager.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_expired_session_explicitly_reauthenticates_and_retries_request(self):
+        manager = ConnectionManager("192.168.1.1", "admin", "secret")
+        session = MagicMock()
+        session.closed = False
+        session.close = AsyncMock()
+        controller = MagicMock()
+        controller.connectivity = MagicMock()
+        controller.connectivity.config.session = session
+        controller.login = AsyncMock()
+        controller.request = AsyncMock(
+            side_effect=[
+                LoginRequired("expired"),
+                {"meta": {"rc": "ok"}, "data": [{"id": "site-1"}]},
+            ]
+        )
+        manager._aiohttp_session = session
+        manager.controller = controller
+        manager._initialized = True
+        manager._auth_generation = 1
+
+        result = await manager.request(ApiRequest(method="get", path="/stat/sysinfo"))
+
+        assert result == [{"id": "site-1"}]
+        controller.login.assert_awaited_once()
+        assert controller.request.await_count == 2
+        assert manager._auth_generation == 2
+        await manager.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_expired_requests_share_one_reauthentication(self):
+        manager = ConnectionManager("192.168.1.1", "admin", "secret")
+        session = MagicMock()
+        session.closed = False
+        session.close = AsyncMock()
+        controller = MagicMock()
+        controller.connectivity = MagicMock()
+        controller.connectivity.config.session = session
+
+        async def login() -> None:
+            await asyncio.sleep(0.01)
+
+        controller.login = AsyncMock(side_effect=login)
+        manager._aiohttp_session = session
+        manager.controller = controller
+        manager._initialized = True
+        manager._auth_generation = 1
+
+        results = await asyncio.gather(manager._reauthenticate(1), manager._reauthenticate(1))
+
+        assert results == [True, True]
+        controller.login.assert_awaited_once()
+        assert manager._auth_generation == 2
         await manager.cleanup()
 
     @pytest.mark.asyncio

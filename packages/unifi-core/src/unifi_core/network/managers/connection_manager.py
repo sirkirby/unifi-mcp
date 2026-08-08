@@ -7,7 +7,16 @@ from typing import Any, Dict, Optional
 
 import aiohttp
 from aiounifi.controller import Controller
-from aiounifi.errors import LoginRequired, RequestError, ResponseError
+from aiounifi.errors import (
+    AuthenticationRateLimitError,
+    Forbidden,
+    LoginRequired,
+    NoPermission,
+    RequestError,
+    ResponseError,
+    TwoFaTokenRequired,
+    Unauthorized,
+)
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
@@ -242,6 +251,8 @@ class ConnectionManager:
         self._cache: Dict[str, Any] = {}
         self._last_cache_update: Dict[str, float] = {}
         self._last_connection_error: Optional[str] = None
+        self._automatic_reconnect_blocked_error: Optional[str] = None
+        self._auth_generation = 0
 
         # Path detection state
         self._unifi_os_override: Optional[bool] = None
@@ -270,6 +281,11 @@ class ConnectionManager:
         self._last_connection_error = self._sanitize_connection_error(error)
         return self._last_connection_error
 
+    @property
+    def last_connection_error(self) -> Optional[str]:
+        """Return the latest sanitized connection failure, if any."""
+        return self._last_connection_error
+
     def _not_connected_error(self) -> ConnectionError:
         if self._last_connection_error:
             return ConnectionError(
@@ -277,18 +293,62 @@ class ConnectionManager:
             )
         return ConnectionError("Not connected to controller")
 
+    @staticmethod
+    def _is_terminal_auth_error(error: BaseException) -> bool:
+        if isinstance(
+            error,
+            (
+                AuthenticationRateLimitError,
+                Forbidden,
+                LoginRequired,
+                NoPermission,
+                TwoFaTokenRequired,
+                Unauthorized,
+            ),
+        ):
+            return True
+        if isinstance(error, RequestError):
+            message = str(error).lower()
+            return "mfa" in message or "totp" in message
+        return False
+
+    def _block_automatic_reconnect(self, error: BaseException) -> str:
+        connection_error = self._record_connection_error(error)
+        self._automatic_reconnect_blocked_error = connection_error
+        self._initialized = False
+        logger.error(
+            "Automatic reconnect blocked after terminal authentication failure: %s. "
+            "Correct the credentials or wait for the controller lockout to clear, then restart the process.",
+            connection_error,
+        )
+        return connection_error
+
+    async def _discard_connection(self) -> None:
+        if self._aiohttp_session and not self._aiohttp_session.closed:
+            await self._aiohttp_session.close()
+        self._aiohttp_session = None
+        self.controller = None
+        self._initialized = False
+
     async def initialize(self) -> bool:
         """Initialize the controller connection (correct for attached aiounifi version)."""
+        if self._automatic_reconnect_blocked_error:
+            logger.error(
+                "Automatic reconnect remains blocked after authentication failure: %s",
+                self._automatic_reconnect_blocked_error,
+            )
+            return False
         if self._initialized and self.controller and self._aiohttp_session and not self._aiohttp_session.closed:
             return True
 
         async with self._connect_lock:
+            if self._automatic_reconnect_blocked_error:
+                return False
             if self._initialized and self.controller and self._aiohttp_session and not self._aiohttp_session.closed:
                 return True
 
             logger.info("Attempting to connect to Unifi controller at %s...", self.host)
             for attempt in range(self._max_retries):
-                session_created = False
                 try:
                     if self.controller:
                         self.controller = None
@@ -300,7 +360,6 @@ class ConnectionManager:
                     self._aiohttp_session = aiohttp.ClientSession(
                         connector=connector, cookie_jar=aiohttp.CookieJar(unsafe=True)
                     )
-                    session_created = True
 
                     # Controller type detection/override configuration
                     # Two-phase detection:
@@ -385,6 +444,7 @@ class ConnectionManager:
                             logger.debug("Post-login detection confirmed pre-login result")
 
                     self._initialized = True
+                    self._auth_generation += 1
                     self._last_connection_error = None
                     logger.info("Successfully connected to Unifi controller at %s for site '%s'", self.host, self.site)
                     self._invalidate_cache()
@@ -397,12 +457,13 @@ class ConnectionManager:
                     asyncio.TimeoutError,
                     aiohttp.ClientError,
                 ) as e:
+                    if self._is_terminal_auth_error(e):
+                        self._block_automatic_reconnect(e)
+                        await self._discard_connection()
+                        return False
                     connection_error = self._record_connection_error(e)
                     logger.warning("Connection attempt %s failed: %s", attempt + 1, connection_error)
-                    if session_created and self._aiohttp_session and not self._aiohttp_session.closed:
-                        await self._aiohttp_session.close()
-                        self._aiohttp_session = None
-                    self.controller = None
+                    await self._discard_connection()
                     if attempt < self._max_retries - 1:
                         await asyncio.sleep(self._retry_delay)
                     else:
@@ -414,17 +475,16 @@ class ConnectionManager:
                         self._initialized = False
                         return False
                 except Exception as e:
-                    connection_error = self._record_connection_error(e)
-                    logger.error(
-                        "Unexpected error during controller initialization: %s",
-                        connection_error,
-                        exc_info=True,
-                    )
-                    if session_created and self._aiohttp_session and not self._aiohttp_session.closed:
-                        await self._aiohttp_session.close()
-                        self._aiohttp_session = None
-                    self._initialized = False
-                    self.controller = None
+                    if self._is_terminal_auth_error(e):
+                        self._block_automatic_reconnect(e)
+                    else:
+                        connection_error = self._record_connection_error(e)
+                        logger.error(
+                            "Unexpected error during controller initialization: %s",
+                            connection_error,
+                            exc_info=True,
+                        )
+                    await self._discard_connection()
                     return False
             return False
 
@@ -447,16 +507,53 @@ class ConnectionManager:
 
         return True
 
+    async def _reauthenticate(self, expected_generation: int) -> bool:
+        """Refresh an expired controller login once, deduplicating concurrent attempts."""
+        if self._automatic_reconnect_blocked_error:
+            return False
+
+        async with self._connect_lock:
+            if self._automatic_reconnect_blocked_error:
+                return False
+            if (
+                self._auth_generation != expected_generation
+                and self._initialized
+                and self.controller
+                and self._aiohttp_session
+                and not self._aiohttp_session.closed
+            ):
+                return True
+            if not self.controller or not self._aiohttp_session or self._aiohttp_session.closed:
+                return False
+
+            try:
+                await self.controller.login()
+            except Exception as error:
+                if self._is_terminal_auth_error(error):
+                    connection_error = self._block_automatic_reconnect(error)
+                else:
+                    connection_error = self._record_connection_error(error)
+                    logger.error("Controller re-authentication failed: %s", connection_error, exc_info=True)
+                await self._discard_connection()
+                return False
+
+            self._initialized = True
+            self._auth_generation += 1
+            self._last_connection_error = None
+            logger.info("Controller session re-authenticated successfully")
+            return True
+
     async def cleanup(self):
         """Clean up resources and close connections."""
-        if self._aiohttp_session and not self._aiohttp_session.closed:
-            await self._aiohttp_session.close()
+        had_open_session = bool(self._aiohttp_session and not self._aiohttp_session.closed)
+        await self._discard_connection()
+        if had_open_session:
             logger.info("aiohttp session closed.")
-        self._initialized = False
-        self.controller = None
-        self._aiohttp_session = None
         self._cache = {}
         self._last_cache_update = {}
+        self._last_connection_error = None
+        self._automatic_reconnect_blocked_error = None
+        self._auth_generation = 0
         logger.info("Unifi connection manager resources cleared.")
 
     async def request(self, api_request: ApiRequest | ApiRequestV2, return_raw: bool = False) -> Any:
@@ -476,6 +573,7 @@ class ConnectionManager:
                 )
                 self.controller.connectivity.is_unifi_os = self._unifi_os_override
 
+        auth_generation = self._auth_generation
         request_method = self.controller.connectivity._request if return_raw else self.controller.request
 
         try:
@@ -501,11 +599,12 @@ class ConnectionManager:
             return response if return_raw else response.get("data")
 
         except LoginRequired:
-            logger.warning("Login required detected during request, attempting re-login...")
-            if await self.initialize():
+            logger.warning("Login required detected during request, attempting explicit re-authentication...")
+            if await self._reauthenticate(auth_generation):
                 if not self.controller:
-                    raise ConnectionError("Re-login failed, controller not available.")
-                logger.info("Re-login successful, retrying original request...")
+                    raise ConnectionError("Re-authentication failed, controller not available.")
+                logger.info("Re-authentication successful, retrying original request...")
+                request_method = self.controller.connectivity._request if return_raw else self.controller.request
                 try:
                     start_ts = _time.perf_counter()
                     retry_response = await request_method(api_request)
@@ -528,14 +627,14 @@ class ConnectionManager:
                     return retry_response if return_raw else retry_response.get("data")
                 except Exception as retry_e:
                     logger.error(
-                        "API request failed even after re-login: %s %s - %s",
+                        "API request failed even after re-authentication: %s %s - %s",
                         api_request.method.upper(),
                         api_request.path,
                         retry_e,
                     )
                     raise retry_e from None
             else:
-                raise ConnectionError("Re-login failed, cannot proceed with request.")
+                raise self._not_connected_error()
         except (RequestError, ResponseError, aiohttp.ClientError) as e:
             logger.error("API request error: %s %s - %s", api_request.method.upper(), api_request.path, e)
             try:

@@ -474,6 +474,12 @@ class LiveSmokeRunner:
         self.server = runtime_mod.server
         self.connection_manager = runtime_mod.connection_manager
         self.report.connected = await self.connection_manager.initialize()
+        if not self.report.connected:
+            detail = getattr(self.connection_manager, "last_connection_error", None)
+            suffix = f": {detail}" if detail else ""
+            raise ConnectionError(
+                "Live smoke could not authenticate to the controller; aborting before tool execution" + suffix
+            )
 
         kwargs = {
             "mode": bootstrap_mod.UNIFI_TOOL_REGISTRATION_MODE,
@@ -1411,26 +1417,33 @@ class LiveSmokeRunner:
             self.skip("unifi_delete_wlan", "approved", "WLAN create did not return an id")
             return
         self.report.created_resources.append({"type": "wlan", "id": wlan_id, "name": name})
-        # Exercise update_wlan: the WLAN is created hidden, so flipping hide_ssid
-        # is a real change. With verify-after-write a controller that silently
-        # ignores the legacy /rest/wlanconf PUT now yields a failed record here.
-        await self.call(
-            "unifi_update_wlan",
-            {"wlan_id": wlan_id, "update_data": {"hide_ssid": False}, "confirm": True},
-            "approved:update",
-        )
-        # Exercise the manual min-rate coupling: a freshly created WLAN is in auto
-        # rate mode, so a rate-only update persists only if the manager also flips
-        # minrate_setting_preference=manual and enables the band. verify-after-write
-        # turns a silent recompute into a failed record here.
-        await self.call(
-            "unifi_update_wlan",
-            {"wlan_id": wlan_id, "update_data": {"minrate_ng_data_rate_kbps": 6000}, "confirm": True},
-            "approved:update",
-        )
-        delete = await self.call("unifi_delete_wlan", {"wlan_id": wlan_id, "confirm": True}, "approved:delete")
-        if delete.success:
-            self.report.cleaned_resources.append({"type": "wlan", "id": wlan_id, "name": name})
+        try:
+            # Exercise update_wlan: the WLAN is created hidden, so flipping hide_ssid
+            # is a real change. With verify-after-write a controller that silently
+            # ignores the legacy /rest/wlanconf PUT now yields a failed record here.
+            await self.call(
+                "unifi_update_wlan",
+                {"wlan_id": wlan_id, "update_data": {"hide_ssid": False}, "confirm": True},
+                "approved:update",
+            )
+            # Exercise the manual min-rate coupling: a freshly created WLAN is in auto
+            # rate mode, so a rate-only update persists only if the manager also flips
+            # minrate_setting_preference=manual and enables the band. verify-after-write
+            # turns a silent recompute into a failed record here.
+            await self.call(
+                "unifi_update_wlan",
+                {"wlan_id": wlan_id, "update_data": {"minrate_ng_data_rate_kbps": 6000}, "confirm": True},
+                "approved:update",
+            )
+            await self.call("unifi_get_wlan_details", {"wlan_id": wlan_id}, "approved:verify")
+        finally:
+            delete = await self.call(
+                "unifi_delete_wlan",
+                {"wlan_id": wlan_id, "confirm": True},
+                "approved:delete",
+            )
+            if delete.success:
+                self.report.cleaned_resources.append({"type": "wlan", "id": wlan_id, "name": name})
 
     async def lifecycle_network_port_profile(self) -> None:
         stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
