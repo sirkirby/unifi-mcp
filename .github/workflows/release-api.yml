@@ -48,7 +48,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
 
       - name: Install and verify the exact published Core floor
-        run: python3 scripts/check_pin_alignment.py --api-core-floor-only
+        run: uv run scripts/check_pin_alignment.py --api-core-floor-only
 
   generated-contracts:
     name: Verify generated action contracts
