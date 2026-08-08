@@ -16,7 +16,7 @@ def test_api_declares_only_core_as_an_internal_runtime_dependency() -> None:
     dependencies = pyproject["project"]["dependencies"]
     internal = [dependency for dependency in dependencies if dependency.startswith("unifi-")]
 
-    assert internal == ["unifi-core[network,protect,access]>=0.4.24,<0.5"]
+    assert internal == ["unifi-core[network,protect,access]>=0.4.26,<0.5"]
 
 
 def test_built_wheel_contains_and_loads_catalog_without_sibling_apps(tmp_path: Path) -> None:

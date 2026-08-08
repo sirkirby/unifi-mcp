@@ -1443,7 +1443,6 @@ class LiveSmokeRunner:
             self.skip("unifi_create_wlan/unifi_delete_wlan", "approved", "could not discover AP group id")
             return
 
-        stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         # SSIDs are capped at 32 bytes; use a compact stamp so the disposable
         # name stays inside the limit while remaining unique and recognizable.
         name = f"{RUN_PREFIX}-ssid-{datetime.now(UTC).strftime('%H%M%S')}-{secrets.token_hex(3)}"
