@@ -3075,6 +3075,16 @@ async def test_semantic_translator_rejects_physical_mutation_before_manager() ->
 @pytest.mark.parametrize(
     ("tool_name", "args", "message"),
     [
+        (
+            "unifi_create_network",
+            {"network_data": {"name": "Guest", "purpose": "guest"}},
+            "Internal firewall zone",
+        ),
+        (
+            "unifi_update_network",
+            {"network_id": "net-1", "update_data": {"purpose": "guest"}},
+            "Internal firewall zone",
+        ),
         ("unifi_update_gateway_settings", {"update_data": {}}, "update_data cannot be empty"),
         (
             "unifi_update_gateway_settings",

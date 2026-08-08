@@ -282,11 +282,12 @@ def test_ap_group_detail_serializer_shape() -> None:
 
 def test_vpn_mutation_ack_bool() -> None:
     reg = _registry()
-    s = reg.serializer_for_tool("unifi_update_vpn_client_state")
-    out = s.serialize_action(True, tool_name="unifi_update_vpn_client_state")
-    assert out["success"] is True
-    assert out["data"] == {"success": True}
-    assert out["render_hint"]["kind"] == "detail"
+    for tool in ("unifi_update_vpn_client_state", "unifi_delete_vpn_client"):
+        s = reg.serializer_for_tool(tool)
+        out = s.serialize_action(True, tool_name=tool)
+        assert out["success"] is True
+        assert out["data"] == {"success": True}
+        assert out["render_hint"]["kind"] == "detail"
 
 
 def test_dns_mutation_ack_dispatches_for_all_mutations() -> None:
@@ -328,7 +329,7 @@ def test_ap_group_mutation_ack_dispatches_for_all_mutations() -> None:
 
 def test_network_mutation_ack_dispatches() -> None:
     reg = _registry()
-    for tool in ("unifi_create_network", "unifi_update_network"):
+    for tool in ("unifi_create_network", "unifi_update_network", "unifi_delete_network"):
         s = reg.serializer_for_tool(tool)
         out = s.serialize_action(True, tool_name=tool)
         assert out["data"] == {"success": True}

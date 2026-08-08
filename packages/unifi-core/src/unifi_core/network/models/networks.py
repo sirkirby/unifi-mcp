@@ -21,6 +21,12 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+UNSAFE_GUEST_PURPOSE_ERROR = (
+    "purpose='guest' is not supported by the legacy network write API on current UniFi Network versions. "
+    "The controller can silently create the network as purpose='corporate' in the Internal firewall zone. "
+    "Create or move the network to the Hotspot zone in the UniFi UI instead."
+)
+
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------

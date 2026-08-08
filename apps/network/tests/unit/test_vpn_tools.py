@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from unifi_core.redaction import REDACTED
+from unifi_core.write_verification import verify_write
 
 # WireGuard "file" mode: the secret rides inside a config-blob string.
 _WG_FILE_CLIENT = {
@@ -134,3 +135,73 @@ async def test_list_vpn_servers_redacts_private_key_keeps_public(monkeypatch) ->
     # The public key is not secret and must stay visible.
     assert server["wireguard_public_key"] != REDACTED
     assert raw["vpn_servers"][0]["x_wireguard_private_key"].startswith("TEST_FAKE_SERVER_PRIVATE_KEY")
+
+
+@pytest.mark.asyncio
+async def test_update_vpn_client_state_previews_before_mutation() -> None:
+    current = {"_id": "vpn-1", "name": "Tunnel", "enabled": True}
+    with patch("unifi_network_mcp.tools.vpn.vpn_manager") as mock_mgr:
+        mock_mgr.get_vpn_client_details = AsyncMock(return_value=current)
+        mock_mgr.update_vpn_client_state = AsyncMock()
+        from unifi_network_mcp.tools.vpn import update_vpn_client_state
+
+        result = await update_vpn_client_state("vpn-1", False)
+
+    assert result["requires_confirmation"] is True
+    assert result["preview"]["current"]["enabled"] is True
+    assert result["preview"]["proposed"]["enabled"] is False
+    mock_mgr.update_vpn_client_state.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_vpn_client_state_confirm_returns_verified_outcome() -> None:
+    current = {"_id": "vpn-1", "name": "Tunnel", "enabled": True}
+    after = {**current, "enabled": False}
+    write_result = verify_write(
+        operation="update",
+        requested={"enabled": False},
+        before=current,
+        after=after,
+        metadata={"vpn_id": "vpn-1"},
+    )
+    with patch("unifi_network_mcp.tools.vpn.vpn_manager") as mock_mgr:
+        mock_mgr.get_vpn_client_details = AsyncMock(return_value=current)
+        mock_mgr.update_vpn_client_state = AsyncMock(return_value=write_result)
+        from unifi_network_mcp.tools.vpn import update_vpn_client_state
+
+        result = await update_vpn_client_state("vpn-1", False, confirm=True)
+
+    assert result["success"] is True
+    assert result["persisted_fields"] == ["enabled"]
+    assert result["details_after_attempt"]["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_update_vpn_server_state_also_requires_confirmation() -> None:
+    current = {"_id": "server-1", "name": "Remote Access", "enabled": True}
+    with patch("unifi_network_mcp.tools.vpn.vpn_manager") as mock_mgr:
+        mock_mgr.get_vpn_server_details = AsyncMock(return_value=current)
+        mock_mgr.update_vpn_server_state = AsyncMock()
+        from unifi_network_mcp.tools.vpn import update_vpn_server_state
+
+        result = await update_vpn_server_state("server-1", False)
+
+    assert result["requires_confirmation"] is True
+    mock_mgr.update_vpn_server_state.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_delete_vpn_client_preview_redacts_secret_and_confirm_deletes() -> None:
+    current = {**_WG_MANUAL_CLIENT, "enabled": True}
+    with patch("unifi_network_mcp.tools.vpn.vpn_manager") as mock_mgr:
+        mock_mgr.get_vpn_client_details = AsyncMock(return_value=current)
+        mock_mgr.delete_vpn_client = AsyncMock(return_value=True)
+        from unifi_network_mcp.tools.vpn import delete_vpn_client
+
+        preview = await delete_vpn_client("wg-manual", confirm=False)
+        confirmed = await delete_vpn_client("wg-manual", confirm=True)
+
+    assert preview["requires_confirmation"] is True
+    assert preview["preview"]["will_delete"]["wireguard_client_private_key"] == REDACTED
+    assert confirmed["success"] is True
+    mock_mgr.delete_vpn_client.assert_awaited_once_with("wg-manual")

@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from unifi_core.redaction import REDACTED
+from unifi_core.write_verification import failed_write, verify_write
 
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")
 os.environ.setdefault("UNIFI_USERNAME", "test")
@@ -34,8 +35,7 @@ SAMPLE_NETWORK = {
 
 
 class TestUpdateNetwork:
-    """Test the update_network tool — covers preview, confirm, error paths, and
-    the Tuple[bool, Optional[str]] manager contract."""
+    """Test update_network preview, confirm, errors, and structured write results."""
 
     @pytest.mark.asyncio
     async def test_missing_network_id(self):
@@ -73,8 +73,15 @@ class TestUpdateNetwork:
         controller rejects it there if needed."""
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
-            mock_mgr.update_network = AsyncMock(return_value=(True, None))
             updated = {**SAMPLE_NETWORK, "dhcpd_leasetime": "not-an-int"}
+            mock_mgr.update_network = AsyncMock(
+                return_value=verify_write(
+                    operation="update",
+                    requested={"dhcpd_leasetime": "not-an-int"},
+                    before=SAMPLE_NETWORK,
+                    after=updated,
+                )
+            )
             mock_mgr.get_network_details = AsyncMock(side_effect=[SAMPLE_NETWORK, updated])
 
             from unifi_network_mcp.tools.network import update_network
@@ -133,7 +140,14 @@ class TestUpdateNetwork:
         updated = {**SAMPLE_NETWORK, "domain_name": "new.example.com"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_network_details = AsyncMock(side_effect=[SAMPLE_NETWORK, updated])
-            mock_mgr.update_network = AsyncMock(return_value=(True, None))
+            mock_mgr.update_network = AsyncMock(
+                return_value=verify_write(
+                    operation="update",
+                    requested={"domain_name": "new.example.com"},
+                    before=SAMPLE_NETWORK,
+                    after=updated,
+                )
+            )
 
             from unifi_network_mcp.tools.network import update_network
 
@@ -150,15 +164,11 @@ class TestUpdateNetwork:
 
     @pytest.mark.asyncio
     async def test_manager_error_surfaces_verbatim(self):
-        """Controller error body from manager tuple propagates to caller.
-
-        This test guards the whole point of the error-surfacing fix: a future
-        refactor that reverts manager.update_network to bool would break this.
-        """
+        """Controller error detail from the structured manager result reaches the caller."""
         controller_error = "{'meta': {'rc': 'error', 'msg': 'api.err.MissingIPAddress'}, 'data': []}"
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
-            mock_mgr.update_network = AsyncMock(return_value=(False, controller_error))
+            mock_mgr.update_network = AsyncMock(return_value=failed_write(controller_error, operation="update"))
 
             from unifi_network_mcp.tools.network import update_network
 
@@ -175,13 +185,8 @@ class TestUpdateNetwork:
         assert "might not be fully implemented" not in result["error"]
 
     @pytest.mark.asyncio
-    async def test_manager_tuple_contract_unpacking(self):
-        """Regression guard: manager must return a 2-tuple, not a bare bool.
-
-        If someone reverts manager.update_network to return bool, unpacking
-        `success, error_detail = ...` will raise TypeError, and this test will
-        catch it.
-        """
+    async def test_manager_structured_result_contract(self):
+        """A regression to a bare bool is rejected instead of reporting phantom success."""
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
             # Simulate a regression: manager returns bare True
@@ -294,7 +299,14 @@ class TestUpdateNetworkWanFields:
         updated = {**SAMPLE_WAN, "wan_smartq_enabled": True}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_network_details = AsyncMock(side_effect=[SAMPLE_WAN, updated])
-            mock_mgr.update_network = AsyncMock(return_value=(True, None))
+            mock_mgr.update_network = AsyncMock(
+                return_value=verify_write(
+                    operation="update",
+                    requested={"wan_smartq_enabled": True},
+                    before=SAMPLE_WAN,
+                    after=updated,
+                )
+            )
 
             from unifi_network_mcp.tools.network import update_network
 
@@ -520,7 +532,9 @@ class TestCreateWlanNetworkconfId:
     async def test_networkconf_id_alias_reaches_manager(self):
         created = {"_id": "w99", "name": "HomeSSID", "networkconf_id": "net-abc"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.create_wlan = AsyncMock(return_value=created)
+            mock_mgr.create_wlan = AsyncMock(
+                return_value=verify_write(operation="create", requested={}, after=created, metadata={"wlan_id": "w99"})
+            )
             mock_mgr._connection.site = "default"
 
             from unifi_network_mcp.tools.network import create_wlan
@@ -546,7 +560,9 @@ class TestCreateWlanNetworkconfId:
     async def test_network_id_model_name_also_works(self):
         created = {"_id": "w99", "name": "HomeSSID", "networkconf_id": "net-abc"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.create_wlan = AsyncMock(return_value=created)
+            mock_mgr.create_wlan = AsyncMock(
+                return_value=verify_write(operation="create", requested={}, after=created, metadata={"wlan_id": "w99"})
+            )
             mock_mgr._connection.site = "default"
 
             from unifi_network_mcp.tools.network import create_wlan
@@ -575,7 +591,9 @@ class TestCreateWlanRoamingFields:
     async def test_roaming_fields_reach_the_manager(self):
         created = {"_id": "w99", "name": "HomeSSID"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.create_wlan = AsyncMock(return_value=created)
+            mock_mgr.create_wlan = AsyncMock(
+                return_value=verify_write(operation="create", requested={}, after=created, metadata={"wlan_id": "w99"})
+            )
             mock_mgr._connection.site = "default"
 
             from unifi_network_mcp.tools.network import create_wlan
@@ -615,7 +633,14 @@ class TestUpdateWlanNetworkconfId:
         updated_wlan = {"_id": "w1", "name": "SSID", "networkconf_id": "new-net"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_wlan_details = AsyncMock(side_effect=[current_wlan, updated_wlan])
-            mock_mgr.update_wlan = AsyncMock(return_value=(True, None))
+            mock_mgr.update_wlan = AsyncMock(
+                return_value=verify_write(
+                    operation="update",
+                    requested={"networkconf_id": "new-net"},
+                    before=current_wlan,
+                    after=updated_wlan,
+                )
+            )
 
             from unifi_network_mcp.tools.network import update_wlan
 
@@ -700,7 +725,14 @@ class TestUpdateNetworkReadOnlyFields:
         updated = {**SAMPLE_NETWORK, "name": "Updated LAN"}
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
             mock_mgr.get_network_details = AsyncMock(side_effect=[SAMPLE_NETWORK, updated])
-            mock_mgr.update_network = AsyncMock(return_value=(True, None))
+            mock_mgr.update_network = AsyncMock(
+                return_value=verify_write(
+                    operation="update",
+                    requested={"name": "Updated LAN"},
+                    before=SAMPLE_NETWORK,
+                    after=updated,
+                )
+            )
 
             from unifi_network_mcp.tools.network import update_network
 

@@ -225,11 +225,14 @@ class TestSnmpTools:
 
         mock_mgr = MagicMock()
         mock_mgr._connection.site = "default"
+        mock_mgr.get_settings = AsyncMock(return_value=[{"enabled": False, "community": "public", "port": 161}])
         monkeypatch.setattr(system, "system_manager", mock_mgr)
 
         result = await system.update_snmp_settings(enabled=True, community="private", confirm=False)
 
         assert result["success"] is True
+        assert result["preview"]["current"]["enabled"] is False
+        assert result["preview"]["current"]["community"] == REDACTED
         assert result["preview"]["proposed"]["community"] == REDACTED
 
     @pytest.mark.asyncio

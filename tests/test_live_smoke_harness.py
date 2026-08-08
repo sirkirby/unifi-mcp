@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -221,6 +222,41 @@ def test_live_smoke_protect_capability_preview_args_from_seeded_inventory():
         {"viewer_id": "viewer-1", "settings": {"name": "Lobby Viewer"}},
         "",
     )
+
+
+def test_network_lifecycle_creates_updates_reads_and_deletes_disposable_vlan() -> None:
+    import live_smoke
+
+    runner = object.__new__(live_smoke.LiveSmokeRunner)
+    runner.cache = SimpleNamespace(items_from_tool=lambda *_args: [{"vlan": 4093}])
+    runner.report = SimpleNamespace(created_resources=[], cleaned_resources=[])
+    calls: list[tuple[str, dict, str]] = []
+
+    async def call(tool: str, args: dict, phase: str):
+        calls.append((tool, args, phase))
+        summary = {"resource_id": "network-smoke-1"} if tool == "unifi_create_network" else {}
+        return SimpleNamespace(summary=summary, success=True)
+
+    runner.call = call
+    runner.skip = lambda *_args: None
+
+    asyncio.run(runner.lifecycle_network_network())
+
+    assert [tool for tool, _args, _phase in calls] == [
+        "unifi_create_network",
+        "unifi_update_network",
+        "unifi_get_network_details",
+        "unifi_delete_network",
+    ]
+    create_args = calls[0][1]["network_data"]
+    assert create_args["purpose"] == "vlan-only"
+    assert create_args["enabled"] is False
+    assert create_args["vlan"] == 4092
+    assert calls[-1][1] == {"network_id": "network-smoke-1", "confirm": True}
+    assert runner.report.created_resources == [
+        {"type": "network", "id": "network-smoke-1", "name": create_args["name"]}
+    ]
+    assert runner.report.cleaned_resources == runner.report.created_resources
 
 
 def test_live_smoke_protect_api_key_preview_skip_when_missing():

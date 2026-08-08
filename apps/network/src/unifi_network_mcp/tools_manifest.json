@@ -1,5 +1,5 @@
 {
-  "count": 187,
+  "count": 189,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -37,9 +37,11 @@
     "unifi_delete_dynamic_dns": "unifi_network_mcp.tools.dynamic_dns",
     "unifi_delete_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_delete_firewall_policy": "unifi_network_mcp.tools.firewall",
+    "unifi_delete_network": "unifi_network_mcp.tools.network",
     "unifi_delete_oon_policy": "unifi_network_mcp.tools.oon",
     "unifi_delete_port_forward": "unifi_network_mcp.tools.port_forwards",
     "unifi_delete_port_profile": "unifi_network_mcp.tools.switch",
+    "unifi_delete_vpn_client": "unifi_network_mcp.tools.vpn",
     "unifi_delete_wlan": "unifi_network_mcp.tools.network",
     "unifi_force_provision_device": "unifi_network_mcp.tools.devices",
     "unifi_force_reconnect_client": "unifi_network_mcp.tools.clients",
@@ -1882,7 +1884,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Create a new network (LAN/VLAN) with schema validation. Requires confirmation.",
+      "description": "Create a new network (LAN/VLAN) with schema validation. Guest-purpose creation is rejected because the legacy API can silently place it in the Internal zone. Confirmed creates are read back and report exact persisted, dropped, and coerced fields; a failed result may still identify a created resource for cleanup. Requires confirmation.",
       "name": "unifi_create_network",
       "permission_action": "create",
       "permission_category": "networks",
@@ -1894,7 +1896,7 @@
               "type": "boolean"
             },
             "network_data": {
-              "description": "Network configuration dict. Required: name (str), purpose (str: 'corporate', 'guest', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled. See update_network for the full list of supported DHCP/DNS fields.",
+              "description": "Network configuration dict. Required: name (str), purpose (str: 'corporate', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). 'guest' is rejected because the legacy API can silently place it in the Internal firewall zone; create Hotspot-zone networks in the UniFi UI. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled. See update_network for the full list of supported DHCP/DNS fields.",
               "type": "object"
             }
           },
@@ -2980,7 +2982,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Create a new Wireless LAN (WLAN/SSID) with schema validation. Requires confirmation.",
+      "description": "Create a new Wireless LAN (WLAN/SSID) with schema validation. Confirmed creates are read back and report exact persisted, dropped, and controller-coerced fields; a failed result may still identify a created WLAN for cleanup. Requires confirmation.",
       "name": "unifi_create_wlan",
       "permission_action": "create",
       "permission_category": "wlans",
@@ -3980,6 +3982,106 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "description": "Delete a LAN/VLAN network by ID. Requires confirmation. WARNING: dependent WLANs, clients, routes, and firewall policies may lose connectivity or become invalid.",
+      "name": "unifi_delete_network",
+      "permission_action": "delete",
+      "permission_category": "networks",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, deletes the network. When false (default), returns a live-state preview",
+              "type": "boolean"
+            },
+            "network_id": {
+              "description": "Unique identifier (_id) of the network to delete (from unifi_list_networks)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "network_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Delete Network"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
       "description": "Delete an OON policy. Requires confirmation. WARNING: This will remove the policy and all associated firewall rules that were auto-generated from it.",
       "name": "unifi_delete_oon_policy",
       "permission_action": "delete",
@@ -4272,6 +4374,106 @@
         }
       },
       "title": "Delete Port Profile"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Delete a VPN client configuration by ID. Requires confirmation.",
+      "name": "unifi_delete_vpn_client",
+      "permission_action": "delete",
+      "permission_category": "vpn_clients",
+      "schema": {
+        "input": {
+          "properties": {
+            "client_id": {
+              "description": "Unique identifier (_id) of the VPN client to delete (from unifi_list_vpn_clients)",
+              "type": "string"
+            },
+            "confirm": {
+              "description": "When true, deletes the VPN client. When false (default), returns a live-state preview",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "client_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Delete VPN Client"
     },
     {
       "annotations": {
@@ -16838,7 +17040,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update specific fields of an existing network (LAN/VLAN). Pass only the fields you want to change \u2014 current values are automatically preserved. Basic: name, purpose ('corporate'/'guest'/'vlan-only'), vlan_enabled (bool), vlan (str), ip_subnet (CIDR), enabled (bool), network_isolation_enabled (bool, corporate only), internet_access_enabled (bool), upnp_lan_enabled (bool). DHCP: dhcpd_enabled (bool), dhcpd_start (IP), dhcpd_stop (IP), dhcpd_leasetime (int seconds), dhcpd_gateway (IP), dhcpd_gateway_enabled (bool), dhcp_relay_enabled (bool), dhcpd_conflict_checking (bool), dhcpguard_enabled (bool, requires dhcpd_ip_1), dhcpd_ip_1 (IP, trusted DHCP server for guard), dhcpd_boot_enabled (bool), dhcpd_boot_server (IP), dhcpd_boot_filename (str), dhcpd_tftp_server (str, DHCP opt 150). DHCP options: dhcpd_dns_1 (IP), dhcpd_dns_2 (IP), dhcpd_dns_enabled (bool), dhcpd_ntp_1 (IPv4), dhcpd_ntp_2 (IPv4), dhcpd_ntp_enabled (bool), dhcpd_wins_1 (IP), dhcpd_wins_2 (IP), dhcpd_wins_enabled (bool), dhcpd_unifi_controller (IP). DNS: domain_name (str). Multicast: igmp_snooping (bool), igmp_querier_switches (list of {switch_mac, querier_address}), igmp_flood_unknown_multicast (bool). WAN (gateway uplink, purpose='wan' networks): wan_type ('dhcp'/'static'/'pppoe'/'disabled'), wan_networkgroup ('WAN'/'WAN2'), wan_dns_preference ('auto'/'manual'), wan_load_balance_type ('failover-only'/'weighted'), wan_load_balance_weight (int 0-100), wan_failover_priority (int), wan_smartq_enabled (bool), wan_vlan_enabled (bool), igmp_proxy_upstream (bool), igmp_proxy_for (JSON: 'none' or list of network refs), mac_override_enabled (bool), wan_ip_aliases (list). WAN IPv6 (dual-stack; does not affect IPv4 internet): ipv6_enabled (bool), wan_type_v6 (str), ipv6_setting_preference ('auto'/'manual'), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. Requires confirmation.",
+      "description": "Update specific fields of an existing network (LAN/VLAN). Pass only the fields you want to change \u2014 current values are automatically preserved. Basic: name, purpose ('corporate'/'vlan-only'), vlan_enabled (bool), vlan (str), ip_subnet (CIDR), enabled (bool), network_isolation_enabled (bool, corporate only), internet_access_enabled (bool), upnp_lan_enabled (bool). DHCP: dhcpd_enabled (bool), dhcpd_start (IP), dhcpd_stop (IP), dhcpd_leasetime (int seconds), dhcpd_gateway (IP), dhcpd_gateway_enabled (bool), dhcp_relay_enabled (bool), dhcpd_conflict_checking (bool), dhcpguard_enabled (bool, requires dhcpd_ip_1), dhcpd_ip_1 (IP, trusted DHCP server for guard), dhcpd_boot_enabled (bool), dhcpd_boot_server (IP), dhcpd_boot_filename (str), dhcpd_tftp_server (str, DHCP opt 150). DHCP options: dhcpd_dns_1 (IP), dhcpd_dns_2 (IP), dhcpd_dns_enabled (bool), dhcpd_ntp_1 (IPv4), dhcpd_ntp_2 (IPv4), dhcpd_ntp_enabled (bool), dhcpd_wins_1 (IP), dhcpd_wins_2 (IP), dhcpd_wins_enabled (bool), dhcpd_unifi_controller (IP). DNS: domain_name (str). Multicast: igmp_snooping (bool), igmp_querier_switches (list of {switch_mac, querier_address}), igmp_flood_unknown_multicast (bool). WAN (gateway uplink, purpose='wan' networks): wan_type ('dhcp'/'static'/'pppoe'/'disabled'), wan_networkgroup ('WAN'/'WAN2'), wan_dns_preference ('auto'/'manual'), wan_load_balance_type ('failover-only'/'weighted'), wan_load_balance_weight (int 0-100), wan_failover_priority (int), wan_smartq_enabled (bool), wan_vlan_enabled (bool), igmp_proxy_upstream (bool), igmp_proxy_for (JSON: 'none' or list of network refs), mac_override_enabled (bool), wan_ip_aliases (list). WAN IPv6 (dual-stack; does not affect IPv4 internet): ipv6_enabled (bool), wan_type_v6 (str), ipv6_setting_preference ('auto'/'manual'), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. Confirmed writes are read back exactly; responses list persisted, dropped, and controller-coerced fields. A failed result may represent a partial write and is not a rollback. Requires confirmation.",
       "name": "unifi_update_network",
       "permission_action": "update",
       "permission_category": "networks",
@@ -17939,7 +18141,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Enable or disable a specific VPN client by ID.",
+      "description": "Enable or disable a specific VPN client by ID. Requires confirmation.",
       "name": "unifi_update_vpn_client_state",
       "permission_action": "update",
       "permission_category": "vpn_clients",
@@ -17949,6 +18151,10 @@
             "client_id": {
               "description": "Unique identifier (_id) of the VPN client to update (from unifi_list_vpn_clients)",
               "type": "string"
+            },
+            "confirm": {
+              "description": "When true, applies the state change. When false (default), returns a live-state preview",
+              "type": "boolean"
             },
             "enabled": {
               "description": "Set to true to enable the VPN client, false to disable it",
@@ -18040,13 +18246,17 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Enable or disable a specific VPN server by ID.",
+      "description": "Enable or disable a specific VPN server by ID. Requires confirmation.",
       "name": "unifi_update_vpn_server_state",
       "permission_action": "update",
       "permission_category": "vpn_servers",
       "schema": {
         "input": {
           "properties": {
+            "confirm": {
+              "description": "When true, applies the state change. When false (default), returns a live-state preview",
+              "type": "boolean"
+            },
             "enabled": {
               "description": "Set to true to enable the VPN server, false to disable it",
               "type": "boolean"
@@ -18141,7 +18351,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update specific fields of an existing WLAN (SSID). Pass only the fields you want to change \u2014 current values are automatically preserved. Basic: name (str), security ('open'/'wpapsk'/'wpa2-psk'), x_passphrase (str), enabled (bool), hide_ssid (bool), guest_policy (bool), usergroup_id (str), networkconf_id (str). Security: wpa3_support (bool), wpa3_transition (bool), pmf_mode ('disabled'/'optional'/'required'), fast_roaming_enabled (bool), group_rekey (int seconds, 0=disabled). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88). Access control: mac_filter_enabled (bool), mac_filter_policy ('allow'/'deny'), mac_filter_list (list of MAC strings), l2_isolation (bool). Radio: wlan_band ('both'/'2g'/'5g'), multicast_enhance_enabled (bool), dtim_mode ('default'/'custom'), dtim_na (int 1-255), dtim_ng (int 1-255), minrate_ng_enabled (bool), minrate_ng_data_rate_kbps (int), minrate_na_enabled (bool), minrate_na_data_rate_kbps (int). Other: schedule_enabled (bool), uapsd_enabled (bool), proxy_arp (bool), iapp_enabled (bool). Requires confirmation.",
+      "description": "Update specific fields of an existing WLAN (SSID). Pass only the fields you want to change \u2014 current values are automatically preserved. Basic: name (str), security ('open'/'wpapsk'/'wpa2-psk'), x_passphrase (str), enabled (bool), hide_ssid (bool), guest_policy (bool), usergroup_id (str), networkconf_id (str). Security: wpa3_support (bool), wpa3_transition (bool), pmf_mode ('disabled'/'optional'/'required'), fast_roaming_enabled (bool), group_rekey (int seconds, 0=disabled). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88). Access control: mac_filter_enabled (bool), mac_filter_policy ('allow'/'deny'), mac_filter_list (list of MAC strings), l2_isolation (bool). Radio: wlan_band ('both'/'2g'/'5g'), multicast_enhance_enabled (bool), dtim_mode ('default'/'custom'), dtim_na (int 1-255), dtim_ng (int 1-255), minrate_ng_enabled (bool), minrate_ng_data_rate_kbps (int), minrate_na_enabled (bool), minrate_na_data_rate_kbps (int). Other: schedule_enabled (bool), uapsd_enabled (bool), proxy_arp (bool), iapp_enabled (bool). Confirmed writes are read back exactly; responses list persisted, dropped, and controller-coerced fields. A failed result may represent a partial write and is not a rollback. Requires confirmation.",
       "name": "unifi_update_wlan",
       "permission_action": "update",
       "permission_category": "wlans",

@@ -25,6 +25,7 @@ from unifi_core.network.models.ap_group import (
 from unifi_core.network.models.networks import (
     READ_ONLY_FIELDS as NETWORK_READ_ONLY_FIELDS,
 )
+from unifi_core.network.models.networks import UNSAFE_GUEST_PURPOSE_ERROR
 from unifi_core.network.models.networks import (
     to_controller_update as network_to_update,
 )
@@ -42,6 +43,17 @@ from unifi_core.redaction import redact_sensitive_fields
 from unifi_network_mcp.runtime import network_manager, server, should_redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
+
+
+def _write_result_payload(result: Any, *, site: str, success_message: str) -> Dict[str, Any]:
+    """Format a Core write-verification result for the MCP response contract."""
+    payload = result.to_dict()
+    payload["site"] = site
+    if result.success:
+        if "details_after_attempt" in payload:
+            payload["details"] = payload.pop("details_after_attempt")
+        payload["message"] = success_message
+    return payload
 
 
 @server.tool(
@@ -256,7 +268,7 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     name="unifi_update_network",
     description="Update specific fields of an existing network (LAN/VLAN). "
     "Pass only the fields you want to change — current values are automatically preserved. "
-    "Basic: name, purpose ('corporate'/'guest'/'vlan-only'), vlan_enabled (bool), vlan (str), "
+    "Basic: name, purpose ('corporate'/'vlan-only'), vlan_enabled (bool), vlan (str), "
     "ip_subnet (CIDR), enabled (bool), network_isolation_enabled (bool, corporate only), "
     "internet_access_enabled (bool), upnp_lan_enabled (bool). "
     "DHCP: dhcpd_enabled (bool), dhcpd_start (IP), dhcpd_stop (IP), dhcpd_leasetime (int seconds), "
@@ -278,7 +290,8 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "ipv6_setting_preference ('auto'/'manual'), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), "
     "wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). "
     "WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. "
-    "Requires confirmation.",
+    "Confirmed writes are read back exactly; responses list persisted, dropped, and controller-coerced fields. "
+    "A failed result may represent a partial write and is not a rollback. Requires confirmation.",
     permission_category="networks",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
@@ -306,7 +319,7 @@ async def update_network(
         update_data (Dict[str, Any]): Dictionary of fields to update.
             Allowed fields (all optional):
             - name (string): New network name.
-            - purpose (string): New purpose ("corporate", "guest", "vlan-only").
+            - purpose (string): New purpose ("corporate" or "vlan-only"). Setting "guest" is rejected because current controllers can silently place it in the Internal firewall zone.
             - vlan_enabled (boolean): Enable/disable VLAN tagging.
             - vlan (integer): New VLAN ID (1-4094).
             - ip_subnet (string): New IP subnet (CIDR format).
@@ -371,7 +384,7 @@ async def update_network(
     Important Constraints:
         - Network isolation (network_isolation_enabled) is ONLY supported on networks with purpose="corporate".
         - Attempting to enable isolation on "guest" or other network types will fail with an API error.
-        - To isolate a guest network: (1) Change its purpose from "guest" to "corporate", then (2) enable network_isolation_enabled.
+        - Create or move guest networks to the Hotspot firewall zone in the UniFi UI; the legacy API cannot do this safely.
 
     Returns:
         Dict: Success status, ID, updated fields, details, or error message.
@@ -392,6 +405,8 @@ async def update_network(
 
     # Translate to controller-safe mutable fields
     validated_data = network_to_update(update_data)
+    if validated_data.get("purpose") == "guest":
+        return {"success": False, "error": UNSAFE_GUEST_PURPOSE_ERROR}
     if not validated_data:
         read_only_attempted = sorted(k for k in update_data if k in NETWORK_READ_ONLY_FIELDS)
         if read_only_attempted:
@@ -455,32 +470,20 @@ async def update_network(
     updated_fields_list = list(validated_data.keys())
     logger.info("Attempting to update network '%s' with fields: %s", network_id, ", ".join(updated_fields_list))
     try:
-        success, error_detail = await network_manager.update_network(network_id, validated_data)
-
-        if success:
-            updated_network = await network_manager.get_network_details(network_id)
+        write_result = await network_manager.update_network(network_id, validated_data)
+        payload = _write_result_payload(
+            write_result,
+            site=network_manager._connection.site,
+            success_message=f"Network '{network_id}' updated successfully.",
+        )
+        payload["network_id"] = network_id
+        payload["updated_fields"] = updated_fields_list
+        if write_result.success:
             logger.info("Successfully updated network (%s)", network_id)
-            return redact_sensitive_fields(
-                {
-                    "success": True,
-                    "network_id": network_id,
-                    "updated_fields": updated_fields_list,
-                    "details": json.loads(json.dumps(updated_network, default=str)),
-                },
-                redact_sensitive=redact_sensitive,
-            )
         else:
-            logger.error("Failed to update network (%s): %s", network_id, error_detail)
-            network_after_update = await network_manager.get_network_details(network_id)
-            return redact_sensitive_fields(
-                {
-                    "success": False,
-                    "network_id": network_id,
-                    "error": f"Failed to update network ({network_id}): {error_detail}",
-                    "details_after_attempt": json.loads(json.dumps(network_after_update, default=str)),
-                },
-                redact_sensitive=redact_sensitive,
-            )
+            payload["error"] = f"Failed to update network ({network_id}): {write_result.error}"
+            logger.error("Network update had unpersisted fields (%s): %s", network_id, write_result.error)
+        return redact_sensitive_fields(payload, redact_sensitive=redact_sensitive)
 
     except Exception as e:
         logger.error("Error updating network %s: %s", network_id, e, exc_info=True)
@@ -488,8 +491,63 @@ async def update_network(
 
 
 @server.tool(
+    name="unifi_delete_network",
+    description=(
+        "Delete a LAN/VLAN network by ID. Requires confirmation. WARNING: dependent WLANs, clients, routes, "
+        "and firewall policies may lose connectivity or become invalid."
+    ),
+    permission_category="networks",
+    permission_action="delete",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def delete_network(
+    network_id: Annotated[
+        str, Field(description="Unique identifier (_id) of the network to delete (from unifi_list_networks)")
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, deletes the network. When false (default), returns a live-state preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Delete a network after previewing its live controller state."""
+    redact_sensitive = should_redact_sensitive_fields()
+    try:
+        current = await network_manager.get_network_details(network_id)
+        if not confirm:
+            return redact_sensitive_fields(
+                delete_preview(
+                    resource_type="network",
+                    resource_id=network_id,
+                    resource_data=current,
+                    resource_name=current.get("name", network_id),
+                    warnings=[
+                        "Dependent WLANs, clients, routes, and firewall policies may lose connectivity or become invalid"
+                    ],
+                ),
+                redact_sensitive=redact_sensitive,
+            )
+
+        success = await network_manager.delete_network(network_id)
+        if success:
+            return {
+                "success": True,
+                "network_id": network_id,
+                "message": f"Network '{current.get('name', network_id)}' deleted successfully.",
+            }
+        return {"success": False, "error": f"Failed to delete network '{network_id}'."}
+    except Exception as e:
+        logger.error("Error deleting network %s: %s", network_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to delete network {network_id}: {e}"}
+
+
+@server.tool(
     name="unifi_create_network",
-    description="Create a new network (LAN/VLAN) with schema validation. Requires confirmation.",
+    description=(
+        "Create a new network (LAN/VLAN) with schema validation. Guest-purpose creation is rejected because the "
+        "legacy API can silently place it in the Internal zone. Confirmed creates are read back and report exact "
+        "persisted, dropped, and coerced fields; a failed result may still identify a created resource for cleanup. "
+        "Requires confirmation."
+    ),
     permission_category="networks",
     permission_action="create",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
@@ -498,7 +556,7 @@ async def create_network(
     network_data: Annotated[
         Dict[str, Any],
         Field(
-            description="Network configuration dict. Required: name (str), purpose (str: 'corporate', 'guest', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled. See update_network for the full list of supported DHCP/DNS fields."
+            description="Network configuration dict. Required: name (str), purpose (str: 'corporate', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). 'guest' is rejected because the legacy API can silently place it in the Internal firewall zone; create Hotspot-zone networks in the UniFi UI. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled. See update_network for the full list of supported DHCP/DNS fields."
         ),
     ],
     confirm: Annotated[
@@ -514,7 +572,7 @@ async def create_network(
 
     Required parameters in network_data:
     - name (string): Network name
-    - purpose (string): Network purpose/type ("corporate", "guest", "wan", "vlan-only", "vpn-client", "vpn-server")
+    - purpose (string): Network purpose/type ("corporate", "wan", "vlan-only", "vpn-client", "vpn-server"). "guest" is rejected because the legacy API cannot safely assign the Hotspot firewall zone.
 
     If purpose is not "vlan-only":
     - ip_subnet (string): IP subnet in CIDR notation (e.g., "192.168.1.0/24") is required
@@ -583,10 +641,11 @@ async def create_network(
 
     # Additional validation for purpose type
     purpose = validated_data.get("purpose")
+    if purpose == "guest":
+        return {"success": False, "error": UNSAFE_GUEST_PURPOSE_ERROR}
     # Ensure purpose is one of the allowed values
     allowed_purposes = [
         "corporate",
-        "guest",
         "wan",
         "vlan-only",
         "vpn-client",
@@ -635,6 +694,8 @@ async def create_network(
     if vlan_id is not None and (int(vlan_id) < 1 or int(vlan_id) > 4094):
         return {"success": False, "error": "'vlan' must be between 1 and 4094."}
 
+    validated_data.setdefault("enabled", True)
+
     if not confirm:
         return redact_sensitive_fields(
             create_preview(
@@ -648,36 +709,22 @@ async def create_network(
 
     logger.info("Attempting to create network '%s' with purpose '%s'", validated_data["name"], purpose)
     try:
-        # Use validated data directly
-        network_data = validated_data
-        network_data.setdefault("enabled", True)
-
-        # Assume manager returns the created dict or None/False
-        created_network = await network_manager.create_network(network_data)
-        if created_network and created_network.get("_id"):
-            new_network_id = created_network.get("_id")
-            logger.info("Successfully created network '%s' with ID %s", validated_data["name"], new_network_id)
-            return redact_sensitive_fields(
-                {
-                    "success": True,
-                    "site": network_manager._connection.site,
-                    "message": f"Network '{validated_data['name']}' created successfully.",
-                    "network_id": new_network_id,
-                    "details": json.loads(json.dumps(created_network, default=str)),
-                },
-                redact_sensitive=redact_sensitive,
+        write_result = await network_manager.create_network(validated_data)
+        payload = _write_result_payload(
+            write_result,
+            site=network_manager._connection.site,
+            success_message=f"Network '{validated_data['name']}' created successfully.",
+        )
+        if write_result.success:
+            logger.info(
+                "Successfully created network '%s' with ID %s", validated_data["name"], payload.get("network_id")
             )
         else:
-            error_msg = (
-                created_network.get("error", "Manager returned failure")
-                if isinstance(created_network, dict)
-                else "Manager returned non-dict or failure"
+            payload["error"] = f"Failed to create network '{validated_data['name']}': {write_result.error}"
+            logger.error(
+                "Network create had unpersisted fields for '%s': %s", validated_data["name"], write_result.error
             )
-            logger.error("Failed to create network '%s'. Reason: %s", validated_data["name"], error_msg)
-            return {
-                "success": False,
-                "error": f"Failed to create network '{validated_data['name']}'. {error_msg}",
-            }
+        return redact_sensitive_fields(payload, redact_sensitive=redact_sensitive)
     except Exception as e:
         logger.error(
             "Error creating network '%s': %s",
@@ -835,7 +882,8 @@ async def get_wlan_details(
     "minrate_ng_enabled (bool), minrate_ng_data_rate_kbps (int), "
     "minrate_na_enabled (bool), minrate_na_data_rate_kbps (int). "
     "Other: schedule_enabled (bool), uapsd_enabled (bool), proxy_arp (bool), iapp_enabled (bool). "
-    "Requires confirmation.",
+    "Confirmed writes are read back exactly; responses list persisted, dropped, and controller-coerced fields. "
+    "A failed result may represent a partial write and is not a rollback. Requires confirmation.",
     permission_category="wlans",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
@@ -917,32 +965,20 @@ async def update_wlan(
     updated_fields_list = list(validated_data.keys())
     logger.info("Attempting to update WLAN '%s' with fields: %s", wlan_id, ", ".join(updated_fields_list))
     try:
-        success, error_detail = await network_manager.update_wlan(wlan_id, validated_data)
-
-        if success:
-            updated_wlan = await network_manager.get_wlan_details(wlan_id)
+        write_result = await network_manager.update_wlan(wlan_id, validated_data)
+        payload = _write_result_payload(
+            write_result,
+            site=network_manager._connection.site,
+            success_message=f"WLAN '{wlan_id}' updated successfully.",
+        )
+        payload["wlan_id"] = wlan_id
+        payload["updated_fields"] = updated_fields_list
+        if write_result.success:
             logger.info("Successfully updated WLAN (%s)", wlan_id)
-            return redact_sensitive_fields(
-                {
-                    "success": True,
-                    "wlan_id": wlan_id,
-                    "updated_fields": updated_fields_list,
-                    "details": json.loads(json.dumps(updated_wlan, default=str)),
-                },
-                redact_sensitive=redact_sensitive,
-            )
         else:
-            logger.error("Failed to update WLAN (%s): %s", wlan_id, error_detail)
-            wlan_after_update = await network_manager.get_wlan_details(wlan_id)
-            return redact_sensitive_fields(
-                {
-                    "success": False,
-                    "wlan_id": wlan_id,
-                    "error": f"Failed to update WLAN ({wlan_id}): {error_detail}",
-                    "details_after_attempt": json.loads(json.dumps(wlan_after_update, default=str)),
-                },
-                redact_sensitive=redact_sensitive,
-            )
+            payload["error"] = f"Failed to update WLAN ({wlan_id}): {write_result.error}"
+            logger.error("WLAN update had unpersisted fields (%s): %s", wlan_id, write_result.error)
+        return redact_sensitive_fields(payload, redact_sensitive=redact_sensitive)
 
     except Exception as e:
         logger.error("Error updating WLAN %s: %s", wlan_id, e, exc_info=True)
@@ -951,7 +987,11 @@ async def update_wlan(
 
 @server.tool(
     name="unifi_create_wlan",
-    description=("Create a new Wireless LAN (WLAN/SSID) with schema validation. Requires confirmation."),
+    description=(
+        "Create a new Wireless LAN (WLAN/SSID) with schema validation. Confirmed creates are read back and report "
+        "exact persisted, dropped, and controller-coerced fields; a failed result may still identify a created WLAN "
+        "for cleanup. Requires confirmation."
+    ),
     permission_category="wlans",
     permission_action="create",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
@@ -1038,6 +1078,8 @@ async def create_wlan(
             "error": "'x_passphrase' is required when security is not 'open'",
         }
 
+    validated_data.setdefault("enabled", True)
+
     if not confirm:
         return redact_sensitive_fields(
             create_preview(
@@ -1051,36 +1093,18 @@ async def create_wlan(
 
     logger.info("Attempting to create WLAN '%s' with security '%s'", validated_data["name"], validated_data["security"])
     try:
-        # Pass validated data directly to manager
-        wlan_payload = validated_data
-        wlan_payload.setdefault("enabled", True)
-
-        created_wlan = await network_manager.create_wlan(wlan_payload)
-
-        if created_wlan and created_wlan.get("_id"):
-            new_wlan_id = created_wlan.get("_id")
-            logger.info("Successfully created WLAN '%s' with ID %s", validated_data["name"], new_wlan_id)
-            return redact_sensitive_fields(
-                {
-                    "success": True,
-                    "site": network_manager._connection.site,
-                    "message": f"WLAN '{validated_data['name']}' created successfully.",
-                    "wlan_id": new_wlan_id,
-                    "details": json.loads(json.dumps(created_wlan, default=str)),
-                },
-                redact_sensitive=redact_sensitive,
-            )
+        write_result = await network_manager.create_wlan(validated_data)
+        payload = _write_result_payload(
+            write_result,
+            site=network_manager._connection.site,
+            success_message=f"WLAN '{validated_data['name']}' created successfully.",
+        )
+        if write_result.success:
+            logger.info("Successfully created WLAN '%s' with ID %s", validated_data["name"], payload.get("wlan_id"))
         else:
-            error_msg = (
-                created_wlan.get("error", "Manager returned failure")
-                if isinstance(created_wlan, dict)
-                else "Manager returned non-dict or failure"
-            )
-            logger.error("Failed to create WLAN '%s'. Reason: %s", validated_data["name"], error_msg)
-            return {
-                "success": False,
-                "error": f"Failed to create WLAN '{validated_data['name']}'. {error_msg}",
-            }
+            payload["error"] = f"Failed to create WLAN '{validated_data['name']}': {write_result.error}"
+            logger.error("WLAN create had unpersisted fields for '%s': %s", validated_data["name"], write_result.error)
+        return redact_sensitive_fields(payload, redact_sensitive=redact_sensitive)
 
     except Exception as e:
         logger.error(

@@ -12,13 +12,13 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
     tools={
         "unifi_create_network": {"kind": RenderKind.DETAIL},
         "unifi_update_network": {"kind": RenderKind.DETAIL},
+        "unifi_delete_network": {"kind": RenderKind.DETAIL},
     },
 )
 class NetworkMutationAckSerializer(Serializer):
     """DETAIL ack for network create/update.
 
-    ``create_network`` returns the created dict; ``update_network`` returns
-    ``bool``."""
+    Create/update return Core write-verification results; delete returns bool."""
 
     @staticmethod
     def serialize(obj) -> dict:

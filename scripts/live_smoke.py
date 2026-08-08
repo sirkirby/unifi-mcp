@@ -706,6 +706,7 @@ class LiveSmokeRunner:
             await self.run_lifecycles()
             await self.lifecycle_network_acl_rule()
             await self.lifecycle_network_ap_group()
+            await self.lifecycle_network_network()
             await self.lifecycle_network_wlan()
             await self.lifecycle_network_port_profile()
             await self.lifecycle_network_firewall_policy()
@@ -1328,6 +1329,58 @@ class LiveSmokeRunner:
         delete = await self.call("unifi_delete_ap_group", {"group_id": group_id, "confirm": True}, "approved:delete")
         if delete.success:
             self.report.cleaned_resources.append({"type": "ap_group", "id": group_id, "name": name})
+
+    async def lifecycle_network_network(self) -> None:
+        networks = self.cache.items_from_tool("unifi_list_networks", "networks")
+        used_vlans = {
+            int(item["vlan"]) for item in networks if isinstance(item, dict) and str(item.get("vlan", "")).isdigit()
+        }
+        vlan = next((candidate for candidate in range(4093, 3999, -1) if candidate not in used_vlans), None)
+        if vlan is None:
+            self.skip("unifi_create_network/unifi_delete_network", "approved", "no disposable VLAN ID available")
+            return
+
+        stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        name = f"{RUN_PREFIX}-network-{stamp}"
+        create = await self.call(
+            "unifi_create_network",
+            {
+                "network_data": {
+                    "name": name,
+                    "purpose": "vlan-only",
+                    "vlan": vlan,
+                    "vlan_enabled": True,
+                    "enabled": False,
+                },
+                "confirm": True,
+            },
+            "approved:create",
+        )
+        network_id = create.summary.get("resource_id")
+        if not network_id:
+            self.skip("unifi_delete_network", "approved", "network create did not return an id")
+            return
+
+        self.report.created_resources.append({"type": "network", "id": network_id, "name": name})
+        try:
+            await self.call(
+                "unifi_update_network",
+                {"network_id": network_id, "update_data": {"name": f"{name}-upd"}, "confirm": True},
+                "approved:update",
+            )
+            await self.call(
+                "unifi_get_network_details",
+                {"network_id": network_id},
+                "approved:verify",
+            )
+        finally:
+            delete = await self.call(
+                "unifi_delete_network",
+                {"network_id": network_id, "confirm": True},
+                "approved:delete",
+            )
+            if delete.success:
+                self.report.cleaned_resources.append({"type": "network", "id": network_id, "name": name})
 
     async def lifecycle_network_wlan(self) -> None:
         ap_group_id = self.cache.id_from_tool("unifi_list_ap_groups", "ap_groups", ("_id", "id"))

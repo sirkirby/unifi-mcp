@@ -82,13 +82,15 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_list_clients": ("client_manager", "get_clients"),
     # Network/WLAN/AP-group mutations: preview pre-fetches for current config.
     "unifi_update_network": ("network_manager", "update_network"),
+    "unifi_delete_network": ("network_manager", "delete_network"),
     "unifi_update_wlan": ("network_manager", "update_wlan"),
     "unifi_toggle_wlan": ("network_manager", "toggle_wlan"),
     "unifi_delete_wlan": ("network_manager", "delete_wlan"),
     "unifi_update_ap_group": ("network_manager", "update_ap_group"),
     "unifi_delete_ap_group": ("network_manager", "delete_ap_group"),
-    # Gateway (USG) settings: singleton update via fetch-merge-put.
+    # Gateway/SNMP settings updates pre-fetch current state for previews.
     "unifi_update_gateway_settings": ("gateway_settings_manager", "update_gateway_settings"),
+    "unifi_update_snmp_settings": ("system_manager", "update_settings"),
     # Firewall: tool layer pre-fetches list to find policy by id.
     "unifi_toggle_firewall_policy": ("firewall_manager", "toggle_firewall_policy"),
     "unifi_get_firewall_policy_details": ("firewall_manager", "get_firewall_policy_by_id"),
@@ -112,6 +114,10 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # PDU and port-forward updates both pre-fetch current state for preview.
     "unifi_set_outlet_state": ("device_manager", "set_outlet_state"),
     "unifi_update_port_forward": ("firewall_manager", "update_port_forward"),
+    # VPN state/delete tools pre-fetch details for live-state previews.
+    "unifi_update_vpn_client_state": ("vpn_manager", "update_vpn_client_state"),
+    "unifi_delete_vpn_client": ("vpn_manager", "delete_vpn_client"),
+    "unifi_update_vpn_server_state": ("vpn_manager", "update_vpn_server_state"),
     # Stats: tool combines existence check on client/device with stats fetch.
     "unifi_get_device_stats": ("stats_manager", "get_device_stats_for_identifier"),
     "unifi_get_client_stats": ("stats_manager", "get_client_stats_for_identifier"),
@@ -835,6 +841,24 @@ def _translate_traffic_flows(args: dict[str, Any]) -> tuple[tuple[Any, ...], dic
         destination_region=as_list(args.get("destination_region")),
     )
     return (), {"query": query}
+
+
+def _translate_network_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.networks import UNSAFE_GUEST_PURPOSE_ERROR
+
+    network_data = dict(args.get("network_data") or {})
+    if network_data.get("purpose") == "guest":
+        raise ValueError(UNSAFE_GUEST_PURPOSE_ERROR)
+    return (), {"network_data": network_data}
+
+
+def _translate_network_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.networks import UNSAFE_GUEST_PURPOSE_ERROR
+
+    update_data = dict(args.get("update_data") or {})
+    if update_data.get("purpose") == "guest":
+        raise ValueError(UNSAFE_GUEST_PURPOSE_ERROR)
+    return (), {"network_id": args["network_id"], "update_data": update_data}
 
 
 def _translate_snmp_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -1619,6 +1643,8 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     ),
     "unifi_list_wlans": _spec(_rename_and_drop(drop=frozenset({"enabled_only", "limit", "search"}))),
     # Network mutation payload transforms.
+    "unifi_create_network": _spec(_translate_network_create, "network_data"),
+    "unifi_update_network": _spec(_translate_network_update, "network_id", "update_data"),
     "unifi_set_device_led": _spec(_translate_device_led, "device_mac", "led_override"),
     "unifi_set_jumbo_frames": _spec(_translate_jumbo_frames, "device_mac", "config_data"),
     "unifi_set_outlet_state": _spec(
