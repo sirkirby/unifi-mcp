@@ -23,6 +23,15 @@ _FLOWS_CACHE_TTL = 45  # seconds; short-lived, matching the 60s alerts-cache pre
 # Periods accepted by /traffic-flow-latest-statistics (the UI's 1h/1D/1W/1M).
 _STATISTICS_PERIODS = ("HOUR", "DAY", "WEEK", "MONTH")
 
+
+def validate_statistics_period(period: str) -> str:
+    """Normalize and validate a traffic-flow statistics period."""
+    normalized = (period or "").upper()
+    if normalized not in _STATISTICS_PERIODS:
+        raise ValueError(f"period must be one of {', '.join(_STATISTICS_PERIODS)}")
+    return normalized
+
+
 # User-facing filter arrays (populated from TrafficFlowQuery).
 _FILTER_FIELDS = (
     "risk",
@@ -126,9 +135,7 @@ class TrafficFlowManager:
         an unknown period fails clearly instead of as an opaque controller 400.
         Cached ~45s keyed on period+top+site.
         """
-        period = (period or "").upper()
-        if period not in _STATISTICS_PERIODS:
-            raise ValueError(f"period must be one of {', '.join(_STATISTICS_PERIODS)}")
+        period = validate_statistics_period(period)
         top = max(1, min(int(top), 100))
 
         cache_key = f"traffic_flow_statistics_{period}_{top}_{self._connection.site}"

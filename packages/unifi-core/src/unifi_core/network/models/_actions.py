@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import ClassVar, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
 # Client actions
@@ -300,6 +300,7 @@ class QosRuleSimpleInput(BaseModel):
 class PortForwardCreateInput(BaseModel):
     """Input for the full port-forward create path (``unifi_create_port_forward``)."""
 
+    model_config = ConfigDict(extra="forbid", strict=True)
     __action_input__: ClassVar[bool] = True
 
     name: str = Field(description="Descriptive name for the port-forward rule")
@@ -318,6 +319,7 @@ class PortForwardUpdateInput(BaseModel):
     All fields are optional — only supplied fields are applied.
     """
 
+    model_config = ConfigDict(extra="forbid", strict=True)
     __action_input__: ClassVar[bool] = True
 
     name: Optional[str] = Field(default=None, description="New name for the rule")
@@ -333,6 +335,7 @@ class PortForwardUpdateInput(BaseModel):
 class PortForwardSimpleInput(BaseModel):
     """Input for the simplified port-forward create path (``unifi_create_simple_port_forward``)."""
 
+    model_config = ConfigDict(extra="forbid", strict=True)
     __action_input__: ClassVar[bool] = True
 
     name: str = Field(description="User-friendly name of the port forward rule")

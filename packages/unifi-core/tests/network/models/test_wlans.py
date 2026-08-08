@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.network.models.wlans import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
     Wlan,
+    apply_update_dependencies,
     from_controller,
     to_controller_create,
     to_controller_update,
+    validate_create,
+    validate_update,
 )
 
 
@@ -98,6 +102,30 @@ class TestFromController:
         model = from_controller({"_id": "w1", "name": "SSID", "x_passphrase": "wifi-secret"})
 
         assert model.x_passphrase == "wifi-secret"
+
+
+class TestStrictValidation:
+    def test_update_rejects_mixed_unknown_field(self) -> None:
+        with pytest.raises(ValueError, match="Unknown WLAN field"):
+            validate_update({"enabled": False, "unknown": True})
+
+    def test_create_rejects_unknown_and_missing_passphrase(self) -> None:
+        with pytest.raises(ValueError, match="Unknown WLAN field"):
+            validate_create({"name": "SSID", "security": "open", "unknown": True})
+        with pytest.raises(ValueError, match="x_passphrase"):
+            validate_create({"name": "SSID", "security": "wpa2-psk"})
+
+    def test_update_expands_minrate_dependencies_before_translation(self) -> None:
+        assert apply_update_dependencies({"minrate_ng_data_rate_kbps": 6000}) == {
+            "minrate_ng_data_rate_kbps": 6000,
+            "minrate_setting_preference": "manual",
+            "minrate_ng_enabled": True,
+        }
+        assert validate_update({"minrate_ng_data_rate_kbps": 6000}) == {
+            "minrate_ng_data_rate_kbps": 6000,
+            "minrate_setting_preference": "manual",
+            "minrate_ng_enabled": True,
+        }
 
 
 class TestToControllerCreate:

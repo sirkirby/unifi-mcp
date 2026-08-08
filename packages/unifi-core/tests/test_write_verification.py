@@ -19,7 +19,22 @@ def test_verify_write_reports_exact_persisted_fields() -> None:
     assert result.error is None
 
 
-def test_verify_write_treats_already_satisfied_field_as_persisted() -> None:
+def test_verify_write_classifies_json_type_changes_as_coercion() -> None:
+    for wanted, actual in (
+        (True, 1),
+        (False, 0),
+        (1, 1.0),
+        ({"enabled": True}, {"enabled": 1}),
+        ([True], [1]),
+    ):
+        result = verify_write(operation="update", requested={"value": wanted}, after={"value": actual})
+
+        assert result.success is False
+        assert result.persisted_fields == ()
+        assert result.coerced_fields == ("value",)
+
+
+def test_verify_write_reports_already_satisfied_field_as_unchanged() -> None:
     result = verify_write(
         operation="update",
         requested={"enabled": True},
@@ -28,7 +43,23 @@ def test_verify_write_treats_already_satisfied_field_as_persisted() -> None:
     )
 
     assert result.success is True
-    assert result.persisted_fields == ("enabled",)
+    assert result.persisted_fields == ()
+    assert result.unchanged_fields == ("enabled",)
+
+
+def test_unchanged_field_does_not_make_dropped_write_partially_successful() -> None:
+    result = verify_write(
+        operation="update",
+        requested={"enabled": True, "guest_policy": True},
+        before={"enabled": True, "guest_policy": False},
+        after={"enabled": True, "guest_policy": False},
+    )
+
+    assert result.success is False
+    assert result.partial_success is False
+    assert result.persisted_fields == ()
+    assert result.unchanged_fields == ("enabled",)
+    assert result.dropped_fields == ("guest_policy",)
 
 
 def test_verify_write_distinguishes_dropped_and_coerced_fields() -> None:

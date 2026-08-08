@@ -8,6 +8,7 @@ unconditionally; they now re-read and confirm the change actually landed.
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from unifi_core.network.managers.network_manager import (
     NetworkManager,
     _apply_minrate_dependencies,
@@ -77,6 +78,19 @@ def test_unpersisted_skips_write_only_fields():
 # ---------------------------------------------------------------------------
 
 
+async def test_update_wlan_empty_update_is_successful_noop():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.update_wlan(WLAN_ID, {})
+
+    assert result.success is True
+    assert result.mutation_applied is False
+    assert result.metadata["wlan_id"] == WLAN_ID
+    conn.ensure_connected.assert_not_awaited()
+    conn.request.assert_not_called()
+
+
 async def test_update_wlan_fails_when_not_persisted():
     conn = _make_connection()
     mgr = NetworkManager(conn)
@@ -103,6 +117,20 @@ async def test_update_wlan_succeeds_when_persisted():
     assert result.error is None
 
 
+async def test_update_wlan_readback_failure_labels_before_state_explicitly():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _wlan()
+    conn.request.side_effect = [[before], {}, RuntimeError("read failed")]
+
+    result = await mgr.update_wlan(WLAN_ID, {"proxy_arp": True})
+
+    assert result.success is False
+    assert result.resource is None
+    assert result.metadata["details_before_attempt"] == before
+    assert "read failed" in result.error
+
+
 async def test_update_wlan_succeeds_for_write_only_field():
     conn = _make_connection()
     mgr = NetworkManager(conn)
@@ -121,6 +149,19 @@ async def test_update_wlan_succeeds_for_write_only_field():
 # ---------------------------------------------------------------------------
 
 
+async def test_update_network_empty_update_is_successful_noop():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.update_network(NETWORK_ID, {})
+
+    assert result.success is True
+    assert result.mutation_applied is False
+    assert result.metadata["network_id"] == NETWORK_ID
+    conn.ensure_connected.assert_not_awaited()
+    conn.request.assert_not_called()
+
+
 async def test_update_network_fails_when_not_persisted():
     conn = _make_connection()
     mgr = NetworkManager(conn)
@@ -131,6 +172,20 @@ async def test_update_network_fails_when_not_persisted():
     assert result.success is False
     assert result.dropped_fields == ("igmp_snooping",)
     assert result.error is not None and "igmp_snooping" in result.error
+
+
+async def test_update_network_readback_failure_labels_before_state_explicitly():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network()
+    conn.request.side_effect = [[before], {}, RuntimeError("read failed")]
+
+    result = await mgr.update_network(NETWORK_ID, {"igmp_snooping": True})
+
+    assert result.success is False
+    assert result.resource is None
+    assert result.metadata["details_before_attempt"] == before
+    assert "read failed" in result.error
 
 
 async def test_update_network_fails_when_controller_coerces_value():
@@ -203,6 +258,15 @@ async def test_create_wlan_rereads_and_reports_partial_persistence():
     assert result.metadata["wlan_id"] == WLAN_ID
 
 
+async def test_delete_network_fails_closed_on_malformed_verification_read():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.side_effect = [[_network()], {}, {"unexpected": "shape"}]
+
+    with pytest.raises(RuntimeError, match="invalid network list response"):
+        await mgr.delete_network(NETWORK_ID)
+
+
 async def test_delete_network_verifies_absence():
     conn = _make_connection()
     mgr = NetworkManager(conn)
@@ -212,6 +276,26 @@ async def test_delete_network_verifies_absence():
     delete_request = conn.request.call_args_list[1].args[0]
     assert delete_request.method == "delete"
     assert delete_request.path == f"/rest/networkconf/{NETWORK_ID}"
+
+
+async def test_delete_wlan_verifies_absence_and_fails_on_malformed_readback():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.side_effect = [[_wlan()], {}, {"unexpected": "shape"}]
+
+    with pytest.raises(RuntimeError, match="invalid WLAN list response"):
+        await mgr.delete_wlan(WLAN_ID)
+
+
+async def test_delete_wlan_verifies_absence():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.side_effect = [[_wlan()], {}, []]
+
+    assert await mgr.delete_wlan(WLAN_ID) is True
+    delete = conn.request.call_args_list[1].args[0]
+    assert delete.method == "delete"
+    assert delete.path == f"/rest/wlanconf/{WLAN_ID}"
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from unifi_api.db.crypto import ColumnCipher, derive_key
@@ -137,6 +138,98 @@ async def test_factory_calls_initialize_on_construction(tmp_path: Path, monkeypa
 
 
 @pytest.mark.asyncio
+async def test_failed_initialization_is_closed_and_not_cached(tmp_path: Path, monkeypatch) -> None:
+    instances: list[_FakeCM] = []
+
+    class _FailingCM(_FakeCM):
+        last_connection_error = "Unauthorized"
+
+        async def initialize(self) -> bool:
+            self.init_calls += 1
+            return False
+
+    def factory(**kwargs):
+        cm = _FailingCM(**kwargs)
+        instances.append(cm)
+        return cm
+
+    from unifi_core.network.managers import connection_manager as cm_module
+
+    monkeypatch.setattr(cm_module, "ConnectionManager", factory)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    manager_factory = ManagerFactory(sm, cipher)
+
+    for _ in range(2):
+        async with sm() as session:
+            with pytest.raises(ConnectionError, match="Unauthorized"):
+                await manager_factory.get_connection_manager(session, cid, "network")
+
+    assert len(instances) == 2
+    assert all(cm.init_calls == 1 and cm.close_calls == 1 for cm in instances)
+    assert manager_factory._connection_cache == {}
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_raising_initialization_is_closed_and_not_cached(tmp_path: Path, monkeypatch) -> None:
+    instances: list[_FakeCM] = []
+
+    class _RaisingCM(_FakeCM):
+        async def initialize(self) -> bool:
+            self.init_calls += 1
+            raise RuntimeError("login exploded")
+
+    def factory(**kwargs):
+        cm = _RaisingCM(**kwargs)
+        instances.append(cm)
+        return cm
+
+    from unifi_core.network.managers import connection_manager as cm_module
+
+    monkeypatch.setattr(cm_module, "ConnectionManager", factory)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    manager_factory = ManagerFactory(sm, cipher)
+
+    async with sm() as session:
+        with pytest.raises(RuntimeError, match="login exploded"):
+            await manager_factory.get_connection_manager(session, cid, "network")
+
+    assert len(instances) == 1
+    assert instances[0].close_calls == 1
+    assert manager_factory._connection_cache == {}
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_non_boolean_initialization_result_fails_closed(tmp_path: Path, monkeypatch) -> None:
+    instances: list[_FakeCM] = []
+
+    class _AmbiguousCM(_FakeCM):
+        async def initialize(self) -> bool:
+            self.init_calls += 1
+            return None  # type: ignore[return-value]
+
+    def factory(**kwargs):
+        cm = _AmbiguousCM(**kwargs)
+        instances.append(cm)
+        return cm
+
+    from unifi_core.network.managers import connection_manager as cm_module
+
+    monkeypatch.setattr(cm_module, "ConnectionManager", factory)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    manager_factory = ManagerFactory(sm, cipher)
+
+    async with sm() as session:
+        with pytest.raises(ConnectionError, match="Failed to initialize"):
+            await manager_factory.get_connection_manager(session, cid, "network")
+
+    assert instances[0].close_calls == 1
+    assert manager_factory._connection_cache == {}
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_network_connection_cache_is_scoped_by_site(tmp_path: Path, monkeypatch) -> None:
     instances = _patch_network_cm(monkeypatch)
     engine, sm, cipher, cid = await _seed(tmp_path)
@@ -190,6 +283,122 @@ async def test_network_domain_managers_remain_isolated_under_forced_interleaving
         return await manager.observe_site()
 
     assert await asyncio.gather(_call("site-a"), _call("site-b")) == ["site-a", "site-b"]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_probe_preserves_cached_production_connection(tmp_path: Path, monkeypatch) -> None:
+    instances = _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    async with sm() as session:
+        cached = await factory.get_connection_manager(session, cid, "network")
+
+    result = await factory.probe_controller(cid)
+
+    assert result["ok"] is True
+    assert len(instances) == 2
+    assert instances[0] is cached
+    assert instances[0].close_calls == 0
+    assert instances[1].close_calls == 1
+    assert factory._connection_cache[(cid, "network", "default")] is cached
+    await factory.invalidate_controller(cid)
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_probe_closes_fresh_uncached_connection(tmp_path: Path, monkeypatch) -> None:
+    instances = _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+
+    result = await factory.probe_controller(cid)
+
+    assert result["ok"] is True
+    assert len(instances) == 1
+    assert instances[0].close_calls == 1
+    assert factory._connection_cache == {}
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_invalidation_waits_for_inflight_construction(tmp_path: Path, monkeypatch) -> None:
+    started = asyncio.Event()
+    release = asyncio.Event()
+    instances: list[_FakeCM] = []
+
+    class _SlowCM(_FakeCM):
+        async def initialize(self) -> bool:
+            self.init_calls += 1
+            started.set()
+            await release.wait()
+            return True
+
+    def cm_factory(**kwargs):
+        cm = _SlowCM(**kwargs)
+        instances.append(cm)
+        return cm
+
+    from unifi_core.network.managers import connection_manager as cm_module
+
+    monkeypatch.setattr(cm_module, "ConnectionManager", cm_factory)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+
+    async def construct():
+        async with sm() as session:
+            return await factory.get_connection_manager(session, cid, "network")
+
+    construction = asyncio.create_task(construct())
+    await started.wait()
+    invalidation = asyncio.create_task(factory.invalidate_controller(cid))
+    await asyncio.sleep(0)
+    assert not invalidation.done()
+    release.set()
+    await construction
+    await invalidation
+
+    assert factory._connection_cache == {}
+    assert instances[0].close_calls == 1
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_invalidation_removes_domain_cache_before_awaiting_close(tmp_path: Path) -> None:
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    close_started = asyncio.Event()
+    release_close = asyncio.Event()
+
+    class _SlowCloseCM:
+        async def close(self) -> None:
+            close_started.set()
+            await release_close.wait()
+
+    domain_key = (cid, "network", "network_manager", "default")
+    factory._domain_cache[domain_key] = object()
+    factory._connection_cache[(cid, "network", "default")] = _SlowCloseCM()
+
+    invalidation = asyncio.create_task(factory.invalidate_controller(cid))
+    await close_started.wait()
+
+    assert domain_key not in factory._domain_cache
+
+    release_close.set()
+    await invalidation
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_invalidate_supports_cleanup_only_connection_manager(tmp_path: Path) -> None:
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    cleanup = AsyncMock()
+    factory._connection_cache[(cid, "network", "default")] = type("CleanupOnlyCM", (), {"cleanup": cleanup})()
+
+    await factory.invalidate_controller(cid)
+
+    cleanup.assert_awaited_once()
     await engine.dispose()
 
 

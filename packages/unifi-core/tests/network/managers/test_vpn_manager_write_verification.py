@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from unifi_core.network.managers.vpn_manager import VpnManager
 
 VPN_ID = "vpn-client-1"
@@ -42,6 +43,20 @@ async def test_update_vpn_client_state_verifies_persisted_value() -> None:
     assert put.data["enabled"] is False
 
 
+async def test_update_vpn_readback_failure_labels_before_state_explicitly() -> None:
+    conn = _connection()
+    manager = VpnManager(conn)
+    before = _client()
+    conn.request.side_effect = [[before], {}, {"unexpected": "shape"}]
+
+    result = await manager.update_vpn_client_state(VPN_ID, False)
+
+    assert result.success is False
+    assert result.resource is None
+    assert result.metadata["details_before_attempt"] == before
+    assert "invalid networkconf response" in result.error
+
+
 async def test_update_vpn_client_state_reports_dropped_value() -> None:
     conn = _connection()
     manager = VpnManager(conn)
@@ -52,6 +67,15 @@ async def test_update_vpn_client_state_reports_dropped_value() -> None:
     assert result.success is False
     assert result.dropped_fields == ("enabled",)
     assert result.mutation_applied is True
+
+
+async def test_delete_vpn_client_fails_closed_on_malformed_verification_read() -> None:
+    conn = _connection()
+    manager = VpnManager(conn)
+    conn.request.side_effect = [[_client()], {}, {"unexpected": "shape"}]
+
+    with pytest.raises(RuntimeError, match="invalid networkconf response"):
+        await manager.delete_vpn_client(VPN_ID)
 
 
 async def test_delete_vpn_client_checks_type_and_verifies_absence() -> None:

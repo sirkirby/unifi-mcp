@@ -23,6 +23,7 @@ class WriteVerificationResult:
     resource: dict[str, Any] | None = None
     error: str | None = None
     persisted_fields: tuple[str, ...] = ()
+    unchanged_fields: tuple[str, ...] = ()
     dropped_fields: tuple[str, ...] = ()
     coerced_fields: tuple[str, ...] = ()
     unverifiable_fields: tuple[str, ...] = ()
@@ -41,6 +42,7 @@ class WriteVerificationResult:
             "partial_success": self.partial_success,
             "operation": self.operation,
             "persisted_fields": list(self.persisted_fields),
+            "unchanged_fields": list(self.unchanged_fields),
             "dropped_fields": list(self.dropped_fields),
             "coerced_fields": list(self.coerced_fields),
             "unverifiable_fields": list(self.unverifiable_fields),
@@ -68,6 +70,17 @@ def _verification_error(operation: str, dropped: Collection[str], coerced: Colle
     )
 
 
+def _exact_equal(actual: Any, wanted: Any) -> bool:
+    """Compare JSON-like values without Python's bool/int numeric coercion."""
+    if type(actual) is not type(wanted):
+        return False
+    if isinstance(actual, dict):
+        return actual.keys() == wanted.keys() and all(_exact_equal(actual[key], wanted[key]) for key in actual)
+    if isinstance(actual, list):
+        return len(actual) == len(wanted) and all(_exact_equal(left, right) for left, right in zip(actual, wanted))
+    return bool(actual == wanted)
+
+
 def verify_write(
     *,
     operation: str,
@@ -86,6 +99,7 @@ def verify_write(
     """
     unverifiable_set = set(unverifiable_fields)
     persisted: list[str] = []
+    unchanged: list[str] = []
     dropped: list[str] = []
     coerced: list[str] = []
     skipped: list[str] = []
@@ -97,15 +111,18 @@ def verify_write(
 
         wanted = requested[key]
         actual = after.get(key, _MISSING)
-        if actual == wanted:
-            persisted.append(key)
+        if _exact_equal(actual, wanted):
+            if before is not None and _exact_equal(before.get(key, _MISSING), wanted):
+                unchanged.append(key)
+            else:
+                persisted.append(key)
             continue
 
         if actual is _MISSING:
             dropped.append(key)
             continue
 
-        if before is not None and actual == before.get(key, _MISSING):
+        if before is not None and _exact_equal(actual, before.get(key, _MISSING)):
             dropped.append(key)
         else:
             coerced.append(key)
@@ -118,9 +135,26 @@ def verify_write(
         resource=dict(after),
         error=error,
         persisted_fields=tuple(persisted),
+        unchanged_fields=tuple(unchanged),
         dropped_fields=tuple(dropped),
         coerced_fields=tuple(coerced),
         unverifiable_fields=tuple(skipped),
+        metadata=dict(metadata or {}),
+    )
+
+
+def noop_write(
+    *,
+    operation: str = "update",
+    resource: Mapping[str, Any] | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> WriteVerificationResult:
+    """Build a successful result for an update that required no controller call."""
+    return WriteVerificationResult(
+        success=True,
+        mutation_applied=False,
+        operation=operation,
+        resource=dict(resource) if resource is not None else None,
         metadata=dict(metadata or {}),
     )
 

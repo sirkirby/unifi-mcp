@@ -17,9 +17,11 @@ type must expose every field listed here.
 
 from __future__ import annotations
 
+import re
+from ipaddress import ip_interface
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 UNSAFE_GUEST_PURPOSE_ERROR = (
     "purpose='guest' is not supported by the legacy network write API on current UniFi Network versions. "
@@ -229,6 +231,8 @@ class Network(BaseModel):
     )
     wan_load_balance_weight: Optional[int] = Field(
         default=None,
+        ge=0,
+        le=100,
         description="Load-balance weight for this WAN (0-100; used when type is 'weighted')",
     )
     wan_failover_priority: Optional[int] = Field(
@@ -411,5 +415,117 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
 
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
+    Callers accepting untrusted dictionaries must use ``validate_update`` first.
     """
     return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+
+
+_ALLOWED_PURPOSES = frozenset({"corporate", "wan", "vlan-only", "vpn-client", "vpn-server"})
+_WRITE_ENUM_VALUES = {
+    "wan_type": frozenset({"dhcp", "static", "pppoe", "disabled"}),
+    "wan_dns_preference": frozenset({"auto", "manual"}),
+    "wan_load_balance_type": frozenset({"failover-only", "weighted"}),
+    "wan_type_v6": frozenset({"disabled", "dhcpv6", "slaac", "static", "pppoe"}),
+    "ipv6_setting_preference": frozenset({"auto", "manual"}),
+    "ipv6_wan_delegation_type": frozenset({"none", "dhcpv6", "static"}),
+    "wan_ipv6_dns_preference": frozenset({"auto", "manual"}),
+}
+_CONTROLLER_READ_ONLY_FIELDS = READ_ONLY_FIELDS | {"_id"}
+
+
+def _validate_payload(fields: Dict[str, Any], *, operation: str) -> tuple[Network, Any]:
+    if not isinstance(fields, dict) or not fields:
+        payload_name = "network_data" if operation == "create" else "update_data"
+        raise ValueError(f"{payload_name} cannot be empty")
+    read_only = sorted(set(fields) & _CONTROLLER_READ_ONLY_FIELDS)
+    if read_only:
+        raise ValueError(f"Network field(s) are read-only and cannot be {operation}d: {', '.join(read_only)}")
+    unknown = sorted(set(fields) - MUTABLE_FIELDS - _CONTROLLER_READ_ONLY_FIELDS)
+    if unknown:
+        raise ValueError(f"Unknown network field(s): {', '.join(unknown)}")
+
+    normalized = dict(fields)
+    if "wan_load_balance_weight" in normalized:
+        raw_weight = normalized["wan_load_balance_weight"]
+        if isinstance(raw_weight, bool) or not isinstance(raw_weight, (int, str)):
+            raise ValueError("'wan_load_balance_weight' must be an integer between 0 and 100.")
+        try:
+            weight = int(raw_weight)
+        except ValueError:
+            raise ValueError("'wan_load_balance_weight' must be an integer between 0 and 100.") from None
+        if isinstance(raw_weight, str) and raw_weight.strip() != str(weight):
+            raise ValueError("'wan_load_balance_weight' must be an integer between 0 and 100.")
+        if weight < 0 or weight > 100:
+            raise ValueError("'wan_load_balance_weight' must be between 0 and 100.")
+        normalized["wan_load_balance_weight"] = weight
+    original_vlan = normalized.get("vlan")
+    if isinstance(original_vlan, bool):
+        raise ValueError("'vlan' must be an integer between 1 and 4094.")
+    if isinstance(original_vlan, int):
+        normalized["vlan"] = str(original_vlan)
+    try:
+        model = Network.model_validate(normalized, strict=True)
+    except ValidationError as error:
+        raise ValueError(f"Invalid network {operation} data: {error.errors()[0]['msg']}") from None
+
+    for field_name, allowed in _WRITE_ENUM_VALUES.items():
+        value = getattr(model, field_name)
+        if value is not None and value not in allowed:
+            raise ValueError(f"Invalid '{field_name}': {value}. Must be one of {sorted(allowed)}.")
+    if model.wan_networkgroup is not None and not re.fullmatch(r"WAN\d*", model.wan_networkgroup):
+        raise ValueError("Invalid 'wan_networkgroup': expected WAN, WAN2, or another numbered WAN group.")
+
+    if model.purpose == "guest":
+        raise ValueError(UNSAFE_GUEST_PURPOSE_ERROR)
+    if model.purpose is not None and model.purpose not in _ALLOWED_PURPOSES:
+        raise ValueError(f"Invalid 'purpose': {model.purpose}. Must be one of {sorted(_ALLOWED_PURPOSES)}.")
+    if model.vlan is not None:
+        try:
+            vlan = int(model.vlan)
+        except (TypeError, ValueError):
+            raise ValueError("'vlan' must be an integer between 1 and 4094.") from None
+        if vlan < 1 or vlan > 4094:
+            raise ValueError("'vlan' must be between 1 and 4094.")
+    if model.ip_subnet is not None:
+        try:
+            ip_interface(model.ip_subnet)
+        except ValueError:
+            raise ValueError("'ip_subnet' must be a valid IPv4 or IPv6 CIDR.") from None
+    return model, original_vlan
+
+
+def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a public Network create dictionary and return controller fields."""
+    model, original_vlan = _validate_payload(fields, operation="create")
+    missing = [name for name in ("name", "purpose") if getattr(model, name) in (None, "")]
+    if missing:
+        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+    if model.vlan_enabled and model.vlan is None:
+        raise ValueError("'vlan' is required when vlan_enabled is true")
+    if model.purpose == "vlan-only":
+        if model.vlan is None:
+            raise ValueError("'vlan' is required for network purpose 'vlan-only'.")
+    elif model.ip_subnet is None:
+        raise ValueError(f"'ip_subnet' is required for network purpose '{model.purpose}'")
+    if model.purpose != "vlan-only" and model.dhcpd_enabled is not False:
+        if not model.dhcpd_start or not model.dhcpd_stop:
+            raise ValueError(
+                "'dhcpd_start' and 'dhcpd_stop' are required if dhcpd_enabled is true (and purpose is not vlan-only)."
+            )
+
+    payload = to_controller_create(model)
+    if isinstance(original_vlan, int) and "vlan" in payload:
+        payload["vlan"] = original_vlan
+    payload.setdefault("enabled", True)
+    return payload
+
+
+def validate_update(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a public partial Network update dictionary and return controller fields."""
+    model, original_vlan = _validate_payload(fields, operation="update")
+    payload = to_controller_update(model.model_dump(include=set(fields), exclude_none=True))
+    if isinstance(original_vlan, int) and "vlan" in payload:
+        payload["vlan"] = original_vlan
+    if not payload:
+        raise ValueError("No valid mutable fields provided for update.")
+    return payload

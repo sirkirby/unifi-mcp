@@ -67,23 +67,8 @@ class TestUpdateNetwork:
 
     @pytest.mark.asyncio
     async def test_invalid_field_type(self):
-        """Fields with wrong-type values pass through to the manager (type
-        validation delegated to the controller API layer after pydantic migration).
-        A known-mutable field with a non-None value is forwarded; the manager/
-        controller rejects it there if needed."""
+        """Wrong field types are rejected before preview or controller access."""
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_NETWORK)
-            updated = {**SAMPLE_NETWORK, "dhcpd_leasetime": "not-an-int"}
-            mock_mgr.update_network = AsyncMock(
-                return_value=verify_write(
-                    operation="update",
-                    requested={"dhcpd_leasetime": "not-an-int"},
-                    before=SAMPLE_NETWORK,
-                    after=updated,
-                )
-            )
-            mock_mgr.get_network_details = AsyncMock(side_effect=[SAMPLE_NETWORK, updated])
-
             from unifi_network_mcp.tools.network import update_network
 
             result = await update_network(
@@ -92,9 +77,10 @@ class TestUpdateNetwork:
                 confirm=True,
             )
 
-        # With pydantic-model filtering, the value passes to the manager;
-        # tool returns success when manager succeeds.
-        assert result["success"] is True
+        assert result["success"] is False
+        assert "Invalid network update data" in result["error"]
+        mock_mgr.get_network_details.assert_not_called()
+        mock_mgr.update_network.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_network_not_found(self):
@@ -232,6 +218,60 @@ SAMPLE_WAN = {
     "wan_dns_preference": "auto",
     "wan_smartq_enabled": False,
 }
+
+
+@pytest.mark.asyncio
+async def test_update_network_preview_read_failure_returns_structured_error():
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        mock_mgr.get_network_details = AsyncMock(side_effect=RuntimeError("controller unavailable"))
+
+        from unifi_network_mcp.tools.network import update_network
+
+        result = await update_network(
+            network_id="net001",
+            update_data={"enabled": False},
+            confirm=False,
+        )
+
+    assert result == {
+        "success": False,
+        "error": "Failed to prepare network update for net001: controller unavailable",
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "update_data,error_fragment",
+    [
+        ({"vlan": "not-an-integer"}, "must be an integer"),
+        ({"vlan": 5000}, "between 1 and 4094"),
+        ({"ip_subnet": "not-a-cidr"}, "valid IPv4 or IPv6 CIDR"),
+    ],
+)
+async def test_update_network_rejects_malformed_values_before_preview(update_data, error_fragment):
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        from unifi_network_mcp.tools.network import update_network
+
+        result = await update_network("net001", update_data, confirm=False)
+
+    assert result["success"] is False
+    assert error_fragment in result["error"]
+    mock_mgr.get_network_details.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_network_rejects_malformed_vlan_without_exception():
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        from unifi_network_mcp.tools.network import create_network
+
+        result = await create_network(
+            {"name": "Broken", "purpose": "vlan-only", "vlan": "not-an-integer"},
+            confirm=False,
+        )
+
+    assert result["success"] is False
+    assert "must be an integer" in result["error"]
+    mock_mgr.create_network.assert_not_called()
 
 
 class TestGetNetworkDetailsWanSummary:
@@ -375,8 +415,18 @@ class TestUpdateNetworkWanFields:
         so dropping any one from the frozenset is caught."""
         from unifi_network_mcp.tools.network import CONNECTIVITY_CRITICAL_WAN_FIELDS, update_network
 
+        valid_values = {
+            "wan_type": "static",
+            "wan_networkgroup": "WAN2",
+            "wan_dns_preference": "manual",
+            "wan_load_balance_type": "weighted",
+            "wan_load_balance_weight": 50,
+            "wan_failover_priority": 1,
+            "wan_vlan_enabled": False,
+            "mac_override_enabled": False,
+        }
         for field in sorted(CONNECTIVITY_CRITICAL_WAN_FIELDS):
-            value = 50 if field == "wan_load_balance_weight" else "x"
+            value = valid_values[field]
             with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
                 mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_WAN)
                 mock_mgr.update_network = AsyncMock()
@@ -668,6 +718,68 @@ class TestUpdateWlanNetworkconfId:
         mock_mgr.update_wlan.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_update_wlan_preview_includes_minrate_dependencies():
+    current = {
+        "_id": "wlan001",
+        "name": "SSID",
+        "minrate_setting_preference": "auto",
+        "minrate_ng_enabled": False,
+        "minrate_ng_data_rate_kbps": 1000,
+    }
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        mock_mgr.get_wlan_details = AsyncMock(return_value=current)
+
+        from unifi_network_mcp.tools.network import update_wlan
+
+        result = await update_wlan(
+            wlan_id="wlan001",
+            update_data={"minrate_ng_data_rate_kbps": 6000},
+            confirm=False,
+        )
+
+    assert result["preview"]["proposed"] == {
+        "minrate_ng_data_rate_kbps": 6000,
+        "minrate_ng_enabled": True,
+        "minrate_setting_preference": "manual",
+    }
+
+
+@pytest.mark.asyncio
+async def test_update_wlan_rejects_mixed_unknown_field_before_preview():
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        from unifi_network_mcp.tools.network import update_wlan
+
+        result = await update_wlan(
+            wlan_id="wlan001",
+            update_data={"enabled": False, "unknown_field": True},
+            confirm=False,
+        )
+
+    assert result["success"] is False
+    assert "Unknown WLAN field" in result["error"]
+    mock_mgr.get_wlan_details.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_wlan_preview_read_failure_returns_structured_error():
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        mock_mgr.get_wlan_details = AsyncMock(side_effect=RuntimeError("controller unavailable"))
+
+        from unifi_network_mcp.tools.network import update_wlan
+
+        result = await update_wlan(
+            wlan_id="wlan001",
+            update_data={"enabled": False},
+            confirm=False,
+        )
+
+    assert result == {
+        "success": False,
+        "error": "Failed to prepare WLAN update for wlan001: controller unavailable",
+    }
+
+
 class TestUpdateNetworkReadOnlyFields:
     """update_network must reject read-only fields with a clear, specific error
     rather than a generic 'no valid fields' message."""
@@ -703,9 +815,8 @@ class TestUpdateNetworkReadOnlyFields:
         assert "read-only" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_unknown_field_gives_generic_error_not_read_only(self):
-        """Completely unrecognised fields produce the generic empty-payload error,
-        not the read-only error — the two code paths must stay distinct."""
+    async def test_unknown_field_is_rejected_explicitly(self):
+        """Completely unrecognised fields are rejected before controller access."""
         from unifi_network_mcp.tools.network import update_network
 
         result = await update_network(
@@ -715,25 +826,13 @@ class TestUpdateNetworkReadOnlyFields:
         )
 
         assert result["success"] is False
-        assert "No valid mutable fields" in result["error"]
+        assert "Unknown network field" in result["error"]
         assert "read-only" not in result["error"]
 
     @pytest.mark.asyncio
-    async def test_mdns_enabled_with_valid_field_proceeds(self):
-        """When mdns_enabled is mixed with a valid field, the update proceeds,
-        mdns_enabled is excluded from the payload, and absent from updated_fields."""
-        updated = {**SAMPLE_NETWORK, "name": "Updated LAN"}
+    async def test_read_only_field_mixed_with_valid_field_rejects_entire_update(self):
+        """Mixed payloads cannot silently discard part of the caller's intent."""
         with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
-            mock_mgr.get_network_details = AsyncMock(side_effect=[SAMPLE_NETWORK, updated])
-            mock_mgr.update_network = AsyncMock(
-                return_value=verify_write(
-                    operation="update",
-                    requested={"name": "Updated LAN"},
-                    before=SAMPLE_NETWORK,
-                    after=updated,
-                )
-            )
-
             from unifi_network_mcp.tools.network import update_network
 
             result = await update_network(
@@ -742,9 +841,8 @@ class TestUpdateNetworkReadOnlyFields:
                 confirm=True,
             )
 
-        assert result["success"] is True
-        payload = mock_mgr.update_network.call_args[0][1]
-        assert "mdns_enabled" not in payload
-        assert payload.get("name") == "Updated LAN"
-        assert "mdns_enabled" not in result["updated_fields"]
-        assert "name" in result["updated_fields"]
+        assert result["success"] is False
+        assert "mdns_enabled" in result["error"]
+        assert "read-only" in result["error"]
+        mock_mgr.get_network_details.assert_not_called()
+        mock_mgr.update_network.assert_not_called()

@@ -8212,6 +8212,17 @@
             ],
             "title": "Minrate Ng Enabled"
           },
+          "minrate_setting_preference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minrate Setting Preference"
+          },
           "multicast_enhance_enabled": {
             "anyOf": [
               {

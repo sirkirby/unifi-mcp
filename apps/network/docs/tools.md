@@ -97,8 +97,8 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_list_port_forwards` — List all port forwarding rules
 - `unifi_get_port_forward` — Get rule details by ID
 - `unifi_toggle_port_forward` — Enable/disable a rule
-- `unifi_create_port_forward` — Create with full schema validation
-- `unifi_create_simple_port_forward` — Create with simplified schema
+- `unifi_create_port_forward` — Preview or create with full schema validation (requires confirmation)
+- `unifi_create_simple_port_forward` — Preview or create with simplified schema (requires confirmation)
 - `unifi_update_port_forward` — Update rule fields
 - `unifi_delete_port_forward` — Delete a rule by ID (requires delete permission)
 

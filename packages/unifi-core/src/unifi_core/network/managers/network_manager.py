@@ -8,7 +8,8 @@ from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.models.networks import UNSAFE_GUEST_PURPOSE_ERROR
-from unifi_core.write_verification import WriteVerificationResult, failed_write, verify_write
+from unifi_core.network.models.wlans import apply_update_dependencies as apply_wlan_update_dependencies
+from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -51,33 +52,9 @@ def _unpersisted_fields(before: Dict[str, Any], after: Dict[str, Any], requested
     return stuck
 
 
-# Manual min-rate data-rate fields are honored only when the controller's rate
-# mode is "manual" and the band's min-rate is enabled. Setting a *_data_rate_kbps
-# while minrate_setting_preference is "auto" is answered rc:ok but silently
-# recomputed away — which the verify step above would (correctly) flag as a
-# non-persisted write. Map each rate field to the enable flag it requires.
-_MINRATE_RATE_FIELDS = {
-    "minrate_ng_data_rate_kbps": "minrate_ng_enabled",
-    "minrate_na_data_rate_kbps": "minrate_na_enabled",
-}
-
-
 def _apply_minrate_dependencies(update_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Return update_data with the dependencies a manual min-rate write needs.
-
-    When a caller sets ``minrate_{ng,na}_data_rate_kbps``, also force
-    ``minrate_setting_preference="manual"`` and the band's ``minrate_*_enabled``
-    so the controller persists the requested rate instead of recomputing it
-    under auto mode. Values the caller set explicitly are left untouched.
-    """
-    rate_fields = [field for field in _MINRATE_RATE_FIELDS if field in update_data]
-    if not rate_fields:
-        return update_data
-    patched = dict(update_data)
-    patched.setdefault("minrate_setting_preference", "manual")
-    for rate_field in rate_fields:
-        patched.setdefault(_MINRATE_RATE_FIELDS[rate_field], True)
-    return patched
+    """Backward-compatible alias for shared WLAN update expansion."""
+    return apply_wlan_update_dependencies(update_data)
 
 
 class NetworkManager:
@@ -117,8 +94,7 @@ class NetworkManager:
                 logger.error(
                     "Unexpected response format from /rest/networkconf: %s. Response: %s", type(response), response
                 )
-                # Don't cache potentially invalid data
-                return []
+                raise RuntimeError("Controller returned an invalid network list response")
 
             # Basic check to ensure we got a list of dicts
             if not isinstance(networks_data, list) or not all(isinstance(item, dict) for item in networks_data):
@@ -127,7 +103,7 @@ class NetworkManager:
                     type(networks_data),
                     networks_data,
                 )
-                return []
+                raise RuntimeError("Controller returned malformed entries in the network list response")
 
             # Return the list of network dictionaries
             networks = networks_data
@@ -221,11 +197,11 @@ class NetworkManager:
         Returns:
             Structured exact field-verification result with post-write state.
         """
+        if not update_data:
+            logger.debug("No update data provided for network %s; no controller call required.", network_id)
+            return noop_write(operation="update", metadata={"network_id": network_id})
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
-        if not update_data:
-            logger.warning("No update data provided for network %s.", network_id)
-            return failed_write("No update data provided", operation="update")
         if update_data.get("purpose") == "guest":
             return failed_write(UNSAFE_GUEST_PURPOSE_ERROR, operation="update")
 
@@ -257,8 +233,7 @@ class NetworkManager:
                     f"Controller accepted the network update but the resource could not be re-read: {e}",
                     operation="update",
                     mutation_applied=True,
-                    resource=existing_network,
-                    metadata={"network_id": network_id},
+                    metadata={"network_id": network_id, "details_before_attempt": existing_network},
                 )
             return verify_write(
                 operation="update",
@@ -298,8 +273,9 @@ class NetworkManager:
         try:
             api_request = ApiRequest(method="get", path="/rest/wlanconf")
             response = await self._connection.request(api_request)
-            wlans_data = response if isinstance(response, list) else []
-            wlans: List[Wlan] = [Wlan(raw_wlan) for raw_wlan in wlans_data]
+            if not isinstance(response, list) or not all(isinstance(item, dict) for item in response):
+                raise RuntimeError("Controller returned an invalid WLAN list response")
+            wlans: List[Wlan] = [Wlan(raw_wlan) for raw_wlan in response]
             self._connection._update_cache(cache_key, wlans)
             return wlans
         except Exception as e:
@@ -389,11 +365,11 @@ class NetworkManager:
         Returns:
             Structured exact field-verification result with post-write state.
         """
+        if not update_data:
+            logger.debug("No update data provided for WLAN %s; no controller call required.", wlan_id)
+            return noop_write(operation="update", metadata={"wlan_id": wlan_id})
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
-        if not update_data:
-            logger.warning("No update data provided for WLAN %s.", wlan_id)
-            return failed_write("No update data provided", operation="update")
 
         try:
             # 1. Existence check; raises UniFiNotFoundError on miss.
@@ -428,8 +404,7 @@ class NetworkManager:
                     f"Controller accepted the WLAN update but the resource could not be re-read: {e}",
                     operation="update",
                     mutation_applied=True,
-                    resource=existing_wlan,
-                    metadata={"wlan_id": wlan_id},
+                    metadata={"wlan_id": wlan_id, "details_before_attempt": existing_wlan},
                 )
             return verify_write(
                 operation="update",
@@ -453,10 +428,14 @@ class NetworkManager:
             bool: True if successful, False otherwise
         """
         try:
+            await self.get_wlan_details(wlan_id)
             api_request = ApiRequest(method="delete", path=f"/rest/wlanconf/{wlan_id}")
             await self._connection.request(api_request)
             logger.info("Delete command sent for WLAN %s", wlan_id)
             self._connection._invalidate_cache(f"{CACHE_PREFIX_WLANS}_{self._connection.site}")
+            wlans = await self.get_wlans()
+            if any(wlan.raw.get("_id") == wlan_id for wlan in wlans):
+                raise RuntimeError("Controller accepted the delete request but the WLAN still exists")
             return True
         except Exception as e:
             logger.error("Error deleting WLAN %s: %s", wlan_id, e)

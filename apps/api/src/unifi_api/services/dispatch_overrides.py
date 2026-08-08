@@ -843,22 +843,32 @@ def _translate_traffic_flows(args: dict[str, Any]) -> tuple[tuple[Any, ...], dic
     return (), {"query": query}
 
 
-def _translate_network_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    from unifi_core.network.models.networks import UNSAFE_GUEST_PURPOSE_ERROR
+def _validated_network_fields(fields: dict[str, Any], *, operation: str) -> dict[str, Any]:
+    from unifi_core.network.models.networks import validate_create, validate_update
 
-    network_data = dict(args.get("network_data") or {})
-    if network_data.get("purpose") == "guest":
-        raise ValueError(UNSAFE_GUEST_PURPOSE_ERROR)
+    return validate_create(fields) if operation == "create" else validate_update(fields)
+
+
+def _translate_network_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    network_data = _validated_network_fields(dict(args.get("network_data") or {}), operation="create")
     return (), {"network_data": network_data}
 
 
 def _translate_network_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    from unifi_core.network.models.networks import UNSAFE_GUEST_PURPOSE_ERROR
-
-    update_data = dict(args.get("update_data") or {})
-    if update_data.get("purpose") == "guest":
-        raise ValueError(UNSAFE_GUEST_PURPOSE_ERROR)
+    update_data = _validated_network_fields(dict(args.get("update_data") or {}), operation="update")
     return (), {"network_id": args["network_id"], "update_data": update_data}
+
+
+def _translate_wlan_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.wlans import validate_create
+
+    return (), {"wlan_data": validate_create(dict(args.get("wlan_data") or {}))}
+
+
+def _translate_wlan_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.wlans import validate_update
+
+    return (), {"wlan_id": args["wlan_id"], "update_data": validate_update(dict(args.get("update_data") or {}))}
 
 
 def _translate_snmp_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -1645,6 +1655,8 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     # Network mutation payload transforms.
     "unifi_create_network": _spec(_translate_network_create, "network_data"),
     "unifi_update_network": _spec(_translate_network_update, "network_id", "update_data"),
+    "unifi_create_wlan": _spec(_translate_wlan_create, "wlan_data"),
+    "unifi_update_wlan": _spec(_translate_wlan_update, "wlan_id", "update_data"),
     "unifi_set_device_led": _spec(_translate_device_led, "device_mac", "led_override"),
     "unifi_set_jumbo_frames": _spec(_translate_jumbo_frames, "device_mac", "config_data"),
     "unifi_set_outlet_state": _spec(

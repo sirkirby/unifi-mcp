@@ -22,6 +22,12 @@ from aiounifi.models.configuration import Configuration
 
 logger = logging.getLogger("unifi-network-mcp")
 
+# aiounifi v92 logs the complete login JSON (including password) at DEBUG.
+# Keep that dependency logger at INFO even when application diagnostics use DEBUG.
+_aiounifi_connectivity_logger = logging.getLogger("aiounifi.interfaces.connectivity")
+if _aiounifi_connectivity_logger.level == logging.NOTSET or _aiounifi_connectivity_logger.level < logging.INFO:
+    _aiounifi_connectivity_logger.setLevel(logging.INFO)
+
 
 async def detect_unifi_os_pre_login(
     session: aiohttp.ClientSession,
@@ -307,15 +313,18 @@ class ConnectionManager:
             ),
         ):
             return True
+        message = str(error).lower()
         if isinstance(error, RequestError):
-            message = str(error).lower()
             return "mfa" in message or "totp" in message
+        if isinstance(error, ResponseError):
+            return "received 429" in message
         return False
 
     def _block_automatic_reconnect(self, error: BaseException) -> str:
         connection_error = self._record_connection_error(error)
         self._automatic_reconnect_blocked_error = connection_error
         self._initialized = False
+        self._invalidate_cache()
         logger.error(
             "Automatic reconnect blocked after terminal authentication failure: %s. "
             "Correct the credentials or wait for the controller lockout to clear, then restart the process.",
@@ -420,6 +429,9 @@ class ConnectionManager:
                         logger.debug("Pre-login is_unifi_os set to: %s", self._unifi_os_override)
 
                     await self.controller.login()
+                    # Core owns session-expiry retries so concurrent requests share
+                    # the generation-locked _reauthenticate() path below.
+                    self.controller.connectivity.can_retry_login = False
 
                     # Phase 2: Post-login verification (authenticated)
                     # Verify API path prefix works correctly after successful login
@@ -482,7 +494,6 @@ class ConnectionManager:
                         logger.error(
                             "Unexpected error during controller initialization: %s",
                             connection_error,
-                            exc_info=True,
                         )
                     await self._discard_connection()
                     return False
@@ -533,10 +544,11 @@ class ConnectionManager:
                     connection_error = self._block_automatic_reconnect(error)
                 else:
                     connection_error = self._record_connection_error(error)
-                    logger.error("Controller re-authentication failed: %s", connection_error, exc_info=True)
+                    logger.error("Controller re-authentication failed: %s", connection_error)
                 await self._discard_connection()
                 return False
 
+            self.controller.connectivity.can_retry_login = False
             self._initialized = True
             self._auth_generation += 1
             self._last_connection_error = None
@@ -544,17 +556,22 @@ class ConnectionManager:
             return True
 
     async def cleanup(self):
-        """Clean up resources and close connections."""
-        had_open_session = bool(self._aiohttp_session and not self._aiohttp_session.closed)
-        await self._discard_connection()
-        if had_open_session:
-            logger.info("aiohttp session closed.")
-        self._cache = {}
-        self._last_cache_update = {}
-        self._last_connection_error = None
-        self._automatic_reconnect_blocked_error = None
-        self._auth_generation = 0
-        logger.info("Unifi connection manager resources cleared.")
+        """Clean up resources without racing initialization or reauthentication."""
+        async with self._connect_lock:
+            had_open_session = bool(self._aiohttp_session and not self._aiohttp_session.closed)
+            await self._discard_connection()
+            if had_open_session:
+                logger.info("aiohttp session closed.")
+            self._cache = {}
+            self._last_cache_update = {}
+            self._last_connection_error = None
+            self._automatic_reconnect_blocked_error = None
+            self._auth_generation = 0
+            logger.info("Unifi connection manager resources cleared.")
+
+    async def close(self) -> None:
+        """Close the connection using the common manager lifecycle contract."""
+        await self.cleanup()
 
     async def request(self, api_request: ApiRequest | ApiRequestV2, return_raw: bool = False) -> Any:
         """Make a request to the controller API, handling raw responses."""
@@ -562,16 +579,17 @@ class ConnectionManager:
             raise self._not_connected_error()
 
         # Apply override if we have better detection (FR-003: use cached detection)
+        original_controller = self.controller
         original_is_unifi_os = None
         if self._unifi_os_override is not None:
-            original_is_unifi_os = self.controller.connectivity.is_unifi_os
+            original_is_unifi_os = original_controller.connectivity.is_unifi_os
             if original_is_unifi_os != self._unifi_os_override:
                 logger.debug(
                     "Overriding is_unifi_os from %s to %s for this request",
                     original_is_unifi_os,
                     self._unifi_os_override,
                 )
-                self.controller.connectivity.is_unifi_os = self._unifi_os_override
+                original_controller.connectivity.is_unifi_os = self._unifi_os_override
 
         auth_generation = self._auth_generation
         request_method = self.controller.connectivity._request if return_raw else self.controller.request
@@ -626,12 +644,20 @@ class ConnectionManager:
                         pass
                     return retry_response if return_raw else retry_response.get("data")
                 except Exception as retry_e:
+                    retry_error = self._sanitize_connection_error(retry_e)
                     logger.error(
                         "API request failed even after re-authentication: %s %s - %s",
                         api_request.method.upper(),
                         api_request.path,
-                        retry_e,
+                        retry_error,
                     )
+                    # A second LoginRequired means the refreshed session was not
+                    # accepted. Treat it as terminal so later tool calls cannot
+                    # generate another controller-login storm. Other endpoint
+                    # permission/rate-limit failures remain scoped to that endpoint.
+                    if isinstance(retry_e, LoginRequired):
+                        self._block_automatic_reconnect(retry_e)
+                        await self._discard_connection()
                     raise retry_e from None
             else:
                 raise self._not_connected_error()
@@ -679,8 +705,12 @@ class ConnectionManager:
             raise
         finally:
             # Always restore original value (FR-003: maintain session state)
-            if original_is_unifi_os is not None:
-                self.controller.connectivity.is_unifi_os = original_is_unifi_os
+            if (
+                original_is_unifi_os is not None
+                and self.controller is original_controller
+                and self.controller is not None
+            ):
+                original_controller.connectivity.is_unifi_os = original_is_unifi_os
 
     # --- Cache Management ---
 

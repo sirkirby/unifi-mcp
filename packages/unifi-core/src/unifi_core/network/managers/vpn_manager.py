@@ -99,14 +99,15 @@ class VpnManager:
             api_request = ApiRequest(method="get", path="/rest/networkconf")
             response = await self._connection.request(api_request)
 
-            # Handle various response formats
+            # Handle known response formats and fail closed on malformed data.
             if isinstance(response, dict) and "data" in response:
                 networks = response["data"]
             elif isinstance(response, list):
                 networks = response
             else:
-                logger.warning("Unexpected networkconf response format: %s", type(response))
-                networks = []
+                raise RuntimeError("Controller returned an invalid networkconf response")
+            if not isinstance(networks, list) or not all(isinstance(item, dict) for item in networks):
+                raise RuntimeError("Controller returned malformed entries in the networkconf response")
 
             self._connection._update_cache(cache_key, networks)
             return networks
@@ -243,16 +244,14 @@ class VpnManager:
                     f"Controller accepted the VPN update but the resource could not be re-read: {e}",
                     operation="update",
                     mutation_applied=True,
-                    resource=existing,
-                    metadata={"vpn_id": config_id},
+                    metadata={"vpn_id": config_id, "details_before_attempt": existing},
                 )
             if refetched is None:
                 return failed_write(
                     "Controller accepted the VPN update but the resource disappeared before verification",
                     operation="update",
                     mutation_applied=True,
-                    resource=existing,
-                    metadata={"vpn_id": config_id},
+                    metadata={"vpn_id": config_id, "details_before_attempt": existing},
                 )
             return verify_write(
                 operation="update",

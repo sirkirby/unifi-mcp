@@ -229,9 +229,9 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 
 | Tool | Type | Description |
 |------|------|-------------|
-| `unifi_create_port_forward` | Read | Create a new port forwarding rule on your Unifi Network controller using schema validation. |
 | `unifi_get_port_forward` | Read | Get a specific port forwarding rule by ID from your Unifi Network controller. |
 | `unifi_list_port_forwards` | Read | List all port forwarding rules on your Unifi Network controller. |
+| `unifi_create_port_forward` | Mutate | Create a new port forwarding rule on your Unifi Network controller using schema validation. |
 | `unifi_create_simple_port_forward` | Mutate | Create a port forward using a simplified schema. |
 | `unifi_delete_port_forward` | Mutate | Delete a port forwarding rule by ID. |
 | `unifi_toggle_port_forward` | Mutate | Toggle a port forwarding rule on or off on your Unifi Network controller. |

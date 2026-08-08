@@ -3085,6 +3085,37 @@ async def test_semantic_translator_rejects_physical_mutation_before_manager() ->
             {"network_id": "net-1", "update_data": {"purpose": "guest"}},
             "Internal firewall zone",
         ),
+        (
+            "unifi_update_network",
+            {"network_id": "net-1", "update_data": {"_id": "controller-owned"}},
+            "read-only",
+        ),
+        (
+            "unifi_update_network",
+            {"network_id": "net-1", "update_data": {"unknown": True}},
+            "Unknown network field",
+        ),
+        (
+            "unifi_update_network",
+            {"network_id": "net-1", "update_data": {"enabled": "not-a-boolean"}},
+            "Invalid network update data",
+        ),
+        ("unifi_update_network", {"network_id": "net-1", "update_data": {}}, "update_data cannot be empty"),
+        (
+            "unifi_create_network",
+            {"network_data": {"name": "Broken", "purpose": "unsupported", "ip_subnet": "10.0.0.1/24"}},
+            "Invalid 'purpose'",
+        ),
+        (
+            "unifi_update_wlan",
+            {"wlan_id": "wlan-1", "update_data": {"enabled": False, "unknown": True}},
+            "Unknown WLAN field",
+        ),
+        (
+            "unifi_create_wlan",
+            {"wlan_data": {"name": "SSID", "security": "wpa2-psk", "unknown": True}},
+            "Unknown WLAN field",
+        ),
         ("unifi_update_gateway_settings", {"update_data": {}}, "update_data cannot be empty"),
         (
             "unifi_update_gateway_settings",
@@ -3185,6 +3216,123 @@ def test_semantic_translators_reject_payloads_the_mcp_wrapper_rejects(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         DISPATCH_ARG_TRANSLATORS[tool_name](args)
+
+
+def test_wlan_update_translator_includes_minrate_dependencies() -> None:
+    positional, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_update_wlan"](
+        {"wlan_id": "wlan-1", "update_data": {"minrate_ng_data_rate_kbps": 6000}}
+    )
+
+    assert positional == ()
+    assert kwargs == {
+        "wlan_id": "wlan-1",
+        "update_data": {
+            "minrate_ng_data_rate_kbps": 6000,
+            "minrate_ng_enabled": True,
+            "minrate_setting_preference": "manual",
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_wlan_update_preview_uses_effective_translated_fields() -> None:
+    factory = MagicMock()
+
+    result = await dispatch_action(
+        registry=PRODUCTION_REGISTRY,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_update_wlan",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"wlan_id": "wlan-1", "update_data": {"minrate_ng_data_rate_kbps": 6000}},
+        confirm=False,
+    )
+
+    assert isinstance(result, MutationPreview)
+    assert result.payload["preview"]["proposed"]["update_data"] == {
+        "minrate_ng_data_rate_kbps": 6000,
+        "minrate_ng_enabled": True,
+        "minrate_setting_preference": "manual",
+    }
+    create_result = await dispatch_action(
+        registry=PRODUCTION_REGISTRY,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_create_wlan",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"wlan_data": {"name": "Preview SSID", "security": "open"}},
+        confirm=False,
+    )
+
+    assert isinstance(create_result, MutationPreview)
+    assert create_result.payload["preview"]["will_create"]["wlan_data"]["enabled"] is True
+    factory.get_domain_manager.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_port_forward_preview_uses_effective_translated_payload_and_rejects_typos() -> None:
+    factory = MagicMock()
+    args = {
+        "port_forward_data": {
+            "name": "Web",
+            "dst_port": "443",
+            "fwd_port": "8443",
+            "fwd_ip": "192.168.1.10",
+        }
+    }
+
+    result = await dispatch_action(
+        registry=PRODUCTION_REGISTRY,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_create_port_forward",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args=args,
+        confirm=False,
+    )
+
+    preview = result.payload["preview"]["will_create"]["port_forward_data"]
+    assert preview["enabled"] is True
+    assert preview["proto"] == "tcp/udp"
+    assert preview["dst_port"] == "443"
+
+    typo_args = {"port_forward_data": {**args["port_forward_data"], "enable": False}}
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        await dispatch_action(
+            registry=PRODUCTION_REGISTRY,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="unifi_create_port_forward",
+            controller_id="cid",
+            controller_products=["network"],
+            site="default",
+            args=typo_args,
+            confirm=False,
+        )
+
+    factory.get_domain_manager.assert_not_called()
+
+
+def test_network_translators_validate_types_and_normalize_vlan() -> None:
+    positional, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_create_network"](
+        {"network_data": {"name": "Lab", "purpose": "vlan-only", "vlan": 4092, "enabled": False}}
+    )
+
+    assert positional == ()
+    assert kwargs == {
+        "network_data": {
+            "name": "Lab",
+            "purpose": "vlan-only",
+            "vlan": 4092,
+            "enabled": False,
+        }
+    }
 
 
 @pytest.mark.parametrize("limit", [None, 0, -1])

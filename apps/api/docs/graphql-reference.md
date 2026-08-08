@@ -2159,6 +2159,7 @@ type Wlan {
   dtimMode: String
   dtimNa: Int
   dtimNg: Int
+  minrateSettingPreference: String
   minrateNgEnabled: Boolean
   minrateNgDataRateKbps: Int
   minrateNaEnabled: Boolean

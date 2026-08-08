@@ -22,22 +22,10 @@ from unifi_core.network.models.ap_group import (
 from unifi_core.network.models.ap_group import (
     to_controller_update as ap_group_to_update,
 )
-from unifi_core.network.models.networks import (
-    READ_ONLY_FIELDS as NETWORK_READ_ONLY_FIELDS,
-)
-from unifi_core.network.models.networks import UNSAFE_GUEST_PURPOSE_ERROR
-from unifi_core.network.models.networks import (
-    to_controller_update as network_to_update,
-)
-from unifi_core.network.models.wlans import (
-    MUTABLE_FIELDS as WLAN_MUTABLE_FIELDS,
-)
-from unifi_core.network.models.wlans import (
-    to_controller_create as wlan_to_create,
-)
-from unifi_core.network.models.wlans import (
-    to_controller_update as wlan_to_update,
-)
+from unifi_core.network.models.networks import validate_create as validate_network_create
+from unifi_core.network.models.networks import validate_update as validate_network_update
+from unifi_core.network.models.wlans import validate_create as validate_wlan_create
+from unifi_core.network.models.wlans import validate_update as validate_wlan_update
 from unifi_core.network.read_views import shape_network_details, shape_network_list, shape_wlan_list
 from unifi_core.redaction import redact_sensitive_fields
 from unifi_network_mcp.runtime import network_manager, server, should_redact_sensitive_fields
@@ -290,7 +278,7 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "ipv6_setting_preference ('auto'/'manual'), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), "
     "wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). "
     "WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. "
-    "Confirmed writes are read back exactly; responses list persisted, dropped, and controller-coerced fields. "
+    "Confirmed writes are read back exactly; responses list persisted, unchanged, dropped, and controller-coerced fields. "
     "A failed result may represent a partial write and is not a rollback. Requires confirmation.",
     permission_category="networks",
     permission_action="update",
@@ -403,26 +391,10 @@ async def update_network(
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
 
-    # Translate to controller-safe mutable fields
-    validated_data = network_to_update(update_data)
-    if validated_data.get("purpose") == "guest":
-        return {"success": False, "error": UNSAFE_GUEST_PURPOSE_ERROR}
-    if not validated_data:
-        read_only_attempted = sorted(k for k in update_data if k in NETWORK_READ_ONLY_FIELDS)
-        if read_only_attempted:
-            return {
-                "success": False,
-                "error": (
-                    f"The following fields are read-only and cannot be updated: "
-                    f"{', '.join(read_only_attempted)}. "
-                    "Use unifi_get_network_details to read their current values."
-                ),
-            }
-        logger.warning("Network update data for ID %s is empty after filtering.", network_id)
-        return {
-            "success": False,
-            "error": "No valid mutable fields provided for update.",
-        }
+    try:
+        validated_data = validate_network_update(update_data)
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
     if "wan_load_balance_weight" in validated_data:
         try:
@@ -432,8 +404,12 @@ async def update_network(
         if _weight < 0 or _weight > 100:
             return {"success": False, "error": "'wan_load_balance_weight' must be between 0 and 100."}
 
-    # Fetch current state for preview
-    current = await network_manager.get_network_details(network_id)
+    # Fetch current state for preview and confirmed-update validation.
+    try:
+        current = await network_manager.get_network_details(network_id)
+    except Exception as e:
+        logger.error("Failed to read network %s before update: %s", network_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to prepare network update for {network_id}: {e}"}
     if not current:
         return {"success": False, "error": "Network not found"}
 
@@ -459,13 +435,6 @@ async def update_network(
             ),
             redact_sensitive=redact_sensitive,
         )
-
-    # Basic cross-field validation (more complex logic might need Pydantic models)
-    if "vlan_enabled" in validated_data and validated_data["vlan_enabled"] and "vlan" not in validated_data:
-        # Check if existing network already has VLAN ID if only enabling
-        pass  # Let manager handle fetching existing state for merge
-    if "vlan" in validated_data and (int(validated_data["vlan"]) < 1 or int(validated_data["vlan"]) > 4094):
-        return {"success": False, "error": "'vlan' must be between 1 and 4094."}
 
     updated_fields_list = list(validated_data.keys())
     logger.info("Attempting to update network '%s' with fields: %s", network_id, ", ".join(updated_fields_list))
@@ -621,80 +590,11 @@ async def create_network(
     - error (string): Error message if unsuccessful
     """
     redact_sensitive = should_redact_sensitive_fields()
-    # Filter input to known mutable fields
-    validated_data = network_to_update(network_data) if network_data else {}
-    # Supplement with any required-on-create fields that to_controller_update might drop
-    # (to_controller_update drops None; required fields must still be present)
-    for k in ("name", "purpose", "ip_subnet", "vlan", "vlan_enabled", "dhcpd_start", "dhcpd_stop"):
-        if k in network_data and k not in validated_data and network_data[k] is not None:
-            validated_data[k] = network_data[k]
-    if not validated_data:
-        return {"success": False, "error": "network_data cannot be empty"}
-
-    # Required fields check
-    required_fields = ["name", "purpose"]
-    missing_fields = [field for field in required_fields if field not in validated_data]
-    if missing_fields:
-        error = f"Missing required fields: {', '.join(missing_fields)}"
-        logger.warning(error)
-        return {"success": False, "error": error}
-
-    # Additional validation for purpose type
-    purpose = validated_data.get("purpose")
-    if purpose == "guest":
-        return {"success": False, "error": UNSAFE_GUEST_PURPOSE_ERROR}
-    # Ensure purpose is one of the allowed values
-    allowed_purposes = [
-        "corporate",
-        "wan",
-        "vlan-only",
-        "vpn-client",
-        "vpn-server",
-    ]  # Consider adding "bridge"? Check schema
-    if purpose not in allowed_purposes:
-        return {
-            "success": False,
-            "error": f"Invalid 'purpose': {purpose}. Must be one of {allowed_purposes}.",
-        }
-
-    # Validation based on purpose
-    if purpose != "vlan-only" and not validated_data.get("ip_subnet"):
-        return {
-            "success": False,
-            "error": f"'ip_subnet' is required for network purpose '{purpose}'",
-        }
-
-    if purpose == "vlan-only" and not validated_data.get("vlan"):
-        return {
-            "success": False,
-            "error": "'vlan' is required for network purpose 'vlan-only'.",
-        }
-
-    # Validation for DHCP — UniFi API uses dhcpd_* field names
-    dhcpd_enabled = validated_data.get("dhcpd_enabled", True)
-    if (
-        purpose != "vlan-only"
-        and dhcpd_enabled
-        and (not validated_data.get("dhcpd_start") or not validated_data.get("dhcpd_stop"))
-    ):
-        return {
-            "success": False,
-            "error": "'dhcpd_start' and 'dhcpd_stop' are required if dhcpd_enabled is true (and purpose is not vlan-only).",
-        }
-
-    # Validation for VLAN
-    vlan_enabled = validated_data.get("vlan_enabled", False)
-    vlan_id = validated_data.get("vlan")
-    if vlan_enabled and not vlan_id:
-        return {
-            "success": False,
-            "error": "'vlan' is required when vlan_enabled is true",
-        }
-
-    if vlan_id is not None and (int(vlan_id) < 1 or int(vlan_id) > 4094):
-        return {"success": False, "error": "'vlan' must be between 1 and 4094."}
-
-    validated_data.setdefault("enabled", True)
+    try:
+        validated_data = validate_network_create(network_data)
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
+    purpose = validated_data["purpose"]
 
     if not confirm:
         return redact_sensitive_fields(
@@ -869,7 +769,8 @@ async def get_wlan_details(
     description="Update specific fields of an existing WLAN (SSID). "
     "Pass only the fields you want to change — current values are automatically preserved. "
     "Basic: name (str), security ('open'/'wpapsk'/'wpa2-psk'), x_passphrase (str), "
-    "enabled (bool), hide_ssid (bool), guest_policy (bool), usergroup_id (str), networkconf_id (str). "
+    "enabled (bool), hide_ssid (bool), guest_policy (controller-dependent bool; may be reported as dropped), "
+    "usergroup_id (str), networkconf_id (str). "
     "Security: wpa3_support (bool), wpa3_transition (bool), pmf_mode ('disabled'/'optional'/'required'), "
     "fast_roaming_enabled (bool), group_rekey (int seconds, 0=disabled). "
     "Roaming: rrm_enabled (bool, 802.11k neighbour reports), "
@@ -879,10 +780,10 @@ async def get_wlan_details(
     "mac_filter_list (list of MAC strings), l2_isolation (bool). "
     "Radio: wlan_band ('both'/'2g'/'5g'), multicast_enhance_enabled (bool), "
     "dtim_mode ('default'/'custom'), dtim_na (int 1-255), dtim_ng (int 1-255), "
-    "minrate_ng_enabled (bool), minrate_ng_data_rate_kbps (int), "
+    "minrate_setting_preference ('auto'/'manual'), minrate_ng_enabled (bool), minrate_ng_data_rate_kbps (int), "
     "minrate_na_enabled (bool), minrate_na_data_rate_kbps (int). "
     "Other: schedule_enabled (bool), uapsd_enabled (bool), proxy_arp (bool), iapp_enabled (bool). "
-    "Confirmed writes are read back exactly; responses list persisted, dropped, and controller-coerced fields. "
+    "Confirmed writes are read back exactly; responses list persisted, unchanged, dropped, and controller-coerced fields. "
     "A failed result may represent a partial write and is not a rollback. Requires confirmation.",
     permission_category="wlans",
     permission_action="update",
@@ -930,18 +831,17 @@ async def update_wlan(
     # Redaction-marker write-back is rejected centrally at the MCP dispatch
     # boundary (StrictKwargFastMCP.call_tool), so no per-field check here.
 
-    # Translate to controller-compatible update payload via pydantic model
-    validated_data = wlan_to_update(update_data)
+    try:
+        validated_data = validate_wlan_update(update_data)
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
-    if not validated_data:
-        logger.warning("WLAN update data for ID %s is empty after validation.", wlan_id)
-        return {
-            "success": False,
-            "error": "Update data is effectively empty or invalid.",
-        }
-
-    # Fetch current state for preview
-    current = await network_manager.get_wlan_details(wlan_id)
+    # Fetch current state for preview and confirmed-update validation.
+    try:
+        current = await network_manager.get_wlan_details(wlan_id)
+    except Exception as e:
+        logger.error("Failed to read WLAN %s before update: %s", wlan_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to prepare WLAN update for {wlan_id}: {e}"}
     if not current:
         return {"success": False, "error": "WLAN not found"}
 
@@ -1000,7 +900,7 @@ async def create_wlan(
     wlan_data: Annotated[
         Dict[str, Any],
         Field(
-            description="WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (bool), usergroup_id, networkconf_id (network to associate). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88)"
+            description="WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (controller-dependent; current versions may silently ignore it and report it as dropped), usergroup_id, networkconf_id (network to associate). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88)"
         ),
     ],
     confirm: Annotated[
@@ -1024,7 +924,7 @@ async def create_wlan(
     Optional parameters in wlan_data:
     - enabled (boolean): Whether the network is enabled (default: true)
     - hide_ssid (boolean): Whether to hide the SSID (default: false)
-    - guest_policy (boolean): Whether this is a guest network (default: false)
+    - guest_policy (boolean): Controller-dependent legacy flag. Current versions may silently ignore it; confirmed writes report it as dropped. Use firewall zones/policies for guest isolation.
     - usergroup_id (string): User group ID (default: default group)
     - networkconf_id (string): Network configuration ID to associate with (default: default LAN)
     - rrm_enabled (boolean): Enable 802.11k Radio Resource Management (neighbour reports)
@@ -1049,36 +949,10 @@ async def create_wlan(
     - error (string): Error message if unsuccessful
     """
     redact_sensitive = should_redact_sensitive_fields()
-    # Filter input to known mutable fields via pydantic model
-    from unifi_core.network.models.wlans import Wlan as WlanModel
-
     try:
-        # Accept networkconf_id as an alias for network_id (controller name vs model name).
-        # Only remap when network_id is not already present — mirrors to_controller_update behaviour.
-        if "networkconf_id" in wlan_data and "network_id" not in wlan_data:
-            wlan_data = {**wlan_data, "network_id": wlan_data["networkconf_id"]}
-            wlan_data = {k: v for k, v in wlan_data.items() if k != "networkconf_id"}
-        wlan_model = WlanModel(**{k: v for k, v in wlan_data.items() if k in WLAN_MUTABLE_FIELDS})
-    except Exception as exc:
-        return {"success": False, "error": f"Invalid WLAN data: {exc}"}
-    validated_data = wlan_to_create(wlan_model)
-
-    # Required fields check
-    required_fields = ["name", "security"]
-    missing_fields = [field for field in required_fields if field not in validated_data]
-    if missing_fields:
-        error = f"Missing required fields: {', '.join(missing_fields)}"
-        logger.warning(error)
-        return {"success": False, "error": error}
-
-    # Check passphrase requirement
-    if validated_data.get("security") != "open" and not validated_data.get("x_passphrase"):
-        return {
-            "success": False,
-            "error": "'x_passphrase' is required when security is not 'open'",
-        }
-
-    validated_data.setdefault("enabled", True)
+        validated_data = validate_wlan_create(wlan_data)
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
     if not confirm:
         return redact_sensitive_fields(

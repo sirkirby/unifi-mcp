@@ -60,6 +60,7 @@ class Wlan:
     dtim_mode: str | None
     dtim_na: int | None
     dtim_ng: int | None
+    minrate_setting_preference: str | None
     minrate_ng_enabled: bool | None
     minrate_ng_data_rate_kbps: int | None
     minrate_na_enabled: bool | None
@@ -113,6 +114,7 @@ class Wlan:
             dtim_mode=raw.get("dtim_mode"),
             dtim_na=raw.get("dtim_na"),
             dtim_ng=raw.get("dtim_ng"),
+            minrate_setting_preference=raw.get("minrate_setting_preference"),
             minrate_ng_enabled=raw.get("minrate_ng_enabled"),
             minrate_ng_data_rate_kbps=raw.get("minrate_ng_data_rate_kbps"),
             minrate_na_enabled=raw.get("minrate_na_enabled"),
