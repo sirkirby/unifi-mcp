@@ -5,7 +5,7 @@
   <img src="../../assets/hero-network.svg" alt="UniFi Network MCP Server" width="720">
 </p>
 
-MCP server exposing 187 UniFi Network Controller tools for LLMs, agents, and automation platforms. Query clients, devices, firewall rules, VLANs, VPNs, Traffic Flows, stats, and more — with safe-by-default permissions and preview-before-confirm for all mutations.
+MCP server exposing 189 UniFi Network Controller tools for LLMs, agents, and automation platforms. Query clients, devices, firewall rules, VLANs, VPNs, Traffic Flows, stats, and more — with safe-by-default permissions and preview-before-confirm for all mutations.
 
 ## Install
 
@@ -100,6 +100,8 @@ Network also bounds two large source responses by default: `unifi_get_dashboard`
 ### Sensitive response fields
 
 Network tools redact known secret-bearing fields by default before returning data to MCP clients. This includes WLAN passphrases, VPN key material, whole VPN config blobs, and SNMP community strings in raw/detail responses and mutation previews. Disable redaction for a trusted local administration process with `UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false` or the global `UNIFI_REDACT_SENSITIVE_FIELDS=false` policy flag when raw values are required.
+
+Confirmed Network/WLAN and VPN-state writes are re-read from the controller and report exact `persisted_fields`, `unchanged_fields`, `dropped_fields`, and `coerced_fields`. Already-satisfied no-op fields appear under `unchanged_fields` and do not make a failed write partially successful. A response with `success: false` and `mutation_applied: true` means the controller accepted the mutation but did not persist it exactly; it may be a partial write, not a rollback. Inspect `partial_success` and `details_after_attempt` before retrying or applying a compensating change.
 
 ## Run
 
@@ -227,7 +229,7 @@ Each device record now includes additional fields alongside the existing MAC, na
 
 - [Configuration](docs/configuration.md) — Full env var reference, YAML config, controller type detection
 - [Permissions](docs/permissions.md) — Permission system, category defaults, how to enable high-risk tools
-- [Tool Catalog](docs/tools.md) — All 187 tools organized by category
+- [Tool Catalog](docs/tools.md) — All 189 tools organized by category
 - [Transports](docs/transports.md) — stdio, Streamable HTTP, and SSE setup
 - [Troubleshooting](docs/troubleshooting.md) — Connection issues, SSL, missing tools
 

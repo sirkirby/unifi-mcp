@@ -4040,6 +4040,17 @@
       "NetworkModel": {
         "additionalProperties": true,
         "properties": {
+          "auto_scale_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Scale Enabled"
+          },
           "dhcp_relay_enabled": {
             "anyOf": [
               {
@@ -4413,6 +4424,17 @@
               }
             ],
             "title": "Ipv6 Enabled"
+          },
+          "ipv6_ra_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Ra Enabled"
           },
           "ipv6_setting_preference": {
             "anyOf": [
@@ -8211,6 +8233,17 @@
               }
             ],
             "title": "Minrate Ng Enabled"
+          },
+          "minrate_setting_preference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minrate Setting Preference"
           },
           "multicast_enhance_enabled": {
             "anyOf": [

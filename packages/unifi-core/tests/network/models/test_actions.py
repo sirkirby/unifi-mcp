@@ -749,3 +749,22 @@ class TestPortForwardSimpleInput:
         assert m.ext_port == "2222"
         assert m.int_port == "22"
         assert m.protocol == "tcp"
+
+
+class TestPortForwardInputStrictness:
+    """Unknown keys fail loudly; long-accepted lax field coercion keeps working."""
+
+    def test_unknown_key_is_rejected(self):
+        with pytest.raises(ValidationError, match="extra_forbidden|Extra inputs"):
+            PortForwardCreateInput(name="Web", dst_port="80", fwd_port="8080", fwd_ip="192.168.1.10", fwdip="typo")
+
+    def test_lax_scalar_coercion_still_accepted(self):
+        m = PortForwardCreateInput(
+            name="Web", dst_port="80", fwd_port="8080", fwd_ip="192.168.1.10", enabled="true", log=1
+        )
+        assert m.enabled is True
+        assert m.log is True
+
+    def test_update_unknown_key_is_rejected(self):
+        with pytest.raises(ValidationError, match="extra_forbidden|Extra inputs"):
+            PortForwardUpdateInput(fwd="192.168.1.10")

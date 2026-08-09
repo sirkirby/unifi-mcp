@@ -125,6 +125,33 @@ def _build_mutation_preview(entry: ToolEntry, site: str, args: dict[str, Any]) -
     return MutationPreview(payload)
 
 
+def _effective_preview_args(
+    entry: ToolEntry,
+    args: dict[str, Any],
+    translated_kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    """Overlay translated public fields so previews match confirmed execution."""
+    effective = dict(args)
+    public_fields = entry.input_schema.get("properties", {})
+    directly_overlaid: set[str] = set()
+    for key in public_fields:
+        if key in translated_kwargs:
+            effective[key] = translated_kwargs[key]
+            directly_overlaid.add(key)
+
+    # Some public tools wrap one free-form object under a friendly name while
+    # the manager uses a different payload name (for example
+    # port_forward_data -> rule_data). Preserve the public wrapper but preview
+    # the validated, default-expanded controller payload that confirmation uses.
+    public_dict_keys = [
+        key for key in public_fields if key not in directly_overlaid and isinstance(args.get(key), dict)
+    ]
+    translated_dicts = [value for value in translated_kwargs.values() if isinstance(value, dict)]
+    if len(public_dict_keys) == 1 and len(translated_dicts) == 1:
+        effective[public_dict_keys[0]] = translated_dicts[0]
+    return effective
+
+
 def _validate_action_args(entry: ToolEntry, args: dict[str, Any]) -> None:
     """Validate raw REST args against the generated MCP input contract."""
     errors = sorted(
@@ -200,7 +227,8 @@ async def dispatch_action(
         positional, keyword = (), manager_args
 
     if action_kind == "mutation" and not confirm:
-        return _build_mutation_preview(entry, site, args)
+        preview_args = _effective_preview_args(entry, args, keyword)
+        return _build_mutation_preview(entry, site, preview_args)
 
     direct_adapter = DISPATCH_DIRECT_RESULT_ADAPTERS.get(tool_name)
     if direct_adapter is not None:

@@ -18,6 +18,7 @@ import importlib
 import json
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -474,6 +475,20 @@ class LiveSmokeRunner:
         self.server = runtime_mod.server
         self.connection_manager = runtime_mod.connection_manager
         self.report.connected = await self.connection_manager.initialize()
+        if not self.report.connected:
+            detail = getattr(self.connection_manager, "last_connection_error", None)
+            suffix = f": {detail}" if detail else ""
+            error = "Live smoke could not connect or authenticate; aborting before tool execution" + suffix
+            self.report.records.append(
+                SmokeRecord(
+                    tool="__setup__",
+                    phase="setup",
+                    status="failed",
+                    success=False,
+                    error=error,
+                )
+            )
+            raise ConnectionError(error)
 
         kwargs = {
             "mode": bootstrap_mod.UNIFI_TOOL_REGISTRATION_MODE,
@@ -706,6 +721,7 @@ class LiveSmokeRunner:
             await self.run_lifecycles()
             await self.lifecycle_network_acl_rule()
             await self.lifecycle_network_ap_group()
+            await self.lifecycle_network_network()
             await self.lifecycle_network_wlan()
             await self.lifecycle_network_port_profile()
             await self.lifecycle_network_firewall_policy()
@@ -1329,14 +1345,107 @@ class LiveSmokeRunner:
         if delete.success:
             self.report.cleaned_resources.append({"type": "ap_group", "id": group_id, "name": name})
 
+    async def lifecycle_network_network(self) -> None:
+        networks = self.cache.items_from_tool("unifi_list_networks", "networks")
+        used_vlans = {
+            int(item["vlan"]) for item in networks if isinstance(item, dict) and str(item.get("vlan", "")).isdigit()
+        }
+        # UniFi reserves the top of the VLAN range (>=4010) for internal use and
+        # rejects creates there with a detail-less api.err.InvalidValue; scan
+        # below 4000 for a disposable ID.
+        vlan = next((candidate for candidate in range(3999, 3899, -1) if candidate not in used_vlans), None)
+        if vlan is None:
+            self.skip("unifi_create_network/unifi_delete_network", "approved", "no disposable VLAN ID available")
+            return
+
+        stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+        name = f"{RUN_PREFIX}-network-{stamp}-{secrets.token_hex(4)}"
+        create = await self.call(
+            "unifi_create_network",
+            {
+                "network_data": {
+                    "name": name,
+                    "purpose": "vlan-only",
+                    "vlan": vlan,
+                    "vlan_enabled": True,
+                    "enabled": False,
+                },
+                "confirm": True,
+            },
+            "approved:create",
+        )
+        network_id = create.summary.get("resource_id")
+        if not network_id and create.summary.get("mutation_applied") is True:
+            await self.call(
+                "unifi_list_networks",
+                {"search": name, "limit": 100},
+                "approved:recover-created-id",
+            )
+            matches = [
+                item
+                for item in self.cache.items_from_tool("unifi_list_networks", "networks")
+                if item.get("name") == name
+            ]
+            if len(matches) == 1:
+                network_id = first_value(matches[0], ("_id", "id"))
+        if not network_id:
+            reason = "network create did not return or uniquely expose an id"
+            if create.summary.get("mutation_applied") is True:
+                self.record_check("unifi_delete_network", "approved:cleanup", False, reason)
+            self.skip("unifi_delete_network", "approved", reason)
+            return
+
+        self.report.created_resources.append({"type": "network", "id": network_id, "name": name})
+        try:
+            if not create.success:
+                self.record_check(
+                    "unifi_create_network",
+                    "approved:verify-create",
+                    False,
+                    "create applied but exact verification failed; cleaning up disposable network",
+                )
+                return
+            update_name = f"{name}-upd"
+            update = await self.call(
+                "unifi_update_network",
+                {"network_id": network_id, "update_data": {"name": update_name}, "confirm": True},
+                "approved:update",
+            )
+            await self.call(
+                "unifi_get_network_details",
+                {"network_id": network_id},
+                "approved:verify",
+            )
+            details_payload = self.cache.by_tool.get("unifi_get_network_details", {})
+            details = details_payload.get("details", {}) if isinstance(details_payload, dict) else {}
+            self.record_check(
+                "unifi_update_network",
+                "approved:verify-persisted",
+                update.success is True
+                and details.get("name") == update_name
+                and details.get("enabled") is False
+                and details.get("purpose") == "vlan-only"
+                and str(details.get("vlan")) == str(vlan),
+                f"name={update_name}, enabled=false, purpose=vlan-only, vlan={vlan} persisted",
+            )
+        finally:
+            delete = await self.call(
+                "unifi_delete_network",
+                {"network_id": network_id, "confirm": True},
+                "approved:delete",
+            )
+            if delete.success:
+                self.report.cleaned_resources.append({"type": "network", "id": network_id, "name": name})
+
     async def lifecycle_network_wlan(self) -> None:
         ap_group_id = self.cache.id_from_tool("unifi_list_ap_groups", "ap_groups", ("_id", "id"))
         if not ap_group_id:
             self.skip("unifi_create_wlan/unifi_delete_wlan", "approved", "could not discover AP group id")
             return
 
-        stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-        name = f"{RUN_PREFIX}-ssid-{stamp}"
+        # SSIDs are capped at 32 bytes; use a compact stamp so the disposable
+        # name stays inside the limit while remaining unique and recognizable.
+        name = f"{RUN_PREFIX}-ssid-{datetime.now(UTC).strftime('%H%M%S')}-{secrets.token_hex(3)}"
         create = await self.call(
             "unifi_create_wlan",
             {
@@ -1345,7 +1454,6 @@ class LiveSmokeRunner:
                     "security": "open",
                     "enabled": False,
                     "hide_ssid": True,
-                    "guest_policy": True,
                     "ap_group_ids": [ap_group_id],
                     "ap_group_mode": "groups",
                 },
@@ -1354,30 +1462,73 @@ class LiveSmokeRunner:
             "approved:create",
         )
         wlan_id = create.summary.get("resource_id")
+        if not wlan_id and create.summary.get("mutation_applied") is True:
+            await self.call(
+                "unifi_list_wlans",
+                {"search": name, "limit": 100},
+                "approved:recover-created-id",
+            )
+            matches = [
+                item for item in self.cache.items_from_tool("unifi_list_wlans", "wlans") if item.get("name") == name
+            ]
+            if len(matches) == 1:
+                wlan_id = first_value(matches[0], ("_id", "id"))
         if not wlan_id:
-            self.skip("unifi_delete_wlan", "approved", "WLAN create did not return an id")
+            reason = "WLAN create did not return or uniquely expose an id"
+            if create.summary.get("mutation_applied") is True:
+                self.record_check("unifi_delete_wlan", "approved:cleanup", False, reason)
+            self.skip("unifi_delete_wlan", "approved", reason)
             return
         self.report.created_resources.append({"type": "wlan", "id": wlan_id, "name": name})
-        # Exercise update_wlan: the WLAN is created hidden, so flipping hide_ssid
-        # is a real change. With verify-after-write a controller that silently
-        # ignores the legacy /rest/wlanconf PUT now yields a failed record here.
-        await self.call(
-            "unifi_update_wlan",
-            {"wlan_id": wlan_id, "update_data": {"hide_ssid": False}, "confirm": True},
-            "approved:update",
-        )
-        # Exercise the manual min-rate coupling: a freshly created WLAN is in auto
-        # rate mode, so a rate-only update persists only if the manager also flips
-        # minrate_setting_preference=manual and enables the band. verify-after-write
-        # turns a silent recompute into a failed record here.
-        await self.call(
-            "unifi_update_wlan",
-            {"wlan_id": wlan_id, "update_data": {"minrate_ng_data_rate_kbps": 6000}, "confirm": True},
-            "approved:update",
-        )
-        delete = await self.call("unifi_delete_wlan", {"wlan_id": wlan_id, "confirm": True}, "approved:delete")
-        if delete.success:
-            self.report.cleaned_resources.append({"type": "wlan", "id": wlan_id, "name": name})
+        try:
+            if not create.success:
+                self.record_check(
+                    "unifi_create_wlan",
+                    "approved:verify-create",
+                    False,
+                    "create applied but exact verification failed; cleaning up disposable WLAN",
+                )
+                return
+            # Exercise update_wlan: the WLAN is created hidden, so flipping hide_ssid
+            # is a real change. With verify-after-write a controller that silently
+            # ignores the legacy /rest/wlanconf PUT now yields a failed record here.
+            visibility_update = await self.call(
+                "unifi_update_wlan",
+                {"wlan_id": wlan_id, "update_data": {"hide_ssid": False}, "confirm": True},
+                "approved:update",
+            )
+            # Exercise the manual min-rate coupling: a freshly created WLAN is in auto
+            # rate mode, so a rate-only update persists only if the manager also flips
+            # minrate_setting_preference=manual and enables the band. verify-after-write
+            # turns a silent recompute into a failed record here.
+            rate_update = await self.call(
+                "unifi_update_wlan",
+                {"wlan_id": wlan_id, "update_data": {"minrate_ng_data_rate_kbps": 6000}, "confirm": True},
+                "approved:update",
+            )
+            await self.call("unifi_get_wlan_details", {"wlan_id": wlan_id}, "approved:verify")
+            details_payload = self.cache.by_tool.get("unifi_get_wlan_details", {})
+            details = details_payload.get("details", {}) if isinstance(details_payload, dict) else {}
+            self.record_check(
+                "unifi_update_wlan",
+                "approved:verify-persisted",
+                visibility_update.success is True
+                and rate_update.success is True
+                and details.get("name") == name
+                and details.get("enabled") is False
+                and details.get("security") == "open"
+                and details.get("hide_ssid") is False
+                and details.get("minrate_ng_data_rate_kbps") == 6000,
+                "name/security preserved; enabled=false, hide_ssid=false, and minrate=6000 persisted",
+            )
+        finally:
+            delete = await self.call(
+                "unifi_delete_wlan",
+                {"wlan_id": wlan_id, "confirm": True},
+                "approved:delete",
+            )
+            if delete.success:
+                self.report.cleaned_resources.append({"type": "wlan", "id": wlan_id, "name": name})
 
     async def lifecycle_network_port_profile(self) -> None:
         stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
@@ -1822,6 +1973,8 @@ def summarize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "site",
         "message",
         "requires_confirmation",
+        "mutation_applied",
+        "partial_success",
         "action",
         "resource_type",
         "resource_name",
@@ -1881,13 +2034,26 @@ def find_resource_id(data: Any) -> str | None:
             "profile_id",
             "voucher_id",
             "visitor_id",
+            "network_id",
             "wlan_id",
+            "client_id",
+            "server_id",
+            "vpn_id",
             "liveview_id",
         ):
             value = data.get(key)
             if value:
                 return str(value)
-        for key in ("details", "group", "policy", "profile", "rule", "data", "result"):
+        for key in (
+            "details",
+            "details_after_attempt",
+            "group",
+            "policy",
+            "profile",
+            "rule",
+            "data",
+            "result",
+        ):
             value = find_resource_id(data.get(key))
             if value:
                 return value
@@ -1906,12 +2072,24 @@ async def run_one(args: argparse.Namespace) -> int:
         await runner.run()
     finally:
         runner.report.finished_at = datetime.now(UTC).isoformat()
-        await runner.close()
-        report_dir = REPO_ROOT / args.report_dir
-        stamp = runner.report.started_at.replace(":", "").replace("+0000", "Z")
-        path = report_dir / f"{runner.server_key}-{stamp}.json"
-        write_json(path, asdict(runner.report))
-        print(f"\nReport: {path}", flush=True)
+        try:
+            await runner.close()
+        except Exception as exc:
+            runner.report.records.append(
+                SmokeRecord(
+                    tool="__cleanup__",
+                    phase="cleanup",
+                    status="failed",
+                    success=False,
+                    error=f"Live smoke cleanup failed: {exc}",
+                )
+            )
+        finally:
+            report_dir = REPO_ROOT / args.report_dir
+            stamp = runner.report.started_at.replace(":", "").replace("+0000", "Z")
+            path = report_dir / f"{runner.server_key}-{stamp}.json"
+            write_json(path, asdict(runner.report))
+            print(f"\nReport: {path}", flush=True)
     failed = [record for record in runner.report.records if record.status in {"failed", "exception"}]
     return 1 if failed else 0
 

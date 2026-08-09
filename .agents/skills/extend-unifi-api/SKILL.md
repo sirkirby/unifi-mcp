@@ -418,6 +418,12 @@ assert payload["notes"] == "keep me"   # preserved
 assert payload["name"] == "new-name"   # updated
 ```
 
+### Write-Verification Standard
+
+Network/WLAN create and update tools re-read controller state after the write and classify every requested field via `unifi_core.write_verification.WriteVerificationResult` (`packages/unifi-core/src/unifi_core/write_verification.py`) into `persisted_fields`, `dropped_fields`, `coerced_fields`, and `unverifiable_fields`. The response envelope reports `mutation_applied` (bool) **separately** from `success` — a request can partially apply (`partial_success` = `not success and persisted_fields`).
+
+**Tolerate controller-side normalization — don't flag it as a silent drop.** Live mutation testing found the controller's own `ap_group_mode` normalization (`groups` -> `all`) on WLAN writes initially flagged as coerced/dropped even though the write fully succeeded as intended. `ap_group_mode` is unverifiable via read-back and must be excluded from strict drop/coerce classification rather than treated as a failure signal — classify genuinely unverifiable fields as `unverifiable_fields`, not `dropped_fields`.
+
 ---
 
 ## Naming Conventions
@@ -457,6 +463,10 @@ Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(
 **Firewall policy required:** `schedule: {"mode": "ALWAYS"}` and `create_allow_respond: False` on BLOCK/REJECT.
 
 **Firmware variation:** Different versions return different field shapes; request firmware version with bug reports.
+
+**VLAN cross-field validation (1–4094):** `update_network`/create validate `vlan` is between 1 and 4094 before dispatching to the manager; out-of-range values are rejected with an error containing "between 1 and 4094" and the manager call is never made. Ref: `apps/network/tests/unit/test_network_tools.py::test_vlan_range_validation`.
+
+**SSID length cap (32 bytes):** WLAN `name` (SSID) is capped at 32 bytes per 802.11; `packages/unifi-core/src/unifi_core/network/models/wlans.py` raises `ValueError("WLAN 'name' (SSID) must be at most 32 bytes")` before the request reaches the controller. Multi-byte (non-ASCII) SSIDs count by byte length, not character count.
 
 **Action dispatcher arg-mismatch:** Without DISPATCH_ARG_TRANSLATORS, action tools fail silently. Test both MCP and `/v1/actions/` paths.
 

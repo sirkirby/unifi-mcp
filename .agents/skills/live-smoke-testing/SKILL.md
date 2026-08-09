@@ -76,6 +76,14 @@ Before any live run, ensure:
    Running with bare `python3` will fail with import errors for `aiounifi`, `dotenv`, and
    other dependencies not available outside the uv-managed virtual environment.
 
+7. **Invoke `uv run` from the workspace root with `--all-packages` in the monorepo.** Running
+   `uv run python scripts/live_smoke.py` from a package subdirectory (or without
+   `--all-packages`) can fail with `ModuleNotFoundError: mcp` because the workspace's shared
+   dependency isn't resolved into that package's isolated env. Run from the repo root:
+   ```bash
+   uv run --all-packages python scripts/live_smoke.py --server network --phase safe
+   ```
+
 ## Procedure 0: PRE-MERGE BLOCKING GATE — API Response Parsing Changes
 
 **Trigger Criteria — Live Smoke is Mandatory Before Merge:**
@@ -389,6 +397,24 @@ Each layer adds cost but catches distinct classes of regressions. The first thre
 in developer workflows; the fourth is automated in the release pipeline.
 
 ## Cross-Cutting Gotchas
+
+- **UniFi Network 429 login-lockout — stop on first 429, do not retry through it.** A 429
+  response from the Network controller's login endpoint means the account is rate-limited or
+  locked out. Retrying immediately produces a cascade of misleading "Not-connected" failures
+  across every subsequent tool call in the run, obscuring the real cause. On the first 429,
+  stop the run immediately, wait for the lockout window to clear (do not hot-loop retries),
+  and re-run once — do not interpret the cascading failures as tool bugs.
+
+- **Write-verification standard — mutations report `WriteVerificationResult`
+  separately from `mutation_applied`.** Lifecycle/mutation tool results classify each written
+  field as `persisted`, `dropped`, or `coerced` by comparing the request payload to a
+  follow-up `get`. `mutation_applied` (did the API accept the write) is reported as a
+  distinct field from field-level verification (did each value actually stick) — a write can
+  have `mutation_applied: true` while individual fields show `dropped` or `coerced`. Guest
+  network `purpose` changes are rejected pre-mutation (validated before the write is even
+  attempted). The harness's disabled-VLAN-only lifecycle exercises this verification path;
+  when adding new lifecycle methods for mutating tools, follow the same persisted/dropped/
+  coerced classification instead of only checking `mutation_applied`.
 
 - **Mock + golden fixtures are insufficient by design.** Live smoke is the only mechanism
   that catches auth token expiry, real payload shapes, hardware-specific fields, and API

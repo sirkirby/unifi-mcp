@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.wlan import Wlan
@@ -7,6 +7,9 @@ from aiounifi.models.wlan import Wlan
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.models.networks import DELETABLE_PURPOSES, UNSAFE_GUEST_PURPOSE_ERROR
+from unifi_core.network.models.wlans import apply_update_dependencies as apply_wlan_update_dependencies
+from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -14,8 +17,14 @@ CACHE_PREFIX_NETWORKS = "networks"
 CACHE_PREFIX_WLANS = "wlans"
 CACHE_PREFIX_AP_GROUPS = "ap_groups"
 
-# Fields the controller never echoes back verbatim (write-only / redacted), so a
-# re-read cannot confirm them. Excluded from post-write persistence verification.
+# Legacy configs omit default-true flags on persist: an absent 'enabled' key
+# on read-back means enabled, not that the write was dropped.
+_ABSENT_VALUE_DEFAULTS = {"enabled": True}
+
+# Fields the controller never echoes back verbatim, so a re-read cannot confirm
+# them: write-only/redacted secrets, plus ap_group_mode, which the controller
+# derives from the ap_group_ids selection (a "groups" request covering every AP
+# is echoed back as "all"). Excluded from post-write persistence verification.
 _UNVERIFIABLE_UPDATE_KEYS = frozenset(
     {
         "x_passphrase",
@@ -24,6 +33,7 @@ _UNVERIFIABLE_UPDATE_KEYS = frozenset(
         "private_preshared_keys",
         "x_iapp_key",
         "password",
+        "ap_group_mode",
     }
 )
 
@@ -49,33 +59,9 @@ def _unpersisted_fields(before: Dict[str, Any], after: Dict[str, Any], requested
     return stuck
 
 
-# Manual min-rate data-rate fields are honored only when the controller's rate
-# mode is "manual" and the band's min-rate is enabled. Setting a *_data_rate_kbps
-# while minrate_setting_preference is "auto" is answered rc:ok but silently
-# recomputed away — which the verify step above would (correctly) flag as a
-# non-persisted write. Map each rate field to the enable flag it requires.
-_MINRATE_RATE_FIELDS = {
-    "minrate_ng_data_rate_kbps": "minrate_ng_enabled",
-    "minrate_na_data_rate_kbps": "minrate_na_enabled",
-}
-
-
 def _apply_minrate_dependencies(update_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Return update_data with the dependencies a manual min-rate write needs.
-
-    When a caller sets ``minrate_{ng,na}_data_rate_kbps``, also force
-    ``minrate_setting_preference="manual"`` and the band's ``minrate_*_enabled``
-    so the controller persists the requested rate instead of recomputing it
-    under auto mode. Values the caller set explicitly are left untouched.
-    """
-    rate_fields = [field for field in _MINRATE_RATE_FIELDS if field in update_data]
-    if not rate_fields:
-        return update_data
-    patched = dict(update_data)
-    patched.setdefault("minrate_setting_preference", "manual")
-    for rate_field in rate_fields:
-        patched.setdefault(_MINRATE_RATE_FIELDS[rate_field], True)
-    return patched
+    """Backward-compatible alias for shared WLAN update expansion."""
+    return apply_wlan_update_dependencies(update_data)
 
 
 class NetworkManager:
@@ -115,8 +101,7 @@ class NetworkManager:
                 logger.error(
                     "Unexpected response format from /rest/networkconf: %s. Response: %s", type(response), response
                 )
-                # Don't cache potentially invalid data
-                return []
+                raise RuntimeError("Controller returned an invalid network list response")
 
             # Basic check to ensure we got a list of dicts
             if not isinstance(networks_data, list) or not all(isinstance(item, dict) for item in networks_data):
@@ -125,7 +110,7 @@ class NetworkManager:
                     type(networks_data),
                     networks_data,
                 )
-                return []
+                raise RuntimeError("Controller returned malformed entries in the network list response")
 
             # Return the list of network dictionaries
             networks = networks_data
@@ -149,44 +134,68 @@ class NetworkManager:
             raise UniFiNotFoundError("network", network_id)
         return network
 
-    async def create_network(self, network_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Create a new network.
-
-        Args:
-            network_data: Dictionary with network configuration
-
-        Returns:
-            The created network data if successful, None otherwise
-        """
+    async def create_network(self, network_data: Dict[str, Any]) -> WriteVerificationResult:
+        """Create a network and verify its exact persisted field values."""
         try:
-            required_fields = ["name", "purpose"]  # vlan_enabled might default
+            required_fields = ["name", "purpose"]
             for field in required_fields:
                 if field not in network_data:
-                    logger.error("Missing required field '%s' for network creation", field)
-                    return None
+                    return failed_write(
+                        f"Missing required field '{field}' for network creation",
+                        operation="create",
+                    )
+            if network_data.get("purpose") == "guest":
+                return failed_write(UNSAFE_GUEST_PURPOSE_ERROR, operation="create")
 
             api_request = ApiRequest(method="post", path="/rest/networkconf", data=network_data)
             response = await self._connection.request(api_request)
             logger.info("Create command sent for network '%s'", network_data.get("name"))
             self._connection._invalidate_cache(f"{CACHE_PREFIX_NETWORKS}_{self._connection.site}")
 
-            if (
-                isinstance(response, dict)
-                and "data" in response
-                and isinstance(response["data"], list)
-                and len(response["data"]) > 0
-            ):
-                return response["data"][0]
-            elif isinstance(response, list) and len(response) > 0 and isinstance(response[0], dict):
-                return response[0]
-            logger.warning("Could not extract created network data from response: %s", response)
-            return response  # Return raw response
+            created = (
+                response[0]
+                if isinstance(response, list) and response and isinstance(response[0], dict)
+                else response
+                if isinstance(response, dict)
+                else None
+            )
+            network_id = created.get("_id") if created else None
+            if not network_id:
+                logger.warning("Could not extract created network data from response: %s", response)
+                return failed_write(
+                    "Controller accepted the network create request but did not return a resource ID; "
+                    "persistence could not be verified.",
+                    operation="create",
+                    mutation_applied=True,
+                    resource=created,
+                )
 
+            try:
+                refetched = await self.get_network_details(network_id)
+            except Exception as e:
+                logger.error("Created network %s could not be re-read: %s", network_id, e, exc_info=True)
+                return failed_write(
+                    "Controller accepted the network create request but the created resource "
+                    f"could not be re-read: {e}",
+                    operation="create",
+                    mutation_applied=True,
+                    resource=created,
+                    metadata={"network_id": network_id},
+                )
+
+            return verify_write(
+                operation="create",
+                requested=network_data,
+                after=refetched,
+                unverifiable_fields=_UNVERIFIABLE_UPDATE_KEYS,
+                absent_value_defaults=_ABSENT_VALUE_DEFAULTS,
+                metadata={"network_id": network_id},
+            )
         except Exception as e:
             logger.error("Error creating network: %s", e, exc_info=True)
             raise
 
-    async def update_network(self, network_id: str, update_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    async def update_network(self, network_id: str, update_data: Dict[str, Any]) -> WriteVerificationResult:
         """Update a network configuration by merging updates with existing data.
 
         Args:
@@ -194,15 +203,15 @@ class NetworkManager:
             update_data: Dictionary of fields to update
 
         Returns:
-            Tuple of (success, error_message). On success error_message is None.
-            On failure error_message contains the controller's response (e.g. an
-            API 400 body) so the caller can surface it instead of a generic guess.
+            Structured exact field-verification result with post-write state.
         """
+        if not update_data:
+            logger.debug("No update data provided for network %s; no controller call required.", network_id)
+            return noop_write(operation="update", metadata={"network_id": network_id})
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
-        if not update_data:
-            logger.warning("No update data provided for network %s.", network_id)
-            return True, None  # No action needed
+        if update_data.get("purpose") == "guest":
+            return failed_write(UNSAFE_GUEST_PURPOSE_ERROR, operation="update")
 
         try:
             # 1. Existence check; raises UniFiNotFoundError on miss.
@@ -225,36 +234,49 @@ class NetworkManager:
             # versions answer the legacy /rest/networkconf PUT with rc:ok but
             # silently ignore the write, so a non-raising request() is not
             # sufficient evidence of success.
-            refetched = await self.get_network_details(network_id)
-            stuck = _unpersisted_fields(existing_network, refetched, update_data)
-            if stuck:
-                return False, (
-                    "Controller accepted the request but did not persist field(s): "
-                    f"{', '.join(sorted(stuck))}. The legacy /rest/networkconf write "
-                    "path may be ignored for these fields on this controller version."
+            try:
+                refetched = await self.get_network_details(network_id)
+            except Exception as e:
+                return failed_write(
+                    f"Controller accepted the network update but the resource could not be re-read: {e}",
+                    operation="update",
+                    mutation_applied=True,
+                    metadata={"network_id": network_id, "details_before_attempt": existing_network},
                 )
-            return True, None
+            return verify_write(
+                operation="update",
+                requested=update_data,
+                before=existing_network,
+                after=refetched,
+                unverifiable_fields=_UNVERIFIABLE_UPDATE_KEYS,
+                absent_value_defaults=_ABSENT_VALUE_DEFAULTS,
+                metadata={"network_id": network_id},
+            )
         except Exception as e:
             logger.error("Error updating network %s: %s", network_id, e, exc_info=True)
             raise
 
     async def delete_network(self, network_id: str) -> bool:
-        """Delete a network.
-
-        Args:
-            network_id: ID of the network to delete
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
+        """Delete a LAN/VLAN network and verify it is absent afterward."""
         try:
+            existing = await self.get_network_details(network_id)
+            purpose = existing.get("purpose")
+            if purpose not in DELETABLE_PURPOSES:
+                hint = " Use unifi_delete_vpn_client for VPN client configurations." if purpose == "vpn-client" else ""
+                raise ValueError(
+                    f"Refusing to delete network {network_id}: purpose '{purpose}' is not a LAN/VLAN network. "
+                    "Deleting WAN or VPN networkconf entries can sever gateway connectivity." + hint
+                )
             api_request = ApiRequest(method="delete", path=f"/rest/networkconf/{network_id}")
             await self._connection.request(api_request)
             logger.info("Delete command sent for network %s", network_id)
             self._connection._invalidate_cache(f"{CACHE_PREFIX_NETWORKS}_{self._connection.site}")
+            networks = await self.get_networks()
+            if any(network.get("_id") == network_id for network in networks):
+                raise RuntimeError("Controller accepted the delete request but the network still exists")
             return True
         except Exception as e:
-            logger.error("Error deleting network %s: %s", network_id, e)
+            logger.error("Error deleting network %s: %s", network_id, e, exc_info=True)
             raise
 
     async def get_wlans(self) -> List[Wlan]:
@@ -267,8 +289,9 @@ class NetworkManager:
         try:
             api_request = ApiRequest(method="get", path="/rest/wlanconf")
             response = await self._connection.request(api_request)
-            wlans_data = response if isinstance(response, list) else []
-            wlans: List[Wlan] = [Wlan(raw_wlan) for raw_wlan in wlans_data]
+            if not isinstance(response, list) or not all(isinstance(item, dict) for item in response):
+                raise RuntimeError("Controller returned an invalid WLAN list response")
+            wlans: List[Wlan] = [Wlan(raw_wlan) for raw_wlan in response]
             self._connection._update_cache(cache_key, wlans)
             return wlans
         except Exception as e:
@@ -290,53 +313,66 @@ class NetworkManager:
             raise UniFiNotFoundError("wlan", wlan_id)
         return wlan_obj.raw
 
-    async def create_wlan(self, wlan_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Create a new wireless network. Returns the created WLAN data dict or None."""
+    async def create_wlan(self, wlan_data: Dict[str, Any]) -> WriteVerificationResult:
+        """Create a WLAN and verify its exact persisted field values."""
         try:
-            required_fields = [
-                "name",
-                "security",
-                "enabled",
-            ]  # x_passphrase needed depending on security
-            for field in required_fields:
+            for field in ("name", "security", "enabled"):
                 if field not in wlan_data:
-                    logger.error("Missing required field '%s' for WLAN creation", field)
-                    return None
+                    return failed_write(f"Missing required field '{field}' for WLAN creation", operation="create")
             if wlan_data.get("security") != "open" and "x_passphrase" not in wlan_data:
-                logger.error(
-                    "Missing required field 'x_passphrase' for WLAN security type '%s'", wlan_data.get("security")
+                return failed_write(
+                    f"Missing required field 'x_passphrase' for WLAN security type '{wlan_data.get('security')}'",
+                    operation="create",
                 )
-                return None
 
             api_request = ApiRequest(method="post", path="/rest/wlanconf", data=wlan_data)
             response = await self._connection.request(api_request)
             logger.info("Create command sent for WLAN '%s'", wlan_data.get("name"))
             self._connection._invalidate_cache(f"{CACHE_PREFIX_WLANS}_{self._connection.site}")
 
-            created_wlan_data = None
-            if (
-                isinstance(response, dict)
-                and "data" in response
-                and isinstance(response["data"], list)
-                and len(response["data"]) > 0
-            ):
-                created_wlan_data = response["data"][0]
-            elif isinstance(response, list) and len(response) > 0 and isinstance(response[0], dict):
-                created_wlan_data = response[0]
+            created = (
+                response[0]
+                if isinstance(response, list) and response and isinstance(response[0], dict)
+                else response
+                if isinstance(response, dict)
+                else None
+            )
+            wlan_id = created.get("_id") if created else None
+            if not wlan_id:
+                logger.warning("Could not extract created WLAN data from response: %s", response)
+                return failed_write(
+                    "Controller accepted the WLAN create request but did not return a resource ID; "
+                    "persistence could not be verified.",
+                    operation="create",
+                    mutation_applied=True,
+                    resource=created,
+                )
 
-            if created_wlan_data and isinstance(created_wlan_data, dict):
-                # Return the dict directly
-                return created_wlan_data
+            try:
+                refetched = await self.get_wlan_details(wlan_id)
+            except Exception as e:
+                logger.error("Created WLAN %s could not be re-read: %s", wlan_id, e, exc_info=True)
+                return failed_write(
+                    f"Controller accepted the WLAN create request but the created resource could not be re-read: {e}",
+                    operation="create",
+                    mutation_applied=True,
+                    resource=created,
+                    metadata={"wlan_id": wlan_id},
+                )
 
-            logger.warning("Could not extract created WLAN data from response: %s", response)
-            # Return raw response or None if it wasn't useful
-            return created_wlan_data if isinstance(created_wlan_data, dict) else None
-
+            return verify_write(
+                operation="create",
+                requested=wlan_data,
+                after=refetched,
+                unverifiable_fields=_UNVERIFIABLE_UPDATE_KEYS,
+                absent_value_defaults=_ABSENT_VALUE_DEFAULTS,
+                metadata={"wlan_id": wlan_id},
+            )
         except Exception as e:
-            logger.error("Error creating WLAN: %s", e)
+            logger.error("Error creating WLAN: %s", e, exc_info=True)
             raise
 
-    async def update_wlan(self, wlan_id: str, update_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    async def update_wlan(self, wlan_id: str, update_data: Dict[str, Any]) -> WriteVerificationResult:
         """Update a WLAN configuration by merging updates with existing data.
 
         Args:
@@ -344,15 +380,13 @@ class NetworkManager:
             update_data: Dictionary of fields to update
 
         Returns:
-            Tuple of (success, error_message). On success error_message is None.
-            On failure error_message contains the controller's response so the
-            caller can surface it instead of a generic guess.
+            Structured exact field-verification result with post-write state.
         """
+        if not update_data:
+            logger.debug("No update data provided for WLAN %s; no controller call required.", wlan_id)
+            return noop_write(operation="update", metadata={"wlan_id": wlan_id})
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
-        if not update_data:
-            logger.warning("No update data provided for WLAN %s.", wlan_id)
-            return True, None  # No action needed
 
         try:
             # 1. Existence check; raises UniFiNotFoundError on miss.
@@ -380,15 +414,24 @@ class NetworkManager:
             # / UniFi OS versions answer the legacy /rest/wlanconf PUT with rc:ok
             # but silently ignore the write, so a non-raising request() is not
             # sufficient evidence of success.
-            refetched = await self.get_wlan_details(wlan_id)
-            stuck = _unpersisted_fields(existing_wlan, refetched, update_data)
-            if stuck:
-                return False, (
-                    "Controller accepted the request but did not persist field(s): "
-                    f"{', '.join(sorted(stuck))}. The legacy /rest/wlanconf write path "
-                    "may be ignored for these fields on this controller version."
+            try:
+                refetched = await self.get_wlan_details(wlan_id)
+            except Exception as e:
+                return failed_write(
+                    f"Controller accepted the WLAN update but the resource could not be re-read: {e}",
+                    operation="update",
+                    mutation_applied=True,
+                    metadata={"wlan_id": wlan_id, "details_before_attempt": existing_wlan},
                 )
-            return True, None
+            return verify_write(
+                operation="update",
+                requested=update_data,
+                before=existing_wlan,
+                after=refetched,
+                unverifiable_fields=_UNVERIFIABLE_UPDATE_KEYS,
+                absent_value_defaults=_ABSENT_VALUE_DEFAULTS,
+                metadata={"wlan_id": wlan_id},
+            )
         except Exception as e:
             logger.error("Error updating WLAN %s: %s", wlan_id, e, exc_info=True)
             raise
@@ -403,10 +446,14 @@ class NetworkManager:
             bool: True if successful, False otherwise
         """
         try:
+            await self.get_wlan_details(wlan_id)
             api_request = ApiRequest(method="delete", path=f"/rest/wlanconf/{wlan_id}")
             await self._connection.request(api_request)
             logger.info("Delete command sent for WLAN %s", wlan_id)
             self._connection._invalidate_cache(f"{CACHE_PREFIX_WLANS}_{self._connection.site}")
+            wlans = await self.get_wlans()
+            if any(wlan.raw.get("_id") == wlan_id for wlan in wlans):
+                raise RuntimeError("Controller accepted the delete request but the WLAN still exists")
             return True
         except Exception as e:
             logger.error("Error deleting WLAN %s: %s", wlan_id, e)

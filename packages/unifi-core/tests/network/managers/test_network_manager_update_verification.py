@@ -8,6 +8,7 @@ unconditionally; they now re-read and confirm the change actually landed.
 
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from unifi_core.network.managers.network_manager import (
     NetworkManager,
     _apply_minrate_dependencies,
@@ -77,6 +78,19 @@ def test_unpersisted_skips_write_only_fields():
 # ---------------------------------------------------------------------------
 
 
+async def test_update_wlan_empty_update_is_successful_noop():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.update_wlan(WLAN_ID, {})
+
+    assert result.success is True
+    assert result.mutation_applied is False
+    assert result.metadata["wlan_id"] == WLAN_ID
+    conn.ensure_connected.assert_not_awaited()
+    conn.request.assert_not_called()
+
+
 async def test_update_wlan_fails_when_not_persisted():
     conn = _make_connection()
     mgr = NetworkManager(conn)
@@ -84,10 +98,11 @@ async def test_update_wlan_fails_when_not_persisted():
     # get(pre) -> put(ignored) -> get(post == pre)
     conn.request.side_effect = [[before], {}, [_wlan()]]
 
-    ok, err = await mgr.update_wlan(WLAN_ID, {"proxy_arp": True})
+    result = await mgr.update_wlan(WLAN_ID, {"proxy_arp": True})
 
-    assert ok is False
-    assert err is not None and "proxy_arp" in err
+    assert result.success is False
+    assert result.dropped_fields == ("proxy_arp",)
+    assert result.error is not None and "proxy_arp" in result.error
 
 
 async def test_update_wlan_succeeds_when_persisted():
@@ -95,10 +110,25 @@ async def test_update_wlan_succeeds_when_persisted():
     mgr = NetworkManager(conn)
     conn.request.side_effect = [[_wlan()], {}, [_wlan(proxy_arp=True)]]
 
-    ok, err = await mgr.update_wlan(WLAN_ID, {"proxy_arp": True})
+    result = await mgr.update_wlan(WLAN_ID, {"proxy_arp": True})
 
-    assert ok is True
-    assert err is None
+    assert result.success is True
+    assert result.persisted_fields == ("proxy_arp",)
+    assert result.error is None
+
+
+async def test_update_wlan_readback_failure_labels_before_state_explicitly():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _wlan()
+    conn.request.side_effect = [[before], {}, RuntimeError("read failed")]
+
+    result = await mgr.update_wlan(WLAN_ID, {"proxy_arp": True})
+
+    assert result.success is False
+    assert result.resource is None
+    assert result.metadata["details_before_attempt"] == before
+    assert "read failed" in result.error
 
 
 async def test_update_wlan_succeeds_for_write_only_field():
@@ -107,10 +137,11 @@ async def test_update_wlan_succeeds_for_write_only_field():
     # passphrase never round-trips; must not be reported as unpersisted
     conn.request.side_effect = [[_wlan()], {}, [_wlan()]]
 
-    ok, err = await mgr.update_wlan(WLAN_ID, {"x_passphrase": "newsecret"})
+    result = await mgr.update_wlan(WLAN_ID, {"x_passphrase": "newsecret"})
 
-    assert ok is True
-    assert err is None
+    assert result.success is True
+    assert result.unverifiable_fields == ("x_passphrase",)
+    assert result.error is None
 
 
 # ---------------------------------------------------------------------------
@@ -118,15 +149,165 @@ async def test_update_wlan_succeeds_for_write_only_field():
 # ---------------------------------------------------------------------------
 
 
+async def test_update_network_empty_update_is_successful_noop():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.update_network(NETWORK_ID, {})
+
+    assert result.success is True
+    assert result.mutation_applied is False
+    assert result.metadata["network_id"] == NETWORK_ID
+    conn.ensure_connected.assert_not_awaited()
+    conn.request.assert_not_called()
+
+
 async def test_update_network_fails_when_not_persisted():
     conn = _make_connection()
     mgr = NetworkManager(conn)
     conn.request.side_effect = [[_network()], {}, [_network()]]
 
-    ok, err = await mgr.update_network(NETWORK_ID, {"igmp_snooping": True})
+    result = await mgr.update_network(NETWORK_ID, {"igmp_snooping": True})
 
-    assert ok is False
-    assert err is not None and "igmp_snooping" in err
+    assert result.success is False
+    assert result.dropped_fields == ("igmp_snooping",)
+    assert result.error is not None and "igmp_snooping" in result.error
+
+
+async def test_update_network_readback_failure_labels_before_state_explicitly():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network()
+    conn.request.side_effect = [[before], {}, RuntimeError("read failed")]
+
+    result = await mgr.update_network(NETWORK_ID, {"igmp_snooping": True})
+
+    assert result.success is False
+    assert result.resource is None
+    assert result.metadata["details_before_attempt"] == before
+    assert "read failed" in result.error
+
+
+async def test_update_network_fails_when_controller_coerces_value():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="vlan-only")
+    after = _network(purpose="wan")
+    conn.request.side_effect = [[before], {}, [after]]
+
+    result = await mgr.update_network(NETWORK_ID, {"purpose": "corporate"})
+
+    assert result.success is False
+    assert result.coerced_fields == ("purpose",)
+    assert result.resource == after
+
+
+async def test_create_network_rejects_unsafe_guest_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.create_network({"name": "Guest", "purpose": "guest"})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert "Internal firewall zone" in result.error
+    conn.request.assert_not_called()
+
+
+async def test_update_network_rejects_unsafe_guest_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.update_network(NETWORK_ID, {"purpose": "guest"})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    conn.request.assert_not_called()
+
+
+async def test_create_network_rereads_and_flags_purpose_coercion():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    requested = {"name": "VLAN", "purpose": "vlan-only", "enabled": True}
+    created = {"_id": NETWORK_ID, **requested}
+    refetched = {**created, "purpose": "corporate"}
+    conn.request.side_effect = [[created], [refetched]]
+
+    result = await mgr.create_network(requested)
+
+    assert result.success is False
+    assert result.mutation_applied is True
+    assert result.metadata["network_id"] == NETWORK_ID
+    assert result.persisted_fields == ("enabled", "name")
+    assert result.coerced_fields == ("purpose",)
+
+
+async def test_create_wlan_rereads_and_reports_partial_persistence():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    requested = {"name": "Guest", "security": "open", "enabled": False, "guest_policy": True}
+    created = {"_id": WLAN_ID, **requested}
+    refetched = {**created, "guest_policy": False}
+    conn.request.side_effect = [[created], [refetched]]
+
+    result = await mgr.create_wlan(requested)
+
+    assert result.success is False
+    assert result.partial_success is True
+    assert result.coerced_fields == ("guest_policy",)
+    assert result.metadata["wlan_id"] == WLAN_ID
+
+
+async def test_delete_network_fails_closed_on_malformed_verification_read():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.side_effect = [[_network(purpose="corporate")], {}, {"unexpected": "shape"}]
+
+    with pytest.raises(RuntimeError, match="invalid network list response"):
+        await mgr.delete_network(NETWORK_ID)
+
+
+@pytest.mark.parametrize("purpose", ["wan", "vpn-client", "vpn-server", None])
+async def test_delete_network_refuses_non_lan_purposes(purpose):
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.side_effect = [[_network(**({"purpose": purpose} if purpose else {}))]]
+
+    with pytest.raises(ValueError, match="not a LAN/VLAN network"):
+        await mgr.delete_network(NETWORK_ID)
+    # Only the existence read happened; no DELETE was issued.
+    assert conn.request.await_count == 1
+
+
+async def test_delete_network_verifies_absence():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.side_effect = [[_network(purpose="corporate")], {}, []]
+
+    assert await mgr.delete_network(NETWORK_ID) is True
+    delete_request = conn.request.call_args_list[1].args[0]
+    assert delete_request.method == "delete"
+    assert delete_request.path == f"/rest/networkconf/{NETWORK_ID}"
+
+
+async def test_delete_wlan_verifies_absence_and_fails_on_malformed_readback():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.side_effect = [[_wlan()], {}, {"unexpected": "shape"}]
+
+    with pytest.raises(RuntimeError, match="invalid WLAN list response"):
+        await mgr.delete_wlan(WLAN_ID)
+
+
+async def test_delete_wlan_verifies_absence():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.side_effect = [[_wlan()], {}, []]
+
+    assert await mgr.delete_wlan(WLAN_ID) is True
+    delete = conn.request.call_args_list[1].args[0]
+    assert delete.method == "delete"
+    assert delete.path == f"/rest/wlanconf/{WLAN_ID}"
 
 
 # ---------------------------------------------------------------------------
@@ -183,10 +364,10 @@ async def test_update_wlan_injects_manual_minrate_dependencies_into_put():
     # get(pre) -> put -> get(post, rate now persisted because mode is manual)
     conn.request.side_effect = [[before], {}, [after]]
 
-    ok, err = await mgr.update_wlan(WLAN_ID, {"minrate_ng_data_rate_kbps": 6000})
+    result = await mgr.update_wlan(WLAN_ID, {"minrate_ng_data_rate_kbps": 6000})
 
-    assert ok is True
-    assert err is None
+    assert result.success is True
+    assert result.error is None
     put_request = conn.request.call_args_list[1].args[0]
     assert put_request.data["minrate_ng_data_rate_kbps"] == 6000
     assert put_request.data["minrate_setting_preference"] == "manual"

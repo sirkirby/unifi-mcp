@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 187 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 189 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`.
 
@@ -97,8 +97,8 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_list_port_forwards` — List all port forwarding rules
 - `unifi_get_port_forward` — Get rule details by ID
 - `unifi_toggle_port_forward` — Enable/disable a rule
-- `unifi_create_port_forward` — Create with full schema validation
-- `unifi_create_simple_port_forward` — Create with simplified schema
+- `unifi_create_port_forward` — Preview or create with full schema validation (requires confirmation)
+- `unifi_create_simple_port_forward` — Preview or create with simplified schema (requires confirmation)
 - `unifi_update_port_forward` — Update rule fields
 - `unifi_delete_port_forward` — Delete a rule by ID (requires delete permission)
 
@@ -111,16 +111,24 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_create_simple_qos_rule` — Create with simplified schema
 - `unifi_update_qos_rule` — Update rule fields
 
-## Networks & WLANs (8 tools)
+## Networks, WLANs & AP Groups (16 tools)
 
 - `unifi_list_networks` — List all networks (LAN, WAN, VLAN)
 - `unifi_get_network_details` — Get network details by ID
-- `unifi_create_network` — Create a network (LAN/VLAN)
-- `unifi_update_network` — Update network fields
+- `unifi_create_network` — Create a network (LAN/VLAN); unsafe legacy `guest` creation is rejected
+- `unifi_update_network` — Update network fields with exact post-write verification
+- `unifi_delete_network` — Delete a network after a live-state preview
 - `unifi_list_wlans` — List all wireless LANs
 - `unifi_get_wlan_details` — Get WLAN details by ID
-- `unifi_create_wlan` — Create a WLAN/SSID
-- `unifi_update_wlan` — Update WLAN fields
+- `unifi_create_wlan` — Create a WLAN/SSID with exact post-write verification
+- `unifi_update_wlan` — Update WLAN fields and report persisted/dropped/coerced fields
+- `unifi_delete_wlan` — Delete a WLAN/SSID
+- `unifi_toggle_wlan` — Toggle a WLAN's enabled state
+- `unifi_list_ap_groups` — List AP groups
+- `unifi_get_ap_group_details` — Get AP-group details by ID
+- `unifi_create_ap_group` — Create an AP group
+- `unifi_update_ap_group` — Update AP-group fields
+- `unifi_delete_ap_group` — Delete an AP group
 
 ## Switch Management (15 tools)
 
@@ -145,14 +153,15 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_update_switch_stp` — Update STP priority and version
 - `unifi_set_jumbo_frames` — Enable/disable jumbo frames
 
-## VPN (6 tools)
+## VPN (7 tools)
 
 - `unifi_list_vpn_clients` — List VPN clients (WireGuard, OpenVPN)
 - `unifi_get_vpn_client_details` — Get client details by ID
-- `unifi_update_vpn_client_state` — Enable/disable a VPN client
+- `unifi_update_vpn_client_state` — Preview, then enable/disable a VPN client with read-back verification
+- `unifi_delete_vpn_client` — Preview, then delete a VPN client
 - `unifi_list_vpn_servers` — List VPN servers
 - `unifi_get_vpn_server_details` — Get server details by ID
-- `unifi_update_vpn_server_state` — Enable/disable a VPN server
+- `unifi_update_vpn_server_state` — Preview, then enable/disable a VPN server with read-back verification
 
 ## Devices (10 tools)
 

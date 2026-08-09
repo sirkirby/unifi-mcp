@@ -563,6 +563,9 @@ async def _fetch_traffic_flow_statistics(
     period: str,
     top: int,
 ) -> dict:
+    from unifi_core.network.managers.traffic_flow_manager import validate_statistics_period
+
+    period = validate_statistics_period(period)
     async with ctx.sessionmaker() as session:
         mgr = await ctx.manager_factory.get_domain_manager(
             session,

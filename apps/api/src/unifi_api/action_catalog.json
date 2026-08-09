@@ -2548,7 +2548,7 @@
       "input_schema": {
         "properties": {
           "network_data": {
-            "description": "Network configuration dict. Required: name (str), purpose (str: 'corporate', 'guest', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled. See update_network for the full list of supported DHCP/DNS fields.",
+            "description": "Network configuration dict. Required: name (str), purpose (str: 'corporate', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). 'guest' is rejected because the legacy API can silently place it in the Internal firewall zone; create Hotspot-zone networks in the UniFi UI. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled. See update_network for the full list of supported DHCP/DNS fields.",
             "type": "object"
           }
         },
@@ -2870,7 +2870,7 @@
       "input_schema": {
         "properties": {
           "wlan_data": {
-            "description": "WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (bool), usergroup_id, networkconf_id (network to associate). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88)",
+            "description": "WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (controller-dependent; current versions may silently ignore it and report it as dropped), usergroup_id, networkconf_id (network to associate). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88)",
             "type": "object"
           }
         },
@@ -3080,6 +3080,28 @@
       }
     },
     {
+      "name": "unifi_delete_network",
+      "product": "network",
+      "category": "networks",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "network_manager",
+      "manager_method": "delete_network",
+      "input_schema": {
+        "properties": {
+          "network_id": {
+            "description": "Unique identifier (_id) of the network to delete (from unifi_list_networks)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "network_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_delete_oon_policy",
       "product": "network",
       "category": "oon_policy",
@@ -3140,6 +3162,28 @@
         },
         "required": [
           "profile_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_delete_vpn_client",
+      "product": "network",
+      "category": "vpn_clients",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "vpn_manager",
+      "manager_method": "delete_vpn_client",
+      "input_schema": {
+        "properties": {
+          "client_id": {
+            "description": "Unique identifier (_id) of the VPN client to delete (from unifi_list_vpn_clients)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id"
         ],
         "type": "object",
         "additionalProperties": false

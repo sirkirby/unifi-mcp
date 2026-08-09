@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any, Callable
 
 from unifi_core.redaction import redact_sensitive_fields
+from unifi_core.write_verification import WriteVerificationResult
 
 
 class RenderKind(str, Enum):
@@ -74,6 +75,9 @@ class Serializer:
         return redact_sensitive_fields(data, redact_sensitive=redact_sensitive)
 
     def serialize_action(self, result, *, tool_name: str, redact_sensitive: bool = True) -> dict:
+        if isinstance(result, WriteVerificationResult):
+            return self._redact(result.to_dict(), redact_sensitive=redact_sensitive)
+
         # Mutation managers that follow the fetch-merge-put golden path return a
         # (ok: bool, error: Optional[str]) ack tuple rather than the resource. Surface
         # it as a structured envelope so the action path reports failures correctly.

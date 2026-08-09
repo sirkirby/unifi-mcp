@@ -33,7 +33,8 @@ class TestCreatePortForward:
                     "fwd_port": "8443",
                     "fwd_ip": "192.168.1.10",
                     "protocol": "tcp_udp",
-                }
+                },
+                confirm=True,
             )
 
         assert result["success"] is True
@@ -42,6 +43,25 @@ class TestCreatePortForward:
         assert payload["proto"] == "tcp/udp"
         assert "fwd_ip" not in payload
         assert "fwd_protocol" not in payload
+
+    @pytest.mark.asyncio
+    async def test_full_create_preview_requires_confirmation_and_does_not_mutate(self):
+        with patch("unifi_network_mcp.tools.port_forwards.firewall_manager") as mock_fm:
+            from unifi_network_mcp.tools.port_forwards import create_port_forward
+
+            result = await create_port_forward(
+                {
+                    "name": "Web Server",
+                    "dst_port": "443",
+                    "fwd_port": "8443",
+                    "fwd_ip": "192.168.1.10",
+                }
+            )
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["will_create"]["fwd_ip"] == "192.168.1.10"
+        mock_fm.create_port_forward.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_full_create_omits_empty_source(self):
@@ -58,7 +78,8 @@ class TestCreatePortForward:
                     "fwd_port": "8443",
                     "fwd_ip": "192.168.1.10",
                     "src_ip": "",
-                }
+                },
+                confirm=True,
             )
 
         payload = mock_fm.create_port_forward.await_args.args[0]
@@ -74,9 +95,10 @@ class TestCreatePortForward:
                 confirm=False,
             )
 
-        assert result["preview"]["fwd_ip"] == "192.168.1.10"
-        assert result["preview"]["protocol"] == "tcp_udp"
-        assert "fwd" not in result["preview"]
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["will_create"]["fwd_ip"] == "192.168.1.10"
+        assert result["preview"]["will_create"]["protocol"] == "tcp_udp"
+        assert "fwd" not in result["preview"]["will_create"]
         mock_fm.create_port_forward.assert_not_called()
 
     @pytest.mark.asyncio

@@ -5,7 +5,7 @@ description: How to manage UniFi network infrastructure — devices, clients, fi
 
 # UniFi Network MCP Server
 
-You have access to a UniFi Network MCP server that lets you query and manage a UniFi Network Controller. It provides 187 tools covering devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, statistics, and more.
+You have access to a UniFi Network MCP server that lets you query and manage a UniFi Network Controller. It provides 189 tools covering devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, statistics, and more.
 
 ## Tool Discovery
 
@@ -41,7 +41,7 @@ Always preview first and show the user before confirming.
 
 ## Response Format
 
-All tools return: `{"success": true, "data": ...}`, `{"success": false, "error": "..."}`, or `{"success": true, "requires_confirmation": true, "preview": ...}`. Always check `success` first.
+All tools return: `{"success": true, "data": ...}`, `{"success": false, "error": "..."}`, or `{"success": true, "requires_confirmation": true, "preview": ...}`. Always check `success` first. Network/WLAN and VPN-state writes are read back after execution and also report `mutation_applied`, `partial_success`, `persisted_fields`, `unchanged_fields`, `dropped_fields`, `coerced_fields`, and actual post-write details. Already-satisfied no-op fields appear in `unchanged_fields` and do not make a failed write partially successful. A failed confirmed write is not necessarily a rollback; inspect those fields before retrying or compensating.
 
 **Redacted secrets:** Secret fields — WLAN passphrases (`x_passphrase`), VPN private/preshared keys, whole VPN config blobs (imported WireGuard/OpenVPN config files), and SNMP community strings — come back as `***REDACTED***` by default. Raw values are controlled by process policy (`UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false` or global `UNIFI_REDACT_SENSITIVE_FIELDS=false`), not by tool arguments. On an update, send **only** the fields you are changing — to keep a secret unchanged, omit it; never echo `***REDACTED***` back, which is rejected so the placeholder can't overwrite the real secret.
 
@@ -89,4 +89,4 @@ Cameras and access readers appear as network clients — use `unifi_lookup_by_ip
 
 ## Tool Reference
 
-For the complete list of all 187 tools organized by category with descriptions, tips, and common scenarios, read `references/network-tools.md`.
+For the complete list of all 189 tools organized by category with descriptions, tips, and common scenarios, read `references/network-tools.md`.

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -31,6 +32,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from unifi_api.db.crypto import ColumnCipher
 from unifi_api.db.models import Controller
+
+logger = logging.getLogger(__name__)
 
 
 class UnknownProduct(Exception):
@@ -196,6 +199,43 @@ class ManagerFactory:
             return site or "default"
         return None
 
+    @staticmethod
+    async def _close_connection_manager(cm: Any) -> None:
+        close = getattr(cm, "close", None) or getattr(cm, "aclose", None) or getattr(cm, "cleanup", None)
+        if close is None:
+            return
+        result = close()
+        if asyncio.iscoroutine(result):
+            await result
+
+    @classmethod
+    async def _require_initialized(cls, cm: Any, product: str) -> Any:
+        try:
+            initialized = await cm.initialize()
+        except BaseException:
+            try:
+                await asyncio.shield(cls._close_connection_manager(cm))
+            except BaseException as cleanup_error:
+                logger.warning(
+                    "Failed to close %s connection after initialization error: %s",
+                    product,
+                    cleanup_error,
+                )
+            raise
+        if initialized is True:
+            return cm
+        detail = getattr(cm, "last_connection_error", None)
+        try:
+            await cls._close_connection_manager(cm)
+        except Exception as cleanup_error:
+            logger.warning(
+                "Failed to close %s connection after unsuccessful initialization: %s",
+                product,
+                cleanup_error,
+            )
+        suffix = f": {detail}" if detail else ""
+        raise ConnectionError(f"Failed to initialize {product} controller connection{suffix}")
+
     async def get_connection_manager(
         self,
         session: AsyncSession,
@@ -270,8 +310,7 @@ class ManagerFactory:
             # operator hasn't provided a token; consuming managers handle
             # that case with a clear error rather than crashing.
             cm.unifi_auth = UniFiAuth(api_key=creds.get("api_token") or None)
-            await cm.initialize()
-            return cm
+            return await self._require_initialized(cm, product)
         if product == "protect":
             from unifi_core.protect.managers.connection_manager import (
                 ProtectConnectionManager as ProtectCM,
@@ -285,8 +324,7 @@ class ManagerFactory:
                 verify_ssl=controller.verify_tls,
                 api_key=creds.get("api_token"),
             )
-            await cm.initialize()
-            return cm
+            return await self._require_initialized(cm, product)
         if product == "access":
             from unifi_core.access.managers.connection_manager import (
                 AccessConnectionManager as AccessCM,
@@ -300,8 +338,7 @@ class ManagerFactory:
                 verify_ssl=controller.verify_tls,
                 api_key=creds.get("api_token"),
             )
-            await cm.initialize()
-            return cm
+            return await self._require_initialized(cm, product)
         raise UnknownProduct(f"unknown product '{product}'")
 
     def _builders_for(self, product: str) -> dict[str, Callable[[Any], Any]]:
@@ -364,9 +401,9 @@ class ManagerFactory:
     async def probe_controller(self, controller_id: str) -> dict:
         """Live connectivity probe across all products the controller advertises.
 
-        Invalidates any cached connection for the controller, then reconstructs
-        each product's ConnectionManager (which calls initialize() — the network
-        round-trip). Per-product latency + success/failure.
+        Constructs an isolated ConnectionManager for each product (including
+        initialize() and the network round-trip), then closes it without touching
+        cached production request sessions. Per-product latency + success/failure.
 
         Returns:
             {
@@ -381,9 +418,11 @@ class ManagerFactory:
             {"ok": False, "error_kind": "not_found", "products": {},
              "latency_ms": 0, "last_probed_at": iso8601}
 
-        This method does NOT cache the constructed connection. After the probe,
-        the controller's connection cache is empty. The next normal request
-        will reconstruct cleanly. This is intentional (probe = fresh handshake).
+        This method does NOT cache the constructed connection and leaves
+        healthy cached sessions untouched — a health probe must not interrupt
+        in-flight production requests. The one exception: cached connections
+        whose auth circuit latched are dropped after their product probes ok,
+        so production traffic recovers as soon as credentials work again.
         """
         async with self._sm() as session:
             controller = await session.get(Controller, controller_id)
@@ -397,17 +436,17 @@ class ManagerFactory:
                 }
             products = [p for p in controller.product_kinds.split(",") if p]
 
-        # Drop cached connections so we exercise the slow path.
-        await self.invalidate_controller(controller_id)
-
+        # Probes construct isolated managers and must not disrupt cached
+        # production request sessions.
         per_product: dict[str, dict] = {}
         total_latency = 0
         all_ok = True
         for product in products:
             start = time.perf_counter()
+            cm = None
             try:
                 async with self._sm() as session:
-                    await self._construct_connection_manager(session, controller_id, product)
+                    cm = await self._construct_connection_manager(session, controller_id, product)
                 latency = int((time.perf_counter() - start) * 1000)
                 per_product[product] = {"ok": True, "latency_ms": latency, "error": None}
                 total_latency += latency
@@ -416,6 +455,21 @@ class ManagerFactory:
                 per_product[product] = {"ok": False, "latency_ms": latency, "error": str(exc)}
                 total_latency += latency
                 all_ok = False
+            finally:
+                if cm is not None:
+                    try:
+                        await self._close_connection_manager(cm)
+                    except Exception as exc:
+                        logger.warning("Failed to close %s probe connection: %s", product, exc)
+                        previous = per_product.get(product, {})
+                        per_product[product] = {
+                            "ok": False,
+                            "latency_ms": previous.get("latency_ms", 0),
+                            "error": f"Probe cleanup failed: {exc}",
+                        }
+                        all_ok = False
+
+        await self._heal_blocked_connections(controller_id, per_product)
 
         return {
             "ok": all_ok,
@@ -425,19 +479,57 @@ class ManagerFactory:
             "last_probed_at": datetime.now(timezone.utc).isoformat(),
         }
 
+    async def _heal_blocked_connections(self, controller_id: str, per_product: dict[str, dict]) -> None:
+        """Drop cached connections whose auth circuit latched once a probe proves auth works.
+
+        A successful isolated probe means credentials and reachability are good
+        again; keeping a cached connection that latched its reconnect block
+        would leave production requests failing until the block's cool-down
+        expires. Healthy cached connections are left untouched.
+        """
+        async with self._locks[controller_id]:
+            healable = [
+                key
+                for key, cached in self._connection_cache.items()
+                if key[0] == controller_id
+                and getattr(cached, "reconnect_blocked", False)
+                and per_product.get(key[1], {}).get("ok")
+            ]
+            if not healable:
+                return
+            # Domain managers may be bound to the blocked connections; sweep
+            # them synchronously with the pops (same invariant as
+            # invalidate_controller). Survivors rebuild from cached healthy
+            # connections on next use.
+            for k in [k for k in self._domain_cache if k[0] == controller_id]:
+                self._domain_cache.pop(k, None)
+            removed = [self._connection_cache.pop(k) for k in healable]
+            logger.info(
+                "Probe succeeded; dropping %d auth-blocked cached connection(s) for controller %s",
+                len(removed),
+                controller_id,
+            )
+            for cm in removed:
+                try:
+                    await self._close_connection_manager(cm)
+                except Exception as exc:
+                    logger.warning("Failed to close auth-blocked connection for controller %s: %s", controller_id, exc)
+
     async def invalidate_controller(self, controller_id: str) -> None:
         """Drop all cached managers for a controller and dispose their sessions."""
-        keys_conn = [k for k in self._connection_cache if k[0] == controller_id]
-        for k in keys_conn:
-            cm = self._connection_cache.pop(k)
-            close = getattr(cm, "close", None) or getattr(cm, "aclose", None)
-            if close is not None:
+        async with self._locks[controller_id]:
+            # Sweep both caches synchronously (no awaits between the sweeps) so
+            # the lock-free read paths can never observe a half-invalidated
+            # state: a domain-cache miss followed by a connection-cache hit on
+            # an entry still awaiting close would rebuild a domain manager
+            # around a disposed session and its pre-rotation credentials.
+            for k in [k for k in self._domain_cache if k[0] == controller_id]:
+                self._domain_cache.pop(k, None)
+            removed = [
+                self._connection_cache.pop(k) for k in [k for k in self._connection_cache if k[0] == controller_id]
+            ]
+            for cm in removed:
                 try:
-                    result = close()
-                    if asyncio.iscoroutine(result):
-                        await result
-                except Exception:
-                    pass
-        keys_domain = [k for k in self._domain_cache if k[0] == controller_id]
-        for k in keys_domain:
-            self._domain_cache.pop(k, None)
+                    await self._close_connection_manager(cm)
+                except Exception as exc:
+                    logger.warning("Failed to close invalidated controller connection %s: %s", controller_id, exc)

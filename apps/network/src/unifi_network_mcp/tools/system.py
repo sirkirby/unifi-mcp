@@ -172,16 +172,22 @@ async def update_snmp_settings(
         return {"success": False, "error": "No valid fields to update after validation."}
 
     if not confirm:
-        return redact_sensitive_fields(
-            update_preview(
-                resource_type="snmp_settings",
-                resource_id="snmp",
-                resource_name="SNMP Settings",
-                current_state={},
-                updates=validated_data,
-            ),
-            redact_sensitive=redact_sensitive,
-        )
+        try:
+            settings_list = await system_manager.get_settings("snmp")
+            current = snmp_from_controller(settings_list).model_dump(exclude_none=False)
+            return redact_sensitive_fields(
+                update_preview(
+                    resource_type="snmp_settings",
+                    resource_id="snmp",
+                    resource_name="SNMP Settings",
+                    current_state=current,
+                    updates=validated_data,
+                ),
+                redact_sensitive=redact_sensitive,
+            )
+        except Exception as e:
+            logger.error("Error preparing SNMP settings preview: %s", e, exc_info=True)
+            return {"success": False, "error": f"Failed to prepare SNMP settings preview: {e}"}
 
     try:
         success = await system_manager.update_settings("snmp", validated_data)

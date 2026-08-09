@@ -9,7 +9,7 @@ from typing import Annotated, Any, Dict
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
-from unifi_core.confirmation import delete_preview, toggle_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, toggle_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import (
     PortForwardCreateInput,
@@ -261,7 +261,7 @@ async def toggle_port_forward(
 # Create Port Forward
 @server.tool(
     name="unifi_create_port_forward",
-    description="Create a new port forwarding rule on your Unifi Network controller using schema validation.",
+    description="Create a new port forwarding rule on your Unifi Network controller using schema validation. Requires confirmation.",
     permission_category="port_forwards",
     permission_action="create",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
@@ -273,6 +273,10 @@ async def create_port_forward(
             description="Port forward configuration dict. Required: name (str), dst_port (external port, e.g. '80' or '10000-10010'), fwd_port (internal port), fwd_ip (internal IP, e.g. '192.168.1.100'). Optional: protocol ('tcp'/'udp'/'tcp_udp', default 'tcp_udp'), enabled (bool, default true), src_ip (source IP/CIDR), log (bool)"
         ),
     ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, creates the rule. When false (default), validates and returns a preview"),
+    ] = False,
 ) -> Dict[str, Any]:
     """Create a new port forwarding rule with comprehensive validation.
 
@@ -325,6 +329,14 @@ async def create_port_forward(
             )
         )
         rule_data["protocol_match_excepted"] = False
+
+        if not confirm:
+            return create_preview(
+                resource_type="port_forward",
+                resource_data=validated.model_dump(exclude_none=True),
+                resource_name=validated.name,
+                warnings=["Creating an enabled port forward may expose an internal service to external traffic"],
+            )
 
         logger.info(
             "Attempting to create port forward: %s (%s %s -> %s:%s)",
@@ -569,11 +581,12 @@ async def create_simple_port_forward(
     }
 
     if not confirm:
-        return {
-            "success": True,
-            "preview": preview_payload,
-            "message": "Set confirm=true to apply.",
-        }
+        return create_preview(
+            resource_type="port_forward",
+            resource_data=preview_payload,
+            resource_name=r.name,
+            warnings=["Creating an enabled port forward may expose an internal service to external traffic"],
+        )
 
     payload = pf_to_create(
         PortForward(

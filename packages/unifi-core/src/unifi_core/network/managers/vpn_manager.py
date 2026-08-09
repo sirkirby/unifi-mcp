@@ -16,6 +16,7 @@ from aiounifi.models.api import ApiRequest
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.write_verification import WriteVerificationResult, failed_write, verify_write
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -98,14 +99,15 @@ class VpnManager:
             api_request = ApiRequest(method="get", path="/rest/networkconf")
             response = await self._connection.request(api_request)
 
-            # Handle various response formats
+            # Handle known response formats and fail closed on malformed data.
             if isinstance(response, dict) and "data" in response:
                 networks = response["data"]
             elif isinstance(response, list):
                 networks = response
             else:
-                logger.warning("Unexpected networkconf response format: %s", type(response))
-                networks = []
+                raise RuntimeError("Controller returned an invalid networkconf response")
+            if not isinstance(networks, list) or not all(isinstance(item, dict) for item in networks):
+                raise RuntimeError("Controller returned malformed entries in the networkconf response")
 
             self._connection._update_cache(cache_key, networks)
             return networks
@@ -199,24 +201,27 @@ class VpnManager:
             raise UniFiNotFoundError("vpn_server", server_id)
         return server
 
-    async def _update_vpn_config(self, config_id: str, update_data: Dict[str, Any]) -> bool:
-        """Update a VPN configuration.
+    def _invalidate_vpn_caches(self) -> None:
+        """Invalidate networkconf and every VPN classification cache."""
+        self._connection._invalidate_cache(f"{CACHE_PREFIX_NETWORKS}_{self._connection.site}")
+        for suffix in ["_True_True", "_True_False", "_False_True"]:
+            self._connection._invalidate_cache(f"{CACHE_PREFIX_VPN_CONFIGS}_{self._connection.site}{suffix}")
 
-        Args:
-            config_id: ID of the VPN configuration to update
-            update_data: Dictionary of fields to update (will be merged with existing)
-
-        Returns:
-            True if successful, False otherwise
-        """
+    async def _update_vpn_config(
+        self,
+        config_id: str,
+        update_data: Dict[str, Any],
+        *,
+        existing: Dict[str, Any] | None = None,
+    ) -> WriteVerificationResult:
+        """Fetch-merge-update a VPN config and verify exact persisted values."""
         try:
-            # Fetch existing config to merge with updates
-            networks = await self._get_all_network_configs()
-            existing = next((n for n in networks if n.get("_id") == config_id), None)
+            if existing is None:
+                networks = await self._get_all_network_configs()
+                existing = next((n for n in networks if n.get("_id") == config_id), None)
 
             if not existing:
-                logger.error("VPN configuration %s not found", config_id)
-                return False
+                raise UniFiNotFoundError("vpn_config", config_id)
 
             # Merge updates into existing config (deep merge preserves nested sub-objects)
             merged_data = deep_merge(existing, update_data)
@@ -230,67 +235,86 @@ class VpnManager:
 
             logger.info("Updated VPN configuration %s", config_id)
 
-            # Invalidate caches
-            self._connection._invalidate_cache(f"{CACHE_PREFIX_NETWORKS}_{self._connection.site}")
-            # Also invalidate VPN-specific caches
-            for suffix in ["_True_True", "_True_False", "_False_True"]:
-                self._connection._invalidate_cache(f"{CACHE_PREFIX_VPN_CONFIGS}_{self._connection.site}{suffix}")
-
-            return True
+            self._invalidate_vpn_caches()
+            try:
+                networks = await self._get_all_network_configs()
+                refetched = next((network for network in networks if network.get("_id") == config_id), None)
+            except Exception as e:
+                return failed_write(
+                    f"Controller accepted the VPN update but the resource could not be re-read: {e}",
+                    operation="update",
+                    mutation_applied=True,
+                    metadata={"vpn_id": config_id, "details_before_attempt": existing},
+                )
+            if refetched is None:
+                return failed_write(
+                    "Controller accepted the VPN update but the resource disappeared before verification",
+                    operation="update",
+                    mutation_applied=True,
+                    metadata={"vpn_id": config_id, "details_before_attempt": existing},
+                )
+            return verify_write(
+                operation="update",
+                requested=update_data,
+                before=existing,
+                after=refetched,
+                # Legacy networkconf omits default-true 'enabled' on persist;
+                # absent means enabled, not a dropped write.
+                absent_value_defaults={"enabled": True},
+                metadata={"vpn_id": config_id},
+            )
 
         except Exception as e:
             logger.error("Error updating VPN configuration %s: %s", config_id, e)
             raise
 
-    async def update_vpn_client_state(self, client_id: str, enabled: bool) -> bool:
-        """Update the enabled state of a VPN client.
-
-        Args:
-            client_id: ID of the VPN client to update
-            enabled: Whether the client should be enabled or disabled
-
-        Returns:
-            True if successful, False otherwise
-        """
+    async def update_vpn_client_state(self, client_id: str, enabled: bool) -> WriteVerificationResult:
+        """Update a VPN client's enabled state and return exact write verification."""
         client = await self.get_vpn_client_details(client_id)  # raises on miss
 
-        result = await self._update_vpn_config(client_id, {"enabled": enabled})
-        if result:
+        result = await self._update_vpn_config(client_id, {"enabled": enabled}, existing=client)
+        if result.success:
             logger.info("VPN client %s %s", client.get("name", client_id), "enabled" if enabled else "disabled")
         return result
 
-    async def update_vpn_server_state(self, server_id: str, enabled: bool) -> bool:
-        """Update the enabled state of a VPN server.
+    async def delete_vpn_client(self, client_id: str) -> bool:
+        """Delete a VPN client and verify its networkconf entry is absent."""
+        client = await self.get_vpn_client_details(client_id)
+        try:
+            await self._connection.request(ApiRequest(method="delete", path=f"/rest/networkconf/{client_id}"))
+            self._invalidate_vpn_caches()
+            networks = await self._get_all_network_configs()
+            if any(network.get("_id") == client_id for network in networks):
+                raise RuntimeError("Controller accepted the delete request but the VPN client still exists")
+            logger.info("Deleted VPN client %s", client.get("name", client_id))
+            return True
+        except Exception as e:
+            logger.error("Error deleting VPN client %s: %s", client_id, e, exc_info=True)
+            raise
 
-        Args:
-            server_id: ID of the VPN server to update
-            enabled: Whether the server should be enabled or disabled
-
-        Returns:
-            True if successful, False otherwise
-        """
+    async def update_vpn_server_state(self, server_id: str, enabled: bool) -> WriteVerificationResult:
+        """Update a VPN server's enabled state and return exact write verification."""
         server = await self.get_vpn_server_details(server_id)  # raises on miss
 
-        result = await self._update_vpn_config(server_id, {"enabled": enabled})
-        if result:
+        result = await self._update_vpn_config(server_id, {"enabled": enabled}, existing=server)
+        if result.success:
             logger.info("VPN server %s %s", server.get("name", server_id), "enabled" if enabled else "disabled")
         return result
 
-    async def toggle_vpn_config(self, config_id: str) -> bool:
+    async def toggle_vpn_config(self, config_id: str) -> WriteVerificationResult:
         """Toggle a VPN configuration's enabled state.
 
         Args:
             config_id: ID of the VPN configuration to toggle
 
         Returns:
-            True if successful, False otherwise
+            Structured exact field-verification result
         """
         networks = await self._get_all_network_configs()
         config = next((n for n in networks if n.get("_id") == config_id), None)
 
         if not config or not is_vpn_network(config):
-            logger.error("VPN configuration %s not found", config_id)
-            return False
+            raise UniFiNotFoundError("vpn_config", config_id)
 
         new_state = not config.get("enabled", True)
-        return await self._update_vpn_config(config_id, {"enabled": new_state})
+        return await self._update_vpn_config(config_id, {"enabled": new_state}, existing=config)

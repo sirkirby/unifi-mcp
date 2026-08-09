@@ -1,4 +1,4 @@
-# Network Server Tool Reference (187 tools)
+# Network Server Tool Reference (189 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 
@@ -157,7 +157,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 ## Networks & WLANs
 
 <!-- AUTO:tools:network -->
-15 tools.
+16 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -171,6 +171,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 | `unifi_create_network` | Mutate | Create a new network (LAN/VLAN) with schema validation. |
 | `unifi_create_wlan` | Mutate | Create a new Wireless LAN (WLAN/SSID) with schema validation. |
 | `unifi_delete_ap_group` | Mutate | Delete an AP group by ID. |
+| `unifi_delete_network` | Mutate | Delete a LAN/VLAN network by ID. |
 | `unifi_delete_wlan` | Mutate | Delete a WLAN/SSID by ID. |
 | `unifi_toggle_wlan` | Mutate | Toggle a WLAN/SSID on or off. |
 | `unifi_update_ap_group` | Mutate | Update an existing AP group's configuration. |
@@ -228,9 +229,9 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 
 | Tool | Type | Description |
 |------|------|-------------|
-| `unifi_create_port_forward` | Read | Create a new port forwarding rule on your Unifi Network controller using schema validation. |
 | `unifi_get_port_forward` | Read | Get a specific port forwarding rule by ID from your Unifi Network controller. |
 | `unifi_list_port_forwards` | Read | List all port forwarding rules on your Unifi Network controller. |
+| `unifi_create_port_forward` | Mutate | Create a new port forwarding rule on your Unifi Network controller using schema validation. |
 | `unifi_create_simple_port_forward` | Mutate | Create a port forward using a simplified schema. |
 | `unifi_delete_port_forward` | Mutate | Delete a port forwarding rule by ID. |
 | `unifi_toggle_port_forward` | Mutate | Toggle a port forwarding rule on or off on your Unifi Network controller. |
@@ -287,7 +288,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## VPN
 
 <!-- AUTO:tools:vpn -->
-6 tools.
+7 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -295,8 +296,9 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_vpn_server_details` | Read | Get details for a specific VPN server by ID. |
 | `unifi_list_vpn_clients` | Read | List all configured VPN clients (Wireguard, OpenVPN, etc). |
 | `unifi_list_vpn_servers` | Read | List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc). |
-| `unifi_update_vpn_client_state` | Read | Enable or disable a specific VPN client by ID. |
-| `unifi_update_vpn_server_state` | Read | Enable or disable a specific VPN server by ID. |
+| `unifi_delete_vpn_client` | Mutate | Delete a VPN client configuration by ID. |
+| `unifi_update_vpn_client_state` | Mutate | Enable or disable a specific VPN client by ID. |
+| `unifi_update_vpn_server_state` | Mutate | Enable or disable a specific VPN server by ID. |
 <!-- /AUTO:tools:vpn -->
 
 **Tips:**

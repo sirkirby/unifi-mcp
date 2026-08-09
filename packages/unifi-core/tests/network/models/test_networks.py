@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.network.models.networks import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
@@ -9,6 +10,8 @@ from unifi_core.network.models.networks import (
     from_controller,
     to_controller_create,
     to_controller_update,
+    validate_create,
+    validate_update,
 )
 
 
@@ -218,6 +221,85 @@ class TestFromController:
         assert n.wan_ipv6_dns_preference == "auto"
         assert n.wan_ipv6_dns1 == ""
         assert n.wan_ipv6_dns2 == ""
+
+
+class TestStrictValidation:
+    def test_update_rejects_mixed_read_only_field(self) -> None:
+        with pytest.raises(ValueError, match="mdns_enabled"):
+            validate_update({"enabled": False, "mdns_enabled": False})
+
+    def test_update_rejects_unknown_and_malformed_values(self) -> None:
+        with pytest.raises(ValueError, match="Unknown network field"):
+            validate_update({"enabled": False, "unknown": True})
+        with pytest.raises(ValueError, match="integer between 1 and 4094"):
+            validate_update({"vlan": "bad"})
+        with pytest.raises(ValueError, match="valid IPv4 or IPv6 CIDR"):
+            validate_update({"ip_subnet": "bad"})
+
+    @pytest.mark.parametrize("value", [True, False, 1.5, 99.9])
+    def test_update_rejects_lossy_wan_load_balance_weight(self, value: object) -> None:
+        with pytest.raises(ValueError, match="must be an integer"):
+            validate_update({"wan_load_balance_weight": value})
+
+    @pytest.mark.parametrize("value", [-1, 101, 500])
+    def test_update_rejects_out_of_range_wan_load_balance_weight(self, value: int) -> None:
+        with pytest.raises(ValueError, match="between 0 and 100"):
+            validate_update({"wan_load_balance_weight": value})
+
+    @pytest.mark.parametrize("value", [-1, 150])
+    def test_read_path_tolerates_out_of_range_wan_load_balance_weight(self, value: int) -> None:
+        # The shared model also parses controller reads; a legacy out-of-range
+        # weight on one row must not break whole-site listings.
+        n = from_controller({"_id": "n1", "name": "WAN", "wan_load_balance_weight": value})
+        assert n.wan_load_balance_weight == value
+
+    def test_update_accepts_real_controller_fields_missing_from_early_allowlist(self) -> None:
+        # Real networkconf fields that REST callers wrote successfully before
+        # strict validation; the allowlist must keep a write path for them.
+        assert validate_update({"ipv6_ra_enabled": False}) == {"ipv6_ra_enabled": False}
+        assert validate_update({"auto_scale_enabled": True}) == {"auto_scale_enabled": True}
+
+    def test_update_normalizes_string_vlan_to_controller_int(self) -> None:
+        # Callers may send vlan as a string (the documented tool format); the
+        # payload is normalized to the controller-native int so exact
+        # verification does not misread the echoed int as a coercion.
+        assert validate_update({"vlan": "100"}) == {"vlan": 100}
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("wan_vlan_enabled", "yes"),
+            ("wan_smartq_enabled", "false"),
+            ("wan_failover_priority", 1.0),
+            ("vlan", True),
+        ],
+    )
+    def test_update_rejects_type_coercion(self, field: str, value: object) -> None:
+        with pytest.raises(ValueError):
+            validate_update({field: value})
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("wan_type", "automatic"),
+            ("wan_networkgroup", "LAN"),
+            ("wan_load_balance_type", "round-robin"),
+            ("wan_type_v6", "automatic"),
+        ],
+    )
+    def test_update_rejects_unknown_wan_enum_values(self, field: str, value: str) -> None:
+        with pytest.raises(ValueError, match=f"Invalid '{field}'"):
+            validate_update({field: value})
+
+    def test_create_enforces_cross_field_requirements_and_preserves_integer_vlan(self) -> None:
+        assert validate_create({"name": "Lab", "purpose": "vlan-only", "vlan": 4092}) == {
+            "name": "Lab",
+            "purpose": "vlan-only",
+            "vlan": 4092,
+            "enabled": True,
+        }
+        with pytest.raises(ValueError, match="dhcpd_start"):
+            validate_create({"name": "LAN", "purpose": "corporate", "ip_subnet": "10.0.0.1/24"})
 
 
 class TestToControllerCreate:

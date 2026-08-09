@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 # ---------------------------------------------------------------------------
 # Pydantic domain model
@@ -64,7 +64,11 @@ class Wlan(BaseModel):
     )
     guest_policy: Optional[bool] = Field(
         default=None,
-        description="Whether this is a guest network",
+        description=(
+            "Controller-dependent legacy guest-policy flag. Current UniFi versions may silently ignore writes; "
+            "confirmed MCP writes report it as dropped when it does not persist. Configure guest isolation with "
+            "firewall zones/policies rather than relying on this flag alone."
+        ),
     )
     network_id: Optional[str] = Field(
         default=None,
@@ -153,6 +157,10 @@ class Wlan(BaseModel):
     dtim_ng: Optional[int] = Field(
         default=None,
         description="DTIM interval for 2.4GHz radio (1–255)",
+    )
+    minrate_setting_preference: Optional[str] = Field(
+        default=None,
+        description="Minimum data-rate mode: auto or manual",
     )
     minrate_ng_enabled: Optional[bool] = Field(
         default=None,
@@ -268,6 +276,7 @@ def from_controller(raw: Any) -> Wlan:
         dtim_mode=_get(raw, "dtim_mode"),
         dtim_na=_get(raw, "dtim_na"),
         dtim_ng=_get(raw, "dtim_ng"),
+        minrate_setting_preference=_get(raw, "minrate_setting_preference"),
         minrate_ng_enabled=_get(raw, "minrate_ng_enabled"),
         minrate_ng_data_rate_kbps=_get(raw, "minrate_ng_data_rate_kbps"),
         minrate_na_enabled=_get(raw, "minrate_na_enabled"),
@@ -305,6 +314,7 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
 
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
+    Callers accepting untrusted dictionaries must use ``validate_update`` first.
     Maps model field names to controller API field names.
     Accepts ``networkconf_id`` as an alias for ``network_id`` so callers can
     pass either the controller field name or the model field name.
@@ -320,3 +330,74 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     if "vlan_id" in result:
         result["vlan"] = result.pop("vlan_id")
     return result
+
+
+_CONTROLLER_ALIASES = {"networkconf_id": "network_id", "vlan": "vlan_id"}
+_CONTROLLER_READ_ONLY_FIELDS = READ_ONLY_FIELDS | {"_id", "site_id"}
+_MINRATE_RATE_FIELDS = {
+    "minrate_ng_data_rate_kbps": "minrate_ng_enabled",
+    "minrate_na_data_rate_kbps": "minrate_na_enabled",
+}
+
+
+def apply_update_dependencies(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Expand WLAN min-rate updates to the exact controller mutation."""
+    rate_fields = [field for field in _MINRATE_RATE_FIELDS if field in fields]
+    if not rate_fields:
+        return fields
+    patched = dict(fields)
+    patched.setdefault("minrate_setting_preference", "manual")
+    for rate_field in rate_fields:
+        patched.setdefault(_MINRATE_RATE_FIELDS[rate_field], True)
+    return patched
+
+
+def _validate_payload(fields: Dict[str, Any], *, operation: str) -> tuple[Wlan, set[str]]:
+    if not isinstance(fields, dict) or not fields:
+        payload_name = "wlan_data" if operation == "create" else "update_data"
+        raise ValueError(f"{payload_name} cannot be empty")
+    read_only = sorted(set(fields) & _CONTROLLER_READ_ONLY_FIELDS)
+    if read_only:
+        raise ValueError(f"WLAN field(s) are read-only and cannot be {operation}d: {', '.join(read_only)}")
+    allowed = MUTABLE_FIELDS | set(_CONTROLLER_ALIASES)
+    unknown = sorted(set(fields) - allowed - _CONTROLLER_READ_ONLY_FIELDS)
+    if unknown:
+        raise ValueError(f"Unknown WLAN field(s): {', '.join(unknown)}")
+
+    normalized = dict(fields)
+    for alias, model_name in _CONTROLLER_ALIASES.items():
+        if alias in normalized and model_name not in normalized:
+            normalized[model_name] = normalized[alias]
+        normalized.pop(alias, None)
+    try:
+        model = Wlan(**normalized)
+    except ValidationError as error:
+        raise ValueError(f"Invalid WLAN {operation} data: {error.errors()[0]['msg']}") from None
+    # 802.11 caps SSIDs at 32 bytes; the controller rejects longer names with a
+    # detail-less api.err.InvalidValue, so fail loudly here instead.
+    if model.name is not None and len(model.name.encode("utf-8")) > 32:
+        raise ValueError("WLAN 'name' (SSID) must be at most 32 bytes")
+    return model, set(normalized)
+
+
+def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a public WLAN create dictionary and return controller fields."""
+    model, _ = _validate_payload(fields, operation="create")
+    missing = [name for name in ("name", "security") if getattr(model, name) in (None, "")]
+    if missing:
+        raise ValueError(f"Missing required fields: {', '.join(missing)}")
+    if model.security != "open" and not model.x_passphrase:
+        raise ValueError("'x_passphrase' is required when security is not 'open'")
+    payload = to_controller_create(model)
+    payload.setdefault("enabled", True)
+    return payload
+
+
+def validate_update(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a public partial WLAN update and return the exact controller fields."""
+    expanded = apply_update_dependencies(fields)
+    model, submitted = _validate_payload(expanded, operation="update")
+    payload = to_controller_update(model.model_dump(include=submitted, exclude_none=True))
+    if not payload:
+        raise ValueError("Update data is effectively empty or invalid.")
+    return payload
