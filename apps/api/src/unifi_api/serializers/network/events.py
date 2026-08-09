@@ -10,20 +10,15 @@ generator (``unifi_api.services.stream_generator.sse_event_stream``) calls
 ``serializer.serialize(event)`` on each broadcast event — a per-event dict
 shaping path that the typed projection layer doesn't yet replace.
 ``unifi_subscribe_events`` keeps its STREAM-kind subscription serializer.
+
+Field mapping delegates to ``event_log_from_controller`` in ``unifi-core`` so
+both controller event shapes (legacy ``/stat/event`` flat keys and v2
+``/system-log/all`` nested ``parameters``) are handled in exactly one place.
 """
 
+from unifi_core.network.models.events import event_log_from_controller
+
 from unifi_api.serializers._base import RenderKind, Serializer, register_serializer
-
-
-def _get(obj, *keys):
-    """Return the first non-None value among the listed keys."""
-    if not isinstance(obj, dict):
-        return None
-    for k in keys:
-        v = obj.get(k)
-        if v is not None:
-            return v
-    return None
 
 
 @register_serializer(tools={"unifi_recent_events": {"kind": RenderKind.EVENT_LOG}})
@@ -38,17 +33,10 @@ class NetworkRecentEventsSerializer(Serializer):
     def serialize(record) -> dict:
         if not isinstance(record, dict):
             return {"id": None}
-        out = {
-            "id": _get(record, "_id", "id"),
-            "key": _get(record, "key", "event_type", "type"),
-            "msg": _get(record, "msg", "message", "description"),
-            "time": _get(record, "time", "timestamp", "ts"),
-            "mac": _get(record, "user", "mac", "ap", "ap_mac", "device_mac"),
-            "ip": _get(record, "ip", "src_ip"),
-        }
-        sev = _get(record, "severity", "level")
-        if sev is not None:
-            out["severity"] = sev
+        out = event_log_from_controller(record).model_dump()
+        # Legacy contract: ``severity`` is included only when non-None.
+        if out.get("severity") is None:
+            out.pop("severity", None)
         return out
 
 

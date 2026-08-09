@@ -12,6 +12,10 @@ Phase 6 PR2 Task 23 migration target. One read shape that used to live in
 
 The stream-subscription serializer (``NetworkStreamSubscriptionSerializer``)
 stays in the original module — STREAM kind has its own envelope shape.
+
+Field mapping delegates to ``event_log_from_controller`` in ``unifi-core`` so
+both controller event shapes (legacy ``/stat/event`` flat keys and v2
+``/system-log/all`` nested ``parameters``) are handled in exactly one place.
 """
 
 from __future__ import annotations
@@ -20,17 +24,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
-
-
-def _get(obj: Any, *keys: str) -> Any:
-    """Return the first non-None value among the listed keys."""
-    if not isinstance(obj, dict):
-        return None
-    for k in keys:
-        v = obj.get(k)
-        if v is not None:
-            return v
-    return None
+from unifi_core.network.models.events import event_log_from_controller
 
 
 @strawberry.type(description="A curated event-log entry.")
@@ -68,16 +62,7 @@ class EventLog:
                 severity=None,
                 _was_dict=False,
             )
-        return cls(
-            id=_get(record, "_id", "id"),
-            key=_get(record, "key", "event_type", "type"),
-            msg=_get(record, "msg", "message", "description"),
-            time=_get(record, "time", "timestamp", "ts"),
-            mac=_get(record, "user", "mac", "ap", "ap_mac", "device_mac"),
-            ip=_get(record, "ip", "src_ip"),
-            severity=_get(record, "severity", "level"),
-            _was_dict=True,
-        )
+        return cls(**event_log_from_controller(record).model_dump(), _was_dict=True)
 
     def to_dict(self) -> dict:
         if not self._was_dict:
