@@ -16,7 +16,11 @@ def test_api_declares_only_core_as_an_internal_runtime_dependency() -> None:
     dependencies = pyproject["project"]["dependencies"]
     internal = [dependency for dependency in dependencies if dependency.startswith("unifi-")]
 
-    assert internal == ["unifi-core[network,protect,access]>=0.4.26,<0.5"]
+    # The floor version moves with routine core releases; assert the
+    # dependency set and bound shape, not the exact floor.
+    assert len(internal) == 1
+    assert internal[0].startswith("unifi-core[network,protect,access]>=")
+    assert internal[0].endswith(",<0.5")
 
 
 def test_built_wheel_contains_and_loads_catalog_without_sibling_apps(tmp_path: Path) -> None:
