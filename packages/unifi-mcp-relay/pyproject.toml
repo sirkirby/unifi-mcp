@@ -5,7 +5,7 @@ description = "MCP relay: bridges local MCP servers to a Cloudflare Worker gatew
 requires-python = ">=3.13"
 dependencies = [
     "websockets>=17.0.1",
-    "mcp[cli]>=1.28.1,<2",
+    "mcp[cli]>=2.0.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
     "cryptography>=50.0.0",

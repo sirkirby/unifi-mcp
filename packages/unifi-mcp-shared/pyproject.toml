@@ -5,7 +5,7 @@ description = "Shared MCP server patterns: permissions, confirmation, lazy loadi
 requires-python = ">=3.13"
 dependencies = [
     "unifi-core>=0.4.22,<0.5",
-    "mcp[cli]>=1.28.1,<2",
+    "mcp[cli]>=2.0.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
     "cryptography>=50.0.0",
