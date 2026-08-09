@@ -1,0 +1,110 @@
+{
+  "data": [
+    {
+      "category": "SECURITY",
+      "event": "BLOCKED_BY_FIREWALL",
+      "id": "evt-0001",
+      "key": "TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT",
+      "message_raw": "{SRC_CLIENT} was blocked from accessing {DST_IP} by the {TRIGGER} Firewall Policy.",
+      "parameters": {
+        "SRC_CLIENT": {
+          "device_fingerprint_id": 4607,
+          "fingerprint_source": 0,
+          "hostname": "lab-cam",
+          "id": "aa:bb:cc:00:00:01",
+          "ip": "192.0.2.11",
+          "name": "Lab-Camera"
+        },
+        "CONSOLE_NAME": {
+          "id": "Lab-Gateway",
+          "name": "Lab-Gateway"
+        },
+        "DST_IP": {
+          "id": "198.51.100.24",
+          "name": "198.51.100.24",
+          "not_actionable": true
+        },
+        "TRIGGER": {
+          "id": "trigger-0001",
+          "name": "block cameras to external"
+        }
+      },
+      "severity": "MEDIUM",
+      "subcategory": "SECURITY_FIREWALL",
+      "target": "TRIGGER",
+      "timestamp": 1786225096952,
+      "title_raw": "Blocked by Firewall",
+      "type": "CONTENT_FILTERING_AND_RESTRICTIONS"
+    },
+    {
+      "category": "SECURITY",
+      "event": "THREAT_DETECTED",
+      "id": "evt-0002",
+      "key": "THREAT_DETECTED_KNOWN_SOURCE_CLIENT",
+      "message_raw": "A network intrusion attempt from {SRC_CLIENT} to {DST_IP} has been detected.",
+      "parameters": {
+        "SRC_CLIENT": {
+          "hostname": "lab-host",
+          "id": "aa:bb:cc:00:00:02",
+          "name": "Lab-Host"
+        },
+        "DEVICE": {
+          "id": "aa:bb:cc:ff:ff:fe",
+          "ip": "192.0.2.1",
+          "model": "UDM-Pro",
+          "name": "Lab-Gateway"
+        },
+        "DST_IP": {
+          "id": "198.51.100.99",
+          "name": "198.51.100.99",
+          "not_actionable": true
+        }
+      },
+      "severity": "HIGH",
+      "subcategory": "SECURITY_INTRUSION_PREVENTION",
+      "target": "DEVICE",
+      "timestamp": 1786225099647,
+      "title_raw": "Threat Detected",
+      "type": "THREAT_DETECTION_AND_PREVENTION"
+    },
+    {
+      "category": "CLIENT_DEVICES",
+      "event": "CLIENT_CONNECTED",
+      "id": "evt-0003",
+      "key": "CLIENT_CONNECTED_WIRELESS_2",
+      "message_raw": "{CLIENT} has connected to {AP}.",
+      "parameters": {
+        "CLIENT": {
+          "hostname": "lab-phone",
+          "id": "aa:bb:cc:00:00:03",
+          "name": "Lab-Phone"
+        },
+        "AP": {
+          "id": "aa:bb:cc:ff:ff:fd",
+          "name": "Lab-AP"
+        }
+      },
+      "severity": "LOW",
+      "subcategory": "CLIENT_CONNECTIVITY",
+      "timestamp": 1786225100000,
+      "title_raw": "Client Connected",
+      "type": "CLIENT_ACTIVITY"
+    },
+    {
+      "category": "SECURITY",
+      "event": "UNKNOWN_ROLE",
+      "id": "evt-0004",
+      "key": "EVENT_WITH_UNKNOWN_PLACEHOLDER",
+      "message_raw": "{MYSTERY_ROLE} did something to {DST_IP}.",
+      "parameters": {
+        "DST_IP": {
+          "id": "198.51.100.7",
+          "name": "198.51.100.7"
+        }
+      },
+      "severity": "LOW",
+      "timestamp": 1786225101000,
+      "title_raw": "Unknown Role"
+    }
+  ]
+}
