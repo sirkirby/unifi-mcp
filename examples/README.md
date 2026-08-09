@@ -93,23 +93,21 @@ Execute discovered tools synchronously or in parallel batches:
 
 ```python
 # Single execution (returns result directly)
-result = await session.call_tool("unifi_execute", {
-    "tool": "unifi_list_clients",
-    "arguments": {"limit": 10}
-})
+result = await session.call_tool("unifi_execute", {"tool": "unifi_list_clients", "arguments": {"limit": 10}})
 
 # Batch execution (parallel, returns job IDs)
-batch = await session.call_tool("unifi_batch", {
-    "operations": [
-        {"tool": "unifi_get_client_details", "arguments": {"mac": "..."}},
-        {"tool": "unifi_get_device_details", "arguments": {"mac": "..."}}
-    ]
-})
+batch = await session.call_tool(
+    "unifi_batch",
+    {
+        "operations": [
+            {"tool": "unifi_get_client_details", "arguments": {"mac": "..."}},
+            {"tool": "unifi_get_device_details", "arguments": {"mac": "..."}},
+        ]
+    },
+)
 
 # Check batch status
-status = await session.call_tool("unifi_batch_status", {
-    "jobIds": [job["jobId"] for job in batch["jobs"]]
-})
+status = await session.call_tool("unifi_batch_status", {"jobIds": [job["jobId"] for job in batch["jobs"]]})
 ```
 
 **Use cases:**

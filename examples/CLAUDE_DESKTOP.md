@@ -62,9 +62,7 @@ What Claude does:
 # Claude writes and executes this internally
 clients = unifi_list_clients()
 wireless = [c for c in clients if c.get("is_wireless")]
-sorted_by_traffic = sorted(wireless,
-                           key=lambda c: c["tx_bytes"] + c["rx_bytes"],
-                           reverse=True)
+sorted_by_traffic = sorted(wireless, key=lambda c: c["tx_bytes"] + c["rx_bytes"], reverse=True)
 top_10 = sorted_by_traffic[:10]
 ```
 
@@ -87,11 +85,7 @@ offline = [d for d in devices if d.get("state") != 1]
 results = []
 for device in offline:
     last_seen = device.get("last_seen")
-    results.append({
-        "name": device["name"],
-        "model": device["model"],
-        "last_seen": format_timestamp(last_seen)
-    })
+    results.append({"name": device["name"], "model": device["model"], "last_seen": format_timestamp(last_seen)})
 ```
 
 Result: Clean list of offline devices with formatted timestamps.
@@ -203,10 +197,7 @@ You: "List my network clients"
 
 Claude:
 ```python
-result = unifi_execute(
-    tool="unifi_list_clients",
-    arguments={}
-)
+result = unifi_execute(tool="unifi_list_clients", arguments={})
 # Returns: result directly
 ```
 
@@ -221,7 +212,7 @@ Claude:
 batch = unifi_batch(
     operations=[
         {"tool": "unifi_get_device_details", "arguments": {"mac": "AA:BB:CC:DD:EE:FF"}},
-        {"tool": "unifi_get_device_details", "arguments": {"mac": "11:22:33:44:55:66"}}
+        {"tool": "unifi_get_device_details", "arguments": {"mac": "11:22:33:44:55:66"}},
     ]
 )
 # Returns: job IDs for each operation

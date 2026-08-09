@@ -142,6 +142,7 @@ The `tool_name=` / `kind=` keyword form does NOT exist. Use:
 ```python
 from unifi_api.serializers._base import RenderKind, Serializer, register_serializer
 
+
 @register_serializer(
     tools={
         "unifi_create_dns_record": {"kind": RenderKind.DETAIL},
@@ -217,8 +218,10 @@ decorators. Call in both setup and teardown.
 ```python
 from unifi_api.serializers._registry import _reset_registry_for_tests
 
+
 def setup_function():
     _reset_registry_for_tests()
+
 
 def teardown_function():
     _reset_registry_for_tests()

@@ -76,6 +76,7 @@ difference.
 ```python
 from unifi_core.exceptions import UniFiNotFoundError
 
+
 async def get_client_details(mac: str) -> dict:
     """Retrieve live client data with fallback to historical."""
     try:
@@ -109,7 +110,7 @@ as separate fields.
 
 ```python
 # ❌ WRONG — used in all three factories before the fix
-hostname=raw.get("hostname") or raw.get("name"),
+hostname = (raw.get("hostname") or raw.get("name"),)
 ```
 
 When both fields are populated with different values, the user's alias (`name`)
@@ -121,8 +122,8 @@ hostname "HarmonyHub").
 
 ```python
 # ✅ CORRECT — return both independently
-name=raw.get("name") or None,
-hostname=raw.get("hostname") or None,
+name = (raw.get("name") or None,)
+hostname = (raw.get("hostname") or None,)
 ```
 
 **Scope — this bug appears identically in four places; all must be fixed
@@ -157,7 +158,7 @@ on a UDM SE running UniFi OS 5.1.12 / Network Application 10.3.58 carried the
 
 ```python
 # ❌ WRONG — all clients become "offline" when is_online is absent
-status="online" if raw.get("is_online") else "offline",
+status = ("online" if raw.get("is_online") else "offline",)
 ```
 
 **The correct pattern — use the `_is_online()` helper in `clients.py`:**
@@ -178,7 +179,7 @@ def _is_online(raw: dict) -> bool:
 Then in each factory:
 
 ```python
-status="online" if _is_online(raw) else "offline",
+status = ("online" if _is_online(raw) else "offline",)
 ```
 
 The GraphQL layer in `graphql/types/network/client.py` has an identical

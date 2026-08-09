@@ -262,6 +262,7 @@ In the future, we could implement:
 ```python
 # Hypothetical on-demand loading
 if UNIFI_TOOL_REGISTRATION_MODE == "lazy":
+
     @server.tool_resolver
     async def load_tool_on_demand(tool_name: str):
         """Load tool only when first called."""

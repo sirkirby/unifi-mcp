@@ -97,7 +97,7 @@ The current implementation in `packages/unifi-mcp-shared/src/unifi_mcp_shared/tr
 http_task = asyncio.create_task(run_http(), name="http")
 await asyncio.sleep(0)  # yield so http_task can start
 try:
-    await run_stdio()           # blocks until stdio EOF / client disconnect
+    await run_stdio()  # blocks until stdio EOF / client disconnect
     logger.info("FastMCP stdio server exited.")
 finally:
     if not http_task.done():

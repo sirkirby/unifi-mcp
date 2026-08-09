@@ -110,10 +110,7 @@ devices = await client.list_devices()
 offline = [d for d in devices if not d.get("state") == 1]
 
 for device in offline:
-    job_id = await client.start_async_job(
-        "unifi_reboot_device",
-        {"mac_address": device["mac"], "confirm": True}
-    )
+    job_id = await client.start_async_job("unifi_reboot_device", {"mac_address": device["mac"], "confirm": True})
     print(f"Rebooting {device['name']}: {job_id}")
 ```
 
@@ -188,7 +185,7 @@ import pandas as pd
 async with UniFiMCPClient() as client:
     clients = await client.list_clients()
     df = pd.DataFrame(clients)
-    df.plot(x='name', y='tx_bytes', kind='bar')
+    df.plot(x="name", y="tx_bytes", kind="bar")
 ```
 
 ---

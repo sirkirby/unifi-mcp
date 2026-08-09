@@ -84,9 +84,9 @@ The fix replaced `asyncio.wait(FIRST_COMPLETED)` with an explicit stdio-primary 
 ```python
 # Correct: stdio drives lifecycle; HTTP is a cancellable background task
 http_task = asyncio.create_task(run_http(), name="http")
-await asyncio.sleep(0)   # yield so http_task starts
+await asyncio.sleep(0)  # yield so http_task starts
 try:
-    await run_stdio()    # primary — runs to completion
+    await run_stdio()  # primary — runs to completion
 finally:
     http_task.cancel()
     ...
