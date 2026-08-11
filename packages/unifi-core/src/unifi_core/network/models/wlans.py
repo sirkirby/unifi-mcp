@@ -144,7 +144,7 @@ class Wlan(BaseModel):
     )
     multicast_enhance_enabled: Optional[bool] = Field(
         default=None,
-        description="Convert multicast to unicast per client",
+        description="Convert multicast to unicast per client (controller field: mcastenhance_enabled)",
     )
     dtim_mode: Optional[str] = Field(
         default=None,
@@ -272,7 +272,7 @@ def from_controller(raw: Any) -> Wlan:
         schedule_enabled=_get(raw, "schedule_enabled"),
         l2_isolation=_get(raw, "l2_isolation"),
         wlan_band=_get(raw, "wlan_band"),
-        multicast_enhance_enabled=_get(raw, "multicast_enhance_enabled"),
+        multicast_enhance_enabled=_get(raw, "mcastenhance_enabled"),
         dtim_mode=_get(raw, "dtim_mode"),
         dtim_na=_get(raw, "dtim_na"),
         dtim_ng=_get(raw, "dtim_ng"),
@@ -306,6 +306,9 @@ def to_controller_create(model: Wlan) -> Dict[str, Any]:
     # Map vlan_id → vlan
     if "vlan_id" in payload:
         payload["vlan"] = payload.pop("vlan_id")
+    # Map multicast_enhance_enabled → mcastenhance_enabled
+    if "multicast_enhance_enabled" in payload:
+        payload["mcastenhance_enabled"] = payload.pop("multicast_enhance_enabled")
     return payload
 
 
@@ -316,12 +319,16 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     ``None`` values are dropped; boolean ``False`` is preserved.
     Callers accepting untrusted dictionaries must use ``validate_update`` first.
     Maps model field names to controller API field names.
-    Accepts ``networkconf_id`` as an alias for ``network_id`` so callers can
-    pass either the controller field name or the model field name.
+    Accepts ``networkconf_id`` as an alias for ``network_id`` and
+    ``mcastenhance_enabled`` as an alias for ``multicast_enhance_enabled`` so
+    callers can pass either the controller field name or the model field name.
     """
     if "networkconf_id" in fields and "network_id" not in fields:
         fields = {**fields, "network_id": fields["networkconf_id"]}
         fields = {k: v for k, v in fields.items() if k != "networkconf_id"}
+    if "mcastenhance_enabled" in fields and "multicast_enhance_enabled" not in fields:
+        fields = {**fields, "multicast_enhance_enabled": fields["mcastenhance_enabled"]}
+        fields = {k: v for k, v in fields.items() if k != "mcastenhance_enabled"}
     result = {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
     # Map network_id → networkconf_id
     if "network_id" in result:
@@ -329,10 +336,17 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     # Map vlan_id → vlan
     if "vlan_id" in result:
         result["vlan"] = result.pop("vlan_id")
+    # Map multicast_enhance_enabled → mcastenhance_enabled
+    if "multicast_enhance_enabled" in result:
+        result["mcastenhance_enabled"] = result.pop("multicast_enhance_enabled")
     return result
 
 
-_CONTROLLER_ALIASES = {"networkconf_id": "network_id", "vlan": "vlan_id"}
+_CONTROLLER_ALIASES = {
+    "networkconf_id": "network_id",
+    "vlan": "vlan_id",
+    "mcastenhance_enabled": "multicast_enhance_enabled",
+}
 _CONTROLLER_READ_ONLY_FIELDS = READ_ONLY_FIELDS | {"_id", "site_id"}
 _MINRATE_RATE_FIELDS = {
     "minrate_ng_data_rate_kbps": "minrate_ng_enabled",

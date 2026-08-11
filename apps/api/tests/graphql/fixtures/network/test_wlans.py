@@ -94,3 +94,34 @@ async def test_wlan_detail_policy_disabled_returns_raw_passphrase(tmp_path, monk
     )
     assert body.get("errors") is None, body
     assert body["data"]["network"]["wlan"]["xPassphrase"] == "wifi-secret"
+
+
+@pytest.mark.asyncio
+async def test_wlan_detail_reads_multicast_enhance_controller_key(tmp_path, monkeypatch):
+    """The controller reports multicast enhancement as ``mcastenhance_enabled``.
+
+    Reading the public field name instead left this null for every WLAN, so the
+    GraphQL surface reported the setting as unset even where the controller had
+    a definite value for it.
+    """
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network")
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "network_manager", "get_wlans"): [
+                {"_id": "wl-1", "name": "HomeNet", "mcastenhance_enabled": True},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ wlan(controller: "{cid}", id: "wl-1") {{
+            id multicastEnhanceEnabled
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    assert body["data"]["network"]["wlan"]["multicastEnhanceEnabled"] is True

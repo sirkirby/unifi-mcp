@@ -287,3 +287,48 @@ class TestRoamingFields:
         payload = to_controller_create(model)
         assert payload["rrm_enabled"] is True
         assert payload["roaming_assistant_6e_rssi"] == -70
+
+
+class TestMulticastEnhance:
+    """Multicast Enhancement is aliased: the controller field is ``mcastenhance_enabled``.
+
+    The public field name stays ``multicast_enhance_enabled``. Before this the
+    model both read and wrote the public name, so the read always yielded
+    ``None`` and the write went out under a key the controller ignores — which
+    also made the post-write verification report the field as unpersisted on
+    every attempt, regardless of the value sent.
+    """
+
+    def test_from_controller_reads_controller_key(self) -> None:
+        wlan = from_controller({"_id": "wlan-mc", "mcastenhance_enabled": True})
+        assert wlan.multicast_enhance_enabled is True
+
+    def test_from_controller_reads_false(self) -> None:
+        wlan = from_controller({"_id": "wlan-mc", "mcastenhance_enabled": False})
+        assert wlan.multicast_enhance_enabled is False
+
+    def test_update_maps_to_controller_key(self) -> None:
+        assert to_controller_update({"multicast_enhance_enabled": True}) == {"mcastenhance_enabled": True}
+
+    def test_update_maps_false_to_controller_key(self) -> None:
+        assert to_controller_update({"multicast_enhance_enabled": False}) == {"mcastenhance_enabled": False}
+
+    def test_create_maps_to_controller_key(self) -> None:
+        model = Wlan(name="SSID", security="open", multicast_enhance_enabled=True)
+        payload = to_controller_create(model)
+        assert payload["mcastenhance_enabled"] is True
+        assert "multicast_enhance_enabled" not in payload
+
+    def test_controller_key_alias_accepted_on_update(self) -> None:
+        """Callers may pass the controller field name directly, as with networkconf_id."""
+        assert to_controller_update({"mcastenhance_enabled": True}) == {"mcastenhance_enabled": True}
+
+    def test_validate_update_accepts_either_name(self) -> None:
+        """The public validator reaches the controller key from both spellings."""
+        assert validate_update({"multicast_enhance_enabled": True}) == {"mcastenhance_enabled": True}
+        assert validate_update({"mcastenhance_enabled": False}) == {"mcastenhance_enabled": False}
+
+    def test_validate_create_maps_to_controller_key(self) -> None:
+        payload = validate_create({"name": "SSID", "security": "open", "multicast_enhance_enabled": True})
+        assert payload["mcastenhance_enabled"] is True
+        assert "multicast_enhance_enabled" not in payload

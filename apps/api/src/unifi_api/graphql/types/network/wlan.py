@@ -110,7 +110,7 @@ class Wlan:
             schedule_enabled=raw.get("schedule_enabled"),
             l2_isolation=raw.get("l2_isolation"),
             wlan_band=raw.get("wlan_band"),
-            multicast_enhance_enabled=raw.get("multicast_enhance_enabled"),
+            multicast_enhance_enabled=raw.get("mcastenhance_enabled"),
             dtim_mode=raw.get("dtim_mode"),
             dtim_na=raw.get("dtim_na"),
             dtim_ng=raw.get("dtim_ng"),
