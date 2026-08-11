@@ -268,7 +268,15 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "WAN IPv6 (dual-stack; does not affect IPv4 internet): ipv6_enabled (bool), wan_type_v6 (str), "
     "ipv6_setting_preference ('auto'/'manual'), ipv6_ra_enabled (bool), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), "
     "wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). "
+    "LAN IPv6 (per-network): ipv6_interface_type ('none'/'static'/'pd'), "
+    "ipv6_aliases (list of CIDR strings, 'Additional IPs' — replaces the whole list), "
+    "ipv6_ra_priority ('high'/'medium'/'low'), ipv6_ra_preferred_lifetime (int seconds), "
+    "ipv6_client_address_assignment ('slaac'/'dhcpv6'), ipv6_pd_interface (str), ipv6_pd_prefixid (hex str), "
+    "ipv6_pd_auto_prefixid_enabled (bool), ipv6_pd_start (str), ipv6_pd_stop (str), "
+    "dhcpdv6_enabled (bool), dhcpdv6_allow_slaac (bool), dhcpdv6_dns_auto (bool), "
+    "dhcpdv6_leasetime (int seconds), dhcpdv6_start (str), dhcpdv6_stop (str). "
     "WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. "
+    "WARNING: setting ipv6_interface_type='static' on a delegated ('pd') network releases its delegated prefix. "
     "Confirmed writes are read back exactly; responses list persisted, unchanged, dropped, and controller-coerced fields. "
     "A failed result may represent a partial write and is not a rollback. Requires confirmation.",
     permission_category="networks",
@@ -358,6 +366,25 @@ async def update_network(
             - wan_ipv6_dns_preference (string): WAN IPv6 DNS source: 'auto' or 'manual'.
             - wan_ipv6_dns1 (string): Primary WAN IPv6 DNS server.
             - wan_ipv6_dns2 (string): Secondary WAN IPv6 DNS server.
+            LAN IPv6 fields (per-network; independent of the WAN uplink fields above):
+            - ipv6_interface_type (string): LAN IPv6 mode: 'none', 'static', or 'pd'.
+            - ipv6_aliases (list of strings): Additional IPv6 prefixes on this network
+              ('Additional IPs'), e.g. a ULA alongside a delegated prefix. Replaces the
+              whole list — pass every prefix you want to keep.
+            - ipv6_ra_priority (string): RA router preference: 'high', 'medium', 'low'.
+            - ipv6_ra_preferred_lifetime (integer): RA preferred lifetime in seconds.
+            - ipv6_client_address_assignment (string): Client addressing: 'slaac' or 'dhcpv6'.
+            - ipv6_pd_interface (string): WAN the prefix is delegated from (e.g. 'wan').
+            - ipv6_pd_prefixid (string): Per-network prefix ID within the delegated prefix (hex).
+            - ipv6_pd_auto_prefixid_enabled (boolean): Auto-assign the prefix ID; set False to pin it.
+            - ipv6_pd_start (string): Start of the range within the delegated prefix (e.g. '::2').
+            - ipv6_pd_stop (string): End of the range within the delegated prefix (e.g. '::7d1').
+            - dhcpdv6_enabled (boolean): Enable the DHCPv6 server on this network.
+            - dhcpdv6_allow_slaac (boolean): Permit SLAAC alongside DHCPv6.
+            - dhcpdv6_dns_auto (boolean): Advertise DNS automatically over DHCPv6.
+            - dhcpdv6_leasetime (integer): DHCPv6 lease time in seconds.
+            - dhcpdv6_start (string): Start of the DHCPv6 assignment range (e.g. '::2').
+            - dhcpdv6_stop (string): End of the DHCPv6 assignment range (e.g. '::7d1').
         confirm (bool): Must be set to `True` to execute. Defaults to `False`.
 
     Important Constraints:
@@ -398,15 +425,22 @@ async def update_network(
 
     if not confirm:
         wan_critical = sorted(set(validated_data) & CONNECTIVITY_CRITICAL_WAN_FIELDS)
-        warnings = None
+        warnings = []
         if wan_critical and current.get("purpose") == "wan":
             wan_name = current.get("name") or network_id
-            warnings = [
+            warnings.append(
                 "WARNING: Changing "
                 + ", ".join(wan_critical)
                 + f" on WAN '{wan_name}' may interrupt internet connectivity. "
                 "Verify the values before setting confirm=true."
-            ]
+            )
+        if validated_data.get("ipv6_interface_type") == "static" and current.get("ipv6_interface_type") == "pd":
+            warnings.append(
+                "WARNING: Switching ipv6_interface_type from 'pd' to 'static' releases this "
+                "network's delegated prefix; clients addressed from it lose their IPv6 "
+                "addresses. Verify before setting confirm=true."
+            )
+        warnings = warnings or None
         return redact_sensitive_fields(
             update_preview(
                 resource_type="network",

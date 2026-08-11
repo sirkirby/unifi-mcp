@@ -846,3 +846,45 @@ class TestUpdateNetworkReadOnlyFields:
         assert "read-only" in result["error"]
         mock_mgr.get_network_details.assert_not_called()
         mock_mgr.update_network.assert_not_called()
+
+
+class TestUpdateNetworkIpv6Preview:
+    """Switching a delegated network to static IPv6 releases its prefix."""
+
+    @pytest.mark.asyncio
+    async def test_preview_warns_on_pd_to_static_ipv6(self):
+        pd_network = {**SAMPLE_NETWORK, "ipv6_interface_type": "pd"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=pd_network)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="net001",
+                update_data={"ipv6_interface_type": "static"},
+                confirm=False,
+            )
+
+        mock_mgr.update_network.assert_not_called()
+        warnings = result.get("warnings") or []
+        assert any("delegated prefix" in w for w in warnings), result
+
+    @pytest.mark.asyncio
+    async def test_preview_no_ipv6_warning_when_already_static(self):
+        """No warning when there is no delegated prefix to lose."""
+        static_network = {**SAMPLE_NETWORK, "ipv6_interface_type": "static"}
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=static_network)
+            mock_mgr.update_network = AsyncMock()
+
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="net001",
+                update_data={"ipv6_interface_type": "static"},
+                confirm=False,
+            )
+
+        warnings = result.get("warnings") or []
+        assert not any("delegated prefix" in w for w in warnings), result

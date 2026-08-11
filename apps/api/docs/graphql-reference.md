@@ -1087,6 +1087,22 @@ type Network {
   wanIpv6DnsPreference: String
   wanIpv6Dns1: String
   wanIpv6Dns2: String
+  ipv6InterfaceType: String
+  ipv6Aliases: [String!]
+  ipv6RaPriority: String
+  ipv6RaPreferredLifetime: Int
+  ipv6ClientAddressAssignment: String
+  ipv6PdInterface: String
+  ipv6PdPrefixid: String
+  ipv6PdAutoPrefixidEnabled: Boolean
+  ipv6PdStart: String
+  ipv6PdStop: String
+  dhcpdv6Enabled: Boolean
+  dhcpdv6AllowSlaac: Boolean
+  dhcpdv6DnsAuto: Boolean
+  dhcpdv6Leasetime: Int
+  dhcpdv6Start: String
+  dhcpdv6Stop: String
 
   """Clients on this network."""
   clients: [Client!]!

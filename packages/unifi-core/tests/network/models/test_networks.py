@@ -412,3 +412,91 @@ class TestToControllerUpdate:
         assert result["wan_dhcpv6_pd_size_auto"] is False
         assert result["wan_ipv6_dns1"] == "2001:4860:4860::8888"
         assert "wan_ipv6_dns2" not in result  # None is dropped (v is not None filter)
+
+
+class TestLanIpv6Fields:
+    """Per-LAN IPv6 settings.
+
+    The model previously carried only WAN-scoped IPv6 fields, so every
+    LAN-side key was rejected as unknown even though get_network_details
+    returns all of them — dual-stack LAN work was unreachable through the tool.
+    """
+
+    LAN_IPV6_FIELDS = (
+        "ipv6_interface_type",
+        "ipv6_aliases",
+        "ipv6_ra_priority",
+        "ipv6_ra_preferred_lifetime",
+        "ipv6_client_address_assignment",
+        "ipv6_pd_interface",
+        "ipv6_pd_prefixid",
+        "ipv6_pd_auto_prefixid_enabled",
+        "ipv6_pd_start",
+        "ipv6_pd_stop",
+        "dhcpdv6_enabled",
+        "dhcpdv6_allow_slaac",
+        "dhcpdv6_dns_auto",
+        "dhcpdv6_leasetime",
+        "dhcpdv6_start",
+        "dhcpdv6_stop",
+    )
+
+    def test_lan_ipv6_fields_are_mutable(self) -> None:
+        for field in self.LAN_IPV6_FIELDS:
+            assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
+
+    def test_from_controller_reads_lan_ipv6_fields(self) -> None:
+        network = from_controller(
+            {
+                "_id": "net-v6",
+                "ipv6_interface_type": "pd",
+                "ipv6_aliases": ["fd00:0:0:50::1/64"],
+                "ipv6_ra_priority": "high",
+                "ipv6_ra_preferred_lifetime": 14400,
+                "ipv6_client_address_assignment": "slaac",
+                "ipv6_pd_interface": "wan",
+                "ipv6_pd_auto_prefixid_enabled": True,
+                "ipv6_pd_start": "::2",
+                "ipv6_pd_stop": "::7d1",
+                "dhcpdv6_allow_slaac": True,
+                "dhcpdv6_dns_auto": True,
+                "dhcpdv6_leasetime": 86400,
+                "dhcpdv6_start": "::2",
+                "dhcpdv6_stop": "::7d1",
+            }
+        )
+        assert network.ipv6_interface_type == "pd"
+        assert network.ipv6_aliases == ["fd00:0:0:50::1/64"]
+        assert network.ipv6_ra_priority == "high"
+        assert network.ipv6_ra_preferred_lifetime == 14400
+        assert network.ipv6_client_address_assignment == "slaac"
+        assert network.ipv6_pd_interface == "wan"
+        assert network.ipv6_pd_auto_prefixid_enabled is True
+        assert network.ipv6_pd_start == "::2"
+        assert network.ipv6_pd_stop == "::7d1"
+        assert network.dhcpdv6_allow_slaac is True
+        assert network.dhcpdv6_dns_auto is True
+        assert network.dhcpdv6_leasetime == 86400
+        assert network.dhcpdv6_start == "::2"
+        assert network.dhcpdv6_stop == "::7d1"
+
+    def test_ipv6_aliases_survives_update_filter(self) -> None:
+        """The reproducer from the bug report: a single ipv6_aliases write."""
+        assert to_controller_update({"ipv6_aliases": ["fd00:0:0:50::1/64"]}) == {"ipv6_aliases": ["fd00:0:0:50::1/64"]}
+
+    def test_validate_update_accepts_ipv6_aliases(self) -> None:
+        """The public validator no longer rejects it as an unknown field."""
+        assert validate_update({"ipv6_aliases": ["fd00:0:0:50::1/64"]}) == {"ipv6_aliases": ["fd00:0:0:50::1/64"]}
+
+    def test_lan_ipv6_bool_false_preserved(self) -> None:
+        result = to_controller_update({"ipv6_pd_auto_prefixid_enabled": False, "dhcpdv6_enabled": False})
+        assert result["ipv6_pd_auto_prefixid_enabled"] is False
+        assert result["dhcpdv6_enabled"] is False
+
+    def test_numeric_prefixid_is_coerced_to_string(self) -> None:
+        """`vlan` is coerced the same way; without it one numeric value fails
+        model validation for the whole site listing."""
+        assert from_controller({"_id": "n", "ipv6_pd_prefixid": 50}).ipv6_pd_prefixid == "50"
+
+    def test_absent_prefixid_stays_none(self) -> None:
+        assert from_controller({"_id": "n"}).ipv6_pd_prefixid is None

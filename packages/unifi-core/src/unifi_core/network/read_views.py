@@ -676,7 +676,25 @@ def shape_network_details(
         ):
             data[key] = network.get(key)
     if include_all or "ipv6" in sections:
-        for key in ("ipv6_interface_type", "ipv6_pd_start", "ipv6_pd_stop", "ipv6_ra_enabled"):
+        for key in (
+            "ipv6_interface_type",
+            "ipv6_aliases",
+            "ipv6_pd_interface",
+            "ipv6_pd_prefixid",
+            "ipv6_pd_auto_prefixid_enabled",
+            "ipv6_pd_start",
+            "ipv6_pd_stop",
+            "ipv6_ra_enabled",
+            "ipv6_ra_priority",
+            "ipv6_ra_preferred_lifetime",
+            "ipv6_client_address_assignment",
+            "dhcpdv6_enabled",
+            "dhcpdv6_allow_slaac",
+            "dhcpdv6_dns_auto",
+            "dhcpdv6_leasetime",
+            "dhcpdv6_start",
+            "dhcpdv6_stop",
+        ):
             data[key] = network.get(key)
     if include_all or "vpn" in sections:
         for key in ("vpn_type", "remote_site_id", "remote_site_subnets"):

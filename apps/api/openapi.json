@@ -4304,6 +4304,72 @@
             ],
             "title": "Dhcpd Wins Enabled"
           },
+          "dhcpdv6_allow_slaac": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Allow Slaac"
+          },
+          "dhcpdv6_dns_auto": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Dns Auto"
+          },
+          "dhcpdv6_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Enabled"
+          },
+          "dhcpdv6_leasetime": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Leasetime"
+          },
+          "dhcpdv6_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Start"
+          },
+          "dhcpdv6_stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dhcpdv6 Stop"
+          },
           "dhcpguard_enabled": {
             "anyOf": [
               {
@@ -4414,6 +4480,31 @@
             ],
             "title": "Ip Subnet"
           },
+          "ipv6_aliases": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Aliases"
+          },
+          "ipv6_client_address_assignment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Client Address Assignment"
+          },
           "ipv6_enabled": {
             "anyOf": [
               {
@@ -4425,6 +4516,72 @@
             ],
             "title": "Ipv6 Enabled"
           },
+          "ipv6_interface_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Interface Type"
+          },
+          "ipv6_pd_auto_prefixid_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Pd Auto Prefixid Enabled"
+          },
+          "ipv6_pd_interface": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Pd Interface"
+          },
+          "ipv6_pd_prefixid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Pd Prefixid"
+          },
+          "ipv6_pd_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Pd Start"
+          },
+          "ipv6_pd_stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Pd Stop"
+          },
           "ipv6_ra_enabled": {
             "anyOf": [
               {
@@ -4435,6 +4592,28 @@
               }
             ],
             "title": "Ipv6 Ra Enabled"
+          },
+          "ipv6_ra_preferred_lifetime": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Ra Preferred Lifetime"
+          },
+          "ipv6_ra_priority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipv6 Ra Priority"
           },
           "ipv6_setting_preference": {
             "anyOf": [

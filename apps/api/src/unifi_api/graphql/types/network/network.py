@@ -101,6 +101,23 @@ class Network:
     wan_ipv6_dns_preference: str | None
     wan_ipv6_dns1: str | None
     wan_ipv6_dns2: str | None
+    # LAN-side IPv6 (per-network)
+    ipv6_interface_type: str | None
+    ipv6_aliases: list[str] | None
+    ipv6_ra_priority: str | None
+    ipv6_ra_preferred_lifetime: int | None
+    ipv6_client_address_assignment: str | None
+    ipv6_pd_interface: str | None
+    ipv6_pd_prefixid: str | None
+    ipv6_pd_auto_prefixid_enabled: bool | None
+    ipv6_pd_start: str | None
+    ipv6_pd_stop: str | None
+    dhcpdv6_enabled: bool | None
+    dhcpdv6_allow_slaac: bool | None
+    dhcpdv6_dns_auto: bool | None
+    dhcpdv6_leasetime: int | None
+    dhcpdv6_start: str | None
+    dhcpdv6_stop: str | None
 
     # Context for relationship edges — NOT in SDL, NOT in to_dict().
     _controller_id: strawberry.Private[str | None] = None
@@ -184,6 +201,22 @@ class Network:
             wan_ipv6_dns_preference=raw.get("wan_ipv6_dns_preference"),
             wan_ipv6_dns1=raw.get("wan_ipv6_dns1"),
             wan_ipv6_dns2=raw.get("wan_ipv6_dns2"),
+            ipv6_interface_type=raw.get("ipv6_interface_type"),
+            ipv6_aliases=raw.get("ipv6_aliases"),
+            ipv6_ra_priority=raw.get("ipv6_ra_priority"),
+            ipv6_ra_preferred_lifetime=raw.get("ipv6_ra_preferred_lifetime"),
+            ipv6_client_address_assignment=raw.get("ipv6_client_address_assignment"),
+            ipv6_pd_interface=raw.get("ipv6_pd_interface"),
+            ipv6_pd_prefixid=raw.get("ipv6_pd_prefixid"),
+            ipv6_pd_auto_prefixid_enabled=raw.get("ipv6_pd_auto_prefixid_enabled"),
+            ipv6_pd_start=raw.get("ipv6_pd_start"),
+            ipv6_pd_stop=raw.get("ipv6_pd_stop"),
+            dhcpdv6_enabled=raw.get("dhcpdv6_enabled"),
+            dhcpdv6_allow_slaac=raw.get("dhcpdv6_allow_slaac"),
+            dhcpdv6_dns_auto=raw.get("dhcpdv6_dns_auto"),
+            dhcpdv6_leasetime=raw.get("dhcpdv6_leasetime"),
+            dhcpdv6_start=raw.get("dhcpdv6_start"),
+            dhcpdv6_stop=raw.get("dhcpdv6_stop"),
         )
 
     def to_dict(self) -> dict:

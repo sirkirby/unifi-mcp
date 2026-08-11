@@ -309,6 +309,78 @@ class Network(BaseModel):
         default=None,
         description="Secondary WAN IPv6 DNS server (when wan_ipv6_dns_preference='manual')",
     )
+    # --- LAN-side IPv6 (per-network; distinct from the WAN uplink fields above) ---
+    ipv6_interface_type: Optional[str] = Field(
+        default=None,
+        description=(
+            "LAN IPv6 addressing mode: 'none', 'static', or 'pd' (prefix delegation). "
+            "Switching a delegated ('pd') network to 'static' drops its delegated prefix"
+        ),
+    )
+    ipv6_aliases: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Additional IPv6 prefixes on this network's interface ('Additional IPs'), "
+            "e.g. a ULA alongside a delegated prefix. Replaces the whole list — pass "
+            "every prefix you want to keep"
+        ),
+    )
+    ipv6_ra_priority: Optional[str] = Field(
+        default=None,
+        description="Router Advertisement router preference: 'high', 'medium', or 'low'",
+    )
+    ipv6_ra_preferred_lifetime: Optional[int] = Field(
+        default=None,
+        description="Router Advertisement preferred lifetime in seconds",
+    )
+    ipv6_client_address_assignment: Optional[str] = Field(
+        default=None,
+        description="How LAN clients get addresses: 'slaac' or 'dhcpv6'",
+    )
+    ipv6_pd_interface: Optional[str] = Field(
+        default=None,
+        description="WAN interface the prefix is delegated from (e.g. 'wan', 'wan2')",
+    )
+    ipv6_pd_prefixid: Optional[str] = Field(
+        default=None,
+        description="Per-network prefix ID within the delegated prefix (hex, e.g. '50')",
+    )
+    ipv6_pd_auto_prefixid_enabled: Optional[bool] = Field(
+        default=None,
+        description="Auto-assign the prefix ID; set False to pin ipv6_pd_prefixid",
+    )
+    ipv6_pd_start: Optional[str] = Field(
+        default=None,
+        description="Start of the address range within the delegated prefix (e.g. '::2')",
+    )
+    ipv6_pd_stop: Optional[str] = Field(
+        default=None,
+        description="End of the address range within the delegated prefix (e.g. '::7d1')",
+    )
+    dhcpdv6_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable the DHCPv6 server on this network",
+    )
+    dhcpdv6_allow_slaac: Optional[bool] = Field(
+        default=None,
+        description="Permit SLAAC addressing alongside DHCPv6",
+    )
+    dhcpdv6_dns_auto: Optional[bool] = Field(
+        default=None,
+        description="Advertise DNS servers automatically over DHCPv6",
+    )
+    dhcpdv6_leasetime: Optional[int] = Field(
+        default=None,
+        description="DHCPv6 lease time in seconds",
+    )
+    dhcpdv6_start: Optional[str] = Field(
+        default=None,
+        description="Start of the DHCPv6 assignment range (e.g. '::2')",
+    )
+    dhcpdv6_stop: Optional[str] = Field(
+        default=None,
+        description="End of the DHCPv6 assignment range (e.g. '::7d1')",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +480,24 @@ def from_controller(raw: Any) -> Network:
         wan_ipv6_dns_preference=_get(raw, "wan_ipv6_dns_preference"),
         wan_ipv6_dns1=_get(raw, "wan_ipv6_dns1"),
         wan_ipv6_dns2=_get(raw, "wan_ipv6_dns2"),
+        ipv6_interface_type=_get(raw, "ipv6_interface_type"),
+        ipv6_aliases=_get(raw, "ipv6_aliases"),
+        ipv6_ra_priority=_get(raw, "ipv6_ra_priority"),
+        ipv6_ra_preferred_lifetime=_get(raw, "ipv6_ra_preferred_lifetime"),
+        ipv6_client_address_assignment=_get(raw, "ipv6_client_address_assignment"),
+        ipv6_pd_interface=_get(raw, "ipv6_pd_interface"),
+        # Coerced like `vlan` above: the prefix ID is a hex string, but a controller
+        # sending it as a number would otherwise fail validation for the whole site.
+        ipv6_pd_prefixid=(str(_get(raw, "ipv6_pd_prefixid")) if _get(raw, "ipv6_pd_prefixid") is not None else None),
+        ipv6_pd_auto_prefixid_enabled=_get(raw, "ipv6_pd_auto_prefixid_enabled"),
+        ipv6_pd_start=_get(raw, "ipv6_pd_start"),
+        ipv6_pd_stop=_get(raw, "ipv6_pd_stop"),
+        dhcpdv6_enabled=_get(raw, "dhcpdv6_enabled"),
+        dhcpdv6_allow_slaac=_get(raw, "dhcpdv6_allow_slaac"),
+        dhcpdv6_dns_auto=_get(raw, "dhcpdv6_dns_auto"),
+        dhcpdv6_leasetime=_get(raw, "dhcpdv6_leasetime"),
+        dhcpdv6_start=_get(raw, "dhcpdv6_start"),
+        dhcpdv6_stop=_get(raw, "dhcpdv6_stop"),
     )
 
 
