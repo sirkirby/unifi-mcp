@@ -6512,6 +6512,20 @@
             ],
             "title": "Dot1X Ctrl"
           },
+          "excluded_networkconf_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded Networkconf Ids"
+          },
           "forward": {
             "anyOf": [
               {
@@ -6578,6 +6592,28 @@
             ],
             "title": "Poe Mode"
           },
+          "stp_bpdu_guard_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stp Bpdu Guard Enabled"
+          },
+          "stp_edge_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stp Edge State"
+          },
           "stp_port_mode": {
             "anyOf": [
               {
@@ -6589,12 +6625,34 @@
             ],
             "title": "Stp Port Mode"
           },
+          "stp_uplink": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stp Uplink"
+          },
           "tagged_networkconf_ids": {
             "items": {
               "type": "string"
             },
             "title": "Tagged Networkconf Ids",
             "type": "array"
+          },
+          "tagged_vlan_mgmt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tagged Vlan Mgmt"
           },
           "voice_networkconf_id": {
             "anyOf": [

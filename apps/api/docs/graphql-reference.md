@@ -1491,12 +1491,17 @@ type PortProfile {
   id: ID
   name: String
   forward: String
+  taggedVlanMgmt: String
   nativeNetworkconfId: String
   taggedNetworkconfIds: [String!]!
+  excludedNetworkconfIds: [String!]
   voiceNetworkconfId: String
   poeMode: String
   isolation: Boolean
   stpPortMode: Boolean
+  stpEdgeState: String
+  stpBpduGuardEnabled: Boolean
+  stpUplink: Boolean
   dot1xCtrl: String
 }
 

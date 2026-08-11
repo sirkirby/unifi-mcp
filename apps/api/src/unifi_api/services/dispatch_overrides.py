@@ -1130,6 +1130,40 @@ def _translate_port_profile_update(args: dict[str, Any]) -> tuple[tuple[Any, ...
     )
 
 
+def _translate_port_profile_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Build the port-profile create payload the way the MCP tool does.
+
+    Packing only the supplied keys is not equivalent here: ``poe_mode``,
+    ``stp_port_mode`` and ``isolation`` must be sent even when the caller takes
+    the documented default, or the controller applies its own — for ``poe_mode``
+    that means the profile is created with PoE off. Shares
+    ``build_create_payload`` with
+    ``apps/network/src/unifi_network_mcp/tools/switch.py:create_port_profile``.
+    """
+    from unifi_core.network.models.switch import build_create_payload
+
+    accepted = {
+        "name",
+        "forward",
+        "native_networkconf_id",
+        "tagged_vlan_mgmt",
+        "tagged_networkconf_ids",
+        "excluded_networkconf_ids",
+        "voice_networkconf_id",
+        "isolation",
+        "poe_mode",
+        "stp_port_mode",
+        "stp_edge_state",
+        "stp_bpdu_guard_enabled",
+        "stp_uplink",
+        "dot1x_ctrl",
+    }
+    supplied = {key: value for key, value in args.items() if key in accepted and value is not None}
+    if not supplied.get("name") or not supplied.get("forward"):
+        raise ValueError("name and forward are required to create a port profile.")
+    return (), {"profile_data": build_create_payload(**supplied)}
+
+
 def _translate_autobackup_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     from unifi_core.network.models.system import autobackup_to_controller_update
 
@@ -1549,24 +1583,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_create_simple_port_forward": _spec(_translate_create_simple_port_forward, "rule_data"),
     "unifi_create_qos_rule": _spec(_translate_create_qos_rule, "rule_data"),
     "unifi_create_simple_qos_rule": _spec(_translate_create_simple_qos_rule, "rule_data"),
-    "unifi_create_port_profile": _spec(
-        _pack_fields(
-            "profile_data",
-            frozenset(
-                {
-                    "name",
-                    "forward",
-                    "native_networkconf_id",
-                    "voice_networkconf_id",
-                    "poe_mode",
-                    "dot1x_ctrl",
-                    "isolation",
-                    "stp_port_mode",
-                }
-            ),
-        ),
-        "profile_data",
-    ),
+    "unifi_create_port_profile": _spec(_translate_port_profile_create, "profile_data"),
     "unifi_create_route": _spec(
         _translate_route_args,
         "name",

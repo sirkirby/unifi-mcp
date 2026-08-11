@@ -2643,6 +2643,10 @@
             "description": "802.1X control: 'force_authorized', 'auto', 'force_unauthorized'",
             "type": "string"
           },
+          "excluded_networkconf_ids": {
+            "description": "Network IDs excluded when tagged_vlan_mgmt is 'custom'",
+            "type": "array"
+          },
           "forward": {
             "description": "Forward mode: 'native' (access), 'all' (trunk), 'customize', or 'disabled'",
             "type": "string"
@@ -2663,9 +2667,29 @@
             "description": "PoE mode: 'auto' or 'off'",
             "type": "string"
           },
+          "stp_bpdu_guard_enabled": {
+            "description": "Shut the port if it receives a BPDU (Edge ports)",
+            "type": "boolean"
+          },
+          "stp_edge_state": {
+            "description": "STP edge state: 'enabled' for end-device (Edge) ports, 'disabled' for uplinks. The UI's Port Mode control sets this with stp_bpdu_guard_enabled and stp_uplink",
+            "type": "string"
+          },
           "stp_port_mode": {
             "description": "Enable STP on this port",
             "type": "boolean"
+          },
+          "stp_uplink": {
+            "description": "Treat the port as an STP uplink (Infrastructure ports)",
+            "type": "boolean"
+          },
+          "tagged_networkconf_ids": {
+            "description": "Network IDs carried tagged when tagged_vlan_mgmt is 'custom'",
+            "type": "array"
+          },
+          "tagged_vlan_mgmt": {
+            "description": "Tagged VLAN Management \u2014 the access-vs-trunk control: 'auto' (allow all), 'block_all' (access port), 'custom'. An access port needs forward='native' with 'block_all'",
+            "type": "string"
           },
           "voice_networkconf_id": {
             "description": "Network/VLAN ID for voice traffic",
@@ -6277,7 +6301,7 @@
       "input_schema": {
         "properties": {
           "profile_data": {
-            "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, forward ('all'/'native'/'customize'/'disabled'), native_networkconf_id, voice_networkconf_id, isolation (bool), poe_mode ('auto'/'off'/'pasv24'/'passthrough'), stp_port_mode (bool), dot1x_ctrl ('force_authorized'/'auto'/'force_unauthorized'/'mac_based'/'multi_host')",
+            "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, forward ('all'/'native'/'customize'/'disabled'), tagged_vlan_mgmt ('auto'/'block_all'/'custom'), native_networkconf_id, tagged_networkconf_ids (list), excluded_networkconf_ids (list), voice_networkconf_id, isolation (bool), poe_mode ('auto'/'off'/'pasv24'/'passthrough'), stp_port_mode (bool), stp_edge_state ('enabled'/'disabled'), stp_bpdu_guard_enabled (bool), stp_uplink (bool), dot1x_ctrl ('force_authorized'/'auto'/'force_unauthorized'/'mac_based'/'multi_host'). The controller rewrites forward to agree with tagged_vlan_mgmt, so change them together",
             "type": "object"
           },
           "profile_id": {

@@ -114,17 +114,19 @@ class TestSwitchManager:
 
     @pytest.mark.asyncio
     async def test_update_port_profile_success(self, switch_manager, mock_connection):
-        """Test update_port_profile returns merged dict."""
+        """Test update_port_profile acks success when the read-back matches."""
         existing = {"_id": "p1", "name": "Original", "forward": "all"}
+        stored = {"_id": "p1", "name": "Updated", "forward": "all"}
         mock_connection.request.side_effect = [
             [existing],  # GET returns list
             {},  # PUT
+            [stored],  # GET read-back
         ]
 
-        result = await switch_manager.update_port_profile("p1", {"name": "Updated"})
+        success, error = await switch_manager.update_port_profile("p1", {"name": "Updated"})
 
-        assert result["name"] == "Updated"
-        assert result["forward"] == "all"
+        assert success is True
+        assert error is None
         mock_connection._invalidate_cache.assert_called()
 
     @pytest.mark.asyncio
@@ -137,21 +139,89 @@ class TestSwitchManager:
             "native_networkconf_id": "net1",
             "poe_mode": "auto",
         }
+        stored_profile = {**existing_profile, "name": "Renamed", "poe_mode": "off"}
         mock_connection.request.side_effect = [
             [existing_profile],  # GET returns list
             {},  # PUT
+            [stored_profile],  # GET read-back
         ]
 
-        result = await switch_manager.update_port_profile("pp1", {"name": "Renamed", "poe_mode": "off"})
+        success, error = await switch_manager.update_port_profile("pp1", {"name": "Renamed", "poe_mode": "off"})
 
-        assert result["name"] == "Renamed"
-        assert result["poe_mode"] == "off"
+        assert success is True, error
         put_call = mock_connection.request.call_args_list[1]
         put_request = put_call[0][0]
         assert put_request.method == "put"
         assert put_request.data["name"] == "Renamed"
         assert put_request.data["poe_mode"] == "off"
         assert put_request.data["forward"] == "customize"
+
+    @pytest.mark.asyncio
+    async def test_update_port_profile_returns_controller_state_not_local_merge(self, switch_manager, mock_connection):
+        """The returned profile is what the controller stored, not what we sent.
+
+        The controller rewrites some values on write (notably `forward`, to
+        agree with tagged_vlan_mgmt). Returning the local merge reported those
+        rewritten writes as if they had been applied verbatim.
+        """
+        existing = {"_id": "p1", "name": "P", "forward": "all", "tagged_vlan_mgmt": "auto"}
+        stored = {"_id": "p1", "name": "P", "forward": "all", "tagged_vlan_mgmt": "auto"}
+        mock_connection.request.side_effect = [
+            [existing],  # GET current
+            {},  # PUT
+            [stored],  # GET read-back
+        ]
+
+        success, error = await switch_manager.update_port_profile("p1", {"forward": "native"})
+
+        assert success is False, "a rewritten write must not ack as success"
+        assert "forward" in error
+        assert "native" in error and "all" in error
+
+    @pytest.mark.asyncio
+    async def test_update_port_profile_read_back_failure_does_not_fail_the_write(self, switch_manager, mock_connection):
+        """The PUT already landed, so a failed read-back means unverified, not failed."""
+        existing = {"_id": "p1", "name": "P", "forward": "all"}
+        mock_connection.request.side_effect = [
+            [existing],  # GET current
+            {},  # PUT — lands
+            RuntimeError("503 Service Unavailable"),  # GET read-back fails
+        ]
+
+        success, error = await switch_manager.update_port_profile("p1", {"name": "Renamed"})
+
+        assert success is True
+        assert error is None
+
+    @pytest.mark.asyncio
+    async def test_update_port_profile_ignores_keys_the_controller_omits(self, switch_manager, mock_connection):
+        """An absent key means the profile does not carry that field, not that the write failed."""
+        existing = {"_id": "p1", "name": "P", "forward": "native"}
+        stored = {"_id": "p1", "name": "P", "forward": "native"}
+        mock_connection.request.side_effect = [
+            [existing],
+            {},
+            [stored],
+        ]
+
+        success, error = await switch_manager.update_port_profile("p1", {"excluded_networkconf_ids": []})
+
+        assert success is True, error
+
+    @pytest.mark.asyncio
+    async def test_update_port_profile_list_order_is_not_a_coercion(self, switch_manager, mock_connection):
+        """The controller may return a list in a different order; that is not a rewrite."""
+        existing = {"_id": "p1", "tagged_networkconf_ids": []}
+        stored = {"_id": "p1", "tagged_networkconf_ids": ["b", "a"]}
+        mock_connection.request.side_effect = [
+            [existing],
+            {},
+            [stored],
+        ]
+
+        success, error = await switch_manager.update_port_profile("p1", {"tagged_networkconf_ids": ["a", "b"]})
+
+        assert success is True, error
 
     @pytest.mark.asyncio
     async def test_update_port_profile_not_found(self, switch_manager, mock_connection):
@@ -167,9 +237,10 @@ class TestSwitchManager:
         existing = {"_id": "p1", "name": "Original"}
         mock_connection.request.return_value = [existing]
 
-        result = await switch_manager.update_port_profile("p1", {})
+        success, error = await switch_manager.update_port_profile("p1", {})
 
-        assert result == existing
+        assert success is True
+        assert error is None
         # Only the GET (for get_port_profile_by_id) ran; no PUT.
         assert mock_connection.request.call_count == 1
 

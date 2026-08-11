@@ -45,12 +45,17 @@ class PortProfile:
     id: strawberry.ID | None
     name: str | None
     forward: str | None
+    tagged_vlan_mgmt: str | None
     native_networkconf_id: str | None
     tagged_networkconf_ids: list[str]
+    excluded_networkconf_ids: list[str] | None
     voice_networkconf_id: str | None
     poe_mode: str | None
     isolation: bool | None
     stp_port_mode: bool | None
+    stp_edge_state: str | None
+    stp_bpdu_guard_enabled: bool | None
+    stp_uplink: bool | None
     dot1x_ctrl: str | None
 
     @classmethod
@@ -66,16 +71,22 @@ class PortProfile:
         tagged = _get(obj, "tagged_networkconf_ids", []) or []
         if not isinstance(tagged, list):
             tagged = []
+        excluded = _get(obj, "excluded_networkconf_ids")
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
             forward=_get(obj, "forward"),
+            tagged_vlan_mgmt=_get(obj, "tagged_vlan_mgmt"),
             native_networkconf_id=_get(obj, "native_networkconf_id"),
             tagged_networkconf_ids=list(tagged),
+            excluded_networkconf_ids=list(excluded) if isinstance(excluded, list) else None,
             voice_networkconf_id=_get(obj, "voice_networkconf_id"),
             poe_mode=_get(obj, "poe_mode"),
             isolation=_get(obj, "isolation"),
             stp_port_mode=_get(obj, "stp_port_mode"),
+            stp_edge_state=_get(obj, "stp_edge_state"),
+            stp_bpdu_guard_enabled=_get(obj, "stp_bpdu_guard_enabled"),
+            stp_uplink=_get(obj, "stp_uplink"),
             dot1x_ctrl=_get(obj, "dot1x_ctrl"),
         )
 

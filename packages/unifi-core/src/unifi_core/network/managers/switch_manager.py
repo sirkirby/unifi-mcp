@@ -12,7 +12,7 @@ API endpoints:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from aiounifi.models.api import ApiRequest
 
@@ -23,6 +23,37 @@ from unifi_core.network.managers.connection_manager import ConnectionManager
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_PORT_PROFILES = "port_profiles"
+
+# Sentinel for "the controller does not return this key at all", which is not the
+# same as it storing a null — an access profile carries no tagged_networkconf_ids
+# key whatsoever, and treating that as a changed value would flag a correct write.
+_ABSENT = object()
+
+
+def coerced_fields(requested: Dict[str, Any], stored: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Return requested keys whose stored value differs from what was sent.
+
+    The controller normalizes some port-profile values on write — most
+    importantly it rewrites ``forward`` to agree with ``tagged_vlan_mgmt`` — and
+    answers rc:ok either way, so a non-raising write is not evidence that the
+    requested configuration was applied.
+
+    Keys the controller does not return are skipped rather than reported: their
+    absence means the field is not stored on this profile shape, not that the
+    write was refused. List values compare order-insensitively.
+    """
+    coerced: Dict[str, Dict[str, Any]] = {}
+    for key, want in requested.items():
+        got = stored.get(key, _ABSENT)
+        if got is _ABSENT:
+            continue
+        if isinstance(want, list) and isinstance(got, list):
+            same = sorted(map(str, want)) == sorted(map(str, got))
+        else:
+            same = got == want
+        if not same:
+            coerced[key] = {"requested": want, "stored": got}
+    return coerced
 
 
 class SwitchManager:
@@ -114,11 +145,15 @@ class SwitchManager:
             logger.error("Error creating port profile: %s", e, exc_info=True)
             raise
 
-    async def update_port_profile(self, profile_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def update_port_profile(self, profile_id: str, update_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         """Update an existing port profile by merging updates with current state.
 
         Returns:
-            The merged profile dict.
+            Tuple of (success, error_message). On success error_message is None.
+            The write is verified by re-reading the profile: the controller
+            normalizes some values — notably ``forward``, which it rewrites to
+            agree with ``tagged_vlan_mgmt`` — while still answering rc:ok, so a
+            non-raising request is not evidence the request was applied.
 
         Raises:
             UniFiNotFoundError: If the profile does not exist.
@@ -128,13 +163,33 @@ class SwitchManager:
 
         existing = await self.get_port_profile_by_id(profile_id)  # raises on miss
         if not update_data:
-            return existing
+            return True, None  # No action needed
 
         merged_data = deep_merge(existing, update_data)
         api_request = ApiRequest(method="put", path=f"/rest/portconf/{profile_id}", data=merged_data)
         await self._connection.request(api_request)
         self._connection._invalidate_cache(CACHE_PREFIX_PORT_PROFILES)
-        return merged_data
+
+        # The write has landed by this point. A read-back failure must not be
+        # reported as a failed write — it only means the result is unverified.
+        try:
+            stored = await self.get_port_profile_by_id(profile_id)
+        except Exception as e:
+            logger.warning("Port profile %s was written but could not be re-read to verify it: %s", profile_id, e)
+            return True, None
+
+        coerced = coerced_fields(update_data, stored)
+        if coerced:
+            detail = ", ".join(
+                f"{key} (requested {value['requested']!r}, stored {value['stored']!r})"
+                for key, value in sorted(coerced.items())
+            )
+            return False, (
+                f"Controller accepted the request but stored different value(s): {detail}. "
+                "forward is rewritten to agree with tagged_vlan_mgmt — an access port needs "
+                "forward='native' with tagged_vlan_mgmt='block_all'."
+            )
+        return True, None
 
     async def delete_port_profile(self, profile_id: str) -> bool:
         """Delete a port profile.

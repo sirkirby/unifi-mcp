@@ -3406,3 +3406,51 @@ def test_delete_recording_result_adapter_rejects_unsupported_operation() -> None
             {},
             MagicMock(),
         )
+
+
+def test_create_port_profile_translator_sends_defaults_that_keep_poe_on() -> None:
+    """Packing only the supplied keys is not equivalent for this tool.
+
+    poe_mode, stp_port_mode and isolation must reach the controller even when
+    the caller takes the documented default, or the controller applies its own —
+    for poe_mode that creates the profile with PoE off, de-energising anything
+    wired through a port using it.
+    """
+    translator = DISPATCH_ARG_TRANSLATORS["unifi_create_port_profile"]
+
+    _, kwargs = translator({"name": "Access", "forward": "native", "tagged_vlan_mgmt": "block_all"})
+
+    payload = kwargs["profile_data"]
+    assert payload["poe_mode"] == "auto"
+    assert payload["stp_port_mode"] is True
+    assert payload["isolation"] is False
+    assert payload["tagged_vlan_mgmt"] == "block_all"
+
+
+def test_create_port_profile_translator_forwards_new_access_port_fields() -> None:
+    translator = DISPATCH_ARG_TRANSLATORS["unifi_create_port_profile"]
+
+    _, kwargs = translator(
+        {
+            "name": "Access",
+            "forward": "native",
+            "tagged_vlan_mgmt": "block_all",
+            "excluded_networkconf_ids": ["net-9"],
+            "stp_edge_state": "enabled",
+            "stp_bpdu_guard_enabled": True,
+            "stp_uplink": False,
+        }
+    )
+
+    payload = kwargs["profile_data"]
+    assert payload["excluded_networkconf_ids"] == ["net-9"]
+    assert payload["stp_edge_state"] == "enabled"
+    assert payload["stp_bpdu_guard_enabled"] is True
+    assert payload["stp_uplink"] is False
+
+
+def test_create_port_profile_translator_requires_name_and_forward() -> None:
+    translator = DISPATCH_ARG_TRANSLATORS["unifi_create_port_profile"]
+
+    with pytest.raises(ValueError):
+        translator({"name": "Access"})
