@@ -332,3 +332,35 @@ class TestMulticastEnhance:
         payload = validate_create({"name": "SSID", "security": "open", "multicast_enhance_enabled": True})
         assert payload["mcastenhance_enabled"] is True
         assert "multicast_enhance_enabled" not in payload
+class TestSettingPreference:
+    """The SSID's Advanced mode (UI: Auto | Manual), exposed read-only.
+
+    While it is "auto" the controller manages a set of advanced settings itself
+    and omits them from the WLAN object; switching to "manual" makes them
+    appear. The field was absent from the model entirely, so the mode governing
+    them was not even visible through the tool.
+
+    It is deliberately NOT mutable. Changing it makes the controller rebuild the
+    WLAN object — observed regenerating ``external_id`` and normalising away
+    stale keys — and which settings the mode covers is controller-version
+    specific, so a write path here would be a footgun rather than a feature.
+    """
+
+    def test_setting_preference_is_read_only(self) -> None:
+        assert "setting_preference" in READ_ONLY_FIELDS
+        assert "setting_preference" not in MUTABLE_FIELDS
+
+    def test_from_controller_reads_setting_preference(self) -> None:
+        assert from_controller({"_id": "w", "setting_preference": "auto"}).setting_preference == "auto"
+        assert from_controller({"_id": "w", "setting_preference": "manual"}).setting_preference == "manual"
+
+    def test_absent_setting_preference_is_none(self) -> None:
+        assert from_controller({"_id": "w"}).setting_preference is None
+
+    def test_update_drops_setting_preference(self) -> None:
+        """Read-only fields are filtered out rather than forwarded."""
+        assert to_controller_update({"setting_preference": "manual", "enabled": True}) == {"enabled": True}
+
+    def test_create_omits_setting_preference(self) -> None:
+        model = Wlan(name="SSID", security="open", setting_preference="manual")
+        assert "setting_preference" not in to_controller_create(model)

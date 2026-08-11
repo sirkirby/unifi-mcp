@@ -8614,6 +8614,17 @@
             ],
             "title": "Security"
           },
+          "setting_preference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setting Preference"
+          },
           "uapsd_enabled": {
             "anyOf": [
               {

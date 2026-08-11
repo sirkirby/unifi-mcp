@@ -2155,6 +2155,7 @@ type VpnServerPage {
 type Wlan {
   id: ID
   name: String
+  settingPreference: String
   enabled: Boolean!
   security: String
   networkId: String

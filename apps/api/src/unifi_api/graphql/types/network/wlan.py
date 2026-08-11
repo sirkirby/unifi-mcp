@@ -32,6 +32,7 @@ def _get(obj: Any, *keys: str, default: Any = None) -> Any:
 class Wlan:
     id: strawberry.ID | None
     name: str | None
+    setting_preference: str | None
     enabled: bool
     security: str | None
     network_id: str | None
@@ -87,6 +88,7 @@ class Wlan:
         return cls(
             id=raw.get("_id") or raw.get("id"),
             name=raw.get("name"),
+            setting_preference=raw.get("setting_preference"),
             enabled=bool(raw.get("enabled", False)),
             security=raw.get("security"),
             network_id=raw.get("networkconf_id") or raw.get("network_id"),

@@ -40,6 +40,16 @@ class Wlan(BaseModel):
         description="Site ID this WLAN belongs to",
         json_schema_extra={"mutable": False},
     )
+    setting_preference: Optional[str] = Field(
+        default=None,
+        description=(
+            "Advanced settings mode: 'auto' (the controller manages the advanced "
+            "radio settings and omits them from the object) or 'manual'. Read-only "
+            "here: changing it makes the controller rebuild the WLAN, and which "
+            "settings it covers varies by controller version"
+        ),
+        json_schema_extra={"mutable": False},
+    )
 
     # --- mutable (accepted by create and update) ---
     name: Optional[str] = Field(
@@ -276,6 +286,7 @@ def from_controller(raw: Any) -> Wlan:
         dtim_mode=_get(raw, "dtim_mode"),
         dtim_na=_get(raw, "dtim_na"),
         dtim_ng=_get(raw, "dtim_ng"),
+        setting_preference=_get(raw, "setting_preference"),
         minrate_setting_preference=_get(raw, "minrate_setting_preference"),
         minrate_ng_enabled=_get(raw, "minrate_ng_enabled"),
         minrate_ng_data_rate_kbps=_get(raw, "minrate_ng_data_rate_kbps"),
