@@ -195,9 +195,12 @@ class Network(BaseModel):
     mdns_enabled: Optional[bool] = Field(
         default=None,
         description=(
-            "Whether mDNS reflection is enabled on this network (read-only via this tool). "
-            "On UniFi OS 5+, the controller accepts this field on the per-network write path "
-            "but silently ignores it. Per-network mDNS is not currently settable via the API."
+            "Whether mDNS is enabled for this network. Read-only and not authoritative: mDNS is "
+            "configured site-wide on current UniFi Network versions, and this key only mirrors that "
+            "site-wide scope — the mirror can go stale for hours, so treat the site-level setting as "
+            "the source of truth (this server does not expose it). The controller accepts this field "
+            "on the per-network write path but silently ignores it; unifi_update_network rejects it "
+            "as read-only."
         ),
         json_schema_extra={"mutable": False},
     )
