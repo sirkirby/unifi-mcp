@@ -266,11 +266,11 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "igmp_proxy_upstream (bool), igmp_proxy_for (JSON: 'none' or list of network refs), "
     "mac_override_enabled (bool), wan_ip_aliases (list). "
     "WAN IPv6 (dual-stack; does not affect IPv4 internet): ipv6_enabled (bool), wan_type_v6 (str), "
-    "ipv6_setting_preference ('auto'/'manual'), ipv6_ra_enabled (bool), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), "
+    "ipv6_setting_preference ('auto'/'manual'), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), "
     "wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). "
     "LAN IPv6 (per-network): ipv6_interface_type ('none'/'static'/'pd'), "
     "ipv6_aliases (list of CIDR strings, 'Additional IPs' — replaces the whole list), "
-    "ipv6_ra_priority ('high'/'medium'/'low'), ipv6_ra_preferred_lifetime (int seconds), "
+    "ipv6_ra_enabled (bool), ipv6_ra_priority ('high'/'medium'/'low'), ipv6_ra_preferred_lifetime (int seconds), "
     "ipv6_client_address_assignment ('slaac'/'dhcpv6'), ipv6_pd_interface (str), ipv6_pd_prefixid (hex str), "
     "ipv6_pd_auto_prefixid_enabled (bool), ipv6_pd_start (str), ipv6_pd_stop (str), "
     "dhcpdv6_enabled (bool), dhcpdv6_allow_slaac (bool), dhcpdv6_dns_auto (bool), "
@@ -371,6 +371,7 @@ async def update_network(
             - ipv6_aliases (list of strings): Additional IPv6 prefixes on this network
               ('Additional IPs'), e.g. a ULA alongside a delegated prefix. Replaces the
               whole list — pass every prefix you want to keep.
+            - ipv6_ra_enabled (boolean): Enable IPv6 Router Advertisements on this network.
             - ipv6_ra_priority (string): RA router preference: 'high', 'medium', 'low'.
             - ipv6_ra_preferred_lifetime (integer): RA preferred lifetime in seconds.
             - ipv6_client_address_assignment (string): Client addressing: 'slaac' or 'dhcpv6'.

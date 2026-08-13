@@ -94,7 +94,6 @@ class Network:
     ipv6_enabled: bool | None
     wan_type_v6: str | None
     ipv6_setting_preference: str | None
-    ipv6_ra_enabled: bool | None
     ipv6_wan_delegation_type: str | None
     wan_dhcpv6_pd_size: int | None
     wan_dhcpv6_pd_size_auto: bool | None
@@ -104,6 +103,7 @@ class Network:
     # LAN-side IPv6 (per-network)
     ipv6_interface_type: str | None
     ipv6_aliases: list[str] | None
+    ipv6_ra_enabled: bool | None
     ipv6_ra_priority: str | None
     ipv6_ra_preferred_lifetime: int | None
     ipv6_client_address_assignment: str | None
@@ -194,7 +194,6 @@ class Network:
             ipv6_enabled=raw.get("ipv6_enabled"),
             wan_type_v6=raw.get("wan_type_v6"),
             ipv6_setting_preference=raw.get("ipv6_setting_preference"),
-            ipv6_ra_enabled=raw.get("ipv6_ra_enabled"),
             ipv6_wan_delegation_type=raw.get("ipv6_wan_delegation_type"),
             wan_dhcpv6_pd_size=raw.get("wan_dhcpv6_pd_size"),
             wan_dhcpv6_pd_size_auto=raw.get("wan_dhcpv6_pd_size_auto"),
@@ -203,6 +202,7 @@ class Network:
             wan_ipv6_dns2=raw.get("wan_ipv6_dns2"),
             ipv6_interface_type=raw.get("ipv6_interface_type"),
             ipv6_aliases=raw.get("ipv6_aliases"),
+            ipv6_ra_enabled=raw.get("ipv6_ra_enabled"),
             ipv6_ra_priority=raw.get("ipv6_ra_priority"),
             ipv6_ra_preferred_lifetime=raw.get("ipv6_ra_preferred_lifetime"),
             ipv6_client_address_assignment=raw.get("ipv6_client_address_assignment"),

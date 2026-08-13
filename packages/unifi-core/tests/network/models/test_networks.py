@@ -285,9 +285,12 @@ class TestStrictValidation:
             ("wan_networkgroup", "LAN"),
             ("wan_load_balance_type", "round-robin"),
             ("wan_type_v6", "automatic"),
+            ("ipv6_interface_type", "automatic"),
+            ("ipv6_ra_priority", "urgent"),
+            ("ipv6_client_address_assignment", "automatic"),
         ],
     )
-    def test_update_rejects_unknown_wan_enum_values(self, field: str, value: str) -> None:
+    def test_update_rejects_unknown_enum_values(self, field: str, value: str) -> None:
         with pytest.raises(ValueError, match=f"Invalid '{field}'"):
             validate_update({field: value})
 

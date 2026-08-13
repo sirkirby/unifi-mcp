@@ -1080,7 +1080,6 @@ type Network {
   ipv6Enabled: Boolean
   wanTypeV6: String
   ipv6SettingPreference: String
-  ipv6RaEnabled: Boolean
   ipv6WanDelegationType: String
   wanDhcpv6PdSize: Int
   wanDhcpv6PdSizeAuto: Boolean
@@ -1089,6 +1088,7 @@ type Network {
   wanIpv6Dns2: String
   ipv6InterfaceType: String
   ipv6Aliases: [String!]
+  ipv6RaEnabled: Boolean
   ipv6RaPriority: String
   ipv6RaPreferredLifetime: Int
   ipv6ClientAddressAssignment: String

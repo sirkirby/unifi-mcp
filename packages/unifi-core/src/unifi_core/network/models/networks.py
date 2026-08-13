@@ -281,10 +281,6 @@ class Network(BaseModel):
         default=None,
         description="IPv6 settings source: 'auto' or 'manual'",
     )
-    ipv6_ra_enabled: Optional[bool] = Field(
-        default=None,
-        description="Enable IPv6 router advertisements on this network",
-    )
     ipv6_wan_delegation_type: Optional[str] = Field(
         default=None,
         description="IPv6 prefix-delegation type (e.g. 'none', 'dhcpv6', 'static')",
@@ -324,6 +320,10 @@ class Network(BaseModel):
             "e.g. a ULA alongside a delegated prefix. Replaces the whole list — pass "
             "every prefix you want to keep"
         ),
+    )
+    ipv6_ra_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable IPv6 router advertisements on this network",
     )
     ipv6_ra_priority: Optional[str] = Field(
         default=None,
@@ -473,7 +473,6 @@ def from_controller(raw: Any) -> Network:
         ipv6_enabled=_get(raw, "ipv6_enabled"),
         wan_type_v6=_get(raw, "wan_type_v6"),
         ipv6_setting_preference=_get(raw, "ipv6_setting_preference"),
-        ipv6_ra_enabled=_get(raw, "ipv6_ra_enabled"),
         ipv6_wan_delegation_type=_get(raw, "ipv6_wan_delegation_type"),
         wan_dhcpv6_pd_size=_get(raw, "wan_dhcpv6_pd_size"),
         wan_dhcpv6_pd_size_auto=_get(raw, "wan_dhcpv6_pd_size_auto"),
@@ -482,6 +481,7 @@ def from_controller(raw: Any) -> Network:
         wan_ipv6_dns2=_get(raw, "wan_ipv6_dns2"),
         ipv6_interface_type=_get(raw, "ipv6_interface_type"),
         ipv6_aliases=_get(raw, "ipv6_aliases"),
+        ipv6_ra_enabled=_get(raw, "ipv6_ra_enabled"),
         ipv6_ra_priority=_get(raw, "ipv6_ra_priority"),
         ipv6_ra_preferred_lifetime=_get(raw, "ipv6_ra_preferred_lifetime"),
         ipv6_client_address_assignment=_get(raw, "ipv6_client_address_assignment"),
@@ -534,6 +534,9 @@ _WRITE_ENUM_VALUES = {
     "ipv6_setting_preference": frozenset({"auto", "manual"}),
     "ipv6_wan_delegation_type": frozenset({"none", "dhcpv6", "static"}),
     "wan_ipv6_dns_preference": frozenset({"auto", "manual"}),
+    "ipv6_interface_type": frozenset({"none", "static", "pd"}),
+    "ipv6_ra_priority": frozenset({"high", "medium", "low"}),
+    "ipv6_client_address_assignment": frozenset({"slaac", "dhcpv6"}),
 }
 _CONTROLLER_READ_ONLY_FIELDS = READ_ONLY_FIELDS | {"_id"}
 
