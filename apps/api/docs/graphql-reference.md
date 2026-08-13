@@ -1149,7 +1149,7 @@ type NetworkQuery {
   """Look up a single device by MAC address."""
   device(controller: ID!, mac: ID!, site: String! = "default"): Device
 
-  """Get the radio configuration for a UniFi access point."""
+  """Get the radio configuration for a UniFi device with radios."""
   deviceRadio(controller: ID!, mac: ID!, site: String! = "default"): DeviceRadio
 
   """Get LLDP neighbors reported by a switch."""
@@ -1713,7 +1713,7 @@ type Query {
   access: AccessQuery!
 }
 
-"""Radio configuration entry on a UniFi access point."""
+"""Radio configuration entry on a UniFi device with radios."""
 type RadioEntry {
   name: String
   radio: String
@@ -2288,7 +2288,7 @@ Read-only access to UniFi Network resources.
 - `contentFilters: ContentFilterPage!`  — List content filters on the given controller/site (paginated).
 - `dashboardStats: [StatPoint!]!`  — Site dashboard timeseries (all-points).
 - `device: Device`  — Look up a single device by MAC address.
-- `deviceRadio: DeviceRadio`  — Get the radio configuration for a UniFi access point.
+- `deviceRadio: DeviceRadio`  — Get the radio configuration for a UniFi device with radios.
 - `deviceStats: [StatPoint!]!`  — Per-device stats timeseries (by MAC).
 - `devices: DevicePage!`  — List devices on the given controller/site (paginated).
 - `dnsRecord: DnsRecord`  — Look up a single DNS record by id.

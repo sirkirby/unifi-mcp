@@ -1138,7 +1138,7 @@ type NetworkQuery {
   """Look up a single device by MAC address."""
   device(controller: ID!, mac: ID!, site: String! = "default"): Device
 
-  """Get the radio configuration for a UniFi access point."""
+  """Get the radio configuration for a UniFi device with radios."""
   deviceRadio(controller: ID!, mac: ID!, site: String! = "default"): DeviceRadio
 
   """Get LLDP neighbors reported by a switch."""
@@ -1702,7 +1702,7 @@ type Query {
   access: AccessQuery!
 }
 
-"""Radio configuration entry on a UniFi access point."""
+"""Radio configuration entry on a UniFi device with radios."""
 type RadioEntry {
   name: String
   radio: String

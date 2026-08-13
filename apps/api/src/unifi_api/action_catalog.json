@@ -3646,7 +3646,7 @@
       "input_schema": {
         "properties": {
           "mac_address": {
-            "description": "MAC address of the access point, in format AA:BB:CC:DD:EE:FF (from unifi_list_devices with device_type='ap')",
+            "description": "MAC address of a device with radios (AP, or UDM/gateway with built-in WiFi), in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)",
             "type": "string"
           }
         },
@@ -6035,7 +6035,7 @@
             "type": "string"
           },
           "mac_address": {
-            "description": "MAC address of the access point, in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)",
+            "description": "MAC address of a device with radios (AP, or UDM/gateway with built-in WiFi), in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)",
             "type": "string"
           },
           "min_rssi": {

@@ -84,7 +84,7 @@ class Device(BaseModel):
 
 
 class DeviceRadio(BaseModel):
-    """Canonical per-radio entry model for access point radio updates.
+    """Canonical per-radio entry model for device radio updates.
 
     Mutable fields mirror the DEVICE_RADIO_UPDATE_SCHEMA.  The model is used
     to type-check and filter radio update dicts before passing them to the

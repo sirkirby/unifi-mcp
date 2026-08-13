@@ -2043,7 +2043,7 @@ class NetworkQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description="Get the radio configuration for a UniFi access point.",
+        description="Get the radio configuration for a UniFi device with radios.",
     )
     async def device_radio(
         self,

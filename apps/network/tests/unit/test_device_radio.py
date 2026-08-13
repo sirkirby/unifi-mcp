@@ -86,6 +86,102 @@ SAMPLE_RADIO_TABLE_STATS = [
 ]
 
 
+# Shapes captured from a live UDM running a 6GHz radio. The 6e entry differs from
+# every AP sample above in two ways: "channel" is the string "auto" when the radio
+# is on automatic selection, and "ht" comes back as an int rather than a string.
+UDM_RADIO_TABLE = [
+    {
+        "name": "wifi0",
+        "radio": "ng",
+        "channel": 11,
+        "ht": "20",
+        "tx_power_mode": "low",
+        "min_rssi_enabled": False,
+        "max_txpower": 23,
+        "min_txpower": 6,
+        "has_dfs": True,
+        "nss": 2,
+        "is_11ax": True,
+        "is_11be": True,
+    },
+    {
+        "name": "wifi1",
+        "radio": "na",
+        "channel": 132,
+        "ht": "80",
+        "tx_power_mode": "low",
+        "min_rssi_enabled": True,
+        "min_rssi": -75,
+        "max_txpower": 26,
+        "min_txpower": 6,
+        "has_dfs": True,
+        "nss": 2,
+        "is_11ax": True,
+        "is_11be": True,
+    },
+    {
+        "name": "wifi2",
+        "radio": "6e",
+        "channel": "auto",
+        "ht": 160,
+        "tx_power_mode": "auto",
+        "min_rssi_enabled": True,
+        "min_rssi": -75,
+        "max_txpower": 24,
+        "min_txpower": 6,
+        "has_dfs": True,
+        "nss": 2,
+        "is_11ax": True,
+        "is_11be": True,
+    },
+]
+
+UDM_RADIO_TABLE_STATS = [
+    {
+        "name": "wifi0",
+        "radio": "ng",
+        "channel": 11,
+        "tx_power": 6,
+        "cu_total": 38,
+        "cu_self_tx": 17,
+        "cu_self_rx": 20,
+        "satisfaction": -1,
+        "num_sta": 10,
+        "tx_retries": 8,
+        "tx_packets": 156,
+        "state": "RUN",
+    },
+    {
+        "name": "wifi1",
+        "radio": "na",
+        "channel": 132,
+        "tx_power": 6,
+        "cu_total": 2,
+        "cu_self_tx": 1,
+        "cu_self_rx": 0,
+        "satisfaction": -1,
+        "num_sta": 2,
+        "tx_retries": 0,
+        "tx_packets": 0,
+        "state": "RUN",
+    },
+    {
+        "name": "wifi2",
+        "radio": "6e",
+        "channel": 37,
+        "tx_power": 21,
+        "cu_total": 1,
+        "cu_self_tx": 1,
+        "cu_self_rx": 0,
+        "satisfaction": -1,
+        "num_sta": 0,
+        "tx_retries": 0,
+        "tx_packets": 0,
+        "state": "RUN",
+    },
+]
+
+
 def _make_ap_device(mac="28:70:4e:c1:b4:c8"):
     """Create a mock Device representing an AP with radio_table data."""
     device = MagicMock()
@@ -112,6 +208,36 @@ def _make_switch_device(mac="11:22:33:44:55:66"):
         "name": "Test Switch",
         "model": "USW-24-PoE",
         "type": "usw",
+    }
+    return device
+
+
+def _make_udm_device(mac="aa:bb:cc:dd:ee:01"):
+    """Create a mock Device representing a UDM/gateway WITH built-in radios (UDR-style)."""
+    device = MagicMock()
+    device.mac = mac
+    device.raw = {
+        "_id": "device_udm123",
+        "mac": mac,
+        "name": "Test UDR",
+        "model": "UDR",
+        "type": "udm",
+        "radio_table": list(UDM_RADIO_TABLE),
+        "radio_table_stats": list(UDM_RADIO_TABLE_STATS),
+    }
+    return device
+
+
+def _make_radioless_gateway_device(mac="aa:bb:cc:dd:ee:02"):
+    """Create a mock Device representing a gateway with no radio hardware (UDM Pro / UXG)."""
+    device = MagicMock()
+    device.mac = mac
+    device.raw = {
+        "_id": "device_udmpro123",
+        "mac": mac,
+        "name": "Test UDM Pro",
+        "model": "UDMPRO",
+        "type": "udm",
     }
     return device
 
@@ -172,6 +298,50 @@ class TestDeviceManagerGetRadio:
         mock_connection.controller.devices.values.return_value = [switch]
 
         result = await device_manager.get_device_radio(switch.mac)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_radio_data_for_udm(self, device_manager, mock_connection):
+        """A gateway with built-in radios is served like an AP, not rejected on its device type."""
+        udm = _make_udm_device()
+        mock_connection.controller.devices.values.return_value = [udm]
+
+        result = await device_manager.get_device_radio(udm.mac)
+
+        assert result is not None
+        assert result["mac"] == udm.mac
+        assert result["name"] == "Test UDR"
+        assert len(result["radios"]) == 3
+
+        assert [radio["radio"] for radio in result["radios"]] == ["ng", "na", "6e"]
+
+        sixe_radio = result["radios"][2]
+        assert sixe_radio["channel"] == "auto"
+        assert sixe_radio["ht"] == 160
+        assert sixe_radio["current_channel"] == 37
+        assert sixe_radio["current_tx_power"] == 21
+
+    @pytest.mark.asyncio
+    async def test_empty_radio_table_still_succeeds(self, device_manager, mock_connection):
+        """An empty radio_table stays an empty success, as it was before radios were keyed off the table."""
+        ap = _make_ap_device()
+        ap.raw["radio_table"] = []
+        ap.raw["radio_table_stats"] = []
+        mock_connection.controller.devices.values.return_value = [ap]
+
+        result = await device_manager.get_device_radio(ap.mac)
+
+        assert result is not None
+        assert result["radios"] == []
+
+    @pytest.mark.asyncio
+    async def test_returns_none_for_radioless_gateway(self, device_manager, mock_connection):
+        """UDM Pro / UXG-style gateways without radio hardware must return None, not empty success."""
+        udm = _make_radioless_gateway_device()
+        mock_connection.controller.devices.values.return_value = [udm]
+
+        result = await device_manager.get_device_radio(udm.mac)
 
         assert result is None
 
@@ -448,4 +618,4 @@ class TestGetDeviceRadioTool:
             result = await get_device_radio(mac_address="11:22:33:44:55:66")
 
         assert result["success"] is False
-        assert "not an access point" in result["error"]
+        assert "does not have radios" in result["error"]

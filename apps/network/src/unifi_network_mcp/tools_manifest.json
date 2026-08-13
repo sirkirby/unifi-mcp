@@ -6255,13 +6255,13 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get radio configuration and live statistics for an access point. Returns per-band config (channel, tx_power, channel width, min_rssi) and live stats (actual tx_power, channel utilization, client count, retries).",
+      "description": "Get radio configuration and live statistics for a device with radios (AP, or UDM/gateway with built-in WiFi). Returns per-band config (channel, tx_power, channel width, min_rssi) and live stats (actual tx_power, channel utilization, client count, retries).",
       "name": "unifi_get_device_radio",
       "schema": {
         "input": {
           "properties": {
             "mac_address": {
-              "description": "MAC address of the access point, in format AA:BB:CC:DD:EE:FF (from unifi_list_devices with device_type='ap')",
+              "description": "MAC address of a device with radios (AP, or UDM/gateway with built-in WiFi), in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)",
               "type": "string"
             }
           },
@@ -16399,7 +16399,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update radio settings for a specific band on an access point. Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), min_rssi_enabled, min_rssi, assisted_roaming_enabled (802.11k/v), antenna_gain (dBi), vwire_enabled, sens_level_enabled, sens_level. Use unifi_get_device_radio first to see current settings.",
+      "description": "Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), min_rssi_enabled, min_rssi, assisted_roaming_enabled (802.11k/v), antenna_gain (dBi), vwire_enabled, sens_level_enabled, sens_level. Use unifi_get_device_radio first to see current settings.",
       "name": "unifi_update_device_radio",
       "permission_action": "update",
       "permission_category": "devices",
@@ -16427,7 +16427,7 @@
               "type": "string"
             },
             "mac_address": {
-              "description": "MAC address of the access point, in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)",
+              "description": "MAC address of a device with radios (AP, or UDM/gateway with built-in WiFi), in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)",
               "type": "string"
             },
             "min_rssi": {

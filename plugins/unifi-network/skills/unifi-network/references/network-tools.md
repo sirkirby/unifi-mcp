@@ -75,7 +75,7 @@ Always available, regardless of registration mode.
 | Tool | Type | Description |
 |------|------|-------------|
 | `unifi_get_device_details` | Read | Returns device data for one device by MAC address. |
-| `unifi_get_device_radio` | Read | Get radio configuration and live statistics for an access point. |
+| `unifi_get_device_radio` | Read | Get radio configuration and live statistics for a device with radios (AP, or UDM/gateway with built-in WiFi). |
 | `unifi_get_pdu_outlets` | Read | Return per-outlet state for a UniFi Smart Power PDU (UP6 / USP-Strip). |
 | `unifi_get_rf_scan_results` | Read | Get RF spectrum scan results for an access point. |
 | `unifi_get_speedtest_status` | Read | Check the status of a running speedtest on the gateway. |
@@ -93,7 +93,7 @@ Always available, regardless of registration mode.
 | `unifi_toggle_device` | Mutate | Enable or disable a device without unadopting it. |
 | `unifi_trigger_rf_scan` | Mutate | Trigger an RF spectrum scan on an access point. |
 | `unifi_trigger_speedtest` | Mutate | Trigger a speedtest on the gateway device. |
-| `unifi_update_device_radio` | Mutate | Update radio settings for a specific band on an access point. |
+| `unifi_update_device_radio` | Mutate | Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). |
 | `unifi_upgrade_device` | Mutate | Initiate a firmware upgrade for a device by MAC address (uses cached firmware by default) |
 <!-- /AUTO:tools:devices -->
 

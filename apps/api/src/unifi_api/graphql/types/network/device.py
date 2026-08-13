@@ -123,7 +123,7 @@ class Device:
         return out
 
 
-@strawberry.type(description="Radio configuration entry on a UniFi access point.")
+@strawberry.type(description="Radio configuration entry on a UniFi device with radios.")
 class RadioEntry:
     name: str | None
     radio: str | None

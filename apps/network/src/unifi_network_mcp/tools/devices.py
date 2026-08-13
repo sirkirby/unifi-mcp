@@ -373,7 +373,7 @@ RADIO_BAND_LABELS = {"ng": "2.4GHz", "na": "5GHz", "6e": "6GHz", "wifi6e": "6GHz
 @server.tool(
     name="unifi_get_device_radio",
     description=(
-        "Get radio configuration and live statistics for an access point. "
+        "Get radio configuration and live statistics for a device with radios (AP, or UDM/gateway with built-in WiFi). "
         "Returns per-band config (channel, tx_power, channel width, min_rssi) "
         "and live stats (actual tx_power, channel utilization, client count, retries)."
     ),
@@ -383,17 +383,17 @@ async def get_device_radio(
     mac_address: Annotated[
         str,
         Field(
-            description="MAC address of the access point, in format AA:BB:CC:DD:EE:FF (from unifi_list_devices with device_type='ap')"
+            description="MAC address of a device with radios (AP, or UDM/gateway with built-in WiFi), in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)"
         ),
     ],
 ) -> Dict[str, Any]:
-    """Implementation for getting focused radio config and stats for an AP."""
+    """Implementation for getting focused radio config and stats for a device with radios."""
     try:
         result = await device_manager.get_device_radio(mac_address)
         if result is None:
             return {
                 "success": False,
-                "error": f"Device {mac_address} is not an access point.",
+                "error": f"Device {mac_address} does not have radios.",
             }
         return {
             "success": True,
@@ -410,7 +410,7 @@ async def get_device_radio(
 @server.tool(
     name="unifi_update_device_radio",
     description=(
-        "Update radio settings for a specific band on an access point. "
+        "Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). "
         "Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), "
         "min_rssi_enabled, min_rssi, assisted_roaming_enabled (802.11k/v), "
         "antenna_gain (dBi), vwire_enabled, sens_level_enabled, sens_level. "
@@ -423,7 +423,9 @@ async def get_device_radio(
 async def update_device_radio(
     mac_address: Annotated[
         str,
-        Field(description="MAC address of the access point, in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)"),
+        Field(
+            description="MAC address of a device with radios (AP, or UDM/gateway with built-in WiFi), in format AA:BB:CC:DD:EE:FF (from unifi_list_devices)"
+        ),
     ],
     radio: Annotated[
         str,
@@ -480,7 +482,7 @@ async def update_device_radio(
         Field(description="When true, applies radio changes. When false (default), returns a preview of the changes"),
     ] = False,
 ) -> Dict[str, Any]:
-    """Implementation for updating AP radio settings."""
+    """Implementation for updating radio settings on a device with radios."""
     updates: Dict[str, Any] = {}
     if tx_power_mode is not None:
         updates["tx_power_mode"] = tx_power_mode
@@ -515,7 +517,7 @@ async def update_device_radio(
         if radio_data is None:
             return {
                 "success": False,
-                "error": f"Device {mac_address} not found or is not an access point.",
+                "error": f"Device {mac_address} not found or does not have radios.",
             }
 
         target_radio = next((r for r in radio_data["radios"] if r["radio"] == radio or r["name"] == radio), None)

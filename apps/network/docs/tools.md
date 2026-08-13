@@ -167,7 +167,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 
 - `unifi_list_devices` — List all adopted devices
 - `unifi_get_device_details` — Get full device object by MAC
-- `unifi_get_device_radio` — Get AP radio config and stats
+- `unifi_get_device_radio` — Get radio config and stats for a device with radios
 - `unifi_update_device_radio` — Update radio settings (TX power, channel, width)
 - `unifi_reboot_device` — Reboot a device by MAC
 - `unifi_rename_device` — Rename a device by MAC

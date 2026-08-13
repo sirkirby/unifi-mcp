@@ -189,16 +189,15 @@ class DeviceManager:
             raise
 
     async def get_device_radio(self, device_mac: str) -> Optional[Dict[str, Any]]:
-        """Get focused radio configuration and live stats for an AP.
+        """Get focused radio configuration and live stats for a device with radios.
 
-        Returns None if the device exists but is not an access point.
+        Returns None if the device exists but has no radios.
 
         Raises:
             UniFiNotFoundError: If the device does not exist.
         """
         device = await self.get_device_details(device_mac)  # raises on miss
-        device_type = device.raw.get("type", "")
-        if not device_type.startswith("uap"):
+        if "radio_table" not in device.raw:
             return None
 
         stats_by_name: Dict[str, Dict[str, Any]] = {s["name"]: s for s in device.raw.get("radio_table_stats", [])}
@@ -240,7 +239,7 @@ class DeviceManager:
         }
 
     async def update_device_radio(self, device_mac: str, radio_id: str, updates: Dict[str, Any]) -> bool:
-        """Update radio settings for a specific band on an AP.
+        """Update radio settings for a specific band on a device with radios.
 
         Args:
             device_mac: MAC address of the AP.
