@@ -7442,7 +7442,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get details for a specific network by ID. By default (summary=false) returns the full raw network configuration. Set summary=true to trim to selected sections via include (basic, dhcp, ipv6, vpn, wan, all).\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'.",
+      "description": "Get details for a specific network by ID. By default (summary=false) returns the full raw network configuration. Set summary=true to trim to selected sections via include (basic, dhcp, ipv6, vpn, wan, all).\n\nmDNS field note: Whether mDNS is enabled for this network. Read-only and not authoritative: mDNS is configured site-wide on current UniFi Network versions, and this key only mirrors that site-wide scope \u2014 the mirror can go stale for hours, so treat the site-level setting as the source of truth (this server does not expose it). The controller accepts this field on the per-network write path but silently ignores it; unifi_update_network rejects it as read-only.\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'.",
       "name": "unifi_get_network_details",
       "schema": {
         "input": {

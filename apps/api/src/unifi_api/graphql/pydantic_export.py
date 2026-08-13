@@ -12,7 +12,7 @@ import datetime
 from typing import Any, get_args, get_origin
 
 import strawberry
-from pydantic import BaseModel, ConfigDict, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 from strawberry.types.base import StrawberryList, StrawberryOptional
 from strawberry.types.private import StrawberryPrivate
 
@@ -104,7 +104,8 @@ def to_pydantic_model(strawberry_type: type) -> type[BaseModel]:
             # strawberry.Private — internal context, not in to_dict()
             continue
         annotation = _strawberry_type_to_pydantic(field.type)
-        fields[field.python_name] = (annotation, None)
+        default = Field(default=None, description=field.description) if field.description else None
+        fields[field.python_name] = (annotation, default)
 
     model = create_model(
         f"{strawberry_type.__name__}Model",

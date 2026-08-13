@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import strawberry
 from strawberry.types import Info
+from unifi_core.network.models.networks import MDNS_ENABLED_DESCRIPTION
 
 if TYPE_CHECKING:
     from unifi_api.graphql.types.network.client import Client
@@ -72,7 +73,7 @@ class Network:
     igmp_snooping: bool | None
     igmp_querier_switches: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     igmp_flood_unknown_multicast: bool | None
-    mdns_enabled: bool | None
+    mdns_enabled: bool | None = strawberry.field(description=MDNS_ENABLED_DESCRIPTION)
     # Access control
     network_isolation_enabled: bool | None
     internet_access_enabled: bool | None

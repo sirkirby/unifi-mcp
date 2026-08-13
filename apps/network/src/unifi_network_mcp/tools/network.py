@@ -23,6 +23,7 @@ from unifi_core.network.models.ap_group import (
     to_controller_update as ap_group_to_update,
 )
 from unifi_core.network.models.networks import DELETABLE_PURPOSES as NETWORK_DELETABLE_PURPOSES
+from unifi_core.network.models.networks import MDNS_ENABLED_DESCRIPTION
 from unifi_core.network.models.networks import validate_create as validate_network_create
 from unifi_core.network.models.networks import validate_update as validate_network_update
 from unifi_core.network.models.wlans import validate_create as validate_wlan_create
@@ -148,6 +149,7 @@ async def list_networks(
         "Get details for a specific network by ID. By default (summary=false) returns the full raw "
         "network configuration. Set summary=true to trim to selected sections via include "
         "(basic, dhcp, ipv6, vpn, wan, all).\n\n"
+        f"mDNS field note: {MDNS_ENABLED_DESCRIPTION}\n\n"
         "Examples: <no args> (full raw); summary=true,include='basic' (minimal); "
         "summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'."
     ),

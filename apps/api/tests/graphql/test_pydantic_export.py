@@ -74,6 +74,19 @@ def test_pydantic_model_rejects_unknown_fields_loosely() -> None:
     Model(**sample)  # must not raise
 
 
+def test_network_mdns_description_reaches_rest_schema() -> None:
+    """The network mDNS warning survives projection into the REST schema."""
+    from unifi_api.graphql.types.network.network import Network
+
+    model = to_pydantic_model(Network)
+    description = model.model_json_schema()["properties"]["mdns_enabled"].get("description")
+
+    assert description is not None
+    assert "configured site-wide" in description
+    assert "stale for hours" in description
+    assert "read-only" in description
+
+
 def test_to_pydantic_model_caches_by_type() -> None:
     """Repeated calls return the same Pydantic class (identity-stable for response_model=)."""
     from unifi_api.graphql.types.network.client import Client

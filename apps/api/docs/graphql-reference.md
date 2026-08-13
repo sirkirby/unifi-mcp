@@ -1061,6 +1061,10 @@ type Network {
   igmpSnooping: Boolean
   igmpQuerierSwitches: JSON
   igmpFloodUnknownMulticast: Boolean
+
+  """
+  Whether mDNS is enabled for this network. Read-only and not authoritative: mDNS is configured site-wide on current UniFi Network versions, and this key only mirrors that site-wide scope — the mirror can go stale for hours, so treat the site-level setting as the source of truth (this server does not expose it). The controller accepts this field on the per-network write path but silently ignores it; unifi_update_network rejects it as read-only.
+  """
   mdnsEnabled: Boolean
   networkIsolationEnabled: Boolean
   internetAccessEnabled: Boolean

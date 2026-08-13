@@ -29,6 +29,15 @@ UNSAFE_GUEST_PURPOSE_ERROR = (
     "Create or move the network to the Hotspot zone in the UniFi UI instead."
 )
 
+MDNS_ENABLED_DESCRIPTION = (
+    "Whether mDNS is enabled for this network. Read-only and not authoritative: mDNS is "
+    "configured site-wide on current UniFi Network versions, and this key only mirrors that "
+    "site-wide scope — the mirror can go stale for hours, so treat the site-level setting as "
+    "the source of truth (this server does not expose it). The controller accepts this field "
+    "on the per-network write path but silently ignores it; unifi_update_network rejects it "
+    "as read-only."
+)
+
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
@@ -194,14 +203,7 @@ class Network(BaseModel):
     )
     mdns_enabled: Optional[bool] = Field(
         default=None,
-        description=(
-            "Whether mDNS is enabled for this network. Read-only and not authoritative: mDNS is "
-            "configured site-wide on current UniFi Network versions, and this key only mirrors that "
-            "site-wide scope — the mirror can go stale for hours, so treat the site-level setting as "
-            "the source of truth (this server does not expose it). The controller accepts this field "
-            "on the per-network write path but silently ignores it; unifi_update_network rejects it "
-            "as read-only."
-        ),
+        description=MDNS_ENABLED_DESCRIPTION,
         json_schema_extra={"mutable": False},
     )
     # Access control
