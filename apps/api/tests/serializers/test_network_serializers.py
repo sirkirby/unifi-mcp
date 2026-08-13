@@ -1,5 +1,6 @@
 """Network serializer unit tests — one fixture per resource."""
 
+import pytest
 from unifi_api.serializers._registry import (
     discover_serializers,
     serializer_registry_singleton,
@@ -168,6 +169,22 @@ def test_wlan_projection_redacts_passphrase() -> None:
     ).to_dict()
 
     assert out["x_passphrase"] == REDACTED
+
+
+@pytest.mark.parametrize("setting_preference", ["auto", "manual"])
+def test_wlan_projection_maps_setting_preference(setting_preference: str) -> None:
+    from unifi_api.graphql.types.network.wlan import Wlan
+
+    out = Wlan.from_manager_output(
+        {
+            "_id": "wlan1",
+            "name": "MyWiFi",
+            "enabled": True,
+            "setting_preference": setting_preference,
+        }
+    ).to_dict()
+
+    assert out["setting_preference"] == setting_preference
 
 
 def test_wlan_projection_maps_roaming_fields() -> None:
