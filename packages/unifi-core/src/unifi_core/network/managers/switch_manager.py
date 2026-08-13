@@ -12,48 +12,22 @@ API endpoints:
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from aiounifi.models.api import ApiRequest
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
 
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_PORT_PROFILES = "port_profiles"
-
-# Sentinel for "the controller does not return this key at all", which is not the
-# same as it storing a null — an access profile carries no tagged_networkconf_ids
-# key whatsoever, and treating that as a changed value would flag a correct write.
-_ABSENT = object()
-
-
-def coerced_fields(requested: Dict[str, Any], stored: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    """Return requested keys whose stored value differs from what was sent.
-
-    The controller normalizes some port-profile values on write — most
-    importantly it rewrites ``forward`` to agree with ``tagged_vlan_mgmt`` — and
-    answers rc:ok either way, so a non-raising write is not evidence that the
-    requested configuration was applied.
-
-    Keys the controller does not return are skipped rather than reported: their
-    absence means the field is not stored on this profile shape, not that the
-    write was refused. List values compare order-insensitively.
-    """
-    coerced: Dict[str, Dict[str, Any]] = {}
-    for key, want in requested.items():
-        got = stored.get(key, _ABSENT)
-        if got is _ABSENT:
-            continue
-        if isinstance(want, list) and isinstance(got, list):
-            same = sorted(map(str, want)) == sorted(map(str, got))
-        else:
-            same = got == want
-        if not same:
-            coerced[key] = {"requested": want, "stored": got}
-    return coerced
+_PORT_PROFILE_ABSENT_VALUE_DEFAULTS: Dict[str, Any] = {
+    "tagged_networkconf_ids": [],
+    "excluded_networkconf_ids": [],
+}
 
 
 class SwitchManager:
@@ -111,21 +85,21 @@ class SwitchManager:
             raise UniFiNotFoundError("port_profile", profile_id)
         return data[0]
 
-    async def create_port_profile(self, profile_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def create_port_profile(self, profile_data: Dict[str, Any]) -> WriteVerificationResult:
         """Create a new port profile.
 
         Args:
             profile_data: Dictionary with at minimum name and forward fields.
 
         Returns:
-            The created port profile dictionary, or None on failure.
+            Structured exact field-verification result with post-write state.
         """
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
         if not profile_data.get("name") or not profile_data.get("forward"):
             logger.error("Missing required fields 'name' and/or 'forward' for port profile")
-            return None
+            return failed_write("Missing required fields 'name' and/or 'forward'", operation="create")
 
         try:
             api_request = ApiRequest(method="post", path="/rest/portconf", data=profile_data)
@@ -140,20 +114,45 @@ class SwitchManager:
                 if isinstance(response, dict)
                 else []
             )
-            return data[0] if data else None
+            created = data[0] if data and isinstance(data[0], dict) else None
+            profile_id = created.get("_id") if created else None
+            if not profile_id:
+                return failed_write(
+                    "Controller accepted the port profile create request but did not return a resource ID; "
+                    "persistence could not be verified.",
+                    operation="create",
+                    mutation_applied=True,
+                    resource=created,
+                )
+
+            try:
+                stored = await self.get_port_profile_by_id(profile_id)
+            except Exception as e:
+                logger.warning("Created port profile %s could not be re-read: %s", profile_id, e)
+                return failed_write(
+                    f"Controller accepted the port profile create request but the resource could not be re-read: {e}",
+                    operation="create",
+                    mutation_applied=True,
+                    resource=created,
+                    metadata={"profile_id": profile_id},
+                )
+
+            return verify_write(
+                operation="create",
+                requested=profile_data,
+                after=stored,
+                absent_value_defaults=_PORT_PROFILE_ABSENT_VALUE_DEFAULTS,
+                metadata={"profile_id": profile_id},
+            )
         except Exception as e:
             logger.error("Error creating port profile: %s", e, exc_info=True)
             raise
 
-    async def update_port_profile(self, profile_id: str, update_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    async def update_port_profile(self, profile_id: str, update_data: Dict[str, Any]) -> WriteVerificationResult:
         """Update an existing port profile by merging updates with current state.
 
         Returns:
-            Tuple of (success, error_message). On success error_message is None.
-            The write is verified by re-reading the profile: the controller
-            normalizes some values — notably ``forward``, which it rewrites to
-            agree with ``tagged_vlan_mgmt`` — while still answering rc:ok, so a
-            non-raising request is not evidence the request was applied.
+            Structured exact field-verification result with post-write state.
 
         Raises:
             UniFiNotFoundError: If the profile does not exist.
@@ -163,7 +162,7 @@ class SwitchManager:
 
         existing = await self.get_port_profile_by_id(profile_id)  # raises on miss
         if not update_data:
-            return True, None  # No action needed
+            return noop_write(operation="update", resource=existing, metadata={"profile_id": profile_id})
 
         merged_data = deep_merge(existing, update_data)
         api_request = ApiRequest(method="put", path=f"/rest/portconf/{profile_id}", data=merged_data)
@@ -176,20 +175,20 @@ class SwitchManager:
             stored = await self.get_port_profile_by_id(profile_id)
         except Exception as e:
             logger.warning("Port profile %s was written but could not be re-read to verify it: %s", profile_id, e)
-            return True, None
-
-        coerced = coerced_fields(update_data, stored)
-        if coerced:
-            detail = ", ".join(
-                f"{key} (requested {value['requested']!r}, stored {value['stored']!r})"
-                for key, value in sorted(coerced.items())
+            return failed_write(
+                f"Controller accepted the port profile update but the resource could not be re-read: {e}",
+                operation="update",
+                mutation_applied=True,
+                metadata={"profile_id": profile_id, "details_before_attempt": existing},
             )
-            return False, (
-                f"Controller accepted the request but stored different value(s): {detail}. "
-                "forward is rewritten to agree with tagged_vlan_mgmt — an access port needs "
-                "forward='native' with tagged_vlan_mgmt='block_all'."
-            )
-        return True, None
+        return verify_write(
+            operation="update",
+            requested=update_data,
+            before=existing,
+            after=stored,
+            absent_value_defaults=_PORT_PROFILE_ABSENT_VALUE_DEFAULTS,
+            metadata={"profile_id": profile_id},
+        )
 
     async def delete_port_profile(self, profile_id: str) -> bool:
         """Delete a port profile.

@@ -16,7 +16,6 @@ from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.network.managers.switch_manager import coerced_fields
 from unifi_core.network.models._actions import (
     ConfigurePortAggregationInput,
     ConfigurePortMirrorInput,
@@ -35,6 +34,7 @@ from unifi_core.network.models.switch import (
 from unifi_core.network.models.switch import (
     to_controller_update as pp_to_update,
 )
+from unifi_core.write_verification import format_tool_payload
 from unifi_network_mcp.runtime import server, switch_manager
 
 logger = logging.getLogger(__name__)
@@ -96,7 +96,8 @@ async def get_port_profile_details(
 @server.tool(
     name="unifi_create_port_profile",
     description="Create a new port profile. forward values: 'native' (access port), 'all' (trunk), "
-    "'customize' (selective trunk), 'disabled'. "
+    "or 'customize' (selective trunk). Port State (Active/Disabled) is a separate controller setting "
+    "that these port-profile tools do not currently expose. "
     "tagged_vlan_mgmt is the access-vs-trunk control ('auto'/'block_all'/'custom'): the controller "
     "rewrites forward to agree with it, so an access port needs forward='native' with "
     "tagged_vlan_mgmt='block_all'. Port Mode in the UI maps to stp_edge_state + "
@@ -107,9 +108,7 @@ async def get_port_profile_details(
 )
 async def create_port_profile(
     name: Annotated[str, Field(description="Profile name")],
-    forward: Annotated[
-        str, Field(description="Forward mode: 'native' (access), 'all' (trunk), 'customize', or 'disabled'")
-    ],
+    forward: Annotated[str, Field(description="Forward mode: 'native' (access), 'all' (trunk), or 'customize'")],
     native_networkconf_id: Annotated[str, Field(description="Network/VLAN ID for native (untagged) traffic")] = "",
     tagged_vlan_mgmt: Annotated[
         str,
@@ -180,27 +179,12 @@ async def create_port_profile(
         )
 
     try:
-        result = await switch_manager.create_port_profile(profile_data)
-        if result:
-            coerced = coerced_fields(profile_data, result)
-            if coerced:
-                return {
-                    "success": False,
-                    "error": (
-                        f"Port profile '{name}' was created, but the controller stored different "
-                        f"values than requested for: {', '.join(sorted(coerced))}. "
-                        "forward is rewritten to agree with tagged_vlan_mgmt — an access port needs "
-                        "forward='native' with tagged_vlan_mgmt='block_all'."
-                    ),
-                    "coerced_fields": coerced,
-                    "profile": json.loads(json.dumps(result, default=str)),
-                }
-            return {
-                "success": True,
-                "message": f"Port profile '{name}' created successfully.",
-                "profile": json.loads(json.dumps(result, default=str)),
-            }
-        return {"success": False, "error": f"Failed to create port profile '{name}'."}
+        write_result = await switch_manager.create_port_profile(profile_data)
+        return format_tool_payload(
+            write_result,
+            site=switch_manager._connection.site,
+            success_message=f"Port profile '{name}' created successfully.",
+        )
     except Exception as e:
         logger.error("Error creating port profile: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to create port profile: {e}"}
@@ -222,14 +206,15 @@ async def update_port_profile(
         Field(
             description="Dictionary of fields to update. Pass only the fields you want to change — "
             "current values are automatically preserved. "
-            "Allowed keys: name, forward ('all'/'native'/'customize'/'disabled'), "
+            "Allowed keys: name, forward ('all'/'native'/'customize'), "
             "tagged_vlan_mgmt ('auto'/'block_all'/'custom'), native_networkconf_id, "
             "tagged_networkconf_ids (list), excluded_networkconf_ids (list), "
             "voice_networkconf_id, isolation (bool), "
             "poe_mode ('auto'/'off'/'pasv24'/'passthrough'), stp_port_mode (bool), "
             "stp_edge_state ('enabled'/'disabled'), stp_bpdu_guard_enabled (bool), stp_uplink (bool), "
             "dot1x_ctrl ('force_authorized'/'auto'/'force_unauthorized'/'mac_based'/'multi_host'). "
-            "The controller rewrites forward to agree with tagged_vlan_mgmt, so change them together"
+            "The controller rewrites forward to agree with tagged_vlan_mgmt, so change them together. "
+            "Port State (Active/Disabled) is a separate controller setting that this tool does not expose"
         ),
     ],
     confirm: Annotated[
@@ -280,13 +265,13 @@ async def update_port_profile(
         )
 
     try:
-        success, error = await switch_manager.update_port_profile(profile_id, validated_data)
-        if not success:
-            return {"success": False, "error": error}
-        result: Dict[str, Any] = {
-            "success": True,
-            "message": f"Port profile '{profile_id}' updated successfully.",
-        }
+        write_result = await switch_manager.update_port_profile(profile_id, validated_data)
+        result = format_tool_payload(
+            write_result,
+            site=switch_manager._connection.site,
+            success_message=f"Port profile '{profile_id}' updated successfully.",
+        )
+        result["profile_id"] = profile_id
         if ignored_fields:
             result["ignored_fields"] = ignored_fields
         return result

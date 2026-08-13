@@ -53,7 +53,7 @@ class PortProfile(BaseModel):
     forward: Optional[str] = Field(
         default=None,
         description=(
-            "Forwarding mode: all (trunk), native (access), customize, disabled. "
+            "Forwarding mode: all (trunk), native (access), or customize (selective trunk). "
             "The controller rewrites this to agree with tagged_vlan_mgmt, so an access "
             "port needs forward='native' together with tagged_vlan_mgmt='block_all'"
         ),

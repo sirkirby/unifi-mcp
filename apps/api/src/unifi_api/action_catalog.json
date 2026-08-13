@@ -2648,7 +2648,7 @@
             "type": "array"
           },
           "forward": {
-            "description": "Forward mode: 'native' (access), 'all' (trunk), 'customize', or 'disabled'",
+            "description": "Forward mode: 'native' (access), 'all' (trunk), or 'customize'",
             "type": "string"
           },
           "isolation": {
@@ -6301,7 +6301,7 @@
       "input_schema": {
         "properties": {
           "profile_data": {
-            "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, forward ('all'/'native'/'customize'/'disabled'), tagged_vlan_mgmt ('auto'/'block_all'/'custom'), native_networkconf_id, tagged_networkconf_ids (list), excluded_networkconf_ids (list), voice_networkconf_id, isolation (bool), poe_mode ('auto'/'off'/'pasv24'/'passthrough'), stp_port_mode (bool), stp_edge_state ('enabled'/'disabled'), stp_bpdu_guard_enabled (bool), stp_uplink (bool), dot1x_ctrl ('force_authorized'/'auto'/'force_unauthorized'/'mac_based'/'multi_host'). The controller rewrites forward to agree with tagged_vlan_mgmt, so change them together",
+            "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, forward ('all'/'native'/'customize'), tagged_vlan_mgmt ('auto'/'block_all'/'custom'), native_networkconf_id, tagged_networkconf_ids (list), excluded_networkconf_ids (list), voice_networkconf_id, isolation (bool), poe_mode ('auto'/'off'/'pasv24'/'passthrough'), stp_port_mode (bool), stp_edge_state ('enabled'/'disabled'), stp_bpdu_guard_enabled (bool), stp_uplink (bool), dot1x_ctrl ('force_authorized'/'auto'/'force_unauthorized'/'mac_based'/'multi_host'). The controller rewrites forward to agree with tagged_vlan_mgmt, so change them together. Port State (Active/Disabled) is a separate controller setting that this tool does not expose",
             "type": "object"
           },
           "profile_id": {

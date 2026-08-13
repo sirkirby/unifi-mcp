@@ -2210,7 +2210,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Create a new port profile. forward values: 'native' (access port), 'all' (trunk), 'customize' (selective trunk), 'disabled'. tagged_vlan_mgmt is the access-vs-trunk control ('auto'/'block_all'/'custom'): the controller rewrites forward to agree with it, so an access port needs forward='native' with tagged_vlan_mgmt='block_all'. Port Mode in the UI maps to stp_edge_state + stp_bpdu_guard_enabled + stp_uplink (Edge = 'enabled'/true/false). Requires confirmation.",
+      "description": "Create a new port profile. forward values: 'native' (access port), 'all' (trunk), or 'customize' (selective trunk). Port State (Active/Disabled) is a separate controller setting that these port-profile tools do not currently expose. tagged_vlan_mgmt is the access-vs-trunk control ('auto'/'block_all'/'custom'): the controller rewrites forward to agree with it, so an access port needs forward='native' with tagged_vlan_mgmt='block_all'. Port Mode in the UI maps to stp_edge_state + stp_bpdu_guard_enabled + stp_uplink (Edge = 'enabled'/true/false). Requires confirmation.",
       "name": "unifi_create_port_profile",
       "permission_action": "create",
       "permission_category": "switch",
@@ -2230,7 +2230,7 @@
               "type": "array"
             },
             "forward": {
-              "description": "Forward mode: 'native' (access), 'all' (trunk), 'customize', or 'disabled'",
+              "description": "Forward mode: 'native' (access), 'all' (trunk), or 'customize'",
               "type": "string"
             },
             "isolation": {
@@ -17395,7 +17395,7 @@
               "type": "boolean"
             },
             "profile_data": {
-              "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, forward ('all'/'native'/'customize'/'disabled'), tagged_vlan_mgmt ('auto'/'block_all'/'custom'), native_networkconf_id, tagged_networkconf_ids (list), excluded_networkconf_ids (list), voice_networkconf_id, isolation (bool), poe_mode ('auto'/'off'/'pasv24'/'passthrough'), stp_port_mode (bool), stp_edge_state ('enabled'/'disabled'), stp_bpdu_guard_enabled (bool), stp_uplink (bool), dot1x_ctrl ('force_authorized'/'auto'/'force_unauthorized'/'mac_based'/'multi_host'). The controller rewrites forward to agree with tagged_vlan_mgmt, so change them together",
+              "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, forward ('all'/'native'/'customize'), tagged_vlan_mgmt ('auto'/'block_all'/'custom'), native_networkconf_id, tagged_networkconf_ids (list), excluded_networkconf_ids (list), voice_networkconf_id, isolation (bool), poe_mode ('auto'/'off'/'pasv24'/'passthrough'), stp_port_mode (bool), stp_edge_state ('enabled'/'disabled'), stp_bpdu_guard_enabled (bool), stp_uplink (bool), dot1x_ctrl ('force_authorized'/'auto'/'force_unauthorized'/'mac_based'/'multi_host'). The controller rewrites forward to agree with tagged_vlan_mgmt, so change them together. Port State (Active/Disabled) is a separate controller setting that this tool does not expose",
               "type": "object"
             },
             "profile_id": {

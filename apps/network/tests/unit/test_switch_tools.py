@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from unifi_core.write_verification import WriteVerificationResult
+
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")
 os.environ.setdefault("UNIFI_USERNAME", "test")
 os.environ.setdefault("UNIFI_PASSWORD", "test")
@@ -123,12 +125,23 @@ class TestPortProfileWriteVerification:
     """
 
     @pytest.mark.asyncio
-    async def test_update_surfaces_manager_verification_failure(self) -> None:
-        """The manager verifies the write; the tool surfaces its verdict."""
-        with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
-            mock_mgr.update_port_profile = AsyncMock(return_value=(False, "stored different value(s): forward ..."))
+    async def test_update_surfaces_structured_verification_failure(self) -> None:
+        """A coerced write exposes that the mutation landed and names the field."""
+        from unifi_network_mcp.tools.switch import update_port_profile
 
-            from unifi_network_mcp.tools.switch import update_port_profile
+        with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
+            mock_mgr._connection.site = "default"
+            mock_mgr.update_port_profile = AsyncMock(
+                return_value=WriteVerificationResult(
+                    success=False,
+                    mutation_applied=True,
+                    operation="update",
+                    resource={"_id": "pp1", "forward": "all"},
+                    error="Controller accepted and applied the update request but persisted different values.",
+                    coerced_fields=("forward",),
+                    metadata={"profile_id": "pp1"},
+                )
+            )
 
             result = await update_port_profile(
                 profile_id="pp1",
@@ -137,14 +150,26 @@ class TestPortProfileWriteVerification:
             )
 
         assert result["success"] is False, result
-        assert "forward" in result["error"]
+        assert result["mutation_applied"] is True
+        assert result["coerced_fields"] == ["forward"]
+        assert result["details_after_attempt"]["forward"] == "all"
 
     @pytest.mark.asyncio
     async def test_update_success_when_manager_verifies(self) -> None:
-        with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
-            mock_mgr.update_port_profile = AsyncMock(return_value=(True, None))
+        from unifi_network_mcp.tools.switch import update_port_profile
 
-            from unifi_network_mcp.tools.switch import update_port_profile
+        with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
+            mock_mgr._connection.site = "default"
+            mock_mgr.update_port_profile = AsyncMock(
+                return_value=WriteVerificationResult(
+                    success=True,
+                    mutation_applied=True,
+                    operation="update",
+                    resource={"_id": "pp1", "forward": "native", "tagged_vlan_mgmt": "block_all"},
+                    persisted_fields=("forward", "tagged_vlan_mgmt"),
+                    metadata={"profile_id": "pp1"},
+                )
+            )
 
             result = await update_port_profile(
                 profile_id="pp1",
@@ -156,18 +181,21 @@ class TestPortProfileWriteVerification:
 
     @pytest.mark.asyncio
     async def test_create_reports_coerced_field(self) -> None:
-        created = {
-            "_id": "pp2",
-            "name": "Access",
-            "forward": "all",
-            "poe_mode": "auto",
-            "isolation": False,
-            "stp_port_mode": True,
-        }
-        with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
-            mock_mgr.create_port_profile = AsyncMock(return_value=created)
+        from unifi_network_mcp.tools.switch import create_port_profile
 
-            from unifi_network_mcp.tools.switch import create_port_profile
+        with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
+            mock_mgr._connection.site = "default"
+            mock_mgr.create_port_profile = AsyncMock(
+                return_value=WriteVerificationResult(
+                    success=False,
+                    mutation_applied=True,
+                    operation="create",
+                    resource={"_id": "pp2", "name": "Access", "forward": "all"},
+                    error="Controller accepted and applied the create request but persisted different values.",
+                    coerced_fields=("forward",),
+                    metadata={"profile_id": "pp2"},
+                )
+            )
 
             result = await create_port_profile(
                 name="Access",
@@ -177,9 +205,9 @@ class TestPortProfileWriteVerification:
             )
 
         assert result["success"] is False, result
-        assert set(result["coerced_fields"]) == {"forward"}, result["coerced_fields"]
-        assert result["coerced_fields"]["forward"]["requested"] == "native"
-        assert result["coerced_fields"]["forward"]["stored"] == "all"
+        assert result["mutation_applied"] is True
+        assert result["coerced_fields"] == ["forward"]
+        assert result["details_after_attempt"]["forward"] == "all"
 
     @pytest.mark.asyncio
     async def test_create_success_path_reports_no_coercion(self) -> None:
@@ -193,11 +221,27 @@ class TestPortProfileWriteVerification:
             "isolation": False,
             "stp_port_mode": True,
         }
+        from unifi_network_mcp.tools.switch import create_port_profile
+
         with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
-            mock_mgr.create_port_profile = AsyncMock(return_value=created)
-
-            from unifi_network_mcp.tools.switch import create_port_profile
-
+            mock_mgr._connection.site = "default"
+            mock_mgr.create_port_profile = AsyncMock(
+                return_value=WriteVerificationResult(
+                    success=True,
+                    mutation_applied=True,
+                    operation="create",
+                    resource=created,
+                    persisted_fields=(
+                        "forward",
+                        "isolation",
+                        "name",
+                        "poe_mode",
+                        "stp_port_mode",
+                        "tagged_vlan_mgmt",
+                    ),
+                    metadata={"profile_id": "pp3"},
+                )
+            )
             result = await create_port_profile(
                 name="Access",
                 forward="native",
@@ -206,7 +250,8 @@ class TestPortProfileWriteVerification:
             )
 
         assert result["success"] is True, result
-        assert "coerced_fields" not in result
+        assert result["coerced_fields"] == []
+        assert result["details"]["_id"] == "pp3"
 
     @pytest.mark.asyncio
     async def test_create_does_not_flag_keys_the_controller_omits(self) -> None:
@@ -225,11 +270,20 @@ class TestPortProfileWriteVerification:
             "isolation": False,
             "stp_port_mode": True,
         }
+        from unifi_network_mcp.tools.switch import create_port_profile
+
         with patch("unifi_network_mcp.tools.switch.switch_manager") as mock_mgr:
-            mock_mgr.create_port_profile = AsyncMock(return_value=created)
-
-            from unifi_network_mcp.tools.switch import create_port_profile
-
+            mock_mgr._connection.site = "default"
+            mock_mgr.create_port_profile = AsyncMock(
+                return_value=WriteVerificationResult(
+                    success=True,
+                    mutation_applied=True,
+                    operation="create",
+                    resource=created,
+                    persisted_fields=("forward", "name", "tagged_vlan_mgmt"),
+                    metadata={"profile_id": "pp4"},
+                )
+            )
             result = await create_port_profile(
                 name="Access",
                 forward="native",
