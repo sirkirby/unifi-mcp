@@ -1718,7 +1718,7 @@ type RadioEntry {
   name: String
   radio: String
   channel: Int
-  ht: Int
+  ht: String
   txPower: Int
   txPowerMode: String
   currentChannel: Int

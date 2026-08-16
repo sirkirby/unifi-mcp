@@ -7,6 +7,7 @@ from aiounifi.models.device import Device
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.models.devices import normalize_radio_channel, normalize_radio_ht
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -206,8 +207,8 @@ class DeviceManager:
             entry: Dict[str, Any] = {
                 "name": radio.get("name"),
                 "radio": radio.get("radio"),
-                "channel": radio.get("channel"),
-                "ht": radio.get("ht"),
+                "channel": normalize_radio_channel(radio.get("channel")),
+                "ht": normalize_radio_ht(radio.get("ht")),
                 "tx_power_mode": radio.get("tx_power_mode"),
                 "tx_power": radio.get("tx_power"),
                 "min_rssi_enabled": radio.get("min_rssi_enabled"),
@@ -221,7 +222,7 @@ class DeviceManager:
             }
             if stats := stats_by_name.get(radio.get("name", "")):
                 entry["current_tx_power"] = stats.get("tx_power")
-                entry["current_channel"] = stats.get("channel")
+                entry["current_channel"] = normalize_radio_channel(stats.get("channel"))
                 entry["cu_total"] = stats.get("cu_total")
                 entry["cu_self_tx"] = stats.get("cu_self_tx")
                 entry["cu_self_rx"] = stats.get("cu_self_rx")
@@ -242,7 +243,7 @@ class DeviceManager:
         """Update radio settings for a specific band on a device with radios.
 
         Args:
-            device_mac: MAC address of the AP.
+            device_mac: MAC address of the device.
             radio_id: Radio identifier -- either the band code ("na", "ng", "6e")
                       or the internal name ("wifi0", "wifi1").
             updates: Dict of radio_table fields to update (e.g. tx_power_mode, channel).

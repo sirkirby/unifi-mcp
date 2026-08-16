@@ -11,6 +11,8 @@ from unifi_core.network.models.devices import (
     Device,
     DeviceRadio,
     from_controller,
+    normalize_radio_channel,
+    normalize_radio_ht,
     radio_from_controller,
     radio_to_controller_update,
     to_controller_update,
@@ -155,6 +157,44 @@ class TestRadioFromController:
         radio = radio_from_controller({})
         assert radio.radio is None
         assert radio.tx_power_mode is None
+
+    def test_normalizes_live_gateway_shape(self) -> None:
+        """A UDM 6GHz radio reports channel "auto" and an int ht; both normalise
+        to the canonical forms (0-for-auto int channel, MHz-string ht)."""
+        raw = {
+            "radio": "6e",
+            "tx_power_mode": "auto",
+            "channel": "auto",
+            "ht": 160,
+            "min_rssi_enabled": True,
+            "min_rssi": -75,
+        }
+        radio = radio_from_controller(raw)
+        assert radio.channel == 0
+        assert radio.ht == "160"
+
+
+class TestRadioNormalizers:
+    def test_channel_auto_maps_to_zero(self) -> None:
+        assert normalize_radio_channel("auto") == 0
+
+    def test_channel_int_passthrough(self) -> None:
+        assert normalize_radio_channel(36) == 36
+
+    def test_channel_none_passthrough(self) -> None:
+        assert normalize_radio_channel(None) is None
+
+    def test_channel_numeric_string_coerces(self) -> None:
+        assert normalize_radio_channel("11") == 11
+
+    def test_ht_int_becomes_string(self) -> None:
+        assert normalize_radio_ht(160) == "160"
+
+    def test_ht_string_passthrough(self) -> None:
+        assert normalize_radio_ht("20") == "20"
+
+    def test_ht_none_passthrough(self) -> None:
+        assert normalize_radio_ht(None) is None
 
 
 class TestRadioToControllerUpdate:

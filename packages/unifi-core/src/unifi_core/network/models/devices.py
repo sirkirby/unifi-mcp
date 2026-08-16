@@ -9,6 +9,8 @@ Mirrors the Strawberry types in
 Factory helpers:
 - ``from_controller``              — normalise raw dict → Device
 - ``radio_from_controller``        — normalise raw radio entry dict → DeviceRadio
+- ``normalize_radio_channel``      — controller channel value → canonical int (0 = auto)
+- ``normalize_radio_ht``           — controller width value → canonical MHz string
 - ``to_controller_update``         — filter a partial Device dict to mutable keys
 - ``radio_to_controller_update``   — filter a partial radio dict to mutable keys
 
@@ -231,14 +233,40 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def normalize_radio_channel(value: Any) -> Optional[int]:
+    """Normalise a controller channel value to the canonical int form.
+
+    APs report an int; gateways report the string ``"auto"`` when the radio
+    selects its own channel. ``"auto"`` maps to 0 — the convention the update
+    schema already documents ("0 for auto").
+    """
+    if value == "auto":
+        return 0
+    if isinstance(value, str):
+        return int(value) if value.isdigit() else None
+    return value
+
+
+def normalize_radio_ht(value: Any) -> Optional[str]:
+    """Normalise a controller channel-width value to the canonical MHz string.
+
+    APs report a string (``"20"``); gateways report an int (``160``). The
+    canonical form is the string, matching VALID_HT_VALUES and the update
+    schema.
+    """
+    if value is None:
+        return None
+    return str(value)
+
+
 def radio_from_controller(raw: Any) -> DeviceRadio:
     """Build a DeviceRadio (single radio entry) from a controller radio_table row."""
     return DeviceRadio(
         radio=_get(raw, "radio"),
         tx_power_mode=_get(raw, "tx_power_mode"),
         tx_power=_get(raw, "tx_power"),
-        channel=_get(raw, "channel"),
-        ht=_get(raw, "ht"),
+        channel=normalize_radio_channel(_get(raw, "channel")),
+        ht=normalize_radio_ht(_get(raw, "ht")),
         min_rssi_enabled=_get(raw, "min_rssi_enabled"),
         min_rssi=_get(raw, "min_rssi"),
         assisted_roaming_enabled=_get(raw, "assisted_roaming_enabled"),

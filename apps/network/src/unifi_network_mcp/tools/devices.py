@@ -544,7 +544,7 @@ async def update_device_radio(
                 updates=validated_data,
             )
             preview["warnings"] = [
-                "AP radio will restart briefly after changes are applied.",
+                "Device radio will restart briefly after changes are applied.",
                 "Connected clients may experience a brief disconnection.",
             ]
             return preview

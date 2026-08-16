@@ -85,8 +85,14 @@ async def test_device_radio(tmp_path, monkeypatch):
         monkeypatch,
         {
             ("network", "device_manager", "get_device_radio"): {
-                "mac": "ap:01",
-                "radio_table": [],
+                "mac": "udm:01",
+                "name": "Gateway",
+                "radios": [
+                    # AP-style raw row: int channel, string ht.
+                    {"name": "wifi0", "radio": "ng", "channel": 11, "ht": "20", "current_channel": 11},
+                    # Gateway-style raw row: "auto" channel, int ht.
+                    {"name": "wifi2", "radio": "6e", "channel": "auto", "ht": 160, "current_channel": 37},
+                ],
             },
         },
     )
@@ -94,13 +100,19 @@ async def test_device_radio(tmp_path, monkeypatch):
         app,
         key,
         f'''{{
-        network {{ deviceRadio(controller: "{cid}", mac: "ap:01") {{
+        network {{ deviceRadio(controller: "{cid}", mac: "udm:01") {{
             mac
+            radios {{ radio channel ht currentChannel }}
         }} }}
     }}''',
     )
     assert body.get("errors") is None, body
-    assert body["data"]["network"]["deviceRadio"]["mac"] == "ap:01"
+    radio_data = body["data"]["network"]["deviceRadio"]
+    assert radio_data["mac"] == "udm:01"
+    assert radio_data["radios"] == [
+        {"radio": "ng", "channel": 11, "ht": "20", "currentChannel": 11},
+        {"radio": "6e", "channel": 0, "ht": "160", "currentChannel": 37},
+    ]
 
 
 @pytest.mark.asyncio

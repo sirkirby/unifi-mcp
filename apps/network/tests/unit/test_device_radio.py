@@ -89,6 +89,8 @@ SAMPLE_RADIO_TABLE_STATS = [
 # Shapes captured from a live UDM running a 6GHz radio. The 6e entry differs from
 # every AP sample above in two ways: "channel" is the string "auto" when the radio
 # is on automatic selection, and "ht" comes back as an int rather than a string.
+# get_device_radio() normalises both to the canonical forms (0-for-auto int
+# channel, MHz-string ht); the raw values here stay as the controller sent them.
 UDM_RADIO_TABLE = [
     {
         "name": "wifi0",
@@ -317,10 +319,14 @@ class TestDeviceManagerGetRadio:
         assert [radio["radio"] for radio in result["radios"]] == ["ng", "na", "6e"]
 
         sixe_radio = result["radios"][2]
-        assert sixe_radio["channel"] == "auto"
-        assert sixe_radio["ht"] == 160
+        assert sixe_radio["channel"] == 0
+        assert sixe_radio["ht"] == "160"
         assert sixe_radio["current_channel"] == 37
         assert sixe_radio["current_tx_power"] == 21
+
+        ng_radio = result["radios"][0]
+        assert ng_radio["channel"] == 11
+        assert ng_radio["ht"] == "20"
 
     @pytest.mark.asyncio
     async def test_empty_radio_table_still_succeeds(self, device_manager, mock_connection):

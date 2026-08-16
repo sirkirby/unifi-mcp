@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from unifi_core.network.models.clients import _is_online, client_from_controller
+from unifi_core.network.models.devices import normalize_radio_channel
 from unifi_core.network.models.firewall import from_controller as firewall_policy_from_controller
 from unifi_core.network.models.networks import from_controller as network_from_controller
 
@@ -516,7 +517,11 @@ def shape_device_details(
         data["port_count"] = len(raw["port_table"])
     if (include_all or "radios" in sections) and "radio_table" in raw:
         data["radio_summary"] = [
-            {"radio": radio.get("radio"), "channel": radio.get("channel"), "tx_power": radio.get("tx_power")}
+            {
+                "radio": radio.get("radio"),
+                "channel": normalize_radio_channel(radio.get("channel")),
+                "tx_power": radio.get("tx_power"),
+            }
             for radio in raw["radio_table"]
         ]
         data["radio_count"] = len(raw["radio_table"])

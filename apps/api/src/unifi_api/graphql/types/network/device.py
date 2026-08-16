@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import strawberry
 from strawberry.types import Info
+from unifi_core.network.models.devices import normalize_radio_channel, normalize_radio_ht
 
 if TYPE_CHECKING:
     from unifi_api.graphql.types.network.client import Client
@@ -128,7 +129,7 @@ class RadioEntry:
     name: str | None
     radio: str | None
     channel: int | None
-    ht: int | None
+    ht: str | None
     tx_power: int | None
     tx_power_mode: str | None
     current_channel: int | None
@@ -140,11 +141,11 @@ class RadioEntry:
         return cls(
             name=_get(r, "name"),
             radio=_get(r, "radio"),
-            channel=_get(r, "channel"),
-            ht=_get(r, "ht"),
+            channel=normalize_radio_channel(_get(r, "channel")),
+            ht=normalize_radio_ht(_get(r, "ht")),
             tx_power=_get(r, "tx_power"),
             tx_power_mode=_get(r, "tx_power_mode"),
-            current_channel=_get(r, "current_channel"),
+            current_channel=normalize_radio_channel(_get(r, "current_channel")),
             current_tx_power=_get(r, "current_tx_power"),
             num_sta=_get(r, "num_sta"),
         )
@@ -156,7 +157,7 @@ class RadioEntry:
 @strawberry.type(description="Wrapper dict containing the radio table for a device.")
 class DeviceRadio:
     """Wrapper-dict shape: manager returns ``{mac, name, model, radios: [...]}``
-    (or None for non-AP devices). Pass through with light field whitelisting on
+    (or None for devices without radios). Pass through with light field whitelisting on
     the radio entries.
 
     The per-radio mutable update fields (tx_power_mode, channel, ht, …) are

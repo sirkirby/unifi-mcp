@@ -113,6 +113,32 @@ def test_shape_device_details_supports_sections_and_missing() -> None:
     assert shape_device_details(None, site="default", mac_address="missing")["success"] is False
 
 
+def test_shape_device_details_normalizes_radio_summary_channel() -> None:
+    raw = {
+        "mac": "aa",
+        "name": "Gateway",
+        "type": "udm",
+        "state": 1,
+        "radio_table": [
+            {"radio": "ng", "channel": 11, "tx_power": 6},
+            {"radio": "6e", "channel": "auto", "tx_power": 21},
+        ],
+    }
+
+    result = shape_device_details(
+        SimpleNamespace(raw=raw),
+        site="default",
+        mac_address="aa",
+        include="radios",
+        summary=True,
+    )
+
+    assert result["device"]["radio_summary"] == [
+        {"radio": "ng", "channel": 11, "tx_power": 6},
+        {"radio": "6e", "channel": 0, "tx_power": 21},
+    ]
+
+
 def test_shape_network_list_applies_every_filter_and_projection() -> None:
     networks = [
         {"_id": "n1", "name": "Guest", "purpose": "guest", "vlan": 20, "enabled": True},
