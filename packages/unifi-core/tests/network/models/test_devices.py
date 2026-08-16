@@ -187,6 +187,11 @@ class TestRadioNormalizers:
     def test_channel_numeric_string_coerces(self) -> None:
         assert normalize_radio_channel("11") == 11
 
+    def test_channel_unknown_string_drops_with_warning(self, caplog) -> None:
+        with caplog.at_level("WARNING"):
+            assert normalize_radio_channel("disabled") is None
+        assert "disabled" in caplog.text
+
     def test_ht_int_becomes_string(self) -> None:
         assert normalize_radio_ht(160) == "160"
 

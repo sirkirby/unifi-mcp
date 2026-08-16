@@ -19,9 +19,12 @@ Per-class MUTABLE_FIELDS constants drive the cross-layer symmetry test.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Device — top-level device (mutable: name only; other mutations are actions)
@@ -243,7 +246,10 @@ def normalize_radio_channel(value: Any) -> Optional[int]:
     if value == "auto":
         return 0
     if isinstance(value, str):
-        return int(value) if value.isdigit() else None
+        if value.isdigit():
+            return int(value)
+        logger.warning("Unrecognised radio channel value %r dropped from read output", value)
+        return None
     return value
 
 
