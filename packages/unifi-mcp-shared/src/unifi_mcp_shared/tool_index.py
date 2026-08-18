@@ -22,6 +22,7 @@ from typing import Any, Dict
 logger = logging.getLogger(__name__)
 
 _MANIFEST_CACHE: Dict[Path, Dict[str, Any]] = {}
+_ANNOTATION_FIELDS = ("title", "readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
 
 # ---------------------------------------------------------------------------
 # Tool metadata structure
@@ -93,6 +94,24 @@ _SEARCH_STOP_WORDS = frozenset(
         "with",
     }
 )
+
+
+def normalize_tool_annotations(annotations: Any | None) -> Dict[str, Any] | None:
+    """Copy declared MCP ToolAnnotations into a JSON-compatible registry value."""
+    if annotations is None:
+        return None
+
+    source = (
+        annotations
+        if isinstance(annotations, dict)
+        else {field_name: getattr(annotations, field_name, None) for field_name in _ANNOTATION_FIELDS}
+    )
+    normalized = {
+        field_name: source[field_name]
+        for field_name in _ANNOTATION_FIELDS
+        if field_name in source and source[field_name] is not None
+    }
+    return normalized or None
 
 
 def _tokenize(value: str) -> tuple[str, ...]:

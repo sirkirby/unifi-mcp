@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Callable, List
 from mcp.types import ToolAnnotations
 
 from unifi_mcp_shared.response_serialization import normalize_call_tool_result
+from unifi_mcp_shared.tool_index import normalize_tool_annotations
 
 if TYPE_CHECKING:
     from unifi_mcp_shared.lazy_tools import LazyToolLoader
@@ -89,6 +90,18 @@ def register_meta_tools(
     exec_title = f"{server_label} Execute Tool"
     batch_title = f"{server_label} Batch Execute"
     status_title = f"{server_label} Batch Status"
+    read_annotations = ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+    action_annotations = ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
 
     # =========================================================================
     # DISCOVERY: {prefix}_tool_index
@@ -106,12 +119,7 @@ def register_meta_tools(
             f"'search' for keyword matching, or 'include_schemas' for full parameter schemas. "
             f"After finding the right tool, use {exec_name} to run it."
         ),
-        annotations=ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=False,
-        ),
+        annotations=read_annotations,
     )
     async def _tool_index_wrapper(
         category: str | None = None,
@@ -180,6 +188,7 @@ def register_meta_tools(
                 "filtered": {"type": "boolean", "description": "True when category or search filter was applied"},
             },
         },
+        annotations=normalize_tool_annotations(read_annotations),
     )
 
     # =========================================================================
@@ -195,12 +204,7 @@ def register_meta_tools(
             "standard MCP clients may call directly registered tools with tools/call. "
             f"For bulk/parallel operations, use {batch_name} instead."
         ),
-        annotations=ToolAnnotations(
-            readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=False,
-        ),
+        annotations=action_annotations,
     )
     async def execute_handler(tool: str, arguments: dict = None) -> dict:
         """Execute a tool synchronously."""
@@ -236,6 +240,7 @@ def register_meta_tools(
             "type": "object",
             "description": f"Result from the executed {server_label} tool",
         },
+        annotations=normalize_tool_annotations(action_annotations),
     )
 
     # =========================================================================
@@ -250,12 +255,7 @@ def register_meta_tools(
             f"Returns job IDs for each operation. Use {status_name} to check progress and get results. "
             f"For single operations, use {exec_name} instead (returns result directly)."
         ),
-        annotations=ToolAnnotations(
-            readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=False,
-            openWorldHint=False,
-        ),
+        annotations=action_annotations,
     )
     async def batch_handler(operations: List[dict]) -> dict:
         """Execute multiple operations in parallel."""
@@ -355,6 +355,7 @@ def register_meta_tools(
                 "message": {"type": "string"},
             },
         },
+        annotations=normalize_tool_annotations(action_annotations),
     )
 
     # =========================================================================
@@ -368,12 +369,7 @@ def register_meta_tools(
             f"Returns status ('running', 'done', 'error'), result (if done), or error (if failed). "
             f"Can check multiple jobs at once by passing an array of job IDs."
         ),
-        annotations=ToolAnnotations(
-            readOnlyHint=True,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=False,
-        ),
+        annotations=read_annotations,
     )
     async def batch_status_handler(jobId: str = None, jobIds: List[str] = None) -> dict:
         """Check status of one or more jobs."""
@@ -432,6 +428,7 @@ def register_meta_tools(
                 },
             },
         },
+        annotations=normalize_tool_annotations(read_annotations),
     )
 
     logger.info("Registered meta-tools: %s, %s, %s, %s", idx_name, exec_name, batch_name, status_name)
@@ -469,6 +466,12 @@ def register_load_tools(
     exec_name = f"{prefix}_execute"
     hint = domain_hint or _DEFAULT_DOMAIN_HINTS.get(prefix, "controller management")
     load_title = f"{server_label} Load Tools"
+    load_annotations = ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
 
     @tool_decorator(
         name=load_name,
@@ -479,12 +482,7 @@ def register_load_tools(
             "notifications/tools/list_changed. "
             f"Clients that do not refresh tool lists should use {exec_name} instead."
         ),
-        annotations=ToolAnnotations(
-            readOnlyHint=False,
-            destructiveHint=False,
-            idempotentHint=True,
-            openWorldHint=False,
-        ),
+        annotations=load_annotations,
     )
     async def load_tools_handler(tools: List[str], ctx: Context) -> dict:
         """Load specific tools and notify the client."""
@@ -555,6 +553,7 @@ def register_load_tools(
                 "message": {"type": "string", "description": "Summary message"},
             },
         },
+        annotations=normalize_tool_annotations(load_annotations),
     )
 
     logger.info("Registered %s meta-tool for dynamic tool loading", load_name)

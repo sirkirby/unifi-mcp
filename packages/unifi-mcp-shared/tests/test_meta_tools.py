@@ -19,6 +19,7 @@ from mcp.types import (
 from pydantic import BaseModel
 from unifi_core.jobs import JobStore
 from unifi_mcp_shared.meta_tools import register_load_tools, register_meta_tools
+from unifi_mcp_shared.tool_index import TOOL_REGISTRY, get_tool_index, register_tool
 
 
 class StructuredInnerResult(BaseModel):
@@ -76,6 +77,48 @@ def test_tool_index_schema_describes_ranked_token_search():
     assert "token search" in description
     assert "at most 20" in description
     assert "no usable terms returns no tools" in description
+
+
+def test_meta_tool_index_objects_contain_declared_annotations():
+    TOOL_REGISTRY.clear()
+    try:
+        register_meta_tools(
+            server=SimpleNamespace(),
+            tool_decorator=_capture_tools()[1],
+            tool_index_handler=AsyncMock(return_value={}),
+            start_async_tool=AsyncMock(),
+            get_job_status=AsyncMock(),
+            register_tool=register_tool,
+            prefix="unifi",
+        )
+        register_load_tools(
+            server=SimpleNamespace(),
+            tool_decorator=_capture_tools()[1],
+            lazy_loader=SimpleNamespace(load_tool=AsyncMock()),
+            register_tool=register_tool,
+            tool_module_map={},
+            prefix="unifi",
+        )
+
+        tools = {
+            tool["name"]: tool for tool in get_tool_index(registration_mode="eager", include_schemas=True)["tools"]
+        }
+        expected = {
+            "unifi_tool_index": True,
+            "unifi_execute": False,
+            "unifi_batch": False,
+            "unifi_batch_status": True,
+            "unifi_load_tools": False,
+        }
+        for name, read_only in expected.items():
+            assert tools[name]["annotations"] == {
+                "readOnlyHint": read_only,
+                "destructiveHint": False,
+                "idempotentHint": name in {"unifi_tool_index", "unifi_batch_status", "unifi_load_tools"},
+                "openWorldHint": False,
+            }
+    finally:
+        TOOL_REGISTRY.clear()
 
 
 @pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])

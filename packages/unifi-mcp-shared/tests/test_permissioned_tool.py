@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from pydantic import Field
 from unifi_mcp_shared.output_schema import (
     UniFiToolResponse,
@@ -30,6 +31,7 @@ def mock_deps():
         input_schema=None,
         output_schema=None,
         auth_method="local_only",
+        annotations=None,
         permission_category=None,
         permission_action=None,
     ):
@@ -39,6 +41,7 @@ def mock_deps():
             "input_schema": input_schema,
             "output_schema": output_schema,
             "auth_method": auth_method,
+            "annotations": annotations,
             "permission_category": permission_category,
             "permission_action": permission_action,
         }
@@ -139,6 +142,46 @@ class TestCreatePermissionedTool:
 
         assert mock_deps["registered_tools"]["perm_tool"]["permission_category"] == "networks"
         assert mock_deps["registered_tools"]["perm_tool"]["permission_action"] == "update"
+
+    @pytest.mark.parametrize(
+        ("permission_category", "permission_action"),
+        [(None, None), ("clients", "read")],
+        ids=["non-permissioned", "permissioned"],
+    )
+    def test_copies_declared_annotations_to_registry(self, mock_deps, permission_category, permission_action):
+        pt = _create_pt(mock_deps)
+        annotations = ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=False,
+        )
+
+        @pt(
+            name="annotated_tool",
+            description="test",
+            annotations=annotations,
+            permission_category=permission_category,
+            permission_action=permission_action,
+        )
+        async def annotated_tool():
+            return {"success": True}
+
+        assert mock_deps["registered_tools"]["annotated_tool"]["annotations"] == {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        }
+
+    def test_absent_annotations_remain_absent_in_registry(self, mock_deps):
+        pt = _create_pt(mock_deps)
+
+        @pt(name="unannotated_tool", description="test")
+        async def unannotated_tool():
+            return {"success": True}
+
+        assert mock_deps["registered_tools"]["unannotated_tool"]["annotations"] is None
 
     def test_registers_default_output_schema_for_standard_tools(self, mock_deps):
         pt = _create_pt(mock_deps)
