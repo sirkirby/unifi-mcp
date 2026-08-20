@@ -277,7 +277,7 @@ def get_routing_manager() -> RoutingManager:
 
 @lru_cache
 def get_traffic_flow_manager() -> TrafficFlowManager:
-    return TrafficFlowManager(get_connection_manager())
+    return TrafficFlowManager(get_connection_manager(), get_dpi_manager())
 
 
 @lru_cache

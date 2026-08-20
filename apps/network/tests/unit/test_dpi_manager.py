@@ -132,11 +132,67 @@ class TestDpiManager:
 
         assert result == cached
 
+    # ---- get_full_dpi_catalog ----
+
+    @pytest.mark.asyncio
+    async def test_get_full_dpi_catalog_paginates_applications_and_includes_categories(self, dpi_manager):
+        async def fake_request(path, params=None):
+            if path == "/v1/dpi/categories":
+                if params["offset"] == "0":
+                    return {
+                        "data": [{"id": 3, "name": "File sharing"}, {"id": 4, "name": "Media streaming"}],
+                        "totalCount": 3,
+                    }
+                if params["offset"] == "2":
+                    return {"data": [{"id": 5, "name": "Email"}], "totalCount": 3}
+            if params["offset"] == "0":
+                return {
+                    "data": [{"id": 262274, "name": "Spotify"}, {"id": 262334, "name": "Netflix"}],
+                    "totalCount": 3,
+                }
+            if params["offset"] == "2":
+                return {"data": [{"id": 262344, "name": "YouTube"}], "totalCount": 3}
+            raise AssertionError(f"Unexpected request: {path} {params}")
+
+        with patch.object(dpi_manager, "_request_integration_api", side_effect=fake_request):
+            result = await dpi_manager.get_full_dpi_catalog()
+
+        assert result == {
+            "applications": [
+                {"id": 262274, "name": "Spotify"},
+                {"id": 262334, "name": "Netflix"},
+                {"id": 262344, "name": "YouTube"},
+            ],
+            "categories": [
+                {"id": 3, "name": "File sharing"},
+                {"id": 4, "name": "Media streaming"},
+                {"id": 5, "name": "Email"},
+            ],
+        }
+
+    @pytest.mark.asyncio
+    async def test_get_full_dpi_catalog_does_not_cache_partial_pages(self, dpi_manager, mock_connection):
+        async def fake_request(path, params=None):
+            if path == "/v1/dpi/categories":
+                return {"data": [{"id": 4, "name": "Media streaming"}], "totalCount": 1}
+            if params["offset"] == "0":
+                return {"data": [{"id": 262274, "name": "Spotify"}], "totalCount": 2}
+            return None
+
+        with (
+            patch.object(dpi_manager, "_request_integration_api", side_effect=fake_request),
+            pytest.raises(RuntimeError, match="incomplete DPI application catalogue"),
+        ):
+            await dpi_manager.get_full_dpi_catalog()
+
+        mock_connection._update_cache.assert_not_called()
+
     # ---- _request_integration_api ----
 
     @pytest.mark.asyncio
-    async def test_request_integration_api_builds_correct_url(self, dpi_manager, mock_auth):
+    async def test_request_integration_api_builds_correct_url(self, dpi_manager, mock_auth, mock_connection):
         """Test _request_integration_api builds the correct URL."""
+        mock_connection.verify_ssl = True
         mock_resp = AsyncMock()
         mock_resp.status = 200
         mock_resp.json = AsyncMock(return_value={"data": []})
@@ -156,6 +212,7 @@ class TestDpiManager:
         mock_session.get.assert_called_once()
         call_args = mock_session.get.call_args
         assert "/proxy/network/integration/v1/dpi/applications" in call_args[0][0]
+        assert call_args.kwargs["ssl"] is True
         mock_session.close.assert_called_once()
 
     @pytest.mark.asyncio
