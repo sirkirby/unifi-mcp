@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError, field_validator
 
+from unifi_core.mac import normalize_mac, normalize_mac_list
+
 # A MAC netmask is the number of leading bits that must match (the UI's
 # optional "Netmask" dropdown — e.g. 24 = vendor OUI, 48 = the complete MAC).
 # The controller stores it as a 6-octet MAC-format bitmask. The UI offers
@@ -253,7 +255,11 @@ def _create_side(macs: List[str], netmask: Optional[int], raw_mask: Optional[str
         "ips_or_subnets": [],
         "network_ids": [],
         "ports": [],
-        "specific_mac_addresses": macs,
+        # Lowercased at the boundary: the controller stores these lowercase, so an
+        # uppercase create would not round-trip against a later list. An entry
+        # that normalizes to nothing passes through unchanged rather than
+        # becoming None.
+        "specific_mac_addresses": [normalize_mac(m) or m for m in macs],
         "type": "CLIENT_MAC",
     }
     if netmask is not None:
@@ -328,7 +334,7 @@ def _update_side(fields: Dict[str, Any], prefix: str) -> Dict[str, Any]:
     netmask_key = f"{prefix}_netmask"
     clear_key = f"clear_{prefix}_netmask"
     if macs_key in fields:
-        side["specific_mac_addresses"] = fields[macs_key]
+        side["specific_mac_addresses"] = normalize_mac_list(fields[macs_key])
     if fields.get(clear_key):
         side["mac_mask"] = None  # sentinel → manager removes the key, clearing the mask
     elif fields.get(netmask_key) is not None:

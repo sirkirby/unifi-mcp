@@ -13,7 +13,9 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from unifi_core.mac import normalize_mac
 
 
 class TrafficFlowQuery(BaseModel):
@@ -40,6 +42,18 @@ class TrafficFlowQuery(BaseModel):
     destination_domain: Optional[list[str]] = Field(default=None, description="Filter by destination domain")
     destination_ip: Optional[list[str]] = Field(default=None, description="Filter by destination IP")
     destination_region: Optional[list[str]] = Field(default=None, description="Filter by destination region")
+
+    @field_validator("source_mac")
+    @classmethod
+    def _normalize_source_mac(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        """Lowercase the filter so it matches what the controller reports.
+
+        This filter is applied server-side; an uppercase value returns 200
+        with zero flows and nothing to indicate why.
+        """
+        if v is None:
+            return None
+        return [normalize_mac(m) or m for m in v]
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:

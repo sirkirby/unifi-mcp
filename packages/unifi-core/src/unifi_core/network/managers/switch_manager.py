@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 from aiounifi.models.api import ApiRequest
 
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.mac import normalize_mac
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
@@ -218,6 +219,7 @@ class SwitchManager:
 
     async def _get_device_stat(self, device_mac: str) -> Optional[Dict[str, Any]]:
         """Get raw device stat data for a specific device."""
+        device_mac = normalize_mac(device_mac) or device_mac
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
@@ -238,6 +240,7 @@ class SwitchManager:
 
     async def _get_device_id(self, device_mac: str) -> Optional[str]:
         """Get the device _id from its MAC address (needed for REST writes)."""
+        device_mac = normalize_mac(device_mac) or device_mac
         device = await self._get_device_stat(device_mac)
         if device:
             return device.get("_id")
@@ -247,6 +250,7 @@ class SwitchManager:
 
     async def get_switch_ports(self, device_mac: str) -> Optional[Dict[str, Any]]:
         """Get port overrides (profile assignments) for a switch."""
+        device_mac = normalize_mac(device_mac) or device_mac
         device = await self._get_device_stat(device_mac)
         if not device:
             return None
@@ -258,6 +262,7 @@ class SwitchManager:
 
     async def get_port_stats(self, device_mac: str) -> Optional[Dict[str, Any]]:
         """Get live port table statistics for a switch."""
+        device_mac = normalize_mac(device_mac) or device_mac
         device = await self._get_device_stat(device_mac)
         if not device:
             return None
@@ -269,6 +274,7 @@ class SwitchManager:
 
     async def get_lldp_neighbors(self, device_mac: str) -> Optional[Dict[str, Any]]:
         """Get LLDP neighbor discovery table for a switch."""
+        device_mac = normalize_mac(device_mac) or device_mac
         device = await self._get_device_stat(device_mac)
         if not device:
             return None
@@ -280,6 +286,7 @@ class SwitchManager:
 
     async def get_switch_capabilities(self, device_mac: str) -> Optional[Dict[str, Any]]:
         """Get switch hardware capabilities."""
+        device_mac = normalize_mac(device_mac) or device_mac
         device = await self._get_device_stat(device_mac)
         if not device:
             return None
@@ -311,6 +318,7 @@ class SwitchManager:
         Raises:
             Exception: On API error.
         """
+        device_mac = normalize_mac(device_mac) or device_mac
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
@@ -343,6 +351,7 @@ class SwitchManager:
         Raises:
             Exception: On API error — propagated to tool layer for user-facing message.
         """
+        device_mac = normalize_mac(device_mac) or device_mac
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
@@ -380,6 +389,7 @@ class SwitchManager:
         Raises:
             Exception: On API error (e.g., non-PoE port).
         """
+        device_mac = normalize_mac(device_mac) or device_mac
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 

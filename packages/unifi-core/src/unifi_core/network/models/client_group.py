@@ -24,6 +24,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from unifi_core.mac import normalize_mac_list
+
 # ---------------------------------------------------------------------------
 # ClientGroup pydantic model
 # ---------------------------------------------------------------------------
@@ -152,7 +154,12 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+    payload = {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+    # This builder takes the caller's raw dict, so the model's field
+    # validator never runs for a partial update.
+    if "members" in payload:
+        payload["members"] = normalize_mac_list(payload["members"])
+    return payload
 
 
 # ---------------------------------------------------------------------------

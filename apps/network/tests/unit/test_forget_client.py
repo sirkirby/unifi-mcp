@@ -36,7 +36,13 @@ class TestForgetClient:
 
     @pytest.mark.asyncio
     async def test_forget_client_success(self, client_manager, mock_connection):
-        """Test successful forget client call."""
+        """Test successful forget client call.
+
+        The MAC goes out lowercased. This assertion previously expected the
+        caller's string verbatim; MACs are now normalized at the entry point so
+        that the lookup and the outgoing command agree, and the controller
+        receives the same casing it reports.
+        """
         result = await client_manager.forget_client("AA:BB:CC:DD:EE:FF")
 
         assert result is True
@@ -44,7 +50,7 @@ class TestForgetClient:
         call_args = mock_connection.request.call_args[0][0]
         assert call_args.method == "post"
         assert call_args.path == "/cmd/stamgr"
-        assert call_args.data == {"macs": ["AA:BB:CC:DD:EE:FF"], "cmd": "forget-sta"}
+        assert call_args.data == {"macs": ["aa:bb:cc:dd:ee:ff"], "cmd": "forget-sta"}
         mock_connection._invalidate_cache.assert_called_once()
 
     @pytest.mark.asyncio

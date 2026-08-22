@@ -117,7 +117,9 @@ async def access_reboot_device(
         return preview_response(
             action="reboot",
             resource_type="access_device",
-            resource_id=device_id,
+            # The resolved identifier, not the caller's string: device_id may
+            # be a MAC, and the preview should name what will actually be acted on.
+            resource_id=preview_data.get("device_id", device_id),
             current_state=preview_data["current_state"],
             proposed_changes=preview_data["proposed_changes"],
             resource_name=preview_data.get("device_name"),

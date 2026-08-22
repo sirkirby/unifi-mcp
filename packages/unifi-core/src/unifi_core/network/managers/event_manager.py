@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, List, Optional
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.message import MessageKey
 
+from unifi_core.mac import mac_equal
 from unifi_core.network.managers.connection_manager import ConnectionManager
 
 logger = logging.getLogger("unifi-network-mcp")
@@ -52,7 +53,7 @@ class EventBuffer:
                 continue
             if event_type and event.get("key") != event_type:
                 continue
-            if mac and event.get("mac") != mac:
+            if mac and not mac_equal(event.get("mac"), mac):
                 continue
             out.append(event)
             if limit and len(out) >= limit:

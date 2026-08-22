@@ -19,7 +19,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
+
+from unifi_core.mac import normalize_mac
 
 # ---------------------------------------------------------------------------
 # Pydantic domain model
@@ -140,6 +142,21 @@ class Wlan(BaseModel):
         default=None,
         description="List of MAC addresses for the filter",
     )
+
+    @field_validator("mac_filter_list")
+    @classmethod
+    def _normalize_mac_filter_list(cls, v):
+        """Lowercase the MACs so a create round-trips against a later list.
+
+        The controller stores these lowercase. An entry that normalizes to
+        nothing - empty or whitespace-only - passes through unchanged rather
+        than becoming None; anything else is lowercased, including a string
+        that is not actually an address.
+        """
+        if v is None:
+            return v
+        return [normalize_mac(m) or m for m in v]
+
     schedule_enabled: Optional[bool] = Field(
         default=None,
         description="Enable WLAN schedule (time-based on/off)",

@@ -5,6 +5,7 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.wlan import Wlan
 
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.mac import normalize_mac_list
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.models.networks import DELETABLE_PURPOSES, UNSAFE_GUEST_PURPOSE_ERROR
@@ -537,6 +538,12 @@ class NetworkManager:
         Returns:
             The created AP group dictionary, or None on failure.
         """
+        # Normalized here rather than in each caller: the MCP tool and the
+        # apps/api dispatch both assemble this dict themselves, so the model's
+        # field validator never sees it.
+        if isinstance(group_data.get("device_macs"), list):
+            group_data = {**group_data, "device_macs": normalize_mac_list(group_data["device_macs"])}
+
         try:
             api_request = ApiRequestV2(method="post", path="/apgroups", data=group_data)
             response = await self._connection.request(api_request)
@@ -579,6 +586,12 @@ class NetworkManager:
             existing = await self.get_ap_group_details(group_id)
             if not update_data:
                 return True
+
+            # Before the merge AND before _unpersisted_fields sees update_data:
+            # an uppercase restatement of an unchanged member list otherwise
+            # reads as a stuck field and reports a failed write that succeeded.
+            if isinstance(update_data.get("device_macs"), list):
+                update_data = {**update_data, "device_macs": normalize_mac_list(update_data["device_macs"])}
 
             merged_data = deep_merge(existing, update_data)
 

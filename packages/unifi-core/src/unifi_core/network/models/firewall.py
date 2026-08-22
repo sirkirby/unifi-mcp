@@ -32,6 +32,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from unifi_core.mac import normalize_mac_list
+
 # ---------------------------------------------------------------------------
 # FirewallRule pydantic model
 # ---------------------------------------------------------------------------
@@ -542,6 +544,19 @@ def normalize_policy_enums(fields: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+def _normalize_endpoint_macs(endpoint: Any) -> Any:
+    """Lowercase the ``client_macs`` inside a source/destination endpoint dict.
+
+    ``source`` and ``destination`` are opaque ``Dict[str, Any]`` on the model,
+    so nothing else inspects what they carry - but on a CLIENT matching_target
+    they hold a MAC list that must round-trip against what the controller
+    reports.
+    """
+    if not isinstance(endpoint, dict) or "client_macs" not in endpoint:
+        return endpoint
+    return {**endpoint, "client_macs": normalize_mac_list(endpoint["client_macs"])}
+
+
 def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Validate and normalize a public V2 firewall-policy partial update.
 
@@ -554,6 +569,9 @@ def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     normalized = normalize_policy_enums(fields)
 
     payload = to_controller_update(normalized)
+    for side in ("source", "destination"):
+        if side in payload:
+            payload[side] = _normalize_endpoint_macs(payload[side])
     if not payload:
         raise ValueError("Update data is effectively empty or invalid.")
     return payload

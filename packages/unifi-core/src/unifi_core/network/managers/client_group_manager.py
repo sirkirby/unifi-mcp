@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 from aiounifi.models.api import ApiRequestV2
 
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.mac import normalize_mac_list
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 
@@ -112,6 +113,12 @@ class ClientGroupManager:
         if missing:
             logger.error("Missing required keys for client group: %s", missing)
             return None
+
+        # Normalized here rather than in each caller: the MCP tool and the
+        # apps/api dispatch both assemble this dict themselves, so a model
+        # validator never sees it.
+        if isinstance(group_data.get("members"), list):
+            group_data = {**group_data, "members": normalize_mac_list(group_data["members"])}
 
         try:
             api_request = ApiRequestV2(method="post", path="/network-members-group", data=group_data)

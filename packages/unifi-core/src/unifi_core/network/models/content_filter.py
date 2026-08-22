@@ -25,7 +25,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from unifi_core.mac import normalize_mac, normalize_mac_list
 
 # ---------------------------------------------------------------------------
 # Pydantic domain model
@@ -68,6 +70,21 @@ class ContentFilter(BaseModel):
         default_factory=list,
         description="Client MAC addresses this filter applies to",
     )
+
+    @field_validator("client_macs")
+    @classmethod
+    def _normalize_client_macs(cls, v):
+        """Lowercase the MACs the controller reports.
+
+        Read-path only, and deliberately so: this model is built solely by
+        ``from_controller``, and there is no content-filter create path at all.
+        The write side is handled in ``to_controller_update``, which callers
+        reach with a raw dict that never touches this model.
+        """
+        if v is None:
+            return v
+        return [normalize_mac(m) or m for m in v]
+
     network_ids: List[str] = Field(
         default_factory=list,
         description="Network IDs this filter applies to",
@@ -172,4 +189,8 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     # profile, so sibling keys (repeat_on_days, time_all_day) are preserved.
     if "schedule_mode" in result:
         result["schedule"] = {"mode": result.pop("schedule_mode")}
+    # This builder takes the caller's raw dict, so the model's field validator
+    # never runs for a partial update.
+    if "client_macs" in result:
+        result["client_macs"] = normalize_mac_list(result["client_macs"])
     return result

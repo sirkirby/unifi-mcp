@@ -19,7 +19,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from unifi_core.mac import normalize_mac, normalize_mac_list
 
 # ---------------------------------------------------------------------------
 # Pydantic domain model
@@ -50,6 +52,21 @@ class ApGroup(BaseModel):
         default_factory=list,
         description="List of AP MAC addresses in this group",
     )
+
+    @field_validator("device_macs")
+    @classmethod
+    def _normalize_device_macs(cls, v):
+        """Lowercase the MACs so a create round-trips against a later list.
+
+        The controller stores these lowercase. An entry that normalizes to
+        nothing - empty or whitespace-only - passes through unchanged rather
+        than becoming None; anything else is lowercased, including a string
+        that is not actually an address.
+        """
+        if v is None:
+            return v
+        return [normalize_mac(m) or m for m in v]
+
     wlan_group_ids: List[str] = Field(
         default_factory=list,
         description="List of WLAN group IDs assigned to this AP group",
@@ -120,4 +137,9 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+    payload = {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
+    # This builder takes the caller's raw dict, so the model's field
+    # validator never runs for a partial update.
+    if "device_macs" in payload:
+        payload["device_macs"] = normalize_mac_list(payload["device_macs"])
+    return payload

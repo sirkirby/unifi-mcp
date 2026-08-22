@@ -14,6 +14,7 @@ from unifi_core.auth import UniFiAuth
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.models.firewall import _normalize_endpoint_macs
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -966,6 +967,13 @@ class FirewallManager:
         """
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
+
+        # Normalized here rather than at the tool: the MCP tool and the apps/api
+        # dispatch both hand this dict straight through, so to_controller_create
+        # is not on the path. A CLIENT endpoint carries a client_macs list.
+        policy_data = {
+            k: (_normalize_endpoint_macs(v) if k in ("source", "destination") else v) for k, v in policy_data.items()
+        }
 
         try:
             policy_name = policy_data.get("name", "Unnamed Policy")

@@ -8,6 +8,7 @@ from aiounifi.models.dpi_restriction_group import (
     DPIRestrictionGroup,
 )  # Import DPIGroup model
 
+from unifi_core.mac import mac_equal, normalize_mac
 from unifi_core.network.managers.client_manager import ClientManager  # Needed for get_top_clients
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.device_manager import DeviceManager
@@ -109,6 +110,7 @@ class StatsManager:
         self, client_mac: str, duration_hours: int = 1, granularity: str = "hourly"
     ) -> List[Dict[str, Any]]:
         """Get statistics for a specific client."""
+        client_mac = normalize_mac(client_mac) or client_mac
         granularity = _resolve_granularity(granularity)
         cache_key = f"{CACHE_PREFIX_STATS_CLIENT}_{client_mac}_{duration_hours}_{granularity}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key, timeout=300)  # 5 minute cache
@@ -176,6 +178,7 @@ class StatsManager:
             granularity: Report granularity (5minutes, hourly, daily, monthly).
             device_type: Device type for endpoint routing (ap, gw, or dev).
         """
+        device_mac = normalize_mac(device_mac) or device_mac
         granularity = _resolve_granularity(granularity)
         cache_key = (
             f"{CACHE_PREFIX_STATS_DEVICE}_{device_mac}_{duration_hours}_{granularity}"
@@ -514,6 +517,7 @@ class StatsManager:
             client_mac: MAC address of the client.
             by: Grouping type, e.g. 'by_app' or 'by_cat'.
         """
+        client_mac = normalize_mac(client_mac) or client_mac
         cache_key = f"{CACHE_PREFIX_STATS_CLIENT_DPI}_{client_mac}_{by}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key, timeout=900)  # 15 minute cache
         if cached_data is not None:
@@ -623,6 +627,7 @@ class StatsManager:
             duration_hours: Number of hours to look back.
             limit: Maximum number of sessions to return.
         """
+        client_mac = normalize_mac(client_mac) or client_mac
         mac_part = client_mac or "all"
         cache_key = f"{CACHE_PREFIX_STATS_SESSIONS}_{mac_part}_{duration_hours}_{limit}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key, timeout=300)  # 5 minute cache
@@ -723,6 +728,7 @@ class StatsManager:
         Returns:
             Dict with WiFi detail fields, or None if client not found.
         """
+        client_mac = normalize_mac(client_mac) or client_mac
         cache_key = f"{CACHE_PREFIX_STATS_CLIENT_WIFI}_{client_mac}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key, timeout=300)  # 5 minute cache
         if cached_data is not None:
@@ -736,9 +742,8 @@ class StatsManager:
             response = await self._connection.request(api_request)
 
             clients = response if isinstance(response, list) else []
-            target = client_mac.lower()
             raw = next(
-                (c for c in clients if isinstance(c, dict) and str(c.get("mac", "")).lower() == target),
+                (c for c in clients if isinstance(c, dict) and mac_equal(c.get("mac"), client_mac)),
                 None,
             )
             if raw is None:
