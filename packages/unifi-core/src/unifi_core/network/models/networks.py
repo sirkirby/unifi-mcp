@@ -288,7 +288,7 @@ class Network(BaseModel):
     )
     ipv6_wan_delegation_type: Optional[str] = Field(
         default=None,
-        description="IPv6 prefix-delegation type (e.g. 'none', 'dhcpv6', 'static')",
+        description="IPv6 prefix-delegation type: 'none', 'pd', 'single_network', or 'static'",
     )
     wan_dhcpv6_pd_size: Optional[int] = Field(
         default=None,
@@ -537,7 +537,7 @@ _WRITE_ENUM_VALUES = {
     "wan_load_balance_type": frozenset({"failover-only", "weighted"}),
     "wan_type_v6": frozenset({"disabled", "dhcpv6", "slaac", "static", "pppoe"}),
     "ipv6_setting_preference": frozenset({"auto", "manual"}),
-    "ipv6_wan_delegation_type": frozenset({"none", "dhcpv6", "static"}),
+    "ipv6_wan_delegation_type": frozenset({"none", "pd", "single_network", "static"}),
     "wan_ipv6_dns_preference": frozenset({"auto", "manual"}),
     "ipv6_interface_type": frozenset({"none", "static", "pd"}),
     "ipv6_ra_priority": frozenset({"high", "medium", "low"}),
