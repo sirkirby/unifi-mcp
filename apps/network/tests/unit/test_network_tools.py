@@ -809,6 +809,46 @@ async def test_update_wlan_preview_includes_minrate_dependencies():
 
 
 @pytest.mark.asyncio
+async def test_update_wlan_preview_includes_validated_schedule_windows():
+    current = {
+        "_id": "wlan001",
+        "name": "SSID",
+        "schedule_enabled": False,
+        "schedule_reversed": False,
+        "schedule_with_duration": [],
+    }
+    windows = [
+        {
+            "duration_minutes": 360,
+            "name": "Weeknight outage",
+            "start_days_of_week": ["mon", "tue", "wed", "thu", "fri"],
+            "start_hour": 1,
+            "start_minute": 0,
+        }
+    ]
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        mock_mgr.get_wlan_details = AsyncMock(return_value=current)
+
+        from unifi_network_mcp.tools.network import update_wlan
+
+        result = await update_wlan(
+            wlan_id="wlan001",
+            update_data={
+                "schedule_enabled": True,
+                "schedule_reversed": True,
+                "schedule_with_duration": windows,
+            },
+            confirm=False,
+        )
+
+    assert result["preview"]["proposed"] == {
+        "schedule_enabled": True,
+        "schedule_reversed": True,
+        "schedule_with_duration": windows,
+    }
+
+
+@pytest.mark.asyncio
 async def test_update_wlan_rejects_mixed_unknown_field_before_preview():
     with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
         from unifi_network_mcp.tools.network import update_wlan

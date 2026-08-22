@@ -28,6 +28,27 @@ def _get(obj: Any, *keys: str, default: Any = None) -> Any:
     return default
 
 
+@strawberry.type(description="A recurring WLAN schedule window.")
+class WlanScheduleWindow:
+    duration_minutes: int
+    name: str | None
+    start_days_of_week: list[str]
+    start_hour: int
+    start_minute: int
+
+    @classmethod
+    def from_manager_output(cls, obj: Any) -> "WlanScheduleWindow":
+        raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
+        days = raw.get("start_days_of_week") or []
+        return cls(
+            duration_minutes=raw.get("duration_minutes", 0),
+            name=raw.get("name"),
+            start_days_of_week=list(days) if isinstance(days, list) else [],
+            start_hour=raw.get("start_hour", 0),
+            start_minute=raw.get("start_minute", 0),
+        )
+
+
 @strawberry.type(description="A UniFi WLAN/SSID configuration.")
 class Wlan:
     id: strawberry.ID | None
@@ -55,6 +76,9 @@ class Wlan:
     mac_filter_policy: str | None
     mac_filter_list: list[str] | None
     schedule_enabled: bool | None
+    schedule_reversed: bool | None
+    schedule: list[str] | None
+    schedule_with_duration: list[WlanScheduleWindow] | None
     l2_isolation: bool | None
     wlan_band: str | None
     multicast_enhance_enabled: bool | None
@@ -85,6 +109,7 @@ class Wlan:
     @classmethod
     def from_manager_output(cls, obj: Any, *, redact_sensitive: bool = True) -> "Wlan":
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
+        schedule_windows = raw.get("schedule_with_duration")
         return cls(
             id=raw.get("_id") or raw.get("id"),
             name=raw.get("name"),
@@ -110,6 +135,13 @@ class Wlan:
             mac_filter_policy=raw.get("mac_filter_policy"),
             mac_filter_list=raw.get("mac_filter_list"),
             schedule_enabled=raw.get("schedule_enabled"),
+            schedule_reversed=raw.get("schedule_reversed"),
+            schedule=raw.get("schedule"),
+            schedule_with_duration=(
+                [WlanScheduleWindow.from_manager_output(window) for window in schedule_windows]
+                if isinstance(schedule_windows, list)
+                else None
+            ),
             l2_isolation=raw.get("l2_isolation"),
             wlan_band=raw.get("wlan_band"),
             multicast_enhance_enabled=raw.get("mcastenhance_enabled"),

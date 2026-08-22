@@ -17,15 +17,44 @@ type must expose every field listed here.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from unifi_core.mac import normalize_mac
 
 # ---------------------------------------------------------------------------
 # Pydantic domain model
 # ---------------------------------------------------------------------------
+
+
+class WlanScheduleWindow(BaseModel):
+    """One recurring controller WLAN schedule window."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    duration_minutes: int = Field(
+        gt=0,
+        description="Length of the schedule window in minutes",
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Optional controller display name for the schedule window",
+    )
+    start_days_of_week: List[Literal["sun", "mon", "tue", "wed", "thu", "fri", "sat"]] = Field(
+        min_length=1,
+        description="Days on which the schedule window starts",
+    )
+    start_hour: int = Field(
+        ge=0,
+        le=23,
+        description="Local start hour (0-23)",
+    )
+    start_minute: int = Field(
+        ge=0,
+        le=59,
+        description="Local start minute (0-59)",
+    )
 
 
 class Wlan(BaseModel):
@@ -160,6 +189,21 @@ class Wlan(BaseModel):
     schedule_enabled: Optional[bool] = Field(
         default=None,
         description="Enable WLAN schedule (time-based on/off)",
+    )
+    schedule_reversed: Optional[bool] = Field(
+        default=None,
+        description="Invert the controller's interpretation of the configured WLAN schedule windows",
+    )
+    schedule: Optional[List[str]] = Field(
+        default=None,
+        description="Legacy compact WLAN schedule rules (for example, mon-fri|0100-0700)",
+    )
+    schedule_with_duration: Optional[List[WlanScheduleWindow]] = Field(
+        default=None,
+        description=(
+            "Recurring WLAN schedule windows with duration_minutes, optional name, start_days_of_week, "
+            "start_hour, and start_minute"
+        ),
     )
     l2_isolation: Optional[bool] = Field(
         default=None,
@@ -297,6 +341,9 @@ def from_controller(raw: Any) -> Wlan:
         mac_filter_policy=_get(raw, "mac_filter_policy"),
         mac_filter_list=_get(raw, "mac_filter_list"),
         schedule_enabled=_get(raw, "schedule_enabled"),
+        schedule_reversed=_get(raw, "schedule_reversed"),
+        schedule=_get(raw, "schedule"),
+        schedule_with_duration=_get(raw, "schedule_with_duration"),
         l2_isolation=_get(raw, "l2_isolation"),
         wlan_band=_get(raw, "wlan_band"),
         multicast_enhance_enabled=_get(raw, "mcastenhance_enabled"),
@@ -323,11 +370,8 @@ def to_controller_create(model: Wlan) -> Dict[str, Any]:
 
     Maps model field names back to controller API field names.
     """
-    payload: Dict[str, Any] = {}
-    for field_name in MUTABLE_FIELDS:
-        value = getattr(model, field_name, None)
-        if value is not None:
-            payload[field_name] = value
+    serialized = model.model_dump(exclude_none=True)
+    payload = {field_name: serialized[field_name] for field_name in MUTABLE_FIELDS if field_name in serialized}
     # Map network_id → networkconf_id
     if "network_id" in payload:
         payload["networkconf_id"] = payload.pop("network_id")

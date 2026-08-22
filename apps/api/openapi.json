@@ -8705,6 +8705,20 @@
             ],
             "title": "Rrm Enabled"
           },
+          "schedule": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
+          },
           "schedule_enabled": {
             "anyOf": [
               {
@@ -8715,6 +8729,31 @@
               }
             ],
             "title": "Schedule Enabled"
+          },
+          "schedule_reversed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Reversed"
+          },
+          "schedule_with_duration": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WlanScheduleWindowModel"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule With Duration"
           },
           "security": {
             "anyOf": [
@@ -8817,6 +8856,43 @@
           }
         },
         "title": "WlanModel",
+        "type": "object"
+      },
+      "WlanScheduleWindowModel": {
+        "additionalProperties": true,
+        "properties": {
+          "duration_minutes": {
+            "title": "Duration Minutes",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "start_days_of_week": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Start Days Of Week",
+            "type": "array"
+          },
+          "start_hour": {
+            "title": "Start Hour",
+            "type": "integer"
+          },
+          "start_minute": {
+            "title": "Start Minute",
+            "type": "integer"
+          }
+        },
+        "title": "WlanScheduleWindowModel",
         "type": "object"
       }
     },

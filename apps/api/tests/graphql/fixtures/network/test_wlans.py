@@ -125,3 +125,60 @@ async def test_wlan_detail_reads_multicast_enhance_controller_key(tmp_path, monk
     )
     assert body.get("errors") is None, body
     assert body["data"]["network"]["wlan"]["multicastEnhanceEnabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_wlan_detail_exposes_schedule_windows(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network")
+    windows = [
+        {
+            "duration_minutes": 360,
+            "name": "Weeknight outage",
+            "start_days_of_week": ["mon", "tue", "wed", "thu", "fri"],
+            "start_hour": 1,
+            "start_minute": 0,
+        }
+    ]
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "network_manager", "get_wlans"): [
+                {
+                    "_id": "wl-1",
+                    "name": "HomeNet",
+                    "schedule_enabled": True,
+                    "schedule_reversed": True,
+                    "schedule": ["mon-fri|0100-0700"],
+                    "schedule_with_duration": windows,
+                },
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ wlan(controller: "{cid}", id: "wl-1") {{
+            scheduleEnabled scheduleReversed schedule
+            scheduleWithDuration {{
+                durationMinutes name startDaysOfWeek startHour startMinute
+            }}
+        }} }}
+    }}''',
+    )
+
+    assert body.get("errors") is None, body
+    wlan = body["data"]["network"]["wlan"]
+    assert wlan["scheduleEnabled"] is True
+    assert wlan["scheduleReversed"] is True
+    assert wlan["schedule"] == ["mon-fri|0100-0700"]
+    assert wlan["scheduleWithDuration"] == [
+        {
+            "durationMinutes": 360,
+            "name": "Weeknight outage",
+            "startDaysOfWeek": ["mon", "tue", "wed", "thu", "fri"],
+            "startHour": 1,
+            "startMinute": 0,
+        }
+    ]

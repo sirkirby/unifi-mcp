@@ -15,6 +15,8 @@ import types
 import typing
 from typing import Any, get_args, get_origin
 
+from pydantic import BaseModel
+
 
 def _unwrap_optional(annotation: Any) -> tuple[Any, bool]:
     """Strip a single layer of Optional[T] / T | None.
@@ -72,6 +74,17 @@ def types_compatible(pydantic_annotation: Any, strawberry_annotation: Any) -> bo
 
     py_norm = _normalize_for_compare(py_inner)
     sb_norm = _normalize_for_compare(sb_inner)
+
+    if get_origin(py_inner) is list and get_origin(sb_inner) is list:
+        return types_compatible(get_args(py_inner)[0], get_args(sb_inner)[0])
+
+    # Nested Pydantic domain models map to same-named Strawberry object types.
+    if (
+        isinstance(py_inner, type)
+        and issubclass(py_inner, BaseModel)
+        and hasattr(sb_inner, "__strawberry_definition__")
+    ):
+        return py_inner.__name__ == sb_inner.__name__
 
     # pydantic dict / list[Any] / Any ↔ strawberry JSON scalar
     # All three pydantic shapes map to opaque structured data; Strawberry

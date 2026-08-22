@@ -829,7 +829,10 @@ async def get_wlan_details(
     "dtim_mode ('default'/'custom'), dtim_na (int 1-255), dtim_ng (int 1-255), "
     "minrate_setting_preference ('auto'/'manual'), minrate_ng_enabled (bool), minrate_ng_data_rate_kbps (int), "
     "minrate_na_enabled (bool), minrate_na_data_rate_kbps (int). "
-    "Other: schedule_enabled (bool), uapsd_enabled (bool), proxy_arp (bool), iapp_enabled (bool). "
+    "Scheduling: schedule_enabled (bool), schedule_reversed (bool), "
+    "schedule (list[str], e.g. 'mon-fri|0100-0700'), schedule_with_duration "
+    "(list of objects with duration_minutes, optional name, start_days_of_week, start_hour, start_minute). "
+    "Other: uapsd_enabled (bool), proxy_arp (bool), iapp_enabled (bool). "
     "Confirmed writes are read back exactly; responses list persisted, unchanged, dropped, and controller-coerced fields. "
     "A failed result may represent a partial write and is not a rollback. Requires confirmation.",
     permission_category="wlans",
@@ -947,7 +950,7 @@ async def create_wlan(
     wlan_data: Annotated[
         Dict[str, Any],
         Field(
-            description="WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (controller-dependent; current versions may silently ignore it and report it as dropped), usergroup_id, networkconf_id (network to associate). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88)"
+            description="WLAN configuration dict. Required: name (SSID string), security ('open'/'wpa-psk'/'wpa2-psk'). Required if security != 'open': x_passphrase (password). Optional: enabled (bool, default true), hide_ssid (bool), guest_policy (controller-dependent; current versions may silently ignore it and report it as dropped), usergroup_id, networkconf_id (network to associate). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88). Scheduling: schedule_enabled (bool), schedule_reversed (bool), schedule (list[str]), schedule_with_duration (list of objects with duration_minutes, optional name, start_days_of_week, start_hour, start_minute)"
         ),
     ],
     confirm: Annotated[
@@ -979,6 +982,10 @@ async def create_wlan(
     - roaming_assistant_na_rssi (integer): 5GHz roaming assistant RSSI threshold in dBm (e.g. -77)
     - roaming_assistant_6e_enabled (boolean): Enable the 6GHz roaming assistant
     - roaming_assistant_6e_rssi (integer): 6GHz roaming assistant RSSI threshold in dBm (e.g. -88)
+    - schedule_enabled (boolean): Enable time-based WLAN scheduling
+    - schedule_reversed (boolean): Invert the controller's interpretation of schedule windows
+    - schedule (list[string]): Legacy compact schedule rules
+    - schedule_with_duration (list[object]): Recurring schedule windows with start day/time and duration
 
     Example:
     {

@@ -28,6 +28,10 @@ class TestFieldSets:
             "network_id",
             "vlan_id",
             "usergroup_id",
+            "schedule_enabled",
+            "schedule_reversed",
+            "schedule",
+            "schedule_with_duration",
             "ap_group_ids",
             "ap_group_mode",
         ):
@@ -139,6 +143,125 @@ class TestStrictValidation:
             "minrate_setting_preference": "manual",
             "minrate_ng_enabled": True,
         }
+
+
+class TestWlanScheduleFields:
+    def test_from_controller_reads_schedule_fields(self) -> None:
+        windows = [
+            {
+                "duration_minutes": 360,
+                "name": "Weeknight outage",
+                "start_days_of_week": ["mon", "tue", "wed", "thu", "fri"],
+                "start_hour": 1,
+                "start_minute": 0,
+            }
+        ]
+        wlan = from_controller(
+            {
+                "_id": "wlan-scheduled",
+                "schedule_enabled": True,
+                "schedule_reversed": True,
+                "schedule": ["mon-fri|0100-0700"],
+                "schedule_with_duration": windows,
+            }
+        )
+
+        assert wlan.schedule_enabled is True
+        assert wlan.schedule_reversed is True
+        assert wlan.schedule == ["mon-fri|0100-0700"]
+        assert [window.model_dump(exclude_none=True) for window in wlan.schedule_with_duration or []] == windows
+
+    def test_validate_update_accepts_duration_windows(self) -> None:
+        update = {
+            "schedule_enabled": True,
+            "schedule_reversed": True,
+            "schedule_with_duration": [
+                {
+                    "duration_minutes": 360,
+                    "name": "Weeknight outage",
+                    "start_days_of_week": ["mon", "tue", "wed", "thu", "fri"],
+                    "start_hour": 1,
+                    "start_minute": 0,
+                },
+                {
+                    "duration_minutes": 300,
+                    "start_days_of_week": ["sat", "sun"],
+                    "start_hour": 2,
+                    "start_minute": 0,
+                },
+            ],
+        }
+
+        assert validate_update(update) == update
+
+    @pytest.mark.parametrize(
+        "window",
+        [
+            {
+                "duration_minutes": 0,
+                "start_days_of_week": ["mon"],
+                "start_hour": 1,
+                "start_minute": 0,
+            },
+            {
+                "duration_minutes": 60,
+                "start_days_of_week": ["monday"],
+                "start_hour": 1,
+                "start_minute": 0,
+            },
+            {
+                "duration_minutes": 60,
+                "start_days_of_week": ["mon"],
+                "start_hour": 24,
+                "start_minute": 0,
+            },
+            {
+                "duration_minutes": 60,
+                "start_days_of_week": ["mon"],
+                "start_hour": 1,
+                "start_minute": 60,
+            },
+            {
+                "duration_minutes": 60,
+                "start_days_of_week": ["mon"],
+                "start_hour": 1,
+                "start_minute": 0,
+                "unknown": True,
+            },
+        ],
+    )
+    def test_validate_update_rejects_invalid_duration_windows(self, window: dict) -> None:
+        with pytest.raises(ValueError, match="Invalid WLAN update data"):
+            validate_update({"schedule_with_duration": [window]})
+
+    def test_empty_schedule_lists_are_preserved_for_clearing(self) -> None:
+        assert validate_update({"schedule": [], "schedule_with_duration": []}) == {
+            "schedule": [],
+            "schedule_with_duration": [],
+        }
+
+    def test_validate_create_preserves_schedule_fields(self) -> None:
+        windows = [
+            {
+                "duration_minutes": 300,
+                "start_days_of_week": ["sat", "sun"],
+                "start_hour": 2,
+                "start_minute": 0,
+            }
+        ]
+        payload = validate_create(
+            {
+                "name": "ScheduledSSID",
+                "security": "open",
+                "schedule_enabled": True,
+                "schedule_reversed": True,
+                "schedule_with_duration": windows,
+            }
+        )
+
+        assert payload["schedule_enabled"] is True
+        assert payload["schedule_reversed"] is True
+        assert payload["schedule_with_duration"] == windows
 
 
 class TestToControllerCreate:

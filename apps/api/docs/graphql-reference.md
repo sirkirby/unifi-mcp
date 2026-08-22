@@ -2202,6 +2202,9 @@ type Wlan {
   macFilterPolicy: String
   macFilterList: [String!]
   scheduleEnabled: Boolean
+  scheduleReversed: Boolean
+  schedule: [String!]
+  scheduleWithDuration: [WlanScheduleWindow!]
   l2Isolation: Boolean
   wlanBand: String
   multicastEnhanceEnabled: Boolean
@@ -2225,6 +2228,15 @@ type Wlan {
 type WlanPage {
   items: [Wlan!]!
   nextCursor: String
+}
+
+"""A recurring WLAN schedule window."""
+type WlanScheduleWindow {
+  durationMinutes: Int!
+  name: String
+  startDaysOfWeek: [String!]!
+  startHour: Int!
+  startMinute: Int!
 }
 
 ```
