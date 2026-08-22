@@ -498,6 +498,25 @@ class TestUpdateNetworkWanFields:
         assert not result.get("warnings")
         mock_mgr.update_network.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_wan_ipv6_pd_delegation_preview(self):
+        """The controller-native PD value reaches the confirmation preview unchanged."""
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_WAN)
+            mock_mgr.update_network = AsyncMock()
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="wan001",
+                update_data={"ipv6_wan_delegation_type": "pd"},
+                confirm=False,
+            )
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["proposed"]["ipv6_wan_delegation_type"] == "pd"
+        mock_mgr.update_network.assert_not_called()
+
 
 class TestWlanToolRedaction:
     @pytest.mark.asyncio

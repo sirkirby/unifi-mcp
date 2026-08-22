@@ -285,6 +285,7 @@ class TestStrictValidation:
             ("wan_networkgroup", "LAN"),
             ("wan_load_balance_type", "round-robin"),
             ("wan_type_v6", "automatic"),
+            ("ipv6_wan_delegation_type", "dhcpv6"),
             ("ipv6_interface_type", "automatic"),
             ("ipv6_ra_priority", "urgent"),
             ("ipv6_client_address_assignment", "automatic"),
@@ -293,6 +294,10 @@ class TestStrictValidation:
     def test_update_rejects_unknown_enum_values(self, field: str, value: str) -> None:
         with pytest.raises(ValueError, match=f"Invalid '{field}'"):
             validate_update({field: value})
+
+    @pytest.mark.parametrize("value", ["none", "pd", "single_network", "static"])
+    def test_update_accepts_ipv6_wan_delegation_types(self, value: str) -> None:
+        assert validate_update({"ipv6_wan_delegation_type": value}) == {"ipv6_wan_delegation_type": value}
 
     def test_create_enforces_cross_field_requirements_and_preserves_integer_vlan(self) -> None:
         assert validate_create({"name": "Lab", "purpose": "vlan-only", "vlan": 4092}) == {

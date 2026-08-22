@@ -268,7 +268,8 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
     "igmp_proxy_upstream (bool), igmp_proxy_for (JSON: 'none' or list of network refs), "
     "mac_override_enabled (bool), wan_ip_aliases (list). "
     "WAN IPv6 (dual-stack; does not affect IPv4 internet): ipv6_enabled (bool), wan_type_v6 (str), "
-    "ipv6_setting_preference ('auto'/'manual'), ipv6_wan_delegation_type (str), wan_dhcpv6_pd_size (int), "
+    "ipv6_setting_preference ('auto'/'manual'), "
+    "ipv6_wan_delegation_type ('none'/'pd'/'single_network'/'static'), wan_dhcpv6_pd_size (int), "
     "wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). "
     "LAN IPv6 (per-network): ipv6_interface_type ('none'/'static'/'pd'), "
     "ipv6_aliases (list of CIDR strings, 'Additional IPs' — replaces the whole list), "
@@ -362,7 +363,8 @@ async def update_network(
             - ipv6_enabled (boolean): Enable IPv6 on the WAN uplink.
             - wan_type_v6 (string): WAN IPv6 type (e.g. 'disabled', 'dhcpv6', 'slaac', 'static').
             - ipv6_setting_preference (string): IPv6 settings source: 'auto' or 'manual'.
-            - ipv6_wan_delegation_type (string): IPv6 prefix-delegation type (e.g. 'none', 'dhcpv6', 'static').
+            - ipv6_wan_delegation_type (string): IPv6 prefix-delegation type:
+              'none', 'pd', 'single_network', or 'static'.
             - wan_dhcpv6_pd_size (integer): DHCPv6 prefix-delegation size (e.g. 64).
             - wan_dhcpv6_pd_size_auto (boolean): Auto-negotiate the DHCPv6 PD size.
             - wan_ipv6_dns_preference (string): WAN IPv6 DNS source: 'auto' or 'manual'.
