@@ -1,0 +1,17 @@
+/.github/CODEOWNERS @sirkirby
+/AGENTS.md @sirkirby
+/CONTRIBUTING.md @sirkirby
+/CLAUDE.md @sirkirby
+/GEMINI.md @sirkirby
+/.agents/ @sirkirby
+/.claude/ @sirkirby
+/.codex/ @sirkirby
+/.myco/ @sirkirby
+/.github/copilot-instructions.md @sirkirby
+/.github/copilot-review-calibration.md @sirkirby
+/.github/instructions/ @sirkirby
+/.github/skills/ @sirkirby
+/.github/agents/ @sirkirby
+/.github/prompts/ @sirkirby
+/.github/hooks/ @sirkirby
+/.github/workflows/ @sirkirby
