@@ -28,6 +28,11 @@ from unifi_core.config import setup_logging as _shared_setup_logging
 # ---------------------------------------------------------------------------
 
 load_dotenv()
+# Under an installed package (pip/uvx), find_dotenv() walks up from this file's
+# site-packages location and never reaches the caller's project, so also load a
+# .env from the process working directory (MCP clients spawn servers with the
+# project as cwd). Real environment variables still take precedence.
+load_dotenv(Path.cwd() / ".env", override=False)
 
 
 DEFAULT_LOG_LEVEL = os.getenv("UNIFI_MCP_LOG_LEVEL", "INFO").upper()
