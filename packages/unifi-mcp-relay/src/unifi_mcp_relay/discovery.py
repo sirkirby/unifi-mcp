@@ -7,9 +7,8 @@ tool catalog for relay registration.
 Discovery strategy:
 1. Initialize MCP session (initialize request + initialized notification)
 2. List tools via tools/list
-3. If a ``*_tool_index`` meta-tool is found (lazy mode), call it to get the
-   full catalog with annotations and schemas
-4. Otherwise, fall back to using tools/list results directly (eager mode)
+3. If ``tools/list`` contains direct tools, use it as the eager catalog
+4. Otherwise, call ``*_tool_index`` for lazy or meta-only discovery
 """
 
 from __future__ import annotations
@@ -21,6 +20,7 @@ from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError, version
 
 import aiohttp
+from unifi_mcp_shared.meta_tools import is_meta_tool
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, mcp_icons_for_server
 from unifi_mcp_shared.protocol import DEFAULT_MCP_PROTOCOL_REVISION
 
@@ -283,7 +283,8 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
     Performs the full MCP handshake:
     1. ``initialize`` — establish session, learn server capabilities
     2. ``tools/list`` — get registered tools (may be meta-tools only in lazy mode)
-    3. If a ``*_tool_index`` tool is found, call it for the full catalog
+    3. Use direct tools from ``tools/list`` in eager mode; otherwise call a
+       ``*_tool_index`` tool for the full lazy/meta-only catalog
 
     Args:
         server_url: Base URL of the MCP server (e.g., ``http://localhost:3000``).
@@ -329,8 +330,11 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
             if tool_index_name and lazy_load_tool_name:
                 break
 
-        if tool_index_name:
-            # Lazy mode: call the tool_index for the full catalog
+        has_direct_tools = any(not is_meta_tool(tool.get("name", "")) for tool in listed_tools)
+        use_tool_index = tool_index_name is not None and not has_direct_tools
+
+        if use_tool_index:
+            # Lazy/meta-only mode: call the tool_index for the full catalog
             logger.info("[discovery] Found tool index '%s' on %s, fetching full catalog", tool_index_name, server_name)
             call_result = await client.request(
                 "tools/call", {"name": tool_index_name, "arguments": {"include_schemas": True}}
@@ -345,8 +349,8 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
                 logger.warning("[discovery] Unexpected tool_index response from %s", server_name)
                 tools = _build_tools_from_list(listed_tools, server_name)
         else:
-            # Eager mode fallback: use tools/list directly
-            logger.info("[discovery] No tool_index found on %s, using tools/list directly", server_name)
+            # Eager mode (or a server without an index): use tools/list directly.
+            logger.info("[discovery] Using tools/list directly on %s", server_name)
             tools = _build_tools_from_list(listed_tools, server_name)
 
         info = ServerInfo(
@@ -354,7 +358,7 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
             url=server_url,
             session_id=client.session_id,
             protocol_version=client.protocol_version,
-            lazy_load_tool_name=lazy_load_tool_name if tool_index_name else None,
+            lazy_load_tool_name=lazy_load_tool_name if use_tool_index else None,
             tools=tools,
         )
         logger.info("[discovery] Discovered %d tools from %s (%s)", len(tools), server_name, server_url)

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from unifi_mcp_relay.protocol import (
     PROTOCOL_VERSION,
+    CatalogUpdateMessage,
     HeartbeatAckMessage,
     RegisteredMessage,
     RegisterMessage,
@@ -21,7 +22,12 @@ def test_register_message_serialization():
         title="List Devices",
         description="List devices",
         input_schema={"type": "object"},
-        annotations={"readOnlyHint": True},
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
         server_origin="unifi-network-mcp",
     )
     msg = RegisterMessage(token="test-token", location_name="Home Lab", tools=[tool], capabilities=["fan_out_v1"])
@@ -32,6 +38,19 @@ def test_register_message_serialization():
     assert len(data["tools"]) == 1
     assert data["tools"][0]["name"] == "list_devices"
     assert data["tools"][0]["title"] == "List Devices"
+    assert data["tools"][0]["annotations"] == tool.annotations
+
+
+def test_catalog_update_serialization_preserves_annotations():
+    tool = ToolInfo(
+        name="list_devices",
+        description="List devices",
+        annotations={"readOnlyHint": True, "openWorldHint": False},
+    )
+
+    data = json.loads(CatalogUpdateMessage(tools=[tool]).to_json())
+
+    assert data["tools"][0]["annotations"] == tool.annotations
 
 
 def test_register_message_matches_worker_contract_fixture():
