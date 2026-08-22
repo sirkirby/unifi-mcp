@@ -50,9 +50,14 @@ At the recorded configured-main SHA and candidate-head SHA, record both SHAs and
 complete rename-aware changed-path set, including both sides of every rename. Build a
 sorted manifest from these included sources:
 
-1. Always include root `AGENTS.md`, `.github/copilot-instructions.md`, the complete
-   predeclared selected-review-skill directory, and direct review-governance files
-   that selected skill requires reading (currently `CONTRIBUTING.md`).
+1. Always include the main/head union of root `AGENTS.md`, `CLAUDE.md`, and
+   `REVIEW.md`, plus `.github/copilot-instructions.md`, the complete predeclared
+   selected-review-skill directory, and direct review-governance files that selected
+   skill requires reading (currently `CONTRIBUTING.md`). At epoch freeze, check the
+   current official GitHub Code Review product changelog and Code Review documentation
+   for every additional natively read root instruction filename; record the filename
+   set, source URLs, and check timestamp. Each additional path must either be absent
+   on both main and head or enter the same main/head union and equality comparison.
 2. Union `.github/instructions/**/*.instructions.md` from main and head; include a
    path when either version's `applyTo` matches any changed path. An absent directory
    is empty.
@@ -70,9 +75,11 @@ sorted manifest from these included sources:
 
 The complete manifest must match configured main before request and at the immediate
 pre-request check. `CONTRIBUTING.md` belongs in this equality set. `CODEOWNERS` is a
-separate human-control invariant, not a manifest member. Do not include `CLAUDE.md`
-or `GEMINI.md` unless an included source explicitly references them; GitHub support
-does not establish them as native review inputs.
+separate human-control invariant, not a manifest member. Root review-instruction
+paths enter through current documented native support whether or not another included
+source references them. Recheck the recorded native filename set before request and
+at immediate preflight. The main/head union makes additions, deletions, and content
+changes fail equality.
 
 ## Review-execution fingerprint
 
