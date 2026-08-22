@@ -16,7 +16,7 @@ Across the final corpus, cover all six categories:
 3. Cross-surface model, REST, GraphQL, MCP, relay, or serialization change.
 4. Authentication or session-lifecycle change.
 5. Hardware-sensitive response, event, endpoint, or mutation behavior.
-6. Dependency-only negative control.
+6. Semantic clean negative; prefer an eligible dependency-only change.
 
 Every score-contributing case must derive from one frozen final review-source epoch,
 including its observable review-execution configuration, recorded with a shared epoch
@@ -41,8 +41,10 @@ reviewed-file list/count is unavailable, record `not exposed` with the strongest
 available UI or session proxy; do not count an excluded-only case. An excluded-only
 dependency PR is a separately labeled, non-scoring operational trigger/exclusion
 control: exclude it from the clean-negative gate and style/noise denominator. Preserve
-the six score-contributing categories by selecting an eligible dependency case or a
-separate semantic clean negative when necessary.
+the six score-contributing categories by using an eligible dependency-only case when
+available; otherwise use a separately labeled eligible semantic clean negative as
+category 6. An excluded-only dependency PR remains an additional non-scoring
+operational trigger/exclusion control.
 
 ## Effective review-source manifest
 
