@@ -22,6 +22,11 @@ class DiscoveryNotReadyError(RuntimeError):
     """Raised when configured local MCP servers are not ready for relay registration."""
 
 
+def _catalog_snapshot(tools: list[ToolInfo]) -> tuple[ToolInfo, ...]:
+    """Return an order-independent snapshot for complete catalog comparison."""
+    return tuple(sorted(tools, key=lambda tool: (tool.server_origin or "", tool.name)))
+
+
 class RelaySidecar:
     """Top-level orchestrator that wires discovery, forwarding, and the relay client together."""
 
@@ -30,6 +35,7 @@ class RelaySidecar:
         self._client = RelayClient(config)
         self._forwarder: ToolForwarder | None = None
         self._catalog: list[ToolInfo] = []
+        self._advertised_catalog: tuple[ToolInfo, ...] = ()
         self._refresh_task: asyncio.Task | None = None
         self._running: bool = False
 
@@ -127,13 +133,13 @@ class RelaySidecar:
 
             logger.info("[main] Refresh: re-discovering tool catalog...")
             try:
-                old_names = {t.name for t in self._catalog}  # Save BEFORE refresh
                 await self._discover_catalog()
-                new_names = {t.name for t in self._catalog}  # Compare AFTER refresh
+                new_catalog = _catalog_snapshot(self._catalog)
 
-                if old_names != new_names:
+                if self._advertised_catalog != new_catalog:
                     sent = await self._client.send_catalog_update(self._catalog)
                     if sent:
+                        self._advertised_catalog = new_catalog
                         logger.info("[main] Sent catalog_update with %d tools", len(self._catalog))
                     else:
                         logger.warning("[main] Could not send catalog_update: client not connected")
@@ -160,12 +166,14 @@ class RelaySidecar:
 
         try:
             catalog = await self._wait_for_startup_catalog()
+            self._advertised_catalog = _catalog_snapshot(catalog)
 
             self._refresh_task = asyncio.create_task(self._refresh_loop())
 
             await self._client.run(
                 tools=catalog,
                 tool_call_handler=self._handle_tool_call,
+                catalog_provider=lambda: self._catalog,
             )
         finally:
             self._running = False

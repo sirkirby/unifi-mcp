@@ -7,8 +7,8 @@ tool catalog for relay registration.
 Discovery strategy:
 1. Initialize MCP session (initialize request + initialized notification)
 2. List tools via tools/list
-3. If ``tools/list`` contains direct tools, use it as the eager catalog
-4. Otherwise, call ``*_tool_index`` for lazy or meta-only discovery
+3. If a ``*_tool_index`` meta-tool is present, call it for the canonical catalog
+4. Otherwise, use ``tools/list`` directly
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from importlib.metadata import PackageNotFoundError, version
 
 import aiohttp
-from unifi_mcp_shared.meta_tools import is_meta_tool
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, mcp_icons_for_server
 from unifi_mcp_shared.protocol import DEFAULT_MCP_PROTOCOL_REVISION
 
@@ -272,6 +271,42 @@ def _build_tools_from_list(tools_list: list[dict], server_name: str) -> list[Too
     return tools
 
 
+def _overlay_listed_metadata(
+    indexed_tools: list[ToolInfo],
+    listed_tools: list[dict],
+    server_name: str,
+) -> list[ToolInfo]:
+    """Supplement indexed tools with metadata exposed directly by tools/list.
+
+    Older eager servers may expose annotations and titles through tools/list but
+    omit them from their index. The index remains canonical for membership and
+    schemas while matching direct entries fill missing metadata.
+    """
+    listed_by_name = {tool.name: tool for tool in _build_tools_from_list(listed_tools, server_name)}
+    merged_tools = []
+    for indexed in indexed_tools:
+        listed = listed_by_name.get(indexed.name)
+        if listed is None:
+            merged_tools.append(indexed)
+            continue
+
+        annotations = None
+        if listed.annotations is not None or indexed.annotations is not None:
+            annotations = {**(listed.annotations or {}), **(indexed.annotations or {})}
+
+        merged_tools.append(
+            ToolInfo(
+                name=indexed.name,
+                title=indexed.title or listed.title,
+                description=indexed.description or listed.description,
+                input_schema=indexed.input_schema or listed.input_schema,
+                annotations=annotations,
+                server_origin=indexed.server_origin,
+            )
+        )
+    return merged_tools
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -283,8 +318,8 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
     Performs the full MCP handshake:
     1. ``initialize`` — establish session, learn server capabilities
     2. ``tools/list`` — get registered tools (may be meta-tools only in lazy mode)
-    3. Use direct tools from ``tools/list`` in eager mode; otherwise call a
-       ``*_tool_index`` tool for the full lazy/meta-only catalog
+    3. Call a ``*_tool_index`` tool for the canonical catalog when available;
+       otherwise use ``tools/list`` directly
 
     Args:
         server_url: Base URL of the MCP server (e.g., ``http://localhost:3000``).
@@ -330,8 +365,10 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
             if tool_index_name and lazy_load_tool_name:
                 break
 
-        has_direct_tools = any(not is_meta_tool(tool.get("name", "")) for tool in listed_tools)
-        use_tool_index = tool_index_name is not None and not has_direct_tools
+        # Lazy servers expose direct tools after they are loaded, so direct-tool
+        # presence cannot distinguish eager mode from a warmed lazy server.
+        # Keep the index canonical whenever the server provides one.
+        use_tool_index = tool_index_name is not None
 
         if use_tool_index:
             # Lazy/meta-only mode: call the tool_index for the full catalog
@@ -344,13 +381,14 @@ async def discover_tools(server_url: str) -> ServerInfo | None:
             content = call_result.get("content", [])
             if content and content[0].get("type") == "text":
                 index_data = json.loads(content[0]["text"])
-                tools = _build_tools_from_index(index_data, server_name)
+                indexed_tools = _build_tools_from_index(index_data, server_name)
+                tools = _overlay_listed_metadata(indexed_tools, listed_tools, server_name)
             else:
                 logger.warning("[discovery] Unexpected tool_index response from %s", server_name)
                 tools = _build_tools_from_list(listed_tools, server_name)
         else:
-            # Eager mode (or a server without an index): use tools/list directly.
-            logger.info("[discovery] Using tools/list directly on %s", server_name)
+            # A server without an index exposes its catalog through tools/list.
+            logger.info("[discovery] No tool index found on %s, using tools/list directly", server_name)
             tools = _build_tools_from_list(listed_tools, server_name)
 
         info = ServerInfo(

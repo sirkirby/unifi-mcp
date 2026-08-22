@@ -154,11 +154,14 @@ class RelayClient:
         self,
         tools: list[ToolInfo],
         tool_call_handler: ToolCallHandler,
+        *,
+        catalog_provider: Callable[[], list[ToolInfo]] | None = None,
     ) -> None:
         """Main loop: connect, register, handle messages, reconnect on failure.
 
         Reconnects with exponential backoff. Stops on auth failures (close codes 4001/4003
-        or 'rejected'/'auth' in error messages).
+        or 'rejected'/'auth' in error messages). When provided, ``catalog_provider``
+        supplies the latest discovered catalog for every reconnect registration.
         """
         self._tool_call_handler = tool_call_handler
         self._running = True
@@ -166,7 +169,8 @@ class RelayClient:
 
         while self._running:
             try:
-                await self._connect_and_register(tools)
+                registration_tools = catalog_provider() if catalog_provider is not None else tools
+                await self._connect_and_register(registration_tools)
                 backoff = 1.0  # Reset on successful connection
                 logger.info("[client] Connected and registered, entering message loop")
                 await self._message_loop(self._ws)

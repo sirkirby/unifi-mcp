@@ -226,6 +226,44 @@ async def test_client_send_catalog_update_handles_send_failure(config, tools):
     assert result is False
 
 
+async def test_client_reconnect_registers_latest_catalog(config, tools):
+    """Reconnect registration must not restore the stale startup catalog."""
+    client = RelayClient(config)
+    updated_tools = [
+        ToolInfo(
+            name="unifi_list_devices",
+            description="List devices",
+            annotations={"readOnlyHint": True, "openWorldHint": False},
+            server_origin="unifi-network-mcp",
+        )
+    ]
+    current_tools = tools
+    message_loop_calls = 0
+
+    async def message_loop(_ws):
+        nonlocal current_tools, message_loop_calls
+        message_loop_calls += 1
+        if message_loop_calls == 1:
+            current_tools = updated_tools
+            raise ConnectionError("connection dropped")
+        client._running = False
+
+    client._connect_and_register = AsyncMock()
+    client._message_loop = AsyncMock(side_effect=message_loop)
+    client._ws = AsyncMock()
+
+    with patch("unifi_mcp_relay.client.asyncio.sleep", new_callable=AsyncMock):
+        await client.run(
+            tools=tools,
+            tool_call_handler=AsyncMock(),
+            catalog_provider=lambda: current_tools,
+        )
+
+    assert client._connect_and_register.await_count == 2
+    assert client._connect_and_register.await_args_list[0].args == (tools,)
+    assert client._connect_and_register.await_args_list[1].args == (updated_tools,)
+
+
 async def test_client_stop(config):
     client = RelayClient(config)
     assert client._running is False

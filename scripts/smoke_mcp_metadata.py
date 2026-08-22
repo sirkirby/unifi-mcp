@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Smoke test MCP standard surfaces over the real stdio transport.
 
-This validates the MCP protocol surface without invoking any UniFi tools:
-``initialize`` for server metadata and ``tools/list`` for tool metadata across
-the supported registration modes.
+This validates the MCP protocol surface without invoking controller operations:
+``initialize`` and ``tools/list`` plus the read-only tool-index and lazy-loader
+meta-tools across the supported registration modes.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -243,6 +244,57 @@ def validate_mode_tools(spec: ServerSpec, tools: list[Any], *, registration_mode
     raise MetadataSmokeError(f"Unknown registration mode: {registration_mode}")
 
 
+def parse_meta_tool_result(result: Any, *, label: str) -> dict[str, Any]:
+    """Decode the JSON object returned by a metadata meta-tool."""
+    if _field(result, "isError"):
+        raise MetadataSmokeError(f"{label}: meta-tool returned an error")
+    for block in _field(result, "content") or []:
+        if _field(block, "type") == "text":
+            try:
+                payload = json.loads(_field(block, "text"))
+            except (TypeError, json.JSONDecodeError) as exc:
+                raise MetadataSmokeError(f"{label}: invalid JSON response") from exc
+            if isinstance(payload, dict):
+                return payload
+    raise MetadataSmokeError(f"{label}: missing JSON text response")
+
+
+def validate_index_catalog(spec: ServerSpec, payload: dict[str, Any], *, registration_mode: str) -> None:
+    """Validate real tool-index membership, schemas, and annotations."""
+    indexed_tools = payload.get("tools")
+    if not isinstance(indexed_tools, list) or payload.get("count") != len(indexed_tools):
+        raise MetadataSmokeError(f"{spec.expected_name}: malformed {spec.index_tool} catalog")
+
+    by_name = _tool_by_name(indexed_tools)
+    representative = by_name.get(spec.representative_tool)
+    if registration_mode == "meta_only":
+        if representative is not None:
+            raise MetadataSmokeError(
+                f"{spec.expected_name}: meta_only index unexpectedly contains {spec.representative_tool}"
+            )
+        required_meta_tools = {
+            spec.index_tool,
+            f"{spec.prefix}_execute",
+            f"{spec.prefix}_batch",
+            f"{spec.prefix}_batch_status",
+        }
+        missing = sorted(required_meta_tools - set(by_name))
+        if missing:
+            raise MetadataSmokeError(f"{spec.expected_name}: meta_only index missing meta-tools: {missing}")
+        return
+
+    if representative is None:
+        raise MetadataSmokeError(f"{spec.expected_name}: {registration_mode} index missing {spec.representative_tool}")
+    schema = _field(representative, "schema")
+    if not isinstance(schema, dict) or not isinstance(schema.get("input"), dict):
+        raise MetadataSmokeError(f"{spec.expected_name}: indexed {spec.representative_tool} missing input schema")
+    annotations = _field(representative, "annotations")
+    if _field(annotations, "openWorldHint") is not False:
+        raise MetadataSmokeError(
+            f"{spec.expected_name}: indexed {spec.representative_tool} missing closed-world annotation"
+        )
+
+
 def smoke_env(*, registration_mode: str, use_current_env: bool = False) -> dict[str, str]:
     """Build the environment used by the metadata smoke server subprocesses."""
     env = os.environ.copy()
@@ -306,6 +358,44 @@ async def smoke_server(spec: ServerSpec, *, registration_mode: str, use_current_
             tools_result = await session.list_tools()
             validate_meta_tool_surface(spec, tools_result.tools)
             validate_mode_tools(spec, tools_result.tools, registration_mode=registration_mode)
+
+            index_result = await session.call_tool(spec.index_tool, {"include_schemas": True})
+            index_payload = parse_meta_tool_result(
+                index_result,
+                label=f"{spec.expected_name}:{spec.index_tool}",
+            )
+            validate_index_catalog(spec, index_payload, registration_mode=registration_mode)
+
+            if registration_mode == "lazy":
+                load_tool_name = f"{spec.prefix}_load_tools"
+                load_result = await session.call_tool(load_tool_name, {"tools": [spec.representative_tool]})
+                if _field(load_result, "isError"):
+                    raise MetadataSmokeError(
+                        f"{spec.expected_name}: failed to warm lazy catalog with {spec.representative_tool}"
+                    )
+                warmed_tools = await session.list_tools()
+                warmed_by_name = _tool_by_name(warmed_tools.tools)
+                representative = warmed_by_name.get(spec.representative_tool)
+                if representative is None:
+                    raise MetadataSmokeError(
+                        f"{spec.expected_name}: warmed lazy tools/list missing {spec.representative_tool}"
+                    )
+                annotations = _field(representative, "annotations")
+                if _field(annotations, "openWorldHint") is not False:
+                    raise MetadataSmokeError(
+                        f"{spec.expected_name}: warmed {spec.representative_tool} missing closed-world annotation"
+                    )
+                warmed_index_result = await session.call_tool(spec.index_tool, {"include_schemas": True})
+                warmed_index_payload = parse_meta_tool_result(
+                    warmed_index_result,
+                    label=f"{spec.expected_name}:{spec.index_tool}:warmed",
+                )
+                validate_index_catalog(spec, warmed_index_payload, registration_mode=registration_mode)
+                if warmed_index_payload.get("count") != index_payload.get("count"):
+                    raise MetadataSmokeError(
+                        f"{spec.expected_name}: warmed lazy index changed catalog size "
+                        f"from {index_payload.get('count')} to {warmed_index_payload.get('count')}"
+                    )
 
             return (
                 f"{spec.expected_name} "
