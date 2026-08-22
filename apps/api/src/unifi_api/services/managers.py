@@ -103,7 +103,7 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
         "stats_manager": lambda cm: StatsManager(cm, ClientManager(cm)),
         "switch_manager": lambda cm: SwitchManager(cm),
         "system_manager": lambda cm: SystemManager(cm),
-        "traffic_flow_manager": lambda cm: TrafficFlowManager(cm),
+        "traffic_flow_manager": lambda cm: TrafficFlowManager(cm, DpiManager(cm, getattr(cm, "unifi_auth", None))),
         "traffic_route_manager": lambda cm: TrafficRouteManager(cm),
         "usergroup_manager": lambda cm: UsergroupManager(cm),
         "vpn_manager": lambda cm: VpnManager(cm),

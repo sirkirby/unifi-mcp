@@ -127,6 +127,25 @@ async def test_statistics_shapes_response():
 
 
 @pytest.mark.asyncio
+async def test_statistics_enriches_application_and_category_names_from_dpi_catalog():
+    class DpiCatalog:
+        async def get_full_dpi_catalog(self):
+            return {
+                "applications": [{"id": (4 << 16) | 470, "name": "Example Stream"}],
+                "categories": [{"id": 4, "name": "Media streaming services"}],
+            }
+
+    conn = _make_connection(response=_STATS_RESPONSE)
+    mgr = TrafficFlowManager(conn, dpi_manager=DpiCatalog())
+
+    result = await mgr.get_traffic_flow_statistics(period="DAY", top=30)
+
+    top_application = result["top_applications"][0]
+    assert top_application["application_name"] == "Example Stream"
+    assert top_application["category_name"] == "Media streaming services"
+
+
+@pytest.mark.asyncio
 async def test_statistics_is_cached_within_ttl():
     conn = _make_connection(response=_STATS_RESPONSE)
     mgr = TrafficFlowManager(conn)
