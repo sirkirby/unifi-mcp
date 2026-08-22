@@ -8,9 +8,8 @@ dependencies = [
     "unifi-mcp-shared>=0.6.7,<0.7",
     # Access managers in unifi-core import unifi_access_api (PyPI name
     # py-unifi-access); pull it in via the [access] extra rather than
-    # declaring py-unifi-access here directly. Access event identity requires
-    # Core 0.4.30 so listed system-log rows remain addressable.
-    "unifi-core[access]>=0.4.30,<0.5",
+    # declaring py-unifi-access here directly.
+    "unifi-core[access]>=0.4.22,<0.5",
     "mcp[cli]>=1.28.1,<2",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.

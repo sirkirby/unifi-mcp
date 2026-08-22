@@ -261,7 +261,7 @@
       "input_schema": {
         "properties": {
           "event_id": {
-            "description": "Event ID (from access_list_events or access_recent_events)",
+            "description": "Event UUID (from access_list_events or access_recent_events)",
             "type": "string"
           }
         },

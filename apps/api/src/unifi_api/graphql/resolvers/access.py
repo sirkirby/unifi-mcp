@@ -6,9 +6,10 @@ Phase 6 PR4 Task C — wires every migrated access read tool into a typed
 - Fetch helpers route through ``ctx.cache.get_or_fetch`` so concurrent
   resolvers in the same request share a single manager round-trip.
 - Page wrappers carry pagination cursors per LIST resolver.
-- DETAIL resolvers either filter the cached LIST snapshot by primary key or
-  fetch per-id via cache when lookup needs manager-specific behavior (including
-  synthetic Access event IDs).
+- DETAIL resolvers either filter the cached LIST snapshot by primary key
+  (``door``, ``event``, ``user``, ``credential``, ``policy``, ``visitor``,
+  ``device``) or fetch per-id via cache when there is no list
+  (``doorStatus``, ``activitySummary``, ``systemInfo``, ``health``).
 
 Relationship edges (Door.policy_assignments, User.credentials, Event.door,
 Event.user) land in Task D. The ``access`` slot of ``EXEMPT_PRODUCTS`` in
@@ -26,7 +27,6 @@ from typing import Any
 
 import strawberry
 from strawberry.types import Info
-from unifi_core.exceptions import UniFiNotFoundError
 
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
@@ -348,34 +348,6 @@ async def _fetch_events(
                 "access",
             )
             return list(await mgr.list_events(limit=list_limit))
-
-    return await ctx.cache.get_or_fetch(key, _do)
-
-
-async def _fetch_event(
-    ctx: GraphQLContext,
-    controller: str,
-    event_id: str,
-) -> Any:
-    key = f"access/event/{controller}/{event_id}"
-
-    async def _do() -> Any:
-        async with ctx.sessionmaker() as session:
-            mgr = await ctx.manager_factory.get_domain_manager(
-                session,
-                controller,
-                "access",
-                "event_manager",
-            )
-            await ctx.manager_factory.get_connection_manager(
-                session,
-                controller,
-                "access",
-            )
-            try:
-                return await mgr.get_event(event_id)
-            except UniFiNotFoundError:
-                return None
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -959,12 +931,16 @@ class AccessQuery:
         id: strawberry.ID,
     ) -> Event | None:
         ctx: GraphQLContext = info.context
-        raw = await _fetch_event(ctx, controller, str(id))
-        if raw is None:
-            return None
-        inst = Event.from_manager_output(raw)
-        inst._controller_id = str(controller)
-        return inst
+        # Filter the cached events list — the REST detail endpoint hits a
+        # dedicated manager method, but the LIST snapshot is cheaper to
+        # reuse for resolver-graph queries.
+        raw = await _fetch_events(ctx, controller, 100)
+        for e in raw:
+            if _id_of(e) == id:
+                inst = Event.from_manager_output(e)
+                inst._controller_id = str(controller)
+                return inst
+        return None
 
     @strawberry.field(
         permission_classes=[IsRead],

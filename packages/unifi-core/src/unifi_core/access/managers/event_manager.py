@@ -291,8 +291,8 @@ class EventManager:
     async def get_event(self, event_id: str) -> dict[str, Any]:
         """Get a single event by ID.
 
-        Searches the system log for the specific event. Raises
-        ``ValueError`` if the event is not found.
+        Searches every available system-log topic and raises
+        ``UniFiNotFoundError`` if the event is not found.
         """
         if not event_id:
             raise ValueError("event_id is required")

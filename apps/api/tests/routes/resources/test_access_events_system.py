@@ -71,18 +71,6 @@ class _FakeAccessCM:
     async def initialize(self) -> None:
         return None
 
-    has_proxy = True
-
-    def __init__(self) -> None:
-        self.response = {"data": {"events": []}, "total": 0}
-
-    async def proxy_request(self, *args, **kwargs):
-        return self.response
-
-    @staticmethod
-    def extract_data(response):
-        return response.get("data", response)
-
 
 def _stub_connection(app, cid: str) -> _FakeAccessCM:
     fake = _FakeAccessCM()
@@ -129,52 +117,6 @@ async def test_list_access_events_happy_path(tmp_path, monkeypatch) -> None:
     body = r.json()
     assert len(body["items"]) == 3
     assert body["render_hint"]["kind"] == "event_log"
-
-
-@pytest.mark.asyncio
-async def test_list_access_events_cursor_traverses_empty_native_ids(tmp_path, monkeypatch) -> None:
-    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await _bootstrap(tmp_path)
-    cm = _stub_connection(app, cid)
-    cm.response = {
-        "total": 2,
-        "data": {
-            "events": [
-                {
-                    "id": "",
-                    "published": 1773766800123,
-                    "event_type": "access.admin.update",
-                    "metadata": {"user": {"id": "user-1"}},
-                },
-                {
-                    "id": "",
-                    "published": 1773766800123,
-                    "event_type": "access.admin.update",
-                    "metadata": {"user": {"id": "user-2"}},
-                },
-            ]
-        },
-    }
-
-    seen: list[str] = []
-    cursor = None
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        while True:
-            suffix = f"&cursor={cursor}" if cursor else ""
-            response = await c.get(
-                f"/v1/sites/default/access/events?controller={cid}&limit=1{suffix}",
-                headers={"Authorization": f"Bearer {key}"},
-            )
-            assert response.status_code == 200, response.text
-            body = response.json()
-            seen.extend(item["id"] for item in body["items"])
-            cursor = body["next_cursor"]
-            if cursor is None:
-                break
-
-    assert len(seen) == 2
-    assert all(seen)
-    assert len(set(seen)) == 2
 
 
 # ---------------------------------------------------------------------------
