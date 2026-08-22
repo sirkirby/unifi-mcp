@@ -1,5 +1,6 @@
 /.github/CODEOWNERS @sirkirby
 /AGENTS.md @sirkirby
+/CONTRIBUTING.md @sirkirby
 /CLAUDE.md @sirkirby
 /GEMINI.md @sirkirby
 /.agents/ @sirkirby
