@@ -47,9 +47,12 @@ async def test_access_event_detail(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("access", "event_manager", "list_events"): [
-                {"id": "evt1", "type": "ACCESS_GRANTED", "timestamp": 1000, "door_id": "door1"},
-            ],
+            ("access", "event_manager", "get_event"): {
+                "id": "evt1",
+                "type": "ACCESS_GRANTED",
+                "timestamp": 1000,
+                "door_id": "door1",
+            },
         },
     )
     body = await graphql_query(

@@ -92,7 +92,7 @@ async def access_list_events(
     auth="local_only",
 )
 async def access_get_event(
-    event_id: Annotated[str, Field(description="Event UUID (from access_list_events or access_recent_events)")],
+    event_id: Annotated[str, Field(description="Event ID (from access_list_events or access_recent_events)")],
 ) -> Dict[str, Any]:
     """Get a single event by ID."""
     logger.info("access_get_event tool called for %s", event_id)

@@ -7,10 +7,13 @@ import datetime
 from unifi_core.access.models.events import (
     MUTABLE_FIELDS,
     READ_ONLY_FIELDS,
+    SYNTHETIC_EVENT_ID_PREFIX,
     ActivitySummary,
     Event,
     activity_summary_from_controller,
     event_from_controller,
+    event_identity,
+    with_event_identity,
 )
 
 
@@ -72,6 +75,68 @@ class TestEventFromController:
         assert e.user_id is None
         assert e.credential_id is None
         assert e.result is None
+
+    def test_system_log_row_gets_stable_synthetic_id(self) -> None:
+        raw = {
+            "id": "",
+            "published": 1773766800123,
+            "event_type": "access.door.unlock",
+            "message": "Door unlocked",
+            "metadata": {"door": {"id": "door-1"}, "user": {"id": "user-1"}},
+        }
+        reordered = {
+            "metadata": {"user": {"id": "user-1"}, "door": {"id": "door-1"}},
+            "message": "Door unlocked",
+            "event_type": "access.door.unlock",
+            "published": 1773766800123,
+        }
+
+        first = event_from_controller(raw).id
+        second = event_from_controller(reordered).id
+
+        assert first == second
+        assert first == "access-syslog-v1-2b284194ff75bed662e5af592d46cb37f7c3dce99df83720cd66610d554c86c9"
+        assert len(first.removeprefix(SYNTHETIC_EVENT_ID_PREFIX)) == 64
+
+    def test_synthetic_id_hashes_complete_nested_payload(self) -> None:
+        first = {
+            "id": "",
+            "published": 1773766800123,
+            "event_type": "access.admin.update",
+            "metadata": {"user": {"id": "user-1"}},
+        }
+        second = {
+            **first,
+            "metadata": {"user": {"id": "user-2"}},
+        }
+
+        assert event_identity(first) != event_identity(second)
+
+    def test_local_buffer_timestamp_does_not_change_synthetic_id(self) -> None:
+        raw = {
+            "id": "",
+            "published": 1773766800123,
+            "event_type": "access.door.unlock",
+        }
+
+        assert event_identity({**raw, "_buffered_at": 1.0}) == event_identity({**raw, "_buffered_at": 2.0})
+
+    def test_native_id_is_preserved(self) -> None:
+        raw = {"id": "controller-event-id", "published": 1773766800123}
+
+        assert event_identity(raw) == "controller-event-id"
+        assert with_event_identity(raw) == raw
+
+    def test_non_system_log_mapping_does_not_get_invented_id(self) -> None:
+        assert event_identity({"id": "", "type": "door_open"}) is None
+
+    def test_with_event_identity_does_not_mutate_controller_row(self) -> None:
+        raw = {"id": "", "published": 1773766800123, "event_type": "access.admin.update"}
+
+        enriched = with_event_identity(raw)
+
+        assert raw["id"] == ""
+        assert enriched["id"].startswith(SYNTHETIC_EVENT_ID_PREFIX)
 
     def test_partial_dict(self) -> None:
         e = event_from_controller({"id": "evt-002", "type": "access_denied", "result": "denied"})

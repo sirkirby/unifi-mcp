@@ -225,7 +225,7 @@ class TestEventManagerREST:
         call_args = mock_req.call_args_list[0]
         assert call_args[0][0] == "POST"
         assert "insights/system_log/search" in call_args[0][1]
-        assert call_args[1]["json"]["topic"] == "admin"
+        assert call_args[1]["json"]["topic"] == "unlocks"
 
     @pytest.mark.asyncio
     async def test_get_event_not_found(self, event_mgr_proxy, cm_proxy):
