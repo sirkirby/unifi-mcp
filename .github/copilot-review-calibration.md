@@ -18,7 +18,16 @@ Across the final corpus, cover all six categories:
 5. Hardware-sensitive response, event, endpoint, or mutation behavior.
 6. Dependency-only negative control.
 
-A case is invalid unless the complete effective review-source manifest matches configured `main` before requesting review and again immediately beforehand; effort is Balanced; the completed review `commit_id` equals the baselined head; explicit selected-skill activation is present; current official documentation still supports head-branch custom-instruction behavior; and agentic context is healthy. Record exposed source-use telemetry and `not exposed` values; missing per-file telemetry is not a load failure.
+Every score-contributing case must derive from one frozen final review-source epoch and
+fixed configuration, recorded with a shared epoch fingerprint. Each case may have a
+different path-applicable projection, but that projection must derive from the same
+frozen governance snapshot. A case is invalid unless its complete effective
+review-source manifest matches configured `main` before requesting review and again
+immediately beforehand; effort is Balanced; the completed review `commit_id` equals
+the baselined head; explicit selected-skill activation is present; current official
+documentation still supports head-branch custom-instruction behavior; and agentic
+context is healthy. Record exposed source-use telemetry and `not exposed` values;
+missing per-file telemetry is not a load failure.
 
 Private source mappings, human baselines, and expected findings must be unavailable through any configured MCP server until scoring is complete. If server-side exclusion cannot be proven, disable MCP access for calibration reviews.
 
@@ -54,7 +63,8 @@ does not establish them as native review inputs.
 
 ## Procedure
 
-For each case:
+Before the first score-contributing case, freeze and record the final
+review-source epoch/configuration and its shared fingerprint. For each case:
 
 1. Construct the exact final review head and record configured-main SHA, base SHA,
    head SHA, rename-aware changed paths, and CI state.
@@ -78,7 +88,7 @@ For each case:
 
 | Field | Recorded value |
 |---|---|
-| Case ID, configured-main SHA, and exact head SHA | — |
+| Case ID, shared frozen epoch/configuration fingerprint, configured-main SHA, and exact head SHA | — |
 | Base SHA and rename-aware changed paths | — |
 | Effective-source manifest equality, pre-request and immediate-preflight | — |
 | Applicable path-instruction set | — |
@@ -126,6 +136,7 @@ Evaluate these checks from the native review object, comments, session evidence,
 Automatic review may be enabled only when:
 
 - All six categories are covered by six valid cases.
+- All six score-contributing cases derive from the same frozen final review-source epoch/configuration, with each recorded projection derived from that epoch.
 - At least five independently verified blocker/high findings remain present across at least two replay heads.
 - At least one clean negative-control case is present.
 - Aggregate known blocker/high recall is at least 80%.
@@ -143,7 +154,16 @@ Automatic review may be enabled only when:
 - Calibration remains within the maintainer-approved AI-credit, Actions-minute, and invalid-rerun ceilings selected before the first replay review.
 - The maintainer reviews the completed scorecard in evidence plan `b63330a19102f440` and explicitly approves activation.
 
-Failure does not weaken a gate. Tune the instructions or skill, then rerun three cases for instruction-only changes or the full six-category corpus for material skill, trust-boundary, MCP, model-policy, or effort changes.
+Failure does not weaken a gate. Any byte change to an included instruction, skill,
+direct governance reference, path instruction, or discoverable/activated skill—or
+any change to skill discovery or activation, review behavior, trust boundary, MCP
+access, model policy, effort, validity/scoring semantics—invalidates the
+score-contributing corpus and requires all six categories to be rerun under one
+frozen final review-source epoch. A
+three-case focused rerun is permitted only as a separately recorded operational smoke
+after a proven non-behavioral change that leaves the effective manifest, review
+configuration, validity rules, and scoring semantics unchanged; it does not replace
+or mix with the six-case activation corpus.
 
 ## Evaluation after activation
 
