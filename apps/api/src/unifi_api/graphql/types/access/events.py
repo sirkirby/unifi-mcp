@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 
 import strawberry
 from strawberry.types import Info
+from unifi_core.access.models.events import event_from_controller
 
 if TYPE_CHECKING:
     from unifi_api.graphql.types.access.doors import Door
@@ -66,6 +67,7 @@ class Event:
     door_id: str | None
     user_id: str | None
     credential_id: str | None
+    message: str | None
     result: str | None
 
     # Context for relationship edges — NOT in SDL, NOT in to_dict().
@@ -83,19 +85,41 @@ class Event:
 
     @classmethod
     def from_manager_output(cls, obj: Any) -> "Event":
-        door_id = _get(obj, "door_id")
-        user_id = _get(obj, "user_id")
+        """Project a controller row.
+
+        ``access_list_events`` hands back RAW controller rows, not ``Event``
+        models. The ``insights/system_log/search`` shape uses ``event_type``,
+        ``published`` in epoch millis, and nests the actor/door/credential under
+        ``metadata`` — so reading ``type``/``timestamp``/``door_id``/``user_id``
+        straight off it produced a row carrying nothing but an id and a result.
+        Normalising through the same function the MCP tool uses is what keeps
+        all three surfaces agreeing on one shape.
+        """
+        # Unwrap ``.raw`` first: this module's ``_get`` does, but the core
+        # helper's does not, so a wrapper object would otherwise normalise to
+        # an all-None row - silently, with no error.
+        source = obj
+        if not isinstance(obj, dict):
+            raw = getattr(obj, "raw", None)
+            if isinstance(raw, dict):
+                source = raw
+        norm = event_from_controller(source)
         inst = cls(
-            id=_get(obj, "id"),
-            type=_get(obj, "type"),
-            timestamp=_get(obj, "timestamp") or _get(obj, "time"),
-            door_id=door_id,
-            user_id=user_id,
-            credential_id=_get(obj, "credential_id"),
-            result=_get(obj, "result"),
+            id=norm.id,
+            type=norm.type,
+            timestamp=norm.timestamp,
+            door_id=norm.door_id,
+            user_id=norm.user_id,
+            credential_id=norm.credential_id,
+            # Read ``message`` from the row rather than the model: the declared
+            # unifi-core floor has no ``message`` field, so ``norm.message``
+            # raises AttributeError and 500s every events request until a core
+            # release lands. The row carries it at every floor.
+            message=_get(source, "message"),
+            result=norm.result,
         )
-        inst._door_id = door_id
-        inst._user_id = user_id
+        inst._door_id = norm.door_id
+        inst._user_id = norm.user_id
         return inst
 
     def to_dict(self) -> dict:

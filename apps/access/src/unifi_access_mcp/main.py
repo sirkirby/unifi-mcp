@@ -69,8 +69,12 @@ async def main_async():
         if ws_enabled:
             try:
                 event_manager.set_server(server)
-                # TODO: Implement websocket event listening for Access
-                logger.info("Access event websocket listener not yet implemented.")
+                # start_listening needs an API client: the Access websocket is
+                # key-authenticated, and a proxy-only session cannot open it.
+                # It logs that condition itself and returns without raising, so
+                # a proxy-only deployment keeps working with REST queries and
+                # an empty recent-events buffer.
+                await event_manager.start_listening()
             except Exception as ws_exc:
                 logger.error(
                     "Failed to start event websocket listener: %s. "

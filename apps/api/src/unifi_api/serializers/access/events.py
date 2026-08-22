@@ -40,6 +40,7 @@ def _event_payload(obj) -> dict:
         "door_id": _get(obj, "door_id"),
         "user_id": _get(obj, "user_id"),
         "credential_id": _get(obj, "credential_id"),
+        "message": _get(obj, "message"),
         "result": _get(obj, "result"),
     }
 
