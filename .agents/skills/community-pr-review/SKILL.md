@@ -87,6 +87,8 @@ or does it duplicate existing functionality / violate the intended scope? A PR t
 mechanical gates but adds a tool that's outside the project's design intent should be redirected
 (Principle #6) rather than merged. Only after confirming design fit should you run Gates 1–4.
 
+**Precedent — decline generic accessors in favor of typed tools:** A generic section-and-dictionary settings accessor (arbitrary read/write across controller settings) was declined as a transport shortcut — it bypasses per-field validation, redaction, and field-symmetry governance. Prefer a typed tool per setting.
+
 **Governance/structural refactor PR** — reorganizes field definitions, introduces shared Pydantic
 models, changes base class hierarchy, or implements a field-symmetry sub-issue
 → Run the structural-correctness path instead:
@@ -318,6 +320,8 @@ only exists on a branch will not be exercised via the plugin until it is publish
 `scripts/live_smoke.py` directly (not the plugin) when verifying branch-local changes, and
 confirm the fix reaches production by running the plugin after the release tag is pushed.
 
+**Gotcha — worktree default starts the MCP server in eager registration mode, hiding lazy-mode code paths.** A validation probe initially reported reviewed code as unreachable because the worktree registers all tools eagerly by default, masking lazy-registration-only paths. Check registration mode before concluding a code path is dead.
+
 **Gotcha — enum-hint PRs: harness defaults miss the change entirely.** When a PR adds enum-value hints or restricts accepted values for a tool parameter, `scripts/live_smoke.py` invokes each tool with default arguments only and exercises none of the constrained paths. Run a targeted script that explicitly passes each new enum value and asserts the response shape is correct (or fails predictably for invalid values).
 
 **Gotcha — hardware-gated tools: deferral requires four conditions.** Some tools succeed only with specific attached hardware. Before blocking merge on a live test failure, confirm all four: (a) the failing tool targets optional hardware (e.g., Access controller), (b) the test environment lacks that hardware, (c) the failure message indicates absence ("device not found" / "hardware unavailable"), not a logic or auth error, and (d) the same tool passes on an environment with the hardware attached. If all four hold, document the deferral explicitly in the PR description.
@@ -325,6 +329,8 @@ confirm the fix reaches production by running the plugin after the release tag i
 **Gotcha — HTTP 401 on uiprotect bootstrap path is benign noise.** Live smoke runs against a controller with Protect enabled emit HTTP 401 on the uiprotect bootstrap path during library startup. This is the library's startup probe and is expected — not an authentication failure. Do not block merge or file a bug on a 401 from this specific path.
 
 **Gotcha — live_smoke.py report JSON has no response payloads; it cannot verify field-population fixes.** `scripts/live_smoke.py` writes only per-tool summaries (count, bytes, duration, status) to `live-smoke-results/*.json` — never the actual response payload. When a PR changes what fields get populated in a response (e.g. populating event `mac`/`ip`/`msg` from v2 system-log records), harness "ok" status proves nothing about the fix. Write a small in-process script that calls the tool directly and diffs the payload against a `git checkout origin/main` run before/after the change.
+
+**Discovery — Pydantic field description changes don't auto-propagate to the MCP manifest / GraphQL SDL / OpenAPI.** Editing a field's `description=` only changes the source comment. Run `make generate` and verify the new wording reaches the generated artifact before claiming a client-visible docs fix is complete.
 
 **Gotcha — `make pre-commit` / bare `uv lock` or `uv sync` silently drop workspace deps.** Running `make pre-commit`, or `uv lock`/`uv sync` without flags, re-syncs the root `.venv` without the full workspace package set — dropping deps like `mcp`. The next `uv run python scripts/live_smoke.py` then dies with `ModuleNotFoundError: No module named 'mcp'`. Run `uv sync --all-packages` before any `scripts/live_smoke.py` invocation that follows a `make` target or a lock/sync operation.
 
@@ -745,6 +751,8 @@ may be working from a stale branch or an AI hallucination. Before accepting the 
 3. Require the contributor to rebase their branch to HEAD before proceeding — their cited line numbers
    may have shifted and their fix may have merge conflicts that invalidate the analysis.
 Only after all three checks pass should you treat the AI-traced diagnosis as actionable.
+
+**Gotcha: hardware-specific bug reports still need the UniFi OS version, even when well-investigated.** A well-investigated hardware-specific bug report (device the maintainer lacked access to) omitted the OS version needed to correlate against a firmware-version block. Always request it explicitly.
 
 ---
 
