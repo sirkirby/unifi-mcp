@@ -42,7 +42,7 @@ class ClientManager:
             return cached_data
 
         try:
-            await self._connection.controller.clients.update()
+            await self._connection.run_with_reauth(self._connection.controller.clients.update)
             clients: List[Client] = list(self._connection.controller.clients.values())
             # Fallback rationale:
             # - Some controller models/versions may not populate the collection
@@ -75,7 +75,7 @@ class ClientManager:
             return cached_data
 
         try:
-            await self._connection.controller.clients_all.update()
+            await self._connection.run_with_reauth(self._connection.controller.clients_all.update)
             all_clients: List[Client] = list(self._connection.controller.clients_all.values())
             # Fallback rationale:
             # - When the clients_all collection is empty, query the canonical

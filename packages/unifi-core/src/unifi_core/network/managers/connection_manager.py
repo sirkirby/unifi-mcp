@@ -3,7 +3,7 @@ import logging
 import re
 import time
 import time as _time
-from typing import Any, Dict, Optional
+from typing import Any, Awaitable, Callable, Dict, Optional, TypeVar
 
 import aiohttp
 from aiounifi.controller import Controller
@@ -21,6 +21,8 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
 logger = logging.getLogger("unifi-network-mcp")
+
+T = TypeVar("T")
 
 # Auth-circuit cool-down: first terminal failure blocks reconnects for the base
 # interval, doubling per consecutive failure up to the cap. Rate-limit lockouts
@@ -755,6 +757,43 @@ class ConnectionManager:
                 and self.controller is not None
             ):
                 original_controller.connectivity.is_unifi_os = original_is_unifi_os
+
+    async def run_with_reauth(self, action: Callable[[], Awaitable[T]]) -> T:
+        """Run an aiounifi controller call, re-authenticating once on ``LoginRequired``.
+
+        aiounifi's collection helpers (``controller.clients.update()``,
+        ``controller.devices.update()``, …) call ``controller.request()``
+        directly, bypassing this manager's :meth:`request` wrapper. When the
+        controller invalidates the session server-side (e.g. a controller
+        restart on cert renewal), those calls raise ``LoginRequired`` on every
+        subsequent poll because nothing refreshes the login. Route them through
+        here so an expired session is re-authenticated and the call retried
+        once, mirroring the recovery :meth:`request` already performs.
+        """
+        if not await self.ensure_connected() or not self.controller:
+            raise self._not_connected_error()
+
+        auth_generation = self._auth_generation
+        try:
+            return await action()
+        except LoginRequired:
+            logger.warning(
+                "Login required detected during controller call, attempting explicit re-authentication..."
+            )
+            if not await self._reauthenticate(auth_generation):
+                raise self._not_connected_error()
+            if not self.controller:
+                raise ConnectionError("Re-authentication failed, controller not available.")
+            logger.info("Re-authentication successful, retrying controller call...")
+            try:
+                return await action()
+            except LoginRequired as retry_e:
+                # A second 401 means the refreshed session was rejected; treat
+                # it as terminal so repeated list polls cannot start a
+                # controller-login storm (mirrors request()).
+                self._block_automatic_reconnect(retry_e)
+                await self._discard_connection()
+                raise
 
     # --- Cache Management ---
 
