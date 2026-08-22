@@ -18,10 +18,11 @@ Across the final corpus, cover all six categories:
 5. Hardware-sensitive response, event, endpoint, or mutation behavior.
 6. Dependency-only negative control.
 
-Every score-contributing case must derive from one frozen final review-source epoch and
-fixed configuration, recorded with a shared epoch fingerprint. Each case may have a
-different path-applicable projection, but that projection must derive from the same
-frozen governance snapshot. A case is invalid unless its complete effective
+Every score-contributing case must derive from one frozen final review-source epoch,
+including its observable review-execution configuration, recorded with a shared epoch
+fingerprint. Each case may have a different path-applicable projection, but that
+projection must derive from the same frozen governance snapshot. A case is invalid
+unless its complete effective
 review-source manifest matches configured `main` before requesting review and again
 immediately beforehand; effort is Balanced; the completed review `commit_id` equals
 the baselined head; explicit selected-skill activation is present; current official
@@ -30,6 +31,18 @@ context is healthy. Record exposed source-use telemetry and `not exposed` values
 missing per-file telemetry is not a load failure.
 
 Private source mappings, human baselines, and expected findings must be unavailable through any configured MCP server until scoring is complete. If server-side exclusion cannot be proven, disable MCP access for calibration reviews.
+
+### Clean-negative eligibility
+
+Predeclare every changed file and classify it against GitHub's current Code Review
+exclusions before selecting a control. A semantic clean negative needs at least one
+review-eligible changed file and evidence that at least one file was reviewed. If the
+reviewed-file list/count is unavailable, record `not exposed` with the strongest
+available UI or session proxy; do not count an excluded-only case. An excluded-only
+dependency PR is a separately labeled, non-scoring operational trigger/exclusion
+control: exclude it from the clean-negative gate and style/noise denominator. Preserve
+the six score-contributing categories by selecting an eligible dependency case or a
+separate semantic clean negative when necessary.
 
 ## Effective review-source manifest
 
@@ -61,40 +74,67 @@ separate human-control invariant, not a manifest member. Do not include `CLAUDE.
 or `GEMINI.md` unless an included source explicitly references them; GitHub support
 does not establish them as native review inputs.
 
+## Review-execution fingerprint
+
+The shared frozen epoch also records an observable execution fingerprint. At the
+current default-branch SHA, record `.github/workflows/copilot-code-review.yml` mode
+and blob hash when present; otherwise record `.github/workflows/copilot-setup-steps.yml`
+mode and blob hash when present; otherwise record both absent. GitHub documents that
+`copilot-code-review.yml` takes precedence and `copilot-setup-steps.yml` is the
+fallback. Record timestamped readback of repository custom-instructions enabled,
+MCP-for-Code-Review enabled, configured MCP server identities and scopes (never
+credentials), effective runner evidence, and Code Review firewall state. Model choice
+is GitHub-managed and not selectable; record that fact, never invent a model ID.
+
+For each completed session/job, record actual MCP activations, runner/OS when exposed,
+firewall or context warnings, agentic-context health, and displayed **Balanced**
+effort. When runner or organization telemetry is unavailable, record `not exposed`
+and the strongest observable proxy. Do not claim hidden-state equality. Observed drift
+or degraded context invalidates the case and the score-contributing cohort.
+
 ## Procedure
 
-Before the first score-contributing case, freeze and record the final
-review-source epoch/configuration and its shared fingerprint. For each case:
+Before the first score-contributing case, freeze and record the final review-source
+and review-execution epoch/configuration with its shared fingerprint. For each case:
 
 1. Construct the exact final review head and record configured-main SHA, base SHA,
    head SHA, rename-aware changed paths, and CI state.
-2. Build, record, and compare the complete effective review-source manifest; record
+2. Predeclare changed files; classify control type and review eligibility; for a
+   semantic clean negative, require an eligible file and later reviewed-file evidence.
+3. Build, record, and compare the complete effective review-source manifest; record
    applicable path instructions, candidate skill inventory, selected-skill directory,
    and direct governance-reference closure.
-3. Complete and save the human baseline against that exact head before reading Copilot output.
-4. Revalidate every expected blocker/high finding on that head and record expected test gaps, live-hardware requirement, and disposition.
-5. Immediately before review, prove the configured-main/head SHAs are unchanged and
-   repeat the complete manifest comparison.
-6. Request Copilot from the Reviewers menu and select **Balanced**.
-7. Verify the feasible evidence bundle: effective-source-manifest equality, displayed
+4. Record the timestamped execution-fingerprint readback and prove it still matches
+   the frozen epoch; record unavailable telemetry as `not exposed` with its proxy.
+5. Complete and save the human baseline against that exact head before reading Copilot output.
+6. Revalidate every expected blocker/high finding on that head and record expected test gaps, live-hardware requirement, and disposition.
+7. Immediately before review, prove the configured-main/head SHAs are unchanged and
+   repeat the complete manifest and execution-fingerprint comparisons.
+8. Request Copilot from the Reviewers menu and select **Balanced**.
+9. Verify the feasible evidence bundle: effective-source-manifest equality, displayed
    Balanced effort, explicit skill activation through attribution/session evidence,
    current official documentation for head-branch custom-instruction behavior, and
    source-use telemetry where GitHub exposes it. Record unavailable per-file telemetry
    as `not exposed`, not as a failed load.
-8. Fetch the completed Copilot review object and require its `commit_id` to equal the baselined head SHA.
-9. Score the observable behavioral-adherence checks and save the result in Myco evidence plan `b63330a19102f440`; verify the whole-content save through readback.
+10. Fetch the completed Copilot review object and require its `commit_id` to equal the baselined head SHA. Record completed-session execution evidence and reviewed-file evidence.
+11. Score the observable behavioral-adherence checks and save the result in Myco evidence plan `b63330a19102f440`; verify the whole-content save through readback.
 
 ## Per-case scorecard
 
 | Field | Recorded value |
 |---|---|
-| Case ID, shared frozen epoch/configuration fingerprint, configured-main SHA, and exact head SHA | — |
+| Case ID, shared frozen source-and-execution epoch/configuration fingerprint, configured-main SHA, and exact head SHA | — |
 | Base SHA and rename-aware changed paths | — |
 | Effective-source manifest equality, pre-request and immediate-preflight | — |
 | Applicable path-instruction set | — |
 | Candidate skill inventory and selected-skill complete-directory proof | — |
 | Activated skills and any additional skill closure proof | — |
 | Separate CODEOWNERS human-control invariant | — |
+| Default-branch workflow precedence/mode/blob or explicit absence | — |
+| Timestamped custom-instructions, MCP-for-Code-Review, MCP identities/scopes, runner, and firewall readback | — |
+| Model state | GitHub-managed/not selectable |
+| Actual MCP activations, runner/OS telemetry or `not exposed` proxy, firewall/context warnings, and context health | — |
+| Control type, predeclared eligible files, reviewed-file evidence, and metric inclusion | — |
 | Category coverage | — |
 | Human baseline completed first | — |
 | Known blocker/high findings | — |
@@ -136,9 +176,9 @@ Evaluate these checks from the native review object, comments, session evidence,
 Automatic review may be enabled only when:
 
 - All six categories are covered by six valid cases.
-- All six score-contributing cases derive from the same frozen final review-source epoch/configuration, with each recorded projection derived from that epoch.
+- All six score-contributing cases derive from the same frozen final review-source-and-execution epoch/configuration, with each recorded projection derived from that epoch.
 - At least five independently verified blocker/high findings remain present across at least two replay heads.
-- At least one clean negative-control case is present.
+- At least one semantic clean negative-control case has an eligible changed file, reviewed-file evidence, and metric inclusion.
 - Aggregate known blocker/high recall is at least 80%.
 - Aggregate Copilot blocker/high precision is at least 80%.
 - Recall and precision both have non-zero denominators; zero is an automatic no-go.
@@ -146,11 +186,11 @@ Automatic review may be enabled only when:
 - There are zero fabricated claims about CI, tests, controller calls, or hardware.
 - Copilot never says `READY FOR MAINTAINER REVIEW` while a known blocker remains.
 - Every case has the feasible evidence bundle: complete effective-source-manifest equality,
-  Balanced effort, exact review commit, explicit skill activation, current official
+  frozen execution fingerprint, Balanced effort, exact review commit, explicit skill activation, current official
   documentation for head-branch custom-instruction behavior, and source-use telemetry
   recorded as observed or `not exposed`.
 - Every case passes the observable behavioral-adherence checks.
-- Style/CI-duplicate noise averages no more than one comment per case.
+- Style/CI-duplicate noise averages no more than one comment per metric-included case; excluded-only controls are outside that denominator.
 - Calibration remains within the maintainer-approved AI-credit, Actions-minute, and invalid-rerun ceilings selected before the first replay review.
 - The maintainer reviews the completed scorecard in evidence plan `b63330a19102f440` and explicitly approves activation.
 
@@ -167,9 +207,13 @@ or mix with the six-case activation corpus.
 
 ## Evaluation after activation
 
-During normal maintenance, evaluate up to the first 20 automatic reviews. Make manual checkpoints after approximately 5, 10, and 20 reviews or after 30 days, recording compact rows in the separate Myco evidence plan. Track eligible community PRs, automatic triggers, and manual fallbacks separately. No background observer, webhook, database, dashboard, or scheduled job is created.
+During normal maintenance, evaluate up to the first 20 automatic reviews. Make manual checkpoints after 5, 10, and 20 eligible cases or after 30 days, recording compact rows in the separate Myco evidence plan. Track confirmed-eligible community PRs, automatic triggers, manual fallbacks, documented GitHub outages, and unknown-eligibility cases separately. No background observer, webhook, database, dashboard, or scheduled job is created.
 
-Repeated automatic-trigger failure for normal community contributors requires a return to manual review requests even when semantic quality remains acceptable.
+This repository policy returns to manual requests after either two consecutive
+confirmed-eligible non-draft community PRs reach ordinary maintainer disposition
+without automatic review, or trigger coverage is below 80% at a 5/10/20 eligible-case
+checkpoint. Documented GitHub outages and unknown-eligibility cases are excluded and
+recorded separately; this policy is not a GitHub SLA.
 
 At each checkpoint choose: continue unchanged, continue observation, tune and recalibrate, disable new-push review, return to manual review requests, or disable Copilot review.
 
@@ -181,5 +225,6 @@ At each checkpoint choose: continue unchanged, continue observation, tune and re
 - Blocker/high precision below 70% across five consecutive reviews.
 - Excessive repeated comments after new pushes.
 - Cost reaches the maintainer-approved AI-credit, Actions-minute, or rerun ceiling.
+- Either automatic-trigger coverage rollback threshold in the preceding section.
 
 Rollback order: disable new-push review; disable the automatic-review ruleset and return to manual requests; disable Copilot review entirely. Rollback never changes `protect-main` or human approval requirements.
