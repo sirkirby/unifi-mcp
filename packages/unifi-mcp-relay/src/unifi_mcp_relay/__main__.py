@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -21,6 +22,9 @@ def main(argv: list[str] | None = None) -> None:
     _build_parser().parse_args(argv)
 
     load_dotenv()
+    # Under an installed package, the default search starts in site-packages.
+    # Also load the project-local file without overriding real environment vars.
+    load_dotenv(Path.cwd() / ".env", override=False)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
