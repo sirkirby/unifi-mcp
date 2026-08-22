@@ -21,9 +21,21 @@ from collections import deque
 from collections.abc import Callable
 from typing import Any
 
+from unifi_core.access.models.events import event_identity, with_event_identity
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError
 
 logger = logging.getLogger(__name__)
+
+_GET_EVENT_PAGE_SIZE = 100
+_EVENT_SEARCH_TOPICS = (
+    "unlocks",
+    "access_denial",
+    "ring",
+    "updates",
+    "critical",
+    "admin",
+    "admin_activity",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +281,7 @@ class EventManager:
                 events = inner
             else:
                 events = []
-            return events
+            return [with_event_identity(event) if isinstance(event, dict) else event for event in events]
         except UniFiConnectionError:
             raise
         except Exception as e:
@@ -289,17 +301,47 @@ class EventManager:
             raise UniFiConnectionError("No proxy session available for get_event")
 
         try:
-            # Search across both known topics for the event
-            for topic in ("admin", "admin_activity"):
-                path = "insights/system_log/search?page_size=100&page_num=1&isAccess"
-                data = await self._cm.proxy_request("POST", path, json={"topic": topic})
-                inner = self._cm.extract_data(data)
-                events = (
-                    inner.get("events", []) if isinstance(inner, dict) else (inner if isinstance(inner, list) else [])
-                )
-                for ev in events:
-                    if isinstance(ev, dict) and ev.get("id") == event_id:
-                        return ev
+            # The controller has no direct event-by-id endpoint. Search every
+            # page of each supported topic so any ID returned by list_events
+            # remains addressable, including synthetic system-log IDs.
+            for topic in _EVENT_SEARCH_TOPICS:
+                page_num = 1
+                while True:
+                    path = f"insights/system_log/search?page_size={_GET_EVENT_PAGE_SIZE}&page_num={page_num}&isAccess"
+                    try:
+                        data = await self._cm.proxy_request("POST", path, json={"topic": topic})
+                    except UniFiConnectionError as exc:
+                        # Topic availability can vary by Access version. An
+                        # unsupported category must not prevent lookup in the
+                        # remaining categories.
+                        if "no such topic" in str(exc).lower():
+                            logger.debug("Skipping unsupported Access event topic %s", topic)
+                            break
+                        raise
+                    inner = self._cm.extract_data(data)
+                    events = (
+                        inner.get("events", [])
+                        if isinstance(inner, dict)
+                        else (inner if isinstance(inner, list) else [])
+                    )
+                    for ev in events:
+                        if isinstance(ev, dict) and event_identity(ev) == event_id:
+                            return with_event_identity(ev)
+
+                    total = data.get("total") if isinstance(data, dict) else None
+                    if total is None and isinstance(inner, dict):
+                        total = inner.get("total")
+                    try:
+                        total_count = int(total) if total is not None else None
+                    except (TypeError, ValueError):
+                        total_count = None
+                    if not events:
+                        break
+                    if total_count is not None and page_num * _GET_EVENT_PAGE_SIZE >= total_count:
+                        break
+                    if total_count is None and len(events) < _GET_EVENT_PAGE_SIZE:
+                        break
+                    page_num += 1
             raise UniFiNotFoundError("event", event_id)
         except (UniFiConnectionError, UniFiNotFoundError, ValueError):
             raise

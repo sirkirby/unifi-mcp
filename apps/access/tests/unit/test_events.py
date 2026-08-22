@@ -8,6 +8,7 @@ import pytest
 
 from unifi_core.access.managers.connection_manager import AccessConnectionManager
 from unifi_core.access.managers.event_manager import EventBuffer, EventManager
+from unifi_core.access.models.events import SYNTHETIC_EVENT_ID_PREFIX, event_identity
 from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError
 
 # ---------------------------------------------------------------------------
@@ -182,6 +183,22 @@ class TestEventManagerREST:
         assert call_args[1]["json"]["topic"] == "admin"
 
     @pytest.mark.asyncio
+    async def test_list_events_assigns_identity_to_system_log_rows(self, event_mgr_proxy, cm_proxy):
+        raw = {
+            "id": "",
+            "published": 1773766800123,
+            "event_type": "access.admin.update",
+            "metadata": {"user": {"id": "user-1"}},
+        }
+
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"total": 1, "data": {"events": [raw]}}
+            events = await event_mgr_proxy.list_events()
+
+        assert events[0]["id"].startswith(SYNTHETIC_EVENT_ID_PREFIX)
+        assert raw["id"] == ""
+
+    @pytest.mark.asyncio
     async def test_list_events_with_filters(self, event_mgr_proxy, cm_proxy):
         """list_events passes filters and topic in the POST body."""
         with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
@@ -225,7 +242,79 @@ class TestEventManagerREST:
         call_args = mock_req.call_args_list[0]
         assert call_args[0][0] == "POST"
         assert "insights/system_log/search" in call_args[0][1]
-        assert call_args[1]["json"]["topic"] == "admin"
+        assert call_args[1]["json"]["topic"] == "unlocks"
+
+    @pytest.mark.asyncio
+    async def test_get_event_resolves_synthetic_id_on_later_controller_page(
+        self, event_mgr_proxy, cm_proxy, monkeypatch
+    ):
+        monkeypatch.setattr("unifi_core.access.managers.event_manager._GET_EVENT_PAGE_SIZE", 2)
+        target = {
+            "id": "",
+            "published": 1773766800123,
+            "event_type": "access.admin.update",
+            "metadata": {"user": {"id": "user-2"}},
+        }
+        first_page = [
+            {"id": "", "published": 1773766802000, "event_type": "access.admin.update", "sequence": 1},
+            {"id": "", "published": 1773766801000, "event_type": "access.admin.update", "sequence": 2},
+        ]
+
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.side_effect = [
+                {"page": 1, "num": 2, "total": 3, "data": {"events": first_page}},
+                {"page": 2, "num": 1, "total": 3, "data": {"events": [target]}},
+            ]
+            event = await event_mgr_proxy.get_event(event_identity(target))
+
+        assert event["id"] == event_identity(target)
+        assert "page_num=2" in mock_req.call_args_list[1].args[1]
+
+    @pytest.mark.asyncio
+    async def test_get_event_searches_every_listable_system_log_topic(self, event_mgr_proxy, cm_proxy):
+        target = {
+            "id": "",
+            "published": 1773766800123,
+            "event_type": "access.admin.update",
+        }
+
+        async def response_for_topic(*args, **kwargs):
+            if kwargs["json"]["topic"] == "admin_activity":
+                return {"total": 1, "data": {"events": [target]}}
+            return {"total": 0, "data": {"events": []}}
+
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.side_effect = response_for_topic
+            event = await event_mgr_proxy.get_event(event_identity(target))
+
+        assert event["id"] == event_identity(target)
+        assert [call.kwargs["json"]["topic"] for call in mock_req.await_args_list] == [
+            "unlocks",
+            "access_denial",
+            "ring",
+            "updates",
+            "critical",
+            "admin",
+            "admin_activity",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_event_skips_topics_unsupported_by_controller_version(self, event_mgr_proxy, cm_proxy):
+        target = {"id": "evt-1", "type": "door_open"}
+
+        async def response_for_topic(*args, **kwargs):
+            topic = kwargs["json"]["topic"]
+            if topic == "updates":
+                raise UniFiConnectionError("Invalid parameters. no such topic: updates")
+            if topic == "critical":
+                return {"total": 1, "data": {"events": [target]}}
+            return {"total": 0, "data": {"events": []}}
+
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.side_effect = response_for_topic
+            event = await event_mgr_proxy.get_event("evt-1")
+
+        assert event == target
 
     @pytest.mark.asyncio
     async def test_get_event_not_found(self, event_mgr_proxy, cm_proxy):

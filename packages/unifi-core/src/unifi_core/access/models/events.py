@@ -12,15 +12,25 @@ to ISO 8601 strings via ``_stringify_dt``. The ``top_users`` and
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
+
+SYNTHETIC_EVENT_ID_PREFIX = "access-syslog-v1-"
+_SYSTEM_LOG_IDENTITY_FIELDS = frozenset({"published", "log_key", "event_type"})
+_LOCAL_EVENT_FIELDS = frozenset({"_buffered_at"})
 
 
 class Event(BaseModel):
     """Canonical Access event model (read-only)."""
 
-    id: Optional[str] = Field(default=None, description="Event UUID", json_schema_extra={"mutable": False})
+    id: Optional[str] = Field(
+        default=None,
+        description="Controller event ID, or a stable synthetic ID for system-log rows",
+        json_schema_extra={"mutable": False},
+    )
     type: Optional[str] = Field(
         default=None, description="Event type (door_open, access_denied, etc.)", json_schema_extra={"mutable": False}
     )
@@ -92,10 +102,51 @@ def _stringify_dt(value: Any) -> Optional[str]:
     return str(value)
 
 
+def event_identity(raw: Any) -> Optional[str]:
+    """Return the stable public identity for an Access event.
+
+    Native controller IDs are preserved. Access system-log rows currently
+    carry an empty ``id``, so those rows receive a versioned SHA-256 content
+    identity over their complete canonical payload. Request-topic context is
+    deliberately absent: the same controller event may appear in more than
+    one topic and must retain one identity across those views.
+
+    The local ``_buffered_at`` arrival timestamp is excluded because it is not
+    controller data and changes each time a websocket event is buffered.
+    """
+    native_id = _get(raw, "id")
+    if native_id is not None and str(native_id).strip():
+        return str(native_id)
+
+    if not isinstance(raw, dict) or not (_SYSTEM_LOG_IDENTITY_FIELDS & raw.keys()):
+        return None
+
+    canonical = {key: value for key, value in raw.items() if key not in _LOCAL_EVENT_FIELDS and key != "id"}
+    try:
+        payload = json.dumps(
+            canonical,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError):
+        return None
+    return f"{SYNTHETIC_EVENT_ID_PREFIX}{hashlib.sha256(payload).hexdigest()}"
+
+
+def with_event_identity(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of *raw* with its stable public event ID attached."""
+    identity = event_identity(raw)
+    if identity is None or raw.get("id") == identity:
+        return raw.copy()
+    return {**raw, "id": identity}
+
+
 def event_from_controller(raw: Any) -> Event:
     """Build an Event from a manager dict or object."""
     return Event(
-        id=_get(raw, "id"),
+        id=event_identity(raw),
         type=_get(raw, "type"),
         timestamp=_stringify_dt(_get(raw, "timestamp") or _get(raw, "time")),
         door_id=_get(raw, "door_id"),
