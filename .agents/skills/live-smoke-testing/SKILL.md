@@ -466,6 +466,8 @@ in developer workflows; the fourth is automated in the release pipeline.
 - **Credential rotation invalidates prior artifacts.** If credentials changed between runs,
   artifacts from prior runs cannot be used as PR evidence. Re-run from scratch.
 
+- **`api-resources` parity check can show a false `MISMATCH` from ID-key preference or the action endpoint's 100-row default.** `_items_id_set()` (in `scripts/live_smoke.py`) walks `("id", "_id", "mac", "uuid")` in order and uses the first key present on each item; if the resource-endpoint item and the matching action-endpoint item expose different first-matching keys, the comparison can pick non-corresponding values for what is actually the same item. Separately, most `parity_args` entries in `API_RESOURCES_SAMPLE` call the action tool with default args, and several list tools default to `limit: 100` — on a site with more than 100 items, `resource_subset_of_action` can go `false` purely from action-side truncation, not a real API contract break. Before treating `parity_mismatches > 0` as a bug, check the site's item count against 100 and confirm which id key populated on each side.
+
 - **Phase scope expands with each new domain.** Each new tool category must be classified and
   added — do not assume prior phases cover new domains.
 
