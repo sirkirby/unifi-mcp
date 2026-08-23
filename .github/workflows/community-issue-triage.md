@@ -102,9 +102,7 @@ safe-outputs:
     footer-install: "<!-- installation footer intentionally disabled -->"
   report-failure-as-issue: false
   report-failed-jobs: false
-  report-incomplete:
-    create-issue: false
-    max: 1
+  report-incomplete: false
   missing-data: false
   missing-tool: false
   timeout-minutes: 5
@@ -162,7 +160,7 @@ safe-outputs:
           "reply_to_id",
           "target",
         ]);
-        const allowedTypes = new Set(["add_comment", "add_labels", "noop", "report_incomplete"]);
+        const allowedTypes = new Set(["add_comment", "add_labels", "noop"]);
         const allowedLabels = new Set([
           "bug",
           "enhancement",
@@ -269,26 +267,16 @@ safe-outputs:
             }
           }
 
-          if (type === "report_incomplete") {
-            if (typeof item.reason !== "string" || item.reason.trim() === "") {
-              violations.push("report_incomplete requires a nonempty reason");
-            } else {
-              const details = typeof item.details === "string" ? "\n" + item.details : "";
-              summarySections.push(
-                "<h3>Incomplete triage</h3>\n<pre>" + escapeHtml(item.reason + details) + "</pre>"
-              );
-            }
-          }
         }
 
         if ((typeCounts.get("add_comment") || 0) > 1 || (typeCounts.get("add_labels") || 0) > 1) {
           violations.push("duplicate comment or label output type");
         }
         if (
-          ((typeCounts.get("noop") || 0) > 0 || (typeCounts.get("report_incomplete") || 0) > 0) &&
+          (typeCounts.get("noop") || 0) > 0 &&
           items.length !== 1
         ) {
-          violations.push("noop and report_incomplete must be exclusive");
+          violations.push("noop must be exclusive");
         }
 
         const inspect = (value, outputType = "") => {
@@ -486,8 +474,8 @@ or another secret. If so:
 - When neither a label nor a comment is warranted, call the `noop` safe-output tool with
   a concise reason. Do not use `noop` when any other safe output is proposed.
 - If a required issue/repository read or safe-output tool fails and prevents a truthful
-  triage result, call `report_incomplete` once with a sanitized reason. Do not emit a
-  label, comment, or `noop`, and do not repeat reporter content or secret-like values.
+  triage result, do not call any safe-output tool. Stop so the fail-closed validator
+  marks the run failed; do not substitute a label, comment, or `noop`.
 - Never include hidden reasoning, raw event data, private plans, credentials, private
   controller information, or copied sensitive strings.
 - Use only raw absolute `https://github.com/sirkirby/unifi-mcp/...` URLs. Do not use
