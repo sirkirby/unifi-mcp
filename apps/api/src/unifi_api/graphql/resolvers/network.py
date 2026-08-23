@@ -1841,15 +1841,15 @@ def _speedtest_key(row: Any) -> tuple:
 
 
 def _decode_cursor(cursor: str | None):
-    """Translate an opaque cursor string to a Cursor (or raise ValueError)."""
+    """Translate an opaque cursor string to a Cursor (or raise InvalidCursor)."""
     from unifi_api.services.pagination import Cursor, InvalidCursor
 
     if not cursor:
         return None
     try:
         return Cursor.decode(cursor)
-    except InvalidCursor:
-        raise ValueError("invalid cursor")
+    except InvalidCursor as exc:
+        raise InvalidCursor("invalid cursor") from exc
 
 
 # ---- Traffic-flows cursor helpers ----------------------------------------

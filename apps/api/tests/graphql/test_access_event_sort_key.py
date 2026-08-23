@@ -58,10 +58,10 @@ def test_cursor_windowing_advances_past_a_page_of_system_log_rows() -> None:
 
 
 def test_a_full_cursor_traversal_returns_every_row_exactly_once() -> None:
-    """Reviewer's live check on #549: traversing a 68-row snapshot at
-    `limit=2` returned 67 rows, because one colliding pair was windowed out
-    together. Page-at-a-time is the only way to catch that - a single
-    `paginate()` call cannot.
+    """A live 68-row traversal once lost one member of a colliding pair.
+
+    Page-at-a-time is the only way to catch that; a single `paginate()` call
+    cannot.
     """
     from unifi_api.services.pagination import paginate
 

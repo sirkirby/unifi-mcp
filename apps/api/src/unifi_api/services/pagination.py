@@ -21,7 +21,7 @@ class InvalidCursor(Exception):
 @dataclass(frozen=True)
 class Cursor:
     last_id: str | int
-    last_ts: int | None = None
+    last_ts: str | int | float | None = None
 
     def encode(self) -> str:
         payload = json.dumps({"last_id": self.last_id, "last_ts": self.last_ts}).encode()
@@ -31,7 +31,15 @@ class Cursor:
     def decode(cls, s: str) -> "Cursor":
         try:
             payload = json.loads(base64.urlsafe_b64decode(s.encode()).decode())
-            return cls(last_id=payload["last_id"], last_ts=payload.get("last_ts"))
+            if not isinstance(payload, dict) or set(payload) != {"last_id", "last_ts"}:
+                raise ValueError("expected exact legacy cursor payload")
+            last_id = payload["last_id"]
+            last_ts = payload["last_ts"]
+            if isinstance(last_id, bool) or not isinstance(last_id, (str, int)):
+                raise ValueError("last_id must be a string or integer")
+            if isinstance(last_ts, bool) or (last_ts is not None and not isinstance(last_ts, (str, int, float))):
+                raise ValueError("last_ts must be a string, integer, float, or null")
+            return cls(last_id=last_id, last_ts=last_ts)
         except Exception as e:
             raise InvalidCursor(f"failed to decode cursor: {e}")
 

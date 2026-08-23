@@ -11,13 +11,17 @@ from typing import Any
 
 from graphql import GraphQLError
 
+from unifi_api.services.access_event_key import InvalidAccessEventCursor
 from unifi_api.services.controllers import ControllerNotFound
+from unifi_api.services.pagination import InvalidCursor
 
 
 def _classify(error: GraphQLError) -> str:
     orig = error.original_error
     if isinstance(orig, ControllerNotFound):
         return "NOT_FOUND"
+    if isinstance(orig, (InvalidAccessEventCursor, InvalidCursor)):
+        return "BAD_REQUEST"
     if isinstance(orig, PermissionError):
         msg = str(orig)
         if msg.startswith("UNAUTHENTICATED:"):

@@ -40,7 +40,7 @@ from unifi_api.graphql.types.access.schedules import Schedule
 from unifi_api.graphql.types.access.system import AccessHealth, AccessSystemInfo
 from unifi_api.graphql.types.access.users import User
 from unifi_api.graphql.types.access.visitors import Visitor
-from unifi_api.services.access_event_key import event_sort_key
+from unifi_api.services.access_event_key import event_sort_key, paginate_access_events
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -64,15 +64,15 @@ def _id_of(obj: Any) -> Any:
 
 
 def _decode_cursor(cursor: str | None):
-    """Translate an opaque cursor string to a Cursor (or raise ValueError)."""
+    """Translate an opaque cursor string to a Cursor (or raise InvalidCursor)."""
     from unifi_api.services.pagination import Cursor, InvalidCursor
 
     if not cursor:
         return None
     try:
         return Cursor.decode(cursor)
-    except InvalidCursor:
-        raise ValueError("invalid cursor")
+    except InvalidCursor as exc:
+        raise InvalidCursor("invalid cursor") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -927,13 +927,10 @@ class AccessQuery:
         # paginate() has enough rows to cursor through.
         raw = await _fetch_events(ctx, controller, max(limit, 100))
 
-        from unifi_api.services.pagination import paginate
-
-        cursor_obj = _decode_cursor(cursor)
-        page, next_cursor = paginate(
+        page, next_cursor = paginate_access_events(
             list(raw),
             limit=limit,
-            cursor=cursor_obj,
+            cursor=cursor,
             key_fn=_event_key,
         )
         items: list[Event] = []
@@ -943,7 +940,7 @@ class AccessQuery:
             items.append(inst)
         return AccessEventPage(
             items=items,
-            next_cursor=next_cursor.encode() if next_cursor else None,
+            next_cursor=next_cursor,
         )
 
     @strawberry.field(

@@ -528,6 +528,51 @@ async def test_list_visitors_happy_path(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_visitors_server_cursor_round_trips_iso_timestamp(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    visitors = [
+        {
+            "id": f"vis-{i}",
+            "first_name": "Visitor",
+            "last_name": str(i),
+            "status": 6,
+            "created_at": f"2026-08-18T12:00:0{i}Z",
+        }
+        for i in range(4)
+    ]
+
+    async def fake_list(self):
+        return visitors
+
+    from unifi_core.access.managers.visitor_manager import VisitorManager
+
+    monkeypatch.setattr(VisitorManager, "list_visitors", fake_list)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        first = await c.get(
+            f"/v1/sites/default/visitors?controller={cid}",
+            params={"limit": 2},
+            headers={"Authorization": f"Bearer {key}"},
+        )
+        assert first.status_code == 200, first.text
+        first_body = first.json()
+        second = await c.get(
+            f"/v1/sites/default/visitors?controller={cid}",
+            params={"limit": 2, "cursor": first_body["next_cursor"]},
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert [item["id"] for item in first_body["items"]] == ["vis-3", "vis-2"]
+    assert [item["id"] for item in second_body["items"]] == ["vis-1", "vis-0"]
+    assert second_body["next_cursor"] is None
+
+
+@pytest.mark.asyncio
 async def test_get_visitor_happy_and_404(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)

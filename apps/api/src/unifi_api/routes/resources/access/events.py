@@ -27,8 +27,11 @@ from unifi_api.routes.resources._common import (
     require_capability,
     resolve_controller,
 )
-from unifi_api.services.access_event_key import event_sort_key
-from unifi_api.services.pagination import Cursor, InvalidCursor, paginate
+from unifi_api.services.access_event_key import (
+    InvalidAccessEventCursor,
+    event_sort_key,
+    paginate_access_events,
+)
 
 router = APIRouter()
 
@@ -89,19 +92,15 @@ async def list_access_events(
         await _maybe_set_site(cm, site_id)
         all_events = await mgr.list_events(limit=max(limit, 100))
 
-    cursor_obj = None
-    if cursor:
-        try:
-            cursor_obj = Cursor.decode(cursor)
-        except InvalidCursor:
-            raise HTTPException(status_code=400, detail="invalid cursor")
-
-    page, next_cursor = paginate(
-        list(all_events),
-        limit=limit,
-        cursor=cursor_obj,
-        key_fn=_event_key,
-    )
+    try:
+        page, next_cursor = paginate_access_events(
+            list(all_events),
+            limit=limit,
+            cursor=cursor,
+            key_fn=_event_key,
+        )
+    except InvalidAccessEventCursor as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     type_registry = request.app.state.type_registry
     tool_type = type_registry.lookup_tool("access_list_events")
@@ -116,7 +115,7 @@ async def list_access_events(
         hint = registry.render_hint_for_tool("access_list_events")
     return {
         "items": items,
-        "next_cursor": next_cursor.encode() if next_cursor else None,
+        "next_cursor": next_cursor,
         "render_hint": hint,
     }
 

@@ -92,15 +92,15 @@ def _id_of(obj: Any) -> Any:
 
 
 def _decode_cursor(cursor: str | None):
-    """Translate an opaque cursor string to a Cursor (or raise ValueError)."""
+    """Translate an opaque cursor string to a Cursor (or raise InvalidCursor)."""
     from unifi_api.services.pagination import Cursor, InvalidCursor
 
     if not cursor:
         return None
     try:
         return Cursor.decode(cursor)
-    except InvalidCursor:
-        raise ValueError("invalid cursor")
+    except InvalidCursor as exc:
+        raise InvalidCursor("invalid cursor") from exc
 
 
 async def _maybe_set_site(cm: Any, site: str | None) -> None:

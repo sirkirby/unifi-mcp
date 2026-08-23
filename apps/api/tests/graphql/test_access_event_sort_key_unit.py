@@ -7,7 +7,13 @@ with `(ts, id) < (last_ts, last_id)`, page 2 of an events query came back
 empty - nothing can be strictly less than the key every row shares.
 """
 
-from unifi_api.services.access_event_key import event_sort_key
+from datetime import datetime, timezone
+
+import pytest
+from unifi_api.graphql.resolvers.access import _event_key as gql_event_key
+from unifi_api.routes.resources.access.events import _event_key as rest_event_key
+from unifi_api.services.access_event_key import event_sort_key, paginate_access_events
+from unifi_api.services.pagination import Cursor
 
 SYSTEM_LOG_ROW = {
     "id": "",
@@ -113,8 +119,8 @@ def test_same_millisecond_rows_for_different_doors_do_not_collide() -> None:
 
 
 def test_rows_differing_only_in_nested_user_metadata_do_not_collide() -> None:
-    """Reviewer's live finding on #549: two admin rows identical except for
-    `metadata.user.id` produced one key, so a cursor traversal dropped both.
+    """Two admin rows identical except for `metadata.user.id` once collided,
+    so a cursor traversal dropped both.
 
     A hand-picked field subset cannot be proven exhaustive - any nested field
     left out of it is a collision waiting for the row that differs only there.
@@ -143,3 +149,91 @@ def test_rows_differing_only_in_an_unmodelled_field_do_not_collide() -> None:
         "published": 1787054400000,
     }
     assert event_sort_key({**base, "some_future_field": "a"}) != event_sort_key({**base, "some_future_field": "b"})
+
+
+@pytest.mark.parametrize(
+    ("row", "expected_millis"),
+    [
+        ({"id": "evt", "timestamp": 1787054400.75}, 1787054400750),
+        ({"id": "evt", "timestamp": "1787054400"}, 1787054400000),
+        ({"id": "evt", "timestamp": "1787054400000"}, 1787054400000),
+        ({"id": "evt", "timestamp": "2026-08-18T08:00:00-04:00"}, 1787054400000),
+        ({"id": "evt", "timestamp": ""}, 0),
+        ({"id": "evt", "timestamp": True}, 0),
+        ({"id": "evt", "timestamp": "not-a-time"}, 0),
+        ({"id": "evt", "timestamp": "1787054400.5"}, 0),
+        ({"id": "evt", "published": "bad", "timestamp": 1787054400}, 1787054400000),
+        ({"id": "evt", "published": "", "time": "2026-08-18T12:00:00Z"}, 1787054400000),
+    ],
+)
+def test_timestamp_normalization_and_fallbacks_match_on_both_surfaces(row, expected_millis) -> None:
+    assert event_sort_key(row)[0] == expected_millis
+    assert gql_event_key(row) == (expected_millis, "evt")
+    assert rest_event_key(row) == (expected_millis, "evt")
+
+
+def test_fractional_epoch_seconds_preserve_sub_second_ordering() -> None:
+    earlier = {"id": "earlier", "timestamp": 1787054400.1}
+    later = {"id": "later", "timestamp": 1787054400.9}
+    assert event_sort_key(earlier)[0] == 1787054400100
+    assert event_sort_key(later)[0] == 1787054400900
+    assert event_sort_key(earlier) < event_sort_key(later)
+
+
+def test_mapping_without_native_identity_uses_complete_row_digest() -> None:
+    first = {"timestamp": 1787054400, "unknown": {"value": "first"}}
+    second = {"timestamp": 1787054400, "unknown": {"value": "second"}}
+    assert event_sort_key(first)[1]
+    assert event_sort_key(first) != event_sort_key(second)
+
+
+def test_unserializable_mapping_values_still_receive_stable_identity() -> None:
+    row = {
+        "timestamp": 1787054400,
+        "unknown": datetime(2026, 8, 18, 12, tzinfo=timezone.utc),
+    }
+    assert event_sort_key(row) == event_sort_key(dict(row))
+    assert event_sort_key(row)[1]
+
+
+def test_raw_wrappers_match_dict_keys_on_both_surfaces() -> None:
+    class Wrapped:
+        def __init__(self, raw) -> None:
+            self.raw = raw
+
+    wrapped = Wrapped(SYSTEM_LOG_ROW)
+    assert gql_event_key(wrapped) == gql_event_key(SYSTEM_LOG_ROW)
+    assert rest_event_key(wrapped) == rest_event_key(SYSTEM_LOG_ROW)
+
+
+def test_plain_objects_without_stable_identity_fail_closed() -> None:
+    class UnsupportedEvent:
+        timestamp = 1787054400
+
+    with pytest.raises(ValueError, match="lacks a stable identity"):
+        gql_event_key(UnsupportedEvent())
+    with pytest.raises(ValueError, match="lacks a stable identity"):
+        rest_event_key(UnsupportedEvent())
+
+
+@pytest.mark.parametrize(
+    "legacy_timestamp",
+    [1787054400, 1787054400000, "2026-08-18T12:00:00Z"],
+    ids=["epoch-seconds", "epoch-millis", "iso"],
+)
+def test_legacy_cursor_normalizes_timestamp_when_identity_is_not_in_snapshot(legacy_timestamp) -> None:
+    rows = [
+        {"id": "newer", "timestamp": 1787054401},
+        {"id": "older", "timestamp": 1787054399},
+    ]
+    legacy_cursor = Cursor(last_id="event-no-longer-in-snapshot", last_ts=legacy_timestamp).encode()
+
+    page, next_cursor = paginate_access_events(
+        rows,
+        limit=10,
+        cursor=legacy_cursor,
+        key_fn=event_sort_key,
+    )
+
+    assert [row["id"] for row in page] == ["older"]
+    assert next_cursor is None

@@ -2,7 +2,9 @@
 
 from graphql import GraphQLError
 from unifi_api.graphql.errors import format_graphql_error
+from unifi_api.services.access_event_key import InvalidAccessEventCursor
 from unifi_api.services.controllers import ControllerNotFound
+from unifi_api.services.pagination import InvalidCursor
 
 
 def test_format_unauthenticated() -> None:
@@ -35,6 +37,20 @@ def test_format_not_found_from_controller_not_found() -> None:
     err.original_error = ControllerNotFound("xyz")
     formatted = format_graphql_error(err)
     assert formatted["extensions"]["code"] == "NOT_FOUND"
+
+
+def test_format_invalid_access_event_cursor_as_bad_request() -> None:
+    err = GraphQLError("unsupported Access event cursor version: 99")
+    err.original_error = InvalidAccessEventCursor("unsupported Access event cursor version: 99")
+    formatted = format_graphql_error(err)
+    assert formatted["extensions"]["code"] == "BAD_REQUEST"
+
+
+def test_format_invalid_generic_cursor_as_bad_request() -> None:
+    err = GraphQLError("invalid cursor")
+    err.original_error = InvalidCursor("invalid cursor")
+    formatted = format_graphql_error(err)
+    assert formatted["extensions"]["code"] == "BAD_REQUEST"
 
 
 def test_format_unknown_internal() -> None:

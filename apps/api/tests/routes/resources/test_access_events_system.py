@@ -8,6 +8,8 @@ Covers 6 endpoint families across 2 route modules:
   (product-prefixed paths to disambiguate from network/protect)
 """
 
+import base64
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -18,6 +20,8 @@ from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
+from unifi_api.services.pagination import Cursor
+from unifi_core.access.models.events import event_identity, with_event_identity
 from unifi_core.exceptions import UniFiNotFoundError
 
 
@@ -88,6 +92,48 @@ def _stub_connection(app, cid: str) -> _FakeAccessCM:
     fake = _FakeAccessCM()
     app.state.manager_factory._connection_cache[(cid, "access", None)] = fake
     return fake
+
+
+def _legacy_event_key(row: dict) -> tuple:
+    """The exact Access REST ordering key used before timestamp normalization."""
+    return (row.get("timestamp") or row.get("time") or 0, row.get("id") or "")
+
+
+def _legacy_cursor(row: dict) -> str:
+    timestamp, identity = _legacy_event_key(row)
+    return Cursor(last_id=identity, last_ts=timestamp).encode()
+
+
+def _cursor_payload(cursor: str) -> dict:
+    return json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
+
+
+def _migration_rows(timestamp_format: str) -> tuple[list[dict], dict]:
+    if timestamp_format == "published":
+        rows = [
+            {
+                "id": "",
+                "log_key": "access.door.unlock",
+                "event_type": "access.door.unlock",
+                "message": f"row {index}",
+                "published": 1787054400000 + offset,
+            }
+            for index, offset in enumerate((1000, 0, -1000))
+        ]
+        return rows, with_event_identity(rows[1])
+    if timestamp_format == "seconds":
+        rows = [{"id": f"evt-{index}", "timestamp": 1787054400 + offset} for index, offset in enumerate((1, 0, -1))]
+    elif timestamp_format == "millis":
+        rows = [
+            {"id": f"evt-{index}", "timestamp": 1787054400000 + offset} for index, offset in enumerate((1000, 0, -1000))
+        ]
+    else:
+        rows = [
+            {"id": "evt-0", "timestamp": "2026-08-18T12:00:01Z"},
+            {"id": "evt-1", "timestamp": "2026-08-18T12:00:00Z"},
+            {"id": "evt-2", "timestamp": "2026-08-18T11:59:59Z"},
+        ]
+    return rows, rows[1]
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +221,93 @@ async def test_list_access_events_cursor_traverses_empty_native_ids(tmp_path, mo
     assert len(seen) == 2
     assert all(seen)
     assert len(set(seen)) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("timestamp_format", ["published", "seconds", "millis", "iso"])
+async def test_list_access_events_resumes_legacy_cursor(tmp_path, monkeypatch, timestamp_format) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    cm = _stub_connection(app, cid)
+    rows, legacy_target = _migration_rows(timestamp_format)
+    cm.response = {"total": len(rows), "data": {"events": rows}}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/v1/sites/default/access/events?controller={cid}",
+            params={"limit": 10, "cursor": _legacy_cursor(legacy_target)},
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert response.status_code == 200, response.text
+    returned_ids = [item["id"] for item in response.json()["items"]]
+    expected_older_id = event_identity(rows[2])
+    assert returned_ids == [expected_older_id]
+    assert len(returned_ids) == len(set(returned_ids))
+    assert event_identity(rows[0]) not in returned_ids
+    assert event_identity(rows[1]) not in returned_ids
+
+
+@pytest.mark.asyncio
+async def test_list_access_events_issues_versioned_resource_cursor(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    cm = _stub_connection(app, cid)
+    rows, _ = _migration_rows("seconds")
+    cm.response = {"total": len(rows), "data": {"events": rows}}
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/v1/sites/default/access/events?controller={cid}",
+            params={"limit": 1},
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert response.status_code == 200, response.text
+    payload = _cursor_payload(response.json()["next_cursor"])
+    assert payload["resource"] == "access_events"
+    assert payload["version"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("cursor", "expected_detail"),
+    [
+        (Cursor(last_id="missing", last_ts="not-a-time").encode(), "timestamp is unrecoverable"),
+        (
+            base64.urlsafe_b64encode(
+                json.dumps({"resource": "access_events", "version": 99, "last_id": "evt", "last_ts": 1}).encode()
+            ).decode(),
+            "unsupported Access event cursor version",
+        ),
+        (
+            base64.urlsafe_b64encode(
+                json.dumps({"resource": "network_events", "version": 1, "last_id": "evt", "last_ts": 1}).encode()
+            ).decode(),
+            "unknown resource format",
+        ),
+        ("not-base64", "invalid Access event cursor"),
+    ],
+)
+async def test_list_access_events_rejects_unrecoverable_cursor(
+    tmp_path,
+    monkeypatch,
+    cursor,
+    expected_detail,
+) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/v1/sites/default/access/events?controller={cid}",
+            params={"cursor": cursor},
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert response.status_code == 400
+    assert expected_detail in response.json()["detail"]
 
 
 # ---------------------------------------------------------------------------
