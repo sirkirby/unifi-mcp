@@ -96,9 +96,9 @@ safe-outputs:
   footer: true
   messages:
     disclosure-header: >-
-      > AI-assisted first-pass triage from [{workflow_name}]({run_url}); a maintainer has not reviewed this output yet.
+      > AI-assisted first-pass triage from {workflow_name}; a maintainer has not reviewed this output yet. Run: {run_url}
     footer: >-
-      > [Workflow run]({run_url})
+      > Workflow run: {run_url}
     footer-install: "<!-- installation footer intentionally disabled -->"
   report-failure-as-issue: false
   report-failed-jobs: false
