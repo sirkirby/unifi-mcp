@@ -175,6 +175,9 @@ async def test_access_events_encoded_cursor_traversal(tmp_path, monkeypatch):
     ("cursor", "expected_message"),
     [
         (Cursor(last_id="missing", last_ts="not-a-time").encode(), "timestamp is unrecoverable"),
+        (Cursor(last_id="missing", last_ts=float("nan")).encode(), "last_ts must be finite"),
+        (Cursor(last_id="missing", last_ts=float("inf")).encode(), "last_ts must be finite"),
+        (Cursor(last_id="missing", last_ts=float("-inf")).encode(), "last_ts must be finite"),
         (
             base64.urlsafe_b64encode(
                 json.dumps({"resource": "access_events", "version": 99, "last_id": "evt", "last_ts": 1}).encode()

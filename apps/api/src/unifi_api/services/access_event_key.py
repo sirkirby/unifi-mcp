@@ -24,6 +24,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any, Callable
 
@@ -185,7 +186,10 @@ def _decode_access_event_cursor(encoded: str) -> tuple[Cursor, bool]:
     if set(payload) - {"last_id", "last_ts"}:
         raise InvalidAccessEventCursor("invalid Access event cursor: unknown legacy format")
     identity = _validated_identity(payload)
-    return Cursor(last_id=identity, last_ts=payload.get("last_ts")), True
+    last_ts = payload.get("last_ts")
+    if isinstance(last_ts, float) and not math.isfinite(last_ts):
+        raise InvalidAccessEventCursor("invalid Access event cursor: last_ts must be finite")
+    return Cursor(last_id=identity, last_ts=last_ts), True
 
 
 def _migrate_legacy_cursor(

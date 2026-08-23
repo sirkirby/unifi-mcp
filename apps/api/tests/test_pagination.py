@@ -58,6 +58,13 @@ def test_cursor_decode_rejects_invalid_value_types(payload, error) -> None:
         Cursor.decode(encoded)
 
 
+@pytest.mark.parametrize("last_ts", [float("nan"), float("inf"), float("-inf")])
+def test_cursor_decode_rejects_non_finite_float_timestamps(last_ts) -> None:
+    encoded = Cursor(last_id="event-id", last_ts=last_ts).encode()
+    with pytest.raises(InvalidCursor, match="last_ts must be finite"):
+        Cursor.decode(encoded)
+
+
 def test_paginate_first_page_no_cursor() -> None:
     items = [{"id": str(i), "ts": i} for i in range(10)]
     page, next_cursor = paginate(items, limit=3, cursor=None, key_fn=lambda x: (x["ts"], x["id"]))
