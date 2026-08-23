@@ -1,5 +1,5 @@
 ---
-name: unifi-mcp-code-review
+name: code-review
 description: Review UniFi MCP pull requests for architecture, controller-contract, cross-surface, security, test, release, and live-validation defects while preserving human merge authority.
 ---
 
