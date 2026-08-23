@@ -24,13 +24,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import math
 from datetime import datetime, timezone
 from typing import Any, Callable
 
 from unifi_core.access.models.events import event_identity
 
-from unifi_api.services.pagination import Cursor, paginate
+from unifi_api.services.pagination import Cursor, InvalidCursor, paginate
 
 __all__ = [
     "InvalidAccessEventCursor",
@@ -183,13 +182,14 @@ def _decode_access_event_cursor(encoded: str) -> tuple[Cursor, bool]:
             raise InvalidAccessEventCursor("invalid Access event cursor: version 1 requires epoch milliseconds")
         return Cursor(last_id=identity, last_ts=last_ts), False
 
-    if set(payload) - {"last_id", "last_ts"}:
+    if set(payload) != {"last_id", "last_ts"}:
         raise InvalidAccessEventCursor("invalid Access event cursor: unknown legacy format")
+    try:
+        cursor = Cursor.decode(encoded)
+    except InvalidCursor as exc:
+        raise InvalidAccessEventCursor(f"invalid Access event cursor: {exc}") from exc
     identity = _validated_identity(payload)
-    last_ts = payload.get("last_ts")
-    if isinstance(last_ts, float) and not math.isfinite(last_ts):
-        raise InvalidAccessEventCursor("invalid Access event cursor: last_ts must be finite")
-    return Cursor(last_id=identity, last_ts=last_ts), True
+    return Cursor(last_id=identity, last_ts=cursor.last_ts), True
 
 
 def _migrate_legacy_cursor(

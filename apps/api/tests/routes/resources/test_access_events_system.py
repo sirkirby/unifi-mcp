@@ -108,6 +108,10 @@ def _cursor_payload(cursor: str) -> dict:
     return json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
 
 
+def _encode_cursor_payload(payload: dict) -> str:
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+
+
 def _migration_rows(timestamp_format: str) -> tuple[list[dict], dict]:
     if timestamp_format == "published":
         rows = [
@@ -306,6 +310,44 @@ async def test_list_access_events_rejects_unrecoverable_cursor(
         response = await client.get(
             f"/v1/sites/default/access/events?controller={cid}",
             params={"cursor": cursor},
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert response.status_code == 400
+    assert expected_detail in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "expected_detail"),
+    [
+        ({"last_id": "present", "last_ts": True}, "last_ts must be a string, integer, float, or null"),
+        ({"last_id": "present", "last_ts": [1787054400000]}, "last_ts must be a string, integer, float, or null"),
+        (
+            {"last_id": "present", "last_ts": {"millis": 1787054400000}},
+            "last_ts must be a string, integer, float, or null",
+        ),
+        ({"last_id": "present"}, "unknown legacy format"),
+    ],
+)
+async def test_list_access_events_rejects_malformed_cursor_when_identity_is_present(
+    tmp_path,
+    monkeypatch,
+    payload,
+    expected_detail,
+) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    cm = _stub_connection(app, cid)
+    cm.response = {
+        "total": 1,
+        "data": {"events": [{"id": "present", "timestamp": 1787054400}]},
+    }
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/v1/sites/default/access/events?controller={cid}",
+            params={"cursor": _encode_cursor_payload(payload)},
             headers={"Authorization": f"Bearer {key}"},
         )
 

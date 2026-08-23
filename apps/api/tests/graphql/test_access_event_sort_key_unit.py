@@ -7,12 +7,19 @@ with `(ts, id) < (last_ts, last_id)`, page 2 of an events query came back
 empty - nothing can be strictly less than the key every row shares.
 """
 
+import base64
+import json
 from datetime import datetime, timezone
 
 import pytest
 from unifi_api.graphql.resolvers.access import _event_key as gql_event_key
 from unifi_api.routes.resources.access.events import _event_key as rest_event_key
-from unifi_api.services.access_event_key import event_sort_key, paginate_access_events
+from unifi_api.services.access_event_key import (
+    InvalidAccessEventCursor,
+    _decode_access_event_cursor,
+    event_sort_key,
+    paginate_access_events,
+)
 from unifi_api.services.pagination import Cursor
 
 SYSTEM_LOG_ROW = {
@@ -23,6 +30,10 @@ SYSTEM_LOG_ROW = {
     "published": 1787054400000,
     "result": "ACCESS",
 }
+
+
+def _encode_cursor_payload(payload: dict) -> str:
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
 
 
 def test_a_system_log_row_has_a_real_timestamp_not_zero() -> None:
@@ -237,3 +248,75 @@ def test_legacy_cursor_normalizes_timestamp_when_identity_is_not_in_snapshot(leg
 
     assert [row["id"] for row in page] == ["older"]
     assert next_cursor is None
+
+
+@pytest.mark.parametrize(
+    ("last_id", "last_ts"),
+    [
+        ("event-id", "2026-08-18T12:00:00Z"),
+        (42, 1787054400000),
+        ("event-id", 1787054400.75),
+        ("event-id", None),
+    ],
+    ids=["iso", "integer", "finite-float", "null"],
+)
+def test_legacy_cursor_accepts_exact_supported_contract(last_id, last_ts) -> None:
+    encoded = _encode_cursor_payload({"last_id": last_id, "last_ts": last_ts})
+
+    cursor, is_legacy = _decode_access_event_cursor(encoded)
+
+    assert is_legacy is True
+    assert cursor == Cursor(last_id=str(last_id), last_ts=last_ts)
+
+
+def test_versioned_access_cursor_is_not_treated_as_legacy() -> None:
+    encoded = _encode_cursor_payload(
+        {
+            "resource": "access_events",
+            "version": 1,
+            "last_id": "event-id",
+            "last_ts": 1787054400000,
+        }
+    )
+
+    cursor, is_legacy = _decode_access_event_cursor(encoded)
+
+    assert is_legacy is False
+    assert cursor == Cursor(last_id="event-id", last_ts=1787054400000)
+
+
+@pytest.mark.parametrize(
+    ("payload", "error"),
+    [
+        ({"last_id": "event-id"}, "unknown legacy format"),
+        ({"last_ts": 1787054400000}, "unknown legacy format"),
+        ({"last_id": "event-id", "last_ts": 1787054400000, "extra": True}, "unknown legacy format"),
+        ({"last_id": "", "last_ts": 1787054400000}, "last_id must be a stable identity"),
+        ({"last_id": True, "last_ts": 1787054400000}, "last_id must be a string or integer"),
+        ({"last_id": 1.5, "last_ts": 1787054400000}, "last_id must be a string or integer"),
+        ({"last_id": None, "last_ts": 1787054400000}, "last_id must be a string or integer"),
+        ({"last_id": ["event-id"], "last_ts": 1787054400000}, "last_id must be a string or integer"),
+        ({"last_id": {"id": "event-id"}, "last_ts": 1787054400000}, "last_id must be a string or integer"),
+        ({"last_id": "event-id", "last_ts": True}, "last_ts must be a string, integer, float, or null"),
+        ({"last_id": "event-id", "last_ts": [1787054400000]}, "last_ts must be a string, integer, float, or null"),
+        (
+            {"last_id": "event-id", "last_ts": {"millis": 1787054400000}},
+            "last_ts must be a string, integer, float, or null",
+        ),
+        ({"last_id": "event-id", "last_ts": float("nan")}, "last_ts must be finite"),
+        ({"last_id": "event-id", "last_ts": float("inf")}, "last_ts must be finite"),
+        ({"last_id": "event-id", "last_ts": float("-inf")}, "last_ts must be finite"),
+        (
+            {"resource": "network_events", "version": 1, "last_id": "event-id", "last_ts": 1787054400000},
+            "unknown resource format",
+        ),
+        ({"version": 1, "last_id": "event-id", "last_ts": 1787054400000}, "unknown resource format"),
+        (
+            {"resource": "access_events", "version": 99, "last_id": "event-id", "last_ts": 1787054400000},
+            "unsupported Access event cursor version",
+        ),
+    ],
+)
+def test_legacy_cursor_rejects_values_outside_supported_contract(payload, error) -> None:
+    with pytest.raises(InvalidAccessEventCursor, match=error):
+        _decode_access_event_cursor(_encode_cursor_payload(payload))

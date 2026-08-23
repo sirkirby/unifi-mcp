@@ -28,6 +28,10 @@ def _legacy_cursor(row: dict) -> str:
     return Cursor(last_id=identity, last_ts=timestamp).encode()
 
 
+def _encode_cursor_payload(payload: dict) -> str:
+    return base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+
+
 def _migration_rows(timestamp_format: str) -> tuple[list[dict], dict]:
     if timestamp_format == "published":
         raw_rows = [
@@ -205,6 +209,46 @@ async def test_access_events_reject_unrecoverable_cursor(
         monkeypatch,
         {("access", "event_manager", "list_events"): []},
     )
+
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        access {{ events(controller: "{cid}", cursor: "{cursor}") {{ items {{ id }} }} }}
+    }}''',
+    )
+
+    assert body["data"] is None
+    assert expected_message in body["errors"][0]["message"]
+    assert body["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "expected_message"),
+    [
+        ({"last_id": "present", "last_ts": True}, "last_ts must be a string, integer, float, or null"),
+        ({"last_id": "present", "last_ts": [1787054400000]}, "last_ts must be a string, integer, float, or null"),
+        (
+            {"last_id": "present", "last_ts": {"millis": 1787054400000}},
+            "last_ts must be a string, integer, float, or null",
+        ),
+        ({"last_id": "present"}, "unknown legacy format"),
+    ],
+)
+async def test_access_events_reject_malformed_cursor_when_identity_is_present(
+    tmp_path,
+    monkeypatch,
+    payload,
+    expected_message,
+):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="access")
+    stub_managers(
+        monkeypatch,
+        {("access", "event_manager", "list_events"): [{"id": "present", "timestamp": 1787054400}]},
+    )
+    cursor = _encode_cursor_payload(payload)
 
     body = await graphql_query(
         app,
