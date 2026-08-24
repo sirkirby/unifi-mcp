@@ -410,6 +410,12 @@ def test_validator_rejects_mixed_case_url_and_textual_issue_reference_outside_co
         "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nIssue 999 is better.",
         "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nIssue: 999 is better.",
         "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nGH-999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "sirkirby/unifi-mcp#999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "see:sirkirby/unifi-mcp#999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "`sirkirby/unifi-mcp#999` is better.",
     ):
         output = {"items": [{"type": "noop", "message": message}]}
 
@@ -417,6 +423,30 @@ def test_validator_rejects_mixed_case_url_and_textual_issue_reference_outside_co
 
         assert result.returncode == 1
         assert "issue reference outside trusted candidate context" in result.stderr
+
+
+def test_validator_rejects_punctuation_adjacent_cross_repository_reference(tmp_path: Path):
+    context = _trusted_context_with_candidate()
+    for reference in (
+        "see:someone/another-repo#225",
+        "`someone/another-repo#225`",
+    ):
+        output = {
+            "items": [
+                {
+                    "type": "noop",
+                    "message": (
+                        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+                        f"{reference} is another match."
+                    ),
+                }
+            ]
+        }
+
+        result = _run_validator(tmp_path, output, duplicate_context=context)
+
+        assert result.returncode == 1
+        assert "cross-repository reference" in result.stderr
 
 
 def test_validator_rejects_percent_encoded_issue_url(tmp_path: Path):

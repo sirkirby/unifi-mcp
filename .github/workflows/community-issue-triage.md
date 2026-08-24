@@ -378,7 +378,7 @@ safe-outputs:
         const htmlLinkPattern = /<(?:a\s|[^>]+\shref\s*=)/gi;
         const mentionPattern = /(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/g;
         const closingPattern = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?[ \t]*#\d+\b/gi;
-        const crossRepoPattern = /(^|[\s(])([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#\d+\b/g;
+        const crossRepoPattern = /(^|[^A-Za-z0-9_.-])([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)\b/g;
         const secretPatterns = [
           /github_pat_[A-Za-z0-9_]{20,}/g,
           /gh[pousr]_[A-Za-z0-9]{20,}/g,
@@ -614,6 +614,8 @@ safe-outputs:
           for (const match of value.matchAll(crossRepoPattern)) {
             if (match[2].toLowerCase() !== "sirkirby" || match[3].toLowerCase() !== "unifi-mcp") {
               violations.push("cross-repository reference");
+            } else {
+              referencedIssueNumbers.add(Number(match[4]));
             }
           }
           for (const pattern of secretPatterns) {
