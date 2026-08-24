@@ -299,7 +299,7 @@ def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(t
         ),
         (
             "Candidate #225: RELATED — " + ("\u200b" * 20),
-            "candidate assessment reason must contain at least 20 visible characters",
+            "candidate assessment must match the required literal grammar",
         ),
         (
             "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
@@ -324,6 +324,16 @@ def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(t
         (
             "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\u2028"
             "Candidate #225: related — This Unicode-separated assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\u0085"
+            "Candidate #225: NOT_RELATED — This next-line assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\f"
+            "Candidate #225: NOT_RELATED — This form-feed assessment must be rejected.",
             "candidate assessment must match the required literal grammar",
         ),
         (

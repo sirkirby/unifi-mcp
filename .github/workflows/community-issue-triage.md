@@ -566,7 +566,7 @@ safe-outputs:
 
         const candidateAssessmentPrefixPattern = /Candidate #(\d+):/i;
         const candidateAssessmentPattern =
-          /^Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\r\n\u2028\u2029]+)$/;
+          /^Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\p{C}\p{Zl}\p{Zp}]+)$/u;
         const inspect = (value) => {
           for (const line of value.split(/\r\n|[\n\r\u2028\u2029]/)) {
             const normalizedCandidateLine = normalizePolicyText(line);
