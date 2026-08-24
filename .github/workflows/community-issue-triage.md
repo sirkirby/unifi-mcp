@@ -555,16 +555,30 @@ safe-outputs:
           violations.push("noop must be exclusive");
         }
 
+        const candidateAssessmentPrefixPattern = /Candidate #(\d+):/i;
         const candidateAssessmentPattern =
-          /(?:^|\n)Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\r\n]{20,})$/gim;
+          /^Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\r\n\u2028\u2029]+)$/;
         const inspect = (value) => {
-          for (const match of value.matchAll(candidateAssessmentPattern)) {
+          for (const line of value.split(/\r\n|[\n\r\u2028\u2029]/)) {
+            if (!candidateAssessmentPrefixPattern.test(line)) continue;
+            const match = line.match(candidateAssessmentPattern);
+            if (!match) {
+              violations.push("candidate assessment must match the required literal grammar");
+              continue;
+            }
             const number = Number(match[1]);
+            const reason = match[3].trim();
+            const visibleReason = reason.replace(/[\p{C}\p{Z}\s]/gu, "");
+            if (visibleReason.length < 20 || !/[\p{L}\p{N}]/u.test(reason)) {
+              violations.push(
+                "candidate assessment reason must contain at least 20 visible characters"
+              );
+              continue;
+            }
             const assessments = candidateAssessments.get(number) || [];
-            assessments.push({verdict: match[2].toUpperCase(), reason: match[3]});
+            assessments.push({verdict: match[2], reason});
             candidateAssessments.set(number, assessments);
           }
-          candidateAssessmentPattern.lastIndex = 0;
           for (const match of value.matchAll(issueReferencePattern)) {
             referencedIssueNumbers.add(Number(match[2]));
           }

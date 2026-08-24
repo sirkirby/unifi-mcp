@@ -286,6 +286,59 @@ def test_validator_requires_top_candidate_acknowledgement(tmp_path: Path):
     assert accepted.returncode == 0, accepted.stderr
 
 
+def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(tmp_path: Path):
+    context = _trusted_context_with_candidate()
+    outputs = (
+        (
+            "Candidate #225: related — It reports the same malformed uvx argument failure.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED —                     ",
+            "candidate assessment reason must contain at least 20 visible characters",
+        ),
+        (
+            "Candidate #225: RELATED — " + ("\u200b" * 20),
+            "candidate assessment reason must contain at least 20 visible characters",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+            "Candidate #225: related — This contradictory assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+            "Candidate #225: DUPLICATE — This unsupported verdict must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+            " Candidate #225: related — This indented assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+            "- Candidate #225: DUPLICATE — This bulleted assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\u2028"
+            "Candidate #225: related — This Unicode-separated assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+    )
+
+    for message, expected_error in outputs:
+        result = _run_validator(
+            tmp_path,
+            {"items": [{"type": "noop", "message": message}]},
+            duplicate_context=context,
+        )
+
+        assert result.returncode == 1
+        assert expected_error in result.stderr
+
+
 def test_validator_rejects_syntactic_candidate_mention_and_unused_ack_field(tmp_path: Path):
     context = _trusted_context_with_candidate()
     outputs = (
