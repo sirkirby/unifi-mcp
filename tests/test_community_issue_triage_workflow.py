@@ -13,6 +13,43 @@ WORKFLOW = ROOT / ".github" / "workflows" / "community-issue-triage.md"
 
 LOCK = ROOT / ".github" / "workflows" / "community-issue-triage.lock.yml"
 
+REQUIRED_LABELS = [
+    "bug",
+    "enhancement",
+    "documentation",
+    "dependencies",
+    "docker",
+    "github-actions",
+    "api",
+    "network",
+    "protect",
+    "access",
+    "needs-info",
+]
+
+NO_CANDIDATE_UNCERTAINTY = (
+    "Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown."
+)
+
+
+def _trusted_context(target_number: int = 521) -> dict[str, object]:
+    return {
+        "version": 1,
+        "status": "complete",
+        "strategy": "bounded-title-lexical-v1",
+        "target": {"number": target_number},
+        "search_performed": True,
+        "candidates": [],
+        "scanned": 560,
+        "truncated": False,
+    }
+
+
+def _trusted_context_with_candidate(target_number: int = 521) -> dict[str, object]:
+    context = _trusted_context(target_number)
+    context["candidates"] = [{"number": 225, "state": "closed", "score": 19}]
+    return context
+
 
 def _validator_script(output_path: Path) -> str:
     source = WORKFLOW.read_text()
@@ -26,7 +63,12 @@ def _validator_script(output_path: Path) -> str:
     return script
 
 
-def _run_validator(tmp_path: Path, output: dict[str, object]):
+def _run_validator(
+    tmp_path: Path,
+    output: dict[str, object],
+    *,
+    duplicate_context: dict[str, object] | str | None = None,
+):
     output_path = tmp_path / "agent_output.json"
     summary_path = tmp_path / "summary.md"
     output_path.write_text(json.dumps(output))
@@ -36,6 +78,11 @@ def _run_validator(tmp_path: Path, output: dict[str, object]):
         {
             "GITHUB_STEP_SUMMARY": str(summary_path),
             "TARGET_NUMBER": "521",
+            "TRUSTED_DUPLICATE_CONTEXT": (
+                json.dumps(_trusted_context())
+                if duplicate_context is None
+                else (duplicate_context if isinstance(duplicate_context, str) else json.dumps(duplicate_context))
+            ),
         }
     )
     return subprocess.run(
@@ -43,6 +90,67 @@ def _run_validator(tmp_path: Path, output: dict[str, object]):
         capture_output=True,
         check=False,
         env=env,
+        text=True,
+    )
+
+
+def _research_script() -> str:
+    source = WORKFLOW.read_text()
+    match = re.search(
+        r"        id: research\n.*?          script: \|\n(?P<script>.*?)\n\n  activation:",
+        source,
+        re.DOTALL,
+    )
+    assert match is not None, "trusted duplicate research script was not found"
+    return textwrap.dedent(match.group("script"))
+
+
+def _run_research(
+    *,
+    target: dict[str, object],
+    candidates: list[dict[str, object]],
+    candidate_pages: list[list[dict[str, object]]] | None = None,
+    graphql_error: bool = False,
+):
+    graphql_implementation = (
+        'async () => { throw new Error("simulated GraphQL failure"); }'
+        if graphql_error
+        else "async () => { const nodes = candidatePages[graphqlCalls] || []; "
+        "graphqlCalls += 1; return {repository: {issues: {nodes, pageInfo: {"
+        "hasNextPage: graphqlCalls < candidatePages.length, "
+        "endCursor: graphqlCalls < candidatePages.length ? String(graphqlCalls) : null"
+        "}}}}; }"
+    )
+    pages = candidate_pages if candidate_pages is not None else [candidates]
+    harness = f"""
+const target = {json.dumps(target)};
+const candidates = {json.dumps(candidates)};
+const candidatePages = {json.dumps(pages)};
+let graphqlCalls = 0;
+const outputs = {{}};
+const core = {{
+  setFailed: (message) => {{ throw new Error(message); }},
+  setOutput: (name, value) => {{ outputs[name] = value; }},
+}};
+const context = {{repo: {{owner: "sirkirby", repo: "unifi-mcp"}}}};
+const github = {{
+  rest: {{issues: {{
+    get: async () => ({{data: target}}),
+    listLabelsForRepo: async () => ({{data: []}}),
+  }}}},
+  paginate: async () => {json.dumps([{"name": label} for label in REQUIRED_LABELS])},
+  graphql: {graphql_implementation},
+}};
+process.env.TARGET_NUMBER = "228";
+process.env.RETENTION_VERIFIED = "true";
+(async () => {{
+{textwrap.indent(_research_script(), "  ")}
+}})().then(() => process.stdout.write(JSON.stringify(outputs)));
+"""
+    return subprocess.run(
+        ["node", "-e", harness],
+        capture_output=True,
+        check=False,
         text=True,
     )
 
@@ -72,7 +180,9 @@ def _allowed_label_output() -> dict[str, object]:
                 "labels": [
                     {
                         "name": "bug",
-                        "rationale": "The report describes reproducible incorrect behavior.",
+                        "rationale": (
+                            "The report describes reproducible incorrect behavior.\n" + NO_CANDIDATE_UNCERTAINTY
+                        ),
                         "confidence": "HIGH",
                     }
                 ],
@@ -95,7 +205,14 @@ def test_triage_reviewed_is_rejected_as_human_only(tmp_path: Path):
 
 
 def test_noop_output_still_passes_validation(tmp_path: Path):
-    output = {"items": [{"type": "noop", "message": "No public action is warranted."}]}
+    output = {
+        "items": [
+            {
+                "type": "noop",
+                "message": "No public action is warranted.\n" + NO_CANDIDATE_UNCERTAINTY,
+            }
+        ]
+    }
     result = _run_validator(tmp_path, output)
 
     assert result.returncode == 0, result.stderr
@@ -111,6 +228,415 @@ def test_allowed_label_passes_and_receives_trusted_target(tmp_path: Path):
     assert "The report describes reproducible incorrect behavior." in summary
 
 
+def test_validator_rejects_missing_malformed_or_mismatched_duplicate_context(tmp_path: Path):
+    output = {"items": [{"type": "noop", "message": "No public action is warranted."}]}
+
+    malformed = _run_validator(tmp_path, output, duplicate_context="not-json")
+    assert malformed.returncode == 1
+    assert "malformed trusted duplicate context" in malformed.stderr
+
+    mismatched = _trusted_context(target_number=522)
+    mismatch = _run_validator(tmp_path, output, duplicate_context=mismatched)
+    assert mismatch.returncode == 1
+    assert "invalid trusted duplicate context" in mismatch.stderr
+
+    missing_skip_reason = _trusted_context()
+    missing_skip_reason["search_performed"] = False
+    missing_reason = _run_validator(tmp_path, output, duplicate_context=missing_skip_reason)
+    assert missing_reason.returncode == 1
+    assert "invalid trusted duplicate context" in missing_reason.stderr
+
+
+def test_validator_rejects_unexpected_candidate_fields(tmp_path: Path):
+    context = _trusted_context_with_candidate()
+    context["candidates"] = [
+        {
+            "number": 225,
+            "state": "closed",
+            "score": 12,
+            "shared_terms": ["candidate", "<script>"],
+        }
+    ]
+    output = {"items": [{"type": "noop", "message": "No public action is warranted."}]}
+
+    result = _run_validator(tmp_path, output, duplicate_context=context)
+
+    assert result.returncode == 1
+    assert "invalid trusted duplicate context" in result.stderr
+
+
+def test_validator_requires_top_candidate_acknowledgement(tmp_path: Path):
+    generic = {"items": [{"type": "noop", "message": "No public action is warranted."}]}
+    context = _trusted_context_with_candidate()
+
+    missing = _run_validator(tmp_path, generic, duplicate_context=context)
+    assert missing.returncode == 1
+    assert "highest-ranked trusted candidate requires one structured assessment" in missing.stderr
+
+    acknowledged = {
+        "items": [
+            {
+                "type": "noop",
+                "message": ("Candidate #225: RELATED — It reports the same malformed uvx argument failure."),
+            }
+        ]
+    }
+    accepted = _run_validator(tmp_path, acknowledged, duplicate_context=context)
+    assert accepted.returncode == 0, accepted.stderr
+
+
+def test_validator_rejects_syntactic_candidate_mention_and_unused_ack_field(tmp_path: Path):
+    context = _trusted_context_with_candidate()
+    outputs = (
+        {"items": [{"type": "noop", "message": "Color #225 is blue; no action is warranted."}]},
+        {
+            "items": [
+                {
+                    "type": "noop",
+                    "message": "No public action is warranted.",
+                    "ack": "Candidate #225: RELATED — This hidden field must never count.",
+                }
+            ]
+        },
+    )
+
+    for output in outputs:
+        result = _run_validator(tmp_path, output, duplicate_context=context)
+
+        assert result.returncode == 1
+        assert "structured assessment" in result.stderr or "unexpected fields" in result.stderr
+
+
+def test_validator_requires_uncertainty_and_rejects_exhaustive_empty_result_claim(tmp_path: Path):
+    unsupported = {
+        "items": [
+            {
+                "type": "noop",
+                "message": "No related issue exists, so no public action is warranted.",
+            }
+        ]
+    }
+    rejected = _run_validator(tmp_path, unsupported)
+
+    assert rejected.returncode == 1
+    assert "missing required lexical uncertainty statement" in rejected.stderr
+
+    contradictory = {
+        "items": [
+            {
+                "type": "noop",
+                "message": NO_CANDIDATE_UNCERTAINTY + "\nNo duplicate issue was found.",
+            }
+        ]
+    }
+    rejected_contradiction = _run_validator(tmp_path, contradictory)
+
+    assert rejected_contradiction.returncode == 1
+    assert "unsupported exhaustive duplicate claim" in rejected_contradiction.stderr
+
+    synonymous = {
+        "items": [
+            {
+                "type": "noop",
+                "message": NO_CANDIDATE_UNCERTAINTY + "\nA search of all issues found nothing similar.",
+            }
+        ]
+    }
+    rejected_synonym = _run_validator(tmp_path, synonymous)
+
+    assert rejected_synonym.returncode == 1
+    assert "relationship prose outside the required lexical statement" in rejected_synonym.stderr
+
+
+def test_validator_accepts_machine_checked_skip_uncertainty_statements(tmp_path: Path):
+    cases = (
+        (
+            "sensitive-title-guard",
+            "Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown.",
+        ),
+        (
+            "no-distinctive-title-terms",
+            (
+                "Lexical result: Search skipped because the title had no distinctive terms; "
+                "duplicate status remains unknown."
+            ),
+        ),
+    )
+    for reason, statement in cases:
+        context = _trusted_context()
+        context.update(
+            {
+                "search_performed": False,
+                "reason": reason,
+                "scanned": 0,
+                "truncated": False,
+            }
+        )
+        output = {"items": [{"type": "noop", "message": statement}]}
+
+        result = _run_validator(tmp_path, output, duplicate_context=context)
+
+        assert result.returncode == 0, result.stderr
+
+
+def test_validator_rejects_issue_reference_outside_trusted_context(tmp_path: Path):
+    context = _trusted_context_with_candidate()
+    output = {
+        "items": [
+            {
+                "type": "noop",
+                "message": (
+                    "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+                    "Issue #999 is the better match."
+                ),
+            }
+        ]
+    }
+
+    result = _run_validator(tmp_path, output, duplicate_context=context)
+
+    assert result.returncode == 1
+    assert "issue reference outside trusted candidate context" in result.stderr
+
+
+def test_validator_rejects_mixed_case_url_and_textual_issue_reference_outside_context(
+    tmp_path: Path,
+):
+    context = _trusted_context_with_candidate()
+    for message in (
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "https://GITHUB.com/sirkirby/unifi-mcp/issues/999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nIssue 999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nIssue: 999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nGH-999 is better.",
+    ):
+        output = {"items": [{"type": "noop", "message": message}]}
+
+        result = _run_validator(tmp_path, output, duplicate_context=context)
+
+        assert result.returncode == 1
+        assert "issue reference outside trusted candidate context" in result.stderr
+
+
+def test_validator_rejects_percent_encoded_issue_url(tmp_path: Path):
+    context = _trusted_context_with_candidate()
+    output = {
+        "items": [
+            {
+                "type": "noop",
+                "message": (
+                    "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+                    "https://github.com/sirkirby/unifi-mcp/issues/%39%39%39 is another match."
+                ),
+            }
+        ]
+    }
+
+    result = _run_validator(tmp_path, output, duplicate_context=context)
+
+    assert result.returncode == 1
+    assert "URL outside the canonical repository" in result.stderr
+
+
+def test_trusted_research_ranks_issue_225_for_issue_228_and_excludes_target():
+    target = {
+        "number": 228,
+        "title": 'Plugin v0.16.0: args[0] "--python-preference==0.16.0" rejected by uvx, MCP fails to connect',
+        "created_at": "2026-05-10T15:00:00Z",
+    }
+    candidates = [
+        {
+            "number": 228,
+            "title": target["title"],
+            "state": "CLOSED",
+            "createdAt": "2026-05-10T15:00:00Z",
+            "closedAt": "2026-05-10T16:11:02Z",
+        },
+        {
+            "number": 225,
+            "title": (
+                "unifi-network plugin manifest has malformed uvx args "
+                "(--python-preference==0.16.0) — MCP server fails to start"
+            ),
+            "state": "CLOSED",
+            "createdAt": "2026-05-09T20:00:00Z",
+            "closedAt": "2026-05-10T01:04:45Z",
+        },
+        {
+            "number": 219,
+            "title": "Plugin setup documentation should explain uvx installation",
+            "state": "OPEN",
+            "createdAt": "2026-05-01T00:00:00Z",
+            "closedAt": None,
+        },
+    ]
+
+    result = _run_research(target=target, candidates=candidates)
+
+    assert result.returncode == 0, result.stderr
+    output = json.loads(result.stdout)
+    context = json.loads(output["context"])
+    assert [candidate["number"] for candidate in context["candidates"]] == [225]
+    assert set(context["candidates"][0]) == {"number", "state", "score"}
+    assert context["candidates"][0]["score"] >= 6
+
+
+def test_trusted_research_follows_graphql_pagination_for_later_candidate():
+    target = {
+        "number": 228,
+        "title": 'Plugin v0.16.0: args[0] "--python-preference==0.16.0" rejected by uvx',
+        "created_at": "2026-05-10T15:00:00Z",
+    }
+    later_candidate = {
+        "number": 225,
+        "title": "Malformed uvx args (--python-preference==0.16.0)",
+        "state": "CLOSED",
+        "createdAt": "2026-05-09T20:00:00Z",
+        "closedAt": "2026-05-10T01:04:45Z",
+    }
+
+    result = _run_research(
+        target=target,
+        candidates=[],
+        candidate_pages=[[], [later_candidate]],
+    )
+
+    assert result.returncode == 0, result.stderr
+    context = json.loads(json.loads(result.stdout)["context"])
+    assert [candidate["number"] for candidate in context["candidates"]] == [225]
+    assert context["scanned"] == 1
+
+
+def test_trusted_research_marks_the_ten_page_scan_bound():
+    target = {
+        "number": 228,
+        "title": "Network client display name is missing",
+        "created_at": "2026-05-10T15:00:00Z",
+    }
+    pages = [
+        [
+            {
+                "number": page * 100 + offset + 1000,
+                "title": f"Unrelated report {page}-{offset}",
+                "state": "OPEN",
+                "createdAt": "2026-05-01T00:00:00Z",
+                "closedAt": None,
+            }
+            for offset in range(100)
+        ]
+        for page in range(10)
+    ]
+    pages.append(
+        [
+            {
+                "number": 225,
+                "title": "Network client display name is missing",
+                "state": "OPEN",
+                "createdAt": "2025-01-01T00:00:00Z",
+                "closedAt": None,
+            }
+        ]
+    )
+
+    result = _run_research(target=target, candidates=[], candidate_pages=pages)
+
+    assert result.returncode == 0, result.stderr
+    context = json.loads(json.loads(result.stdout)["context"])
+    assert context["scanned"] == 1000
+    assert context["truncated"] is True
+    assert context["candidates"] == []
+
+
+def test_trusted_research_accepts_no_candidates_and_filters_old_closed_issues():
+    target = {
+        "number": 228,
+        "title": "Network client display name is missing",
+        "created_at": "2026-05-10T15:00:00Z",
+    }
+    candidates = [
+        {
+            "number": 12,
+            "title": "Network client display name is missing",
+            "state": "CLOSED",
+            "createdAt": "2024-01-01T00:00:00Z",
+            "closedAt": "2024-01-02T00:00:00Z",
+        }
+    ]
+
+    result = _run_research(target=target, candidates=candidates)
+
+    assert result.returncode == 0, result.stderr
+    context = json.loads(json.loads(result.stdout)["context"])
+    assert context["search_performed"] is True
+    assert context["candidates"] == []
+
+
+def test_trusted_research_reports_when_title_has_no_distinctive_terms():
+    target = {
+        "number": 228,
+        "title": "It is a",
+        "created_at": "2026-05-10T15:00:00Z",
+    }
+
+    result = _run_research(target=target, candidates=[], graphql_error=True)
+
+    assert result.returncode == 0, result.stderr
+    context = json.loads(json.loads(result.stdout)["context"])
+    assert context["search_performed"] is False
+    assert context["reason"] == "no-distinctive-title-terms"
+
+
+def test_trusted_research_skips_graphql_for_a_sensitive_title():
+    target = {
+        "number": 228,
+        "title": "Leaked token: github_pat_abcdefghijklmnopqrstuvwxyz123456",
+        "created_at": "2026-05-10T15:00:00Z",
+    }
+
+    result = _run_research(target=target, candidates=[], graphql_error=True)
+
+    assert result.returncode == 0, result.stderr
+    context = json.loads(json.loads(result.stdout)["context"])
+    assert context["search_performed"] is False
+    assert context["reason"] == "sensitive-title-guard"
+
+
+def test_trusted_research_excludes_sensitive_candidate_titles():
+    target = {
+        "number": 228,
+        "title": "API token authentication failure",
+        "created_at": "2026-05-10T15:00:00Z",
+    }
+    candidates = [
+        {
+            "number": 225,
+            "title": "API token: github_pat_abcdefghijklmnopqrstuvwxyz123456 authentication failure",
+            "state": "OPEN",
+            "createdAt": "2026-05-09T20:00:00Z",
+            "closedAt": None,
+        }
+    ]
+
+    result = _run_research(target=target, candidates=candidates)
+
+    assert result.returncode == 0, result.stderr
+    context = json.loads(json.loads(result.stdout)["context"])
+    assert context["candidates"] == []
+
+
+def test_trusted_research_fails_closed_when_github_candidate_fetch_fails():
+    target = {
+        "number": 228,
+        "title": "Network client display name is missing",
+        "created_at": "2026-05-10T15:00:00Z",
+    }
+
+    result = _run_research(target=target, candidates=[], graphql_error=True)
+
+    assert result.returncode != 0
+    assert "simulated GraphQL failure" in result.stderr
+
+
 def test_source_and_compiled_output_policy_keep_triage_reviewed_human_only():
     source = WORKFLOW.read_text()
     compiled = LOCK.read_text()
@@ -122,14 +648,50 @@ def test_source_and_compiled_output_policy_keep_triage_reviewed_human_only():
     assert "triage-reviewed" in config["add_labels"]["blocked"]
 
 
-def test_scoped_issue_search_contract_is_in_source_and_compiled_manifest():
+def test_trusted_duplicate_research_replaces_agent_issue_search():
     source = WORKFLOW.read_text()
+    compiled = LOCK.read_text()
     compiled_lines = LOCK.read_text().splitlines()
     manifest_line = next(line for line in compiled_lines if line.startswith("# gh-aw-manifest: "))
     manifest = json.loads(manifest_line.removeprefix("# gh-aw-manifest: "))
     github_server = next(server for server in manifest["mcp_servers"] if server["name"] == "github")
 
-    assert ("Call `search_issues` with `owner: sirkirby`, `repo: unifi-mcp`, and a nonempty query") in source.replace(
-        "\n", " "
+    assert "bounded-title-lexical-v1" in source
+    assert "needs.trusted_duplicate_research.outputs.context" in source
+    assert "search_issues" not in github_server["tools"]
+    assert "github(search_issues)" not in compiled
+    assert "candidate.title.length" not in compiled
+    assert "title: String(candidate.title" not in compiled
+    assert "shared_terms" not in compiled
+    assert re.search(r"  activation:\n    needs: trusted_duplicate_research\n", compiled)
+    assert re.search(
+        r"  safe_outputs:\n    needs:\n(?:      - .*\n)*      - trusted_duplicate_research\n",
+        compiled,
     )
-    assert "search_issues" in github_server["tools"]
+    assert "TRUSTED_DUPLICATE_CONTEXT: ${{ needs.trusted_duplicate_research.outputs.context }}" in compiled
+
+    issue_read_limit = re.search(r"- name: issue_read\n(?:\s*#.*\n)?\s*max-calls: (?P<limit>\d+)", source)
+    assert issue_read_limit is not None
+    assert int(issue_read_limit.group("limit")) == 2 + 5
+
+
+def test_prompt_requires_minimal_safe_output_argument_shapes():
+    source = WORKFLOW.read_text().replace("\n", " ")
+
+    assert "`add_comment` with `{body}`" in source
+    assert re.search(
+        r"`add_labels` with\s+`\{labels: \[\{name, rationale, confidence\}\]\}`",
+        source,
+    )
+    assert "`noop` with `{message}`" in source
+    for forbidden_selector in (
+        "item_number",
+        "repo",
+        "target",
+        "comment_id",
+        "reply_to_id",
+        "suggest",
+        "secrecy",
+        "integrity",
+    ):
+        assert forbidden_selector in source
