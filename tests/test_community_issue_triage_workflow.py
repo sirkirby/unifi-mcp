@@ -444,35 +444,65 @@ def test_validator_requires_uncertainty_and_leaves_free_form_semantics_for_human
         assert result.returncode == 0, result.stderr
 
 
-def test_validator_accepts_machine_checked_skip_uncertainty_statements(tmp_path: Path):
-    cases = (
-        (
-            "sensitive-title-guard",
-            "Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown.",
-        ),
-        (
-            "no-distinctive-title-terms",
-            (
-                "Lexical result: Search skipped because the title had no distinctive terms; "
-                "duplicate status remains unknown."
-            ),
-        ),
+def test_validator_accepts_machine_checked_no_distinctive_terms_uncertainty(tmp_path: Path):
+    context = _trusted_context()
+    context.update(
+        {
+            "search_performed": False,
+            "reason": "no-distinctive-title-terms",
+            "scanned": 0,
+            "truncated": False,
+        }
     )
-    for reason, statement in cases:
-        context = _trusted_context()
-        context.update(
+    output = {
+        "items": [
             {
-                "search_performed": False,
-                "reason": reason,
-                "scanned": 0,
-                "truncated": False,
+                "type": "noop",
+                "message": (
+                    "Lexical result: Search skipped because the title had no distinctive terms; "
+                    "duplicate status remains unknown."
+                ),
             }
-        )
-        output = {"items": [{"type": "noop", "message": statement}]}
+        ]
+    }
 
-        result = _run_validator(tmp_path, output, duplicate_context=context)
+    result = _run_validator(tmp_path, output, duplicate_context=context)
 
-        assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stderr
+
+
+def test_validator_requires_sensitive_stop_for_trusted_sensitive_title_guard(tmp_path: Path):
+    context = _trusted_context()
+    context.update(
+        {
+            "search_performed": False,
+            "reason": "sensitive-title-guard",
+            "scanned": 0,
+            "truncated": False,
+        }
+    )
+    uncertainty = {
+        "items": [
+            {
+                "type": "noop",
+                "message": (
+                    "Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown."
+                ),
+            }
+        ]
+    }
+
+    rejected = _run_validator(tmp_path, uncertainty, duplicate_context=context)
+
+    assert rejected.returncode == 1
+    assert "sensitive title guard requires the exact exclusive noop shape" in rejected.stderr
+
+    accepted = _run_validator(
+        tmp_path,
+        {"items": [{"type": "noop", "message": "Sensitive intake stop: Maintainer attention is required."}]},
+        duplicate_context=context,
+    )
+    assert accepted.returncode == 0, accepted.stderr
 
 
 def test_validator_rejects_issue_reference_outside_trusted_context(tmp_path: Path):
@@ -493,6 +523,51 @@ def test_validator_rejects_issue_reference_outside_trusted_context(tmp_path: Pat
 
     assert result.returncode == 1
     assert "issue reference outside trusted candidate context" in result.stderr
+
+
+def test_validator_does_not_treat_plural_verb_as_issue_reference(tmp_path: Path):
+    context = _trusted_context_with_candidate()
+    for prose in (
+        "The endpoint issues 500 responses when authentication fails.",
+        "The endpoint issues no 500 responses when authentication fails.",
+        "The endpoint issues no. 500 responses when authentication fails.",
+        "The endpoint issues number 500 responses during the test.",
+    ):
+        output = {
+            "items": [
+                {
+                    "type": "noop",
+                    "message": (
+                        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n" + prose
+                    ),
+                }
+            ]
+        }
+
+        result = _run_validator(tmp_path, output, duplicate_context=context)
+
+        assert result.returncode == 0, result.stderr
+
+
+def test_validator_rejects_untrusted_explicit_plural_issue_references(tmp_path: Path):
+    context = _trusted_context_with_candidate()
+    for reference in ("issues #999", "issues: #999"):
+        output = {
+            "items": [
+                {
+                    "type": "noop",
+                    "message": (
+                        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+                        f"The report also references {reference}."
+                    ),
+                }
+            ]
+        }
+
+        result = _run_validator(tmp_path, output, duplicate_context=context)
+
+        assert result.returncode == 1
+        assert "issue reference outside trusted candidate context" in result.stderr
 
 
 def test_validator_rejects_mixed_case_url_and_textual_issue_reference_outside_context(

@@ -372,8 +372,9 @@ safe-outputs:
         const violations = [];
         const urlPattern = /https?:\/\/[^\s<>"'\x60]+/gi;
         const issueReferencePattern = /(^|[^A-Za-z0-9_])#\s*(\d+)\b/g;
-        const textualIssueReferencePattern =
-          /\bissues?\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi;
+        const singularTextualIssueReferencePattern =
+          /\bissue\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi;
+        const pluralTextualIssueReferencePattern = /\bissues\s*:?\s*#\s*(\d+)\b/gi;
         const ghIssueReferencePattern = /\bGH\s*-\s*(\d+)\b/gi;
         const issuePathReferencePattern =
           /(^|[^A-Za-z0-9_.\/-])(?:(?:(?:\/\/)?(?:www\.)?github\.com\/)|(?:\/|(?:\.\.?\/)+))?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)\b/gi;
@@ -602,10 +603,14 @@ safe-outputs:
             referencedIssueNumbers.add(Number(match[2]));
           }
           issueReferencePattern.lastIndex = 0;
-          for (const match of normalizedReferenceValue.matchAll(textualIssueReferencePattern)) {
+          for (const match of normalizedReferenceValue.matchAll(singularTextualIssueReferencePattern)) {
             referencedIssueNumbers.add(Number(match[1]));
           }
-          textualIssueReferencePattern.lastIndex = 0;
+          singularTextualIssueReferencePattern.lastIndex = 0;
+          for (const match of normalizedReferenceValue.matchAll(pluralTextualIssueReferencePattern)) {
+            referencedIssueNumbers.add(Number(match[1]));
+          }
+          pluralTextualIssueReferencePattern.lastIndex = 0;
           for (const match of normalizedReferenceValue.matchAll(ghIssueReferencePattern)) {
             referencedIssueNumbers.add(Number(match[1]));
           }
@@ -685,6 +690,9 @@ safe-outputs:
           (typeCounts.get("noop") || 0) === 1 &&
           semanticStrings.length === 1 &&
           semanticStrings[0] === sensitiveStopMessage;
+        if (duplicateContext.reason === "sensitive-title-guard" && !sensitiveStop) {
+          violations.push("sensitive title guard requires the exact exclusive noop shape");
+        }
         if (sensitiveStopRequested && !sensitiveStop) {
           violations.push("sensitive intake stop must use the exact exclusive noop shape");
         }
