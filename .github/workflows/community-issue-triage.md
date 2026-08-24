@@ -36,7 +36,7 @@ max-ai-credits: 75
 max-daily-ai-credits: -1
 
 pre-agent-steps:
-  - name: Verify the target is an issue
+  - name: Verify the target issue and triage labels
     uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
     env:
       TARGET_NUMBER: ${{ inputs.issue_number }}
@@ -62,6 +62,37 @@ pre-agent-steps:
         });
         if (data.pull_request) {
           core.setFailed("issue_number must identify an issue, not a pull request");
+          return;
+        }
+
+        const requiredLabels = [
+          "bug",
+          "enhancement",
+          "documentation",
+          "dependencies",
+          "docker",
+          "github-actions",
+          "api",
+          "network",
+          "protect",
+          "access",
+          "needs-info",
+          "triage-reviewed",
+        ];
+        const repositoryLabels = await github.paginate(
+          github.rest.issues.listLabelsForRepo,
+          {
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            per_page: 100,
+          },
+        );
+        const availableLabels = new Set(repositoryLabels.map((label) => label.name));
+        const missingLabels = requiredLabels.filter((label) => !availableLabels.has(label));
+        if (missingLabels.length > 0) {
+          core.setFailed(
+            "Required triage labels are missing: " + missingLabels.join(", "),
+          );
         }
 
 tools:
@@ -117,6 +148,12 @@ safe-outputs:
         node <<'NODE'
         const fs = require("fs");
         const outputPath = "/tmp/gh-aw/agent_output.json";
+
+        const targetNumber = Number(process.env.TARGET_NUMBER);
+        if (!Number.isSafeInteger(targetNumber) || targetNumber < 1) {
+          console.error("Blocked invalid trusted target before staged preview");
+          process.exit(1);
+        }
 
         if (!fs.existsSync(outputPath)) {
           console.error("Blocked missing agent output before staged preview");
@@ -239,8 +276,14 @@ safe-outputs:
                 const rationale = typeof label.rationale === "string" ? label.rationale : "";
                 const confidence = typeof label.confidence === "string" ? label.confidence : "";
                 if (!allowedLabels.has(name)) violations.push("label outside allowlist");
-                if (rationale.trim() === "" || rationale.length > 280) {
-                  violations.push("label rationale must contain 1 to 280 characters");
+                if (
+                  rationale.trim() === "" ||
+                  rationale.length > 240 ||
+                  !/[.!?]$/.test(rationale.trim())
+                ) {
+                  violations.push(
+                    "label rationale must be a complete sentence containing 1 to 240 characters"
+                  );
                 }
                 if (!new Set(["LOW", "MEDIUM", "HIGH"]).has(confidence)) {
                   violations.push("label confidence must be LOW, MEDIUM, or HIGH");
@@ -341,6 +384,27 @@ safe-outputs:
         if (violations.length > 0) {
           console.error("Blocked staged output: " + [...new Set(violations)].join(", "));
           process.exit(1);
+        }
+        const labelItems = items.filter((item) => {
+          const type =
+            typeof item.type === "string"
+              ? item.type.toLowerCase().replaceAll("-", "_")
+              : "";
+          return type === "add_labels";
+        });
+        if (labelItems.length > 0) {
+          // gh-aw v0.87.4 add_labels ignores its configured target during
+          // workflow_dispatch. Inject only the trusted dispatch target after
+          // recursively rejecting every agent-supplied selector above.
+          for (const item of labelItems) item.item_number = targetNumber;
+          try {
+            const trustedOutputPath = outputPath + ".trusted";
+            fs.writeFileSync(trustedOutputPath, JSON.stringify(output));
+            fs.renameSync(trustedOutputPath, outputPath);
+          } catch {
+            console.error("Blocked staged output because the trusted target could not be injected");
+            process.exit(1);
+          }
         }
         if (!process.env.GITHUB_STEP_SUMMARY) {
           console.error("Blocked staged output because GITHUB_STEP_SUMMARY is unavailable");
@@ -452,7 +516,8 @@ or another secret. If so:
    exists.
 4. Search open and recent closed issues in this repository for only strong duplicate or
    related candidates. A candidate is evidence, not a duplicate disposition. Never
-   propose the `duplicate` label.
+   propose the `duplicate` label. If the output names a related candidate, describe the
+   precise relationship and never also claim that no related issue was found.
 5. Inspect only the minimum relevant repository source needed to distinguish plausible
    behavior from an unsupported assertion.
 6. Identify objectively missing information such as exact package version or commit,
@@ -467,10 +532,13 @@ or another secret. If so:
 - Add `needs-info` only when a specific objectively required fact is missing.
 - Add `triage-reviewed` only when the normal triage pass completed; do not add it on the
   sensitive-intake stop path or an incomplete/tool-failure run.
-- Every proposed label addition must include a concise rationale and calibrated
-  confidence for issue-intent review.
-- Propose at most one concise contributor-facing comment. If the issue is complete and
-  no helpful question, correction, or related issue exists, emit no generic comment.
+- Every proposed label addition must include a complete-sentence rationale of at most
+  240 characters and calibrated confidence for issue-intent review.
+- Propose at most one concise contributor-facing comment, and only when it adds new,
+  actionable information not already present in the issue. Do not paraphrase or merely
+  confirm a complete report; that should normally produce labels only. A related issue
+  warrants a comment only when the reporter has not already identified it and the
+  relationship gives the contributor a useful next action.
 - When neither a label nor a comment is warranted, call the `noop` safe-output tool with
   a concise reason. Do not use `noop` when any other safe output is proposed.
 - If a required issue/repository read or safe-output tool fails and prevents a truthful
