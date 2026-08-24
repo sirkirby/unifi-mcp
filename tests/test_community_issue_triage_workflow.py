@@ -123,9 +123,9 @@ def _run_research(
     )
     pages = candidate_pages if candidate_pages is not None else [candidates]
     harness = f"""
-const target = {json.dumps(target)};
-const candidates = {json.dumps(candidates)};
-const candidatePages = {json.dumps(pages)};
+const fixture = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const target = fixture.target;
+const candidatePages = fixture.candidatePages;
 let graphqlCalls = 0;
 const outputs = {{}};
 const core = {{
@@ -151,6 +151,7 @@ process.env.RETENTION_VERIFIED = "true";
         ["node", "-e", harness],
         capture_output=True,
         check=False,
+        input=json.dumps({"target": target, "candidatePages": pages}),
         text=True,
     )
 
