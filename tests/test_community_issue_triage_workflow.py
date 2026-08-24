@@ -584,6 +584,61 @@ def test_validator_identifies_untrusted_references_from_live_acceptance_output(t
     assert "issue reference outside trusted candidate context: #226, #227" in result.stderr
 
 
+def test_validator_rejects_untrusted_pull_request_reference_forms(tmp_path: Path):
+    context = _trusted_context_with_candidate(target_number=228)
+    for reference in (
+        "PR 999",
+        "pull request 999",
+        "https://github.com/sirkirby/unifi-mcp/pull/999",
+        "sirkirby/unifi-mcp/pull/999",
+    ):
+        output = {
+            "items": [
+                {
+                    "type": "noop",
+                    "message": (
+                        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+                        f"The fix was included in {reference}."
+                    ),
+                }
+            ]
+        }
+
+        result = _run_validator(
+            tmp_path,
+            output,
+            duplicate_context=context,
+            target_number=228,
+        )
+
+        assert result.returncode == 1
+        assert "issue reference outside trusted candidate context: #999" in result.stderr
+
+
+def test_validator_accepts_number_free_pull_request_paraphrase(tmp_path: Path):
+    context = _trusted_context_with_candidate(target_number=228)
+    output = {
+        "items": [
+            {
+                "type": "noop",
+                "message": (
+                    "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+                    "The fix was included in a prior merged change."
+                ),
+            }
+        ]
+    }
+
+    result = _run_validator(
+        tmp_path,
+        output,
+        duplicate_context=context,
+        target_number=228,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_validator_does_not_treat_plural_verb_as_issue_reference(tmp_path: Path):
     context = _trusted_context_with_candidate()
     for prose in (

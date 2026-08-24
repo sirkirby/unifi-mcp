@@ -375,9 +375,11 @@ safe-outputs:
         const singularTextualIssueReferencePattern =
           /\bissue\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi;
         const pluralTextualIssueReferencePattern = /\bissues\s*:?\s*#\s*(\d+)\b/gi;
+        const textualPullRequestReferencePattern =
+          /\b(?:PR|pull\s+request)\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi;
         const ghIssueReferencePattern = /\bGH\s*-\s*(\d+)\b/gi;
-        const issuePathReferencePattern =
-          /(^|[^A-Za-z0-9_.\/-])(?:(?:(?:\/\/)?(?:www\.)?github\.com\/)|(?:\/|(?:\.\.?\/)+))?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)\b/gi;
+        const githubItemPathReferencePattern =
+          /(^|[^A-Za-z0-9_.\/-])(?:(?:(?:\/\/)?(?:www\.)?github\.com\/)|(?:\/|(?:\.\.?\/)+))?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/(?:issues|pull)\/(\d+)\b/gi;
         const markdownLinkPattern = /\[[^\]]+\]\s*(?:\([^)]*\)|\[[^\]]*\])/g;
         const htmlLinkPattern = /<(?:a\s|[^>]+\shref\s*=)/gi;
         const mentionPattern = /(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/g;
@@ -611,18 +613,22 @@ safe-outputs:
             referencedIssueNumbers.add(Number(match[1]));
           }
           pluralTextualIssueReferencePattern.lastIndex = 0;
+          for (const match of normalizedReferenceValue.matchAll(textualPullRequestReferencePattern)) {
+            referencedIssueNumbers.add(Number(match[1]));
+          }
+          textualPullRequestReferencePattern.lastIndex = 0;
           for (const match of normalizedReferenceValue.matchAll(ghIssueReferencePattern)) {
             referencedIssueNumbers.add(Number(match[1]));
           }
           ghIssueReferencePattern.lastIndex = 0;
-          for (const match of normalizedReferenceValue.matchAll(issuePathReferencePattern)) {
+          for (const match of normalizedReferenceValue.matchAll(githubItemPathReferencePattern)) {
             if (match[2].toLowerCase() !== "sirkirby" || match[3].toLowerCase() !== "unifi-mcp") {
               violations.push("cross-repository reference");
             } else {
               referencedIssueNumbers.add(Number(match[4]));
             }
           }
-          issuePathReferencePattern.lastIndex = 0;
+          githubItemPathReferencePattern.lastIndex = 0;
           for (const match of normalizedReferenceValue.matchAll(urlPattern)) {
             const candidate = match[0].replace(/[),.;!?]+$/, "");
             try {
@@ -638,12 +644,12 @@ safe-outputs:
               ) {
                 violations.push("URL outside the canonical repository");
               } else {
-                const issuePathMatch = normalizedPath.match(
-                  /^\/sirkirby\/unifi-mcp\/issues\/(\d+)$/,
-                );
-                if (issuePathMatch) {
-                  referencedIssueNumbers.add(Number(issuePathMatch[1]));
-                }
+              const githubItemPathMatch = normalizedPath.match(
+                /^\/sirkirby\/unifi-mcp\/(?:issues|pull)\/(\d+)$/,
+              );
+              if (githubItemPathMatch) {
+                referencedIssueNumbers.add(Number(githubItemPathMatch[1]));
+              }
               }
             } catch {
               violations.push("malformed URL");
