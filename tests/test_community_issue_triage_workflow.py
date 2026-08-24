@@ -519,6 +519,16 @@ def test_validator_rejects_mixed_case_url_and_textual_issue_reference_outside_co
         "see:sirkirby/unifi-mcp#999 is better.",
         "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
         "`sirkirby/unifi-mcp#999` is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "/sirkirby/unifi-mcp/issues/999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "github.com/sirkirby/unifi-mcp/issues/999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "sirkirby/unifi-mcp/issues/999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "./sirkirby/unifi-mcp/issues/999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "//github.com/sirkirby/unifi-mcp/issues/999 is better.",
     ):
         output = {"items": [{"type": "noop", "message": message}]}
 
@@ -533,6 +543,11 @@ def test_validator_rejects_punctuation_adjacent_cross_repository_reference(tmp_p
     for reference in (
         "see:someone/another-repo#225",
         "`someone/another-repo#225`",
+        "/someone/another-repo/issues/225",
+        "github.com/someone/another-repo/issues/225",
+        "someone/another-repo/issues/225",
+        "./someone/another-repo/issues/225",
+        "//github.com/someone/another-repo/issues/225",
     ):
         output = {
             "items": [
@@ -550,6 +565,49 @@ def test_validator_rejects_punctuation_adjacent_cross_repository_reference(tmp_p
 
         assert result.returncode == 1
         assert "cross-repository reference" in result.stderr
+
+
+def test_validator_accepts_only_the_exact_sensitive_intake_stop_shape(tmp_path: Path):
+    message = "Sensitive intake stop: Maintainer attention is required."
+    for context in (_trusted_context(), _trusted_context_with_candidate()):
+        accepted = _run_validator(
+            tmp_path,
+            {"items": [{"type": "noop", "message": message}]},
+            duplicate_context=context,
+        )
+        assert accepted.returncode == 0, accepted.stderr
+
+    rejected = _run_validator(
+        tmp_path,
+        {
+            "items": [
+                {"type": "noop", "message": message},
+                {
+                    "type": "add_labels",
+                    "labels": [{"name": "bug", "rationale": "This report requires review.", "confidence": "LOW"}],
+                },
+            ]
+        },
+        duplicate_context=_trusted_context_with_candidate(),
+    )
+    assert rejected.returncode == 1
+    assert "sensitive intake stop must use the exact exclusive noop shape" in rejected.stderr
+
+    extended_messages = (
+        (
+            _trusted_context_with_candidate(),
+            message + "\nCandidate #225: RELATED — It reports the same malformed uvx argument failure.",
+        ),
+        (_trusted_context(), message + "\n" + NO_CANDIDATE_UNCERTAINTY),
+    )
+    for context, extended_message in extended_messages:
+        extended = _run_validator(
+            tmp_path,
+            {"items": [{"type": "noop", "message": extended_message}]},
+            duplicate_context=context,
+        )
+        assert extended.returncode == 1
+        assert "sensitive intake stop must use the exact exclusive noop shape" in extended.stderr
 
 
 def test_validator_rejects_percent_encoded_issue_url(tmp_path: Path):

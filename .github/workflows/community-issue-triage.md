@@ -375,6 +375,8 @@ safe-outputs:
         const textualIssueReferencePattern =
           /\bissues?\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi;
         const ghIssueReferencePattern = /\bGH\s*-\s*(\d+)\b/gi;
+        const issuePathReferencePattern =
+          /(^|[^A-Za-z0-9_.\/-])(?:(?:(?:\/\/)?(?:www\.)?github\.com\/)|(?:\/|(?:\.\.?\/)+))?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)\b/gi;
         const markdownLinkPattern = /\[[^\]]+\]\s*(?:\([^)]*\)|\[[^\]]*\])/g;
         const htmlLinkPattern = /<(?:a\s|[^>]+\shref\s*=)/gi;
         const mentionPattern = /(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/g;
@@ -608,6 +610,14 @@ safe-outputs:
             referencedIssueNumbers.add(Number(match[1]));
           }
           ghIssueReferencePattern.lastIndex = 0;
+          for (const match of normalizedReferenceValue.matchAll(issuePathReferencePattern)) {
+            if (match[2].toLowerCase() !== "sirkirby" || match[3].toLowerCase() !== "unifi-mcp") {
+              violations.push("cross-repository reference");
+            } else {
+              referencedIssueNumbers.add(Number(match[4]));
+            }
+          }
+          issuePathReferencePattern.lastIndex = 0;
           for (const match of normalizedReferenceValue.matchAll(urlPattern)) {
             const candidate = match[0].replace(/[),.;!?]+$/, "");
             try {
@@ -666,22 +676,36 @@ safe-outputs:
           }
         }
         const semanticText = semanticStrings.join("\n");
-        if (duplicateContext.candidates.length > 0) {
-          const topCandidate = duplicateContext.candidates[0].number;
-          if ((candidateAssessments.get(topCandidate) || []).length !== 1) {
-            violations.push("highest-ranked trusted candidate requires one structured assessment");
-          }
-        } else {
-          const requiredUncertainty = duplicateContext.truncated
-            ? "Lexical result: No candidate met the threshold in the 1,000 newest issues; duplicate status remains unknown beyond that bound."
-            : duplicateContext.search_performed
-              ? "Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown."
-              : duplicateContext.reason === "sensitive-title-guard"
-                ? "Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown."
-                : "Lexical result: Search skipped because the title had no distinctive terms; duplicate status remains unknown.";
-          const uncertaintyOccurrences = semanticText.split(requiredUncertainty).length - 1;
-          if (uncertaintyOccurrences !== 1) {
-            violations.push("missing required lexical uncertainty statement");
+        const sensitiveStopMessage = "Sensitive intake stop: Maintainer attention is required.";
+        const sensitiveStopRequested = semanticStrings.some((value) =>
+          value.includes(sensitiveStopMessage),
+        );
+        const sensitiveStop =
+          items.length === 1 &&
+          (typeCounts.get("noop") || 0) === 1 &&
+          semanticStrings.length === 1 &&
+          semanticStrings[0] === sensitiveStopMessage;
+        if (sensitiveStopRequested && !sensitiveStop) {
+          violations.push("sensitive intake stop must use the exact exclusive noop shape");
+        }
+        if (!sensitiveStop) {
+          if (duplicateContext.candidates.length > 0) {
+            const topCandidate = duplicateContext.candidates[0].number;
+            if ((candidateAssessments.get(topCandidate) || []).length !== 1) {
+              violations.push("highest-ranked trusted candidate requires one structured assessment");
+            }
+          } else {
+            const requiredUncertainty = duplicateContext.truncated
+              ? "Lexical result: No candidate met the threshold in the 1,000 newest issues; duplicate status remains unknown beyond that bound."
+              : duplicateContext.search_performed
+                ? "Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown."
+                : duplicateContext.reason === "sensitive-title-guard"
+                  ? "Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown."
+                  : "Lexical result: Search skipped because the title had no distinctive terms; duplicate status remains unknown.";
+            const uncertaintyOccurrences = semanticText.split(requiredUncertainty).length - 1;
+            if (uncertaintyOccurrences !== 1) {
+              violations.push("missing required lexical uncertainty statement");
+            }
           }
         }
         if (violations.length > 0) {
@@ -803,11 +827,11 @@ or another secret. If so:
 1. Stop. Do not inspect source, research duplicates, validate exploitability, or repeat
    the sensitive material in any output.
 2. Do not propose `security` or any other label.
-3. Propose at most one minimal comment directing the reporter to
-   `https://github.com/sirkirby/unifi-mcp/security/advisories` when that does not amplify
-   the disclosure. Otherwise emit no public comment.
-4. State only that maintainer attention is required; do not claim a vulnerability or
-   leak is confirmed.
+3. In Stage A, emit exactly one `noop` with the exact message
+   `Sensitive intake stop: Maintainer attention is required.` Do not emit a comment or
+   labels. This validator-recognized shape may bypass duplicate assessment even when the
+   trusted title scan produced candidates.
+4. Do not claim a vulnerability or leak is confirmed.
 
 ## Normal triage
 
@@ -836,23 +860,24 @@ ${{ needs.trusted_duplicate_research.outputs.context }}
 3. Classify any unresolved issue type as bug, enhancement, documentation,
    question/support, or unclear. Do not force a component label when no exact label
    exists.
-4. Evaluate every candidate in the trusted duplicate-candidate context before choosing a
-   label, comment, or `noop`. When a title has strong overlap, use `issue_read` to inspect
+4. If the sensitive-intake stop path is not activated, evaluate every candidate in the
+   trusted duplicate-candidate context before choosing a label, comment, or `noop`. When
+   a title has strong overlap, use `issue_read` to inspect
    that candidate before describing the relationship. A candidate is evidence, not a
    duplicate disposition. Never propose the `duplicate` label. If the output names a
    related candidate, describe the precise relationship and never also claim that no
    related issue was found. If `search_performed` is false, do not attempt substitute
    duplicate research. Apply the sensitive-intake stop path when the reason is
-   `sensitive-title-guard`; otherwise state the lexical prefilter limitation internally
-   and continue normal triage.
-5. When candidates are present, include exactly one line for the highest-ranked candidate
+   `sensitive-title-guard` or target issue/comments reveal sensitive intake; otherwise
+   state the lexical prefilter limitation internally and continue normal triage.
+5. During normal triage, when candidates are present, include exactly one line for the highest-ranked candidate
    in a safe-output rationale, comment, or `noop` message using this contract:
    `Candidate #<number>: RELATED|NOT_RELATED|UNCERTAIN — <specific reason of at least 20 characters>`.
    Use only one of the three literal verdicts. The line is a machine-checked Stage A
    assessment, not proof that `issue_read` succeeded; a human must still verify tool-use
    evidence. Reference no issue number outside the trusted target and candidate set.
-6. When no candidates are present, include the one exact statement matching the trusted
-   context:
+6. During normal triage, when no candidates are present, include the one exact statement
+   matching the trusted context:
    - complete scan: `Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown.`
    - bounded scan: `Lexical result: No candidate met the threshold in the 1,000 newest issues; duplicate status remains unknown beyond that bound.`
    - sensitive-title guard: `Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown.`
