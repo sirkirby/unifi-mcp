@@ -567,7 +567,7 @@ safe-outputs:
           violations.push("noop must be exclusive");
         }
 
-        const candidateAssessmentPrefixPattern = /Candidate #\d+:/gi;
+        const candidateAssessmentPrefixPattern = /Candidate\s*#\s*\d+\s*:/gi;
         const candidateAssessmentPattern =
           /^Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\p{C}\p{Zl}\p{Zp}]+)$/u;
         const inspect = (value) => {

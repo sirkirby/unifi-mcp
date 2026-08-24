@@ -321,6 +321,16 @@ def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(t
         ),
         (
             "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+            "Candidate#225: NOT_RELATED — This compact contradictory assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+            "Candidate # 225: NOT_RELATED — This spaced contradictory assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
             " Candidate #225: related — This indented assessment must be rejected.",
             "candidate assessment must match the required literal grammar",
         ),
