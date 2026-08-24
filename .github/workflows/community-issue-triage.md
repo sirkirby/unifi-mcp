@@ -675,10 +675,14 @@ safe-outputs:
           targetNumber,
           ...duplicateContext.candidates.map((candidate) => candidate.number),
         ]);
-        for (const issueNumber of referencedIssueNumbers) {
-          if (!trustedIssueNumbers.has(issueNumber)) {
-            violations.push("issue reference outside trusted candidate context");
-          }
+        const untrustedIssueNumbers = [...referencedIssueNumbers]
+          .filter((issueNumber) => !trustedIssueNumbers.has(issueNumber))
+          .sort((left, right) => left - right);
+        if (untrustedIssueNumbers.length > 0) {
+          violations.push(
+            "issue reference outside trusted candidate context: " +
+              untrustedIssueNumbers.map((issueNumber) => "#" + issueNumber).join(", ")
+          );
         }
         const semanticText = semanticStrings.join("\n");
         const sensitiveStopMessage = "Sensitive intake stop: Maintainer attention is required.";
@@ -884,6 +888,11 @@ ${{ needs.trusted_duplicate_research.outputs.context }}
    Use only one of the three literal verdicts. The line is a machine-checked Stage A
    assessment, not proof that `issue_read` succeeded; a human must still verify tool-use
    evidence. Reference no issue number outside the trusted target and candidate set.
+   Before calling a safe-output tool, scan every free-form output string for numeric
+   GitHub references. Only the trusted target number and candidate numbers may remain.
+   Do not repeat issue or pull-request numbers discovered in untrusted content, including
+   bare `#N`, `PR #N`, `issue #N`, URLs, or paths. Paraphrase supporting references as
+   `a prior merged change` or `a prior report` without their numbers.
 6. During normal triage, when no candidates are present, include the one exact statement
    matching the trusted context:
    - complete scan: `Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown.`

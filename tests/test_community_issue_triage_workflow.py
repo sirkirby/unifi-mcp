@@ -68,6 +68,7 @@ def _run_validator(
     output: dict[str, object],
     *,
     duplicate_context: dict[str, object] | str | None = None,
+    target_number: int = 521,
 ):
     output_path = tmp_path / "agent_output.json"
     summary_path = tmp_path / "summary.md"
@@ -77,7 +78,7 @@ def _run_validator(
     env.update(
         {
             "GITHUB_STEP_SUMMARY": str(summary_path),
-            "TARGET_NUMBER": "521",
+            "TARGET_NUMBER": str(target_number),
             "TRUSTED_DUPLICATE_CONTEXT": (
                 json.dumps(_trusted_context())
                 if duplicate_context is None
@@ -557,6 +558,32 @@ def test_validator_rejects_issue_reference_outside_trusted_context(tmp_path: Pat
     assert "issue reference outside trusted candidate context" in result.stderr
 
 
+def test_validator_identifies_untrusted_references_from_live_acceptance_output(tmp_path: Path):
+    context = _trusted_context_with_candidate(target_number=228)
+    output = {
+        "items": [
+            {
+                "type": "noop",
+                "message": (
+                    "Issue #228 is already closed and resolved by the maintainer.\n\n"
+                    "Candidate #225: RELATED — Same root-cause bug was previously fixed "
+                    "via merged PR #227/#226."
+                ),
+            }
+        ]
+    }
+
+    result = _run_validator(
+        tmp_path,
+        output,
+        duplicate_context=context,
+        target_number=228,
+    )
+
+    assert result.returncode == 1
+    assert "issue reference outside trusted candidate context: #226, #227" in result.stderr
+
+
 def test_validator_does_not_treat_plural_verb_as_issue_reference(tmp_path: Path):
     context = _trusted_context_with_candidate()
     for prose in (
@@ -994,3 +1021,11 @@ def test_prompt_requires_minimal_safe_output_argument_shapes():
         "integrity",
     ):
         assert forbidden_selector in source
+
+
+def test_prompt_requires_a_reference_allowlist_preflight_before_safe_output():
+    source = " ".join(WORKFLOW.read_text().split())
+
+    assert "Before calling a safe-output tool, scan every free-form output string" in source
+    assert "Do not repeat issue or pull-request numbers discovered in untrusted content" in source
+    assert "a prior merged change" in source
