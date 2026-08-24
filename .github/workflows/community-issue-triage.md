@@ -371,9 +371,10 @@ safe-outputs:
 
         const violations = [];
         const urlPattern = /https?:\/\/[^\s<>"'\x60]+/gi;
-        const issueReferencePattern = /(^|[^A-Za-z0-9_])#(\d+)\b/g;
-        const textualIssueReferencePattern = /\bissues?\s*:?\s*#?(\d+)\b/gi;
-        const ghIssueReferencePattern = /\bGH-(\d+)\b/gi;
+        const issueReferencePattern = /(^|[^A-Za-z0-9_])#\s*(\d+)\b/g;
+        const textualIssueReferencePattern =
+          /\bissues?\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi;
+        const ghIssueReferencePattern = /\bGH\s*-\s*(\d+)\b/gi;
         const markdownLinkPattern = /\[[^\]]+\]\s*(?:\([^)]*\)|\[[^\]]*\])/g;
         const htmlLinkPattern = /<(?:a\s|[^>]+\shref\s*=)/gi;
         const mentionPattern = /(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/g;
@@ -579,19 +580,25 @@ safe-outputs:
             assessments.push({verdict: match[2], reason});
             candidateAssessments.set(number, assessments);
           }
-          for (const match of value.matchAll(issueReferencePattern)) {
+          const normalizedReferenceValue = value
+            .normalize("NFKC")
+            .replace(/\s/gu, " ")
+            .replace(/\p{C}/gu, "")
+            .replace(/\p{Z}/gu, " ")
+            .replace(/ +/g, " ");
+          for (const match of normalizedReferenceValue.matchAll(issueReferencePattern)) {
             referencedIssueNumbers.add(Number(match[2]));
           }
           issueReferencePattern.lastIndex = 0;
-          for (const match of value.matchAll(textualIssueReferencePattern)) {
+          for (const match of normalizedReferenceValue.matchAll(textualIssueReferencePattern)) {
             referencedIssueNumbers.add(Number(match[1]));
           }
           textualIssueReferencePattern.lastIndex = 0;
-          for (const match of value.matchAll(ghIssueReferencePattern)) {
+          for (const match of normalizedReferenceValue.matchAll(ghIssueReferencePattern)) {
             referencedIssueNumbers.add(Number(match[1]));
           }
           ghIssueReferencePattern.lastIndex = 0;
-          for (const match of value.matchAll(urlPattern)) {
+          for (const match of normalizedReferenceValue.matchAll(urlPattern)) {
             const candidate = match[0].replace(/[),.;!?]+$/, "");
             try {
               const url = new URL(candidate);
@@ -623,9 +630,9 @@ safe-outputs:
           htmlLinkPattern.lastIndex = 0;
           if (mentionPattern.test(value)) violations.push("user or bot mention");
           mentionPattern.lastIndex = 0;
-          if (closingPattern.test(value)) violations.push("closing keyword");
+          if (closingPattern.test(normalizedReferenceValue)) violations.push("closing keyword");
           closingPattern.lastIndex = 0;
-          for (const match of value.matchAll(crossRepoPattern)) {
+          for (const match of normalizedReferenceValue.matchAll(crossRepoPattern)) {
             if (match[2].toLowerCase() !== "sirkirby" || match[3].toLowerCase() !== "unifi-mcp") {
               violations.push("cross-repository reference");
             } else {

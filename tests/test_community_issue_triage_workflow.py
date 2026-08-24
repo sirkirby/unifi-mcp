@@ -462,7 +462,15 @@ def test_validator_rejects_mixed_case_url_and_textual_issue_reference_outside_co
         "https://GITHUB.com/sirkirby/unifi-mcp/issues/999 is better.",
         "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nIssue 999 is better.",
         "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nIssue: 999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nIssue number 999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nIssue no. 999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nIssue num. 999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "Iss\u200bue number 999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+        "Ｉｓｓｕｅ　ｎｕｍｂｅｒ　９９９ is better.",
         "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nGH-999 is better.",
+        "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\nGH\u200b - 999 is better.",
         "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
         "sirkirby/unifi-mcp#999 is better.",
         "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
