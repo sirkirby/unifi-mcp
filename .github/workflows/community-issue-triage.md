@@ -77,7 +77,6 @@ pre-agent-steps:
           "protect",
           "access",
           "needs-info",
-          "triage-reviewed",
         ];
         const repositoryLabels = await github.paginate(
           github.rest.issues.listLabelsForRepo,
@@ -104,6 +103,9 @@ tools:
       - sirkirby/unifi-mcp
     min-integrity: none
     toolsets: [repos, issues]
+    # Keep the intended limits declared for forward compatibility. gh-aw v0.87.4
+    # currently omits them from the compiled guard policy, so Stage A must audit
+    # actual call counts and Stage B remains blocked until runtime enforcement exists.
     allowed:
       - name: issue_read
         max-calls: 3
@@ -210,7 +212,6 @@ safe-outputs:
           "protect",
           "access",
           "needs-info",
-          "triage-reviewed",
         ]);
         const summarySections = [];
         const escapeHtml = (value) =>
@@ -438,8 +439,8 @@ safe-outputs:
       - protect
       - access
       - needs-info
-      - triage-reviewed
     blocked:
+      - triage-reviewed
       - duplicate
       - invalid
       - wontfix
@@ -514,10 +515,12 @@ or another secret. If so:
 3. Classify any unresolved issue type as bug, enhancement, documentation,
    question/support, or unclear. Do not force a component label when no exact label
    exists.
-4. Search open and recent closed issues in this repository for only strong duplicate or
-   related candidates. A candidate is evidence, not a duplicate disposition. Never
-   propose the `duplicate` label. If the output names a related candidate, describe the
-   precise relationship and never also claim that no related issue was found.
+4. Call `search_issues` with `owner: sirkirby`, `repo: unifi-mcp`, and a nonempty query
+   to search open and recent closed issues for only strong duplicate or related
+   candidates. If the search fails, follow the tool-failure rule below. A candidate is
+   evidence, not a duplicate disposition. Never propose the `duplicate` label. If the
+   output names a related candidate, describe the precise relationship and never also
+   claim that no related issue was found.
 5. Inspect only the minimum relevant repository source needed to distinguish plausible
    behavior from an unsupported assertion.
 6. Identify objectively missing information such as exact package version or commit,
@@ -530,8 +533,8 @@ or another secret. If so:
 
 - Propose no more than four labels and only from the configured allowlist.
 - Add `needs-info` only when a specific objectively required fact is missing.
-- Add `triage-reviewed` only when the normal triage pass completed; do not add it on the
-  sensitive-intake stop path or an incomplete/tool-failure run.
+- Never propose `triage-reviewed`. That completion label is reserved for a human
+  maintainer until tool-use evidence is tamper-resistant and success-correlated.
 - Every proposed label addition must include a complete-sentence rationale of at most
   240 characters and calibrated confidence for issue-intent review.
 - Propose at most one concise contributor-facing comment, and only when it adds new,

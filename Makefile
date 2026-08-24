@@ -54,7 +54,7 @@ shared-test:
 	uv run --package unifi-mcp-shared pytest packages/unifi-mcp-shared/tests -v
 
 catalog-test:
-	uv run pytest tests/test_generate_api_action_catalog.py tests/test_live_smoke_harness.py -v
+	uv run pytest tests/test_community_issue_triage_workflow.py tests/test_generate_api_action_catalog.py tests/test_live_smoke_harness.py -v
 
 docs-test:
 	uv run python -m unittest discover -s tests/docs -p 'test_*.py' -v
