@@ -17,7 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 network = ["aiounifi>=92"]
 protect = [
-    "uiprotect>=15.14.2",
+    "uiprotect>=15.14.3",
     # uiprotect permits older PyJWT releases; published Core wheels must enforce
     # the advisory-safe floor even when installed over an existing environment.
     "PyJWT>=2.13.0",

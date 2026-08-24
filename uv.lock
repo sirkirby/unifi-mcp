@@ -1652,14 +1652,14 @@ wheels = [
 
 [[package]]
 name = "starlette"
-version = "1.5.1"
+version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/36/1f/b3f556fa9fd223ef7d00e1d2ef0192f0020767cbe7eb3a2f147e80ea48e4/starlette-1.5.1.tar.gz", hash = "sha256:ac3795c54313f3717a37c41b4b998ad67561b6f57c779de4cb5b0e4ab69e328f", size = 2712742, upload-time = "2026-08-08T17:01:46.037Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b5/b4/205b0d5241d934e8add0c38aa924c4f9fb7330834ff11e5444db964ec3f9/starlette-1.6.0.tar.gz", hash = "sha256:d4e3ac5e546444960c710297a3c9fc3f7ebae1b7e963f3d36173b49da535be9b", size = 2716969, upload-time = "2026-08-08T18:27:57.512Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/e9/b68fe9746932000210e4116bf8ed1246f86540e2b876d3f9f869f4b442de/starlette-1.5.1-py3-none-any.whl", hash = "sha256:08b5aa725dbb52de43633a6318628444b8979bf94396d93196703f73a466e9af", size = 74376, upload-time = "2026-08-08T17:01:44.414Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/cb/6a6a47d5b464bd08695d254f3da6e7986cc70c9fa5d778eda57538edfe56/starlette-1.6.0-py3-none-any.whl", hash = "sha256:a86dd39d14bb45f85a3d18525215a9ef0cfd1f192ac793220e72598c90335f0c", size = 75969, upload-time = "2026-08-08T18:27:56.196Z" },
 ]
 
 [[package]]
@@ -1731,7 +1731,7 @@ wheels = [
 
 [[package]]
 name = "uiprotect"
-version = "15.14.2"
+version = "15.14.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
@@ -1748,9 +1748,9 @@ dependencies = [
     { name = "pyjwt" },
     { name = "yarl" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/71/2e/58b213c10f248e053dc0b2ca1ca67d429cc34233aba57ebf9b4db29a9844/uiprotect-15.14.2.tar.gz", hash = "sha256:ae3a099d0e76ccc57580230c2e3d121c24356583e3d66a96c75b0417b7e88e2a", size = 211968, upload-time = "2026-07-15T21:20:56.249Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/78/8f2c78c110a275a0cf0df6a28691a43419b852f07743f69765c1945e2472/uiprotect-15.14.3.tar.gz", hash = "sha256:e94d375b167176a43aad3a6d8c6051ff29baf31603170d0984c2835248f33c38", size = 212226, upload-time = "2026-08-17T13:27:10.726Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/69/45/ce9b89b70794cbd733049db4f90a9b9d24712a04e772b1ab461fc6277af3/uiprotect-15.14.2-py3-none-any.whl", hash = "sha256:a73fe98579127fa3f569f1e268e2f31c4b94cb8b7f801b1d9997ebd75aa3c18f", size = 232727, upload-time = "2026-07-15T21:20:54.527Z" },
+    { url = "https://files.pythonhosted.org/packages/90/a2/a889d437ded41619a2b9933c2b05b03b64483deea025829e7d5614d24ecc/uiprotect-15.14.3-py3-none-any.whl", hash = "sha256:fdc122187fd361f2a656a4ab5b105ad58f57b50689590a7684b5e3b6b42827cd", size = 232979, upload-time = "2026-08-17T13:27:08.975Z" },
 ]
 
 [[package]]
@@ -1797,7 +1797,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.31" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "starlette", specifier = ">=1.3.1" },
+    { name = "starlette", specifier = ">=1.6.0" },
     { name = "typing-extensions", specifier = ">=4.16.0" },
     { name = "unifi-core", extras = ["access"], editable = "packages/unifi-core" },
     { name = "unifi-mcp-shared", editable = "packages/unifi-mcp-shared" },
@@ -1865,7 +1865,7 @@ requires-dist = [
     { name = "python-multipart", specifier = ">=0.0.31" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.51" },
-    { name = "starlette", specifier = ">=1.3.1" },
+    { name = "starlette", specifier = ">=1.6.0" },
     { name = "strawberry-graphql", extras = ["fastapi"], specifier = ">=0.323.2,<0.324.0" },
     { name = "typer", specifier = ">=0.26.8" },
     { name = "unifi-core", extras = ["access", "network", "protect"], editable = "packages/unifi-core" },
@@ -1917,7 +1917,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pyjwt", marker = "extra == 'protect'", specifier = ">=2.13.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=15.14.2" },
+    { name = "uiprotect", marker = "extra == 'protect'", specifier = ">=15.14.3" },
 ]
 provides-extras = ["access", "network", "protect"]
 
@@ -1969,7 +1969,7 @@ requires-dist = [
     { name = "pyjwt", specifier = ">=2.13.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.31" },
-    { name = "starlette", specifier = ">=1.3.1" },
+    { name = "starlette", specifier = ">=1.6.0" },
     { name = "unifi-core", editable = "packages/unifi-core" },
     { name = "unifi-mcp-shared", editable = "packages/unifi-mcp-shared" },
     { name = "websockets", specifier = ">=17.0.1" },
@@ -2019,7 +2019,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.31" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "starlette", specifier = ">=1.3.1" },
+    { name = "starlette", specifier = ">=1.6.0" },
     { name = "unifi-core", editable = "packages/unifi-core" },
 ]
 
@@ -2073,7 +2073,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.31" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "starlette", specifier = ">=1.3.1" },
+    { name = "starlette", specifier = ">=1.6.0" },
     { name = "typing-extensions", specifier = ">=4.16.0" },
     { name = "unifi-core", extras = ["network"], editable = "packages/unifi-core" },
     { name = "unifi-mcp-shared", editable = "packages/unifi-mcp-shared" },
@@ -2133,7 +2133,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.31" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "starlette", specifier = ">=1.3.1" },
+    { name = "starlette", specifier = ">=1.6.0" },
     { name = "typing-extensions", specifier = ">=4.16.0" },
     { name = "unifi-core", extras = ["protect"], editable = "packages/unifi-core" },
     { name = "unifi-mcp-shared", editable = "packages/unifi-mcp-shared" },
