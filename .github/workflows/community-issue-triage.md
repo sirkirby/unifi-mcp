@@ -380,6 +380,14 @@ safe-outputs:
         const mentionPattern = /(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/g;
         const closingPattern = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?[ \t]*#\d+\b/gi;
         const crossRepoPattern = /(^|[^A-Za-z0-9_.-])([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)\b/g;
+        const normalizePolicyText = (text) =>
+          text
+            .normalize("NFKC")
+            .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
+            .replace(/\s/gu, " ")
+            .replace(/\p{C}/gu, "")
+            .replace(/\p{Z}/gu, " ")
+            .replace(/ +/g, " ");
         const secretPatterns = [
           /github_pat_[A-Za-z0-9_]{20,}/g,
           /gh[pousr]_[A-Za-z0-9]{20,}/g,
@@ -561,7 +569,8 @@ safe-outputs:
           /^Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\r\n\u2028\u2029]+)$/;
         const inspect = (value) => {
           for (const line of value.split(/\r\n|[\n\r\u2028\u2029]/)) {
-            if (!candidateAssessmentPrefixPattern.test(line)) continue;
+            const normalizedCandidateLine = normalizePolicyText(line);
+            if (!candidateAssessmentPrefixPattern.test(normalizedCandidateLine)) continue;
             const match = line.match(candidateAssessmentPattern);
             if (!match) {
               violations.push("candidate assessment must match the required literal grammar");
@@ -580,12 +589,7 @@ safe-outputs:
             assessments.push({verdict: match[2], reason});
             candidateAssessments.set(number, assessments);
           }
-          const normalizedReferenceValue = value
-            .normalize("NFKC")
-            .replace(/\s/gu, " ")
-            .replace(/\p{C}/gu, "")
-            .replace(/\p{Z}/gu, " ")
-            .replace(/ +/g, " ");
+          const normalizedReferenceValue = normalizePolicyText(value);
           for (const match of normalizedReferenceValue.matchAll(issueReferencePattern)) {
             referencedIssueNumbers.add(Number(match[2]));
           }
@@ -656,13 +660,6 @@ safe-outputs:
           }
         }
         const semanticText = semanticStrings.join("\n");
-        if (
-          /\bno\s+(?:related\s+issues?|duplicate(?:\s+issues?|s))\b/i.test(
-            semanticText,
-          )
-        ) {
-          violations.push("unsupported exhaustive duplicate claim");
-        }
         if (duplicateContext.candidates.length > 0) {
           const topCandidate = duplicateContext.candidates[0].number;
           if ((candidateAssessments.get(topCandidate) || []).length !== 1) {
@@ -679,17 +676,6 @@ safe-outputs:
           const uncertaintyOccurrences = semanticText.split(requiredUncertainty).length - 1;
           if (uncertaintyOccurrences !== 1) {
             violations.push("missing required lexical uncertainty statement");
-          }
-          const relationshipRemainder = semanticText.replace(requiredUncertainty, "");
-          if (
-            /\b(?:duplicate|related|similar|matching|search|searched|searching)\b/i.test(
-              relationshipRemainder,
-            ) ||
-            /\b(?:prior|previous|first|only)\s+(?:issue|report)\b/i.test(
-              relationshipRemainder,
-            )
-          ) {
-            violations.push("relationship prose outside the required lexical statement");
           }
         }
         if (violations.length > 0) {
@@ -867,6 +853,9 @@ ${{ needs.trusted_duplicate_research.outputs.context }}
    - no distinctive terms: `Lexical result: Search skipped because the title had no distinctive terms; duplicate status remains unknown.`
    Include the matching statement exactly once. Outside that fixed statement, do not add
    any duplicate, related, similar, matching, prior-report, or search-disposition prose.
+   In Stage A this semantic restriction is human-adjudicated: the validator enforces the
+   exact uncertainty statement but deliberately does not classify free-form prose. Stage B
+   must replace that prose with a structured duplicate-status field rendered by trusted code.
 7. Inspect only the minimum relevant repository source needed to distinguish plausible
    behavior from an unsupported assertion.
 8. Identify objectively missing information such as exact package version or commit,

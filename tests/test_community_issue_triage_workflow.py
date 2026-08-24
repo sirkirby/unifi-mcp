@@ -326,6 +326,21 @@ def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(t
             "Candidate #225: related — This Unicode-separated assessment must be rejected.",
             "candidate assessment must match the required literal grammar",
         ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+            "Candi\u200bdate #225: NOT_RELATED — This zero-width assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+            "Candi\u034fdate #225: NOT_RELATED — This grapheme-joiner assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
+            "Candi\ufe0fdate #225: NOT_RELATED — This variation-selector assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
     )
 
     for message, expected_error in outputs:
@@ -361,7 +376,9 @@ def test_validator_rejects_syntactic_candidate_mention_and_unused_ack_field(tmp_
         assert "structured assessment" in result.stderr or "unexpected fields" in result.stderr
 
 
-def test_validator_requires_uncertainty_and_rejects_exhaustive_empty_result_claim(tmp_path: Path):
+def test_validator_requires_uncertainty_and_leaves_free_form_semantics_for_human_review(
+    tmp_path: Path,
+):
     unsupported = {
         "items": [
             {
@@ -375,31 +392,36 @@ def test_validator_requires_uncertainty_and_rejects_exhaustive_empty_result_clai
     assert rejected.returncode == 1
     assert "missing required lexical uncertainty statement" in rejected.stderr
 
-    contradictory = {
-        "items": [
+    human_adjudicated_prose = (
+        "No duplicate issue was found.",
+        "A search of all issues found nothing similar.",
+        "No rela\u200bted issue was found.",
+        "Nothing sim\u200bilar was found.",
+        "A sea\u200brch of all issues found nothing.",
+        "No other reports exist.",
+        "The search found nothing among existing issues.",
+        "The search returned zero matching issues.",
+        "I could not find a matching issue.",
+        "Repository search returns incorrect results for matching client rules.",
+        "Client search returns incorrect candidates for matching rules.",
+        "Client search returns no matching candidates because the controller filter is broken.",
+        "The issue is matching client rules incorrectly.",
+        "Repository search fails to return issues with the requested status.",
+    )
+    for prose in human_adjudicated_prose:
+        result = _run_validator(
+            tmp_path,
             {
-                "type": "noop",
-                "message": NO_CANDIDATE_UNCERTAINTY + "\nNo duplicate issue was found.",
-            }
-        ]
-    }
-    rejected_contradiction = _run_validator(tmp_path, contradictory)
+                "items": [
+                    {
+                        "type": "noop",
+                        "message": NO_CANDIDATE_UNCERTAINTY + "\n" + prose,
+                    }
+                ]
+            },
+        )
 
-    assert rejected_contradiction.returncode == 1
-    assert "unsupported exhaustive duplicate claim" in rejected_contradiction.stderr
-
-    synonymous = {
-        "items": [
-            {
-                "type": "noop",
-                "message": NO_CANDIDATE_UNCERTAINTY + "\nA search of all issues found nothing similar.",
-            }
-        ]
-    }
-    rejected_synonym = _run_validator(tmp_path, synonymous)
-
-    assert rejected_synonym.returncode == 1
-    assert "relationship prose outside the required lexical statement" in rejected_synonym.stderr
+        assert result.returncode == 0, result.stderr
 
 
 def test_validator_accepts_machine_checked_skip_uncertainty_statements(tmp_path: Path):
