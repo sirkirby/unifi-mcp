@@ -302,6 +302,14 @@ def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(t
             "candidate assessment must match the required literal grammar",
         ),
         (
+            "Candidate #225: RELATED — a" + ("\u034f" * 19),
+            "candidate assessment reason must contain at least 20 visible characters",
+        ),
+        (
+            "Candidate #225: RELATED — a" + ("\ufe0f" * 19),
+            "candidate assessment reason must contain at least 20 visible characters",
+        ),
+        (
             "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
             "Candidate #225: related — This contradictory assessment must be rejected.",
             "candidate assessment must match the required literal grammar",
@@ -372,6 +380,20 @@ def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(t
 
         assert result.returncode == 1
         assert expected_error in result.stderr
+
+    astral_code_points = _run_validator(
+        tmp_path,
+        {
+            "items": [
+                {
+                    "type": "noop",
+                    "message": "Candidate #225: RELATED — a" + ("😀" * 19),
+                }
+            ]
+        },
+        duplicate_context=context,
+    )
+    assert astral_code_points.returncode == 0, astral_code_points.stderr
 
 
 def test_validator_rejects_syntactic_candidate_mention_and_unused_ack_field(tmp_path: Path):

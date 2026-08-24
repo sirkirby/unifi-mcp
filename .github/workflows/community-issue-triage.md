@@ -587,8 +587,8 @@ safe-outputs:
             }
             const number = Number(match[1]);
             const reason = match[3].trim();
-            const visibleReason = reason.replace(/[\p{C}\p{Z}\s]/gu, "");
-            if (visibleReason.length < 20 || !/[\p{L}\p{N}]/u.test(reason)) {
+            const visibleReason = normalizePolicyText(reason).replace(/[\p{M}\s]/gu, "");
+            if ([...visibleReason].length < 20 || !/[\p{L}\p{N}]/u.test(reason)) {
               violations.push(
                 "candidate assessment reason must contain at least 20 visible characters"
               );
