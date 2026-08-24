@@ -564,13 +564,19 @@ safe-outputs:
           violations.push("noop must be exclusive");
         }
 
-        const candidateAssessmentPrefixPattern = /Candidate #(\d+):/i;
+        const candidateAssessmentPrefixPattern = /Candidate #\d+:/gi;
         const candidateAssessmentPattern =
           /^Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\p{C}\p{Zl}\p{Zp}]+)$/u;
         const inspect = (value) => {
           for (const line of value.split(/\r\n|[\n\r\u2028\u2029]/)) {
             const normalizedCandidateLine = normalizePolicyText(line);
-            if (!candidateAssessmentPrefixPattern.test(normalizedCandidateLine)) continue;
+            const candidateAssessmentPrefixes =
+              normalizedCandidateLine.match(candidateAssessmentPrefixPattern) || [];
+            if (candidateAssessmentPrefixes.length === 0) continue;
+            if (candidateAssessmentPrefixes.length !== 1) {
+              violations.push("candidate assessment line must contain exactly one assessment");
+              continue;
+            }
             const match = line.match(candidateAssessmentPattern);
             if (!match) {
               violations.push("candidate assessment must match the required literal grammar");

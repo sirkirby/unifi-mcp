@@ -329,12 +329,22 @@ def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(t
         (
             "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\u0085"
             "Candidate #225: NOT_RELATED — This next-line assessment must be rejected.",
-            "candidate assessment must match the required literal grammar",
+            "candidate assessment line must contain exactly one assessment",
         ),
         (
             "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\f"
             "Candidate #225: NOT_RELATED — This form-feed assessment must be rejected.",
-            "candidate assessment must match the required literal grammar",
+            "candidate assessment line must contain exactly one assessment",
+        ),
+        (
+            "Candidate #225: RELATED — This has a sufficiently long reason. "
+            "Candidate #225: NOT_RELATED — This same-line contradiction must be rejected.",
+            "candidate assessment line must contain exactly one assessment",
+        ),
+        (
+            "Candidate #225: RELATED — This has a sufficiently long reason. "
+            "Candi\u200bdate #225: NOT_RELATED — This hidden contradiction must be rejected.",
+            "candidate assessment line must contain exactly one assessment",
         ),
         (
             "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
