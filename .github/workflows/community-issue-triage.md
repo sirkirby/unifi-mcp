@@ -485,8 +485,19 @@ safe-outputs:
           typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
 
           if (type === "add_comment") {
-            if (!hasExactKeys(item, ["type", "body"])) {
+            // gh-aw appends temporary_id after a successful add_comment tool call.
+            // Accept only the framework's documented identifier shape; every other
+            // selector or control field remains fail-closed. Shape validation does
+            // not establish provenance because the agent can also see this field.
+            if (!hasExactKeys(item, ["type", "body", "temporary_id"], ["type", "body"])) {
               violations.push("add_comment contains unexpected fields");
+            }
+            if (
+              Object.prototype.hasOwnProperty.call(item, "temporary_id") &&
+              (typeof item.temporary_id !== "string" ||
+                !/^#?aw_[A-Za-z0-9_]{3,12}$/.test(item.temporary_id))
+            ) {
+              violations.push("add_comment contains invalid framework temporary_id");
             }
             if (typeof item.body !== "string" || item.body.trim() === "") {
               violations.push("add_comment requires a nonempty body");

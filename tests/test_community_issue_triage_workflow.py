@@ -220,6 +220,144 @@ def test_noop_output_still_passes_validation(tmp_path: Path):
     assert result.returncode == 0, result.stderr
 
 
+def test_validator_accepts_framework_temporary_id_from_live_issue_546_output(tmp_path: Path):
+    output = {
+        "items": [
+            {
+                "type": "add_labels",
+                "labels": [
+                    {
+                        "name": "enhancement",
+                        "rationale": "The issue proposes a new DPI name-resolution capability.",
+                        "confidence": "HIGH",
+                    },
+                    {
+                        "name": "network",
+                        "rationale": "The request applies to Network traffic-flow statistics.",
+                        "confidence": "HIGH",
+                    },
+                ],
+            },
+            {
+                "type": "add_comment",
+                "body": (
+                    "Issue #546 has a concrete implementation path and live evidence.\n\n" + NO_CANDIDATE_UNCERTAINTY
+                ),
+                "temporary_id": "aw_09GWN1A0",
+            },
+        ],
+        "errors": [],
+    }
+
+    result = _run_validator(
+        tmp_path,
+        output,
+        duplicate_context=_trusted_context(target_number=546),
+        target_number=546,
+    )
+
+    assert result.returncode == 0, result.stderr
+    trusted_output = json.loads((tmp_path / "agent_output.json").read_text())
+    assert trusted_output["items"][0]["item_number"] == 546
+    assert trusted_output["items"][1]["temporary_id"] == "aw_09GWN1A0"
+
+    del output["items"][1]["temporary_id"]
+    without_framework_metadata = _run_validator(
+        tmp_path,
+        output,
+        duplicate_context=_trusted_context(target_number=546),
+        target_number=546,
+    )
+    assert without_framework_metadata.returncode == 0, without_framework_metadata.stderr
+
+
+def test_validator_rejects_invalid_or_misplaced_temporary_id(tmp_path: Path):
+    invalid_comment_ids: tuple[object, ...] = (
+        "aw_x",
+        "aw_0123456789abc",
+        "aw_bad-value",
+        " aw_09GWN1A0",
+        "aw_09GWN1A0 ",
+        "aw_09GWN1A0\n",
+        "aw_０9GWN1A0",
+        "temporary_123",
+        123,
+    )
+    for temporary_id in invalid_comment_ids:
+        output = {
+            "items": [
+                {
+                    "type": "add_comment",
+                    "body": NO_CANDIDATE_UNCERTAINTY,
+                    "temporary_id": temporary_id,
+                }
+            ]
+        }
+
+        result = _run_validator(tmp_path, output)
+
+        assert result.returncode == 1
+        assert "invalid framework temporary_id" in result.stderr
+
+    for output in (
+        {
+            "items": [
+                {
+                    "type": "noop",
+                    "message": "No action is warranted.\n" + NO_CANDIDATE_UNCERTAINTY,
+                    "temporary_id": "aw_09GWN1A0",
+                }
+            ]
+        },
+        {
+            "items": [
+                {
+                    "type": "add_labels",
+                    "labels": _allowed_label_output()["items"][0]["labels"],
+                    "temporary_id": "aw_09GWN1A0",
+                }
+            ]
+        },
+    ):
+        result = _run_validator(tmp_path, output)
+
+        assert result.returncode == 1
+        assert "unexpected fields" in result.stderr
+
+    forbidden_fields: dict[str, object] = {
+        "item_number": 546,
+        "repo": "sirkirby/unifi-mcp",
+        "target": "status",
+        "comment_id": 123,
+        "reply_to_id": "aw_parent",
+        "suggest": True,
+        "secrecy": "public",
+        "integrity": "approved",
+    }
+    for field, value in forbidden_fields.items():
+        output = {
+            "items": [
+                {
+                    "type": "add_comment",
+                    "body": NO_CANDIDATE_UNCERTAINTY,
+                    "temporary_id": "aw_09GWN1A0",
+                    field: value,
+                }
+            ]
+        }
+
+        result = _run_validator(tmp_path, output)
+
+        assert result.returncode == 1
+
+
+def test_temporary_id_pattern_matches_pinned_compiled_contract():
+    pattern = "^#?aw_[A-Za-z0-9_]{3,12}$"
+
+    assert pattern in WORKFLOW.read_text()
+    assert f'"pattern": "{pattern}"' in LOCK.read_text()
+
+
 def test_allowed_label_passes_and_receives_trusted_target(tmp_path: Path):
     result = _run_validator(tmp_path, _allowed_label_output())
 
