@@ -287,6 +287,33 @@ def test_validator_requires_top_candidate_acknowledgement(tmp_path: Path):
     assert accepted.returncode == 0, accepted.stderr
 
 
+def test_validator_accepts_exact_second_live_issue_228_output(tmp_path: Path):
+    context = _trusted_context_with_candidate(target_number=228)
+    output = {
+        "items": [
+            {
+                "type": "noop",
+                "message": (
+                    'Issue 228 is closed and already carries the correct "bug" label; '
+                    "no further labels or comment needed. Candidate #225: RELATED — both "
+                    'report the identical malformed uvx args["--python-preference==0.16.0"] '
+                    "manifest bug, resolved via a prior merged change."
+                ),
+            }
+        ],
+        "errors": [],
+    }
+
+    result = _run_validator(
+        tmp_path,
+        output,
+        duplicate_context=context,
+        target_number=228,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(tmp_path: Path):
     context = _trusted_context_with_candidate()
     outputs = (
@@ -333,6 +360,27 @@ def test_validator_requires_uppercase_verdict_and_substantive_candidate_reason(t
         (
             "Candidate #225: RELATED — It reports the same malformed uvx argument failure.\n"
             " Candidate #225: related — This indented assessment must be rejected.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Additional rationale without sentence punctuation Candidate #225: RELATED — "
+            "It reports the same malformed uvx argument failure.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Additional rationale.\tCandidate #225: RELATED — It reports the same malformed uvx argument failure.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Additional rationale.\vCandidate #225: RELATED — It reports the same malformed uvx argument failure.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Additional rationale.\fCandidate #225: RELATED — It reports the same malformed uvx argument failure.",
+            "candidate assessment must match the required literal grammar",
+        ),
+        (
+            "Additional rationale.\ufeffCandidate #225: RELATED — It reports the same malformed uvx argument failure.",
             "candidate assessment must match the required literal grammar",
         ),
         (

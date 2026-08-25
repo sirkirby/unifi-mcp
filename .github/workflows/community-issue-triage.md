@@ -571,7 +571,7 @@ safe-outputs:
 
         const candidateAssessmentPrefixPattern = /Candidate\s*#\s*\d+\s*:/gi;
         const candidateAssessmentPattern =
-          /^Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\p{C}\p{Zl}\p{Zp}]+)$/u;
+          /(?:^|(?<=[.!?]) +)Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\p{C}\p{Zl}\p{Zp}]+)$/u;
         const inspect = (value) => {
           for (const line of value.split(/\r\n|[\n\r\u2028\u2029]/)) {
             const normalizedCandidateLine = normalizePolicyText(line);
@@ -894,10 +894,11 @@ ${{ needs.trusted_duplicate_research.outputs.context }}
    duplicate research. Apply the sensitive-intake stop path when the reason is
    `sensitive-title-guard` or target issue/comments reveal sensitive intake; otherwise
    state the lexical prefilter limitation internally and continue normal triage.
-5. During normal triage, when candidates are present, include exactly one line for the highest-ranked candidate
+5. During normal triage, when candidates are present, include exactly one sentence for the highest-ranked candidate
    in a safe-output rationale, comment, or `noop` message using this contract:
    `Candidate #<number>: RELATED|NOT_RELATED|UNCERTAIN — <specific reason of at least 20 characters>`.
-   Use only one of the three literal verdicts. The line is a machine-checked Stage A
+   The sentence may stand alone or follow other rationale after sentence-ending punctuation.
+   Use only one of the three literal verdicts. The sentence is a machine-checked Stage A
    assessment, not proof that `issue_read` succeeded; a human must still verify tool-use
    evidence. Reference no issue number outside the trusted target and candidate set.
    Before calling a safe-output tool, scan every free-form output string for numeric
