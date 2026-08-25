@@ -1445,7 +1445,7 @@ def test_source_and_compiled_output_policy_keep_triage_reviewed_human_only():
     assert "triage-reviewed" in config["add_labels"]["blocked"]
 
 
-def test_runtime_imported_prompt_requires_conditional_evidence_and_exclusive_disposition():
+def test_runtime_imported_prompt_declares_read_and_disposition_contract():
     source = " ".join(WORKFLOW.read_text().split())
 
     required_fragments = (
@@ -1453,6 +1453,8 @@ def test_runtime_imported_prompt_requires_conditional_evidence_and_exclusive_dis
         "Otherwise read the target comments with `issue_read(method: get_comments)`",
         "A repeated `get` call does not count as reading comments.",
         "If a required read fails, emit no safe output.",
+        "These read requirements are prompt-level Stage A guidance, not validator-attested runtime evidence; "
+        "a human must verify the run's tool-use record.",
         "Before calling any safe-output tool, choose exactly one final disposition:",
         "ACTION:** propose `add_labels`, `add_comment`, or both. Never also call `noop`.",
         "NO-ACTION:** propose exactly one `noop`. Never also call `add_labels` or `add_comment`.",

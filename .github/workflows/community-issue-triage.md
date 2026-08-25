@@ -890,6 +890,8 @@ immediately and do not read comments. Otherwise read the target comments with
 material. A repeated `get` call does not count as reading comments. Only continue to
 normal triage after both required target reads succeed without activating the stop path.
 If a required read fails, emit no safe output.
+These read requirements are prompt-level Stage A guidance, not validator-attested runtime
+evidence; a human must verify the run's tool-use record.
 
 When the sensitive-intake stop path is activated:
 
@@ -984,9 +986,9 @@ Before calling any safe-output tool, choose exactly one final disposition:
 - **ACTION:** propose `add_labels`, `add_comment`, or both. Never also call `noop`.
 - **NO-ACTION:** propose exactly one `noop`. Never also call `add_labels` or `add_comment`.
 
-A label-only ACTION is complete and does not need a `noop`. When trusted candidates exist,
-the chosen ACTION or NO-ACTION output must contain exactly one required highest-ranked
-candidate assessment; never add a `noop` merely to carry that assessment.
+A label-only ACTION is complete and does not need a `noop`. When trusted candidates
+exist, the chosen ACTION or NO-ACTION output must contain exactly one required
+highest-ranked candidate assessment; never add a `noop` merely to carry that assessment.
 
 - Use only these argument shapes: `add_comment` with `{body}`; `add_labels` with
   `{labels: [{name, rationale, confidence}]}`; and `noop` with `{message}`. Omit every
