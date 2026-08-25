@@ -182,9 +182,7 @@ def _allowed_label_output() -> dict[str, object]:
                 "labels": [
                     {
                         "name": "bug",
-                        "rationale": (
-                            "The report describes reproducible incorrect behavior.\n" + NO_CANDIDATE_UNCERTAINTY
-                        ),
+                        "rationale": "The report describes reproducible incorrect behavior.",
                         "confidence": "HIGH",
                     }
                 ],
@@ -366,6 +364,50 @@ def test_allowed_label_passes_and_receives_trusted_target(tmp_path: Path):
     assert trusted_output["items"][0]["item_number"] == 521
     summary = (tmp_path / "summary.md").read_text()
     assert "The report describes reproducible incorrect behavior." in summary
+    assert NO_CANDIDATE_UNCERTAINTY in summary
+
+
+def test_validator_accepts_exact_second_live_issue_546_label_only_output(tmp_path: Path):
+    output = {
+        "items": [
+            {
+                "type": "add_labels",
+                "labels": [
+                    {
+                        "name": "enhancement",
+                        "rationale": (
+                            "Issue proposes new functionality: enriching DPI traffic-flow statistics "
+                            "with resolved application and category names from the UniFi Integration API."
+                        ),
+                        "confidence": "HIGH",
+                    },
+                    {
+                        "name": "network",
+                        "rationale": (
+                            "Issue explicitly targets the network component — specifically the "
+                            "unifi_get_traffic_flow_statistics tool and DPI application catalogue."
+                        ),
+                        "confidence": "HIGH",
+                    },
+                ],
+            }
+        ],
+        "errors": [],
+    }
+
+    result = _run_validator(
+        tmp_path,
+        output,
+        duplicate_context=_trusted_context(target_number=546),
+        target_number=546,
+    )
+
+    assert result.returncode == 0, result.stderr
+    trusted_output = json.loads((tmp_path / "agent_output.json").read_text())
+    assert trusted_output["items"][0]["item_number"] == 546
+    summary = (tmp_path / "summary.md").read_text()
+    assert NO_CANDIDATE_UNCERTAINTY in summary
+    assert "<h3>Proposed labels</h3>" in summary
 
 
 def test_validator_rejects_missing_malformed_or_mismatched_duplicate_context(tmp_path: Path):
@@ -663,6 +705,170 @@ def test_validator_requires_uncertainty_and_leaves_free_form_semantics_for_human
         assert result.returncode == 0, result.stderr
 
 
+def test_validator_requires_uncertainty_in_the_narrative_not_a_label_rationale(
+    tmp_path: Path,
+):
+    output = {
+        "items": [
+            {
+                "type": "add_labels",
+                "labels": [
+                    {
+                        "name": "enhancement",
+                        "rationale": NO_CANDIDATE_UNCERTAINTY,
+                        "confidence": "HIGH",
+                    }
+                ],
+            },
+            {
+                "type": "add_comment",
+                "body": (
+                    "The proposal is complete and gives the maintainer a concrete next action. "
+                    "This is an automated first-pass triage; a maintainer will make final decisions."
+                ),
+            },
+        ]
+    }
+
+    result = _run_validator(tmp_path, output)
+
+    assert result.returncode == 1
+    assert "missing required lexical uncertainty statement" in result.stderr
+
+
+def test_validator_rejects_uncertainty_caveat_in_label_only_rationale(tmp_path: Path):
+    output = {
+        "items": [
+            {
+                "type": "add_labels",
+                "labels": [
+                    {
+                        "name": "enhancement",
+                        "rationale": NO_CANDIDATE_UNCERTAINTY,
+                        "confidence": "HIGH",
+                    }
+                ],
+            }
+        ]
+    }
+
+    result = _run_validator(tmp_path, output)
+
+    assert result.returncode == 1
+    assert "must appear only in narratives" in result.stderr
+
+
+def test_validator_rejects_nonmatching_fixed_caveat_in_label_rationale(tmp_path: Path):
+    bounded_uncertainty = (
+        "Lexical result: No candidate met the threshold in the 1,000 newest issues; "
+        "duplicate status remains unknown beyond that bound."
+    )
+    output = {
+        "items": [
+            {
+                "type": "add_labels",
+                "labels": [
+                    {
+                        "name": "enhancement",
+                        "rationale": bounded_uncertainty,
+                        "confidence": "HIGH",
+                    }
+                ],
+            }
+        ]
+    }
+
+    result = _run_validator(tmp_path, output)
+
+    assert result.returncode == 1
+    assert "must appear only in narratives" in result.stderr
+
+
+def test_validator_normalizes_label_caveat_marker_before_exclusion(tmp_path: Path):
+    rationales = (
+        NO_CANDIDATE_UNCERTAINTY.replace("status", "stat\u200bus"),
+        NO_CANDIDATE_UNCERTAINTY.replace(
+            "duplicate status remains unknown",
+            "Duplicate Status Remains Unknown",
+        ),
+    )
+
+    for rationale in rationales:
+        output = {
+            "items": [
+                {
+                    "type": "add_labels",
+                    "labels": [
+                        {
+                            "name": "enhancement",
+                            "rationale": rationale,
+                            "confidence": "HIGH",
+                        }
+                    ],
+                }
+            ]
+        }
+
+        result = _run_validator(tmp_path, output)
+
+        assert result.returncode == 1
+        assert "must appear only in narratives" in result.stderr
+
+
+def test_validator_rejects_label_caveat_duplicating_valid_comment(tmp_path: Path):
+    output = {
+        "items": [
+            {
+                "type": "add_labels",
+                "labels": [
+                    {
+                        "name": "enhancement",
+                        "rationale": NO_CANDIDATE_UNCERTAINTY,
+                        "confidence": "HIGH",
+                    }
+                ],
+            },
+            {"type": "add_comment", "body": NO_CANDIDATE_UNCERTAINTY},
+        ]
+    }
+
+    result = _run_validator(tmp_path, output)
+
+    assert result.returncode == 1
+    assert "must appear only in narratives" in result.stderr
+
+
+def test_validator_requires_exactly_one_uncertainty_statement_per_narrative(tmp_path: Path):
+    comment = {
+        "items": [
+            {
+                "type": "add_comment",
+                "body": NO_CANDIDATE_UNCERTAINTY + "\n" + NO_CANDIDATE_UNCERTAINTY,
+            }
+        ]
+    }
+
+    result = _run_validator(tmp_path, comment)
+
+    assert result.returncode == 1
+    assert "missing required lexical uncertainty statement" in result.stderr
+
+
+def test_validator_accepts_bounded_uncertainty_in_narrative_and_trusted_summary(tmp_path: Path):
+    context = _trusted_context()
+    context.update({"scanned": 1000, "truncated": True})
+    bounded_uncertainty = (
+        "Lexical result: No candidate met the threshold in the 1,000 newest issues; "
+        "duplicate status remains unknown beyond that bound."
+    )
+    output = {"items": [{"type": "noop", "message": bounded_uncertainty}]}
+
+    result = _run_validator(tmp_path, output, duplicate_context=context)
+
+    assert result.returncode == 0, result.stderr
+    assert bounded_uncertainty in (tmp_path / "summary.md").read_text()
+
+
 def test_validator_accepts_machine_checked_no_distinctive_terms_uncertainty(tmp_path: Path):
     context = _trusted_context()
     context.update(
@@ -688,6 +894,7 @@ def test_validator_accepts_machine_checked_no_distinctive_terms_uncertainty(tmp_
     result = _run_validator(tmp_path, output, duplicate_context=context)
 
     assert result.returncode == 0, result.stderr
+    assert output["items"][0]["message"] in (tmp_path / "summary.md").read_text()
 
 
 def test_validator_requires_sensitive_stop_for_trusted_sensitive_title_guard(tmp_path: Path):
@@ -722,6 +929,8 @@ def test_validator_requires_sensitive_stop_for_trusted_sensitive_title_guard(tmp
         duplicate_context=context,
     )
     assert accepted.returncode == 0, accepted.stderr
+    summary = (tmp_path / "summary.md").read_text()
+    assert "Lexical result: Search skipped by the sensitive-title guard" in summary
 
 
 def test_validator_rejects_issue_reference_outside_trusted_context(tmp_path: Path):

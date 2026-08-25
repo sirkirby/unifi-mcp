@@ -418,6 +418,7 @@ safe-outputs:
         const summarySections = [];
         const referencedIssueNumbers = new Set();
         const semanticStrings = [];
+        const narrativeStrings = [];
         const candidateAssessments = new Map();
         const hasExactKeys = (value, allowed, required = allowed) => {
           const keys = Object.keys(value);
@@ -431,6 +432,17 @@ safe-outputs:
             .replaceAll("&", "&amp;")
             .replaceAll("<", "&lt;")
             .replaceAll(">", "&gt;");
+        const requiredUncertainty =
+          duplicateContext.candidates.length === 0
+            ? duplicateContext.truncated
+              ? "Lexical result: No candidate met the threshold in the 1,000 newest issues; duplicate status remains unknown beyond that bound."
+              : duplicateContext.search_performed
+                ? "Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown."
+                : duplicateContext.reason === "sensitive-title-guard"
+                  ? "Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown."
+                  : "Lexical result: Search skipped because the title had no distinctive terms; duplicate status remains unknown."
+            : null;
+        const uncertaintyMarker = "duplicate status remains unknown";
         const candidateSummary = duplicateContext.search_performed
           ? duplicateContext.candidates.length > 0
             ? duplicateContext.candidates
@@ -503,6 +515,7 @@ safe-outputs:
               violations.push("add_comment requires a nonempty body");
             } else {
               semanticStrings.push(item.body);
+              narrativeStrings.push(item.body);
               summarySections.push(
                 "<h3>Proposed comment</h3>\n<pre>" + escapeHtml(item.body) + "</pre>"
               );
@@ -564,6 +577,7 @@ safe-outputs:
               violations.push("noop requires a nonempty message");
             } else {
               semanticStrings.push(item.message);
+              narrativeStrings.push(item.message);
               summarySections.push("<h3>No action proposed</h3>\n<pre>" + escapeHtml(item.message) + "</pre>");
             }
           }
@@ -707,7 +721,6 @@ safe-outputs:
               untrustedIssueNumbers.map((issueNumber) => "#" + issueNumber).join(", ")
           );
         }
-        const semanticText = semanticStrings.join("\n");
         const sensitiveStopMessage = "Sensitive intake stop: Maintainer attention is required.";
         const sensitiveStopRequested = semanticStrings.some((value) =>
           value.includes(sensitiveStopMessage),
@@ -730,16 +743,29 @@ safe-outputs:
               violations.push("highest-ranked trusted candidate requires one structured assessment");
             }
           } else {
-            const requiredUncertainty = duplicateContext.truncated
-              ? "Lexical result: No candidate met the threshold in the 1,000 newest issues; duplicate status remains unknown beyond that bound."
-              : duplicateContext.search_performed
-                ? "Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown."
-                : duplicateContext.reason === "sensitive-title-guard"
-                  ? "Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown."
-                  : "Lexical result: Search skipped because the title had no distinctive terms; duplicate status remains unknown.";
-            const uncertaintyOccurrences = semanticText.split(requiredUncertainty).length - 1;
-            if (uncertaintyOccurrences !== 1) {
+            const requiredUncertaintyOccurrences = (value) =>
+              value.split(requiredUncertainty).length - 1;
+            if (
+              narrativeStrings.some(
+                (value) => requiredUncertaintyOccurrences(value) !== 1,
+              )
+            ) {
               violations.push("missing required lexical uncertainty statement");
+            }
+            if (
+              semanticStrings.reduce(
+                (count, value) =>
+                  count +
+                  (normalizePolicyText(value)
+                    .toLowerCase()
+                    .split(uncertaintyMarker).length -
+                    1),
+                0,
+              ) !== narrativeStrings.length
+            ) {
+              violations.push(
+                "required lexical uncertainty statement must appear only in narratives",
+              );
             }
           }
         }
@@ -779,6 +805,7 @@ safe-outputs:
           "\n\n" +
           "### Trusted duplicate candidate research\n\n" +
           candidateSummary +
+          (requiredUncertainty ? "\n\n" + requiredUncertainty : "") +
           "\n\nScanned " +
           duplicateContext.scanned +
           (duplicateContext.truncated ? " newest issues (bounded scan)." : " issues.") +
@@ -917,17 +944,21 @@ ${{ needs.trusted_duplicate_research.outputs.context }}
    may remain. Do not emit any numbered pull-request reference, including singular,
    plural, spaced, hyphenated, URL, or path forms. Paraphrase supporting references as
    `a prior merged change` or `a prior report` without their numbers.
-6. During normal triage, when no candidates are present, include the one exact statement
-   matching the trusted context:
+6. During normal triage, when no candidates are present and you emit a comment or
+   `noop`, include the one exact statement matching the trusted context in that
+   narrative field:
    - complete scan: `Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown.`
    - bounded scan: `Lexical result: No candidate met the threshold in the 1,000 newest issues; duplicate status remains unknown beyond that bound.`
    - sensitive-title guard: `Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown.`
    - no distinctive terms: `Lexical result: Search skipped because the title had no distinctive terms; duplicate status remains unknown.`
-   Include the matching statement exactly once. Outside that fixed statement, do not add
-   any duplicate, related, similar, matching, prior-report, or search-disposition prose.
-   In Stage A this semantic restriction is human-adjudicated: the validator enforces the
-   exact uncertainty statement but deliberately does not classify free-form prose. Stage B
-   must replace that prose with a structured duplicate-status field rendered by trusted code.
+   Include the matching statement exactly once. A label-only proposal must not put this
+   unrelated caveat into a label rationale; trusted workflow code renders it in the Stage A
+   summary instead. Outside that fixed statement, do not add any duplicate, related,
+   similar, matching, prior-report, or search-disposition prose. In Stage A this semantic
+   restriction is human-adjudicated: the validator enforces the exact uncertainty statement
+   in comment and `noop` narratives but deliberately does not classify free-form prose.
+   Stage B must replace that prose with a structured duplicate-status field rendered by
+   trusted code.
 7. Inspect only the minimum relevant repository source needed to distinguish plausible
    behavior from an unsupported assertion.
 8. Identify objectively missing information such as exact package version or commit,
