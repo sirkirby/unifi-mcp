@@ -1,6 +1,6 @@
 ---
-name: Community issue triage (staged)
-description: Read-only, manually dispatched first-pass analysis of an existing community issue.
+name: Community issue triage (Stage A.5 canary)
+description: Manually dispatched canary that keeps comments staged and routes one needs-info label suggestion for maintainer review.
 
 on:
   workflow_dispatch:
@@ -76,19 +76,7 @@ jobs:
               return;
             }
 
-            const requiredLabels = [
-              "bug",
-              "enhancement",
-              "documentation",
-              "dependencies",
-              "docker",
-              "github-actions",
-              "api",
-              "network",
-              "protect",
-              "access",
-              "needs-info",
-            ];
+            const requiredLabels = ["needs-info"];
             const repositoryLabels = await github.paginate(
               github.rest.issues.listLabelsForRepo,
               {
@@ -254,7 +242,7 @@ tools:
     min-integrity: none
     toolsets: [repos, issues]
     # Keep the intended limits declared for forward compatibility. gh-aw v0.87.4
-    # currently omits them from the compiled guard policy, so Stage A must audit
+    # currently omits them from the compiled guard policy, so Stage A.5 must audit
     # actual call counts and Stage B remains blocked until runtime enforcement exists.
     allowed:
       - name: issue_read
@@ -267,7 +255,7 @@ tools:
     read-only: true
 
 safe-outputs:
-  staged: true
+  staged: false
   github-token: ${{ secrets.GITHUB_TOKEN }}
   data: false
   mentions: false
@@ -291,7 +279,7 @@ safe-outputs:
   concurrency-group: community-issue-triage-safe-outputs
   threat-detection: false
   steps:
-    - name: Validate staged output content
+    - name: Validate Stage A.5 output content
       shell: bash
       env:
         TARGET_NUMBER: ${{ inputs.issue_number }}
@@ -303,7 +291,7 @@ safe-outputs:
 
         const targetNumber = Number(process.env.TARGET_NUMBER);
         if (!Number.isSafeInteger(targetNumber) || targetNumber < 1) {
-          console.error("Blocked invalid trusted target before staged preview");
+          console.error("Blocked invalid trusted target before canary processing");
           process.exit(1);
         }
 
@@ -357,7 +345,7 @@ safe-outputs:
         }
 
         if (!fs.existsSync(outputPath)) {
-          console.error("Blocked missing agent output before staged preview");
+          console.error("Blocked missing agent output before canary processing");
           process.exit(1);
         }
 
@@ -365,7 +353,7 @@ safe-outputs:
         try {
           output = JSON.parse(fs.readFileSync(outputPath, "utf8"));
         } catch {
-          console.error("Blocked malformed agent output before staged preview");
+          console.error("Blocked malformed agent output before canary processing");
           process.exit(1);
         }
 
@@ -402,19 +390,7 @@ safe-outputs:
         ];
 
         const allowedTypes = new Set(["add_comment", "add_labels", "noop"]);
-        const allowedLabels = new Set([
-          "bug",
-          "enhancement",
-          "documentation",
-          "dependencies",
-          "docker",
-          "github-actions",
-          "api",
-          "network",
-          "protect",
-          "access",
-          "needs-info",
-        ]);
+        const allowedLabels = new Set(["needs-info"]);
         const summarySections = [];
         const referencedIssueNumbers = new Set();
         const semanticStrings = [];
@@ -526,8 +502,8 @@ safe-outputs:
             if (!hasExactKeys(item, ["type", "labels"])) {
               violations.push("add_labels contains unexpected fields");
             }
-            if (!Array.isArray(item.labels) || item.labels.length < 1 || item.labels.length > 4) {
-              violations.push("add_labels requires one to four labels");
+            if (!Array.isArray(item.labels) || item.labels.length !== 1) {
+              violations.push("add_labels requires exactly one needs-info label");
             } else {
               const renderedLabels = [];
               for (const label of item.labels) {
@@ -565,7 +541,11 @@ safe-outputs:
                     "</li>"
                 );
               }
-              summarySections.push("<h3>Proposed labels</h3>\n<ul>" + renderedLabels.join("") + "</ul>");
+              summarySections.push(
+                "<h3>Proposed needs-info suggestion</h3>\n<ul>" +
+                  renderedLabels.join("") +
+                  "</ul>",
+              );
             }
           }
 
@@ -770,7 +750,7 @@ safe-outputs:
           }
         }
         if (violations.length > 0) {
-          console.error("Blocked staged output: " + [...new Set(violations)].join(", "));
+          console.error("Blocked Stage A.5 output: " + [...new Set(violations)].join(", "));
           process.exit(1);
         }
         const labelItems = items.filter((item) => {
@@ -782,24 +762,29 @@ safe-outputs:
         });
         if (labelItems.length > 0) {
           // gh-aw v0.87.4 add_labels ignores its configured target during
-          // workflow_dispatch. Inject only the trusted dispatch target after
-          // recursively rejecting every agent-supplied selector above.
-          for (const item of labelItems) item.item_number = targetNumber;
+          // workflow_dispatch. The agent is also prohibited from choosing whether
+          // the label applies directly. After exact validation, inject both the
+          // trusted dispatch target and suggest=true so GitHub routes the label for
+          // maintainer review instead of applying it immediately.
+          for (const item of labelItems) {
+            item.item_number = targetNumber;
+            for (const label of item.labels) label.suggest = true;
+          }
           try {
             const trustedOutputPath = outputPath + ".trusted";
             fs.writeFileSync(trustedOutputPath, JSON.stringify(output));
             fs.renameSync(trustedOutputPath, outputPath);
           } catch {
-            console.error("Blocked staged output because the trusted target could not be injected");
+            console.error("Blocked Stage A.5 output because trusted canary controls could not be injected");
             process.exit(1);
           }
         }
         if (!process.env.GITHUB_STEP_SUMMARY) {
-          console.error("Blocked staged output because GITHUB_STEP_SUMMARY is unavailable");
+          console.error("Blocked Stage A.5 output because GITHUB_STEP_SUMMARY is unavailable");
           process.exit(1);
         }
         const summary =
-          "## Validated Stage A proposal\n\n" +
+          "## Validated Stage A.5 canary proposal\n\n" +
           "Target: issue #" +
           process.env.TARGET_NUMBER +
           "\n\n" +
@@ -811,27 +796,18 @@ safe-outputs:
           (duplicateContext.truncated ? " newest issues (bounded scan)." : " issues.") +
           "\n\n" +
           summarySections.join("\n\n") +
-          "\n\n> Preview only. No repository change was applied.\n";
+          "\n\n> If safe-output processing succeeds, the needs-info label will be submitted as a maintainer-review suggestion; comments remain preview-only.\n";
         try {
           fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
         } catch {
-          console.error("Blocked staged output because the proposal summary could not be written");
+          console.error("Blocked Stage A.5 output because the proposal summary could not be written");
           process.exit(1);
         }
         NODE
   add-labels:
+    staged: false
     target: ${{ inputs.issue_number }}
     allowed:
-      - bug
-      - enhancement
-      - documentation
-      - dependencies
-      - docker
-      - github-actions
-      - api
-      - network
-      - protect
-      - access
       - needs-info
     blocked:
       - triage-reviewed
@@ -844,11 +820,12 @@ safe-outputs:
       - breaking change
       - compatibility-critical
       - "*[bot]"
-    max: 4
+    max: 1
     issues: true
     pull-requests: false
     issue-intent: true
   add-comment:
+    staged: true
     target: ${{ inputs.issue_number }}
     max: 1
     discussions: false
@@ -859,9 +836,10 @@ safe-outputs:
 
 # Community issue triage
 
-Analyze issue `${{ inputs.issue_number }}` in `sirkirby/unifi-mcp` and propose a
-careful first-line triage result. This run is globally staged: proposed labels and the
-optional comment are previews only and must not be described as changes already made.
+Analyze issue `${{ inputs.issue_number }}` in `sirkirby/unifi-mcp` for the supervised
+Stage A.5 canary. Only a `needs-info` label may be proposed, and the trusted validator
+routes it to GitHub as a suggestion that requires maintainer review. An optional comment
+remains preview-only. Do not describe either output as a change already applied.
 
 ## Hard boundaries
 
@@ -890,7 +868,7 @@ immediately and do not read comments. Otherwise read the target comments with
 material. A repeated `get` call does not count as reading comments. Only continue to
 normal triage after both required target reads succeed without activating the stop path.
 If a required read fails, emit no safe output.
-These read requirements are prompt-level Stage A guidance, not validator-attested runtime
+These read requirements are prompt-level Stage A.5 guidance, not validator-attested runtime
 evidence; a human must verify the run's tool-use record.
 
 When the sensitive-intake stop path is activated:
@@ -994,9 +972,10 @@ highest-ranked candidate assessment; never add a `noop` merely to carry that ass
   `{labels: [{name, rationale, confidence}]}`; and `noop` with `{message}`. Omit every
   selector or control field, including `item_number`, `repo`, `target`, `comment_id`,
   `reply_to_id`, `suggest`, `secrecy`, and `integrity`. The trusted validator injects the
-  dispatch target after validating the proposal.
-- Propose no more than four labels and only from the configured allowlist.
-- Add `needs-info` only when a specific objectively required fact is missing.
+  dispatch target and `suggest: true` after validating the proposal.
+- Propose exactly one label at most: `needs-info`, and only when a specific objectively
+  required fact is missing. Do not propose type, component, completion, or priority labels
+  during this canary.
 - Never propose `triage-reviewed`. That completion label is reserved for a human
   maintainer until tool-use evidence is tamper-resistant and success-correlated.
 - Every proposed label addition must include a complete-sentence rationale of at most

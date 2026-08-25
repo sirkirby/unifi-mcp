@@ -13,7 +13,8 @@ WORKFLOW = ROOT / ".github" / "workflows" / "community-issue-triage.md"
 
 LOCK = ROOT / ".github" / "workflows" / "community-issue-triage.lock.yml"
 
-REQUIRED_LABELS = [
+REQUIRED_LABELS = ["needs-info"]
+FORMER_CLASSIFICATION_LABELS = [
     "bug",
     "enhancement",
     "documentation",
@@ -24,7 +25,6 @@ REQUIRED_LABELS = [
     "network",
     "protect",
     "access",
-    "needs-info",
 ]
 
 NO_CANDIDATE_UNCERTAINTY = (
@@ -181,8 +181,8 @@ def _allowed_label_output() -> dict[str, object]:
                 "type": "add_labels",
                 "labels": [
                     {
-                        "name": "bug",
-                        "rationale": "The report describes reproducible incorrect behavior.",
+                        "name": "needs-info",
+                        "rationale": "The report is missing one objectively required diagnostic detail.",
                         "confidence": "HIGH",
                     }
                 ],
@@ -233,20 +233,15 @@ def test_validator_rejects_live_mixed_label_and_noop_shape(tmp_path: Path):
     assert "noop must be exclusive" in result.stderr
 
 
-def test_validator_accepts_framework_temporary_id_from_live_issue_546_output(tmp_path: Path):
+def test_validator_accepts_stage_a5_label_suggestion_and_staged_comment(tmp_path: Path):
     output = {
         "items": [
             {
                 "type": "add_labels",
                 "labels": [
                     {
-                        "name": "enhancement",
-                        "rationale": "The issue proposes a new DPI name-resolution capability.",
-                        "confidence": "HIGH",
-                    },
-                    {
-                        "name": "network",
-                        "rationale": "The request applies to Network traffic-flow statistics.",
+                        "name": "needs-info",
+                        "rationale": "The report is missing the controller version needed to reproduce the failure.",
                         "confidence": "HIGH",
                     },
                 ],
@@ -272,6 +267,7 @@ def test_validator_accepts_framework_temporary_id_from_live_issue_546_output(tmp
     assert result.returncode == 0, result.stderr
     trusted_output = json.loads((tmp_path / "agent_output.json").read_text())
     assert trusted_output["items"][0]["item_number"] == 546
+    assert trusted_output["items"][0]["labels"][0]["suggest"] is True
     assert trusted_output["items"][1]["temporary_id"] == "aw_09GWN1A0"
 
     del output["items"][1]["temporary_id"]
@@ -377,12 +373,43 @@ def test_allowed_label_passes_and_receives_trusted_target(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     trusted_output = json.loads((tmp_path / "agent_output.json").read_text())
     assert trusted_output["items"][0]["item_number"] == 521
+    assert trusted_output["items"][0]["labels"] == [
+        {
+            "name": "needs-info",
+            "rationale": "The report is missing one objectively required diagnostic detail.",
+            "confidence": "HIGH",
+            "suggest": True,
+        }
+    ]
     summary = (tmp_path / "summary.md").read_text()
-    assert "The report describes reproducible incorrect behavior." in summary
+    assert "The report is missing one objectively required diagnostic detail." in summary
     assert NO_CANDIDATE_UNCERTAINTY in summary
+    assert "If safe-output processing succeeds" in summary
+    assert "comments remain preview-only" in summary
 
 
-def test_validator_accepts_exact_second_live_issue_546_label_only_output(tmp_path: Path):
+def test_validator_rejects_agent_control_of_issue_intent_suggestion(tmp_path: Path):
+    output = _allowed_label_output()
+    output["items"][0]["labels"][0]["suggest"] = True
+
+    result = _run_validator(tmp_path, output)
+
+    assert result.returncode == 1
+    assert "label intent contains unexpected fields" in result.stderr
+
+
+def test_validator_rejects_every_former_classification_label(tmp_path: Path):
+    for label_name in FORMER_CLASSIFICATION_LABELS:
+        output = _allowed_label_output()
+        output["items"][0]["labels"][0]["name"] = label_name
+
+        result = _run_validator(tmp_path, output)
+
+        assert result.returncode == 1
+        assert "label outside allowlist" in result.stderr
+
+
+def test_validator_rejects_historical_multi_label_output_in_narrow_canary(tmp_path: Path):
     output = {
         "items": [
             {
@@ -417,12 +444,8 @@ def test_validator_accepts_exact_second_live_issue_546_label_only_output(tmp_pat
         target_number=546,
     )
 
-    assert result.returncode == 0, result.stderr
-    trusted_output = json.loads((tmp_path / "agent_output.json").read_text())
-    assert trusted_output["items"][0]["item_number"] == 546
-    summary = (tmp_path / "summary.md").read_text()
-    assert NO_CANDIDATE_UNCERTAINTY in summary
-    assert "<h3>Proposed labels</h3>" in summary
+    assert result.returncode == 1
+    assert "add_labels requires exactly one needs-info label" in result.stderr
 
 
 def test_validator_rejects_missing_malformed_or_mismatched_duplicate_context(tmp_path: Path):
@@ -1445,6 +1468,48 @@ def test_source_and_compiled_output_policy_keep_triage_reviewed_human_only():
     assert "triage-reviewed" in config["add_labels"]["blocked"]
 
 
+def test_stage_a5_source_and_compiled_policy_keep_only_needs_info_live():
+    source = WORKFLOW.read_text()
+    compiled = LOCK.read_text()
+    config = _compiled_safe_output_config(compiled)
+
+    assert re.search(r"safe-outputs:\n  staged: false\n", source)
+    assert config["add_labels"] == {
+        "allowed": ["needs-info"],
+        "blocked": [
+            "triage-reviewed",
+            "duplicate",
+            "invalid",
+            "wontfix",
+            "security",
+            "good first issue",
+            "help wanted",
+            "breaking change",
+            "compatibility-critical",
+            "*[bot]",
+        ],
+        "issue_intent": True,
+        "max": 1,
+        "staged": False,
+        "target": "${GH_AW_INPUT_ISSUE_NUMBER}",
+    }
+    assert config["add_comment"]["staged"] is True
+    assert "GH_AW_SAFE_OUTPUTS_STAGED" not in compiled
+
+    safe_outputs_job = re.search(
+        r"\n  safe_outputs:\n(?P<body>.*?)\n  trusted_duplicate_research:\n",
+        compiled,
+        re.DOTALL,
+    )
+    assert safe_outputs_job is not None
+    permissions = re.search(
+        r"    permissions:\n(?P<body>(?:      .*\n)+?)    concurrency:",
+        safe_outputs_job.group("body"),
+    )
+    assert permissions is not None
+    assert permissions.group("body") == "      issues: write\n"
+
+
 def test_runtime_imported_prompt_declares_read_and_disposition_contract():
     source = " ".join(WORKFLOW.read_text().split())
 
@@ -1453,7 +1518,7 @@ def test_runtime_imported_prompt_declares_read_and_disposition_contract():
         "Otherwise read the target comments with `issue_read(method: get_comments)`",
         "A repeated `get` call does not count as reading comments.",
         "If a required read fails, emit no safe output.",
-        "These read requirements are prompt-level Stage A guidance, not validator-attested runtime evidence; "
+        "These read requirements are prompt-level Stage A.5 guidance, not validator-attested runtime evidence; "
         "a human must verify the run's tool-use record.",
         "Before calling any safe-output tool, choose exactly one final disposition:",
         "ACTION:** propose `add_labels`, `add_comment`, or both. Never also call `noop`.",
