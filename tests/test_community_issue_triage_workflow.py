@@ -218,6 +218,21 @@ def test_noop_output_still_passes_validation(tmp_path: Path):
     assert result.returncode == 0, result.stderr
 
 
+def test_validator_rejects_live_mixed_label_and_noop_shape(tmp_path: Path):
+    output = _allowed_label_output()
+    output["items"].append(
+        {
+            "type": "noop",
+            "message": "The issue is ready for maintainer review.\n" + NO_CANDIDATE_UNCERTAINTY,
+        }
+    )
+
+    result = _run_validator(tmp_path, output)
+
+    assert result.returncode == 1
+    assert "noop must be exclusive" in result.stderr
+
+
 def test_validator_accepts_framework_temporary_id_from_live_issue_546_output(tmp_path: Path):
     output = {
         "items": [
@@ -1428,6 +1443,31 @@ def test_source_and_compiled_output_policy_keep_triage_reviewed_human_only():
     config = _compiled_safe_output_config(compiled)
     assert "triage-reviewed" not in config["add_labels"]["allowed"]
     assert "triage-reviewed" in config["add_labels"]["blocked"]
+
+
+def test_runtime_imported_prompt_requires_conditional_evidence_and_exclusive_disposition():
+    source = " ".join(WORKFLOW.read_text().split())
+
+    required_fragments = (
+        "First read the target issue with `issue_read(method: get)`.",
+        "Otherwise read the target comments with `issue_read(method: get_comments)`",
+        "A repeated `get` call does not count as reading comments.",
+        "If a required read fails, emit no safe output.",
+        "Before calling any safe-output tool, choose exactly one final disposition:",
+        "ACTION:** propose `add_labels`, `add_comment`, or both. Never also call `noop`.",
+        "NO-ACTION:** propose exactly one `noop`. Never also call `add_labels` or `add_comment`.",
+        "A label-only ACTION is complete and does not need a `noop`.",
+        "read and evaluate every candidate. Before any safe-output call, verify that the chosen output "
+        "includes exactly one sentence for the highest-ranked candidate",
+    )
+
+    for fragment in required_fragments:
+        assert fragment in source
+
+    compiled = LOCK.read_text()
+    assert (
+        'GH_AW_PROMPT_CONTENT_0005: "{{#runtime-import .github/workflows/community-issue-triage.md}}\\n"'
+    ) in compiled
 
 
 def test_trusted_duplicate_research_replaces_agent_issue_search():

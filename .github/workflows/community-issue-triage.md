@@ -882,9 +882,16 @@ optional comment are previews only and must not be described as changes already 
 
 ## Sensitive-intake stop path
 
-Before normal triage, decide whether the issue plausibly contains an undisclosed
-vulnerability, credential or token, personal information, private controller details,
-or another secret. If so:
+First read the target issue with `issue_read(method: get)`. If its title or body
+plausibly contains an undisclosed vulnerability, credential or token, personal
+information, private controller details, or another secret, follow the stop path below
+immediately and do not read comments. Otherwise read the target comments with
+`issue_read(method: get_comments)` and follow the stop path if a comment contains such
+material. A repeated `get` call does not count as reading comments. Only continue to
+normal triage after both required target reads succeed without activating the stop path.
+If a required read fails, emit no safe output.
+
+When the sensitive-intake stop path is activated:
 
 1. Stop. Do not inspect source, research duplicates, validate exploitability, or repeat
    the sensitive material in any output.
@@ -909,8 +916,9 @@ issue exists. Stage A intentionally has no semantic-search fallback.
 ${{ needs.trusted_duplicate_research.outputs.context }}
 ```
 
-1. Read issue `${{ inputs.issue_number }}` and its comments. Normal triage applies to open
-   and closed issues; closure is not an exemption from the evidence steps below.
+1. Use the already completed target `get` and `get_comments` reads. Normal triage applies
+   to open and closed issues; closure is not an exemption from either required target read
+   or the evidence steps below.
 2. Trust deterministic issue-form metadata first. Preserve an existing `bug`,
    `enhancement`, or `documentation` label. Map an explicit component selection only
    when it has an exact allowed label: Network to `network`, Protect to `protect`,
@@ -932,8 +940,10 @@ ${{ needs.trusted_duplicate_research.outputs.context }}
    duplicate research. Apply the sensitive-intake stop path when the reason is
    `sensitive-title-guard` or target issue/comments reveal sensitive intake; otherwise
    state the lexical prefilter limitation internally and continue normal triage.
-5. During normal triage, when candidates are present, include exactly one sentence for the highest-ranked candidate
-   in a safe-output rationale, comment, or `noop` message using this contract:
+5. During normal triage, when candidates are present, read and evaluate every candidate.
+   Before any safe-output call, verify that the chosen output includes exactly one sentence
+   for the highest-ranked candidate in a label rationale, comment, or `noop` message using
+   this contract:
    `Candidate #<number>: RELATED|NOT_RELATED|UNCERTAIN — <specific reason of at least 20 characters>`.
    The sentence may stand alone or follow other rationale after sentence-ending punctuation.
    Use only one of the three literal verdicts. The sentence is a machine-checked Stage A
@@ -968,6 +978,15 @@ ${{ needs.trusted_duplicate_research.outputs.context }}
    reporter or maintainer.
 
 ## Safe-output contract
+
+Before calling any safe-output tool, choose exactly one final disposition:
+
+- **ACTION:** propose `add_labels`, `add_comment`, or both. Never also call `noop`.
+- **NO-ACTION:** propose exactly one `noop`. Never also call `add_labels` or `add_comment`.
+
+A label-only ACTION is complete and does not need a `noop`. When trusted candidates exist,
+the chosen ACTION or NO-ACTION output must contain exactly one required highest-ranked
+candidate assessment; never add a `noop` merely to carry that assessment.
 
 - Use only these argument shapes: `add_comment` with `{body}`; `add_labels` with
   `{labels: [{name, rationale, confidence}]}`; and `noop` with `{message}`. Omit every
