@@ -1,5 +1,5 @@
-# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"9ffb950c3e40b74be29ff19b02889664485dc40c3b71c0c189ef60b0697f2fbd","body_hash":"85bfd99e561529e7f87086f4218045ebf78fa3fb34ba21dd365fc6035d2d89f4","compiler_version":"v0.87.4","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.80"}}
-# gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"ea4b911d44a5336c74325a122a5fd9110b45ff06","version":"v0.87.4"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4","digest":"sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4@sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4","digest":"sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4@sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4","digest":"sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4@sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.10","digest":"sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.10@sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"},{"image":"ghcr.io/github/github-mcp-server:v1.10.0","digest":"sha256:097512ddf58af80a620c177ae9cad93448f9a2a55c70ee8fde5cec6714522a8c","pinned_image":"ghcr.io/github/github-mcp-server:v1.10.0@sha256:097512ddf58af80a620c177ae9cad93448f9a2a55c70ee8fde5cec6714522a8c"}],"mcp_servers":[{"name":"github","tools":["get_file_contents","issue_read","search_code"]},{"name":"safeoutputs","tools":["add_comment","add_labels","noop"]}]}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"0672b6a61c54777ee980ab1695b5ae5566263a87421c51de1bfed4357d8acc45","body_hash":"79c1b39e1d3fae6cb9a2523cf32f43ecefecb0f1f9cfdf2f541bbb0a3018acaa","compiler_version":"v0.87.4","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.80"}}
+# gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"ea4b911d44a5336c74325a122a5fd9110b45ff06","version":"v0.87.4"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4","digest":"sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4@sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4","digest":"sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4@sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4","digest":"sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4@sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.10","digest":"sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.10@sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"}],"mcp_servers":[{"name":"safeoutputs","tools":["add_comment","add_labels","noop"]}]}
 # This file was automatically generated by gh-aw (v0.87.4). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
 #
 #    ___                   _   _
@@ -23,7 +23,7 @@
 #
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
-# Manually dispatched canary that keeps comments staged and routes one needs-info label suggestion for maintainer review.
+# Manually dispatched readiness workflow with trusted issue evidence, staged comments, and one human-reviewed needs-info suggestion.
 #
 # Secrets used:
 #   - COPILOT_GITHUB_TOKEN
@@ -35,7 +35,6 @@
 #   - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 #   - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
 #   - actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-#   - actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0 (source v9)
 #   - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
 #   - github/gh-aw-actions/setup@ea4b911d44a5336c74325a122a5fd9110b45ff06 # v0.87.4
 #
@@ -45,9 +44,8 @@
 #   - ghcr.io/github/gh-aw-firewall/squid:0.28.4@sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258
 #   - ghcr.io/github/gh-aw-mcpg:v0.4.10@sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42
 #   - ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196
-#   - ghcr.io/github/github-mcp-server:v1.10.0@sha256:097512ddf58af80a620c177ae9cad93448f9a2a55c70ee8fde5cec6714522a8c
 
-name: "Community issue triage (Stage A.5 canary)"
+name: "Community issue triage (inert Stage B readiness)"
 on:
   workflow_dispatch:
     inputs:
@@ -73,11 +71,10 @@ concurrency:
   group: community-issue-triage
   queue: single
 
-run-name: "Community issue triage (Stage A.5 canary)"
+run-name: "Community issue triage (inert Stage B readiness)"
 
 jobs:
   activation:
-    needs: trusted_duplicate_research
     runs-on: ubuntu-slim
     permissions:
       actions: read
@@ -104,7 +101,7 @@ jobs:
           destination: ${{ runner.temp }}/gh-aw/actions
           job-name: ${{ github.job }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Community issue triage (Stage A.5 canary)"
+          GH_AW_SETUP_WORKFLOW_NAME: "Community issue triage (inert Stage B readiness)"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/community-issue-triage.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.80"
           GH_AW_INFO_AWF_VERSION: "v0.28.4"
@@ -118,7 +115,7 @@ jobs:
           GH_AW_INFO_VERSION: "1.0.80"
           GH_AW_INFO_AGENT_VERSION: "1.0.80"
           GH_AW_INFO_CLI_VERSION: "v0.87.4"
-          GH_AW_INFO_WORKFLOW_NAME: "Community issue triage (Stage A.5 canary)"
+          GH_AW_INFO_WORKFLOW_NAME: "Community issue triage (inert Stage B readiness)"
           GH_AW_INFO_EXPERIMENTAL: "false"
           GH_AW_INFO_SUPPORTS_TOOLS_ALLOWLIST: "true"
           GH_AW_INFO_STAGED: "false"
@@ -204,23 +201,13 @@ jobs:
           GH_AW_ACTIONS_DIR: ${{ runner.temp }}/gh-aw/actions
           GH_AW_PROMPT: ${{ runner.temp }}/gh-aw/aw-prompts/prompt.txt
           GH_AW_SAFE_OUTPUTS: ${{ runner.temp }}/gh-aw/safeoutputs/outputs.jsonl
-          GH_AW_PROMPT_CONFIG: "{\"items\":[{\"content_env\":\"GH_AW_PROMPT_CONTENT_0000\"},{\"file\":\"xpia.md\"},{\"file\":\"temp_folder_prompt.md\"},{\"file\":\"markdown.md\"},{\"file\":\"safe_outputs_prompt.md\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0001\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0002\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0003\"},{\"file\":\"github_mcp_tools_with_safeoutputs_prompt.md\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0004\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0005\"}]}"
-          GH_AW_EXPR_1A3A194A: ${{ github.event.discussion.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'discussion' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_463A214A: ${{ github.event.pull_request.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'pull_request' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_802A9F6A: ${{ github.event.issue.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'issue' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_FF1D34CE: ${{ github.event.comment.id || fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').comment_id }}
-          GH_AW_GITHUB_ACTOR: ${{ github.actor }}
-          GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
-          GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
-          GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
+          GH_AW_PROMPT_CONFIG: "{\"items\":[{\"content_env\":\"GH_AW_PROMPT_CONTENT_0000\"},{\"file\":\"xpia.md\"},{\"file\":\"temp_folder_prompt.md\"},{\"file\":\"markdown.md\"},{\"file\":\"safe_outputs_prompt.md\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0001\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0002\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0003\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0004\"}]}"
           GH_AW_INPUTS_ISSUE_NUMBER: ${{ inputs.issue_number }}
-          GH_AW_NEEDS_TRUSTED_DUPLICATE_RESEARCH_OUTPUTS_CONTEXT: ${{ needs.trusted_duplicate_research.outputs.context }}
           GH_AW_PROMPT_CONTENT_0000: "<system>\n"
           GH_AW_PROMPT_CONTENT_0001: "<safe-output-tools>\nTools: add_comment, add_labels, noop\n"
           GH_AW_PROMPT_CONTENT_0002: "</safe-output-tools>\n"
-          GH_AW_PROMPT_CONTENT_0003: "<github-context>\nThe following GitHub context information is available for this workflow:\n{{#if github.actor}}\n- **actor**: __GH_AW_GITHUB_ACTOR__\n{{/if}}\n{{#if github.repository}}\n- **repository**: __GH_AW_GITHUB_REPOSITORY__\n{{/if}}\n{{#if github.workspace}}\n- **workspace**: __GH_AW_GITHUB_WORKSPACE__\n{{/if}}\n{{#if github.event.issue.number || (github.aw.context.item_type == 'issue' && github.aw.context.item_number)}}\n- **issue-number**: #__GH_AW_EXPR_802A9F6A__\n{{/if}}\n{{#if github.event.discussion.number || (github.aw.context.item_type == 'discussion' && github.aw.context.item_number)}}\n- **discussion-number**: #__GH_AW_EXPR_1A3A194A__\n{{/if}}\n{{#if github.event.pull_request.number || (github.aw.context.item_type == 'pull_request' && github.aw.context.item_number)}}\n- **pull-request-number**: #__GH_AW_EXPR_463A214A__\n{{/if}}\n{{#if github.event.comment.id || github.aw.context.comment_id}}\n- **comment-id**: __GH_AW_EXPR_FF1D34CE__\n{{/if}}\n{{#if github.run_id}}\n- **workflow-run-id**: __GH_AW_GITHUB_RUN_ID__\n{{/if}}\n</github-context>\n\n"
-          GH_AW_PROMPT_CONTENT_0004: "</system>\n"
-          GH_AW_PROMPT_CONTENT_0005: "{{#runtime-import .github/workflows/community-issue-triage.md}}\n"
+          GH_AW_PROMPT_CONTENT_0003: "</system>\n"
+          GH_AW_PROMPT_CONTENT_0004: "{{#runtime-import .github/workflows/community-issue-triage.md}}\n"
         with:
           script: |
             const { setupGlobals } = require(process.env.GH_AW_ACTIONS_DIR + '/setup_globals.cjs');
@@ -233,7 +220,6 @@ jobs:
           GH_AW_PROMPT: ${{ runner.temp }}/gh-aw/aw-prompts/prompt.txt
           GH_AW_ENGINE_ID: "copilot"
           GH_AW_INPUTS_ISSUE_NUMBER: ${{ inputs.issue_number }}
-          GH_AW_NEEDS_TRUSTED_DUPLICATE_RESEARCH_OUTPUTS_CONTEXT: ${{ needs.trusted_duplicate_research.outputs.context }}
         with:
           script: |
             const path = require('path');
@@ -246,16 +232,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_PROMPT: ${{ runner.temp }}/gh-aw/aw-prompts/prompt.txt
-          GH_AW_EXPR_1A3A194A: ${{ github.event.discussion.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'discussion' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_463A214A: ${{ github.event.pull_request.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'pull_request' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_802A9F6A: ${{ github.event.issue.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'issue' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
-          GH_AW_EXPR_FF1D34CE: ${{ github.event.comment.id || fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').comment_id }}
-          GH_AW_GITHUB_ACTOR: ${{ github.actor }}
-          GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
-          GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
-          GH_AW_GITHUB_WORKSPACE: ${{ github.workspace }}
           GH_AW_INPUTS_ISSUE_NUMBER: ${{ inputs.issue_number }}
-          GH_AW_NEEDS_TRUSTED_DUPLICATE_RESEARCH_OUTPUTS_CONTEXT: ${{ needs.trusted_duplicate_research.outputs.context }}
         with:
           script: |
             const path = require('path');
@@ -269,16 +246,7 @@ jobs:
             return await substitutePlaceholders({
               file: process.env.GH_AW_PROMPT,
               substitutions: {
-                GH_AW_EXPR_1A3A194A: process.env.GH_AW_EXPR_1A3A194A,
-                GH_AW_EXPR_463A214A: process.env.GH_AW_EXPR_463A214A,
-                GH_AW_EXPR_802A9F6A: process.env.GH_AW_EXPR_802A9F6A,
-                GH_AW_EXPR_FF1D34CE: process.env.GH_AW_EXPR_FF1D34CE,
-                GH_AW_GITHUB_ACTOR: process.env.GH_AW_GITHUB_ACTOR,
-                GH_AW_GITHUB_REPOSITORY: process.env.GH_AW_GITHUB_REPOSITORY,
-                GH_AW_GITHUB_RUN_ID: process.env.GH_AW_GITHUB_RUN_ID,
-                GH_AW_GITHUB_WORKSPACE: process.env.GH_AW_GITHUB_WORKSPACE,
-                GH_AW_INPUTS_ISSUE_NUMBER: process.env.GH_AW_INPUTS_ISSUE_NUMBER,
-                GH_AW_NEEDS_TRUSTED_DUPLICATE_RESEARCH_OUTPUTS_CONTEXT: process.env.GH_AW_NEEDS_TRUSTED_DUPLICATE_RESEARCH_OUTPUTS_CONTEXT
+                GH_AW_INPUTS_ISSUE_NUMBER: process.env.GH_AW_INPUTS_ISSUE_NUMBER
               }
             });
       - name: Validate prompt placeholders
@@ -317,11 +285,11 @@ jobs:
   agent:
     needs:
       - activation
-      - trusted_duplicate_research
+      - trusted_issue_snapshot
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
-      issues: read
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       GH_AW_ASSETS_ALLOWED_EXTS: ""
@@ -335,6 +303,7 @@ jobs:
       ai_credits_rate_limit_error: ${{ steps.parse-mcp-gateway.outputs.ai_credits_rate_limit_error || 'false' }}
       aic: ${{ steps.parse-mcp-gateway.outputs.aic }}
       ambient_context: ${{ steps.parse-mcp-gateway.outputs.ambient_context }}
+      checkout_pr_success: ${{ steps.checkout-pr.outputs.checkout_pr_success || 'true' }}
       effective_tokens: ${{ steps.parse-mcp-gateway.outputs.effective_tokens }}
       has_patch: ${{ steps.collect_output.outputs.has_patch }}
       http_400_response_error: ${{ steps.detect-agent-errors.outputs.http_400_response_error || 'false' }}
@@ -363,7 +332,7 @@ jobs:
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
           parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Community issue triage (Stage A.5 canary)"
+          GH_AW_SETUP_WORKFLOW_NAME: "Community issue triage (inert Stage B readiness)"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/community-issue-triage.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.80"
           GH_AW_INFO_AWF_VERSION: "v0.28.4"
@@ -376,6 +345,12 @@ jobs:
             echo "GH_AW_SAFE_OUTPUTS_CONFIG_PATH=${RUNNER_TEMP}/gh-aw/safeoutputs/config.json"
             echo "GH_AW_SAFE_OUTPUTS_TOOLS_PATH=${RUNNER_TEMP}/gh-aw/safeoutputs/tools.json"
           } >> "$GITHUB_OUTPUT"
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+          fetch-depth: 1
       - name: Create gh-aw temp directory
         run: bash "${RUNNER_TEMP}/gh-aw/actions/create_gh_aw_tmp_dir.sh"
       - name: Configure gh CLI for GitHub Enterprise
@@ -387,6 +362,28 @@ jobs:
         with:
           name: activation
           path: /tmp/gh-aw
+      - name: Configure Git credentials
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/configure_git_credentials.sh"
+      - name: Checkout PR branch
+        id: checkout-pr
+        if: |
+          github.event.pull_request || github.event.issue.pull_request || github.event_name == 'workflow_dispatch' && fromJSON(github.event.inputs.aw_context || '{}').item_type == 'pull_request'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const path = require('path');
+            const actionsDir = path.join(process.env.RUNNER_TEMP, 'gh-aw', 'actions');
+            const { setupGlobals } = require(path.join(actionsDir, 'setup_globals.cjs'));
+            setupGlobals(core, github, context, exec, io, getOctokit);
+            const { main } = require(path.join(actionsDir, 'checkout_pr_branch.cjs'));
+            await main();
       - name: Install GitHub Copilot CLI
         run: bash "${RUNNER_TEMP}/gh-aw/actions/install_copilot_cli.sh"
         env:
@@ -394,27 +391,12 @@ jobs:
           GH_AW_COMPILED_VERSION: v0.87.4
       - name: Install AWF binary
         run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.28.4 --rootless
-      - name: Determine automatic lockdown mode for GitHub MCP Server
-        id: determine-automatic-lockdown
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0 (source v9)
+      - name: Restore agent config folders from base branch
+        if: steps.checkout-pr.outcome == 'success'
         env:
-          GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
-          GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
-          GH_AW_GITHUB_MIN_INTEGRITY: 'none'
-          GH_AW_GITHUB_REPOS: '["sirkirby/unifi-mcp"]'
-        with:
-          script: |
-            const path = require('path');
-            const actionsDir = path.join(process.env.RUNNER_TEMP, 'gh-aw', 'actions');
-            const determineAutomaticLockdown = require(path.join(actionsDir, 'determine_automatic_lockdown.cjs'));
-            await determineAutomaticLockdown(github, context, core);
-      - name: Parse integrity filter lists
-        id: parse-guard-vars
-        env:
-          GH_AW_BLOCKED_USERS_VAR: ${{ vars.GH_AW_GITHUB_BLOCKED_USERS || '' }}
-          GH_AW_TRUSTED_USERS_VAR: ${{ vars.GH_AW_GITHUB_TRUSTED_USERS || '' }}
-          GH_AW_APPROVAL_LABELS_VAR: ${{ vars.GH_AW_GITHUB_APPROVAL_LABELS || '' }}
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/parse_guard_list.sh"
+          GH_AW_AGENT_FOLDERS: ".agents .github"
+          GH_AW_AGENT_FILES: "AGENTS.md"
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/restore_base_github_folders.sh"
       - name: Restore inline sub-agents from activation artifact
         env:
           GH_AW_SUB_AGENT_DIR: ".github/agents"
@@ -424,8 +406,37 @@ jobs:
         env:
           GH_AW_SKILL_DIR: ".github/skills"
         run: bash "${RUNNER_TEMP}/gh-aw/actions/restore_inline_skills.sh"
+      - name: Download the trusted issue snapshot for inference
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}
+          path: ${{ runner.temp }}/trusted-intake-download
+      - env:
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.trusted_issue_snapshot.outputs.artifact_digest }}
+          EXPECTED_ARTIFACT_ID: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}
+          EXPECTED_BUNDLE_DIGEST: ${{ needs.trusted_issue_snapshot.outputs.bundle_digest }}
+          EXPECTED_RUN_ID: ${{ github.run_id }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_TARGET: ${{ inputs.issue_number }}
+          SNAPSHOT_PATH: ${{ runner.temp }}/trusted-intake-download/context.json
+        name: Verify trusted snapshot provenance before inference
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: "const fs = require(\"fs\");\nconst path = require(\"path\");\nconst {pathToFileURL} = require(\"url\");\nconst contract = await import(\n  pathToFileURL(\n    path.join(\n      process.env.GITHUB_WORKSPACE,\n      \".github/scripts/community_issue_triage_contract.mjs\",\n    ),\n  ).href\n);\nconst bundle = JSON.parse(\n  fs.readFileSync(process.env.SNAPSHOT_PATH, \"utf8\"),\n);\nconst artifact = await github.request(\n  \"GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}\",\n  {\n    owner: context.repo.owner,\n    repo: context.repo.repo,\n    artifact_id: Number(process.env.EXPECTED_ARTIFACT_ID),\n  },\n);\ncontract.verifyArtifactProvenance({\n  bundle,\n  expectedRepository: context.repo.owner + \"/\" + context.repo.repo,\n  expectedRunId: process.env.EXPECTED_RUN_ID,\n  expectedWorkflowSha: process.env.EXPECTED_SHA,\n  expectedTargetNumber: Number(process.env.EXPECTED_TARGET),\n  artifactId: artifact.data.id,\n  expectedArtifactId: Number(process.env.EXPECTED_ARTIFACT_ID),\n  actionDigest: artifact.data.digest,\n  expectedActionDigest: process.env.EXPECTED_ARTIFACT_DIGEST,\n  expectedBundleDigest: process.env.EXPECTED_BUNDLE_DIGEST,\n});\n"
+      - name: Seal the verified inference snapshot outside agent-writable paths
+        run: |
+          set -euo pipefail
+          trusted_source="${RUNNER_TEMP}/trusted-intake-download/context.json"
+          sudo install -d -o root -g root -m 0755 /opt/gh-aw-trusted-intake
+          sudo install -o root -g root -m 0444 "$trusted_source" /opt/gh-aw-trusted-intake/context.json
+          rm -f "$trusted_source"
+          rmdir "${RUNNER_TEMP}/trusted-intake-download"
+          test "$(stat -c '%U:%G:%a' /opt/gh-aw-trusted-intake/context.json)" = "root:root:444"
+        shell: bash
+
       - name: Download container images
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ghcr.io/github/gh-aw-firewall/agent:0.28.4@sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46 ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4@sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882 ghcr.io/github/gh-aw-firewall/squid:0.28.4@sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258 ghcr.io/github/gh-aw-mcpg:v0.4.10@sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42 ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196 ghcr.io/github/github-mcp-server:v1.10.0@sha256:097512ddf58af80a620c177ae9cad93448f9a2a55c70ee8fde5cec6714522a8c
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ghcr.io/github/gh-aw-firewall/agent:0.28.4@sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46 ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4@sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882 ghcr.io/github/gh-aw-firewall/squid:0.28.4@sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258 ghcr.io/github/gh-aw-mcpg:v0.4.10@sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42 ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196
       - name: Prepare Safe Outputs Directories
         run: |
           mkdir -p "${RUNNER_TEMP}/gh-aw/safeoutputs"
@@ -548,8 +559,6 @@ jobs:
           GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
           GH_AW_SAFE_OUTPUTS_CONFIG_PATH: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS_CONFIG_PATH }}
           GH_AW_SAFE_OUTPUTS_TOOLS_PATH: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS_TOOLS_PATH }}
-          GH_AW_SINK_VISIBILITY: ${{ steps.determine-automatic-lockdown.outputs.visibility }}
-          GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_AW_INPUT_ISSUE_NUMBER: ${{ inputs.issue_number }}
         run: |
@@ -582,31 +591,9 @@ jobs:
 
           mkdir -p "$HOME/.copilot"
           GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-          cat << GH_AW_MCP_CONFIG_93b72797525b97f6_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
+          cat << GH_AW_MCP_CONFIG_6f7380427d277030_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
           {
             "mcpServers": {
-              "github": {
-                "type": "stdio",
-                "container": "ghcr.io/github/github-mcp-server:v1.10.0",
-                "env": {
-                  "GITHUB_FEATURES": "fields_param",
-                  "GITHUB_HOST": "${GITHUB_SERVER_URL}",
-                  "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_MCP_SERVER_TOKEN}",
-                  "GITHUB_READ_ONLY": "1",
-                  "GITHUB_TOOLSETS": "repos,issues"
-                },
-                "guard-policies": {
-                  "allow-only": {
-                    "approval-labels": ${{ steps.parse-guard-vars.outputs.approval_labels }},
-                    "blocked-users": ${{ steps.parse-guard-vars.outputs.blocked_users }},
-                    "min-integrity": "none",
-                    "repos": [
-                      "sirkirby/unifi-mcp"
-                    ],
-                    "trusted-users": ${{ steps.parse-guard-vars.outputs.trusted_users }}
-                  }
-                }
-              },
               "safeoutputs": {
                 "type": "stdio",
                 "container": "ghcr.io/github/gh-aw-node",
@@ -633,14 +620,6 @@ jobs:
                   "GITHUB_WORKSPACE": "\${GITHUB_WORKSPACE}",
                   "RUNNER_TEMP": "\${RUNNER_TEMP}",
                   "GH_AW_INPUT_ISSUE_NUMBER": "\${GH_AW_INPUT_ISSUE_NUMBER}"
-                },
-                "guard-policies": {
-                  "write-sink": {
-                    "accept": [
-                      "private:sirkirby/unifi-mcp"
-                    ],
-                    "sink-visibility": "${GH_AW_SINK_VISIBILITY}"
-                  }
                 }
               }
             },
@@ -652,7 +631,7 @@ jobs:
               "startupTimeout": 120
             }
           }
-          GH_AW_MCP_CONFIG_93b72797525b97f6_EOF
+          GH_AW_MCP_CONFIG_6f7380427d277030_EOF
       - name: Mount MCP servers as CLIs
         id: mount-mcp-clis
         continue-on-error: true
@@ -679,9 +658,6 @@ jobs:
       - name: Execute GitHub Copilot CLI
         id: agentic_execution
         # Copilot CLI tool arguments (sorted):
-        # --allow-tool github(get_file_contents)
-        # --allow-tool github(issue_read)
-        # --allow-tool github(search_code)
         # --allow-tool safeoutputs
         # --allow-tool write
         timeout-minutes: 10
@@ -729,8 +705,8 @@ jobs:
             fi
           fi
           # shellcheck disable=SC1003,SC2016,SC2086
-          awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" ${GH_AW_TOOL_CACHE_MOUNT:+--mount "$GH_AW_TOOL_CACHE_MOUNT"} ${GH_AW_DOCKER_HOST:+--docker-host "$GH_AW_DOCKER_HOST"} --env-all --exclude-env ACTIONS_ID_TOKEN_REQUEST_TOKEN --exclude-env ACTIONS_ID_TOKEN_REQUEST_URL --exclude-env COPILOT_GITHUB_TOKEN --exclude-env GITHUB_MCP_SERVER_TOKEN --exclude-env MCP_GATEWAY_API_KEY --mount /tmp/gh-aw:/tmp/gh-aw:rw --log-level info --skip-pull \
-            -- /bin/bash -c 'set +o histexpand; export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && : "${RUNNER_TOOL_CACHE:?RUNNER_TOOL_CACHE must be set}"; GH_AW_TOOL_CACHE="$RUNNER_TOOL_CACHE"; export PATH="$(find "$GH_AW_TOOL_CACHE" -maxdepth 5 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true; [ -n "$ERLANG_HOME" ] && export PATH="$ERLANG_HOME/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" "${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs" "${RUNNER_TEMP}/gh-aw/bin/copilot" --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-tool '\''github(get_file_contents)'\'' --allow-tool '\''github(issue_read)'\'' --allow-tool '\''github(search_code)'\'' --allow-tool safeoutputs --allow-tool write --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
+          awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" ${GH_AW_TOOL_CACHE_MOUNT:+--mount "$GH_AW_TOOL_CACHE_MOUNT"} ${GH_AW_DOCKER_HOST:+--docker-host "$GH_AW_DOCKER_HOST"} --env-all --exclude-env ACTIONS_ID_TOKEN_REQUEST_TOKEN --exclude-env ACTIONS_ID_TOKEN_REQUEST_URL --exclude-env COPILOT_GITHUB_TOKEN --exclude-env MCP_GATEWAY_API_KEY --mount /tmp/gh-aw:/tmp/gh-aw:rw --mount /opt/gh-aw-trusted-intake:/opt/gh-aw-trusted-intake:ro --log-level info --skip-pull \
+            -- /bin/bash -c 'set +o histexpand; export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && : "${RUNNER_TOOL_CACHE:?RUNNER_TOOL_CACHE must be set}"; GH_AW_TOOL_CACHE="$RUNNER_TOOL_CACHE"; export PATH="$(find "$GH_AW_TOOL_CACHE" -maxdepth 5 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true; [ -n "$ERLANG_HOME" ] && export PATH="$ERLANG_HOME/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" "${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs" "${RUNNER_TEMP}/gh-aw/bin/copilot" --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-tool safeoutputs --allow-tool write --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
         env:
           AWF_REFLECT_ENABLED: 1
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
@@ -749,7 +725,6 @@ jobs:
           GITHUB_AW: true
           GITHUB_COPILOT_INTEGRATION_ID: agentic-workflows
           GITHUB_HEAD_REF: ${{ github.head_ref }}
-          GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_STEP_SUMMARY: /tmp/gh-aw/agent-step-summary.md
@@ -776,6 +751,12 @@ jobs:
             setupGlobals(core, github, context, exec, io, getOctokit);
             const { main } = require(path.join(actionsDir, 'detect_agent_errors.cjs'));
             await main();
+      - name: Configure Git credentials
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/configure_git_credentials.sh"
       - name: Copy Copilot session state files to logs
         if: always()
         continue-on-error: true
@@ -801,10 +782,8 @@ jobs:
             const { main } = require(path.join(actionsDir, 'redact_secrets.cjs'));
             await main();
         env:
-          GH_AW_SECRET_NAMES: 'COPILOT_GITHUB_TOKEN,GH_AW_GITHUB_MCP_SERVER_TOKEN,GH_AW_GITHUB_TOKEN,GITHUB_TOKEN'
+          GH_AW_SECRET_NAMES: 'COPILOT_GITHUB_TOKEN,GITHUB_TOKEN'
           SECRET_COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
-          SECRET_GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
-          SECRET_GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
           SECRET_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Append agent step summary
         if: always()
@@ -920,8 +899,6 @@ jobs:
             /tmp/gh-aw/sandbox/agent/logs/
             /tmp/gh-aw/redacted-urls.log
             /tmp/gh-aw/mcp-logs/
-            /tmp/gh-aw/proxy-logs/
-            !/tmp/gh-aw/proxy-logs/proxy-tls/
             /tmp/gh-aw/agent_usage.json
             /tmp/gh-aw/agent-stdio.log
             /tmp/gh-aw/pre-agent-audit.txt
@@ -940,11 +917,11 @@ jobs:
       - activation
       - agent
       - safe_outputs
-      - trusted_duplicate_research
+      - trusted_issue_snapshot
     if: >
-      always() && (needs.agent.result != 'skipped' || needs.activation.outputs.lockdown_check_failed == 'true' ||
+      (always() && (needs.agent.result != 'skipped' || needs.activation.outputs.lockdown_check_failed == 'true' ||
       needs.activation.outputs.oauth_token_check_failed == 'true' || needs.activation.outputs.stale_lock_file_failed == 'true' ||
-      needs.activation.outputs.secret_verification_result == 'failed')
+      needs.activation.outputs.secret_verification_result == 'failed')) && (false)
     runs-on: ubuntu-slim
     permissions:
       issues: write
@@ -966,7 +943,7 @@ jobs:
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
           parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Community issue triage (Stage A.5 canary)"
+          GH_AW_SETUP_WORKFLOW_NAME: "Community issue triage (inert Stage B readiness)"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/community-issue-triage.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.80"
           GH_AW_INFO_AWF_VERSION: "v0.28.4"
@@ -1024,7 +1001,7 @@ jobs:
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
           GH_AW_NOOP_MAX: "1"
-          GH_AW_WORKFLOW_NAME: "Community issue triage (Stage A.5 canary)"
+          GH_AW_WORKFLOW_NAME: "Community issue triage (inert Stage B readiness)"
           GH_AW_WORKFLOW_SOURCE_URL: "${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/workflows/community-issue-triage.md"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
@@ -1047,7 +1024,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_AGENT_OUTPUT: ${{ steps.setup-agent-output-env.outputs.GH_AW_AGENT_OUTPUT }}
-          GH_AW_WORKFLOW_NAME: "Community issue triage (Stage A.5 canary)"
+          GH_AW_WORKFLOW_NAME: "Community issue triage (inert Stage B readiness)"
           GH_AW_WORKFLOW_SOURCE_URL: "${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/workflows/community-issue-triage.md"
           GH_AW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_AW_AGENT_CONCLUSION: ${{ needs.agent.result }}
@@ -1056,6 +1033,7 @@ jobs:
           GH_AW_ENGINE_ID: "copilot"
           GH_AW_SECRET_VERIFICATION_RESULT: ${{ needs.activation.outputs.secret_verification_result }}
           GH_AW_ENGINE_SECRET_FAILURE_MESSAGE: "**Alternative**: If your organization has a Copilot subscription, you can avoid the need for a personal access token by adding a top-level `permissions` block to your workflow file. This enables Copilot inference through the org using the built-in GitHub Actions token.\n\n```yaml\npermissions:\n  copilot-requests: write\n```\n\nSee: https://github.github.com/gh-aw/reference/engines/#github-copilot-default"
+          GH_AW_CHECKOUT_PR_SUCCESS: ${{ needs.agent.outputs.checkout_pr_success }}
           GH_AW_EFFECTIVE_TOKENS: ${{ needs.agent.outputs.effective_tokens || '' }}
           GH_AW_AI_CREDITS_RATE_LIMIT_ERROR: ${{ needs.agent.outputs.ai_credits_rate_limit_error || 'false' }}
           GH_AW_UNKNOWN_MODEL_AI_CREDITS: ${{ needs.agent.outputs.unknown_model_ai_credits || 'false' }}
@@ -1094,10 +1072,11 @@ jobs:
     needs:
       - activation
       - agent
-      - trusted_duplicate_research
+      - trusted_issue_snapshot
     if: (!cancelled()) && needs.agent.result != 'skipped'
     runs-on: ubuntu-slim
     permissions:
+      actions: read
       contents: read
       issues: write
     concurrency:
@@ -1115,7 +1094,7 @@ jobs:
       GH_AW_RUNTIME_FEATURES: ${{ vars.GH_AW_RUNTIME_FEATURES }}
       GH_AW_SAFE_OUTPUT_MESSAGES: "{\"footer\":\"\\u003e Workflow run: {run_url}\",\"footerInstall\":\"\\u003c!-- installation footer intentionally disabled --\\u003e\",\"disclosureHeader\":\"\\u003e AI-assisted first-pass triage from {workflow_name}; a maintainer has not reviewed this output yet. Run: {run_url}\"}"
       GH_AW_WORKFLOW_ID: "community-issue-triage"
-      GH_AW_WORKFLOW_NAME: "Community issue triage (Stage A.5 canary)"
+      GH_AW_WORKFLOW_NAME: "Community issue triage (inert Stage B readiness)"
       GH_AW_WORKFLOW_SOURCE_URL: "${{ github.server_url }}/${{ github.repository }}/blob/${{ github.ref_name }}/.github/workflows/community-issue-triage.md"
     outputs:
       code_push_failure_count: ${{ steps.process_safe_outputs.outputs.code_push_failure_count }}
@@ -1144,11 +1123,75 @@ jobs:
           trace-id: ${{ needs.activation.outputs.setup-trace-id }}
           parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
         env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Community issue triage (Stage A.5 canary)"
+          GH_AW_SETUP_WORKFLOW_NAME: "Community issue triage (inert Stage B readiness)"
           GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/community-issue-triage.lock.yml@${{ github.ref }}
           GH_AW_INFO_VERSION: "1.0.80"
           GH_AW_INFO_AWF_VERSION: "v0.28.4"
           GH_AW_INFO_ENGINE_ID: "copilot"
+      - name: Check out the immutable validator source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Download a fresh trusted snapshot for final validation
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}
+          path: ${{ runner.temp }}/trusted-intake-original
+      - name: Verify trusted snapshot provenance and current issue state
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.trusted_issue_snapshot.outputs.artifact_digest }}
+          EXPECTED_ARTIFACT_ID: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}
+          EXPECTED_BUNDLE_DIGEST: ${{ needs.trusted_issue_snapshot.outputs.bundle_digest }}
+          EXPECTED_RUN_ID: ${{ github.run_id }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_TARGET: ${{ inputs.issue_number }}
+          SNAPSHOT_PATH: ${{ runner.temp }}/trusted-intake-original/context.json
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+            const {pathToFileURL} = require("url");
+            const contract = await import(
+              pathToFileURL(
+                path.join(
+                  process.env.GITHUB_WORKSPACE,
+                  ".github/scripts/community_issue_triage_contract.mjs",
+                ),
+              ).href
+            );
+            const bundle = JSON.parse(
+              fs.readFileSync(process.env.SNAPSHOT_PATH, "utf8"),
+            );
+            const artifact = await github.request(
+              "GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}",
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: Number(process.env.EXPECTED_ARTIFACT_ID),
+              },
+            );
+            contract.verifyArtifactProvenance({
+              bundle,
+              expectedRepository: context.repo.owner + "/" + context.repo.repo,
+              expectedRunId: process.env.EXPECTED_RUN_ID,
+              expectedWorkflowSha: process.env.EXPECTED_SHA,
+              expectedTargetNumber: Number(process.env.EXPECTED_TARGET),
+              artifactId: artifact.data.id,
+              expectedArtifactId: Number(process.env.EXPECTED_ARTIFACT_ID),
+              actionDigest: artifact.data.digest,
+              expectedActionDigest: process.env.EXPECTED_ARTIFACT_DIGEST,
+              expectedBundleDigest: process.env.EXPECTED_BUNDLE_DIGEST,
+            });
+            await contract.verifyFreshness({
+              github,
+              bundle,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
       - name: Download agent output artifact
         id: download-agent-output
         continue-on-error: true
@@ -1175,687 +1218,131 @@ jobs:
           GH_HOST="${GITHUB_SERVER_URL#https://}"
           GH_HOST="${GH_HOST#http://}"
           echo "GH_HOST=${GH_HOST}" >> "$GITHUB_ENV"
-      - name: Validate Stage A.5 output content
+      - name: Validate and render the attested readiness proposal
         run: |
           node <<'NODE'
           const fs = require("fs");
-          const outputPath = "/tmp/gh-aw/agent_output.json";
+          const path = require("path");
+          const {pathToFileURL} = require("url");
 
           const validate = async () => {
-
-          const targetNumber = Number(process.env.TARGET_NUMBER);
-          if (!Number.isSafeInteger(targetNumber) || targetNumber < 1) {
-            console.error("Blocked invalid trusted target before canary processing");
-            process.exit(1);
-          }
-
-          let duplicateContext;
-          try {
-            duplicateContext = JSON.parse(process.env.TRUSTED_DUPLICATE_CONTEXT || "");
-          } catch {
-            console.error("Blocked missing or malformed trusted duplicate context");
-            process.exit(1);
-          }
-          const validCandidate = (candidate) =>
-            candidate &&
-            typeof candidate === "object" &&
-            !Array.isArray(candidate) &&
-            Object.keys(candidate).length === 3 &&
-            Object.keys(candidate).every((key) =>
-              ["number", "state", "score"].includes(key),
-            ) &&
-            Number.isSafeInteger(candidate.number) &&
-            candidate.number > 0 &&
-            candidate.number !== targetNumber &&
-            (candidate.state === "open" || candidate.state === "closed") &&
-            Number.isSafeInteger(candidate.score) &&
-            candidate.score >= 6;
-          if (
-            !duplicateContext ||
-            typeof duplicateContext !== "object" ||
-            Array.isArray(duplicateContext) ||
-            duplicateContext.version !== 1 ||
-            duplicateContext.status !== "complete" ||
-            duplicateContext.strategy !== "bounded-title-lexical-v1" ||
-            !duplicateContext.target ||
-            duplicateContext.target.number !== targetNumber ||
-            typeof duplicateContext.search_performed !== "boolean" ||
-            !Number.isSafeInteger(duplicateContext.scanned) ||
-            duplicateContext.scanned < 0 ||
-            duplicateContext.scanned > 1000 ||
-            typeof duplicateContext.truncated !== "boolean" ||
-            (duplicateContext.truncated && duplicateContext.scanned !== 1000) ||
-            (!duplicateContext.search_performed &&
-              !["sensitive-title-guard", "no-distinctive-title-terms"].includes(
-                duplicateContext.reason,
-              )) ||
-            !Array.isArray(duplicateContext.candidates) ||
-            duplicateContext.candidates.length > 5 ||
-            !duplicateContext.candidates.every(validCandidate) ||
-            (!duplicateContext.search_performed && duplicateContext.candidates.length !== 0)
-          ) {
-            console.error("Blocked invalid trusted duplicate context");
-            process.exit(1);
-          }
-
-          if (!fs.existsSync(outputPath)) {
-            console.error("Blocked missing agent output before canary processing");
-            process.exit(1);
-          }
-
-          let output;
-          try {
-            output = JSON.parse(fs.readFileSync(outputPath, "utf8"));
-          } catch {
-            console.error("Blocked malformed agent output before canary processing");
-            process.exit(1);
-          }
-
-          const violations = [];
-          const urlPattern = /https?:\/\/[^\s<>"'\x60]+/gi;
-          const issueReferencePattern = /(^|[^A-Za-z0-9_])#\s*(\d+)\b/g;
-          const singularTextualIssueReferencePattern =
-            /\bissue\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi;
-          const pluralTextualIssueReferencePattern = /\bissues\s*:?\s*#\s*(\d+)\b/gi;
-          const textualPullRequestReferencePattern =
-            /\b(?:PRs?|pull[\s-]+requests?)\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*\d+\b/gi;
-          const ghIssueReferencePattern = /\bGH\s*-\s*(\d+)\b/gi;
-          const githubItemPathReferencePattern =
-            /(^|[^A-Za-z0-9_.\/-])(?:(?:(?:\/\/)?(?:www\.)?github\.com\/)|(?:\/|(?:\.\.?\/)+))?([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/(issues|pull)\/(\d+)\b/gi;
-          const markdownLinkPattern = /\[[^\]]+\]\s*(?:\([^)]*\)|\[[^\]]*\])/g;
-          const htmlLinkPattern = /<(?:a\s|[^>]+\shref\s*=)/gi;
-          const mentionPattern = /(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/g;
-          const closingPattern = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?[ \t]*#\d+\b/gi;
-          const crossRepoPattern = /(^|[^A-Za-z0-9_.-])([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)\b/g;
-          const normalizePolicyText = (text) =>
-            text
-              .normalize("NFKC")
-              .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
-              .replace(/\s/gu, " ")
-              .replace(/\p{C}/gu, "")
-              .replace(/\p{Z}/gu, " ")
-              .replace(/ +/g, " ");
-          const secretPatterns = [
-            /github_pat_[A-Za-z0-9_]{20,}/g,
-            /gh[pousr]_[A-Za-z0-9]{20,}/g,
-            /AKIA[0-9A-Z]{16}/g,
-            /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/g,
-            /\b(?:authorization|api[_ -]?key|token|secret|password)\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,}/gi,
-          ];
-
-          const repositoryEvidencePaths = [
-            /^(?:README|CONTRIBUTING|SECURITY)\.md$/,
-            /^(?:docs|apps|packages)\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
-          ];
-          const missingInformationTemplates = new Map([
-            ["package_version", "The exact unifi-mcp package version or commit."],
-            ["transport", "The transport in use: stdio, SSE, or streamable HTTP."],
-            ["controller_version", "The UniFi application family and version."],
-            ["sanitized_error", "The complete sanitized error message or response status."],
-            ["reproduction_steps", "Minimal steps that reproduce the behavior."],
-            ["expected_actual", "The expected behavior and the actual behavior observed."],
-            ["live_controller_evidence", "Sanitized live-controller evidence showing the result."],
-          ]);
-          const commentFooter =
-            "This is an automated first-pass triage; a maintainer will make final decisions.";
-          const fetchRepositoryFile = async (path) => {
-            const token = process.env.GITHUB_TOKEN || "";
-            const sha = process.env.GITHUB_SHA || "";
-            if (token === "" || !/^[0-9a-f]{40}$/i.test(sha)) {
-              throw new Error("trusted repository credentials or immutable SHA are unavailable");
+            const targetNumber = Number(process.env.TARGET_NUMBER);
+            if (!Number.isSafeInteger(targetNumber) || targetNumber < 1) {
+              throw new Error("invalid trusted dispatch target");
             }
-            const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-            const response = await fetch(
-              "https://api.github.com/repos/sirkirby/unifi-mcp/contents/" +
-                encodedPath +
-                "?ref=" +
-                encodeURIComponent(sha),
-              {
-                headers: {
-                  Accept: "application/vnd.github.raw+json",
-                  Authorization: "Bearer " + token,
-                  "X-GitHub-Api-Version": "2022-11-28",
+            const outputPath = "/tmp/gh-aw/agent_output.json";
+            if (!fs.existsSync(outputPath)) {
+              throw new Error("agent output is missing");
+            }
+            const output = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+            const bundle = JSON.parse(
+              fs.readFileSync(process.env.SNAPSHOT_PATH, "utf8"),
+            );
+            const contract = await import(
+              pathToFileURL(
+                path.join(
+                  process.env.GITHUB_WORKSPACE,
+                  ".github/scripts/community_issue_triage_contract.mjs",
+                ),
+              ).href
+            );
+            const fetchRepositoryFile = async (repositoryPath) => {
+              const token = process.env.GITHUB_TOKEN || "";
+              const sha = process.env.GITHUB_SHA || "";
+              if (token === "" || !/^[0-9a-f]{40}$/i.test(sha)) {
+                throw new Error(
+                  "trusted repository credentials or immutable SHA are unavailable",
+                );
+              }
+              const encodedPath = repositoryPath
+                .split("/")
+                .map(encodeURIComponent)
+                .join("/");
+              const response = await fetch(
+                "https://api.github.com/repos/sirkirby/unifi-mcp/contents/" +
+                  encodedPath +
+                  "?ref=" +
+                  encodeURIComponent(sha),
+                {
+                  headers: {
+                    Accept: "application/vnd.github.raw+json",
+                    Authorization: "Bearer " + token,
+                    "X-GitHub-Api-Version": "2022-11-28",
+                  },
                 },
-              },
+              );
+              if (!response.ok) {
+                throw new Error("GitHub contents API returned " + response.status);
+              }
+              return response.text();
+            };
+            const result = await contract.validateAndRewriteAgentOutput({
+              output,
+              bundle,
+              fetchRepositoryFile,
+              targetNumber,
+            });
+            const trustedOutputPath = outputPath + ".trusted";
+            fs.writeFileSync(
+              trustedOutputPath,
+              JSON.stringify(result.output),
+              {encoding: "utf8", mode: 0o600},
             );
-            if (!response.ok) {
-              throw new Error("GitHub contents API returned " + response.status);
-            }
-            const content = await response.text();
-            if (content.length > 1024 * 1024) {
-              throw new Error("repository evidence file exceeds the trusted size limit");
-            }
-            return content;
-          };
-          const renderCommentProposal = async (body) => {
-            if (typeof body !== "string" || body.trim() === "") {
-              throw new Error("add_comment requires a nonempty canonical JSON body");
-            }
-            let proposal;
-            try {
-              proposal = JSON.parse(body);
-            } catch {
-              throw new Error("add_comment body must be canonical JSON");
-            }
-            if (
-              !proposal ||
-              typeof proposal !== "object" ||
-              Array.isArray(proposal) ||
-              JSON.stringify(proposal) !== body ||
-              proposal.version !== 1
-            ) {
-              throw new Error("add_comment body must be a canonical version 1 proposal");
-            }
+            fs.renameSync(trustedOutputPath, outputPath);
 
-            let rendered;
-            if (proposal.kind === "missing_information") {
-              if (
-                !hasExactKeys(proposal, ["version", "kind", "fields"]) ||
-                Object.keys(proposal).join("\u0000") !== "version\u0000kind\u0000fields"
-              ) {
-                throw new Error("missing_information proposal contains unexpected fields");
-              }
-              if (
-                !Array.isArray(proposal.fields) ||
-                proposal.fields.length < 1 ||
-                proposal.fields.length > 3 ||
-                !proposal.fields.every((field) => typeof field === "string") ||
-                new Set(proposal.fields).size !== proposal.fields.length ||
-                !proposal.fields.every((field) => missingInformationTemplates.has(field))
-              ) {
-                throw new Error("missing_information requires 1 to 3 unique allowlisted field IDs");
-              }
-              rendered =
-                "To make this report actionable, please provide:\n\n" +
-                proposal.fields
-                  .map((field) => "- " + missingInformationTemplates.get(field))
-                  .join("\n");
-            } else if (proposal.kind === "repository_evidence") {
-              if (
-                !hasExactKeys(proposal, ["version", "kind", "path", "quote"]) ||
-                Object.keys(proposal).join("\u0000") !== "version\u0000kind\u0000path\u0000quote"
-              ) {
-                throw new Error("repository_evidence proposal contains unexpected fields");
-              }
-              if (
-                typeof proposal.path !== "string" ||
-                proposal.path.length > 240 ||
-                !repositoryEvidencePaths.some((pattern) => pattern.test(proposal.path))
-              ) {
-                throw new Error("repository evidence path is outside the Markdown allowlist");
-              }
-              if (
-                typeof proposal.quote !== "string" ||
-                proposal.quote !== proposal.quote.trim() ||
-                proposal.quote.length < 20 ||
-                proposal.quote.length > 600 ||
-                proposal.quote.split("\n").length > 6 ||
-                /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u2028\u2029]/u.test(proposal.quote)
-              ) {
-                throw new Error("repository evidence quote must be 20 to 600 safe characters across at most 6 lines");
-              }
-
-              const repositoryContent = await fetchRepositoryFile(proposal.path);
-              const firstMatch = repositoryContent.indexOf(proposal.quote);
-              const secondMatch =
-                firstMatch < 0
-                  ? -1
-                  : repositoryContent.indexOf(proposal.quote, firstMatch + 1);
-              if (firstMatch < 0 || secondMatch >= 0) {
-                throw new Error("repository evidence quote must have one unique contiguous match");
-              }
-              const startLine = repositoryContent.slice(0, firstMatch).split("\n").length;
-              const endLine = startLine + proposal.quote.split("\n").length - 1;
-              const sourceUrl =
-                "https://github.com/sirkirby/unifi-mcp/blob/" +
-                process.env.GITHUB_SHA +
-                "/" +
-                proposal.path.split("/").map(encodeURIComponent).join("/") +
-                "#L" +
-                startLine +
-                "-L" +
-                endLine;
-              rendered =
-                "The repository documentation currently states:\n\n" +
-                proposal.quote
-                  .split("\n")
-                  .map((line) => "> " + line)
-                  .join("\n") +
-                "\n\nSource: " +
-                sourceUrl;
-            } else {
-              throw new Error("add_comment proposal kind is not allowlisted");
+            if (!process.env.GITHUB_STEP_SUMMARY) {
+              throw new Error("GITHUB_STEP_SUMMARY is unavailable");
             }
-
-            if (requiredUncertainty) rendered += "\n\n" + requiredUncertainty;
-            return rendered + "\n\n" + commentFooter;
-          };
-
-          const allowedTypes = new Set(["add_comment", "add_labels", "noop"]);
-          const allowedLabels = new Set(["needs-info"]);
-          const summarySections = [];
-          const referencedIssueNumbers = new Set();
-          const semanticStrings = [];
-          const narrativeStrings = [];
-          const candidateAssessments = new Map();
-          let outputChanged = false;
-          const hasExactKeys = (value, allowed, required = allowed) => {
-            const keys = Object.keys(value);
-            return (
-              keys.every((key) => allowed.includes(key)) &&
-              required.every((key) => keys.includes(key))
-            );
-          };
-          const escapeHtml = (value) =>
-            value
-              .replaceAll("&", "&amp;")
-              .replaceAll("<", "&lt;")
-              .replaceAll(">", "&gt;");
-          const requiredUncertainty =
-            duplicateContext.candidates.length === 0
-              ? duplicateContext.truncated
-                ? "Lexical result: No candidate met the threshold in the 1,000 newest issues; duplicate status remains unknown beyond that bound."
-                : duplicateContext.search_performed
-                  ? "Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown."
-                  : duplicateContext.reason === "sensitive-title-guard"
-                    ? "Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown."
-                    : "Lexical result: Search skipped because the title had no distinctive terms; duplicate status remains unknown."
-              : null;
-          const uncertaintyMarker = "duplicate status remains unknown";
-          const candidateSummary = duplicateContext.search_performed
-            ? duplicateContext.candidates.length > 0
-              ? duplicateContext.candidates
-                  .map(
-                    (candidate) =>
-                      "- #" +
-                      candidate.number +
-                      " (score " +
-                      candidate.score +
-                      ")",
-                  )
-                  .join("\n")
-              : "No lexical candidates met the deterministic threshold."
-            : duplicateContext.reason === "sensitive-title-guard"
-              ? "Lexical candidate research was skipped by the sensitive-title guard."
-              : "Lexical candidate research was skipped because the title had no distinctive terms.";
-
-          let items = [];
-          if (!output || typeof output !== "object" || Array.isArray(output)) {
-            violations.push("agent output must be an object");
-          } else {
-            if (!hasExactKeys(output, ["items", "errors"], ["items"])) {
-              violations.push("agent output contains unexpected fields");
-            }
-            if (!Array.isArray(output.items) || output.items.length === 0) {
-              violations.push("agent output must contain at least one item");
-            } else {
-              items = output.items;
-            }
-            if (
-              Object.prototype.hasOwnProperty.call(output, "errors") &&
-              (!Array.isArray(output.errors) || output.errors.length > 0)
-            ) {
-              violations.push("safe-output collection errors");
-            }
-          }
-
-          const typeCounts = new Map();
-          for (const item of items) {
-            if (!item || typeof item !== "object" || Array.isArray(item)) {
-              violations.push("safe-output item must be an object");
-              continue;
-            }
-            const type =
-              typeof item.type === "string"
-                ? item.type.toLowerCase().replaceAll("-", "_")
-                : "";
-            if (!allowedTypes.has(type)) {
-              violations.push("unsupported safe-output type");
-              continue;
-            }
-            typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
-
-            if (type === "add_comment") {
-              // gh-aw appends temporary_id after a successful add_comment tool call.
-              // Accept only the framework's documented identifier shape; every other
-              // selector or control field remains fail-closed. Shape validation does
-              // not establish provenance because the agent can also see this field.
-              if (!hasExactKeys(item, ["type", "body", "temporary_id"], ["type", "body"])) {
-                violations.push("add_comment contains unexpected fields");
-              }
-              if (
-                Object.prototype.hasOwnProperty.call(item, "temporary_id") &&
-                (typeof item.temporary_id !== "string" ||
-                  !/^#?aw_[A-Za-z0-9_]{3,12}$/.test(item.temporary_id))
-              ) {
-                violations.push("add_comment contains invalid framework temporary_id");
-              }
-              try {
-                const renderedComment = await renderCommentProposal(item.body);
-                item.body = renderedComment;
-                outputChanged = true;
-                semanticStrings.push(renderedComment);
-                narrativeStrings.push(renderedComment);
-                summarySections.push(
-                  "<h3>Proposed comment</h3>\n<pre>" + escapeHtml(renderedComment) + "</pre>"
-                );
-              } catch (error) {
-                violations.push(error instanceof Error ? error.message : "comment proposal validation failed");
-              }
-            }
-
-            if (type === "add_labels") {
-              if (!hasExactKeys(item, ["type", "labels"])) {
-                violations.push("add_labels contains unexpected fields");
-              }
-              if (!Array.isArray(item.labels) || item.labels.length !== 1) {
-                violations.push("add_labels requires exactly one needs-info label");
-              } else {
-                const renderedLabels = [];
-                for (const label of item.labels) {
-                  if (!label || typeof label !== "object" || Array.isArray(label)) {
-                    violations.push("label intent metadata is required");
-                    continue;
-                  }
-                  if (!hasExactKeys(label, ["name", "rationale", "confidence"])) {
-                    violations.push("label intent contains unexpected fields");
-                  }
-                  const name = typeof label.name === "string" ? label.name : "";
-                  const rationale = typeof label.rationale === "string" ? label.rationale : "";
-                  const confidence = typeof label.confidence === "string" ? label.confidence : "";
-                  if (!allowedLabels.has(name)) violations.push("label outside allowlist");
-                  if (
-                    rationale.trim() === "" ||
-                    rationale.length > 240 ||
-                    !/[.!?]$/.test(rationale.trim())
-                  ) {
-                    violations.push(
-                      "label rationale must be a complete sentence containing 1 to 240 characters"
-                    );
-                  }
-                  if (!new Set(["LOW", "MEDIUM", "HIGH"]).has(confidence)) {
-                    violations.push("label confidence must be LOW, MEDIUM, or HIGH");
-                  }
-                  if (rationale !== "") semanticStrings.push(rationale);
-                  renderedLabels.push(
-                    "<li><code>" +
-                      escapeHtml(name) +
-                      "</code> (" +
-                      escapeHtml(confidence) +
-                      "): " +
-                      escapeHtml(rationale) +
-                      "</li>"
-                  );
-                }
-                summarySections.push(
-                  "<h3>Proposed needs-info suggestion</h3>\n<ul>" +
-                    renderedLabels.join("") +
-                    "</ul>",
-                );
-              }
-            }
-
-            if (type === "noop") {
-              if (!hasExactKeys(item, ["type", "message"])) {
-                violations.push("noop contains unexpected fields");
-              }
-              if (typeof item.message !== "string" || item.message.trim() === "") {
-                violations.push("noop requires a nonempty message");
-              } else {
-                semanticStrings.push(item.message);
-                narrativeStrings.push(item.message);
-                summarySections.push("<h3>No action proposed</h3>\n<pre>" + escapeHtml(item.message) + "</pre>");
-              }
-            }
-
-          }
-
-          if ((typeCounts.get("add_comment") || 0) > 1 || (typeCounts.get("add_labels") || 0) > 1) {
-            violations.push("duplicate comment or label output type");
-          }
-          if (
-            (typeCounts.get("noop") || 0) > 0 &&
-            items.length !== 1
-          ) {
-            violations.push("noop must be exclusive");
-          }
-
-          const candidateAssessmentPrefixPattern = /Candidate\s*#\s*\d+\s*:/gi;
-          const candidateAssessmentPattern =
-            /(?:^|(?<=[.!?]) +)Candidate #(\d+): (RELATED|NOT_RELATED|UNCERTAIN) [—-] ([^\p{C}\p{Zl}\p{Zp}]+)$/u;
-          const inspect = (value) => {
-            for (const line of value.split(/\r\n|[\n\r\u2028\u2029]/)) {
-              const normalizedCandidateLine = normalizePolicyText(line);
-              const candidateAssessmentPrefixes =
-                normalizedCandidateLine.match(candidateAssessmentPrefixPattern) || [];
-              if (candidateAssessmentPrefixes.length === 0) continue;
-              if (candidateAssessmentPrefixes.length !== 1) {
-                violations.push("candidate assessment line must contain exactly one assessment");
-                continue;
-              }
-              const match = line.match(candidateAssessmentPattern);
-              if (!match) {
-                violations.push("candidate assessment must match the required literal grammar");
-                continue;
-              }
-              const number = Number(match[1]);
-              const reason = match[3].trim();
-              const visibleReason = normalizePolicyText(reason).replace(/[\p{M}\s]/gu, "");
-              if ([...visibleReason].length < 20 || !/[\p{L}\p{N}]/u.test(reason)) {
-                violations.push(
-                  "candidate assessment reason must contain at least 20 visible characters"
-                );
-                continue;
-              }
-              const assessments = candidateAssessments.get(number) || [];
-              assessments.push({verdict: match[2], reason});
-              candidateAssessments.set(number, assessments);
-            }
-            const normalizedReferenceValue = normalizePolicyText(value);
-            for (const match of normalizedReferenceValue.matchAll(issueReferencePattern)) {
-              referencedIssueNumbers.add(Number(match[2]));
-            }
-            issueReferencePattern.lastIndex = 0;
-            for (const match of normalizedReferenceValue.matchAll(singularTextualIssueReferencePattern)) {
-              referencedIssueNumbers.add(Number(match[1]));
-            }
-            singularTextualIssueReferencePattern.lastIndex = 0;
-            for (const match of normalizedReferenceValue.matchAll(pluralTextualIssueReferencePattern)) {
-              referencedIssueNumbers.add(Number(match[1]));
-            }
-            pluralTextualIssueReferencePattern.lastIndex = 0;
-            if (textualPullRequestReferencePattern.test(normalizedReferenceValue)) {
-              violations.push("numbered pull-request reference is not allowed");
-            }
-            textualPullRequestReferencePattern.lastIndex = 0;
-            for (const match of normalizedReferenceValue.matchAll(ghIssueReferencePattern)) {
-              referencedIssueNumbers.add(Number(match[1]));
-            }
-            ghIssueReferencePattern.lastIndex = 0;
-            for (const match of normalizedReferenceValue.matchAll(githubItemPathReferencePattern)) {
-              if (match[2].toLowerCase() !== "sirkirby" || match[3].toLowerCase() !== "unifi-mcp") {
-                violations.push("cross-repository reference");
-              } else if (match[4].toLowerCase() === "pull") {
-                violations.push("numbered pull-request reference is not allowed");
-              } else {
-                referencedIssueNumbers.add(Number(match[5]));
-              }
-            }
-            githubItemPathReferencePattern.lastIndex = 0;
-            for (const match of normalizedReferenceValue.matchAll(urlPattern)) {
-              const candidate = match[0].replace(/[),.;!?]+$/, "");
-              try {
-                const url = new URL(candidate);
-                const path = url.pathname.replace(/\/+$/, "");
-                const normalizedPath = path.toLowerCase();
-                if (
-                  url.protocol !== "https:" ||
-                  url.hostname.toLowerCase() !== "github.com" ||
-                  path.includes("%") ||
-                  (normalizedPath !== "/sirkirby/unifi-mcp" &&
-                    !normalizedPath.startsWith("/sirkirby/unifi-mcp/"))
-                ) {
-                  violations.push("URL outside the canonical repository");
-                } else {
-                const githubItemPathMatch = normalizedPath.match(
-                  /^\/sirkirby\/unifi-mcp\/(issues|pull)\/(\d+)$/,
-                );
-                if (githubItemPathMatch) {
-                  if (githubItemPathMatch[1] === "pull") {
-                    violations.push("numbered pull-request reference is not allowed");
-                  } else {
-                    referencedIssueNumbers.add(Number(githubItemPathMatch[2]));
-                  }
-                }
-                }
-              } catch {
-                violations.push("malformed URL");
-              }
-            }
-            if (markdownLinkPattern.test(value)) violations.push("Markdown link syntax");
-            markdownLinkPattern.lastIndex = 0;
-            if (htmlLinkPattern.test(value)) violations.push("HTML link syntax");
-            htmlLinkPattern.lastIndex = 0;
-            if (mentionPattern.test(value)) violations.push("user or bot mention");
-            mentionPattern.lastIndex = 0;
-            if (closingPattern.test(normalizedReferenceValue)) violations.push("closing keyword");
-            closingPattern.lastIndex = 0;
-            for (const match of normalizedReferenceValue.matchAll(crossRepoPattern)) {
-              if (match[2].toLowerCase() !== "sirkirby" || match[3].toLowerCase() !== "unifi-mcp") {
-                violations.push("cross-repository reference");
-              } else {
-                referencedIssueNumbers.add(Number(match[4]));
-              }
-            }
-            for (const pattern of secretPatterns) {
-              if (pattern.test(value)) violations.push("secret-like content");
-              pattern.lastIndex = 0;
-            }
-          };
-
-          semanticStrings.forEach((value) => inspect(value));
-          const trustedIssueNumbers = new Set([
-            targetNumber,
-            ...duplicateContext.candidates.map((candidate) => candidate.number),
-          ]);
-          const untrustedIssueNumbers = [...referencedIssueNumbers]
-            .filter((issueNumber) => !trustedIssueNumbers.has(issueNumber))
-            .sort((left, right) => left - right);
-          if (untrustedIssueNumbers.length > 0) {
-            violations.push(
-              "issue reference outside trusted candidate context: " +
-                untrustedIssueNumbers.map((issueNumber) => "#" + issueNumber).join(", ")
-            );
-          }
-          const sensitiveStopMessage = "Sensitive intake stop: Maintainer attention is required.";
-          const sensitiveStopRequested = semanticStrings.some((value) =>
-            value.includes(sensitiveStopMessage),
-          );
-          const sensitiveStop =
-            items.length === 1 &&
-            (typeCounts.get("noop") || 0) === 1 &&
-            semanticStrings.length === 1 &&
-            semanticStrings[0] === sensitiveStopMessage;
-          if (duplicateContext.reason === "sensitive-title-guard" && !sensitiveStop) {
-            violations.push("sensitive title guard requires the exact exclusive noop shape");
-          }
-          if (sensitiveStopRequested && !sensitiveStop) {
-            violations.push("sensitive intake stop must use the exact exclusive noop shape");
-          }
-          if (!sensitiveStop) {
-            if (duplicateContext.candidates.length > 0) {
-              const topCandidate = duplicateContext.candidates[0].number;
-              if ((candidateAssessments.get(topCandidate) || []).length !== 1) {
-                violations.push("highest-ranked trusted candidate requires one structured assessment");
-              }
-            } else {
-              const requiredUncertaintyOccurrences = (value) =>
-                value.split(requiredUncertainty).length - 1;
-              if (
-                narrativeStrings.some(
-                  (value) => requiredUncertaintyOccurrences(value) !== 1,
-                )
-              ) {
-                violations.push("missing required lexical uncertainty statement");
-              }
-              if (
-                semanticStrings.reduce(
-                  (count, value) =>
-                    count +
-                    (normalizePolicyText(value)
-                      .toLowerCase()
-                      .split(uncertaintyMarker).length -
-                      1),
-                  0,
-                ) !== narrativeStrings.length
-              ) {
-                violations.push(
-                  "required lexical uncertainty statement must appear only in narratives",
-                );
-              }
-            }
-          }
-          if (violations.length > 0) {
-            console.error("Blocked Stage A.5 output: " + [...new Set(violations)].join(", "));
-            process.exit(1);
-          }
-          const labelItems = items.filter((item) => {
-            const type =
-              typeof item.type === "string"
-                ? item.type.toLowerCase().replaceAll("-", "_")
-                : "";
-            return type === "add_labels";
-          });
-          if (labelItems.length > 0) {
-            // gh-aw v0.87.4 add_labels ignores its configured target during
-            // workflow_dispatch. The agent is also prohibited from choosing whether
-            // the label applies directly. After exact validation, inject both the
-            // trusted dispatch target and suggest=true so GitHub routes the label for
-            // maintainer review instead of applying it immediately.
-            for (const item of labelItems) {
-              item.item_number = targetNumber;
-              for (const label of item.labels) label.suggest = true;
-            }
-            outputChanged = true;
-          }
-          if (outputChanged) {
-            try {
-              const trustedOutputPath = outputPath + ".trusted";
-              fs.writeFileSync(trustedOutputPath, JSON.stringify(output));
-              fs.renameSync(trustedOutputPath, outputPath);
-            } catch {
-              console.error("Blocked Stage A.5 output because trusted canary controls could not be injected");
-              process.exit(1);
-            }
-          }
-          if (!process.env.GITHUB_STEP_SUMMARY) {
-            console.error("Blocked Stage A.5 output because GITHUB_STEP_SUMMARY is unavailable");
-            process.exit(1);
-          }
-          const summary =
-            "## Validated Stage A.5 canary proposal\n\n" +
-            "Target: issue #" +
-            process.env.TARGET_NUMBER +
-            "\n\n" +
-            "### Trusted duplicate candidate research\n\n" +
-            candidateSummary +
-            (requiredUncertainty ? "\n\n" + requiredUncertainty : "") +
-            "\n\nScanned " +
-            duplicateContext.scanned +
-            (duplicateContext.truncated ? " newest issues (bounded scan)." : " issues.") +
-            "\n\n" +
-            summarySections.join("\n\n") +
-            "\n\n> If safe-output processing succeeds, the needs-info label will be submitted as a maintainer-review suggestion; comments remain preview-only.\n";
-          try {
+            const candidateSummary =
+              bundle.candidates.length === 0
+                ? "No lexical candidates met the deterministic threshold."
+                : bundle.candidates
+                    .map(
+                      (candidate) =>
+                        "- #" +
+                        candidate.number +
+                        " (score " +
+                        candidate.score +
+                        ")",
+                    )
+                    .join("\n");
+            const relationshipSummary =
+              result.summary.relationships.length === 0
+                ? "No candidate relationships were required."
+                : result.summary.relationships
+                    .map(
+                      (relationship) =>
+                        "- #" +
+                        relationship.candidate_number +
+                        ": " +
+                        relationship.verdict_html +
+                        " — " +
+                        relationship.reason_html,
+                    )
+                    .join("\n");
+            const summary =
+              "## Validated inert Stage B readiness proposal\n\n" +
+              "Target: issue #" +
+              targetNumber +
+              "\n\n### Trusted bounded candidate research\n\n" +
+              candidateSummary +
+              "\n\nScanned " +
+              bundle.scanned +
+              (bundle.scan_truncated
+                ? " newest issues (bounded scan)."
+                : " issues.") +
+              "\n\n### Machine-readable relationship assessments\n\n" +
+              relationshipSummary +
+              "\n\n### Trusted rendered output\n\n" +
+              result.summary.rendered_html
+                .map((value) => "<pre>" + value + "</pre>")
+                .join("\n\n") +
+              "\n\n> If safe-output processing succeeds, the needs-info label will be submitted as a maintainer-review suggestion; comments remain preview-only.\n";
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
-          } catch {
-            console.error("Blocked Stage A.5 output because the proposal summary could not be written");
-            process.exit(1);
-          }
           };
           validate().catch((error) => {
             console.error(
-              "Blocked Stage A.5 output because trusted validation failed: " +
+              "Blocked inert Stage B readiness output: " +
                 (error instanceof Error ? error.message : "unknown error"),
             );
             process.exit(1);
@@ -1863,8 +1350,8 @@ jobs:
           NODE
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SNAPSHOT_PATH: ${{ runner.temp }}/trusted-intake-original/context.json
           TARGET_NUMBER: ${{ inputs.issue_number }}
-          TRUSTED_DUPLICATE_CONTEXT: ${{ needs.trusted_duplicate_research.outputs.context }}
         shell: bash
       - name: Process Safe Outputs
         id: process_safe_outputs
@@ -1896,15 +1383,18 @@ jobs:
             /tmp/gh-aw/temporary-id-map.json
           if-no-files-found: ignore
 
-  trusted_duplicate_research:
-    name: Trusted duplicate candidate research
+  trusted_issue_snapshot:
+    name: Trusted bounded issue snapshot
+    needs: activation
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: read
     timeout-minutes: 5
     outputs:
-      context: ${{ steps.research.outputs.context }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      bundle_digest: ${{ steps.snapshot.outputs.bundle_digest }}
     steps:
       - name: Configure GH_HOST for enterprise compatibility
         id: ghes-host-config
@@ -1915,15 +1405,27 @@ jobs:
           GH_HOST="${GITHUB_SERVER_URL#https://}"
           GH_HOST="${GH_HOST#http://}"
           echo "GH_HOST=${GH_HOST}" >> "$GITHUB_ENV"
-      - name: Verify target and build duplicate candidate context
-        id: research
+      - name: Check out the immutable workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Build the bounded trusted issue snapshot
+        id: snapshot
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           RETENTION_VERIFIED: ${{ inputs.retention_verified }}
           TARGET_NUMBER: ${{ inputs.issue_number }}
+          WORKFLOW_RUN_ID: ${{ github.run_id }}
+          WORKFLOW_SHA: ${{ github.sha }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const fs = require("fs");
+            const path = require("path");
+            const {pathToFileURL} = require("url");
+
             if (process.env.RETENTION_VERIFIED !== "true") {
               core.setFailed("Repository Actions artifact and log retention must be verified at one day before calibration");
               return;
@@ -1935,161 +1437,38 @@ jobs:
               return;
             }
 
-            const { data: target } = await github.rest.issues.get({
+            const contractPath = path.join(
+              process.env.GITHUB_WORKSPACE,
+              ".github/scripts/community_issue_triage_contract.mjs",
+            );
+            const contract = await import(pathToFileURL(contractPath).href);
+            const result = await contract.createTrustedSnapshot({
+              github,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: issueNumber,
+              targetNumber: issueNumber,
+              runId: process.env.WORKFLOW_RUN_ID,
+              workflowSha: process.env.WORKFLOW_SHA,
             });
-            if (target.pull_request) {
-              core.setFailed("issue_number must identify an issue, not a pull request");
-              return;
-            }
-
-            const requiredLabels = ["needs-info"];
-            const repositoryLabels = await github.paginate(
-              github.rest.issues.listLabelsForRepo,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                per_page: 100,
-              },
+            const outputDirectory = path.join(
+              process.env.RUNNER_TEMP,
+              "trusted-intake-context",
             );
-            const availableLabels = new Set(repositoryLabels.map((label) => label.name));
-            const missingLabels = requiredLabels.filter((label) => !availableLabels.has(label));
-            if (missingLabels.length > 0) {
-              core.setFailed(
-                "Required triage labels are missing: " + missingLabels.join(", "),
-              );
-              return;
-            }
-
-            const sensitiveTitlePatterns = [
-              /github_pat_[A-Za-z0-9_]{20,}/,
-              /gh[pousr]_[A-Za-z0-9]{20,}/,
-              /AKIA[0-9A-Z]{16}/,
-              /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-              /\b(?:authorization|api[_ -]?key|token|secret|password)\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,}/i,
-            ];
-            const hasSensitiveTitle = (value) =>
-              sensitiveTitlePatterns.some((pattern) => pattern.test(String(value || "")));
-            const sensitiveTitle = hasSensitiveTitle(target.title);
-
-            const envelope = {
-              version: 1,
-              status: "complete",
-              strategy: "bounded-title-lexical-v1",
-              target: {number: issueNumber},
-              search_performed: !sensitiveTitle,
-              candidates: [],
-              scanned: 0,
-              truncated: false,
-            };
-            if (sensitiveTitle) {
-              envelope.reason = "sensitive-title-guard";
-              core.setOutput("context", JSON.stringify(envelope));
-              return;
-            }
-
-            const stopWords = new Set([
-              "about", "after", "again", "against", "being", "cannot", "could",
-              "does", "fails", "from", "have", "into", "issue", "plugin", "server",
-              "should", "that", "their", "this", "through", "unifi", "when", "with",
-            ]);
-            const tokens = (value) => {
-              const matches = String(value || "")
-                .toLowerCase()
-                .match(/[a-z0-9]+(?:[._-][a-z0-9]+)*/g) || [];
-              return [
-                ...new Set(
-                  matches.filter(
-                    (token) => token.length >= 3 && token.length <= 100 && !stopWords.has(token),
-                  ),
-                ),
-              ];
-            };
-            const tokenWeight = (token) => {
-              if (/^\d+(?:\.\d+){1,}$/.test(token)) return 8;
-              if (token.includes("-") || token.includes("_")) return 5;
-              if (token.length >= 10) return 4;
-              return 2;
-            };
-            const targetTokens = tokens(target.title);
-            if (targetTokens.length === 0) {
-              envelope.search_performed = false;
-              envelope.reason = "no-distinctive-title-terms";
-              core.setOutput("context", JSON.stringify(envelope));
-              return;
-            }
-
-            const collected = [];
-            let cursor = null;
-            let truncated = false;
-            for (let page = 0; page < 10; page += 1) {
-              const result = await github.graphql(
-                `query($owner: String!, $repo: String!, $cursor: String) {
-                  repository(owner: $owner, name: $repo) {
-                    issues(
-                      first: 100
-                      after: $cursor
-                      orderBy: {field: CREATED_AT, direction: DESC}
-                      states: [OPEN, CLOSED]
-                    ) {
-                      nodes { number title state createdAt closedAt }
-                      pageInfo { hasNextPage endCursor }
-                    }
-                  }
-                }`,
-                {
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  cursor,
-                },
-              );
-              const connection = result.repository?.issues;
-              if (!connection || !Array.isArray(connection.nodes)) {
-                throw new Error("GitHub returned an invalid issue candidate response");
-              }
-              collected.push(...connection.nodes);
-              if (!connection.pageInfo?.hasNextPage) break;
-              cursor = connection.pageInfo.endCursor;
-              if (!cursor) throw new Error("GitHub issue pagination omitted endCursor");
-              if (page === 9) truncated = true;
-            }
-
-            const targetCreatedAt = Date.parse(target.created_at);
-            if (!Number.isFinite(targetCreatedAt)) {
-              throw new Error("Target issue created_at is invalid");
-            }
-            const closedCutoff = targetCreatedAt - 365 * 24 * 60 * 60 * 1000;
-            const targetTokenSet = new Set(targetTokens);
-            const ranked = collected
-              .filter((candidate) => candidate.number !== issueNumber)
-              .filter((candidate) => !hasSensitiveTitle(candidate.title))
-              .filter((candidate) => {
-                if (candidate.state === "OPEN") return true;
-                const closedAt = Date.parse(candidate.closedAt);
-                return Number.isFinite(closedAt) && closedAt >= closedCutoff;
-              })
-              .map((candidate) => {
-                const candidateTokens = tokens(candidate.title);
-                const shared = candidateTokens.filter((token) => targetTokenSet.has(token));
-                const score = shared.reduce((total, token) => total + tokenWeight(token), 0);
-                return {candidate, shared, score};
-              })
-              .filter(({shared, score}) => shared.length >= 2 && score >= 6)
-              .sort((left, right) =>
-                right.score - left.score ||
-                right.shared.length - left.shared.length ||
-                right.candidate.number - left.candidate.number,
-              )
-              .slice(0, 5)
-              .map(({candidate, score}) => ({
-                number: candidate.number,
-                state: candidate.state.toLowerCase(),
-                score,
-              }));
-
-            envelope.candidates = ranked;
-            envelope.scanned = collected.length;
-            envelope.truncated = truncated;
-            core.setOutput("context", JSON.stringify(envelope));
+            fs.mkdirSync(outputDirectory, {recursive: true, mode: 0o700});
+            fs.writeFileSync(
+              path.join(outputDirectory, "context.json"),
+              result.json,
+              {encoding: "utf8", mode: 0o600},
+            );
+            core.setOutput("bundle_digest", result.digest);
+      - name: Upload the immutable trusted snapshot
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          compression-level: 0
+          if-no-files-found: error
+          include-hidden-files: false
+          name: trusted-intake-context-${{ github.run_id }}
+          overwrite: false
+          path: ${{ runner.temp }}/trusted-intake-context/context.json
+          retention-days: 1
