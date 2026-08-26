@@ -30,6 +30,19 @@ FORMER_CLASSIFICATION_LABELS = [
 NO_CANDIDATE_UNCERTAINTY = (
     "Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown."
 )
+TEST_SHA = "1" * 40
+
+
+def _canonical_comment(proposal: dict[str, object]) -> str:
+    return json.dumps(proposal, separators=(",", ":"))
+
+
+def _missing_information_comment(*fields: str) -> str:
+    return _canonical_comment({"version": 1, "kind": "missing_information", "fields": list(fields)})
+
+
+def _repository_evidence_comment(path: str, quote: str) -> str:
+    return _canonical_comment({"version": 1, "kind": "repository_evidence", "path": path, "quote": quote})
 
 
 def _trusted_context(target_number: int = 521) -> dict[str, object]:
@@ -51,7 +64,7 @@ def _trusted_context_with_candidate(target_number: int = 521) -> dict[str, objec
     return context
 
 
-def _validator_script(output_path: Path) -> str:
+def _validator_script(output_path: Path, repository_files: dict[str, str]) -> str:
     source = WORKFLOW.read_text()
     match = re.search(r"node <<'NODE'\n(?P<script>.*?)\n        NODE", source, re.DOTALL)
     assert match is not None, "workflow validator heredoc was not found"
@@ -60,7 +73,28 @@ def _validator_script(output_path: Path) -> str:
         'const outputPath = "/tmp/gh-aw/agent_output.json";',
         f"const outputPath = {json.dumps(str(output_path))};",
     )
-    return script
+    fetch_stub = f"""
+const testRepositoryFiles = {json.dumps(repository_files)};
+globalThis.fetch = async (rawUrl, options) => {{
+  const url = new URL(rawUrl);
+  const prefix = "/repos/sirkirby/unifi-mcp/contents/";
+  const encodedPath = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : "";
+  const path = encodedPath.split("/").map(decodeURIComponent).join("/");
+  const authorized = options?.headers?.Authorization === "Bearer test-token";
+  const validRequest =
+    url.protocol === "https:" &&
+    url.hostname === "api.github.com" &&
+    url.searchParams.get("ref") === {json.dumps(TEST_SHA)} &&
+    authorized;
+  const found = validRequest && Object.prototype.hasOwnProperty.call(testRepositoryFiles, path);
+  return {{
+    ok: found,
+    status: found ? 200 : 404,
+    text: async () => found ? testRepositoryFiles[path] : "",
+  }};
+}};
+"""
+    return fetch_stub + script
 
 
 def _run_validator(
@@ -69,6 +103,7 @@ def _run_validator(
     *,
     duplicate_context: dict[str, object] | str | None = None,
     target_number: int = 521,
+    repository_files: dict[str, str] | None = None,
 ):
     output_path = tmp_path / "agent_output.json"
     summary_path = tmp_path / "summary.md"
@@ -78,6 +113,8 @@ def _run_validator(
     env.update(
         {
             "GITHUB_STEP_SUMMARY": str(summary_path),
+            "GITHUB_SHA": TEST_SHA,
+            "GITHUB_TOKEN": "test-token",
             "TARGET_NUMBER": str(target_number),
             "TRUSTED_DUPLICATE_CONTEXT": (
                 json.dumps(_trusted_context())
@@ -87,7 +124,7 @@ def _run_validator(
         }
     )
     return subprocess.run(
-        ["node", "-e", _validator_script(output_path)],
+        ["node", "-e", _validator_script(output_path, repository_files or {})],
         capture_output=True,
         check=False,
         env=env,
@@ -248,9 +285,7 @@ def test_validator_accepts_stage_a5_label_suggestion_and_staged_comment(tmp_path
             },
             {
                 "type": "add_comment",
-                "body": (
-                    "Issue #546 has a concrete implementation path and live evidence.\n\n" + NO_CANDIDATE_UNCERTAINTY
-                ),
+                "body": _missing_information_comment("controller_version"),
                 "temporary_id": "aw_09GWN1A0",
             },
         ],
@@ -269,6 +304,9 @@ def test_validator_accepts_stage_a5_label_suggestion_and_staged_comment(tmp_path
     assert trusted_output["items"][0]["item_number"] == 546
     assert trusted_output["items"][0]["labels"][0]["suggest"] is True
     assert trusted_output["items"][1]["temporary_id"] == "aw_09GWN1A0"
+    assert "The UniFi application family and version." in trusted_output["items"][1]["body"]
+    assert NO_CANDIDATE_UNCERTAINTY in trusted_output["items"][1]["body"]
+    assert "automated first-pass triage" in trusted_output["items"][1]["body"]
 
     del output["items"][1]["temporary_id"]
     without_framework_metadata = _run_validator(
@@ -278,6 +316,225 @@ def test_validator_accepts_stage_a5_label_suggestion_and_staged_comment(tmp_path
         target_number=546,
     )
     assert without_framework_metadata.returncode == 0, without_framework_metadata.stderr
+
+
+def test_validator_renders_missing_information_from_closed_field_ids(tmp_path: Path):
+    output = {
+        "items": [
+            {
+                "type": "add_comment",
+                "body": _missing_information_comment("package_version", "transport", "sanitized_error"),
+            }
+        ]
+    }
+
+    result = _run_validator(tmp_path, output)
+
+    assert result.returncode == 0, result.stderr
+    rendered = json.loads((tmp_path / "agent_output.json").read_text())["items"][0]["body"]
+    assert rendered.startswith("To make this report actionable, please provide:")
+    assert "The exact unifi-mcp package version or commit." in rendered
+    assert "The transport in use: stdio, SSE, or streamable HTTP." in rendered
+    assert "The complete sanitized error message or response status." in rendered
+    assert NO_CANDIDATE_UNCERTAINTY in rendered
+    assert rendered.endswith("This is an automated first-pass triage; a maintainer will make final decisions.")
+
+
+def test_validator_verifies_repository_evidence_at_immutable_sha_and_renders_link(
+    tmp_path: Path,
+):
+    quote = (
+        "Read-only mode prevents mutation tools from changing controller state.\n"
+        "Use confirm mode when you want preview-before-execution behavior."
+    )
+    repository_content = (
+        "# Permissions\n\n"
+        "The permission model has two independent controls.\n" + quote + "\n\nAdditional guidance follows.\n"
+    )
+    output = {
+        "items": [
+            {
+                "type": "add_comment",
+                "body": _repository_evidence_comment("docs/permissions.md", quote),
+            }
+        ]
+    }
+
+    result = _run_validator(
+        tmp_path,
+        output,
+        repository_files={"docs/permissions.md": repository_content},
+    )
+
+    assert result.returncode == 0, result.stderr
+    rendered = json.loads((tmp_path / "agent_output.json").read_text())["items"][0]["body"]
+    assert "> Read-only mode prevents mutation tools" in rendered
+    assert f"https://github.com/sirkirby/unifi-mcp/blob/{TEST_SHA}/docs/permissions.md#L4-L5" in rendered
+    assert NO_CANDIDATE_UNCERTAINTY in rendered
+    summary = (tmp_path / "summary.md").read_text()
+    assert "The repository documentation currently states:" in summary
+    assert "&gt; Read-only mode prevents mutation tools" in summary
+    assert f"/blob/{TEST_SHA}/docs/permissions.md#L4-L5" in summary
+
+
+def test_validator_rejects_free_form_581_style_comment(tmp_path: Path):
+    output = {
+        "items": [
+            {
+                "type": "add_comment",
+                "body": (
+                    "The permissions question is ready for maintainer review. Please find "
+                    "and share the relevant repository documentation."
+                ),
+            }
+        ]
+    }
+
+    result = _run_validator(tmp_path, output)
+
+    assert result.returncode == 1
+    assert "add_comment body must be canonical JSON" in result.stderr
+
+
+def test_validator_rejects_noncanonical_or_agent_authored_comment_proposals(tmp_path: Path):
+    proposals = (
+        json.dumps({"version": 1, "kind": "missing_information", "fields": ["transport"]}),
+        _canonical_comment(
+            {
+                "kind": "missing_information",
+                "version": 1,
+                "fields": ["transport"],
+            }
+        ),
+        _canonical_comment(
+            {
+                "version": 1,
+                "kind": "missing_information",
+                "fields": ["transport"],
+                "question": "Which transport are you using?",
+            }
+        ),
+        _canonical_comment({"version": 2, "kind": "missing_information", "fields": ["transport"]}),
+        _canonical_comment({"version": 1, "kind": "free_form", "body": "Please provide details."}),
+    )
+    for body in proposals:
+        result = _run_validator(tmp_path, {"items": [{"type": "add_comment", "body": body}]})
+
+        assert result.returncode == 1
+
+
+def test_validator_rejects_invalid_missing_information_field_sets(tmp_path: Path):
+    invalid_fields: tuple[object, ...] = (
+        [],
+        ["unknown_field"],
+        ["transport", "transport"],
+        ["package_version", "transport", "controller_version", "sanitized_error"],
+        "transport",
+        ["transport", 7],
+    )
+    for fields in invalid_fields:
+        proposal = {"version": 1, "kind": "missing_information", "fields": fields}
+        result = _run_validator(
+            tmp_path,
+            {"items": [{"type": "add_comment", "body": _canonical_comment(proposal)}]},
+        )
+
+        assert result.returncode == 1
+        assert "missing_information requires 1 to 3 unique allowlisted field IDs" in result.stderr
+
+
+def test_validator_rejects_untrusted_repository_evidence_selectors(tmp_path: Path):
+    quote = "This exact repository guidance is long enough for validation."
+    invalid_paths = (
+        "../README.md",
+        "/README.md",
+        ".github/workflows/triage.md",
+        "src/permissions.py",
+        "docs/../README.md",
+        "docs//permissions.md",
+        "https://github.com/sirkirby/unifi-mcp/README.md",
+    )
+    for path in invalid_paths:
+        result = _run_validator(
+            tmp_path,
+            {"items": [{"type": "add_comment", "body": _repository_evidence_comment(path, quote)}]},
+        )
+
+        assert result.returncode == 1
+        assert "repository evidence path is outside the Markdown allowlist" in result.stderr
+
+    for extra_key, value in (
+        ("repo", "sirkirby/unifi-mcp"),
+        ("ref", "main"),
+        ("url", "https://github.com/sirkirby/unifi-mcp"),
+        ("line", 10),
+    ):
+        proposal = {
+            "version": 1,
+            "kind": "repository_evidence",
+            "path": "docs/permissions.md",
+            "quote": quote,
+            extra_key: value,
+        }
+        result = _run_validator(
+            tmp_path,
+            {"items": [{"type": "add_comment", "body": _canonical_comment(proposal)}]},
+        )
+
+        assert result.returncode == 1
+        assert "repository_evidence proposal contains unexpected fields" in result.stderr
+
+
+def test_validator_rejects_invalid_or_unverifiable_repository_quotes(tmp_path: Path):
+    valid_path = "docs/permissions.md"
+    invalid_quotes = (
+        "short",
+        " leading whitespace makes this quote noncanonical",
+        "trailing whitespace makes this quote noncanonical ",
+        "one\ntwo\nthree\nfour\nfive\nsix\nseven",
+        "A tab\tinside repository evidence is not safe.",
+        "x" * 601,
+    )
+    for quote in invalid_quotes:
+        result = _run_validator(
+            tmp_path,
+            {"items": [{"type": "add_comment", "body": _repository_evidence_comment(valid_path, quote)}]},
+        )
+
+        assert result.returncode == 1
+        assert "repository evidence quote must be" in result.stderr
+
+    missing_quote = "This otherwise valid quote does not occur in the repository file."
+    missing = _run_validator(
+        tmp_path,
+        {"items": [{"type": "add_comment", "body": _repository_evidence_comment(valid_path, missing_quote)}]},
+        repository_files={valid_path: "Different repository documentation text."},
+    )
+    assert missing.returncode == 1
+    assert "one unique contiguous match" in missing.stderr
+
+    duplicate_quote = "This exact guidance appears more than once in the documentation."
+    duplicate = _run_validator(
+        tmp_path,
+        {"items": [{"type": "add_comment", "body": _repository_evidence_comment(valid_path, duplicate_quote)}]},
+        repository_files={valid_path: duplicate_quote + "\n" + duplicate_quote},
+    )
+    assert duplicate.returncode == 1
+    assert "one unique contiguous match" in duplicate.stderr
+
+
+def test_validator_rejects_secret_like_verified_repository_quote(tmp_path: Path):
+    quote = "The example token=abcdefghijklmnop123456 must never be published."
+    output = {"items": [{"type": "add_comment", "body": _repository_evidence_comment("docs/security.md", quote)}]}
+
+    result = _run_validator(
+        tmp_path,
+        output,
+        repository_files={"docs/security.md": quote},
+    )
+
+    assert result.returncode == 1
+    assert "secret-like content" in result.stderr
 
 
 def test_validator_rejects_invalid_or_misplaced_temporary_id(tmp_path: Path):
@@ -297,7 +554,7 @@ def test_validator_rejects_invalid_or_misplaced_temporary_id(tmp_path: Path):
             "items": [
                 {
                     "type": "add_comment",
-                    "body": NO_CANDIDATE_UNCERTAINTY,
+                    "body": _missing_information_comment("controller_version"),
                     "temporary_id": temporary_id,
                 }
             ]
@@ -348,7 +605,7 @@ def test_validator_rejects_invalid_or_misplaced_temporary_id(tmp_path: Path):
             "items": [
                 {
                     "type": "add_comment",
-                    "body": NO_CANDIDATE_UNCERTAINTY,
+                    "body": _missing_information_comment("controller_version"),
                     "temporary_id": "aw_09GWN1A0",
                     field: value,
                 }
@@ -752,7 +1009,7 @@ def test_validator_requires_uncertainty_in_the_narrative_not_a_label_rationale(
                 "type": "add_labels",
                 "labels": [
                     {
-                        "name": "enhancement",
+                        "name": "needs-info",
                         "rationale": NO_CANDIDATE_UNCERTAINTY,
                         "confidence": "HIGH",
                     }
@@ -760,10 +1017,7 @@ def test_validator_requires_uncertainty_in_the_narrative_not_a_label_rationale(
             },
             {
                 "type": "add_comment",
-                "body": (
-                    "The proposal is complete and gives the maintainer a concrete next action. "
-                    "This is an automated first-pass triage; a maintainer will make final decisions."
-                ),
+                "body": _missing_information_comment("transport"),
             },
         ]
     }
@@ -771,7 +1025,7 @@ def test_validator_requires_uncertainty_in_the_narrative_not_a_label_rationale(
     result = _run_validator(tmp_path, output)
 
     assert result.returncode == 1
-    assert "missing required lexical uncertainty statement" in result.stderr
+    assert "required lexical uncertainty statement must appear only in narratives" in result.stderr
 
 
 def test_validator_rejects_uncertainty_caveat_in_label_only_rationale(tmp_path: Path):
@@ -877,16 +1131,16 @@ def test_validator_rejects_label_caveat_duplicating_valid_comment(tmp_path: Path
 
 
 def test_validator_requires_exactly_one_uncertainty_statement_per_narrative(tmp_path: Path):
-    comment = {
+    noop = {
         "items": [
             {
-                "type": "add_comment",
-                "body": NO_CANDIDATE_UNCERTAINTY + "\n" + NO_CANDIDATE_UNCERTAINTY,
+                "type": "noop",
+                "message": NO_CANDIDATE_UNCERTAINTY + "\n" + NO_CANDIDATE_UNCERTAINTY,
             }
         ]
     }
 
-    result = _run_validator(tmp_path, comment)
+    result = _run_validator(tmp_path, noop)
 
     assert result.returncode == 1
     assert "missing required lexical uncertainty statement" in result.stderr
@@ -1507,7 +1761,28 @@ def test_stage_a5_source_and_compiled_policy_keep_only_needs_info_live():
         safe_outputs_job.group("body"),
     )
     assert permissions is not None
-    assert permissions.group("body") == "      issues: write\n"
+    assert permissions.group("body") == "      contents: read\n      issues: write\n"
+
+
+def test_stage_b_safety_correction_remains_manual_staged_and_read_only():
+    source = WORKFLOW.read_text()
+    compiled = LOCK.read_text()
+
+    source_triggers = re.search(r"\non:\n(?P<body>.*?)\npermissions:\n", source, re.DOTALL)
+    compiled_triggers = re.search(r"\non:\n(?P<body>.*?)\npermissions:\s*\{\}\n", compiled, re.DOTALL)
+    assert source_triggers is not None
+    assert compiled_triggers is not None
+    for trigger_block in (source_triggers.group("body"), compiled_triggers.group("body")):
+        assert "workflow_dispatch:" in trigger_block
+        assert "pull_request" not in trigger_block
+        assert "issues:" not in trigger_block
+        assert "schedule:" not in trigger_block
+
+    assert "permissions:\n  contents: read\n  issues: read\n" in source
+    assert "threat-detection: false" in source
+    assert _compiled_safe_output_config(compiled)["add_comment"]["staged"] is True
+    assert "tool-call-limits" not in compiled
+    assert "Stage B remains blocked until runtime enforcement exists" in source
 
 
 def test_runtime_imported_prompt_declares_read_and_disposition_contract():

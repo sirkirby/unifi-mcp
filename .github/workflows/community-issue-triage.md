@@ -231,6 +231,8 @@ jobs:
     needs: [trusted_duplicate_research]
   safe_outputs:
     needs: [trusted_duplicate_research]
+    permissions:
+      contents: read
 
 tools:
   bash: false
@@ -282,12 +284,15 @@ safe-outputs:
     - name: Validate Stage A.5 output content
       shell: bash
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         TARGET_NUMBER: ${{ inputs.issue_number }}
         TRUSTED_DUPLICATE_CONTEXT: ${{ needs.trusted_duplicate_research.outputs.context }}
       run: |
         node <<'NODE'
         const fs = require("fs");
         const outputPath = "/tmp/gh-aw/agent_output.json";
+
+        const validate = async () => {
 
         const targetNumber = Number(process.env.TARGET_NUMBER);
         if (!Number.isSafeInteger(targetNumber) || targetNumber < 1) {
@@ -389,6 +394,154 @@ safe-outputs:
           /\b(?:authorization|api[_ -]?key|token|secret|password)\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,}/gi,
         ];
 
+        const repositoryEvidencePaths = [
+          /^(?:README|CONTRIBUTING|SECURITY)\.md$/,
+          /^(?:docs|apps|packages)\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
+        ];
+        const missingInformationTemplates = new Map([
+          ["package_version", "The exact unifi-mcp package version or commit."],
+          ["transport", "The transport in use: stdio, SSE, or streamable HTTP."],
+          ["controller_version", "The UniFi application family and version."],
+          ["sanitized_error", "The complete sanitized error message or response status."],
+          ["reproduction_steps", "Minimal steps that reproduce the behavior."],
+          ["expected_actual", "The expected behavior and the actual behavior observed."],
+          ["live_controller_evidence", "Sanitized live-controller evidence showing the result."],
+        ]);
+        const commentFooter =
+          "This is an automated first-pass triage; a maintainer will make final decisions.";
+        const fetchRepositoryFile = async (path) => {
+          const token = process.env.GITHUB_TOKEN || "";
+          const sha = process.env.GITHUB_SHA || "";
+          if (token === "" || !/^[0-9a-f]{40}$/i.test(sha)) {
+            throw new Error("trusted repository credentials or immutable SHA are unavailable");
+          }
+          const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+          const response = await fetch(
+            "https://api.github.com/repos/sirkirby/unifi-mcp/contents/" +
+              encodedPath +
+              "?ref=" +
+              encodeURIComponent(sha),
+            {
+              headers: {
+                Accept: "application/vnd.github.raw+json",
+                Authorization: "Bearer " + token,
+                "X-GitHub-Api-Version": "2022-11-28",
+              },
+            },
+          );
+          if (!response.ok) {
+            throw new Error("GitHub contents API returned " + response.status);
+          }
+          const content = await response.text();
+          if (content.length > 1024 * 1024) {
+            throw new Error("repository evidence file exceeds the trusted size limit");
+          }
+          return content;
+        };
+        const renderCommentProposal = async (body) => {
+          if (typeof body !== "string" || body.trim() === "") {
+            throw new Error("add_comment requires a nonempty canonical JSON body");
+          }
+          let proposal;
+          try {
+            proposal = JSON.parse(body);
+          } catch {
+            throw new Error("add_comment body must be canonical JSON");
+          }
+          if (
+            !proposal ||
+            typeof proposal !== "object" ||
+            Array.isArray(proposal) ||
+            JSON.stringify(proposal) !== body ||
+            proposal.version !== 1
+          ) {
+            throw new Error("add_comment body must be a canonical version 1 proposal");
+          }
+
+          let rendered;
+          if (proposal.kind === "missing_information") {
+            if (
+              !hasExactKeys(proposal, ["version", "kind", "fields"]) ||
+              Object.keys(proposal).join("\u0000") !== "version\u0000kind\u0000fields"
+            ) {
+              throw new Error("missing_information proposal contains unexpected fields");
+            }
+            if (
+              !Array.isArray(proposal.fields) ||
+              proposal.fields.length < 1 ||
+              proposal.fields.length > 3 ||
+              !proposal.fields.every((field) => typeof field === "string") ||
+              new Set(proposal.fields).size !== proposal.fields.length ||
+              !proposal.fields.every((field) => missingInformationTemplates.has(field))
+            ) {
+              throw new Error("missing_information requires 1 to 3 unique allowlisted field IDs");
+            }
+            rendered =
+              "To make this report actionable, please provide:\n\n" +
+              proposal.fields
+                .map((field) => "- " + missingInformationTemplates.get(field))
+                .join("\n");
+          } else if (proposal.kind === "repository_evidence") {
+            if (
+              !hasExactKeys(proposal, ["version", "kind", "path", "quote"]) ||
+              Object.keys(proposal).join("\u0000") !== "version\u0000kind\u0000path\u0000quote"
+            ) {
+              throw new Error("repository_evidence proposal contains unexpected fields");
+            }
+            if (
+              typeof proposal.path !== "string" ||
+              proposal.path.length > 240 ||
+              !repositoryEvidencePaths.some((pattern) => pattern.test(proposal.path))
+            ) {
+              throw new Error("repository evidence path is outside the Markdown allowlist");
+            }
+            if (
+              typeof proposal.quote !== "string" ||
+              proposal.quote !== proposal.quote.trim() ||
+              proposal.quote.length < 20 ||
+              proposal.quote.length > 600 ||
+              proposal.quote.split("\n").length > 6 ||
+              /[\u0000-\u0009\u000b-\u001f\u007f]/u.test(proposal.quote)
+            ) {
+              throw new Error("repository evidence quote must be 20 to 600 safe characters across at most 6 lines");
+            }
+
+            const repositoryContent = await fetchRepositoryFile(proposal.path);
+            const firstMatch = repositoryContent.indexOf(proposal.quote);
+            const secondMatch =
+              firstMatch < 0
+                ? -1
+                : repositoryContent.indexOf(proposal.quote, firstMatch + proposal.quote.length);
+            if (firstMatch < 0 || secondMatch >= 0) {
+              throw new Error("repository evidence quote must have one unique contiguous match");
+            }
+            const startLine = repositoryContent.slice(0, firstMatch).split("\n").length;
+            const endLine = startLine + proposal.quote.split("\n").length - 1;
+            const sourceUrl =
+              "https://github.com/sirkirby/unifi-mcp/blob/" +
+              process.env.GITHUB_SHA +
+              "/" +
+              proposal.path.split("/").map(encodeURIComponent).join("/") +
+              "#L" +
+              startLine +
+              "-L" +
+              endLine;
+            rendered =
+              "The repository documentation currently states:\n\n" +
+              proposal.quote
+                .split("\n")
+                .map((line) => "> " + line)
+                .join("\n") +
+              "\n\nSource: " +
+              sourceUrl;
+          } else {
+            throw new Error("add_comment proposal kind is not allowlisted");
+          }
+
+          if (requiredUncertainty) rendered += "\n\n" + requiredUncertainty;
+          return rendered + "\n\n" + commentFooter;
+        };
+
         const allowedTypes = new Set(["add_comment", "add_labels", "noop"]);
         const allowedLabels = new Set(["needs-info"]);
         const summarySections = [];
@@ -396,6 +549,7 @@ safe-outputs:
         const semanticStrings = [];
         const narrativeStrings = [];
         const candidateAssessments = new Map();
+        let outputChanged = false;
         const hasExactKeys = (value, allowed, required = allowed) => {
           const keys = Object.keys(value);
           return (
@@ -487,14 +641,17 @@ safe-outputs:
             ) {
               violations.push("add_comment contains invalid framework temporary_id");
             }
-            if (typeof item.body !== "string" || item.body.trim() === "") {
-              violations.push("add_comment requires a nonempty body");
-            } else {
-              semanticStrings.push(item.body);
-              narrativeStrings.push(item.body);
+            try {
+              const renderedComment = await renderCommentProposal(item.body);
+              item.body = renderedComment;
+              outputChanged = true;
+              semanticStrings.push(renderedComment);
+              narrativeStrings.push(renderedComment);
               summarySections.push(
-                "<h3>Proposed comment</h3>\n<pre>" + escapeHtml(item.body) + "</pre>"
+                "<h3>Proposed comment</h3>\n<pre>" + escapeHtml(renderedComment) + "</pre>"
               );
+            } catch (error) {
+              violations.push(error instanceof Error ? error.message : "comment proposal validation failed");
             }
           }
 
@@ -770,6 +927,9 @@ safe-outputs:
             item.item_number = targetNumber;
             for (const label of item.labels) label.suggest = true;
           }
+          outputChanged = true;
+        }
+        if (outputChanged) {
           try {
             const trustedOutputPath = outputPath + ".trusted";
             fs.writeFileSync(trustedOutputPath, JSON.stringify(output));
@@ -803,6 +963,14 @@ safe-outputs:
           console.error("Blocked Stage A.5 output because the proposal summary could not be written");
           process.exit(1);
         }
+        };
+        validate().catch((error) => {
+          console.error(
+            "Blocked Stage A.5 output because trusted validation failed: " +
+              (error instanceof Error ? error.message : "unknown error"),
+          );
+          process.exit(1);
+        });
         NODE
   add-labels:
     staged: false
@@ -934,19 +1102,20 @@ ${{ needs.trusted_duplicate_research.outputs.context }}
    may remain. Do not emit any numbered pull-request reference, including singular,
    plural, spaced, hyphenated, URL, or path forms. Paraphrase supporting references as
    `a prior merged change` or `a prior report` without their numbers.
-6. During normal triage, when no candidates are present and you emit a comment or
-   `noop`, include the one exact statement matching the trusted context in that
-   narrative field:
+6. During normal triage, when no candidates are present and you emit a `noop`, include
+   the one exact statement matching the trusted context in that narrative field. For a
+   comment proposal, trusted workflow code adds the matching statement after validation:
    - complete scan: `Lexical result: No candidate met the deterministic threshold; duplicate status remains unknown.`
    - bounded scan: `Lexical result: No candidate met the threshold in the 1,000 newest issues; duplicate status remains unknown beyond that bound.`
    - sensitive-title guard: `Lexical result: Search skipped by the sensitive-title guard; duplicate status remains unknown.`
    - no distinctive terms: `Lexical result: Search skipped because the title had no distinctive terms; duplicate status remains unknown.`
-   Include the matching statement exactly once. A label-only proposal must not put this
+   Include the matching statement exactly once in a `noop`. A label-only proposal must not put this
    unrelated caveat into a label rationale; trusted workflow code renders it in the Stage A
    summary instead. Outside that fixed statement, do not add any duplicate, related,
    similar, matching, prior-report, or search-disposition prose. In Stage A this semantic
    restriction is human-adjudicated: the validator enforces the exact uncertainty statement
-   in comment and `noop` narratives but deliberately does not classify free-form prose.
+   in trusted-rendered comments and `noop` narratives but deliberately does not classify
+   other free-form prose.
    Stage B must replace that prose with a structured duplicate-status field rendered by
    trusted code.
 7. Inspect only the minimum relevant repository source needed to distinguish plausible
@@ -980,11 +1149,25 @@ highest-ranked candidate assessment; never add a `noop` merely to carry that ass
   maintainer until tool-use evidence is tamper-resistant and success-correlated.
 - Every proposed label addition must include a complete-sentence rationale of at most
   240 characters and calibrated confidence for issue-intent review.
-- Propose at most one concise contributor-facing comment, and only when it adds new,
-  actionable information not already present in the issue. Do not paraphrase or merely
-  confirm a complete report; that should normally produce labels only. A related issue
-  warrants a comment only when the reporter has not already identified it and the
-  relationship gives the contributor a useful next action.
+- Propose at most one contributor-facing comment, and only through one of these exact
+  canonical JSON strings in `body` (no whitespace outside JSON, no extra keys, and keys
+  in the shown order). Trusted workflow code verifies the proposal, derives any source
+  link from the immutable workflow SHA, and renders all public prose:
+  - Missing information: `{"version":1,"kind":"missing_information","fields":["field_id"]}`
+    with 1 to 3 unique IDs from `package_version`, `transport`, `controller_version`,
+    `sanitized_error`, `reproduction_steps`, `expected_actual`, and
+    `live_controller_evidence`. Do not author a question or other prose.
+  - Repository evidence: `{"version":1,"kind":"repository_evidence","path":"docs/example.md","quote":"exact contiguous quote"}`.
+    The path must be `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, or a Markdown file
+    under `docs/`, `apps/`, or `packages/`. Read that exact path with
+    `get_file_contents`, copy a unique exact quote of 20 to 600 characters across at most
+    6 lines, and supply no repository, ref, URL, or line numbers. The trusted validator
+    fetches the path at `GITHUB_SHA` and rejects any mismatch.
+  Do not paraphrase or merely confirm a complete report. If neither strict proposal
+  applies, omit `add_comment` and use a label-only action or `noop`. When trusted
+  candidates exist, a comment can pass only when another allowed output carries the
+  required highest-ranked candidate assessment; do not invent relationship prose merely
+  to enable a comment.
 - When neither a label nor a comment is warranted, call the `noop` safe-output tool with
   a concise reason. Do not use `noop` when any other safe output is proposed.
 - If a required issue/repository read or safe-output tool fails and prevents a truthful
@@ -995,5 +1178,5 @@ highest-ranked candidate assessment; never add a `noop` merely to carry that ass
 - Use only raw absolute `https://github.com/sirkirby/unifi-mcp/...` URLs. Do not use
   Markdown or HTML link syntax.
 - Clearly distinguish confirmed repository facts from hypotheses and unknowns.
-- End a proposed comment with: “This is an automated first-pass triage; a maintainer
-  will make final decisions.” The generated workflow footer supplies run attribution.
+- Do not add a footer to the JSON proposal. Trusted workflow code adds the fixed
+  first-pass disclaimer, and the generated workflow footer supplies run attribution.
