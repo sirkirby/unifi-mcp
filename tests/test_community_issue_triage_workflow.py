@@ -34,7 +34,7 @@ TEST_SHA = "1" * 40
 
 
 def _canonical_comment(proposal: dict[str, object]) -> str:
-    return json.dumps(proposal, separators=(",", ":"))
+    return json.dumps(proposal, separators=(",", ":"), ensure_ascii=False)
 
 
 def _missing_information_comment(*fields: str) -> str:
@@ -493,6 +493,9 @@ def test_validator_rejects_invalid_or_unverifiable_repository_quotes(tmp_path: P
         "trailing whitespace makes this quote noncanonical ",
         "one\ntwo\nthree\nfour\nfive\nsix\nseven",
         "A tab\tinside repository evidence is not safe.",
+        "A C1 next-line\u0085separator is not safe repository evidence.",
+        "A Unicode line\u2028separator is not safe repository evidence.",
+        "A Unicode paragraph\u2029separator is not safe repository evidence.",
         "x" * 601,
     )
     for quote in invalid_quotes:

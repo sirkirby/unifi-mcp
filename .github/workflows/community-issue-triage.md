@@ -501,7 +501,7 @@ safe-outputs:
               proposal.quote.length < 20 ||
               proposal.quote.length > 600 ||
               proposal.quote.split("\n").length > 6 ||
-              /[\u0000-\u0009\u000b-\u001f\u007f]/u.test(proposal.quote)
+              /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u2028\u2029]/u.test(proposal.quote)
             ) {
               throw new Error("repository evidence quote must be 20 to 600 safe characters across at most 6 lines");
             }
