@@ -235,6 +235,18 @@ async function fetchIssue(github, owner, repo, issueNumber) {
   return normalizeIssue(raw);
 }
 
+async function requireNeedsInfoLabel(github, owner, repo) {
+  let response;
+  try {
+    response = await github.rest.issues.getLabel({owner, repo, name: "needs-info"});
+  } catch {
+    fail("required repository label 'needs-info' is missing or unreadable; create it before calibration");
+  }
+  if (response?.data?.name !== "needs-info") {
+    fail("required repository label 'needs-info' is missing or unreadable; create it before calibration");
+  }
+}
+
 async function fetchBoundedComments(github, owner, repo, issueNumber) {
   const request = {owner, repo, issue_number: issueNumber, per_page: 100, page: 1};
   const response = await github.rest.issues.listComments(request);
@@ -397,7 +409,7 @@ export async function createTrustedSnapshot({
   workflowSha,
   randomBytes,
 }) {
-  if (!github?.rest?.issues?.get || !github?.rest?.issues?.listComments || !github?.graphql) {
+  if (!github?.rest?.issues?.get || !github?.rest?.issues?.getLabel || !github?.rest?.issues?.listComments || !github?.graphql) {
     fail("createTrustedSnapshot requires an injected GitHub issue and GraphQL client");
   }
   assertSafePositiveInteger(targetNumber, "targetNumber");
@@ -406,6 +418,7 @@ export async function createTrustedSnapshot({
   const normalizedWorkflowSha = assertWorkflowSha(workflowSha);
   const nextReceipt = receiptFactory(randomBytes);
 
+  await requireNeedsInfoLabel(github, owner, repo);
   const target = await fetchIssue(github, owner, repo, targetNumber);
   const targetReceipt = nextReceipt();
   const targetDigest = canonicalDigest(target);
@@ -923,7 +936,7 @@ function rejectRelationshipSemanticsOutsideCarrier(decision, bundle) {
   for (const value of values) {
     const normalized = normalizePolicyText(value);
     if (
-      /\b(?:related|not[ _-]?related|uncertain|relationship|duplicate status|lexical result)\b/i.test(normalized) ||
+      /\b(?:related|not[ _-]?related|uncertain|relationships?|duplicat\p{L}*|similar\p{L}*|match\p{L}*|overlap\p{L}*|candidates?|search\p{L}*|lexical|same (?:issues?|problems?|reports?)|(?:prior|previous|earlier|existing) reports?)\b/iu.test(normalized) ||
       normalized.includes(bundle.target.receipt) ||
       (bundle.comments && normalized.includes(bundle.comments.receipt)) ||
       bundle.candidates.some(

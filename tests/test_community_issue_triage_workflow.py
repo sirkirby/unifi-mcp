@@ -86,10 +86,15 @@ import * as contract from __MODULE__;
 import fs from "node:fs";
 
 const payload = JSON.parse(fs.readFileSync(0, "utf8"));
-const calls = {get: [], comments: [], graphql: 0};
+const calls = {labels: [], get: [], comments: [], graphql: 0};
 const issues = new Map(Object.entries(payload.issues || {}).map(([key, value]) => [Number(key), value]));
 const github = {
   rest: {issues: {
+    getLabel: async (request) => {
+      calls.labels.push(request.name);
+      if (payload.failLabel) throw new Error("simulated missing label");
+      return {data: {name: payload.labelName || "needs-info"}};
+    },
     get: async (request) => {
       calls.get.push(request.issue_number);
       if ((payload.failGet || []).includes(request.issue_number)) {
@@ -170,6 +175,7 @@ try {
   }
   process.stdout.write(JSON.stringify(result));
 } catch (error) {
+  process.stdout.write(JSON.stringify({calls}));
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 }
@@ -362,6 +368,7 @@ def test_snapshot_fetches_target_comments_and_ranked_candidates_with_receipts():
     assert re.fullmatch(r"[a-f0-9]{32}", bundle["comments"]["receipt"])
     assert re.fullmatch(r"[a-f0-9]{32}", bundle["candidates"][0]["receipt"])
     assert len({bundle["target"]["receipt"], bundle["comments"]["receipt"], bundle["candidates"][0]["receipt"]}) == 3
+    assert created["calls"]["labels"] == ["needs-info"]
     assert created["calls"]["get"] == [TARGET_NUMBER, 225]
     assert created["calls"]["comments"] == [{"issue_number": TARGET_NUMBER, "page": 1, "per_page": 100}]
 
@@ -373,6 +380,23 @@ def test_snapshot_requires_target_and_comment_receipts_even_with_zero_candidates
     assert bundle["comments"]["receipt"]
     accepted = _render(bundle, _normal_proposal(bundle), "noop")
     assert accepted.returncode == 0, accepted.stderr
+
+
+@pytest.mark.parametrize("label_failure", ["missing", "renamed"])
+def test_snapshot_fails_before_issue_reads_when_needs_info_label_is_unavailable(label_failure: str):
+    payload = _snapshot_payload()
+    if label_failure == "missing":
+        payload["failLabel"] = True
+    else:
+        payload["labelName"] = "needs-information"
+    result = _run_contract(payload)
+    assert result.returncode != 0
+    assert "required repository label 'needs-info'" in result.stderr
+    calls = json.loads(result.stdout)["calls"]
+    assert calls["labels"] == ["needs-info"]
+    assert calls["get"] == []
+    assert calls["comments"] == []
+    assert calls["graphql"] == 0
 
 
 @pytest.mark.parametrize("failure", ["target", "comments", "graphql", "candidate"])
@@ -643,13 +667,25 @@ def test_relationship_reason_rejects_control_unicode_reference_secret_and_bounds
     assert "relationship reason" in result.stderr
 
 
-def test_primary_decision_rejects_relationship_semantics_outside_structured_carrier():
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "This is a duplicate of an earlier report and no public action is needed.",
+        "This looks similar to an existing report and no public action is needed.",
+        "The available title matches a previous report and no public action is needed.",
+        "A candidate search found the same issue, so no public action is needed.",
+        "The candidates show enough commonality that no public action is needed.",
+        "The earlier reports indicate that no public action is needed here.",
+        "This is duplicative of another submission, so no public action is needed.",
+    ],
+)
+def test_primary_decision_rejects_relationship_semantics_outside_structured_carrier(reason: str):
     bundle = _create_snapshot()["bundle"]
     proposal = _normal_proposal(
         bundle,
         decision={
             "kind": "noop",
-            "reason": "Candidate 225 is related even though the structured assessment says otherwise.",
+            "reason": reason,
         },
         verdicts=["NOT_RELATED", "NOT_RELATED"],
     )
