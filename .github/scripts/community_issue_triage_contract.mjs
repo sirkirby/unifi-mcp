@@ -834,7 +834,6 @@ function inspectRenderedText(value, bundle) {
   for (const match of normalized.matchAll(/(^|[^A-Za-z0-9_])#\s*(\d+)\b/g)) referenced.add(Number(match[2]));
   for (const match of normalized.matchAll(/\bissue\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi)) referenced.add(Number(match[1]));
   for (const match of normalized.matchAll(/\bGH\s*-\s*(\d+)\b/gi)) referenced.add(Number(match[1]));
-  for (const number of referenced) if (!trustedNumbers.has(number)) violations.push("issue reference outside trusted evidence");
   if (/\b(?:PRs?|pull[\s-]+requests?)\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*\d+\b/i.test(normalized)) violations.push("numbered pull-request reference is not allowed");
   if (/(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/.test(value)) violations.push("user or bot mention is not allowed");
   if (/\[[^\]]+\]\s*(?:\([^)]*\)|\[[^\]]*\])/.test(value) || /<(?:a\s|[^>]+\shref\s*=)/i.test(value)) violations.push("agent-authored link syntax is not allowed");
@@ -850,9 +849,37 @@ function inspectRenderedText(value, bundle) {
       continue;
     }
     const prefix = `/${bundle.repository.toLowerCase()}`;
-    if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "github.com" || !url.pathname.toLowerCase().startsWith(`${prefix}/`)) violations.push("URL outside the canonical repository");
+    let repositoryPath;
+    try {
+      repositoryPath = decodeURIComponent(url.pathname).toLowerCase();
+    } catch {
+      violations.push("malformed URL path");
+      continue;
+    }
+    if (url.protocol !== "https:" || url.hostname.toLowerCase() !== "github.com" || !repositoryPath.startsWith(`${prefix}/`)) {
+      violations.push("URL outside the canonical repository");
+      continue;
+    }
+    const relativePath = repositoryPath.slice(prefix.length);
+    const issueMatch = relativePath.match(/^\/issues\/(\d+)(?:\/|$)/);
+    const pullMatch = relativePath.match(/^\/pull\/(\d+)(?:\/|$)/);
+    if (issueMatch) referenced.add(Number(issueMatch[1]));
+    if (pullMatch) violations.push("numbered pull-request reference is not allowed");
   }
+  for (const number of referenced) if (!trustedNumbers.has(number)) violations.push("issue reference outside trusted evidence");
   if (violations.length > 0) fail([...new Set(violations)].join(", "));
+}
+
+/** Render only trusted candidate-search metadata for the maintainer summary. */
+export function summarizeCandidateResearch(bundle) {
+  validateBundle(bundle);
+  if (!bundle.search_performed) {
+    return bundle.status === "sensitive_stop"
+      ? "Candidate research was skipped because sensitive intake was detected before search."
+      : "Candidate research was skipped because the target title had no distinctive search terms.";
+  }
+  if (bundle.candidates.length === 0) return "No lexical candidates met the deterministic threshold.";
+  return bundle.candidates.map((candidate) => `- #${candidate.number} (score ${candidate.score})`).join("\n");
 }
 
 async function renderRepositoryEvidence(decision, bundle, fetchRepositoryFile) {

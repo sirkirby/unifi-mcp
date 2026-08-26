@@ -161,6 +161,8 @@ try {
     });
   } else if (payload.op === "select") {
     result = contract.selectProposalCarrier(payload.items);
+  } else if (payload.op === "candidateSummary") {
+    result = {summary: contract.summarizeCandidateResearch(payload.bundle)};
   } else if (payload.op === "canonical") {
     result = {json: contract.canonicalStringify(payload.value), digest: contract.canonicalDigest(payload.value)};
   } else {
@@ -822,6 +824,52 @@ def test_repository_evidence_is_verified_from_one_unique_immutable_file_match():
     duplicate = _run_contract(payload)
     assert duplicate.returncode != 0
     assert "unique" in duplicate.stderr
+
+
+def test_candidate_summary_distinguishes_skipped_search_from_zero_results():
+    skipped_bundle = _create_snapshot(
+        _snapshot_payload(candidates=[_issue(225)], comments=[])
+        | {"issues": {str(TARGET_NUMBER): _issue(TARGET_NUMBER, title="This issue")}}
+    )["bundle"]
+    skipped = _run_contract({"op": "candidateSummary", "bundle": skipped_bundle})
+    assert skipped.returncode == 0, skipped.stderr
+    assert json.loads(skipped.stdout)["summary"] == (
+        "Candidate research was skipped because the target title had no distinctive search terms."
+    )
+
+    zero_result_bundle = _create_snapshot()["bundle"]
+    zero_result = _run_contract({"op": "candidateSummary", "bundle": zero_result_bundle})
+    assert zero_result.returncode == 0, zero_result.stderr
+    assert json.loads(zero_result.stdout)["summary"] == "No lexical candidates met the deterministic threshold."
+
+
+@pytest.mark.parametrize(
+    ("url", "accepted", "message"),
+    (
+        (f"https://github.com/sirkirby/unifi-mcp/issues/{TARGET_NUMBER}", True, ""),
+        ("https://github.com/sirkirby/unifi-mcp/issues/999", False, "outside trusted evidence"),
+        ("https://github.com/sirkirby/unifi-mcp/pull/999", False, "pull-request reference"),
+        ("https://github.com/sirkirby/unifi-mcp/%70ull/999/files", False, "pull-request reference"),
+    ),
+)
+def test_repository_evidence_numbered_urls_obey_reference_contract(url: str, accepted: bool, message: str):
+    bundle = _create_snapshot()["bundle"]
+    quote = f"The repository documentation points maintainers to {url} for additional context."
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "repository_evidence", "path": "docs/permissions.md", "quote": quote},
+    )
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {"items": [{"type": "add_comment", "body": proposal}]},
+            "repositoryFiles": {"docs/permissions.md": quote},
+        }
+    )
+    assert (result.returncode == 0) is accepted
+    if not accepted:
+        assert message in result.stderr
 
 
 def test_repository_evidence_path_quote_and_secret_defenses_remain_strict():

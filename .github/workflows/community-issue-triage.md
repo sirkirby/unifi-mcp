@@ -376,19 +376,7 @@ safe-outputs:
           if (!process.env.GITHUB_STEP_SUMMARY) {
             throw new Error("GITHUB_STEP_SUMMARY is unavailable");
           }
-          const candidateSummary =
-            bundle.candidates.length === 0
-              ? "No lexical candidates met the deterministic threshold."
-              : bundle.candidates
-                  .map(
-                    (candidate) =>
-                      "- #" +
-                      candidate.number +
-                      " (score " +
-                      candidate.score +
-                      ")",
-                  )
-                  .join("\n");
+          const candidateSummary = contract.summarizeCandidateResearch(bundle);
           const relationshipSummary =
             result.summary.relationships.length === 0
               ? "No candidate relationships were required."
