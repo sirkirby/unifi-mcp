@@ -9,6 +9,7 @@
 
 import {createHash, randomBytes as cryptoRandomBytes} from "node:crypto";
 import {readFile, writeFile} from "node:fs/promises";
+import {isIP} from "node:net";
 import {pathToFileURL} from "node:url";
 
 export const CONTRACT_VERSION = 2;
@@ -25,12 +26,55 @@ const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
 const POSITIVE_INTEGER_STRING_PATTERN = /^[1-9][0-9]*$/;
 const VERDICTS = new Set(["RELATED", "NOT_RELATED", "UNCERTAIN"]);
 const SENSITIVE_SCOPES = new Set(["target", "comments", "candidate"]);
-const SECRET_PATTERNS = [
+const SENSITIVE_CONFIGURATION_BLOB_KEYS = new Set([
+  "openvpn_configuration",
+  "wireguard_client_configuration_file",
+  "wireguard_server_configuration_file",
+]);
+const SENSITIVE_PATTERNS = [
   /github_pat_[A-Za-z0-9_]{20,}/,
   /gh[pousr]_[A-Za-z0-9]{20,}/,
   /AKIA[0-9A-Z]{16}/,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/,
-  /\b(?:authorization|api[_ -]?key|token|secret|password)\s*[:=]\s*["']?[A-Za-z0-9_./+=-]{16,}/i,
+  /(?:^|[^A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*[A-Za-z0-9]*(?:api[_ -]?(?:key|token)|token|secret|password|passwd|passphrase|p(?:re)?[_ -]?shared(?:[_ -]?key)?|psk|(?:snmp[_ -]?)?community|private[_ -]?key)["']?\s*=\s*(?!["']?(?:(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?(?:[.!?](?=\s|$)|(?=$|[\r\n,;}\]])))(?:["'][^"'\r\n]+["']|[^\s,;}{]+)/i,
+  /(?:^|[^A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*[A-Za-z0-9]*(?:authorization|auth(?:[_ -]?key)?|api[_ -]?(?:key|token)|token|secret|password|passwd|passphrase|credential|cookie|session(?:[_ -]?id)?|p(?:re)?[_ -]?shared(?:[_ -]?key)?|psk|pin(?:[_ -]?code)?|(?:snmp[_ -]?)?community|private[_ -]?key|tls[_ -]?(?:auth|crypt)|rtsp[s]?[_ -]?(?:alias|url|streams?))["']?\s*=\s*(?!["']?(?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?(?:[.!?](?=\s|$)|(?=$|[\r\n,;}\]])))(?:["'][^"'\r\n]{6,}["']|[^\s,;}{]{6,})/i,
+  /(?:^|[^A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*[A-Za-z0-9]*(?:api[_ -]?(?:key|token)|token|secret|password|passwd|passphrase|p(?:re)?[_ -]?shared(?:[_ -]?key)?|psk|(?:snmp[_ -]?)?community|private[_ -]?key)["']?\s*:\s*(?!["'](?:(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>|none|null)["'](?:\s*[,}]|[.!?]?(?=\s|$)))["'][^"'\r\n]+["']/i,
+  /(?:^|[^A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*[A-Za-z0-9]*(?:authorization|auth|credential|cookie|session(?:[_ -]?id)?|pin(?:[_ -]?code)?|tls[_ -]?auth|rtsp[s]?[_ -]?(?:alias|url|streams?))["']?\s*:\s*(?!["'](?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["'](?:\s*[,}]|[.!?]?(?=\s|$)))["'][^"'\r\n]+["']/i,
+  /(?:^|[^A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*[A-Za-z0-9]*(?:authorization|auth(?:[_ -]?key)?|api[_ -]?(?:key|token)|token|secret|password|passwd|passphrase|credential|cookie|session(?:[_ -]?id)?|p(?:re)?[_ -]?shared(?:[_ -]?key)?|psk|pin(?:[_ -]?code)?|snmp[_ -]?community|private[_ -]?key|tls[_ -]?(?:auth|crypt)|rtsp[s]?[_ -]?(?:alias|url|streams?))["']?\s*:\s*(?!["']?(?:configured(?:\s+correctly)?|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>|removed|hidden|masked|omitted|enabled|unset|missing|unknown|unavailable|disabled|none|null)["']?(?:[.!?](?=\s|$)|(?=$|[\r\n,;}\]])))(?:["'][^"'\r\n]+["']|[^\s,;}{]+)/i,
+  /(?:^|[^A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*[A-Za-z0-9]*(?:authorization|auth(?:[_ -]?key)?|api[_ -]?(?:key|token)|token|secret|password|passwd|passphrase|credential|cookie|session(?:[_ -]?id)?|p(?:re)?[_ -]?shared(?:[_ -]?key)?|psk|pin(?:[_ -]?code)?|snmp[_ -]?community|private[_ -]?key|tls[_ -]?(?:auth|crypt)|rtsp[s]?[_ -]?(?:alias|url|streams?))["']?\s+(?:is|was|are|were)\s+(?!["']?(?:(?:(?:currently|automatically|already|properly)\s+)?(?:configured(?:\s+correctly)?|(?:being\s+)?refreshed|incorrect|correct|valid|ok|fine|working|set|expired|invalid|available|present|missing|empty|removed|hidden|masked|omitted|unset|unavailable|disabled|none|null)|securely\s+stored(?:\s+in\s+(?:1password|a\s+password\s+manager|the\s+vault))?|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?(?:[.!?](?=\s|$)|(?=$|[\r\n,;}\]])))(?:["'][^"'\r\n]+["']|[^\s,;}{]+)/i,
+  /(?:^|[^A-Za-z0-9_])(?:pin(?:[_ -]?code)?)["']?\s*[:=]\s*["']?\d{4,12}["']?\b/i,
+  /(?:^|\s)--pin(?:[-_]?code)?\s+["']?\d{4,12}["']?\b/i,
+  /(?:^|[^A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*[A-Za-z0-9]*(?:password|passwd|passphrase|p(?:re)?[_ -]?shared(?:[_ -]?key)?|psk|snmp[_ -]?community|private[_ -]?key)["']?\s*:\s*(?!["']?(?:(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>|none|null)["']?(?:[.!?](?=\s|$)|(?=$|[\r\n,;}\]])))[^\s,;}{]+/i,
+  /(?:^|\s)--(?:api[-_]?(?:key|token)|token|secret|password|passwd|passphrase|p(?:re)?[-_]?shared(?:[-_]?key)?|psk|(?:snmp[-_]?)?community|private[-_]?key)\s+(?!["']?(?:(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?(?:\s|$))(?:["'][^"'\r\n]+["']|\S+)/i,
+  /(?:^|[^A-Za-z0-9_])(?:x[_-]?iapp[_-]?key|private[_-]?preshared[_-]?keys|openvpn[_-]?configuration|wireguard[_-]?(?:client|server)[_-]?configuration[_-]?file)["']?[ \t]*[:=][ \t]*(?!["']?(?:(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>|none|null)["']?(?:\s|$|[,;}]))(?:["'][^"'\r\n]{6,}["']|[^\s,;}{]{6,})/i,
+  /(?:^|\s)--(?:auth(?:[-_]?key)?|api[-_]?(?:key|token)|token|secret|password|passwd|passphrase|credential|cookie|session[-_]?id|p(?:re)?[-_]?shared(?:[-_]?key)?|psk|pin(?:[-_]?code)?|(?:snmp[-_]?)?community|private[-_]?key|tls[-_]?(?:auth|crypt))\s+(?!["']?(?:(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?(?:\s|$))(?:["'][^"'\r\n]{6,}["']|\S{6,})/i,
+  /(?:^|[^A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*[A-Za-z0-9]*(?:auth(?:[_ -]?key)?|api[_ -]?(?:key|token)|token|secret|password|passwd|passphrase|credential|cookie|session(?:[_ -]?id)?|p(?:re)?[_ -]?shared(?:[_ -]?key)?|psk|pin(?:[_ -]?code)?|(?:snmp[_ -]?)?community|private[_ -]?key|tls[_ -]?(?:auth|crypt))["']?\s*:\s*[>|][-+]?\s*\r?\n[ \t]+(?!["']?(?:(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?(?:\s|$))(?:["'][^"'\r\n]{6,}["']|\S{6,})/i,
+  /(?:^|[^A-Za-z0-9_])["']?(?:[A-Za-z0-9]+[_-])*authorization["']?\s*[:=]\s*["']?(?:bearer|basic)\s+[A-Za-z0-9_./+=:-]{8,}/i,
+  /\bbearer\s+[A-Za-z0-9._~+/=-]{20,}\b/i,
+  /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
+  /https?:\/\/[^\s/:@]+:[^\s/@]+@/i,
+  /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
+  /\b(?:social security|ssn|date of birth|dob|home address|street address)\s*[:=]\s*\S+/i,
+  /\b(?:phone|mobile|telephone|tel)(?:\s+number)?\s*(?::|=|\bis\b)\s*(?:\+?\d[\d ().-]{7,}\d|\(\d{2,4}\)[\d ().-]{5,}\d)\b/i,
+  /\b\d{3}-\d{2}-\d{4}\b/,
+  /\b(?:live|reside|address)\s+(?:at|is)\s+\d{1,6}\s+[A-Za-z][A-Za-z .'-]{1,60}\s+(?:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|court|ct)\b/i,
+  /\b(?:10(?:\.\d{1,3}){3}|127(?:\.\d{1,3}){3}|169\.254(?:\.\d{1,3}){2}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})\b/,
+  /\b(?:device|controller|console|gateway)\s+(?:serial(?:\s+number)?|uuid|device[ _-]?id)\s*[:=]\s*(?!["']?(?:unavailable|unknown|missing|none|null|unset|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?(?:[.!?](?=\s|$)|(?=$|[\r\n,;}\]])))[A-Za-z0-9][A-Za-z0-9._:-]{5,}\b/i,
+  /\b(?:f[cd][0-9a-f]{2}|fe[89ab][0-9a-f]):[0-9a-f:]+\b/i,
+  /\b(?:[0-9A-F]{2}[:-]){5}[0-9A-F]{2}\b/i,
+  /\b(?:[0-9A-F]{4}\.){2}[0-9A-F]{4}\b/i,
+  /\b[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.(?:local|lan|internal|home|private)(?::\d{1,5})?\b/i,
+  /\b(?:zero[\p{Pd} ]?day|0[\p{Pd} ]?day|undisclosed vulnerab\p{L}*|security vulnerab\p{L}*|remote[\p{Pd} ]code execution|privilege[\p{Pd} ]escalation|sql[\p{Pd} ]injection|sqli|command[\p{Pd} ]injection|(?:path|directory)[\p{Pd} ]traversal|server[\p{Pd} ]side request forgery|ssrf|cross[\p{Pd} ]site scripting|xss|csrf|rce|idor|xxe|access[\p{Pd} ]control bypass|account takeover|unauthenticated(?:\s+(?:access|user|users|request|requests))?|arbitrary (?:file|code|command) (?:read|write|execution)|expos(?:e|es|ed|ing) credentials?|credential exposure)\b/iu,
+  /\b(?:auth(?:entication|orization)?)[^\r\n]{0,40}\bbypass\p{L}*\b/iu,
+  /\bbypass\p{L}*\b[^\r\n]{0,40}\b(?:auth(?:entication|orization)?)\b/iu,
+];
+const BENIGN_SECURITY_CONTEXT_PATTERNS = [
+  /^\s*unauthenticated (?:users|requests) (?:correctly )?(?:receive|return) 401(?: unauthorized)?(?: as expected)?[.!]?\s*$/iu,
+  /^\s*(?:the )?api denies unauthenticated requests[.!]?\s*$/iu,
+  /^\s*(?:the )?(?:xml )?parser rejects xxe payloads[.!]?\s*$/iu,
+  /^\s*xxe payloads are rejected by (?:the )?(?:xml )?parser[.!]?\s*$/iu,
+  /^\s*account takeover protection (?:is enabled|prevented the attack)[.!]?\s*$/iu,
+  /^\s*arbitrary file read is not possible[.!]?\s*$/iu,
 ];
 const STOP_WORDS = new Set([
   "about", "after", "again", "against", "being", "cannot", "could",
@@ -125,8 +169,164 @@ function textBytes(value, name) {
   return size;
 }
 
-function containsSecret(value) {
-  return SECRET_PATTERNS.some((pattern) => pattern.test(value));
+function isDocumentationEndpoint(value) {
+  const normalized = value.toLowerCase();
+  const documentationDomains = ["example.com", "example.org", "example.net"];
+  return (
+    documentationDomains.some((domain) => normalized === domain || normalized.endsWith(`.${domain}`)) ||
+    normalized.startsWith("2001:db8:") ||
+    /^(?:192\.0\.2|198\.51\.100|203\.0\.113)\./.test(normalized)
+  );
+}
+
+function normalizeStructuredKey(value) {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .join("_");
+}
+
+function isSanitizedBlobValue(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return ["", "null", "none", "redacted", "***redacted***", "[redacted]", "<redacted>"].includes(normalized);
+  }
+  if (Array.isArray(value)) return value.every((item) => isSanitizedBlobValue(item));
+  if (typeof value === "object") return Object.values(value).every((item) => isSanitizedBlobValue(item));
+  return false;
+}
+
+function isSanitizedYamlScalar(value) {
+  const normalized = value.trim();
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    return isSanitizedBlobValue(normalized.slice(1, -1));
+  }
+  return isSanitizedBlobValue(normalized);
+}
+
+function isSanitizedYamlMapping(value) {
+  const normalized = value.trim();
+  if (normalized === "{}" || normalized === "[]") return true;
+  if (!normalized.startsWith("{") || !normalized.endsWith("}")) return false;
+  const entries = normalized.slice(1, -1).split(",");
+  return entries.every((entry) => {
+    const separator = entry.indexOf(":");
+    return separator >= 0 && isSanitizedYamlScalar(entry.slice(separator + 1));
+  });
+}
+
+function isSanitizedYamlLines(lines) {
+  const meaningful = lines.map((line) => line.trim()).filter(Boolean);
+  if (meaningful.length === 0) return true;
+  return meaningful.every((line) => {
+    const separator = line.indexOf(":");
+    if (separator < 0) return isSanitizedYamlScalar(line);
+    return isSanitizedYamlScalar(line.slice(separator + 1));
+  });
+}
+
+function structuredObjectContainsSensitiveBlob(value) {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) return value.some((item) => structuredObjectContainsSensitiveBlob(item));
+  return Object.entries(value).some(([key, item]) => {
+    if (SENSITIVE_CONFIGURATION_BLOB_KEYS.has(normalizeStructuredKey(key))) {
+      return !isSanitizedBlobValue(item);
+    }
+    return structuredObjectContainsSensitiveBlob(item);
+  });
+}
+
+function containsSensitiveConfigurationBlob(value) {
+  try {
+    if (structuredObjectContainsSensitiveBlob(JSON.parse(value))) return true;
+  } catch {
+    // Continue with the bounded YAML subset below.
+  }
+
+  const lines = value.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = lines[index].match(
+      /^([ \t]*)["']?(openvpn[_-]?configuration|wireguard[_-]?(?:client|server)[_-]?configuration[_-]?file)["']?[ \t]*:[ \t]*(.*)$/i,
+    );
+    if (!match) continue;
+    const baseIndent = match[1].length;
+    const inlineValue = match[3].trim();
+    if (/^[>|][-+]?$/.test(inlineValue) || !inlineValue) {
+      const blockLines = [];
+      for (let next = index + 1; next < lines.length; next += 1) {
+        const nextLine = lines[next];
+        if (!nextLine.trim()) {
+          blockLines.push("");
+          continue;
+        }
+        const indentation = nextLine.match(/^[ \t]*/)[0].length;
+        if (indentation <= baseIndent) break;
+        blockLines.push(nextLine.slice(baseIndent + 1));
+      }
+      if (!isSanitizedYamlLines(blockLines)) return true;
+      continue;
+    }
+    let structuredValue = inlineValue;
+    try {
+      structuredValue = JSON.parse(inlineValue);
+    } catch {
+      if (isSanitizedYamlMapping(inlineValue)) continue;
+    }
+    if (!isSanitizedBlobValue(structuredValue)) return true;
+  }
+  return false;
+}
+
+function containsControllerAddress(value) {
+  const assignmentPattern = /(?:\b(?:controller|console|gateway)(?:\s+(?:public\s+)?(?:ip(?:v[46])?(?:\s+address)?|address|url|host(?:name)?))?|(?:^|[^A-Z0-9_])UNIFI(?:_[A-Z0-9]+)?_HOST)\s*(?::|=|\bis(?:\s+at)?\b|\bat\b)\s*(?:"([^"]+)"|'([^']+)'|(\[[^\]]+\](?::\d{1,5})?|[^\s,;}]+))/giu;
+  for (const match of value.matchAll(assignmentPattern)) {
+    const raw = (match[1] || match[2] || match[3]).replace(/[.!?]+$/, "");
+    if (/^https?:\/\//i.test(raw)) {
+      try {
+        const hostname = new URL(raw).hostname.replace(/^\[|\]$/g, "");
+        if (!isDocumentationEndpoint(hostname)) return true;
+      } catch {
+        const authority = raw.replace(/^https?:\/\//i, "").split(/[/?#]/, 1)[0];
+        const bracketed = authority.match(/^\[([^\]]+)\](?::[^:]*)?$/);
+        const hostWithMalformedPort = authority.match(/^([^:]+):[^:]*$/);
+        const fallbackHost = bracketed ? bracketed[1] : hostWithMalformedPort ? hostWithMalformedPort[1] : authority;
+        if (
+          (isIP(fallbackHost) ||
+            /^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/.test(fallbackHost)) &&
+          !isDocumentationEndpoint(fallbackHost)
+        ) return true;
+      }
+      continue;
+    }
+    const unwrapped = raw.replace(/^\[([^\]]+)\](?::\d{1,5})?$/, "$1");
+    const authority = unwrapped.split(/[/?#]/, 1)[0];
+    const ipv4WithPort = authority.match(/^((?:\d{1,3}\.){3}\d{1,3}):\d{1,5}$/);
+    const endpointHost = ipv4WithPort ? ipv4WithPort[1] : authority;
+    if (isIP(endpointHost)) {
+      if (!isDocumentationEndpoint(endpointHost)) return true;
+      continue;
+    }
+    const hostname = endpointHost.replace(/:\d{1,5}$/, "");
+    if (/^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/.test(hostname)) {
+      if (!isDocumentationEndpoint(hostname)) return true;
+    }
+  }
+  return false;
+}
+
+function containsSensitiveContent(value) {
+  if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(value))) return false;
+  return (
+    containsControllerAddress(value) ||
+    containsSensitiveConfigurationBlob(value) ||
+    SENSITIVE_PATTERNS.some((pattern) => pattern.test(value))
+  );
 }
 
 function normalizeAuthor(value) {
@@ -348,7 +548,7 @@ function inspectEvidence(textItems) {
   let sensitive = false;
   for (const item of textItems) {
     totalBytes += textBytes(item.value, item.name);
-    sensitive = sensitive || containsSecret(item.value);
+    sensitive = sensitive || containsSensitiveContent(item.value);
   }
   if (totalBytes > MAX_RAW_EVIDENCE_BYTES) {
     fail(`raw evidence exceeds the ${MAX_RAW_EVIDENCE_BYTES}-byte aggregate limit`);
@@ -554,7 +754,7 @@ export function validateBundle(bundle) {
       ...commentsTextItems(comments),
       ...bundle.candidates.flatMap((candidate) => issueTextItems(normalizeIssue(candidate.data), `candidate ${candidate.number}`)),
     ]);
-    if (inspection.sensitive) fail("normal snapshot contains secret-like evidence");
+    if (inspection.sensitive) fail("normal snapshot contains sensitive evidence");
   } else {
     if (bundle.content_persisted || !bundle.sensitivity || !SENSITIVE_SCOPES.has(bundle.sensitivity.scope)) fail("sensitive snapshot flags are invalid");
     if (!exactKeys(bundle.sensitivity, ["scope"])) fail("sensitive snapshot contains unexpected sensitivity metadata");
@@ -662,7 +862,7 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
     ...commentsTextItems(comments),
     ...candidates.flatMap((candidate) => issueTextItems(candidate, `candidate ${candidate.number}`)),
   ]);
-  if (bundle.status === "complete" && inspection.sensitive) fail("fresh evidence now contains secret-like content");
+  if (bundle.status === "complete" && inspection.sensitive) fail("fresh evidence now contains sensitive content");
   return createMetadataEnvelope(bundle);
 }
 
@@ -677,7 +877,7 @@ function normalizeReason(value) {
   if (normalized !== value) fail("relationship reason must already be normalized");
   const length = [...normalized].length;
   if (length < 20 || length > 240 || !/[\p{L}\p{N}]/u.test(normalized)) fail("relationship reason must contain 20 to 240 safe visible characters");
-  if (/[<>@#]/u.test(normalized) || /https?:\/\//iu.test(normalized) || containsSecret(normalized)) fail("relationship reason contains unsafe syntax");
+  if (/[<>@#]/u.test(normalized) || /https?:\/\//iu.test(normalized) || containsSensitiveContent(normalized)) fail("relationship reason contains unsafe syntax");
   return normalized;
 }
 
@@ -712,7 +912,7 @@ function validateDecision(decision, expectedKind) {
       [...decision.quote].length > 600 ||
       decision.quote.split("\n").length > 6 ||
       /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u2028\u2029]/u.test(decision.quote) ||
-      containsSecret(decision.quote)
+      containsSensitiveContent(decision.quote)
     ) fail("repository_evidence quote must be 20 to 600 safe characters across at most 6 lines");
     return decision;
   }
@@ -869,7 +1069,7 @@ function inspectRenderedText(value, bundle) {
   if (/(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/.test(value)) violations.push("user or bot mention is not allowed");
   if (/\[[^\]]+\]\s*(?:\([^)]*\)|\[[^\]]*\])/.test(value) || /<(?:a\s|[^>]+\shref\s*=)/i.test(value)) violations.push("agent-authored link syntax is not allowed");
   if (/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?[ \t]*#\d+\b/i.test(normalized)) violations.push("closing keyword is not allowed");
-  if (containsSecret(value)) violations.push("secret-like content is not allowed");
+  if (containsSensitiveContent(value)) violations.push("sensitive content is not allowed");
   for (const match of value.matchAll(/https?:\/\/[^\s<>"'`]+/gi)) {
     const raw = match[0].replace(/[),.;!?]+$/, "");
     let url;
