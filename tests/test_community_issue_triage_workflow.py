@@ -886,6 +886,13 @@ def test_candidate_summary_distinguishes_skipped_search_from_zero_results():
         ("https://github.com/sirkirby/unifi-mcp/issues/999", False, "outside trusted evidence"),
         ("https://github.com/sirkirby/unifi-mcp/pull/999", False, "pull-request reference"),
         ("https://github.com/sirkirby/unifi-mcp/%70ull/999/files", False, "pull-request reference"),
+        (f"sirkirby/unifi-mcp/issues/{TARGET_NUMBER}", True, ""),
+        ("sirkirby/unifi-mcp/issues/999", False, "outside trusted evidence"),
+        ("sirkirby/unifi-mcp/pull/999", False, "pull-request reference"),
+        (f"other/repository/issues/{TARGET_NUMBER}", False, "cross-repository reference"),
+        (f"sirkirby/unifi-mcp#{TARGET_NUMBER}", True, ""),
+        ("sirkirby/unifi-mcp#999", False, "outside trusted evidence"),
+        (f"other/repository#{TARGET_NUMBER}", False, "cross-repository reference"),
     ),
 )
 def test_repository_evidence_numbered_urls_obey_reference_contract(url: str, accepted: bool, message: str):

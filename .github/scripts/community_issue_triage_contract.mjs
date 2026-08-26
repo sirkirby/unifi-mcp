@@ -847,6 +847,24 @@ function inspectRenderedText(value, bundle) {
   for (const match of normalized.matchAll(/(^|[^A-Za-z0-9_])#\s*(\d+)\b/g)) referenced.add(Number(match[2]));
   for (const match of normalized.matchAll(/\bissue\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi)) referenced.add(Number(match[1]));
   for (const match of normalized.matchAll(/\bGH\s*-\s*(\d+)\b/gi)) referenced.add(Number(match[1]));
+  for (const match of normalized.matchAll(/(^|[^A-Za-z0-9_.-])([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)#(\d+)\b/gi)) {
+    const repository = `${match[2]}/${match[3]}`.toLowerCase();
+    if (repository !== bundle.repository.toLowerCase()) {
+      violations.push("cross-repository reference is not allowed");
+    } else {
+      referenced.add(Number(match[4]));
+    }
+  }
+  for (const match of normalized.matchAll(/(^|[^A-Za-z0-9_.-])([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/(issues|pull)\/(\d+)\b/gi)) {
+    const repository = `${match[2]}/${match[3]}`.toLowerCase();
+    if (repository !== bundle.repository.toLowerCase()) {
+      violations.push("cross-repository reference is not allowed");
+    } else if (match[4].toLowerCase() === "pull") {
+      violations.push("numbered pull-request reference is not allowed");
+    } else {
+      referenced.add(Number(match[5]));
+    }
+  }
   if (/\b(?:PRs?|pull[\s-]+requests?)\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*\d+\b/i.test(normalized)) violations.push("numbered pull-request reference is not allowed");
   if (/(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/.test(value)) violations.push("user or bot mention is not allowed");
   if (/\[[^\]]+\]\s*(?:\([^)]*\)|\[[^\]]*\])/.test(value) || /<(?:a\s|[^>]+\shref\s*=)/i.test(value)) violations.push("agent-authored link syntax is not allowed");
