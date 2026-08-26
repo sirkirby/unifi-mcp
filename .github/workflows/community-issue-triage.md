@@ -511,7 +511,7 @@ safe-outputs:
             const secondMatch =
               firstMatch < 0
                 ? -1
-                : repositoryContent.indexOf(proposal.quote, firstMatch + proposal.quote.length);
+                : repositoryContent.indexOf(proposal.quote, firstMatch + 1);
             if (firstMatch < 0 || secondMatch >= 0) {
               throw new Error("repository evidence quote must have one unique contiguous match");
             }

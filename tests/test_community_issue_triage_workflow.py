@@ -522,6 +522,23 @@ def test_validator_rejects_invalid_or_unverifiable_repository_quotes(tmp_path: P
     assert duplicate.returncode == 1
     assert "one unique contiguous match" in duplicate.stderr
 
+    repeated_line = "Repeated repository guidance line."
+    overlapping_quote = "\n".join([repeated_line] * 6)
+    overlapping = _run_validator(
+        tmp_path,
+        {
+            "items": [
+                {
+                    "type": "add_comment",
+                    "body": _repository_evidence_comment(valid_path, overlapping_quote),
+                }
+            ]
+        },
+        repository_files={valid_path: "\n".join([repeated_line] * 7)},
+    )
+    assert overlapping.returncode == 1
+    assert "one unique contiguous match" in overlapping.stderr
+
 
 def test_validator_rejects_secret_like_verified_repository_quote(tmp_path: Path):
     quote = "The example token=abcdefghijklmnop123456 must never be published."
