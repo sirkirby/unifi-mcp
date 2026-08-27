@@ -17,6 +17,21 @@ TEST_SHA = "1" * 40
 ACTION_DIGEST = "a" * 64
 ARTIFACT_ID = "4321"
 TARGET_NUMBER = 228
+INITIAL_MARKER = "<!-- unifi-mcp-community-triage:v3:initial -->"
+CONTINUATION_MARKER = "<!-- unifi-mcp-community-triage:v3:continuation -->"
+LABEL_ALLOWLIST = [
+    "bug",
+    "enhancement",
+    "documentation",
+    "dependencies",
+    "docker",
+    "github-actions",
+    "api",
+    "network",
+    "protect",
+    "access",
+    "needs-info",
+]
 
 
 def _canonical(value: object) -> str:
@@ -52,6 +67,12 @@ def _comment(comment_id: int, body: str = "Additional sanitized context.") -> di
         "updated_at": "2026-05-10T15:10:00Z",
         "user": {"login": "community-member"},
     }
+
+
+def _bot_comment(comment_id: int, marker: str) -> dict[str, object]:
+    comment = _comment(comment_id, f"Trusted automation response.\n\n{marker}")
+    comment["user"] = {"login": "github-actions[bot]", "type": "Bot"}
+    return comment
 
 
 def _candidate_node(issue: dict[str, object]) -> dict[str, object]:
@@ -142,6 +163,17 @@ try {
       targetNumber: payload.targetNumber || 228,
       runId: payload.runId || "98765",
       workflowSha: payload.workflowSha || "1111111111111111111111111111111111111111",
+      runKind: payload.runKind || "initial",
+      trigger: payload.trigger || {
+        event_name: "issues",
+        action: "opened",
+        actor: "community-member",
+        issue_number: payload.targetNumber || 228,
+        comment_id: null,
+      },
+      expectedInitialMarkerCount: payload.expectedInitialMarkerCount ?? 0,
+      expectedContinuationCount: payload.expectedContinuationCount ?? 0,
+      expectedNeedsInfoPresent: payload.expectedNeedsInfoPresent ?? false,
       randomBytes,
     });
     result = {bundle: JSON.parse(created.json), digest: created.digest, calls};
@@ -170,6 +202,8 @@ try {
     result = {summary: contract.summarizeCandidateResearch(payload.bundle)};
   } else if (payload.op === "canonical") {
     result = {json: contract.canonicalStringify(payload.value), digest: contract.canonicalDigest(payload.value)};
+  } else if (payload.op === "eligibility") {
+    result = contract.evaluateIntakeEligibility(payload.args);
   } else {
     throw new Error("unknown harness operation");
   }
@@ -200,11 +234,37 @@ def _create_snapshot(payload: dict[str, object] | None = None) -> dict[str, obje
     return json.loads(result.stdout)
 
 
+def _continuation_bundle(*, continuation_count: int = 0) -> dict[str, object]:
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}, {"name": "network"}]
+    comments = [_bot_comment(1, INITIAL_MARKER)]
+    comments.extend(_bot_comment(index + 2, CONTINUATION_MARKER) for index in range(continuation_count))
+    payload = _snapshot_payload(comments=comments)
+    payload["issues"][str(TARGET_NUMBER)] = issue
+    payload.update(
+        {
+            "runKind": "continuation",
+            "trigger": {
+                "event_name": "issues",
+                "action": "edited",
+                "actor": "community-member",
+                "issue_number": TARGET_NUMBER,
+                "comment_id": None,
+            },
+            "expectedInitialMarkerCount": 1,
+            "expectedContinuationCount": continuation_count,
+            "expectedNeedsInfoPresent": True,
+        }
+    )
+    return _create_snapshot(payload)["bundle"]
+
+
 def _normal_proposal(
     bundle: dict[str, object],
     *,
     decision: dict[str, object] | None = None,
     verdicts: list[str] | None = None,
+    label_intents: list[dict[str, object]] | None = None,
 ) -> str:
     candidates = bundle["candidates"]
     assert isinstance(candidates, list)
@@ -220,12 +280,23 @@ def _normal_proposal(
     ]
     return _canonical(
         {
-            "version": 2,
+            "version": 3,
             "kind": "triage_proposal",
             "target_receipt": bundle["target"]["receipt"],
             "comments_receipt": bundle["comments"]["receipt"],
+            "run_kind": bundle["run_kind"],
+            "trigger_receipt": bundle["trigger_receipt"],
+            "label_intents": label_intents
+            if label_intents is not None
+            else [
+                {
+                    "name": "network",
+                    "rationale": "The report concerns the UniFi Network application family.",
+                    "confidence": "HIGH",
+                }
+            ],
             "relationships": relationships,
-            "decision": decision or {"kind": "noop"},
+            "decision": decision or {"kind": "ready_for_maintainer"},
         }
     )
 
@@ -243,25 +314,291 @@ def _compiled_safe_output_config(compiled: str) -> dict[str, object]:
     return json.loads(json.loads(encoded))
 
 
-def test_source_remains_inert_staged_and_human_reviewed():
+def _eligibility(
+    *,
+    event_name: str = "issues",
+    action: str = "opened",
+    actor: str = "community-member",
+    issue: dict[str, object] | None = None,
+    event_comment: dict[str, object] | None = None,
+    comments: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    issue_payload = issue or _issue(TARGET_NUMBER)
+    issue_payload.setdefault("pull_request", None)
+    issue_payload.setdefault("user", {"login": "community-member", "type": "User"})
+    result = _run_contract(
+        {
+            "op": "eligibility",
+            "args": {
+                "eventName": event_name,
+                "action": action,
+                "actor": actor,
+                "issue": issue_payload,
+                "eventComment": event_comment,
+                "comments": comments or [],
+            },
+        }
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
+
+
+def test_source_and_compiled_workflow_activate_only_the_bounded_issue_events():
     source = WORKFLOW.read_text()
     compiled = LOCK.read_text()
     source_triggers = re.search(r"\non:\n(?P<body>.*?)\npermissions:\n", source, re.DOTALL)
     compiled_triggers = re.search(r"\non:\n(?P<body>.*?)\npermissions:\s*\{\}\n", compiled, re.DOTALL)
     assert source_triggers is not None and compiled_triggers is not None
     for trigger_block in (source_triggers.group("body"), compiled_triggers.group("body")):
-        assert "workflow_dispatch:" in trigger_block
-        assert "issues:" not in trigger_block
+        assert "issues:" in trigger_block
+        assert "opened" in trigger_block and "edited" in trigger_block
+        assert "issue_comment:" in trigger_block and "created" in trigger_block
+        assert "workflow_dispatch:" not in trigger_block
         assert "pull_request" not in trigger_block
         assert "schedule:" not in trigger_block
 
+    for setting in (
+        "roles: all",
+        "reaction: none",
+        "status-comment: false",
+        "stale-check: full",
+        "max-ai-credits: 75",
+        "max-daily-ai-credits: 150",
+        "max-runs-per-window: 1",
+        "window: 180",
+        "events: [issues, issue_comment]",
+        "ignored-roles: []",
+        "group: community-issue-triage-${{ github.event.issue.number }}",
+        "cancel-in-progress: false",
+        "queue: single",
+    ):
+        assert setting in source
+
+
+def test_safe_output_surface_is_bounded_to_triage_labels_comments_and_needs_info_removal():
+    source = WORKFLOW.read_text()
+    compiled = LOCK.read_text()
+
     config = _compiled_safe_output_config(compiled)
-    assert config["add_comment"]["staged"] is True
-    assert config["add_labels"]["allowed"] == ["needs-info"]
+    assert config["add_comment"]["staged"] is False
+    assert config["add_comment"]["target"] == "triggering"
+    assert config["add_comment"]["max"] == 1
+    assert config["add_labels"]["allowed"] == LABEL_ALLOWLIST
+    assert config["add_labels"]["target"] == "triggering"
+    assert config["add_labels"]["max"] == 4
     assert config["add_labels"]["issue_intent"] is True
     assert config["add_labels"]["staged"] is False
-    assert "triage-reviewed" in config["add_labels"]["blocked"]
+    assert {"triage-reviewed", "duplicate", "security"}.issubset(config["add_labels"]["blocked"])
+    assert config["remove_labels"] == {
+        "allowed": ["needs-info"],
+        "max": 1,
+        "required_labels": ["needs-info"],
+        "staged": False,
+        "target": "triggering",
+    }
+    assert "staged: false" in source
     assert "threat-detection: false" in source
+    assert "report-failure-as-issue: false" in source
+    assert "report-failed-jobs: false" in source
+    assert "report-incomplete: false" in source
+
+
+def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
+    source = WORKFLOW.read_text()
+    gate = source.split("  intake_gate:\n", 1)[1].split("\n  trusted_issue_snapshot:\n", 1)[0]
+    assert "permissions:\n      contents: read\n      issues: read\n" in gate
+    assert "evaluateIntakeEligibility" in gate
+    assert 'core.setOutput("eligible"' in gate
+    assert 'core.setOutput("run_kind"' in gate
+    assert 'core.setOutput("trigger_json"' in gate
+    assert "github.rest.issues.get" in gate
+    assert "github.paginate" in gate or "listComments" in gate
+
+    snapshot = source.split("  trusted_issue_snapshot:\n", 1)[1].split("\n  agent:\n", 1)[0]
+    assert "needs: [intake_gate]" in snapshot
+    assert "if: ${{ needs.intake_gate.outputs.eligible == 'true' }}" in snapshot
+    assert "${{ needs.intake_gate.outputs.run_kind }}" in snapshot
+    assert "${{ needs.intake_gate.outputs.trigger_json }}" in snapshot
+    assert "${{ needs.intake_gate.outputs.target_number }}" in snapshot
+
+    for job_name, boundary in (("agent", "conclusion"), ("safe_outputs", "pre-agent-steps:")):
+        job_tail = source.split(f"  {job_name}:\n", 1)[1]
+        if boundary == "pre-agent-steps:":
+            job = job_tail.split("\npre-agent-steps:", 1)[0]
+        else:
+            job = job_tail.split(f"\n  {boundary}:\n", 1)[0]
+        assert "intake_gate" in job
+        assert "needs.intake_gate.outputs.eligible == 'true'" in job
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "edited",
+        "closed",
+        "pull_request",
+        "wrong_actor",
+        "bot_author",
+        "already_processed",
+    ],
+)
+def test_initial_intake_gate_accepts_only_a_fresh_open_reporter_issue(mutation: str):
+    issue = _issue(TARGET_NUMBER)
+    action = "opened"
+    actor = "community-member"
+    comments: list[dict[str, object]] = []
+    if mutation == "edited":
+        action = "edited"
+    elif mutation == "closed":
+        issue["state"] = "closed"
+    elif mutation == "pull_request":
+        issue["pull_request"] = {"url": "https://api.github.test/pulls/228"}
+    elif mutation == "wrong_actor":
+        actor = "someone-else"
+    elif mutation == "bot_author":
+        issue["user"] = {"login": "dependency-bot", "type": "Bot"}
+        actor = "dependency-bot"
+    elif mutation == "already_processed":
+        comments = [_bot_comment(1, INITIAL_MARKER)]
+    result = _eligibility(action=action, actor=actor, issue=issue, comments=comments)
+    assert result["eligible"] is False
+    assert result["reason"]
+
+
+def test_intake_gate_rejects_malformed_issue_data_instead_of_defaulting_eligible():
+    result = _run_contract(
+        {
+            "op": "eligibility",
+            "args": {
+                "eventName": "issues",
+                "action": "opened",
+                "actor": "community-member",
+                "issue": {"number": TARGET_NUMBER},
+                "eventComment": None,
+                "comments": [],
+            },
+        }
+    )
+    assert result.returncode != 0
+
+
+def test_initial_intake_gate_emits_the_trusted_binding_metadata():
+    result = _eligibility()
+    assert result == {
+        "eligible": True,
+        "reason": "eligible initial intake",
+        "target_number": TARGET_NUMBER,
+        "run_kind": "initial",
+        "trigger": {
+            "event_name": "issues",
+            "action": "opened",
+            "actor": "community-member",
+            "issue_number": TARGET_NUMBER,
+            "comment_id": None,
+        },
+        "initial_marker_count": 0,
+        "continuation_count": 0,
+        "needs_info_present": False,
+    }
+
+
+@pytest.mark.parametrize("event_name", ["issues", "issue_comment"])
+def test_continuation_gate_accepts_reporter_updates_only_with_trusted_state(event_name: str):
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}, {"name": "network"}]
+    comments = [_bot_comment(1, INITIAL_MARKER)]
+    event_comment = None
+    action = "edited"
+    if event_name == "issue_comment":
+        action = "created"
+        event_comment = _comment(2)
+        comments.append(event_comment)
+    result = _eligibility(
+        event_name=event_name,
+        action=action,
+        issue=issue,
+        event_comment=event_comment,
+        comments=comments,
+    )
+    assert result["eligible"] is True
+    assert result["run_kind"] == "continuation"
+    assert result["trigger"]["comment_id"] == (2 if event_name == "issue_comment" else None)
+    assert result["initial_marker_count"] == 1
+    assert result["continuation_count"] == 0
+    assert result["needs_info_present"] is True
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing_needs_info",
+        "missing_initial_marker",
+        "wrong_actor",
+        "comment_author_mismatch",
+        "comment_id_mismatch",
+        "continuation_cap",
+        "closed",
+        "pull_request",
+    ],
+)
+def test_continuation_gate_fails_closed_when_any_trusted_precondition_is_missing(mutation: str):
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    comments = [_bot_comment(1, INITIAL_MARKER)]
+    actor = "community-member"
+    event_comment = _comment(2)
+    comments.append(event_comment)
+    if mutation == "missing_needs_info":
+        issue["labels"] = []
+    elif mutation == "missing_initial_marker":
+        comments = [event_comment]
+    elif mutation == "wrong_actor":
+        actor = "someone-else"
+    elif mutation == "comment_author_mismatch":
+        event_comment["user"] = {"login": "someone-else", "type": "User"}
+    elif mutation == "comment_id_mismatch":
+        event_comment = {**event_comment, "id": 99}
+    elif mutation == "continuation_cap":
+        comments.extend([_bot_comment(3, CONTINUATION_MARKER), _bot_comment(4, CONTINUATION_MARKER)])
+    elif mutation == "closed":
+        issue["state"] = "closed"
+    elif mutation == "pull_request":
+        issue["pull_request"] = {"url": "https://api.github.test/pulls/228"}
+    result = _eligibility(
+        event_name="issue_comment",
+        action="created",
+        actor=actor,
+        issue=issue,
+        event_comment=event_comment,
+        comments=comments,
+    )
+    assert result["eligible"] is False
+
+
+def test_reporter_marker_copies_never_satisfy_or_consume_trusted_marker_limits():
+    reporter_initial = _comment(1, INITIAL_MARKER)
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    rejected = _eligibility(
+        action="edited",
+        issue=issue,
+        comments=[reporter_initial],
+    )
+    assert rejected["eligible"] is False
+    assert rejected["initial_marker_count"] == 0
+
+    accepted = _eligibility(
+        action="edited",
+        issue=issue,
+        comments=[
+            _bot_comment(2, INITIAL_MARKER),
+            _comment(3, CONTINUATION_MARKER),
+            _bot_comment(4, CONTINUATION_MARKER),
+        ],
+    )
+    assert accepted["eligible"] is True
+    assert accepted["initial_marker_count"] == 1
+    assert accepted["continuation_count"] == 1
 
 
 def test_source_removes_agent_github_tools_and_uses_sealed_credential_free_source():
@@ -401,8 +738,49 @@ def test_snapshot_requires_target_and_comment_receipts_even_with_zero_candidates
     assert bundle["candidates"] == []
     assert bundle["target"]["receipt"]
     assert bundle["comments"]["receipt"]
-    accepted = _render(bundle, _normal_proposal(bundle), "noop")
+    accepted = _render(bundle, _normal_proposal(bundle), "ready_for_maintainer")
     assert accepted.returncode == 0, accepted.stderr
+
+
+def test_snapshot_v3_binds_initial_trigger_identity_and_gate_state_with_an_independent_receipt():
+    bundle = _create_snapshot()["bundle"]
+    assert bundle["version"] == 3
+    assert bundle["strategy"] == "bounded-title-lexical-v3"
+    assert bundle["run_kind"] == "initial"
+    assert bundle["trigger"] == {
+        "event_name": "issues",
+        "action": "opened",
+        "actor": "community-member",
+        "issue_number": TARGET_NUMBER,
+        "comment_id": None,
+    }
+    assert bundle["initial_marker_count"] == 0
+    assert bundle["continuation_count"] == 0
+    assert bundle["needs_info_present"] is False
+    assert re.fullmatch(r"[a-f0-9]{32}", bundle["trigger_receipt"])
+    receipts = {
+        bundle["trigger_receipt"],
+        bundle["target"]["receipt"],
+        bundle["comments"]["receipt"],
+    }
+    assert len(receipts) == 3
+
+
+def test_snapshot_v3_binds_continuation_marker_and_needs_info_state():
+    bundle = _continuation_bundle()
+    assert bundle["run_kind"] == "continuation"
+    assert bundle["initial_marker_count"] == 1
+    assert bundle["continuation_count"] == 0
+    assert bundle["needs_info_present"] is True
+
+
+@pytest.mark.parametrize("field", ["run_kind", "trigger_receipt"])
+def test_v3_proposal_rejects_tampered_trigger_binding(field: str):
+    bundle = _create_snapshot()["bundle"]
+    proposal = json.loads(_normal_proposal(bundle))
+    proposal[field] = "continuation" if field == "run_kind" else "f" * 32
+    result = _render(bundle, _canonical(proposal))
+    assert result.returncode != 0
 
 
 @pytest.mark.parametrize("label_failure", ["missing", "renamed"])
@@ -894,15 +1272,36 @@ def test_artifact_provenance_rejects_each_mismatch(field: str, value: object, me
     assert message in result.stderr
 
 
-def test_artifact_provenance_rejects_tampered_bundle_content_and_receipts():
+def test_artifact_provenance_rejects_tampered_content_receipts_trigger_and_gate_state():
     created = _create_snapshot()
-    for mutation in ("content", "receipt"):
+    for mutation in (
+        "content",
+        "receipt",
+        "trigger",
+        "trigger_receipt",
+        "run_kind",
+        "initial_marker_count",
+        "continuation_count",
+        "needs_info_present",
+    ):
         args = _provenance_args(created)
         args["bundle"] = copy.deepcopy(created["bundle"])
         if mutation == "content":
             args["bundle"]["target"]["data"]["body"] = "tampered"
-        else:
+        elif mutation == "receipt":
             args["bundle"]["comments"]["receipt"] = args["bundle"]["target"]["receipt"]
+        elif mutation == "trigger":
+            args["bundle"]["trigger"]["actor"] = "someone-else"
+        elif mutation == "trigger_receipt":
+            args["bundle"]["trigger_receipt"] = "f" * 32
+        elif mutation == "run_kind":
+            args["bundle"]["run_kind"] = "continuation"
+        elif mutation == "initial_marker_count":
+            args["bundle"]["initial_marker_count"] = 1
+        elif mutation == "continuation_count":
+            args["bundle"]["continuation_count"] = 1
+        else:
+            args["bundle"]["needs_info_present"] = True
         result = _run_contract({"op": "provenance", "args": args})
         assert result.returncode != 0
 
@@ -940,7 +1339,7 @@ def test_freshness_fails_on_edits_additions_candidate_drift_or_delete(drift: str
 
 def test_normal_proposal_binds_receipts_and_requires_zero_candidate_array():
     bundle = _create_snapshot()["bundle"]
-    accepted = _render(bundle, _normal_proposal(bundle), "noop")
+    accepted = _render(bundle, _normal_proposal(bundle), "ready_for_maintainer")
     assert accepted.returncode == 0, accepted.stderr
     parsed = json.loads(accepted.stdout)
     assert parsed["relationships"] == []
@@ -1031,13 +1430,16 @@ def test_noop_rejects_every_free_form_reason(reason: str):
     assert "noop decision contains unexpected fields" in result.stderr
 
 
-def test_reasonless_noop_uses_fixed_trusted_prose_and_structured_relationships():
+def test_ready_for_maintainer_uses_fixed_trusted_prose_and_structured_relationships():
     bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
-    result = _render(bundle, _normal_proposal(bundle, verdicts=["NOT_RELATED"]), "noop")
+    result = _render(bundle, _normal_proposal(bundle, verdicts=["NOT_RELATED"]), "ready_for_maintainer")
     assert result.returncode == 0, result.stderr
     rendered = json.loads(result.stdout)["rendered"]
-    assert rendered.startswith("No public triage action is proposed by this first pass.")
+    assert rendered.startswith(
+        "Thanks for the report. This automated first pass found enough information for maintainer review."
+    )
     assert "Candidate #225: NOT_RELATED" in rendered
+    assert rendered.endswith(INITIAL_MARKER)
 
 
 def test_noncanonical_json_and_unexpected_fields_are_rejected():
@@ -1054,18 +1456,285 @@ def test_noncanonical_json_and_unexpected_fields_are_rejected():
     assert "unexpected fields" in result.stderr
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    ["empty", "too_many", "duplicate", "disallowed", "bad_rationale", "bad_confidence", "extra_field"],
+)
+def test_v3_label_intents_require_one_to_four_unique_exact_allowlisted_entries(mutation: str):
+    bundle = _create_snapshot()["bundle"]
+    labels = [
+        {
+            "name": "network",
+            "rationale": "The report concerns the UniFi Network application family.",
+            "confidence": "HIGH",
+        }
+    ]
+    if mutation == "empty":
+        labels = []
+    elif mutation == "too_many":
+        labels = [
+            {
+                "name": name,
+                "rationale": f"The report provides enough evidence to suggest the {name} label.",
+                "confidence": "MEDIUM",
+            }
+            for name in LABEL_ALLOWLIST[:5]
+        ]
+    elif mutation == "duplicate":
+        labels.append(copy.deepcopy(labels[0]))
+    elif mutation == "disallowed":
+        labels[0]["name"] = "triage-reviewed"
+    elif mutation == "bad_rationale":
+        labels[0]["rationale"] = "short"
+    elif mutation == "bad_confidence":
+        labels[0]["confidence"] = "CERTAIN"
+    else:
+        labels[0]["agent_target"] = TARGET_NUMBER
+    result = _render(bundle, _normal_proposal(bundle, label_intents=labels))
+    assert result.returncode != 0
+
+
+def test_initial_ready_for_maintainer_rewrites_only_fixed_trusted_acknowledgement_and_marker():
+    bundle = _create_snapshot()["bundle"]
+    labels = [
+        {
+            "name": "network",
+            "rationale": "The report concerns the UniFi Network application family.",
+            "confidence": "HIGH",
+        },
+        {
+            "name": "bug",
+            "rationale": "The reported behavior differs from the documented expected result.",
+            "confidence": "MEDIUM",
+        },
+    ]
+    proposal = _normal_proposal(bundle, label_intents=labels)
+    output = {
+        "items": [
+            {"type": "add_comment", "body": proposal},
+            {"type": "add_labels", "labels": labels},
+        ]
+    }
+    result = _run_contract({"op": "rewrite", "bundle": bundle, "output": output})
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)["output"]["items"]
+    comment = next(item for item in rewritten if item["type"] == "add_comment")
+    assert comment["body"] == (
+        "Thanks for the report. This automated first pass found enough information for maintainer review.\n\n"
+        "This is an automated first-pass triage; a maintainer will make final decisions.\n\n"
+        f"{INITIAL_MARKER}"
+    )
+    label_item = next(item for item in rewritten if item["type"] == "add_labels")
+    assert label_item["item_number"] == TARGET_NUMBER
+    assert label_item["labels"] == [intent | {"suggest": True} for intent in labels]
+    assert "triage_proposal" not in _canonical(rewritten)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "name", "rationale", "confidence", "order"])
+def test_v3_label_intents_must_exactly_match_the_add_labels_safe_output(mutation: str):
+    bundle = _create_snapshot()["bundle"]
+    labels = [
+        {
+            "name": "network",
+            "rationale": "The report concerns the UniFi Network application family.",
+            "confidence": "HIGH",
+        },
+        {
+            "name": "bug",
+            "rationale": "The reported behavior differs from the documented expected result.",
+            "confidence": "MEDIUM",
+        },
+    ]
+    output_labels = copy.deepcopy(labels)
+    if mutation == "missing":
+        output_labels.pop()
+    elif mutation == "extra":
+        output_labels.append(
+            {
+                "name": "api",
+                "rationale": "The report directly concerns a documented API behavior.",
+                "confidence": "LOW",
+            }
+        )
+    elif mutation == "name":
+        output_labels[0]["name"] = "protect"
+    elif mutation == "rationale":
+        output_labels[0]["rationale"] = "A different but otherwise sufficiently long rationale was supplied."
+    elif mutation == "confidence":
+        output_labels[0]["confidence"] = "LOW"
+    else:
+        output_labels.reverse()
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": _normal_proposal(bundle, label_intents=labels)},
+                    {"type": "add_labels", "labels": output_labels},
+                ]
+            },
+        }
+    )
+    assert result.returncode != 0
+
+
+@pytest.mark.parametrize("decision_kind", ["missing_information", "repository_evidence"])
+def test_initial_actionable_comments_receive_the_trusted_initial_marker(decision_kind: str):
+    bundle = _create_snapshot()["bundle"]
+    repository_files: dict[str, str] = {}
+    if decision_kind == "missing_information":
+        decision = {"kind": decision_kind, "fields": ["controller_version"]}
+    else:
+        quote = "Read-only mode prevents mutation tools from changing controller state."
+        decision = {"kind": decision_kind, "path": "docs/permissions.md", "quote": quote}
+        repository_files["docs/permissions.md"] = quote
+    labels = [
+        {
+            "name": "needs-info" if decision_kind == "missing_information" else "documentation",
+            "rationale": "The report requires a bounded actionable first-pass response.",
+            "confidence": "HIGH",
+        }
+    ]
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "repositoryFiles": repository_files,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": _normal_proposal(bundle, decision=decision, label_intents=labels)},
+                    {"type": "add_labels", "labels": labels},
+                ]
+            },
+        }
+    )
+    assert result.returncode == 0, result.stderr
+    comment = next(item for item in json.loads(result.stdout)["output"]["items"] if item["type"] == "add_comment")
+    assert comment["body"].endswith(INITIAL_MARKER)
+
+
+def test_incomplete_continuation_requires_zero_label_intents_and_adds_only_the_trusted_marker_comment():
+    bundle = _continuation_bundle(continuation_count=1)
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "missing_information", "fields": ["sanitized_error"]},
+        label_intents=[],
+    )
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {"items": [{"type": "add_comment", "body": proposal}]},
+        }
+    )
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)["output"]["items"]
+    assert [item["type"] for item in rewritten] == ["add_comment"]
+    assert rewritten[0]["body"].endswith(CONTINUATION_MARKER)
+    assert INITIAL_MARKER not in rewritten[0]["body"]
+
+
+@pytest.mark.parametrize("mutation", ["label_intent", "wrong_decision", "add_labels", "noop"])
+def test_incomplete_continuation_rejects_any_non_comment_or_non_missing_information_shape(mutation: str):
+    bundle = _continuation_bundle()
+    labels: list[dict[str, object]] = []
+    decision: dict[str, object] = {"kind": "missing_information", "fields": ["transport"]}
+    items: list[dict[str, object]]
+    if mutation == "label_intent":
+        labels = [
+            {
+                "name": "network",
+                "rationale": "The report concerns the UniFi Network application family.",
+                "confidence": "HIGH",
+            }
+        ]
+    elif mutation == "wrong_decision":
+        decision = {"kind": "ready_for_maintainer"}
+    proposal = _normal_proposal(bundle, decision=decision, label_intents=labels)
+    items = [{"type": "add_comment", "body": proposal}]
+    if mutation == "add_labels":
+        output_labels = [
+            {
+                "name": "network",
+                "rationale": "The report concerns the UniFi Network application family.",
+                "confidence": "HIGH",
+            }
+        ]
+        items.append({"type": "add_labels", "labels": output_labels})
+    elif mutation == "noop":
+        items = [{"type": "noop", "message": proposal}]
+    result = _run_contract({"op": "rewrite", "bundle": bundle, "output": {"items": items}})
+    assert result.returncode != 0
+
+
+def test_complete_continuation_exclusively_removes_needs_info_without_a_comment():
+    bundle = _continuation_bundle()
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {"items": [{"type": "remove_labels", "labels": ["needs-info"]}]},
+        }
+    )
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)
+    assert rewritten["carrier"] == "removal"
+    assert rewritten["proposal"] is None
+    assert rewritten["output"]["items"] == [
+        {"type": "remove_labels", "labels": ["needs-info"], "item_number": TARGET_NUMBER}
+    ]
+
+
+@pytest.mark.parametrize(
+    "items",
+    [
+        [{"type": "remove_labels", "labels": []}],
+        [{"type": "remove_labels", "labels": ["network"]}],
+        [{"type": "remove_labels", "labels": ["needs-info", "network"]}],
+        [{"type": "remove_labels", "labels": ["needs-info"], "item_number": TARGET_NUMBER}],
+        [
+            {"type": "remove_labels", "labels": ["needs-info"]},
+            {"type": "add_comment", "body": "not allowed"},
+        ],
+    ],
+)
+def test_complete_continuation_rejects_every_nonexclusive_or_agent_controlled_removal_shape(
+    items: list[dict[str, object]],
+):
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": _continuation_bundle(),
+            "output": {"items": items},
+        }
+    )
+    assert result.returncode != 0
+
+
+def test_initial_bundle_can_never_use_the_continuation_label_removal_path():
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": _create_snapshot()["bundle"],
+            "output": {"items": [{"type": "remove_labels", "labels": ["needs-info"]}]},
+        }
+    )
+    assert result.returncode != 0
+
+
 def test_sensitive_variants_require_only_receipts_available_at_the_stop_scope():
     target_payload = _snapshot_payload()
     target_payload["issues"][str(TARGET_NUMBER)]["body"] = "token=abcdefghijklmnop123456"
     target = _create_snapshot(target_payload)["bundle"]
-    target_carrier = _canonical({"version": 2, "kind": "sensitive_stop", "target_receipt": target["target"]["receipt"]})
+    target_carrier = _canonical({"version": 3, "kind": "sensitive_stop", "target_receipt": target["target"]["receipt"]})
     assert _render(target, target_carrier).returncode == 0
 
     comments_payload = _snapshot_payload(comments=[_comment(1, "token=abcdefghijklmnop123456")])
     comments = _create_snapshot(comments_payload)["bundle"]
     comments_carrier = _canonical(
         {
-            "version": 2,
+            "version": 3,
             "kind": "sensitive_stop",
             "target_receipt": comments["target"]["receipt"],
             "comments_receipt": comments["comments"]["receipt"],
@@ -1080,21 +1749,28 @@ def test_sensitive_variants_require_only_receipts_available_at_the_stop_scope():
     assert "comment binding mismatch" in rejected.stderr
 
 
-def test_designated_carrier_precedence_is_label_then_comment_then_noop():
+def test_designated_carrier_precedence_is_comment_then_label_then_noop():
     label = {"type": "add_labels", "labels": [{"name": "needs-info", "rationale": "{}", "confidence": "HIGH"}]}
     comment = {"type": "add_comment", "body": "{}"}
     noop = {"type": "noop", "message": "{}"}
-    assert json.loads(_run_contract({"op": "select", "items": [comment, label]}).stdout)["type"] == "label"
+    assert json.loads(_run_contract({"op": "select", "items": [comment, label]}).stdout)["type"] == "comment"
     assert json.loads(_run_contract({"op": "select", "items": [noop, comment]}).stdout)["type"] == "comment"
     assert json.loads(_run_contract({"op": "select", "items": [noop]}).stdout)["type"] == "noop"
 
 
 def test_high_level_rewrite_rejects_mixed_noop_action_and_agent_target_controls():
     bundle = _create_snapshot()["bundle"]
-    proposal = _normal_proposal(bundle, decision={"kind": "needs_info", "fields": ["controller_version"]})
+    labels = [
+        {
+            "name": "network",
+            "rationale": "The report concerns the UniFi Network application family.",
+            "confidence": "HIGH",
+        }
+    ]
+    proposal = _normal_proposal(bundle, label_intents=labels)
     mixed = {
         "items": [
-            {"type": "add_labels", "labels": [{"name": "needs-info", "rationale": proposal, "confidence": "HIGH"}]},
+            {"type": "add_comment", "body": proposal},
             {"type": "noop", "message": proposal},
         ]
     }
@@ -1104,11 +1780,12 @@ def test_high_level_rewrite_rejects_mixed_noop_action_and_agent_target_controls(
 
     controlled = {
         "items": [
+            {"type": "add_comment", "body": proposal},
             {
                 "type": "add_labels",
                 "item_number": 999,
-                "labels": [{"name": "needs-info", "rationale": proposal, "confidence": "HIGH", "suggest": False}],
-            }
+                "labels": labels,
+            },
         ]
     }
     result = _run_contract({"op": "rewrite", "bundle": bundle, "output": controlled})
@@ -1117,79 +1794,86 @@ def test_high_level_rewrite_rejects_mixed_noop_action_and_agent_target_controls(
 
 def test_trusted_rewrite_injects_label_target_and_suggestion_and_removes_raw_json():
     bundle = _create_snapshot()["bundle"]
-    proposal = _normal_proposal(bundle, decision={"kind": "needs_info", "fields": ["controller_version"]})
+    labels = [
+        {
+            "name": "needs-info",
+            "rationale": "The report is missing the exact UniFi application version.",
+            "confidence": "HIGH",
+        }
+    ]
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "missing_information", "fields": ["controller_version"]},
+        label_intents=labels,
+    )
     output = {
         "items": [
-            {
-                "type": "add_labels",
-                "labels": [{"name": "needs-info", "rationale": proposal, "confidence": "HIGH"}],
-            }
+            {"type": "add_comment", "body": proposal},
+            {"type": "add_labels", "labels": labels},
         ]
     }
     result = _run_contract({"op": "rewrite", "bundle": bundle, "output": output})
     assert result.returncode == 0, result.stderr
     rewritten = json.loads(result.stdout)
-    item = rewritten["output"]["items"][0]
+    item = next(item for item in rewritten["output"]["items"] if item["type"] == "add_labels")
     assert item["item_number"] == TARGET_NUMBER
     assert item["labels"][0]["suggest"] is True
-    assert "UniFi application family and version" in item["labels"][0]["rationale"]
     assert "triage_proposal" not in _canonical(rewritten["output"])
     assert "&lt;" not in rewritten["summary"]
 
 
-def test_label_and_missing_information_comment_require_identical_fields():
+def test_missing_information_initial_decision_requires_the_needs_info_label():
     bundle = _create_snapshot()["bundle"]
-    proposal = _normal_proposal(
-        bundle,
-        decision={"kind": "needs_info", "fields": ["controller_version", "transport"]},
-    )
 
-    def output(fields: list[str]) -> dict[str, object]:
-        action = _canonical(
+    def output(label_name: str) -> dict[str, object]:
+        labels = [
             {
-                "version": 2,
-                "kind": "triage_action",
-                "decision": {"kind": "missing_information", "fields": fields},
+                "name": label_name,
+                "rationale": "The report is missing the exact UniFi application version.",
+                "confidence": "HIGH",
             }
+        ]
+        proposal = _normal_proposal(
+            bundle,
+            decision={"kind": "missing_information", "fields": ["controller_version"]},
+            label_intents=labels,
         )
         return {
             "items": [
-                {
-                    "type": "add_labels",
-                    "labels": [{"name": "needs-info", "rationale": proposal, "confidence": "HIGH"}],
-                },
-                {"type": "add_comment", "body": action},
+                {"type": "add_comment", "body": proposal},
+                {"type": "add_labels", "labels": labels},
             ]
         }
 
-    accepted = _run_contract(
-        {
-            "op": "rewrite",
-            "bundle": bundle,
-            "output": output(["controller_version", "transport"]),
-        }
-    )
+    accepted = _run_contract({"op": "rewrite", "bundle": bundle, "output": output("needs-info")})
     assert accepted.returncode == 0, accepted.stderr
 
-    rejected = _run_contract(
-        {
-            "op": "rewrite",
-            "bundle": bundle,
-            "output": output(["controller_version"]),
-        }
-    )
+    rejected = _run_contract({"op": "rewrite", "bundle": bundle, "output": output("network")})
     assert rejected.returncode != 0
-    assert "must exactly match" in rejected.stderr
+    assert "requires needs-info" in rejected.stderr
 
 
 def test_repository_evidence_is_verified_from_one_unique_immutable_file_match():
     bundle = _create_snapshot()["bundle"]
     quote = "Read-only mode prevents mutation tools from changing controller state."
+    labels = [
+        {
+            "name": "documentation",
+            "rationale": "The repository documentation directly addresses the reported behavior.",
+            "confidence": "HIGH",
+        }
+    ]
     proposal = _normal_proposal(
         bundle,
         decision={"kind": "repository_evidence", "path": "docs/permissions.md", "quote": quote},
+        label_intents=labels,
     )
-    output = {"items": [{"type": "add_comment", "body": proposal}]}
+    output = {
+        "items": [
+            {"type": "add_comment", "body": proposal},
+            {"type": "add_labels", "labels": labels},
+        ]
+    }
     payload = {
         "op": "rewrite",
         "bundle": bundle,
@@ -1244,15 +1928,28 @@ def test_candidate_summary_distinguishes_skipped_search_from_zero_results():
 def test_repository_evidence_numbered_urls_obey_reference_contract(url: str, accepted: bool, message: str):
     bundle = _create_snapshot()["bundle"]
     quote = f"The repository documentation points maintainers to {url} for additional context."
+    labels = [
+        {
+            "name": "documentation",
+            "rationale": "The repository documentation directly addresses the reported behavior.",
+            "confidence": "HIGH",
+        }
+    ]
     proposal = _normal_proposal(
         bundle,
         decision={"kind": "repository_evidence", "path": "docs/permissions.md", "quote": quote},
+        label_intents=labels,
     )
     result = _run_contract(
         {
             "op": "rewrite",
             "bundle": bundle,
-            "output": {"items": [{"type": "add_comment", "body": proposal}]},
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": proposal},
+                    {"type": "add_labels", "labels": labels},
+                ]
+            },
             "repositoryFiles": {"docs/permissions.md": quote},
         }
     )
@@ -1297,14 +1994,19 @@ def test_summary_html_escapes_all_trusted_rendered_assessments():
     proposal["relationships"][0]["reason"] = (
         "The evidence says A & B overlap enough to require maintainer confirmation."
     )
-    output = {"items": [{"type": "noop", "message": _canonical(proposal)}]}
+    output = {
+        "items": [
+            {"type": "add_comment", "body": _canonical(proposal)},
+            {"type": "add_labels", "labels": proposal["label_intents"]},
+        ]
+    }
     result = _run_contract({"op": "rewrite", "bundle": bundle, "output": output})
     assert result.returncode == 0, result.stderr
     rewritten = json.loads(result.stdout)
     assert rewritten["summary"]["relationships"][0]["reason_html"] == (
         "The evidence says A &amp; B overlap enough to require maintainer confirmation."
     )
-    assert "triage_proposal" not in rewritten["output"]["items"][0]["message"]
+    assert "triage_proposal" not in rewritten["output"]["items"][0]["body"]
 
 
 def test_prompt_imports_only_the_artifact_and_requires_the_structured_contract():
@@ -1316,7 +2018,9 @@ def test_prompt_imports_only_the_artifact_and_requires_the_structured_contract()
         "candidate_receipt",
         "target_receipt",
         "comments_receipt",
-        "Before calling any safe-output tool, choose exactly one final disposition",
+        "trigger_receipt",
+        "label_intents",
+        "The artifact's `run_kind` selects exactly one contract",
     ):
         assert fragment in source
     compiled = LOCK.read_text()
@@ -1326,11 +2030,13 @@ def test_prompt_imports_only_the_artifact_and_requires_the_structured_contract()
 def test_prompt_requires_minimal_safe_output_argument_shapes_and_reference_preflight():
     source = " ".join(WORKFLOW.read_text().split())
     assert "`add_comment` with `{body}`" in source
-    assert re.search(r"`add_labels` with `\{labels: \[\{name, rationale, confidence\}\]\}`", source)
-    assert "`noop` with `{message}`" in source
+    assert "`add_labels` with `{labels:[{name,rationale,confidence}]}`" in source
+    assert "`remove_labels` with `{labels}`" in source
+    assert "Emit exactly one `noop`. Its `message` must be canonical JSON" in source
     assert "Do not write relationship or search-disposition prose outside this array" in source
-    assert 'exact decision `{"kind":"noop"}`' in source
-    assert '`{"kind":"noop","reason":' not in source
+    assert '`{"kind":"ready_for_maintainer"}`' in source
+    assert "Complete continuation" in source
+    assert '`{"labels":["needs-info"]}`' in source
     assert "Do not add a footer or any visible prose to the JSON proposal" in source
 
 
@@ -1342,7 +2048,17 @@ def test_contract_cli_accepts_only_file_paths_for_proposal_validation(tmp_path: 
     output_path = tmp_path / "trusted.json"
     summary_path = tmp_path / "summary.html"
     bundle_path.write_text(json.dumps(bundle))
-    input_path.write_text(json.dumps({"items": [{"type": "noop", "message": proposal}]}))
+    parsed = json.loads(proposal)
+    input_path.write_text(
+        json.dumps(
+            {
+                "items": [
+                    {"type": "add_comment", "body": proposal},
+                    {"type": "add_labels", "labels": parsed["label_intents"]},
+                ]
+            }
+        )
+    )
     result = subprocess.run(
         [
             "node",

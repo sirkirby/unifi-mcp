@@ -12,8 +12,8 @@ import {readFile, writeFile} from "node:fs/promises";
 import {isIP} from "node:net";
 import {pathToFileURL} from "node:url";
 
-export const CONTRACT_VERSION = 2;
-export const SNAPSHOT_STRATEGY = "bounded-title-lexical-v2";
+export const CONTRACT_VERSION = 3;
+export const SNAPSHOT_STRATEGY = "bounded-title-lexical-v3";
 export const MAX_TARGET_COMMENTS = 100;
 export const MAX_CANDIDATES = 5;
 export const MAX_SCANNED_ISSUES = 1000;
@@ -25,6 +25,14 @@ const SHA_PATTERN = /^[a-f0-9]{40}$/i;
 const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
 const POSITIVE_INTEGER_STRING_PATTERN = /^[1-9][0-9]*$/;
 const VERDICTS = new Set(["RELATED", "NOT_RELATED", "UNCERTAIN"]);
+const RUN_KINDS = new Set(["initial", "continuation"]);
+const INITIAL_MARKER = "<!-- unifi-mcp-community-triage:v3:initial -->";
+const CONTINUATION_MARKER = "<!-- unifi-mcp-community-triage:v3:continuation -->";
+const ACTIONS_BOT = "github-actions[bot]";
+const ALLOWED_LABELS = new Set([
+  "bug", "enhancement", "documentation", "dependencies", "docker",
+  "github-actions", "api", "network", "protect", "access", "needs-info",
+]);
 const SENSITIVE_SCOPES = new Set(["target", "comments", "candidate"]);
 const SENSITIVE_CONFIGURATION_BLOB_KEYS = new Set([
   "openvpn_configuration",
@@ -378,6 +386,76 @@ export function normalizeComment(raw) {
   };
 }
 
+function normalizeTrigger(trigger) {
+  if (!exactKeys(trigger, ["event_name", "action", "actor", "issue_number", "comment_id"])) {
+    fail("trigger identity contains unexpected fields");
+  }
+  if (trigger.event_name !== "issues" && trigger.event_name !== "issue_comment") fail("trigger event is invalid");
+  if (typeof trigger.action !== "string" || typeof trigger.actor !== "string" || trigger.actor === "") fail("trigger action or actor is invalid");
+  assertSafePositiveInteger(trigger.issue_number, "trigger issue number");
+  if (trigger.comment_id !== null) assertSafePositiveInteger(trigger.comment_id, "trigger comment id");
+  return trigger;
+}
+
+/** Fail-closed deterministic eligibility for automatic community intake. */
+export function evaluateIntakeEligibility({eventName, action, actor, issue, eventComment = null, comments = []}) {
+  const target = normalizeIssue(issue);
+  if (!Array.isArray(comments) || comments.length > MAX_TARGET_COMMENTS) fail("eligibility comments exceed the trusted bound");
+  const normalizedComments = comments.map(normalizeComment).sort((left, right) => left.id - right.id);
+  const triggerComment = eventComment === null ? null : normalizeComment(eventComment);
+  const initialMarkerCount = normalizedComments.filter(
+    (comment) => comment.author === ACTIONS_BOT && comment.body.includes(INITIAL_MARKER),
+  ).length;
+  const continuationCount = normalizedComments.filter(
+    (comment) => comment.author === ACTIONS_BOT && comment.body.includes(CONTINUATION_MARKER),
+  ).length;
+  const needsInfoPresent = target.labels.includes("needs-info");
+  const trigger = normalizeTrigger({
+    event_name: eventName,
+    action,
+    actor,
+    issue_number: target.number,
+    comment_id: triggerComment?.id ?? null,
+  });
+  const base = {
+    eligible: false,
+    reason: "event is not eligible",
+    target_number: target.number,
+    run_kind: null,
+    trigger,
+    initial_marker_count: initialMarkerCount,
+    continuation_count: continuationCount,
+    needs_info_present: needsInfoPresent,
+  };
+  if (issue?.pull_request) return {...base, reason: "target identifies a pull request"};
+  if (target.state !== "open") return {...base, reason: "target issue is not open"};
+  if (typeof target.author !== "string" || target.author === "" || issue?.user?.type === "Bot") {
+    return {...base, reason: "target author is not an eligible human reporter"};
+  }
+  if (actor !== target.author) return {...base, reason: "trigger actor is not the issue author"};
+  if (eventName === "issues" && action === "opened") {
+    if (triggerComment !== null) return {...base, reason: "initial issue event cannot bind a comment"};
+    if (initialMarkerCount !== 0) return {...base, reason: "trusted initial triage marker already exists"};
+    return {...base, eligible: true, reason: "eligible initial intake", run_kind: "initial"};
+  }
+  const continuationEvent = eventName === "issues" && action === "edited";
+  const commentEvent = eventName === "issue_comment" && action === "created";
+  if (!continuationEvent && !commentEvent) return base;
+  if (commentEvent) {
+    if (triggerComment === null || triggerComment.author !== actor) return {...base, reason: "triggering comment identity mismatch"};
+    const collected = normalizedComments.find((comment) => comment.id === triggerComment.id);
+    if (!collected || canonicalDigest(collected) !== canonicalDigest(triggerComment)) {
+      return {...base, reason: "triggering comment is not bound to the trusted collection"};
+    }
+  } else if (triggerComment !== null) {
+    return {...base, reason: "edited issue event cannot bind a comment"};
+  }
+  if (!needsInfoPresent) return {...base, reason: "continuation requires needs-info"};
+  if (initialMarkerCount < 1) return {...base, reason: "continuation requires a trusted initial marker"};
+  if (continuationCount >= 2) return {...base, reason: "continuation limit reached"};
+  return {...base, eligible: true, reason: "eligible continuation", run_kind: "continuation"};
+}
+
 function canonicalize(value, seen) {
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number") {
@@ -559,7 +637,11 @@ function inspectEvidence(textItems) {
   return {totalBytes, sensitive};
 }
 
-function baseBundle({repository, runId, workflowSha, targetNumber, targetReceipt, targetDigest}) {
+function baseBundle({
+  repository, runId, workflowSha, targetNumber, targetReceipt, targetDigest,
+  runKind, trigger, triggerReceipt, initialMarkerCount, continuationCount,
+  needsInfoPresent,
+}) {
   return {
     version: CONTRACT_VERSION,
     status: "complete",
@@ -568,6 +650,12 @@ function baseBundle({repository, runId, workflowSha, targetNumber, targetReceipt
     run_id: runId,
     workflow_sha: workflowSha,
     target_number: targetNumber,
+    run_kind: runKind,
+    trigger,
+    trigger_receipt: triggerReceipt,
+    initial_marker_count: initialMarkerCount,
+    continuation_count: continuationCount,
+    needs_info_present: needsInfoPresent,
     scanned: 0,
     scan_truncated: false,
     search_performed: false,
@@ -601,7 +689,7 @@ function snapshotResult(bundle) {
 }
 
 /**
- * Build the trusted v2 artifact bundle using an injected Octokit-like client.
+ * Build the trusted v3 artifact bundle using an injected Octokit-like client.
  */
 export async function createTrustedSnapshot({
   github,
@@ -610,6 +698,11 @@ export async function createTrustedSnapshot({
   targetNumber,
   runId,
   workflowSha,
+  runKind,
+  trigger,
+  expectedInitialMarkerCount = 0,
+  expectedContinuationCount = 0,
+  expectedNeedsInfoPresent = false,
   randomBytes,
 }) {
   if (!github?.rest?.issues?.get || !github?.rest?.issues?.getLabel || !github?.rest?.issues?.listComments || !github?.graphql) {
@@ -620,6 +713,12 @@ export async function createTrustedSnapshot({
   const normalizedRunId = normalizeRunId(runId);
   const normalizedWorkflowSha = assertWorkflowSha(workflowSha);
   const nextReceipt = receiptFactory(randomBytes);
+  if (!RUN_KINDS.has(runKind)) fail("snapshot run kind is invalid");
+  const normalizedTrigger = normalizeTrigger(trigger);
+  if (normalizedTrigger.issue_number !== targetNumber) fail("snapshot trigger target binding mismatch");
+  if (!Number.isSafeInteger(expectedInitialMarkerCount) || expectedInitialMarkerCount < 0) fail("expected initial marker count is invalid");
+  if (!Number.isSafeInteger(expectedContinuationCount) || expectedContinuationCount < 0 || expectedContinuationCount > 1) fail("expected continuation count is invalid");
+  if (typeof expectedNeedsInfoPresent !== "boolean") fail("expected needs-info state is invalid");
 
   await requireNeedsInfoLabel(github, owner, repo);
   const target = await fetchIssue(github, owner, repo, targetNumber);
@@ -632,11 +731,34 @@ export async function createTrustedSnapshot({
     targetNumber,
     targetReceipt,
     targetDigest,
+    runKind,
+    trigger: normalizedTrigger,
+    triggerReceipt: nextReceipt(),
+    initialMarkerCount: expectedInitialMarkerCount,
+    continuationCount: expectedContinuationCount,
+    needsInfoPresent: expectedNeedsInfoPresent,
   });
   const targetInspection = inspectEvidence(issueTextItems(target, "target"));
   if (targetInspection.sensitive) return snapshotResult(sensitiveBundle(bundle, "target"));
 
   const comments = await fetchBoundedComments(github, owner, repo, targetNumber);
+  const eventComment = normalizedTrigger.comment_id === null
+    ? null
+    : comments.find((comment) => comment.id === normalizedTrigger.comment_id) || null;
+  const eligibility = evaluateIntakeEligibility({
+    eventName: normalizedTrigger.event_name,
+    action: normalizedTrigger.action,
+    actor: normalizedTrigger.actor,
+    issue: target,
+    eventComment,
+    comments,
+  });
+  if (
+    !eligibility.eligible || eligibility.run_kind !== runKind ||
+    eligibility.initial_marker_count !== expectedInitialMarkerCount ||
+    eligibility.continuation_count !== expectedContinuationCount ||
+    eligibility.needs_info_present !== expectedNeedsInfoPresent
+  ) fail("trusted intake eligibility changed before snapshot creation");
   const commentsReceipt = nextReceipt();
   const commentsDigest = canonicalDigest(comments);
   bundle.comments = {
@@ -704,7 +826,8 @@ function validateCandidateMetadata(candidate, targetNumber) {
 export function validateBundle(bundle) {
   if (!exactKeys(bundle, [
     "version", "status", "strategy", "repository", "run_id", "workflow_sha",
-    "target_number", "scanned", "scan_truncated", "search_performed", "search_reason",
+    "target_number", "run_kind", "trigger", "trigger_receipt", "initial_marker_count",
+    "continuation_count", "needs_info_present", "scanned", "scan_truncated", "search_performed", "search_reason",
     "content_persisted", "sensitivity", "target", "comments", "candidates",
   ])) fail("snapshot bundle contains unexpected fields or field order");
   if (bundle.version !== CONTRACT_VERSION || bundle.strategy !== SNAPSHOT_STRATEGY) fail("snapshot bundle version or strategy is invalid");
@@ -713,6 +836,15 @@ export function validateBundle(bundle) {
   normalizeRunId(bundle.run_id);
   assertWorkflowSha(bundle.workflow_sha);
   assertSafePositiveInteger(bundle.target_number, "snapshot target number");
+  if (!RUN_KINDS.has(bundle.run_kind)) fail("snapshot run kind is invalid");
+  normalizeTrigger(bundle.trigger);
+  if (bundle.trigger.issue_number !== bundle.target_number) fail("snapshot trigger target binding mismatch");
+  assertReceipt(bundle.trigger_receipt, "trigger receipt");
+  if (!Number.isSafeInteger(bundle.initial_marker_count) || bundle.initial_marker_count < 0) fail("snapshot initial marker count is invalid");
+  if (!Number.isSafeInteger(bundle.continuation_count) || bundle.continuation_count < 0 || bundle.continuation_count > 1) fail("snapshot continuation count is invalid");
+  if (typeof bundle.needs_info_present !== "boolean") fail("snapshot needs-info state is invalid");
+  if (bundle.run_kind === "initial" && bundle.initial_marker_count !== 0) fail("initial snapshot eligibility bindings are invalid");
+  if (bundle.run_kind === "continuation" && (bundle.initial_marker_count < 1 || !bundle.needs_info_present)) fail("continuation snapshot eligibility bindings are invalid");
   if (!Number.isSafeInteger(bundle.scanned) || bundle.scanned < 0 || bundle.scanned > MAX_SCANNED_ISSUES) fail("snapshot scanned count is invalid");
   if (typeof bundle.scan_truncated !== "boolean" || typeof bundle.search_performed !== "boolean") fail("snapshot scan flags are invalid");
   if (bundle.scan_truncated && bundle.scanned !== MAX_SCANNED_ISSUES) fail("truncated scan must bind the full 1,000-issue bound");
@@ -723,7 +855,8 @@ export function validateBundle(bundle) {
   assertDigest(bundle.target.digest, "target digest");
   if (!Array.isArray(bundle.candidates) || bundle.candidates.length > MAX_CANDIDATES) fail("snapshot candidate count is invalid");
   const numbers = new Set();
-  const receipts = new Set([bundle.target.receipt]);
+  const receipts = new Set([bundle.target.receipt, bundle.trigger_receipt]);
+  if (bundle.target.receipt === bundle.trigger_receipt) fail("snapshot receipts must be independent");
   for (const candidate of bundle.candidates) {
     validateCandidateMetadata(candidate, bundle.target_number);
     if (numbers.has(candidate.number)) fail("snapshot contains a duplicate candidate number");
@@ -783,6 +916,12 @@ export function createMetadataEnvelope(bundle) {
     run_id: bundle.run_id,
     workflow_sha: bundle.workflow_sha,
     target_number: bundle.target_number,
+    run_kind: bundle.run_kind,
+    trigger: bundle.trigger,
+    trigger_receipt: bundle.trigger_receipt,
+    initial_marker_count: bundle.initial_marker_count,
+    continuation_count: bundle.continuation_count,
+    needs_info_present: bundle.needs_info_present,
     scanned: bundle.scanned,
     scan_truncated: bundle.scan_truncated,
     search_performed: bundle.search_performed,
@@ -850,6 +989,23 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
   if (bundle.comments === null || comments.length !== bundle.comments.count || canonicalDigest(comments) !== bundle.comments.digest) {
     fail("target comments changed after the trusted snapshot");
   }
+  const eventComment = bundle.trigger.comment_id === null
+    ? null
+    : comments.find((comment) => comment.id === bundle.trigger.comment_id) || null;
+  const eligibility = evaluateIntakeEligibility({
+    eventName: bundle.trigger.event_name,
+    action: bundle.trigger.action,
+    actor: bundle.trigger.actor,
+    issue: target,
+    eventComment,
+    comments,
+  });
+  if (
+    !eligibility.eligible || eligibility.run_kind !== bundle.run_kind ||
+    eligibility.initial_marker_count !== bundle.initial_marker_count ||
+    eligibility.continuation_count !== bundle.continuation_count ||
+    eligibility.needs_info_present !== bundle.needs_info_present
+  ) fail("trusted intake eligibility changed after the snapshot");
   if (bundle.sensitivity?.scope === "comments") return createMetadataEnvelope(bundle);
 
   const candidates = [];
@@ -898,7 +1054,7 @@ function validateRelationships(value, bundle) {
 function validateDecision(decision, expectedKind) {
   if (!decision || typeof decision !== "object" || Array.isArray(decision) || typeof decision.kind !== "string") fail("proposal decision is invalid");
   if (expectedKind && decision.kind !== expectedKind) fail(`proposal carrier requires a ${expectedKind} decision`);
-  if (decision.kind === "needs_info" || decision.kind === "missing_information") {
+  if (decision.kind === "missing_information") {
     if (!exactKeys(decision, ["kind", "fields"])) fail(`${decision.kind} decision contains unexpected fields`);
     if (!Array.isArray(decision.fields) || decision.fields.length < 1 || decision.fields.length > 3 || new Set(decision.fields).size !== decision.fields.length || !decision.fields.every((field) => MISSING_INFORMATION_FIELDS.has(field))) {
       fail(`${decision.kind} decision requires 1 to 3 unique allowlisted fields`);
@@ -919,6 +1075,10 @@ function validateDecision(decision, expectedKind) {
     ) fail("repository_evidence quote must be 20 to 600 safe characters across at most 6 lines");
     return decision;
   }
+  if (decision.kind === "ready_for_maintainer") {
+    if (!exactKeys(decision, ["kind"])) fail("ready_for_maintainer decision contains unexpected fields");
+    return decision;
+  }
   if (decision.kind === "noop") {
     if (!exactKeys(decision, ["kind"])) fail("noop decision contains unexpected fields");
     return decision;
@@ -932,21 +1092,37 @@ function relationshipText(relationships) {
   );
 }
 
-function renderDecision(decision, relationships) {
+function renderDecision(decision, relationships, runKind = "initial") {
   let body;
-  if (decision.kind === "needs_info") {
-    body = `Required diagnostic information is missing: ${decision.fields.map((field) => MISSING_INFORMATION_TEXT.get(field)).join(" ")}`;
-  } else if (decision.kind === "missing_information") {
+  if (decision.kind === "missing_information") {
     body = "To make this report actionable, please provide:\n\n" + decision.fields.map((field) => `- ${MISSING_INFORMATION_TEXT.get(field)}`).join("\n");
   } else if (decision.kind === "repository_evidence") {
     body = `Repository evidence (${decision.path}):\n\n> ${decision.quote}`;
+  } else if (decision.kind === "ready_for_maintainer") {
+    body = "Thanks for the report. This automated first pass found enough information for maintainer review.";
   } else {
     body = "No public triage action is proposed by this first pass.";
   }
   const assessments = relationshipText(relationships);
   if (assessments.length > 0) body += `\n\n${assessments.join("\n")}`;
-  if (decision.kind === "missing_information" || decision.kind === "repository_evidence") body += `\n\n${COMMENT_FOOTER}`;
+  if (decision.kind === "missing_information" || decision.kind === "repository_evidence" || decision.kind === "ready_for_maintainer") {
+    body += `\n\n${COMMENT_FOOTER}`;
+    body += `\n\n${runKind === "continuation" ? CONTINUATION_MARKER : INITIAL_MARKER}`;
+  }
   return body;
+}
+
+function validateLabelIntents(value, allowEmpty = false) {
+  if (!Array.isArray(value) || value.length > 4 || (!allowEmpty && value.length < 1)) fail("label_intents must contain one to four labels");
+  const names = new Set();
+  return value.map((intent) => {
+    if (!exactKeys(intent, ["name", "rationale", "confidence"])) fail("label intent contains unexpected fields");
+    if (!ALLOWED_LABELS.has(intent.name) || names.has(intent.name)) fail("label intents must be unique and allowlisted");
+    names.add(intent.name);
+    const rationale = normalizeReason(intent.rationale);
+    if (!new Set(["LOW", "MEDIUM", "HIGH"]).has(intent.confidence)) fail("label intent confidence is invalid");
+    return {...intent, rationale};
+  });
 }
 
 function parseCanonicalCarrier(carrier) {
@@ -986,13 +1162,16 @@ export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind
   validateBundle(bundle);
   if (bundle.status === "sensitive_stop") return validateSensitiveProposal({carrier, bundle});
   const proposal = parseCanonicalCarrier(carrier);
-  if (!exactKeys(proposal, ["comments_receipt", "decision", "kind", "relationships", "target_receipt", "version"])) fail("normal proposal contains unexpected fields or field order");
+  if (!exactKeys(proposal, ["comments_receipt", "decision", "kind", "label_intents", "relationships", "run_kind", "target_receipt", "trigger_receipt", "version"])) fail("normal proposal contains unexpected fields or field order");
   if (proposal.version !== CONTRACT_VERSION || proposal.kind !== "triage_proposal") fail("normal proposal version or kind is invalid");
-  if (proposal.target_receipt !== bundle.target.receipt || proposal.comments_receipt !== bundle.comments.receipt) fail("normal proposal target or comment receipt binding mismatch");
+  if (proposal.target_receipt !== bundle.target.receipt || proposal.comments_receipt !== bundle.comments.receipt || proposal.trigger_receipt !== bundle.trigger_receipt || proposal.run_kind !== bundle.run_kind) fail("normal proposal intake binding mismatch");
   const relationships = validateRelationships(proposal.relationships, bundle);
   const decision = validateDecision(proposal.decision, expectedDecisionKind);
+  const labelIntents = validateLabelIntents(proposal.label_intents, bundle.run_kind === "continuation");
+  if (bundle.run_kind === "initial" && !new Set(["ready_for_maintainer", "missing_information", "repository_evidence"]).has(decision.kind)) fail("initial decision is not allowlisted");
+  if (bundle.run_kind === "continuation" && decision.kind !== "missing_information") fail("incomplete continuation must request missing information");
   rejectRelationshipSemanticsOutsideCarrier(decision, bundle);
-  return {proposal: {...proposal, relationships, decision}, rendered: renderDecision(decision, relationships), relationships};
+  return {proposal: {...proposal, label_intents: labelIntents, relationships, decision}, rendered: renderDecision(decision, relationships, bundle.run_kind), relationships};
 }
 
 /** Select the one designated carrier: label rationale, else comment body, else noop message. */
@@ -1007,11 +1186,6 @@ export function selectProposalCarrier(items) {
   const comments = normalized.filter(({type}) => type === "add_comment");
   const noops = normalized.filter(({type}) => type === "noop");
   if (labels.length > 1 || comments.length > 1 || noops.length > 1) fail("agent output contains duplicate proposal types");
-  if (labels.length > 0) {
-    const labelList = labels[0].item?.labels;
-    if (!Array.isArray(labelList) || labelList.length !== 1 || typeof labelList[0]?.rationale !== "string") fail("label proposal carrier is invalid");
-    return {type: "label", raw: labelList[0].rationale, expectedDecisionKind: "needs_info", itemIndex: labels[0].index, labelIndex: 0};
-  }
   if (comments.length > 0) {
     if (typeof comments[0].item?.body !== "string") fail("comment proposal carrier is invalid");
     return {type: "comment", raw: comments[0].item.body, expectedDecisionKind: null, itemIndex: comments[0].index};
@@ -1136,18 +1310,21 @@ async function renderRepositoryEvidence(decision, bundle, fetchRepositoryFile) {
   );
 }
 
-function appendRelationshipsAndFooter(body, decision, relationships) {
+function appendRelationshipsAndFooter(body, decision, relationships, runKind) {
   const assessments = relationshipText(relationships);
   let rendered = body;
   if (assessments.length > 0) rendered += `\n\n${assessments.join("\n")}`;
-  if (decision.kind === "missing_information" || decision.kind === "repository_evidence") rendered += `\n\n${COMMENT_FOOTER}`;
+  if (decision.kind === "missing_information" || decision.kind === "repository_evidence") {
+    rendered += `\n\n${COMMENT_FOOTER}`;
+    rendered += `\n\n${runKind === "continuation" ? CONTINUATION_MARKER : INITIAL_MARKER}`;
+  }
   return rendered;
 }
 
 async function renderVerifiedDecision(decision, relationships, bundle, fetchRepositoryFile) {
-  if (decision.kind !== "repository_evidence") return renderDecision(decision, relationships);
+  if (decision.kind !== "repository_evidence") return renderDecision(decision, relationships, bundle.run_kind);
   const evidence = await renderRepositoryEvidence(decision, bundle, fetchRepositoryFile);
-  return appendRelationshipsAndFooter(evidence, decision, relationships);
+  return appendRelationshipsAndFooter(evidence, decision, relationships, bundle.run_kind);
 }
 
 function rejectRelationshipSemanticsOutsideCarrier(decision, bundle) {
@@ -1167,14 +1344,6 @@ function rejectRelationshipSemanticsOutsideCarrier(decision, bundle) {
       )
     ) fail("relationship or search semantics are allowed only in the designated carrier");
   }
-}
-
-function parseSecondaryAction(raw, bundle) {
-  const action = parseCanonicalCarrier(raw);
-  if (!exactKeys(action, ["decision", "kind", "version"]) || action.version !== CONTRACT_VERSION || action.kind !== "triage_action") fail("secondary comment must be a canonical triage_action proposal");
-  const decision = validateDecision(action.decision);
-  rejectRelationshipSemanticsOutsideCarrier(decision, bundle);
-  return {...action, decision};
 }
 
 /**
@@ -1199,6 +1368,30 @@ export async function validateAndRewriteAgentOutput({
   if (!Array.isArray(output.items) || output.items.length < 1 || output.items.length > 2) fail("agent output must contain one or two bounded items");
 
   const trustedOutput = structuredClone(output);
+  if (
+    bundle.status === "complete" && bundle.run_kind === "continuation" &&
+    trustedOutput.items.length === 1 &&
+    String(trustedOutput.items[0]?.type || "").toLowerCase().replaceAll("-", "_") === "remove_labels"
+  ) {
+    const removal = trustedOutput.items[0];
+    removal.type = "remove_labels";
+    if (!exactKeys(removal, ["type", "labels"]) || !Array.isArray(removal.labels) || canonicalStringify(removal.labels) !== '["needs-info"]') {
+      fail("complete continuation must remove exactly needs-info");
+    }
+    if (!bundle.needs_info_present) fail("complete continuation requires a trusted needs-info label");
+    removal.item_number = targetNumber;
+    return {
+      output: trustedOutput,
+      carrier: "removal",
+      proposal: null,
+      summary: {
+        heading_html: "Trusted complete continuation",
+        rendered_html: ["The reporter supplied the requested information; needs-info will be removed."],
+        relationships: [],
+      },
+    };
+  }
+
   const counts = new Map();
   for (const item of trustedOutput.items) {
     if (!item || typeof item !== "object" || Array.isArray(item)) fail("safe-output item must be an object");
@@ -1212,24 +1405,32 @@ export async function validateAndRewriteAgentOutput({
       if (typeof item.body !== "string" || item.body === "") fail("add_comment requires a proposal body");
       if (Object.hasOwn(item, "temporary_id") && (typeof item.temporary_id !== "string" || !/^#?aw_[A-Za-z0-9_]{3,12}$/.test(item.temporary_id))) fail("add_comment temporary_id is invalid");
     } else if (type === "add_labels") {
-      if (!exactKeys(item, ["type", "labels"]) || !Array.isArray(item.labels) || item.labels.length !== 1) fail("add_labels requires exactly one label intent");
-      const label = item.labels[0];
-      if (!exactKeys(label, ["name", "rationale", "confidence"]) || label.name !== "needs-info" || typeof label.rationale !== "string" || !new Set(["LOW", "MEDIUM", "HIGH"]).has(label.confidence)) fail("label intent is outside the trusted needs-info contract");
+      if (!exactKeys(item, ["type", "labels"]) || !Array.isArray(item.labels) || item.labels.length < 1 || item.labels.length > 4) fail("add_labels requires one to four label intents");
+      item.labels = validateLabelIntents(item.labels);
     } else {
       if (!exactKeys(item, ["type", "message"]) || typeof item.message !== "string" || item.message === "") fail("noop requires exactly one proposal message");
     }
   }
   if ((counts.get("noop") || 0) > 0 && trustedOutput.items.length !== 1) fail("noop must be exclusive from action outputs");
   if (bundle.status === "sensitive_stop" && ((counts.get("noop") || 0) !== 1 || trustedOutput.items.length !== 1)) fail("sensitive evidence requires the exact exclusive noop shape");
+  if (bundle.status === "complete") {
+    if ((counts.get("noop") || 0) !== 0) fail("normal automatic triage must produce an actionable bounded result");
+    if ((counts.get("add_comment") || 0) !== 1) fail("normal automatic triage requires exactly one trusted comment carrier");
+    if (bundle.run_kind === "initial" && (counts.get("add_labels") || 0) !== 1) fail("initial triage requires one bounded label collection");
+    if (bundle.run_kind === "continuation" && (counts.get("add_labels") || 0) !== 0) fail("incomplete continuation must not add labels");
+  }
 
   const carrier = selectProposalCarrier(trustedOutput.items);
   const validated = validateAndRenderProposal({carrier: carrier.raw, bundle, expectedDecisionKind: carrier.expectedDecisionKind});
-  if (
-    bundle.status === "complete" &&
-    carrier.type === "comment" &&
-    validated.proposal.decision.kind !== "missing_information" &&
-    validated.proposal.decision.kind !== "repository_evidence"
-  ) fail("comment carrier decision is not allowlisted");
+  const labelsItem = trustedOutput.items.find((item) => item.type === "add_labels");
+  const outputLabelIntents = labelsItem?.labels || [];
+  if (canonicalStringify(outputLabelIntents) !== canonicalStringify(validated.proposal.label_intents || [])) fail("proposal label intents do not exactly match add_labels output");
+  if (bundle.status === "complete" && bundle.run_kind === "initial") {
+    if (validated.proposal.label_intents.length < 1) fail("initial proposal requires at least one label intent");
+    const hasNeedsInfo = validated.proposal.label_intents.some(({name}) => name === "needs-info");
+    if (validated.proposal.decision.kind === "missing_information" && !hasNeedsInfo) fail("missing-information initial triage requires needs-info");
+    if (validated.proposal.decision.kind === "ready_for_maintainer" && hasNeedsInfo) fail("ready initial triage cannot add needs-info");
+  }
   if (bundle.status === "complete") {
     validated.rendered = await renderVerifiedDecision(
       validated.proposal.decision,
@@ -1239,30 +1440,18 @@ export async function validateAndRewriteAgentOutput({
     );
   }
   const carrierItem = trustedOutput.items[carrier.itemIndex];
-  if (carrier.type === "label") carrierItem.labels[0].rationale = validated.rendered;
   if (carrier.type === "comment") carrierItem.body = validated.rendered;
   if (carrier.type === "noop") carrierItem.message = validated.rendered;
 
-  if (carrier.type === "label") {
-    carrierItem.item_number = targetNumber;
-    carrierItem.labels[0].suggest = true;
-    const comment = trustedOutput.items.find((item) => item.type === "add_comment");
-    if (comment) {
-      const secondary = parseSecondaryAction(comment.body, bundle);
-      if (secondary.decision.kind !== "missing_information" && secondary.decision.kind !== "repository_evidence") fail("secondary comment decision is not allowlisted");
-      if (
-        secondary.decision.kind === "missing_information" &&
-        JSON.stringify(secondary.decision.fields) !== JSON.stringify(validated.proposal.decision.fields)
-      ) fail("secondary missing-information fields must exactly match the needs-info label fields");
-      comment.body = await renderVerifiedDecision(secondary.decision, [], bundle, fetchRepositoryFile);
-      inspectRenderedText(comment.body, {...bundle, candidates: []});
-    }
+  if (labelsItem) {
+    labelsItem.item_number = targetNumber;
+    for (const label of labelsItem.labels) label.suggest = true;
   }
 
   const renderedStrings = [];
   for (const item of trustedOutput.items) {
     if (item.type === "add_comment") renderedStrings.push(item.body);
-    if (item.type === "add_labels") renderedStrings.push(item.labels[0].rationale);
+    if (item.type === "add_labels") renderedStrings.push(...item.labels.map(({rationale}) => rationale));
     if (item.type === "noop") renderedStrings.push(item.message);
   }
   for (const value of renderedStrings) inspectRenderedText(value, bundle);

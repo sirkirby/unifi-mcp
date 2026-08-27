@@ -1,19 +1,16 @@
 ---
-name: Community issue triage (inert Stage B readiness)
-description: Manually dispatched readiness workflow with trusted issue evidence, staged comments, and one human-reviewed needs-info suggestion.
+name: Community issue triage
+description: Automatically provide a bounded first-pass triage response on qualifying community issue intake.
 
 on:
-  workflow_dispatch:
-    inputs:
-      issue_number:
-        description: Existing issue number to evaluate
-        required: true
-        type: number
-      retention_verified:
-        description: Confirm repository Actions artifact and log retention is set to one day
-        required: true
-        default: false
-        type: boolean
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+  roles: all
+  reaction: none
+  status-comment: false
+  stale-check: full
 
 permissions:
   actions: read
@@ -33,17 +30,123 @@ network:
 
 timeout-minutes: 10
 concurrency:
-  group: community-issue-triage
+  group: community-issue-triage-${{ github.event.issue.number }}
   cancel-in-progress: false
   queue: single
 max-ai-credits: 75
-max-daily-ai-credits: -1
+max-daily-ai-credits: 150
+user-rate-limit:
+  max-runs-per-window: 1
+  window: 180
+  events: [issues, issue_comment]
+  ignored-roles: []
 
 jobs:
+  intake_gate:
+    name: Qualifying community intake gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      eligible: ${{ steps.gate.outputs.eligible }}
+      target_number: ${{ steps.gate.outputs.target_number }}
+      run_kind: ${{ steps.gate.outputs.run_kind }}
+      continuation_count: ${{ steps.gate.outputs.continuation_count }}
+      initial_marker_count: ${{ steps.gate.outputs.initial_marker_count }}
+      needs_info_present: ${{ steps.gate.outputs.needs_info_present }}
+      trigger_json: ${{ steps.gate.outputs.trigger_json }}
+    steps:
+      - name: Check out the immutable eligibility contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Evaluate the trusted intake event
+        id: gate
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_ACTOR: ${{ github.actor }}
+          TARGET_NUMBER: ${{ github.event.issue.number }}
+          EVENT_COMMENT_ID: ${{ github.event.comment.id }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const path = require("path");
+            const {pathToFileURL} = require("url");
+            const contract = await import(
+              pathToFileURL(
+                path.join(
+                  process.env.GITHUB_WORKSPACE,
+                  ".github/scripts/community_issue_triage_contract.mjs",
+                ),
+              ).href
+            );
+            const targetNumber = Number(process.env.TARGET_NUMBER);
+            if (!Number.isSafeInteger(targetNumber) || targetNumber < 1) {
+              throw new Error("qualifying intake target is invalid");
+            }
+            const issueResponse = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: targetNumber,
+            });
+            const request = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: targetNumber,
+              per_page: 100,
+              page: 1,
+            };
+            const commentsResponse = await github.rest.issues.listComments(request);
+            if (!Array.isArray(commentsResponse.data)) {
+              throw new Error("GitHub returned an invalid issue comment collection");
+            }
+            if (commentsResponse.data.length === 100) {
+              const overflow = await github.rest.issues.listComments({...request, page: 2});
+              if (!Array.isArray(overflow.data) || overflow.data.length > 0) {
+                throw new Error("issue comment collection exceeds the trusted bound");
+              }
+            }
+            let eventComment = null;
+            if (process.env.EVENT_NAME === "issue_comment") {
+              const commentId = Number(process.env.EVENT_COMMENT_ID);
+              if (!Number.isSafeInteger(commentId) || commentId < 1) {
+                throw new Error("triggering issue comment ID is invalid");
+              }
+              const commentResponse = await github.rest.issues.getComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: commentId,
+              });
+              eventComment = commentResponse.data;
+            }
+            const result = contract.evaluateIntakeEligibility({
+              eventName: process.env.EVENT_NAME,
+              action: process.env.EVENT_ACTION,
+              actor: process.env.EVENT_ACTOR,
+              issue: issueResponse.data,
+              eventComment,
+              comments: commentsResponse.data,
+            });
+            core.setOutput("eligible", String(result.eligible));
+            core.setOutput("target_number", String(result.target_number));
+            core.setOutput("run_kind", result.run_kind || "");
+            core.setOutput("continuation_count", String(result.continuation_count));
+            core.setOutput("initial_marker_count", String(result.initial_marker_count));
+            core.setOutput("needs_info_present", String(result.needs_info_present));
+            core.setOutput("trigger_json", contract.canonicalStringify(result.trigger));
+
   trusted_issue_snapshot:
     name: Trusted bounded issue snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs: [intake_gate]
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' }}
     permissions:
       contents: read
       issues: read
@@ -62,8 +165,12 @@ jobs:
         id: snapshot
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         env:
-          TARGET_NUMBER: ${{ inputs.issue_number }}
-          RETENTION_VERIFIED: ${{ inputs.retention_verified }}
+          TARGET_NUMBER: ${{ needs.intake_gate.outputs.target_number }}
+          RUN_KIND: ${{ needs.intake_gate.outputs.run_kind }}
+          TRIGGER_JSON: ${{ needs.intake_gate.outputs.trigger_json }}
+          INITIAL_MARKER_COUNT: ${{ needs.intake_gate.outputs.initial_marker_count }}
+          CONTINUATION_COUNT: ${{ needs.intake_gate.outputs.continuation_count }}
+          NEEDS_INFO_PRESENT: ${{ needs.intake_gate.outputs.needs_info_present }}
           WORKFLOW_SHA: ${{ github.sha }}
           WORKFLOW_RUN_ID: ${{ github.run_id }}
         with:
@@ -72,11 +179,6 @@ jobs:
             const fs = require("fs");
             const path = require("path");
             const {pathToFileURL} = require("url");
-
-            if (process.env.RETENTION_VERIFIED !== "true") {
-              core.setFailed("Repository Actions artifact and log retention must be verified at one day before calibration");
-              return;
-            }
 
             const issueNumber = Number(process.env.TARGET_NUMBER);
             if (!Number.isSafeInteger(issueNumber) || issueNumber < 1) {
@@ -96,6 +198,11 @@ jobs:
               targetNumber: issueNumber,
               runId: process.env.WORKFLOW_RUN_ID,
               workflowSha: process.env.WORKFLOW_SHA,
+              runKind: process.env.RUN_KIND,
+              trigger: JSON.parse(process.env.TRIGGER_JSON),
+              expectedInitialMarkerCount: Number(process.env.INITIAL_MARKER_COUNT),
+              expectedContinuationCount: Number(process.env.CONTINUATION_COUNT),
+              expectedNeedsInfoPresent: process.env.NEEDS_INFO_PRESENT === "true",
             });
             const outputDirectory = path.join(
               process.env.RUNNER_TEMP,
@@ -125,7 +232,8 @@ jobs:
           include-hidden-files: false
 
   agent:
-    needs: [trusted_issue_snapshot]
+    needs: [intake_gate, trusted_issue_snapshot]
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' }}
     permissions:
       actions: read
       contents: read
@@ -135,7 +243,8 @@ jobs:
     # trusted safe-output summary and Actions job status remain observable.
     if: ${{ false }}
   safe_outputs:
-    needs: [trusted_issue_snapshot]
+    needs: [intake_gate, trusted_issue_snapshot]
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' }}
     permissions:
       actions: read
       contents: read
@@ -159,7 +268,7 @@ jobs:
           EXPECTED_BUNDLE_DIGEST: ${{ needs.trusted_issue_snapshot.outputs.bundle_digest }}
           EXPECTED_RUN_ID: ${{ github.run_id }}
           EXPECTED_SHA: ${{ github.sha }}
-          EXPECTED_TARGET: ${{ inputs.issue_number }}
+          EXPECTED_TARGET: ${{ needs.intake_gate.outputs.target_number }}
           SNAPSHOT_PATH: ${{ runner.temp }}/trusted-intake-original/context.json
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -219,7 +328,7 @@ pre-agent-steps:
       EXPECTED_BUNDLE_DIGEST: ${{ needs.trusted_issue_snapshot.outputs.bundle_digest }}
       EXPECTED_RUN_ID: ${{ github.run_id }}
       EXPECTED_SHA: ${{ github.sha }}
-      EXPECTED_TARGET: ${{ inputs.issue_number }}
+      EXPECTED_TARGET: ${{ needs.intake_gate.outputs.target_number }}
       SNAPSHOT_PATH: ${{ runner.temp }}/trusted-intake-download/context.json
     with:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -362,7 +471,7 @@ safe-outputs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TARGET_NUMBER: ${{ inputs.issue_number }}
+        TARGET_NUMBER: ${{ needs.intake_gate.outputs.target_number }}
         SNAPSHOT_PATH: ${{ runner.temp }}/trusted-intake-original/context.json
       run: |
         node <<'NODE'
@@ -454,7 +563,7 @@ safe-outputs:
                   )
                   .join("\n");
           const summary =
-            "## Validated inert Stage B readiness proposal\n\n" +
+            "## Validated community issue triage\n\n" +
             "Target: issue #" +
             targetNumber +
             "\n\n### Trusted bounded candidate research\n\n" +
@@ -470,12 +579,12 @@ safe-outputs:
             result.summary.rendered_html
               .map((value) => "<pre>" + value + "</pre>")
               .join("\n\n") +
-            "\n\n> If safe-output processing succeeds, the needs-info label will be submitted as a maintainer-review suggestion; comments remain preview-only.\n";
+            "\n\n> Trusted validation completed before any bounded public output was applied.\n";
           fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
         };
         validate().catch((error) => {
           console.error(
-            "Blocked inert Stage B readiness output: " +
+            "Blocked community issue triage output: " +
               (error instanceof Error ? error.message : "unknown error"),
           );
           process.exit(1);
@@ -483,8 +592,18 @@ safe-outputs:
         NODE
   add-labels:
     staged: false
-    target: ${{ inputs.issue_number }}
+    target: triggering
     allowed:
+      - bug
+      - enhancement
+      - documentation
+      - dependencies
+      - docker
+      - github-actions
+      - api
+      - network
+      - protect
+      - access
       - needs-info
     blocked:
       - triage-reviewed
@@ -497,27 +616,32 @@ safe-outputs:
       - breaking change
       - compatibility-critical
       - "*[bot]"
-    max: 1
+    max: 4
     issues: true
     pull-requests: false
     issue-intent: true
   add-comment:
-    staged: true
-    target: ${{ inputs.issue_number }}
+    staged: false
+    target: triggering
     max: 1
     discussions: false
-    issues: false
+    issues: true
     pull-requests: false
     footer: true
+  remove-labels:
+    staged: false
+    target: triggering
+    allowed: [needs-info]
+    required-labels: [needs-info]
+    max: 1
 ---
 
 # Community issue triage
 
-Analyze issue `${{ inputs.issue_number }}` in `sirkirby/unifi-mcp` for the inert Stage B
-readiness workflow. Only a `needs-info` label may be proposed, and the trusted validator
-routes it to GitHub as a suggestion that requires maintainer review. An optional comment
-remains preview-only. Do not describe either output as a change already applied. This
-workflow does not activate automatic triage or public comments.
+Analyze issue `${{ needs.intake_gate.outputs.target_number }}` in `sirkirby/unifi-mcp` for an
+automatic, bounded first-pass response. Trusted code validates every public label, comment,
+and `needs-info` removal. A human maintainer retains all closure, priority, assignment,
+approval, merge, and final-disposition decisions.
 
 ## Hard boundaries
 
@@ -551,7 +675,7 @@ When the sensitive-intake stop path is activated:
    the sensitive material in any output.
 2. Do not propose `security` or any other label.
 3. Emit exactly one `noop`. Its `message` must be canonical JSON for the bundle scope:
-   target `{"kind":"sensitive_stop","target_receipt":"<target receipt>","version":2}`;
+   target `{"kind":"sensitive_stop","target_receipt":"<target receipt>","version":3}`;
    comments adds `"comments_receipt":"<comments receipt>"` in canonical key order;
    candidate adds the ordered `"candidate_receipts":["<receipt>"]` array as well.
    Do not emit the rendered stop sentence yourself; trusted code renders it.
@@ -568,7 +692,8 @@ that two issues are duplicates, and an empty candidate list is not proof that no
 Do not perform substitute network research. You have no GitHub MCP or GitHub credential.
 
 1. Read the target `data`, every target comment `data` entry, and every candidate `data`
-   entry from the artifact. Normal triage applies to open and closed issues.
+   entry from the artifact. The trusted gate has already limited normal triage to an open,
+   non-pull-request issue triggered by its human reporter.
 2. Trust deterministic issue-form metadata first. Preserve an existing `bug`,
    `enhancement`, or `documentation` label. Map an explicit component selection only
    when it has an exact allowed label: Network to `network`, Protect to `protect`,
@@ -580,7 +705,7 @@ Do not perform substitute network research. You have no GitHub MCP or GitHub cre
 3. Classify any unresolved issue type as bug, enhancement, documentation,
    question/support, or unclear. Do not force a component label when no exact label
    exists.
-4. Evaluate every candidate before choosing a label, comment, or `noop`. A candidate is
+4. Evaluate every candidate before choosing labels or a comment. A candidate is
    evidence, not a duplicate disposition. Never propose the `duplicate` label. Create one
    relationship object per candidate, in the exact artifact order, with the exact candidate
    number and receipt, one `RELATED`, `NOT_RELATED`, or `UNCERTAIN` verdict, and a specific
@@ -597,59 +722,52 @@ Do not perform substitute network research. You have no GitHub MCP or GitHub cre
 
 ## Safe-output contract
 
-Before calling any safe-output tool, choose exactly one final disposition:
+The artifact's `run_kind` selects exactly one contract:
 
-- **ACTION:** propose `add_labels`, `add_comment`, or both. Never also call `noop`.
-- **NO-ACTION:** propose exactly one `noop`. Never also call `add_labels` or `add_comment`.
+- **Initial:** call `add_labels` once with 1 to 4 unique allowlisted label intents and
+  `add_comment` once with the canonical v3 proposal as its body. Use only `bug`,
+  `enhancement`, `documentation`, `dependencies`, `docker`, `github-actions`, `api`,
+  `network`, `protect`, `access`, and `needs-info`. Never propose `needs-info` unless the
+  decision is `missing_information`; never propose it for `ready_for_maintainer`.
+- **Incomplete continuation:** call only `add_comment` with a `missing_information`
+  proposal. The proposal's `label_intents` must be empty because `needs-info` already
+  exists. Trusted code adds the continuation marker.
+- **Complete continuation:** call only `remove_labels` with `{"labels":["needs-info"]}`.
+  Do not emit a comment or add labels. Trusted code verifies the existing label and run
+  kind before applying the removal.
+- **Sensitive stop:** call only the canonical receipt-bound `noop` described above.
 
-A label-only ACTION is complete and does not need a `noop`. Every normal disposition
-must carry the target receipt, comments receipt, and the complete ordered relationship
-array, including an empty array when no candidate exists.
+For every normal initial or incomplete-continuation proposal:
 
-- Use only these argument shapes: `add_comment` with `{body}`; `add_labels` with
-  `{labels: [{name, rationale, confidence}]}`; and `noop` with `{message}`. Omit every
-  selector or control field, including `item_number`, `repo`, `target`, `comment_id`,
-  `reply_to_id`, `suggest`, `secrecy`, and `integrity`. The trusted validator injects the
-  dispatch target and `suggest: true` after validating the proposal.
-- Propose exactly one label at most: `needs-info`, and only when a specific objectively
-  required fact is missing. Do not propose type, component, completion, or priority labels
-  during this readiness workflow.
-- Never propose `triage-reviewed`. That completion label is reserved for a human
-  maintainer until tool-use evidence is tamper-resistant and success-correlated.
-- Use one designated canonical JSON carrier: the `needs-info` label rationale when a
-  label exists, otherwise the comment body, otherwise the `noop` message. Canonical JSON
-  has no extra whitespace and sorts object keys alphabetically at every level.
-- A normal carrier has this exact structure:
-  `{"comments_receipt":"<comments receipt>","decision":<decision>,"kind":"triage_proposal","relationships":[<relationship>],"target_receipt":"<target receipt>","version":2}`.
-  A relationship is
+- Use `add_comment` with `{body}`, `add_labels` with
+  `{labels:[{name,rationale,confidence}]}`, and `remove_labels` with `{labels}` only.
+  Omit selectors and control fields such as `item_number`, `repo`, `target`, `comment_id`,
+  `suggest`, `secrecy`, and `integrity`; trusted code injects the target and suggestion flag.
+- Each label rationale must be 20 to 240 normalized, specific, safe visible characters.
+  Confidence is exactly `LOW`, `MEDIUM`, or `HIGH`. The proposal `label_intents` must
+  exactly match the `add_labels` array, including order.
+- The comment body is canonical JSON with no extra whitespace and alphabetically sorted
+  keys at every level. Its exact top-level structure is:
+  `{"comments_receipt":"<comments receipt>","decision":<decision>,"kind":"triage_proposal","label_intents":[<label intent>],"relationships":[<relationship>],"run_kind":"initial","target_receipt":"<target receipt>","trigger_receipt":"<trigger receipt>","version":3}`.
+  Copy `run_kind` and all receipts exactly from the artifact.
+- A relationship is
   `{"candidate_number":123,"candidate_receipt":"<candidate receipt>","reason":"specific normalized reason","verdict":"RELATED"}`.
-  Use the same structure and key order for `NOT_RELATED` or `UNCERTAIN`.
-- For a label carrier, the decision is
-  `{"fields":["field_id"],"kind":"needs_info"}` with 1 to 3 unique IDs from
-  `package_version`, `transport`, `controller_version`, `sanitized_error`,
-  `reproduction_steps`, `expected_actual`, and `live_controller_evidence`. Keep
-  calibrated `LOW`, `MEDIUM`, or `HIGH` confidence outside the rationale JSON. Trusted
-  code renders the complete-sentence rationale.
-- For a comment-only carrier, the decision is either
-  `{"fields":["field_id"],"kind":"missing_information"}` or
+  Cover every candidate exactly once in artifact order; use `NOT_RELATED` or `UNCERTAIN`
+  when appropriate and an empty array when there are no candidates.
+- Initial decisions are exactly `{"kind":"ready_for_maintainer"}`,
+  `{"fields":["field_id"],"kind":"missing_information"}`, or
   `{"kind":"repository_evidence","path":"docs/example.md","quote":"exact contiguous quote"}`.
-  Repository evidence must come from the immutable local checkout and use
-  `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, or a Markdown file under `docs/`,
-  `apps/`, or `packages/`. Copy one unique exact quote of 20 to 600 safe characters;
-  supply no repository, ref, URL, or line numbers. The trusted validator independently
-  fetches it at `GITHUB_SHA` and rejects any mismatch.
-- If both label and comment are proposed, the label rationale is the sole carrier. The
-  comment body uses the decision-only canonical form
-  `{"decision":{"fields":["field_id"],"kind":"missing_information"},"kind":"triage_action","version":2}`
-  or the corresponding `repository_evidence` decision. It must not repeat receipts or
-  relationships. When using a missing-information comment with a label, use the same
-  field IDs in both decisions.
-- When neither a label nor a comment is warranted, use the exact decision
-  `{"kind":"noop"}` in the canonical carrier. Trusted code supplies the fixed visible
-  no-action sentence. Do not use `noop` when any other safe output is proposed.
-- If the artifact/repository read or safe-output tool fails and prevents a truthful
-  triage result, do not call any safe-output tool. Stop so the fail-closed validator
-  marks the run failed; do not substitute a label, comment, or `noop`.
+  Missing-information fields are 1 to 3 unique values from `package_version`, `transport`,
+  `controller_version`, `sanitized_error`, `reproduction_steps`, `expected_actual`, and
+  `live_controller_evidence`.
+- Repository evidence must come from the immutable local source and use `README.md`,
+  `CONTRIBUTING.md`, `SECURITY.md`, or a Markdown file under `docs/`, `apps/`, or
+  `packages/`. Copy one unique exact quote of 20 to 600 safe characters. Trusted code
+  independently fetches it at `GITHUB_SHA` and rejects any mismatch.
+- Never propose `triage-reviewed`, `duplicate`, `security`, closure, assignment, priority,
+  approval, merge, branch, or pull-request actions.
+- If artifact or repository evidence cannot support a truthful result, emit no safe output
+  and let validation fail closed. Do not substitute a public guess.
 - Never include hidden reasoning, raw event data, private plans, credentials, private
   controller information, or copied sensitive strings.
 - Use only raw absolute `https://github.com/sirkirby/unifi-mcp/...` URLs. Do not use
