@@ -457,6 +457,10 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     assert "listWorkflowRuns" in rate_gate
     assert "listWorkflowRunArtifacts" in rate_gate
     assert "180 * 60 * 1000" in rate_gate
+    assert 'Date.parse(current.data?.created_at || "")' in rate_gate
+    assert "observedAt - currentCreatedAt > windowMs" in rate_gate
+    assert "new Date(currentCreatedAt - windowMs)" in rate_gate
+    assert "new Date(Date.now() - 180 * 60 * 1000)" not in rate_gate
     assert 'core.setOutput("allowed", "false")' in rate_gate
     assert 'core.setOutput("allowed", "true")' in rate_gate
     assert "qualifying-intake-${{ github.run_id }}" in rate_gate

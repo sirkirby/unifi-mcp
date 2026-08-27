@@ -184,6 +184,9 @@ jobs:
             core.setOutput("allowed", "false");
             const currentRunId = Number(context.runId);
             const actor = process.env.GITHUB_ACTOR;
+            if (!Number.isSafeInteger(currentRunId) || currentRunId < 1) {
+              throw new Error("qualifying rate gate run ID is invalid");
+            }
             if (typeof actor !== "string" || actor === "") {
               throw new Error("qualifying rate gate actor is missing");
             }
@@ -196,7 +199,19 @@ jobs:
             if (!Number.isSafeInteger(workflowId) || workflowId < 1) {
               throw new Error("could not resolve the current workflow ID for the qualifying rate gate");
             }
-            const cutoff = new Date(Date.now() - 180 * 60 * 1000);
+            const windowMs = 180 * 60 * 1000;
+            const currentCreatedAt = Date.parse(current.data?.created_at || "");
+            const observedAt = Date.now();
+            if (!Number.isFinite(currentCreatedAt) || currentCreatedAt > observedAt + 5 * 60 * 1000) {
+              throw new Error("current workflow run timestamp is invalid");
+            }
+            if (observedAt - currentCreatedAt > windowMs) {
+              core.notice(`Qualifying intake run ${currentRunId} exceeded the trusted queue-age window.`);
+              return;
+            }
+            // Bind the window to event/run creation, not delayed runner execution. Two
+            // closely created events therefore cannot both pass after a long FIFO wait.
+            const cutoff = new Date(currentCreatedAt - windowMs);
             const request = {
               owner: context.repo.owner,
               repo: context.repo.repo,
