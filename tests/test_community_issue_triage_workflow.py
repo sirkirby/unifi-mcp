@@ -308,6 +308,17 @@ const github = {rest: {actions: {
     const artifacts = payload.repoArtifacts === "INVALID" ? {invalid: true} : (payload.repoArtifacts || []);
     return {data: {total_count: payload.repoArtifactTotal ?? artifacts.length, artifacts}};
   },
+}, issues: {
+  removeLabel: async (request) => {
+    calls.push({operation: "removeLabel", request});
+    fail("removeLabel");
+    if (payload.removeLabelStatus) {
+      const error = new Error(`simulated removeLabel status ${payload.removeLabelStatus}`);
+      error.status = Number(payload.removeLabelStatus);
+      throw error;
+    }
+    return {data: {name: request.name}};
+  },
 }}};
 const core = {
   setOutput: (name, value) => { outputs[name] = String(value); },
@@ -563,13 +574,7 @@ def test_safe_output_surface_is_bounded_to_triage_labels_comments_and_needs_info
     assert config["add_labels"]["issue_intent"] is True
     assert config["add_labels"]["staged"] is False
     assert {"triage-reviewed", "duplicate", "security"}.issubset(config["add_labels"]["blocked"])
-    assert config["remove_labels"] == {
-        "allowed": ["needs-info"],
-        "max": 1,
-        "required_labels": ["needs-info"],
-        "staged": False,
-        "target": "triggering",
-    }
+    assert "remove_labels" not in config
     assert "staged: false" in source
     assert "threat-detection: false" in source
     assert "report-failure-as-issue: false" in source
@@ -579,6 +584,11 @@ def test_safe_output_surface_is_bounded_to_triage_labels_comments_and_needs_info
 
 def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     source = WORKFLOW.read_text()
+    activation = source.split("  activation:\n", 1)[1].split("\n  intake_gate:\n", 1)[0]
+    assert "needs: [intake_gate, qualifying_rate_gate]" in activation
+    assert "needs.intake_gate.outputs.eligible == 'true'" in activation
+    assert "needs.qualifying_rate_gate.outputs.allowed == 'true'" in activation
+
     gate = source.split("  intake_gate:\n", 1)[1].split("\n  qualifying_rate_gate:\n", 1)[0]
     assert "permissions:\n      contents: read\n      issues: read\n" in gate
     assert "evaluateIntakeEligibility" in gate
@@ -1283,11 +1293,29 @@ def test_compiled_permissions_and_manifest_have_no_agent_github_surface_or_track
 
 def test_snapshot_and_safe_output_jobs_use_exact_least_privilege_permissions():
     source = WORKFLOW.read_text()
+    compiled = LOCK.read_text()
     snapshot = re.search(r"  trusted_issue_snapshot:\n(?P<body>.*?)\n  agent:\n", source, re.DOTALL)
     safe = re.search(r"  safe_outputs:\n(?P<body>.*?)\npre-agent-steps:", source, re.DOTALL)
     assert snapshot is not None and safe is not None
     assert "permissions:\n      contents: read\n      issues: read\n" in snapshot.group("body")
     assert "permissions:\n      actions: read\n      contents: read\n" in safe.group("body")
+
+    activation = compiled.split("\n  activation:\n", 1)[1].split("\n  agent:\n", 1)[0]
+    assert "intake_gate" in activation.split("    runs-on:", 1)[0]
+    assert "qualifying_rate_gate" in activation.split("    runs-on:", 1)[0]
+    assert "needs.intake_gate.outputs.eligible == 'true'" in activation
+    assert "needs.qualifying_rate_gate.outputs.allowed == 'true'" in activation
+
+    compiled_safe = compiled.split("\n  safe_outputs:\n", 1)[1].split("\n  trusted_issue_snapshot:\n", 1)[0]
+    compiled_permissions = compiled_safe.split("    permissions:\n", 1)[1].split(
+        "    timeout-minutes:", 1
+    )[0]
+    assert compiled_permissions == (
+        "      actions: read\n"
+        "      contents: read\n"
+        "      issues: write\n"
+    )
+    assert "pull-requests:" not in compiled_permissions
 
 
 def test_snapshot_fetches_target_comments_and_ranked_candidates_with_receipts():
@@ -2361,33 +2389,44 @@ def test_incomplete_continuation_rejects_any_non_comment_or_non_missing_informat
     assert result.returncode != 0
 
 
-def test_complete_continuation_exclusively_removes_needs_info_without_a_comment():
+def test_complete_continuation_exclusively_requests_trusted_issue_only_label_removal():
     bundle = _continuation_bundle()
+    completion = _canonical(
+        {
+            "kind": "complete_continuation",
+            "target_receipt": bundle["target"]["receipt"],
+            "trigger_receipt": bundle["trigger_receipt"],
+            "version": 3,
+        }
+    )
     result = _run_contract(
         {
             "op": "rewrite",
             "bundle": bundle,
-            "output": {"items": [{"type": "remove_labels", "labels": ["needs-info"]}]},
+            "output": {"items": [{"type": "noop", "message": completion}]},
         }
     )
     assert result.returncode == 0, result.stderr
     rewritten = json.loads(result.stdout)
-    assert rewritten["carrier"] == "removal"
+    assert rewritten["carrier"] == "completion"
     assert rewritten["proposal"] is None
     assert rewritten["output"]["items"] == [
-        {"type": "remove_labels", "labels": ["needs-info"], "item_number": TARGET_NUMBER}
+        {
+            "type": "noop",
+            "message": "The reporter supplied the requested information; needs-info will be removed.",
+        }
     ]
 
 
 @pytest.mark.parametrize(
     "items",
     [
-        [{"type": "remove_labels", "labels": []}],
-        [{"type": "remove_labels", "labels": ["network"]}],
-        [{"type": "remove_labels", "labels": ["needs-info", "network"]}],
-        [{"type": "remove_labels", "labels": ["needs-info"], "item_number": TARGET_NUMBER}],
+        [{"type": "noop", "message": "{}"}],
+        [{"type": "noop", "message": '{"kind":"complete_continuation","version":3}'}],
+        [{"type": "noop", "message": "not-json"}],
+        [{"type": "noop", "message": "{}", "item_number": TARGET_NUMBER}],
         [
-            {"type": "remove_labels", "labels": ["needs-info"]},
+            {"type": "noop", "message": "{}"},
             {"type": "add_comment", "body": "not allowed"},
         ],
     ],
@@ -2405,12 +2444,84 @@ def test_complete_continuation_rejects_every_nonexclusive_or_agent_controlled_re
     assert result.returncode != 0
 
 
-def test_initial_bundle_can_never_use_the_continuation_label_removal_path():
+@pytest.mark.parametrize("field", ["target_receipt", "trigger_receipt"])
+def test_complete_continuation_rejects_tampered_receipt_binding(field: str):
+    bundle = _continuation_bundle()
+    completion = {
+        "kind": "complete_continuation",
+        "target_receipt": bundle["target"]["receipt"],
+        "trigger_receipt": bundle["trigger_receipt"],
+        "version": 3,
+    }
+    completion[field] = "0" * 32
     result = _run_contract(
         {
             "op": "rewrite",
-            "bundle": _create_snapshot()["bundle"],
-            "output": {"items": [{"type": "remove_labels", "labels": ["needs-info"]}]},
+            "bundle": bundle,
+            "output": {"items": [{"type": "noop", "message": _canonical(completion)}]},
+        }
+    )
+    assert result.returncode != 0
+    assert "receipt binding" in result.stderr
+
+
+@pytest.mark.parametrize("status", [None, 404])
+def test_complete_continuation_executes_exact_issue_only_label_removal_script(
+    tmp_path: Path,
+    status: int | None,
+):
+    payload: dict[str, object] = {"env": {"TARGET_NUMBER": str(TARGET_NUMBER)}}
+    if status is not None:
+        payload["removeLabelStatus"] = status
+    result, observed = _run_github_script(
+        "Apply trusted complete continuation label removal",
+        payload,
+        tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    assert observed["thrown"] is None
+    assert observed["calls"] == [
+        {
+            "operation": "removeLabel",
+            "request": {
+                "owner": "sirkirby",
+                "repo": "unifi-mcp",
+                "issue_number": TARGET_NUMBER,
+                "name": "needs-info",
+            },
+        }
+    ]
+    if status == 404:
+        assert observed["notices"] == [
+            "needs-info was already absent from the trusted continuation target."
+        ]
+
+
+def test_complete_continuation_label_removal_fails_closed_on_api_error(tmp_path: Path):
+    result, observed = _run_github_script(
+        "Apply trusted complete continuation label removal",
+        {"env": {"TARGET_NUMBER": str(TARGET_NUMBER)}, "removeLabelStatus": 500},
+        tmp_path,
+    )
+    assert result.returncode == 0, result.stderr
+    assert observed["thrown"] == "simulated removeLabel status 500"
+
+
+def test_initial_bundle_can_never_use_the_continuation_label_removal_path():
+    bundle = _create_snapshot()["bundle"]
+    completion = _canonical(
+        {
+            "kind": "complete_continuation",
+            "target_receipt": bundle["target"]["receipt"],
+            "trigger_receipt": bundle["trigger_receipt"],
+            "version": 3,
+        }
+    )
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {"items": [{"type": "noop", "message": completion}]},
         }
     )
     assert result.returncode != 0
@@ -2747,12 +2858,16 @@ def test_prompt_requires_minimal_safe_output_argument_shapes_and_reference_prefl
     source = " ".join(WORKFLOW.read_text().split())
     assert "`add_comment` with `{body}`" in source
     assert "`add_labels` with `{labels:[{name,rationale,confidence}]}`" in source
-    assert "`remove_labels` with `{labels}`" in source
+    assert "`remove_labels`" not in source
     assert "Emit exactly one `noop`. Its `message` must be canonical JSON" in source
     assert "Do not write relationship or search-disposition prose outside this array" in source
     assert '`{"kind":"ready_for_maintainer"}`' in source
     assert "Complete continuation" in source
-    assert '`{"labels":["needs-info"]}`' in source
+    completion_shape = (
+        '`{"kind":"complete_continuation","target_receipt":"<target receipt>",'
+        '"trigger_receipt":"<trigger receipt>","version":3}`'
+    )
+    assert completion_shape in source
     assert "Do not add a footer or any visible prose to the JSON proposal" in source
 
 

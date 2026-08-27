@@ -40,6 +40,10 @@ max-ai-credits: 75
 max-daily-ai-credits: 150
 
 jobs:
+  activation:
+    needs: [intake_gate, qualifying_rate_gate]
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' }}
+
   intake_gate:
     name: Qualifying community intake gate
     runs-on: ubuntu-latest
@@ -406,6 +410,7 @@ jobs:
     permissions:
       actions: read
       contents: read
+      issues: write
     pre-steps:
       - name: Require the current run's committed AI credit reservation
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -791,6 +796,7 @@ safe-outputs:
   threat-detection: false
   steps:
     - name: Validate and render the attested readiness proposal
+      id: validate_output
       shell: bash
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -867,6 +873,15 @@ safe-outputs:
           );
           fs.renameSync(trustedOutputPath, outputPath);
 
+          if (!process.env.GITHUB_OUTPUT) {
+            throw new Error("GITHUB_OUTPUT is unavailable");
+          }
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            "remove_needs_info=" + (result.carrier === "completion" ? "true" : "false") + "\n",
+            {encoding: "utf8", mode: 0o600},
+          );
+
           if (!process.env.GITHUB_STEP_SUMMARY) {
             throw new Error("GITHUB_STEP_SUMMARY is unavailable");
           }
@@ -913,6 +928,32 @@ safe-outputs:
           process.exit(1);
         });
         NODE
+    - name: Apply trusted complete continuation label removal
+      if: ${{ steps.validate_output.outputs.remove_needs_info == 'true' }}
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+      env:
+        TARGET_NUMBER: ${{ needs.intake_gate.outputs.target_number }}
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const targetNumber = Number(process.env.TARGET_NUMBER);
+          if (!Number.isSafeInteger(targetNumber) || targetNumber < 1) {
+            throw new Error("trusted continuation target is invalid");
+          }
+          try {
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: targetNumber,
+              name: "needs-info",
+            });
+          } catch (error) {
+            if (error?.status === 404) {
+              core.notice("needs-info was already absent from the trusted continuation target.");
+              return;
+            }
+            throw error;
+          }
   add-labels:
     staged: false
     target: triggering
@@ -951,12 +992,6 @@ safe-outputs:
     issues: true
     pull-requests: false
     footer: true
-  remove-labels:
-    staged: false
-    target: triggering
-    allowed: [needs-info]
-    required-labels: [needs-info]
-    max: 1
 ---
 
 # Community issue triage
@@ -1058,15 +1093,16 @@ The artifact's `run_kind` selects exactly one contract:
 - **Incomplete continuation:** call only `add_comment` with a `missing_information`
   proposal. The proposal's `label_intents` must be empty because `needs-info` already
   exists. Trusted code adds the continuation marker.
-- **Complete continuation:** call only `remove_labels` with `{"labels":["needs-info"]}`.
-  Do not emit a comment or add labels. Trusted code verifies the existing label and run
-  kind before applying the removal.
+- **Complete continuation:** call only `noop`. Its `message` must be canonical JSON with
+  `{"kind":"complete_continuation","target_receipt":"<target receipt>","trigger_receipt":"<trigger receipt>","version":3}`.
+  Do not emit a comment or add labels. Trusted code verifies the receipts, existing label,
+  and run kind before applying the issue-only removal.
 - **Sensitive stop:** call only the canonical receipt-bound `noop` described above.
 
 For every normal initial or incomplete-continuation proposal:
 
-- Use `add_comment` with `{body}`, `add_labels` with
-  `{labels:[{name,rationale,confidence}]}`, and `remove_labels` with `{labels}` only.
+- Use `add_comment` with `{body}` and `add_labels` with
+  `{labels:[{name,rationale,confidence}]}` only.
   Omit selectors and control fields such as `item_number`, `repo`, `target`, `comment_id`,
   `suggest`, `secrecy`, and `integrity`; trusted code injects the target and suggestion flag.
 - Each label rationale must be 20 to 240 normalized, specific, safe visible characters.

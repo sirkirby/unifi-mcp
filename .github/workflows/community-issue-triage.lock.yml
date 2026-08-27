@@ -1,5 +1,5 @@
-# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"47575b7023fe2442c301dd022ccb371f42b1daeaf837b189cc1cd3cdfa923ce6","body_hash":"e140ed77786f882c32fc96e3aefc0645a9c9eed1f5cb04ef372f58a5e5de655b","compiler_version":"v0.87.4","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.80"}}
-# gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/cache/save","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"ea4b911d44a5336c74325a122a5fd9110b45ff06","version":"v0.87.4"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4","digest":"sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4@sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4","digest":"sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4@sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4","digest":"sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4@sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.10","digest":"sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.10@sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"}],"mcp_servers":[{"name":"safeoutputs","tools":["add_comment","add_labels","noop","remove_labels"]}]}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"1acc8cab06c7dc7817754924e104b0c72321c53e04feae0b8ae32d128dd9516e","body_hash":"62b97d178edc0accc8322f40e246a62f9f9aa1ae3ee7d012757c50a2184c069e","compiler_version":"v0.87.4","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.80"}}
+# gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/cache/save","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"ea4b911d44a5336c74325a122a5fd9110b45ff06","version":"v0.87.4"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4","digest":"sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4@sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4","digest":"sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4@sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4","digest":"sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4@sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.10","digest":"sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.10@sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"}],"mcp_servers":[{"name":"safeoutputs","tools":["add_comment","add_labels","noop"]}]}
 # This file was automatically generated by gh-aw (v0.87.4). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
 #
 #    ___                   _   _
@@ -69,7 +69,10 @@ run-name: "Community issue triage"
 
 jobs:
   activation:
-    needs: intake_gate
+    needs:
+      - intake_gate
+      - qualifying_rate_gate
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' }}
     runs-on: ubuntu-slim
     permissions:
       actions: read
@@ -270,7 +273,7 @@ jobs:
           GH_AW_PROMPT_CONFIG: "{\"items\":[{\"content_env\":\"GH_AW_PROMPT_CONTENT_0000\"},{\"file\":\"xpia.md\"},{\"file\":\"temp_folder_prompt.md\"},{\"file\":\"markdown.md\"},{\"file\":\"safe_outputs_prompt.md\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0001\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0002\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0003\"},{\"content_env\":\"GH_AW_PROMPT_CONTENT_0004\"}]}"
           GH_AW_NEEDS_INTAKE_GATE_OUTPUTS_TARGET_NUMBER: ${{ needs.intake_gate.outputs.target_number }}
           GH_AW_PROMPT_CONTENT_0000: "<system>\n"
-          GH_AW_PROMPT_CONTENT_0001: "<safe-output-tools>\nTools: add_comment, add_labels(max:4), remove_labels, noop\n"
+          GH_AW_PROMPT_CONTENT_0001: "<safe-output-tools>\nTools: add_comment, add_labels(max:4), noop\n"
           GH_AW_PROMPT_CONTENT_0002: "</safe-output-tools>\n"
           GH_AW_PROMPT_CONTENT_0003: "</system>\n"
           GH_AW_PROMPT_CONTENT_0004: "{{#runtime-import .github/workflows/community-issue-triage.md}}\n"
@@ -523,7 +526,7 @@ jobs:
         env:
           GH_AW_FILE_ROOT: "${{ runner.temp }}/gh-aw"
           GH_AW_FILE_CONFIG: "{\"files\":[{\"path\":\"safeoutputs/config.json\",\"content_env\":\"GH_AW_SAFE_OUTPUTS_CONFIG\"}]}"
-          GH_AW_SAFE_OUTPUTS_CONFIG: "{\"add_comment\":{\"discussions\":false,\"footer\":true,\"max\":1,\"staged\":false,\"target\":\"triggering\"},\"add_labels\":{\"allowed\":[\"bug\",\"enhancement\",\"documentation\",\"dependencies\",\"docker\",\"github-actions\",\"api\",\"network\",\"protect\",\"access\",\"needs-info\"],\"blocked\":[\"triage-reviewed\",\"duplicate\",\"invalid\",\"wontfix\",\"security\",\"good first issue\",\"help wanted\",\"breaking change\",\"compatibility-critical\",\"*[bot]\"],\"issue_intent\":true,\"max\":4,\"staged\":false,\"target\":\"triggering\"},\"max_bot_mentions\":1,\"mentions\":{\"enabled\":false},\"noop\":{\"max\":1,\"report-as-issue\":\"false\"},\"remove_labels\":{\"allowed\":[\"needs-info\"],\"max\":1,\"required_labels\":[\"needs-info\"],\"staged\":false,\"target\":\"triggering\"}}"
+          GH_AW_SAFE_OUTPUTS_CONFIG: "{\"add_comment\":{\"discussions\":false,\"footer\":true,\"max\":1,\"staged\":false,\"target\":\"triggering\"},\"add_labels\":{\"allowed\":[\"bug\",\"enhancement\",\"documentation\",\"dependencies\",\"docker\",\"github-actions\",\"api\",\"network\",\"protect\",\"access\",\"needs-info\"],\"blocked\":[\"triage-reviewed\",\"duplicate\",\"invalid\",\"wontfix\",\"security\",\"good first issue\",\"help wanted\",\"breaking change\",\"compatibility-critical\",\"*[bot]\"],\"issue_intent\":true,\"max\":4,\"staged\":false,\"target\":\"triggering\"},\"max_bot_mentions\":1,\"mentions\":{\"enabled\":false},\"noop\":{\"max\":1,\"report-as-issue\":\"false\"}}"
         with:
           script: |
             const path = require('path');
@@ -538,8 +541,7 @@ jobs:
             {
               "description_suffixes": {
                 "add_comment": " CONSTRAINTS: Maximum 1 comment(s) can be added. Target: triggering. Supports reply_to_id for discussion threading.",
-                "add_labels": " CONSTRAINTS: Maximum 4 label(s) can be added. Only these labels are allowed: [\"bug\" \"enhancement\" \"documentation\" \"dependencies\" \"docker\" \"github-actions\" \"api\" \"network\" \"protect\" \"access\" \"needs-info\"]. Target: triggering.",
-                "remove_labels": " CONSTRAINTS: Maximum 1 label(s) can be removed. Only these labels can be removed: [needs-info]. Target: triggering."
+                "add_labels": " CONSTRAINTS: Maximum 4 label(s) can be added. Only these labels are allowed: [\"bug\" \"enhancement\" \"documentation\" \"dependencies\" \"docker\" \"github-actions\" \"api\" \"network\" \"protect\" \"access\" \"needs-info\"]. Target: triggering."
               },
               "repo_params": {},
               "dynamic_tools": []
@@ -614,22 +616,6 @@ jobs:
                     "type": "string",
                     "sanitize": true,
                     "maxLength": 65000
-                  }
-                }
-              },
-              "remove_labels": {
-                "defaultMax": 5,
-                "fields": {
-                  "item_number": {
-                    "issueNumberOrTemporaryId": true
-                  },
-                  "labels": {
-                    "required": true,
-                    "type": "array"
-                  },
-                  "repo": {
-                    "type": "string",
-                    "maxLength": 256
                   }
                 }
               }
@@ -1032,7 +1018,6 @@ jobs:
     runs-on: ubuntu-slim
     permissions:
       issues: write
-      pull-requests: write
     concurrency:
       group: "gh-aw-conclusion-community-issue-triage"
       cancel-in-progress: false
@@ -1510,7 +1495,6 @@ jobs:
       actions: read
       contents: read
       issues: write
-      pull-requests: write
     timeout-minutes: 5
     env:
       GH_AW_AGENT_AIC: ${{ needs.agent.outputs.aic }}
@@ -1653,6 +1637,7 @@ jobs:
           GH_HOST="${GH_HOST#http://}"
           echo "GH_HOST=${GH_HOST}" >> "$GITHUB_ENV"
       - name: Validate and render the attested readiness proposal
+        id: validate_output
         run: |
           node <<'NODE'
           const fs = require("fs");
@@ -1724,6 +1709,15 @@ jobs:
             );
             fs.renameSync(trustedOutputPath, outputPath);
 
+            if (!process.env.GITHUB_OUTPUT) {
+              throw new Error("GITHUB_OUTPUT is unavailable");
+            }
+            fs.appendFileSync(
+              process.env.GITHUB_OUTPUT,
+              "remove_needs_info=" + (result.carrier === "completion" ? "true" : "false") + "\n",
+              {encoding: "utf8", mode: 0o600},
+            );
+
             if (!process.env.GITHUB_STEP_SUMMARY) {
               throw new Error("GITHUB_STEP_SUMMARY is unavailable");
             }
@@ -1775,6 +1769,32 @@ jobs:
           SNAPSHOT_PATH: ${{ runner.temp }}/trusted-intake-original/context.json
           TARGET_NUMBER: ${{ needs.intake_gate.outputs.target_number }}
         shell: bash
+      - name: Apply trusted complete continuation label removal
+        if: ${{ steps.validate_output.outputs.remove_needs_info == 'true' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TARGET_NUMBER: ${{ needs.intake_gate.outputs.target_number }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const targetNumber = Number(process.env.TARGET_NUMBER);
+            if (!Number.isSafeInteger(targetNumber) || targetNumber < 1) {
+              throw new Error("trusted continuation target is invalid");
+            }
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: targetNumber,
+                name: "needs-info",
+              });
+            } catch (error) {
+              if (error?.status === 404) {
+                core.notice("needs-info was already absent from the trusted continuation target.");
+                return;
+              }
+              throw error;
+            }
       - name: Process Safe Outputs
         id: process_safe_outputs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -1785,7 +1805,7 @@ jobs:
           GH_AW_SAFE_OUTPUTS_URLS: "allowed-only"
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_API_URL: ${{ github.api_url }}
-          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"add_comment\":{\"discussions\":false,\"footer\":true,\"max\":1,\"staged\":false,\"target\":\"triggering\"},\"add_labels\":{\"allowed\":[\"bug\",\"enhancement\",\"documentation\",\"dependencies\",\"docker\",\"github-actions\",\"api\",\"network\",\"protect\",\"access\",\"needs-info\"],\"blocked\":[\"triage-reviewed\",\"duplicate\",\"invalid\",\"wontfix\",\"security\",\"good first issue\",\"help wanted\",\"breaking change\",\"compatibility-critical\",\"*[bot]\"],\"issue_intent\":true,\"max\":4,\"staged\":false,\"target\":\"triggering\"},\"mentions\":{\"enabled\":false},\"noop\":{\"max\":1,\"report-as-issue\":\"false\"},\"remove_labels\":{\"allowed\":[\"needs-info\"],\"max\":1,\"required_labels\":[\"needs-info\"],\"staged\":false,\"target\":\"triggering\"}}"
+          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"add_comment\":{\"discussions\":false,\"footer\":true,\"max\":1,\"staged\":false,\"target\":\"triggering\"},\"add_labels\":{\"allowed\":[\"bug\",\"enhancement\",\"documentation\",\"dependencies\",\"docker\",\"github-actions\",\"api\",\"network\",\"protect\",\"access\",\"needs-info\"],\"blocked\":[\"triage-reviewed\",\"duplicate\",\"invalid\",\"wontfix\",\"security\",\"good first issue\",\"help wanted\",\"breaking change\",\"compatibility-critical\",\"*[bot]\"],\"issue_intent\":true,\"max\":4,\"staged\":false,\"target\":\"triggering\"},\"mentions\":{\"enabled\":false},\"noop\":{\"max\":1,\"report-as-issue\":\"false\"}}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

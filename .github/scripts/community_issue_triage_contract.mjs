@@ -1443,18 +1443,28 @@ export async function validateAndRewriteAgentOutput({
   if (
     bundle.status === "complete" && bundle.run_kind === "continuation" &&
     trustedOutput.items.length === 1 &&
-    String(trustedOutput.items[0]?.type || "").toLowerCase().replaceAll("-", "_") === "remove_labels"
+    String(trustedOutput.items[0]?.type || "").toLowerCase().replaceAll("-", "_") === "noop"
   ) {
-    const removal = trustedOutput.items[0];
-    removal.type = "remove_labels";
-    if (!exactKeys(removal, ["type", "labels"]) || !Array.isArray(removal.labels) || canonicalStringify(removal.labels) !== '["needs-info"]') {
-      fail("complete continuation must remove exactly needs-info");
+    const completion = trustedOutput.items[0];
+    completion.type = "noop";
+    if (!exactKeys(completion, ["type", "message"])) {
+      fail("complete continuation must use exactly one receipt-bound noop");
     }
+    const proposal = parseCanonicalCarrier(completion.message);
+    if (!exactKeys(proposal, ["kind", "target_receipt", "trigger_receipt", "version"])) {
+      fail("complete continuation proposal contains unexpected fields");
+    }
+    if (
+      proposal.version !== CONTRACT_VERSION ||
+      proposal.kind !== "complete_continuation" ||
+      proposal.target_receipt !== bundle.target.receipt ||
+      proposal.trigger_receipt !== bundle.trigger_receipt
+    ) fail("complete continuation receipt binding mismatch");
     if (!bundle.needs_info_present) fail("complete continuation requires a trusted needs-info label");
-    removal.item_number = targetNumber;
+    completion.message = "The reporter supplied the requested information; needs-info will be removed.";
     return {
       output: trustedOutput,
-      carrier: "removal",
+      carrier: "completion",
       proposal: null,
       summary: {
         heading_html: "Trusted complete continuation",
