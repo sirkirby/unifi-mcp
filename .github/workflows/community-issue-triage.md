@@ -21,14 +21,13 @@ permissions:
 
 strict: true
 engine: copilot
-checkout:
-  ref: ${{ github.sha }}
-  fetch-depth: 1
+checkout: false
 sandbox:
   agent:
     id: awf
     mounts:
       - /opt/gh-aw-trusted-intake:/opt/gh-aw-trusted-intake:ro
+      - /opt/gh-aw-repository:/opt/gh-aw-repository:ro
 network:
   allowed: [github]
 
@@ -108,13 +107,17 @@ jobs:
               result.json,
               {encoding: "utf8", mode: 0o600},
             );
+            fs.copyFileSync(
+              contractPath,
+              path.join(outputDirectory, "contract.mjs"),
+            );
             core.setOutput("bundle_digest", result.digest);
       - name: Upload the immutable trusted snapshot
         id: upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trusted-intake-context-${{ github.run_id }}
-          path: ${{ runner.temp }}/trusted-intake-context/context.json
+          path: ${{ runner.temp }}/trusted-intake-context
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
@@ -227,8 +230,8 @@ pre-agent-steps:
         const contract = await import(
           pathToFileURL(
             path.join(
-              process.env.GITHUB_WORKSPACE,
-              ".github/scripts/community_issue_triage_contract.mjs",
+              process.env.RUNNER_TEMP,
+              "trusted-intake-download/contract.mjs",
             ),
           ).href
         );
@@ -263,8 +266,67 @@ pre-agent-steps:
       sudo install -d -o root -g root -m 0755 /opt/gh-aw-trusted-intake
       sudo install -o root -g root -m 0444 "$trusted_source" /opt/gh-aw-trusted-intake/context.json
       rm -f "$trusted_source"
+      rm -f "${RUNNER_TEMP}/trusted-intake-download/contract.mjs"
       rmdir "${RUNNER_TEMP}/trusted-intake-download"
       test "$(stat -c '%U:%G:%a' /opt/gh-aw-trusted-intake/context.json)" = "root:root:444"
+  - name: Materialize immutable public repository source without credentials
+    shell: bash
+    env:
+      EXPECTED_REPOSITORY: ${{ github.repository }}
+      WORKFLOW_SHA: ${{ github.sha }}
+    run: |
+      set -euo pipefail
+      test "$EXPECTED_REPOSITORY" = "sirkirby/unifi-mcp"
+      [[ "$WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      archive="${RUNNER_TEMP}/unifi-mcp-${WORKFLOW_SHA}.tar.gz"
+      extract_dir="${RUNNER_TEMP}/unifi-mcp-source"
+      expected_root="unifi-mcp-${WORKFLOW_SHA}/"
+      curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+        --tlsv1.2 --retry 3 \
+        --output "$archive" \
+        "https://github.com/${EXPECTED_REPOSITORY}/archive/${WORKFLOW_SHA}.tar.gz"
+
+      while IFS= read -r member; do
+        case "$member" in
+          "$expected_root"*) ;;
+          *) echo "repository archive contains an unexpected root" >&2; exit 1 ;;
+        esac
+        case "/$member/" in
+          *"/../"*|*"/./"*) echo "repository archive contains an unsafe path" >&2; exit 1 ;;
+        esac
+      done < <(tar -tzf "$archive")
+
+      mkdir -m 0700 "$extract_dir"
+      tar -xzf "$archive" --strip-components=1 --no-same-owner -C "$extract_dir"
+      if find "$extract_dir" -type l -print -quit | grep -q .; then
+        echo "repository archive contains a symbolic link" >&2
+        exit 1
+      fi
+
+      sudo install -d -o root -g root -m 0555 /opt/gh-aw-repository
+      sudo cp -R "$extract_dir/." /opt/gh-aw-repository/
+      sudo chown -R root:root /opt/gh-aw-repository
+      sudo find /opt/gh-aw-repository -type d -exec chmod 0555 {} +
+      sudo find /opt/gh-aw-repository -type f -exec chmod 0444 {} +
+      rm -rf "$extract_dir"
+      rm -f "$archive"
+
+      test -f /opt/gh-aw-repository/AGENTS.md
+      test -f /opt/gh-aw-repository/.github/scripts/community_issue_triage_contract.mjs
+      test ! -e /opt/gh-aw-repository/.git
+      test -z "$(find /opt/gh-aw-repository ! -user root -print -quit)"
+      test -z "$(find /opt/gh-aw-repository ! -group root -print -quit)"
+      test -z "$(find /opt/gh-aw-repository -perm /0222 -print -quit)"
+  - name: Prove the agent repository is credential-free
+    shell: bash
+    run: |
+      set -euo pipefail
+      test ! -e /opt/gh-aw-repository/.git
+      if git config --global --get-regexp '^(credential\.|http\..*\.extraheader)' >/dev/null 2>&1; then
+        echo "unexpected Git credential configuration is present" >&2
+        exit 1
+      fi
 
 tools:
   bash: false
@@ -524,8 +586,9 @@ Do not perform substitute network research. You have no GitHub MCP or GitHub cre
    number and receipt, one `RELATED`, `NOT_RELATED`, or `UNCERTAIN` verdict, and a specific
    normalized reason of 20 to 240 characters. Use an empty array when there are no
    candidates. Do not write relationship or search-disposition prose outside this array.
-5. Inspect only the minimum relevant checked-out repository source needed to distinguish plausible
-   behavior from an unsupported assertion.
+5. Inspect only the minimum relevant repository source under the sealed read-only
+   `/opt/gh-aw-repository` tree needed to distinguish plausible behavior from an
+   unsupported assertion.
 6. Identify objectively missing information such as exact package version or commit,
    transport, controller/application family and version, sanitized error, reproduction
    steps, expected versus actual behavior, or relevant live-controller evidence.
@@ -581,9 +644,9 @@ array, including an empty array when no candidate exists.
   or the corresponding `repository_evidence` decision. It must not repeat receipts or
   relationships. When using a missing-information comment with a label, use the same
   field IDs in both decisions.
-- When neither a label nor a comment is warranted, use decision
-  `{"kind":"noop","reason":"specific normalized reason"}` in the canonical carrier.
-  Do not use `noop` when any other safe output is proposed.
+- When neither a label nor a comment is warranted, use the exact decision
+  `{"kind":"noop"}` in the canonical carrier. Trusted code supplies the fixed visible
+  no-action sentence. Do not use `noop` when any other safe output is proposed.
 - If the artifact/repository read or safe-output tool fails and prevents a truthful
   triage result, do not call any safe-output tool. Stop so the fail-closed validator
   marks the run failed; do not substitute a label, comment, or `noop`.

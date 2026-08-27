@@ -321,11 +321,14 @@ function containsControllerAddress(value) {
 }
 
 function containsSensitiveContent(value) {
-  if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(value))) return false;
+  const normalized = value
+    .normalize("NFKC")
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, "");
+  if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
   return (
-    containsControllerAddress(value) ||
-    containsSensitiveConfigurationBlob(value) ||
-    SENSITIVE_PATTERNS.some((pattern) => pattern.test(value))
+    containsControllerAddress(normalized) ||
+    containsSensitiveConfigurationBlob(normalized) ||
+    SENSITIVE_PATTERNS.some((pattern) => pattern.test(normalized))
   );
 }
 
@@ -917,8 +920,8 @@ function validateDecision(decision, expectedKind) {
     return decision;
   }
   if (decision.kind === "noop") {
-    if (!exactKeys(decision, ["kind", "reason"])) fail("noop decision contains unexpected fields");
-    return {...decision, reason: normalizeReason(decision.reason)};
+    if (!exactKeys(decision, ["kind"])) fail("noop decision contains unexpected fields");
+    return decision;
   }
   fail("proposal decision kind is invalid");
 }
@@ -938,7 +941,7 @@ function renderDecision(decision, relationships) {
   } else if (decision.kind === "repository_evidence") {
     body = `Repository evidence (${decision.path}):\n\n> ${decision.quote}`;
   } else {
-    body = decision.reason;
+    body = "No public triage action is proposed by this first pass.";
   }
   const assessments = relationshipText(relationships);
   if (assessments.length > 0) body += `\n\n${assessments.join("\n")}`;
