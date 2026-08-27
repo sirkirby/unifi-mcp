@@ -1307,14 +1307,8 @@ def test_snapshot_and_safe_output_jobs_use_exact_least_privilege_permissions():
     assert "needs.qualifying_rate_gate.outputs.allowed == 'true'" in activation
 
     compiled_safe = compiled.split("\n  safe_outputs:\n", 1)[1].split("\n  trusted_issue_snapshot:\n", 1)[0]
-    compiled_permissions = compiled_safe.split("    permissions:\n", 1)[1].split(
-        "    timeout-minutes:", 1
-    )[0]
-    assert compiled_permissions == (
-        "      actions: read\n"
-        "      contents: read\n"
-        "      issues: write\n"
-    )
+    compiled_permissions = compiled_safe.split("    permissions:\n", 1)[1].split("    timeout-minutes:", 1)[0]
+    assert compiled_permissions == ("      actions: read\n      contents: read\n      issues: write\n")
     assert "pull-requests:" not in compiled_permissions
 
 
@@ -2492,9 +2486,7 @@ def test_complete_continuation_executes_exact_issue_only_label_removal_script(
         }
     ]
     if status == 404:
-        assert observed["notices"] == [
-            "needs-info was already absent from the trusted continuation target."
-        ]
+        assert observed["notices"] == ["needs-info was already absent from the trusted continuation target."]
 
 
 def test_complete_continuation_label_removal_fails_closed_on_api_error(tmp_path: Path):
