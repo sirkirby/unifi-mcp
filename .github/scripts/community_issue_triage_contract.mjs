@@ -1216,7 +1216,7 @@ export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind
   if (proposal.target_receipt !== bundle.target.receipt || proposal.comments_receipt !== bundle.comments.receipt || proposal.trigger_receipt !== bundle.trigger_receipt || proposal.run_kind !== bundle.run_kind) fail("normal proposal intake binding mismatch");
   const relationships = validateRelationships(proposal.relationships, bundle);
   const decision = validateDecision(proposal.decision, expectedDecisionKind);
-  const labelIntents = validateLabelIntents(proposal.label_intents, bundle.run_kind === "continuation");
+  const labelIntents = validateLabelIntents(proposal.label_intents, true);
   if (bundle.run_kind === "initial" && !new Set(["ready_for_maintainer", "missing_information", "repository_evidence"]).has(decision.kind)) fail("initial decision is not allowlisted");
   if (bundle.run_kind === "continuation" && decision.kind !== "missing_information") fail("incomplete continuation must request missing information");
   if (bundle.run_kind === "initial") {
@@ -1391,7 +1391,9 @@ function rejectRelationshipSemanticsOutsideCarrier(decision, bundle, labelIntent
   for (const value of values) {
     const normalized = normalizePolicyText(value);
     if (
-      /\b(?:related|not[ _-]?related|uncertain|relationships?|duplicat\p{L}*|similar\p{L}*|match\p{L}*|overlap\p{L}*|candidates?|search\p{L}*|lexical|same (?:issues?|problems?|reports?)|(?:prior|previous|earlier|existing) reports?)\b/iu.test(normalized) ||
+      /\b(?:lexical|candidate|duplicate)\s+(?:issue|report|result|search|match|relationship)s?\b/iu.test(normalized) ||
+      /\b(?:search(?:ed|ing)?|match(?:ed|es|ing)?|similar|related|overlap(?:ped|s|ping)?)\s+(?:to|with|for)?\s*(?:a\s+|the\s+)?(?:prior|previous|earlier|existing|candidate|other)\s+(?:issue|problem|report)\b/iu.test(normalized) ||
+      /\b(?:same|duplicate(?:s|d)?)\s+(?:issue|problem|report)\b/iu.test(normalized) ||
       normalized.includes(bundle.target.receipt) ||
       (bundle.comments && normalized.includes(bundle.comments.receipt)) ||
       bundle.candidates.some(
@@ -1473,7 +1475,7 @@ export async function validateAndRewriteAgentOutput({
   if (bundle.status === "complete") {
     if ((counts.get("noop") || 0) !== 0) fail("normal automatic triage must produce an actionable bounded result");
     if ((counts.get("add_comment") || 0) !== 1) fail("normal automatic triage requires exactly one trusted comment carrier");
-    if (bundle.run_kind === "initial" && (counts.get("add_labels") || 0) !== 1) fail("initial triage requires one bounded label collection");
+    if (bundle.run_kind === "initial" && (counts.get("add_labels") || 0) > 1) fail("initial triage allows at most one bounded label collection");
     if (bundle.run_kind === "continuation" && (counts.get("add_labels") || 0) !== 0) fail("incomplete continuation must not add labels");
   }
 
@@ -1483,7 +1485,6 @@ export async function validateAndRewriteAgentOutput({
   const outputLabelIntents = labelsItem?.labels || [];
   if (canonicalStringify(outputLabelIntents) !== canonicalStringify(validated.proposal.label_intents || [])) fail("proposal label intents do not exactly match add_labels output");
   if (bundle.status === "complete" && bundle.run_kind === "initial") {
-    if (validated.proposal.label_intents.length < 1) fail("initial proposal requires at least one label intent");
     const hasNeedsInfo = validated.proposal.label_intents.some(({name}) => name === "needs-info");
     if (validated.proposal.decision.kind === "missing_information" && !hasNeedsInfo) fail("missing-information initial triage requires needs-info");
     if (validated.proposal.decision.kind !== "missing_information" && hasNeedsInfo) fail("needs-info is valid only for missing-information initial triage");

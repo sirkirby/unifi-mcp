@@ -1,5 +1,5 @@
-# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"5c29f4e492ef6007d13dec8d40eff6485c22f433fd94ea9dde9c8bf7c3ea0462","body_hash":"dbcb41fc9d31a62059ab4372301d516322d216d3b3d8e57ff77b83429e9b30da","compiler_version":"v0.87.4","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.80"}}
-# gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/cache/save","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"ea4b911d44a5336c74325a122a5fd9110b45ff06","version":"ea4b911d44a5336c74325a122a5fd9110b45ff06"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4","digest":"sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4@sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4","digest":"sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4@sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4","digest":"sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4@sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.10","digest":"sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.10@sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"}],"mcp_servers":[{"name":"safeoutputs","tools":["add_comment","add_labels","noop","remove_labels"]}]}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"ad7c34ec177d91d6409f0cb751256047f0cd3db8f3b8c3e59394e8e5ede8a4aa","body_hash":"e140ed77786f882c32fc96e3aefc0645a9c9eed1f5cb04ef372f58a5e5de655b","compiler_version":"v0.87.4","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.80"}}
+# gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/cache/save","sha":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","version":"v6.1.0"},{"repo":"actions/checkout","sha":"3d3c42e5aac5ba805825da76410c181273ba90b1","version":"v7.0.1"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"ea4b911d44a5336c74325a122a5fd9110b45ff06","version":"v0.87.4"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4","digest":"sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.28.4@sha256:8f18587981eff7e6291784200a88a7191d23bfd8f5723db848c640d6b4e88e46"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4","digest":"sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.28.4@sha256:64e668297d1b9d83ee102626e104c054ac2cf5cfd7225bf6e144f86962229882"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4","digest":"sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.28.4@sha256:35953d0beac18f642aa0bc98bb726a85288539b1fc630c16e94da33300058258"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.4.10","digest":"sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.4.10@sha256:08bb5fa417aed94b40a14e2b7b3ae457531a5f22b143a32fe58317139d9b8f42"},{"image":"ghcr.io/github/gh-aw-node","digest":"sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196","pinned_image":"ghcr.io/github/gh-aw-node@sha256:0d9f1fb5fd6610c0ac1f5194a38e45a8a1e81f8a390d5142d8e4e6f26a4b3196"}],"mcp_servers":[{"name":"safeoutputs","tools":["add_comment","add_labels","noop","remove_labels"]}]}
 # This file was automatically generated by gh-aw (v0.87.4). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
 #
 #    ___                   _   _
@@ -38,7 +38,6 @@
 #   - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
 #   - actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
 #   - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-#   - github/gh-aw-actions/setup@ea4b911d44a5336c74325a122a5fd9110b45ff06 # ea4b911d44a5336c74325a122a5fd9110b45ff06
 #   - github/gh-aw-actions/setup@ea4b911d44a5336c74325a122a5fd9110b45ff06 # v0.87.4
 #
 # Container images used:
@@ -63,9 +62,8 @@ on:
 permissions: {}
 
 concurrency:
-  cancel-in-progress: false
-  group: community-issue-triage
-  queue: single
+  group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.run_id }}"
+  queue: max
 
 run-name: "Community issue triage"
 
@@ -363,6 +361,9 @@ jobs:
     permissions:
       actions: read
       contents: read
+    concurrency:
+      group: "community-issue-triage-agent"
+      queue: max
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       GH_AW_ASSETS_ALLOWED_EXTS: ""
@@ -444,7 +445,30 @@ jobs:
         env:
           GH_AW_SKILL_DIR: ".github/skills"
         run: bash "${RUNNER_TEMP}/gh-aw/actions/restore_inline_skills.sh"
-      - name: Download the trusted issue snapshot for inference
+      - env:
+          GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
+          MAX_AI_CREDITS: "75"
+          MAX_DAILY_AI_CREDITS: "150"
+          RESERVATION_NAME: community-issue-triage-aic-reservation
+        id: reserve_daily_budget
+        name: Reserve the conservative daily AI credit budget
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: "const fs = require(\"fs\");\nconst path = require(\"path\");\n\nconst block = (message) => {\n  core.setOutput(\"allowed\", \"false\");\n  if (typeof process.env.GH_AW_SAFE_OUTPUTS !== \"string\" || process.env.GH_AW_SAFE_OUTPUTS === \"\") {\n    throw new Error(\"safe-output path is unavailable for a fail-closed budget decision\");\n  }\n  fs.appendFileSync(\n    process.env.GH_AW_SAFE_OUTPUTS,\n    JSON.stringify({type: \"noop\", message}) + \"\\n\",\n    {encoding: \"utf8\", mode: 0o600},\n  );\n  core.setFailed(message);\n};\n\ncore.setOutput(\"allowed\", \"false\");\nconst reservationName = process.env.RESERVATION_NAME;\nconst perRun = Number(process.env.MAX_AI_CREDITS);\nconst daily = Number(process.env.MAX_DAILY_AI_CREDITS);\nif (\n  typeof reservationName !== \"string\" || reservationName === \"\" ||\n  !Number.isFinite(perRun) || perRun <= 0 ||\n  !Number.isFinite(daily) || daily < perRun\n) {\n  block(\"The daily AI credit reservation configuration is invalid; no public action was taken.\");\n  return;\n}\n\ntry {\n  const currentRun = await github.rest.actions.getWorkflowRun({\n    owner: context.repo.owner,\n    repo: context.repo.repo,\n    run_id: Number(context.runId),\n  });\n  const workflowId = Number(currentRun.data?.workflow_id);\n  if (!Number.isSafeInteger(workflowId) || workflowId < 1) {\n    throw new Error(\"current workflow ID is invalid\");\n  }\n  const response = await github.rest.actions.listArtifactsForRepo({\n    owner: context.repo.owner,\n    repo: context.repo.repo,\n    name: reservationName,\n    per_page: 100,\n    page: 1,\n  });\n  const totalCount = Number(response.data?.total_count);\n  const artifacts = response.data?.artifacts;\n  if (\n    !Array.isArray(artifacts) ||\n    !Number.isSafeInteger(totalCount) ||\n    totalCount < 0 ||\n    totalCount > 100 ||\n    artifacts.length !== totalCount\n  ) {\n    throw new Error(\"daily reservation artifact history exceeds the trusted bound\");\n  }\n\n  const cutoff = Date.now() - 24 * 60 * 60 * 1000;\n  const reservedRunIds = new Set();\n  let reserved = 0;\n  for (const artifact of artifacts) {\n    if (artifact?.name !== reservationName) {\n      throw new Error(\"GitHub returned an unexpected reservation artifact name\");\n    }\n    const createdAt = Date.parse(artifact.created_at || \"\");\n    if (!Number.isFinite(createdAt)) {\n      throw new Error(\"GitHub returned an invalid reservation timestamp\");\n    }\n    if (createdAt < cutoff) continue;\n    if (artifact.expired) {\n      throw new Error(\"a current-window reservation artifact is unexpectedly expired\");\n    }\n    const runId = Number(artifact.workflow_run?.id);\n    if (!Number.isSafeInteger(runId) || runId < 1 || reservedRunIds.has(runId)) {\n      throw new Error(\"reservation workflow provenance is invalid or duplicated\");\n    }\n    const run = await github.rest.actions.getWorkflowRun({\n      owner: context.repo.owner,\n      repo: context.repo.repo,\n      run_id: runId,\n    });\n    if (Number(run.data?.workflow_id) !== workflowId) continue;\n    reservedRunIds.add(runId);\n    reserved += perRun;\n  }\n\n  if (reserved + perRun > daily) {\n    block(\"The conservative daily AI credit budget is exhausted; no public action was taken.\");\n    core.notice(`Daily AI credit reservation blocked at ${reserved}/${daily}.`);\n    return;\n  }\n\n  const directory = path.join(process.env.RUNNER_TEMP, \"triage-aic-reservation\");\n  fs.mkdirSync(directory, {recursive: true, mode: 0o700});\n  fs.writeFileSync(\n    path.join(directory, \"reservation.json\"),\n    JSON.stringify({\n      actor: process.env.GITHUB_ACTOR,\n      credits: perRun,\n      run_id: String(context.runId),\n      workflow_id: String(workflowId),\n    }),\n    {encoding: \"utf8\", mode: 0o600},\n  );\n  core.setOutput(\"allowed\", \"true\");\n} catch (error) {\n  const message = error instanceof Error ? error.message : \"unknown error\";\n  core.warning(`Daily AI credit reservation failed closed: ${message}`);\n  block(\"The daily AI credit reservation could not be verified; no public action was taken.\");\n}\n"
+      - if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
+        name: Commit the daily AI credit reservation before inference
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          compression-level: 0
+          if-no-files-found: error
+          include-hidden-files: false
+          name: community-issue-triage-aic-reservation
+          overwrite: false
+          path: ${{ runner.temp }}/triage-aic-reservation/reservation.json
+          retention-days: 2
+      - if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
+        name: Download the trusted issue snapshot for inference
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           artifact-ids: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}
@@ -457,12 +481,14 @@ jobs:
           EXPECTED_SHA: ${{ github.sha }}
           EXPECTED_TARGET: ${{ needs.intake_gate.outputs.target_number }}
           SNAPSHOT_PATH: ${{ runner.temp }}/trusted-intake-download/context.json
+        if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
         name: Verify trusted snapshot provenance before inference
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: "const fs = require(\"fs\");\nconst path = require(\"path\");\nconst {pathToFileURL} = require(\"url\");\nconst contract = await import(\n  pathToFileURL(\n    path.join(\n      process.env.RUNNER_TEMP,\n      \"trusted-intake-download/contract.mjs\",\n    ),\n  ).href\n);\nconst bundle = JSON.parse(\n  fs.readFileSync(process.env.SNAPSHOT_PATH, \"utf8\"),\n);\nconst artifact = await github.request(\n  \"GET /repos/{owner}/{repo}/actions/artifacts/{artifact_id}\",\n  {\n    owner: context.repo.owner,\n    repo: context.repo.repo,\n    artifact_id: Number(process.env.EXPECTED_ARTIFACT_ID),\n  },\n);\ncontract.verifyArtifactProvenance({\n  bundle,\n  expectedRepository: context.repo.owner + \"/\" + context.repo.repo,\n  expectedRunId: process.env.EXPECTED_RUN_ID,\n  expectedWorkflowSha: process.env.EXPECTED_SHA,\n  expectedTargetNumber: Number(process.env.EXPECTED_TARGET),\n  artifactId: artifact.data.id,\n  expectedArtifactId: Number(process.env.EXPECTED_ARTIFACT_ID),\n  actionDigest: artifact.data.digest,\n  expectedActionDigest: process.env.EXPECTED_ARTIFACT_DIGEST,\n  expectedBundleDigest: process.env.EXPECTED_BUNDLE_DIGEST,\n});\n"
-      - name: Seal the verified inference snapshot outside agent-writable paths
+      - if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
+        name: Seal the verified inference snapshot outside agent-writable paths
         run: |
           set -euo pipefail
           trusted_source="${RUNNER_TEMP}/trusted-intake-download/context.json"
@@ -476,10 +502,12 @@ jobs:
       - env:
           EXPECTED_REPOSITORY: ${{ github.repository }}
           WORKFLOW_SHA: ${{ github.sha }}
+        if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
         name: Materialize immutable public repository source without credentials
         run: "set -euo pipefail\ntest \"$EXPECTED_REPOSITORY\" = \"sirkirby/unifi-mcp\"\n[[ \"$WORKFLOW_SHA\" =~ ^[0-9a-f]{40}$ ]]\n\narchive=\"${RUNNER_TEMP}/unifi-mcp-${WORKFLOW_SHA}.tar.gz\"\nextract_dir=\"${RUNNER_TEMP}/unifi-mcp-source\"\nexpected_root=\"unifi-mcp-${WORKFLOW_SHA}/\"\ncurl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \\\n  --tlsv1.2 --retry 3 \\\n  --output \"$archive\" \\\n  \"https://github.com/${EXPECTED_REPOSITORY}/archive/${WORKFLOW_SHA}.tar.gz\"\n\nwhile IFS= read -r member; do\n  case \"$member\" in\n    \"$expected_root\"*) ;;\n    *) echo \"repository archive contains an unexpected root\" >&2; exit 1 ;;\n  esac\n  case \"/$member/\" in\n    *\"/../\"*|*\"/./\"*) echo \"repository archive contains an unsafe path\" >&2; exit 1 ;;\n  esac\ndone < <(tar -tzf \"$archive\")\n\nmkdir -m 0700 \"$extract_dir\"\ntar -xzf \"$archive\" --strip-components=1 --no-same-owner -C \"$extract_dir\"\nif find \"$extract_dir\" -type l -print -quit | grep -q .; then\n  echo \"repository archive contains a symbolic link\" >&2\n  exit 1\nfi\n\nsudo install -d -o root -g root -m 0555 /opt/gh-aw-repository\nsudo cp -R \"$extract_dir/.\" /opt/gh-aw-repository/\nsudo chown -R root:root /opt/gh-aw-repository\nsudo find /opt/gh-aw-repository -type d -exec chmod 0555 {} +\nsudo find /opt/gh-aw-repository -type f -exec chmod 0444 {} +\nrm -rf \"$extract_dir\"\nrm -f \"$archive\"\n\ntest -f /opt/gh-aw-repository/AGENTS.md\ntest -f /opt/gh-aw-repository/.github/scripts/community_issue_triage_contract.mjs\ntest ! -e /opt/gh-aw-repository/.git\ntest -z \"$(find /opt/gh-aw-repository ! -user root -print -quit)\"\ntest -z \"$(find /opt/gh-aw-repository ! -group root -print -quit)\"\ntest -z \"$(find /opt/gh-aw-repository -perm /0222 -print -quit)\"\n"
         shell: bash
-      - name: Prove the agent repository is credential-free
+      - if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
+        name: Prove the agent repository is credential-free
         run: "set -euo pipefail\ntest ! -e /opt/gh-aw-repository/.git\nif git config --global --get-regexp '^(credential\\.|http\\..*\\.extraheader)' >/dev/null 2>&1; then\n  echo \"unexpected Git credential configuration is present\" >&2\n  exit 1\nfi\n"
         shell: bash
 
@@ -930,6 +958,28 @@ jobs:
           if [ ! -f /tmp/gh-aw/agent_output.json ]; then
             echo '{"items":[]}' > /tmp/gh-aw/agent_output.json
           fi
+      - if: ${{ always() && steps.reserve_daily_budget.outputs.allowed == 'true' }}
+        name: Collect the exact pinned-runtime usage files
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/collect_usage_artifact_files.sh"
+      - if: ${{ always() && steps.reserve_daily_budget.outputs.allowed == 'true' }}
+        name: Upload actual AI usage before releasing the agent queue
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          if-no-files-found: error
+          name: usage
+          path: |
+            /tmp/gh-aw/usage/aw_info.json
+            /tmp/gh-aw/usage/aw-info.jsonl
+            /tmp/gh-aw/usage/agent_usage.json
+            /tmp/gh-aw/usage/agent_usage.jsonl
+            /tmp/gh-aw/usage/detection_usage.jsonl
+            /tmp/gh-aw/usage/evals.jsonl
+            /tmp/gh-aw/usage/github_rate_limits.jsonl
+            /tmp/gh-aw/usage/agent/token_usage.jsonl
+            /tmp/gh-aw/usage/detection/token_usage.jsonl
+            /tmp/gh-aw/usage/activity/summary.json
+          retention-days: 2
+
       # Small dedicated copy of the agent output so safe-output processing
       # survives a failed or timed-out upload of the larger agent artifact
       - name: Upload agent output fallback artifact
@@ -974,7 +1024,6 @@ jobs:
       - qualifying_rate_gate
       - safe_outputs
       - trusted_issue_snapshot
-      - usage_accounting
     if: >
       (always() && (needs.agent.result != 'skipped' || needs.activation.outputs.lockdown_check_failed == 'true' ||
       needs.activation.outputs.oauth_token_check_failed == 'true' || needs.activation.outputs.stale_lock_file_failed == 'true' ||
@@ -1304,6 +1353,11 @@ jobs:
     permissions:
       actions: read
       contents: read
+    concurrency:
+      cancel-in-progress: false
+      group: community-issue-triage-reporter-${{ github.actor }}
+      queue: max
+
     timeout-minutes: 5
     outputs:
       allowed: ${{ steps.rate.outputs.allowed }}
@@ -1428,16 +1482,13 @@ jobs:
       - trusted_issue_snapshot
     if: >
       ((!cancelled()) && needs.agent.result != 'skipped') && (needs.intake_gate.outputs.eligible == 'true' &&
-      needs.qualifying_rate_gate.outputs.allowed == 'true')
+      needs.qualifying_rate_gate.outputs.allowed == 'true' && needs.agent.result == 'success')
     runs-on: ubuntu-slim
     permissions:
       actions: read
       contents: read
       issues: write
       pull-requests: write
-    concurrency:
-      group: "community-issue-triage-safe-outputs"
-      cancel-in-progress: false
     timeout-minutes: 5
     env:
       GH_AW_AGENT_AIC: ${{ needs.agent.outputs.aic }}
@@ -1484,6 +1535,11 @@ jobs:
           GH_AW_INFO_VERSION: "1.0.80"
           GH_AW_INFO_AWF_VERSION: "v0.28.4"
           GH_AW_INFO_ENGINE_ID: "copilot"
+      - name: Require the current run's committed AI credit reservation
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: community-issue-triage-aic-reservation
+          path: ${{ runner.temp }}/triage-aic-reservation
       - name: Check out the immutable validator source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1827,57 +1883,3 @@ jobs:
           overwrite: false
           path: ${{ runner.temp }}/trusted-intake-context
           retention-days: 1
-
-  usage_accounting:
-    name: Record AI credit usage without public write authority
-    needs:
-      - agent
-      - intake_gate
-      - qualifying_rate_gate
-    if: >
-      always() && needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' &&
-      needs.agent.result != 'skipped'
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-    timeout-minutes: 5
-    steps:
-      - name: Configure GH_HOST for enterprise compatibility
-        id: ghes-host-config
-        shell: bash
-        run: | # zizmor: ignore[github-env] - GITHUB_SERVER_URL is set by GitHub Actions, not user input.
-          # Derive GH_HOST from GITHUB_SERVER_URL so the gh CLI targets the correct
-          # GitHub instance (GHES/GHEC). On github.com this is a harmless no-op.
-          GH_HOST="${GITHUB_SERVER_URL#https://}"
-          GH_HOST="${GH_HOST#http://}"
-          echo "GH_HOST=${GH_HOST}" >> "$GITHUB_ENV"
-      - name: Load the pinned usage collector
-        uses: github/gh-aw-actions/setup@ea4b911d44a5336c74325a122a5fd9110b45ff06 # ea4b911d44a5336c74325a122a5fd9110b45ff06
-        with:
-          destination: ${{ runner.temp }}/gh-aw/actions
-          job-name: ${{ github.job }}
-      - name: Download the agent artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: agent
-          path: /tmp/gh-aw/
-      - name: Collect the exact pinned-runtime usage files
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/collect_usage_artifact_files.sh"
-      - name: Upload the daily-guard usage ledger entry
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          if-no-files-found: error
-          name: usage
-          path: |
-            /tmp/gh-aw/usage/aw_info.json
-            /tmp/gh-aw/usage/aw-info.jsonl
-            /tmp/gh-aw/usage/agent_usage.json
-            /tmp/gh-aw/usage/agent_usage.jsonl
-            /tmp/gh-aw/usage/detection_usage.jsonl
-            /tmp/gh-aw/usage/evals.jsonl
-            /tmp/gh-aw/usage/github_rate_limits.jsonl
-            /tmp/gh-aw/usage/agent/token_usage.jsonl
-            /tmp/gh-aw/usage/detection/token_usage.jsonl
-            /tmp/gh-aw/usage/activity/summary.json
-          retention-days: 2

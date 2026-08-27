@@ -384,12 +384,32 @@ def test_source_and_compiled_workflow_activate_only_the_bounded_issue_events():
         "stale-check: full",
         "max-ai-credits: 75",
         "max-daily-ai-credits: 150",
-        "group: community-issue-triage",
-        "cancel-in-progress: false",
-        "queue: single",
+        "group: community-issue-triage-agent",
+        "queue: max",
     ):
         assert setting in source
+    assert "queue: single" not in source
+    assert 'group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.run_id }}"' in compiled
     assert "user-rate-limit:" not in source
+
+
+def test_public_ingress_and_accepted_work_use_non_displacing_scoped_fifo_queues():
+    compiled = LOCK.read_text()
+    top_level = compiled.split("\nconcurrency:\n", 1)[1].split("\n\nrun-name:", 1)[0]
+    assert 'group: "gh-aw-${{ github.workflow }}-${{ github.event.issue.number || github.run_id }}"' in top_level
+    assert "queue: max" in top_level
+
+    reporter = compiled.split("\n  qualifying_rate_gate:\n", 1)[1].split("\n  safe_outputs:\n", 1)[0]
+    assert "group: community-issue-triage-reporter-${{ github.actor }}" in reporter
+    assert "queue: max" in reporter.split("    concurrency:\n", 1)[1].split("    outputs:\n", 1)[0]
+
+    agent = compiled.split("\n  agent:\n", 1)[1].split("\n  conclusion:\n", 1)[0]
+    assert 'group: "community-issue-triage-agent"' in agent
+    assert "queue: max" in agent.split("    concurrency:\n", 1)[1].split("    env:\n", 1)[0]
+
+    # Safe-output writes need no cross-target lock: the top-level per-issue FIFO
+    # serializes same-target runs, while different issues can be updated independently.
+    assert "community-issue-triage-safe-outputs" not in compiled
 
 
 def test_safe_output_surface_is_bounded_to_triage_labels_comments_and_needs_info_removal():
@@ -441,6 +461,8 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     assert 'core.setOutput("allowed", "true")' in rate_gate
     assert "qualifying-intake-${{ github.run_id }}" in rate_gate
     assert "if: ${{ steps.rate.outputs.allowed == 'true' }}" in rate_gate
+    assert "group: community-issue-triage-reporter-${{ github.actor }}" in rate_gate
+    assert "queue: max" in rate_gate
 
     snapshot = source.split("  trusted_issue_snapshot:\n", 1)[1].split("\n  agent:\n", 1)[0]
     assert "needs: [intake_gate, qualifying_rate_gate]" in snapshot
@@ -728,7 +750,7 @@ def test_source_removes_agent_github_tools_and_uses_sealed_credential_free_sourc
 def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
     source = WORKFLOW.read_text()
     compiled = LOCK.read_text()
-    assert source.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 3
+    assert source.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 4
     assert source.count("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c") == 3
     assert source.count("artifact-ids: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}") == 2
     assert "name: trusted-intake-context-${{ github.run_id }}" in source
@@ -754,19 +776,31 @@ def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
     assert "continue-on-error" not in source
 
 
-def test_usage_ledger_is_recorded_by_a_read_only_job_while_compiler_conclusion_stays_unreachable():
+def test_daily_budget_is_reserved_before_inference_and_usage_is_uploaded_before_releasing_agent_queue():
     source = WORKFLOW.read_text()
-    accounting = source.split("  usage_accounting:\n", 1)[1].split("\n  conclusion:\n", 1)[0]
-    assert "permissions:\n      actions: read\n      contents: read\n" in accounting
-    assert "issues: write" not in accounting and "pull-requests: write" not in accounting
-    assert "name: agent" in accounting
-    assert "collect_usage_artifact_files.sh" in accounting
-    assert "name: usage" in accounting
-    assert "retention-days: 2" in accounting
+    pre_agent = source.split("pre-agent-steps:\n", 1)[1].split("\npost-steps:\n", 1)[0]
+    assert "community-issue-triage-aic-reservation" in pre_agent
+    assert "reserved + perRun > daily" in pre_agent
+    assert "listArtifactsForRepo" in pre_agent
+    assert "getWorkflowRun" in pre_agent
+    assert 'core.setOutput("allowed", "false")' in pre_agent
+    assert 'core.setOutput("allowed", "true")' in pre_agent
+    assert 'JSON.stringify({type: "noop", message})' in pre_agent
+    assert "core.setFailed(message)" in pre_agent
+    assert "overwrite: false" in pre_agent
+
+    post_agent = source.split("post-steps:\n", 1)[1].split("\ntools:\n", 1)[0]
+    assert "collect_usage_artifact_files.sh" in post_agent
+    assert "name: usage" in post_agent
+    assert "retention-days: 2" in post_agent
+
+    safe_outputs = source.split("  safe_outputs:\n", 1)[1].split("\npre-agent-steps:\n", 1)[0]
+    assert "Require the current run's committed AI credit reservation" in safe_outputs
+    assert "needs.agent.result == 'success'" in safe_outputs
 
     conclusion = source.split("  conclusion:\n", 1)[1].split("\n  safe_outputs:\n", 1)[0]
     assert "if: ${{ false }}" in conclusion
-    assert "usage_accounting" in conclusion
+    assert "usage_accounting" not in source
 
 
 def test_snapshot_job_outputs_only_artifact_id_and_digests():
@@ -813,7 +847,7 @@ def test_compiled_permissions_and_manifest_have_no_agent_github_surface_or_track
     assert "tracking_issue" not in compiled
 
     agent = compiled.split("\n  agent:\n", 1)[1].split("\n  conclusion:\n", 1)[0]
-    permissions = agent.split("    permissions:\n", 1)[1].split("    env:\n", 1)[0]
+    permissions = agent.split("    permissions:\n", 1)[1].split("    concurrency:\n", 1)[0]
     assert permissions == "      actions: read\n      contents: read\n"
 
 
@@ -1625,7 +1659,7 @@ def test_noncanonical_json_and_unexpected_fields_are_rejected():
 
 @pytest.mark.parametrize(
     "mutation",
-    ["empty", "too_many", "duplicate", "disallowed", "bad_rationale", "bad_confidence", "extra_field"],
+    ["too_many", "duplicate", "disallowed", "bad_rationale", "bad_confidence", "extra_field"],
 )
 def test_v3_label_intents_require_one_to_four_unique_exact_allowlisted_entries(mutation: str):
     bundle = _create_snapshot()["bundle"]
@@ -1636,9 +1670,7 @@ def test_v3_label_intents_require_one_to_four_unique_exact_allowlisted_entries(m
             "confidence": "HIGH",
         }
     ]
-    if mutation == "empty":
-        labels = []
-    elif mutation == "too_many":
+    if mutation == "too_many":
         labels = [
             {
                 "name": name,
@@ -1659,6 +1691,48 @@ def test_v3_label_intents_require_one_to_four_unique_exact_allowlisted_entries(m
         labels[0]["agent_target"] = TARGET_NUMBER
     result = _render(bundle, _normal_proposal(bundle, label_intents=labels))
     assert result.returncode != 0
+
+
+def test_initial_complete_support_question_can_emit_a_truthful_comment_without_forcing_a_label():
+    bundle = _create_snapshot()["bundle"]
+    proposal = _normal_proposal(bundle, label_intents=[])
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {"items": [{"type": "add_comment", "body": proposal}]},
+        }
+    )
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)["output"]["items"]
+    assert [item["type"] for item in rewritten] == ["add_comment"]
+    assert rewritten[0]["body"].startswith("Thanks for the report.")
+
+
+@pytest.mark.parametrize(
+    "rationale",
+    [
+        "Matches the explicit Network component selected by the reporter.",
+        "The report is related to the UniFi Network application family.",
+        "The observed behavior is similar to a documented Network component failure mode.",
+    ],
+)
+def test_label_rationales_allow_ordinary_non_candidate_wording(rationale: str):
+    bundle = _create_snapshot()["bundle"]
+    labels = [{"name": "network", "rationale": rationale, "confidence": "HIGH"}]
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": _normal_proposal(bundle, label_intents=labels)},
+                    {"type": "add_labels", "labels": labels},
+                ]
+            },
+        }
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize(

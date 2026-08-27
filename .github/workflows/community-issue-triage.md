@@ -17,7 +17,14 @@ permissions:
   contents: read
 
 strict: true
-engine: copilot
+engine:
+  id: copilot
+  # Only accepted agent jobs enter this FIFO queue. Public issue events are first
+  # filtered by the per-issue ingress and per-reporter qualifying gates below.
+  concurrency:
+    group: community-issue-triage-agent
+    cancel-in-progress: false
+    queue: max
 checkout: false
 sandbox:
   agent:
@@ -29,12 +36,6 @@ network:
   allowed: [github]
 
 timeout-minutes: 10
-concurrency:
-  # This low-volume workflow is serialized globally so the qualifying-intake receipt
-  # gate and the prior-run AIC ledger cannot race across reporters.
-  group: community-issue-triage
-  cancel-in-progress: false
-  queue: single
 max-ai-credits: 75
 max-daily-ai-credits: 150
 
@@ -164,6 +165,13 @@ jobs:
     permissions:
       actions: read
       contents: read
+    concurrency:
+      # Eligibility is already true before this job queues. Serialize only a
+      # reporter's own receipt check+reservation so two targets from that reporter
+      # cannot race, without allowing them to displace another reporter's run.
+      group: community-issue-triage-reporter-${{ github.actor }}
+      cancel-in-progress: false
+      queue: max
     outputs:
       allowed: ${{ steps.rate.outputs.allowed }}
     steps:
@@ -365,57 +373,23 @@ jobs:
     permissions:
       actions: read
       contents: read
-  usage_accounting:
-    name: Record AI credit usage without public write authority
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: [intake_gate, qualifying_rate_gate, agent]
-    if: always() && needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' && needs.agent.result != 'skipped'
-    permissions:
-      actions: read
-      contents: read
-    steps:
-      - name: Load the pinned usage collector
-        uses: github/gh-aw-actions/setup@ea4b911d44a5336c74325a122a5fd9110b45ff06 # v0.87.4
-        with:
-          destination: ${{ runner.temp }}/gh-aw/actions
-          job-name: ${{ github.job }}
-      - name: Download the agent artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: agent
-          path: /tmp/gh-aw/
-      - name: Collect the exact pinned-runtime usage files
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/collect_usage_artifact_files.sh"
-      - name: Upload the daily-guard usage ledger entry
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: usage
-          path: |
-            /tmp/gh-aw/usage/aw_info.json
-            /tmp/gh-aw/usage/aw-info.jsonl
-            /tmp/gh-aw/usage/agent_usage.json
-            /tmp/gh-aw/usage/agent_usage.jsonl
-            /tmp/gh-aw/usage/detection_usage.jsonl
-            /tmp/gh-aw/usage/evals.jsonl
-            /tmp/gh-aw/usage/github_rate_limits.jsonl
-            /tmp/gh-aw/usage/agent/token_usage.jsonl
-            /tmp/gh-aw/usage/detection/token_usage.jsonl
-            /tmp/gh-aw/usage/activity/summary.json
-          if-no-files-found: error
-          retention-days: 2
   conclusion:
     # gh-aw v0.87.4 emits issue-write-capable noop/failure handlers even when
-    # reporting is disabled. Keep that compiler-owned path unreachable; the
-    # dedicated read-only usage_accounting job records the daily AIC ledger.
+    # reporting is disabled. Keep that compiler-owned path unreachable; the agent
+    # post-steps record actual usage without giving a reporting job write authority.
     if: ${{ false }}
   safe_outputs:
     needs: [intake_gate, qualifying_rate_gate, trusted_issue_snapshot]
-    if: ${{ needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' }}
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' && needs.agent.result == 'success' }}
     permissions:
       actions: read
       contents: read
     pre-steps:
+      - name: Require the current run's committed AI credit reservation
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: community-issue-triage-aic-reservation
+          path: ${{ runner.temp }}/triage-aic-reservation
       - name: Check out the immutable validator source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -482,12 +456,147 @@ jobs:
             });
 
 pre-agent-steps:
+  - name: Reserve the conservative daily AI credit budget
+    id: reserve_daily_budget
+    uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+    env:
+      GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
+      RESERVATION_NAME: community-issue-triage-aic-reservation
+      MAX_AI_CREDITS: "75"
+      MAX_DAILY_AI_CREDITS: "150"
+    with:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+      script: |
+        const fs = require("fs");
+        const path = require("path");
+
+        const block = (message) => {
+          core.setOutput("allowed", "false");
+          if (typeof process.env.GH_AW_SAFE_OUTPUTS !== "string" || process.env.GH_AW_SAFE_OUTPUTS === "") {
+            throw new Error("safe-output path is unavailable for a fail-closed budget decision");
+          }
+          fs.appendFileSync(
+            process.env.GH_AW_SAFE_OUTPUTS,
+            JSON.stringify({type: "noop", message}) + "\n",
+            {encoding: "utf8", mode: 0o600},
+          );
+          core.setFailed(message);
+        };
+
+        core.setOutput("allowed", "false");
+        const reservationName = process.env.RESERVATION_NAME;
+        const perRun = Number(process.env.MAX_AI_CREDITS);
+        const daily = Number(process.env.MAX_DAILY_AI_CREDITS);
+        if (
+          typeof reservationName !== "string" || reservationName === "" ||
+          !Number.isFinite(perRun) || perRun <= 0 ||
+          !Number.isFinite(daily) || daily < perRun
+        ) {
+          block("The daily AI credit reservation configuration is invalid; no public action was taken.");
+          return;
+        }
+
+        try {
+          const currentRun = await github.rest.actions.getWorkflowRun({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: Number(context.runId),
+          });
+          const workflowId = Number(currentRun.data?.workflow_id);
+          if (!Number.isSafeInteger(workflowId) || workflowId < 1) {
+            throw new Error("current workflow ID is invalid");
+          }
+          const response = await github.rest.actions.listArtifactsForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            name: reservationName,
+            per_page: 100,
+            page: 1,
+          });
+          const totalCount = Number(response.data?.total_count);
+          const artifacts = response.data?.artifacts;
+          if (
+            !Array.isArray(artifacts) ||
+            !Number.isSafeInteger(totalCount) ||
+            totalCount < 0 ||
+            totalCount > 100 ||
+            artifacts.length !== totalCount
+          ) {
+            throw new Error("daily reservation artifact history exceeds the trusted bound");
+          }
+
+          const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+          const reservedRunIds = new Set();
+          let reserved = 0;
+          for (const artifact of artifacts) {
+            if (artifact?.name !== reservationName) {
+              throw new Error("GitHub returned an unexpected reservation artifact name");
+            }
+            const createdAt = Date.parse(artifact.created_at || "");
+            if (!Number.isFinite(createdAt)) {
+              throw new Error("GitHub returned an invalid reservation timestamp");
+            }
+            if (createdAt < cutoff) continue;
+            if (artifact.expired) {
+              throw new Error("a current-window reservation artifact is unexpectedly expired");
+            }
+            const runId = Number(artifact.workflow_run?.id);
+            if (!Number.isSafeInteger(runId) || runId < 1 || reservedRunIds.has(runId)) {
+              throw new Error("reservation workflow provenance is invalid or duplicated");
+            }
+            const run = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+            if (Number(run.data?.workflow_id) !== workflowId) continue;
+            reservedRunIds.add(runId);
+            reserved += perRun;
+          }
+
+          if (reserved + perRun > daily) {
+            block("The conservative daily AI credit budget is exhausted; no public action was taken.");
+            core.notice(`Daily AI credit reservation blocked at ${reserved}/${daily}.`);
+            return;
+          }
+
+          const directory = path.join(process.env.RUNNER_TEMP, "triage-aic-reservation");
+          fs.mkdirSync(directory, {recursive: true, mode: 0o700});
+          fs.writeFileSync(
+            path.join(directory, "reservation.json"),
+            JSON.stringify({
+              actor: process.env.GITHUB_ACTOR,
+              credits: perRun,
+              run_id: String(context.runId),
+              workflow_id: String(workflowId),
+            }),
+            {encoding: "utf8", mode: 0o600},
+          );
+          core.setOutput("allowed", "true");
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "unknown error";
+          core.warning(`Daily AI credit reservation failed closed: ${message}`);
+          block("The daily AI credit reservation could not be verified; no public action was taken.");
+        }
+  - name: Commit the daily AI credit reservation before inference
+    if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
+    uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+    with:
+      name: community-issue-triage-aic-reservation
+      path: ${{ runner.temp }}/triage-aic-reservation/reservation.json
+      if-no-files-found: error
+      retention-days: 2
+      compression-level: 0
+      overwrite: false
+      include-hidden-files: false
   - name: Download the trusted issue snapshot for inference
+    if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
     uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
     with:
       artifact-ids: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}
       path: ${{ runner.temp }}/trusted-intake-download
   - name: Verify trusted snapshot provenance before inference
+    if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
     uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
     env:
       EXPECTED_ARTIFACT_ID: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}
@@ -535,6 +644,7 @@ pre-agent-steps:
           expectedBundleDigest: process.env.EXPECTED_BUNDLE_DIGEST,
         });
   - name: Seal the verified inference snapshot outside agent-writable paths
+    if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
     shell: bash
     run: |
       set -euo pipefail
@@ -546,6 +656,7 @@ pre-agent-steps:
       rmdir "${RUNNER_TEMP}/trusted-intake-download"
       test "$(stat -c '%U:%G:%a' /opt/gh-aw-trusted-intake/context.json)" = "root:root:444"
   - name: Materialize immutable public repository source without credentials
+    if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
     shell: bash
     env:
       EXPECTED_REPOSITORY: ${{ github.repository }}
@@ -595,6 +706,7 @@ pre-agent-steps:
       test -z "$(find /opt/gh-aw-repository ! -group root -print -quit)"
       test -z "$(find /opt/gh-aw-repository -perm /0222 -print -quit)"
   - name: Prove the agent repository is credential-free
+    if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
     shell: bash
     run: |
       set -euo pipefail
@@ -603,6 +715,29 @@ pre-agent-steps:
         echo "unexpected Git credential configuration is present" >&2
         exit 1
       fi
+
+post-steps:
+  - name: Collect the exact pinned-runtime usage files
+    if: ${{ always() && steps.reserve_daily_budget.outputs.allowed == 'true' }}
+    run: bash "${RUNNER_TEMP}/gh-aw/actions/collect_usage_artifact_files.sh"
+  - name: Upload actual AI usage before releasing the agent queue
+    if: ${{ always() && steps.reserve_daily_budget.outputs.allowed == 'true' }}
+    uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+    with:
+      name: usage
+      path: |
+        /tmp/gh-aw/usage/aw_info.json
+        /tmp/gh-aw/usage/aw-info.jsonl
+        /tmp/gh-aw/usage/agent_usage.json
+        /tmp/gh-aw/usage/agent_usage.jsonl
+        /tmp/gh-aw/usage/detection_usage.jsonl
+        /tmp/gh-aw/usage/evals.jsonl
+        /tmp/gh-aw/usage/github_rate_limits.jsonl
+        /tmp/gh-aw/usage/agent/token_usage.jsonl
+        /tmp/gh-aw/usage/detection/token_usage.jsonl
+        /tmp/gh-aw/usage/activity/summary.json
+      if-no-files-found: error
+      retention-days: 2
 
 tools:
   bash: false
@@ -631,7 +766,6 @@ safe-outputs:
   missing-data: false
   missing-tool: false
   timeout-minutes: 5
-  concurrency-group: community-issue-triage-safe-outputs
   threat-detection: false
   steps:
     - name: Validate and render the attested readiness proposal
@@ -891,11 +1025,14 @@ Do not perform substitute network research. You have no GitHub MCP or GitHub cre
 
 The artifact's `run_kind` selects exactly one contract:
 
-- **Initial:** call `add_labels` once with 1 to 4 unique allowlisted label intents and
-  `add_comment` once with the canonical v3 proposal as its body. Use only `bug`,
-  `enhancement`, `documentation`, `dependencies`, `docker`, `github-actions`, `api`,
-  `network`, `protect`, `access`, and `needs-info`. Never propose `needs-info` unless the
-  decision is `missing_information`; never propose it for `ready_for_maintainer`.
+- **Initial:** call `add_comment` once with the canonical v3 proposal as its body. Call
+  `add_labels` at most once with 1 to 4 unique allowlisted label intents, and only when
+  the trusted intake truthfully supports them; do not force a label for a complete
+  support question or unclear report. The proposal's `label_intents` must be empty when
+  `add_labels` is omitted. Use only `bug`, `enhancement`, `documentation`, `dependencies`,
+  `docker`, `github-actions`, `api`, `network`, `protect`, `access`, and `needs-info`.
+  Never propose `needs-info` unless the decision is `missing_information`; never propose
+  it for `ready_for_maintainer`.
 - **Incomplete continuation:** call only `add_comment` with a `missing_information`
   proposal. The proposal's `label_intents` must be empty because `needs-info` already
   exists. Trusted code adds the continuation marker.
