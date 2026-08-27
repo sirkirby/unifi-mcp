@@ -2863,6 +2863,19 @@ def test_prompt_requires_minimal_safe_output_argument_shapes_and_reference_prefl
     assert "Do not add a footer or any visible prose to the JSON proposal" in source
 
 
+def test_prompt_exact_proposal_shape_copies_the_artifact_run_kind():
+    source = " ".join(WORKFLOW.read_text().split())
+    proposal_shape = (
+        '`{"comments_receipt":"<comments receipt>","decision":<decision>,'
+        '"kind":"triage_proposal","label_intents":[<label intent>],'
+        '"relationships":[<relationship>],"run_kind":"<artifact run kind>",'
+        '"target_receipt":"<target receipt>","trigger_receipt":"<trigger receipt>",'
+        '"version":3}`'
+    )
+    assert proposal_shape in source
+    assert '"run_kind":"initial","target_receipt":"<target receipt>"' not in source
+
+
 def test_contract_cli_accepts_only_file_paths_for_proposal_validation(tmp_path: Path):
     bundle = _create_snapshot()["bundle"]
     proposal = _normal_proposal(bundle)

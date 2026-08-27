@@ -1110,7 +1110,7 @@ For every normal initial or incomplete-continuation proposal:
   exactly match the `add_labels` array, including order.
 - The comment body is canonical JSON with no extra whitespace and alphabetically sorted
   keys at every level. Its exact top-level structure is:
-  `{"comments_receipt":"<comments receipt>","decision":<decision>,"kind":"triage_proposal","label_intents":[<label intent>],"relationships":[<relationship>],"run_kind":"initial","target_receipt":"<target receipt>","trigger_receipt":"<trigger receipt>","version":3}`.
+  `{"comments_receipt":"<comments receipt>","decision":<decision>,"kind":"triage_proposal","label_intents":[<label intent>],"relationships":[<relationship>],"run_kind":"<artifact run kind>","target_receipt":"<target receipt>","trigger_receipt":"<trigger receipt>","version":3}`.
   Copy `run_kind` and all receipts exactly from the artifact.
 - A relationship is
   `{"candidate_number":123,"candidate_receipt":"<candidate receipt>","reason":"specific normalized reason","verdict":"RELATED"}`.
