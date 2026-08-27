@@ -584,12 +584,18 @@ def test_safe_output_surface_is_bounded_to_triage_labels_comments_and_needs_info
 
 def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     source = WORKFLOW.read_text()
+    compiled = LOCK.read_text()
     activation = source.split("  activation:\n", 1)[1].split("\n  intake_gate:\n", 1)[0]
     assert "needs: [intake_gate, qualifying_rate_gate]" in activation
     assert "needs.intake_gate.outputs.eligible == 'true'" in activation
     assert "needs.qualifying_rate_gate.outputs.allowed == 'true'" in activation
 
     gate = source.split("  intake_gate:\n", 1)[1].split("\n  qualifying_rate_gate:\n", 1)[0]
+    assert "github.event.issue.pull_request == null" in gate
+    assert "github.event.issue.state == 'open'" in gate
+    assert "github.event.issue.user.type != 'Bot'" in gate
+    assert "github.actor == github.event.issue.user.login" in gate
+    assert "github.event.comment.user.login == github.actor" in gate
     assert "permissions:\n      contents: read\n      issues: read\n" in gate
     assert "evaluateIntakeEligibility" in gate
     assert 'core.setOutput("eligible"' in gate
@@ -598,6 +604,16 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     assert "github.rest.issues.get" in gate
     assert "github.paginate" in gate or "listComments" in gate
     assert "listEventsForTimeline" in gate
+
+    compiled_gate = compiled.split("  intake_gate:\n", 1)[1].split("\n  qualifying_rate_gate:\n", 1)[0]
+    for fragment in (
+        "github.event.issue.pull_request == null",
+        "github.event.issue.state == 'open'",
+        "github.event.issue.user.type != 'Bot'",
+        "github.actor == github.event.issue.user.login",
+        "github.event.comment.user.login == github.actor",
+    ):
+        assert fragment in compiled_gate
 
     rate_gate = source.split("  qualifying_rate_gate:\n", 1)[1].split("\n  trusted_issue_snapshot:\n", 1)[0]
     assert "needs: [intake_gate]" in rate_gate

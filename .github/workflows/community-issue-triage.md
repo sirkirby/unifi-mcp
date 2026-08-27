@@ -46,6 +46,10 @@ jobs:
 
   intake_gate:
     name: Qualifying community intake gate
+    # Reject public PR comments, bots, closed issues, and non-reporters from the
+    # event payload before a runner or GitHub API request is allocated. The
+    # checked-out contract repeats these checks against current trusted data.
+    if: github.event.issue.pull_request == null && github.event.issue.state == 'open' && github.event.issue.user.type != 'Bot' && github.actor == github.event.issue.user.login && (github.event_name == 'issues' || (github.event_name == 'issue_comment' && github.event.comment.user.login == github.actor))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
