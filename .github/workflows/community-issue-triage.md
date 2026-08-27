@@ -30,16 +30,13 @@ network:
 
 timeout-minutes: 10
 concurrency:
-  group: community-issue-triage-${{ github.event.issue.number }}
+  # This low-volume workflow is serialized globally so the qualifying-intake receipt
+  # gate and the prior-run AIC ledger cannot race across reporters.
+  group: community-issue-triage
   cancel-in-progress: false
   queue: single
 max-ai-credits: 75
 max-daily-ai-credits: 150
-user-rate-limit:
-  max-runs-per-window: 1
-  window: 180
-  events: [issues, issue_comment]
-  ignored-roles: []
 
 jobs:
   intake_gate:
@@ -112,6 +109,23 @@ jobs:
                 throw new Error("issue comment collection exceeds the trusted bound");
               }
             }
+            const timelineRequest = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: targetNumber,
+              per_page: 100,
+              page: 1,
+            };
+            const timelineResponse = await github.rest.issues.listEventsForTimeline(timelineRequest);
+            if (!Array.isArray(timelineResponse.data)) {
+              throw new Error("GitHub returned an invalid issue timeline event collection");
+            }
+            if (timelineResponse.data.length === 100) {
+              const overflow = await github.rest.issues.listEventsForTimeline({...timelineRequest, page: 2});
+              if (!Array.isArray(overflow.data) || overflow.data.length > 0) {
+                throw new Error("issue timeline event collection exceeds the trusted bound");
+              }
+            }
             let eventComment = null;
             if (process.env.EVENT_NAME === "issue_comment") {
               const commentId = Number(process.env.EVENT_COMMENT_ID);
@@ -132,6 +146,7 @@ jobs:
               issue: issueResponse.data,
               eventComment,
               comments: commentsResponse.data,
+              timelineEvents: timelineResponse.data,
             });
             core.setOutput("eligible", String(result.eligible));
             core.setOutput("target_number", String(result.target_number));
@@ -140,13 +155,126 @@ jobs:
             core.setOutput("initial_marker_count", String(result.initial_marker_count));
             core.setOutput("needs_info_present", String(result.needs_info_present));
             core.setOutput("trigger_json", contract.canonicalStringify(result.trigger));
+  qualifying_rate_gate:
+    name: Qualifying reporter rate gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [intake_gate]
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' }}
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      allowed: ${{ steps.rate.outputs.allowed }}
+    steps:
+      - name: Enforce one qualifying intake per reporter every three hours
+        id: rate
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            core.setOutput("allowed", "false");
+            const currentRunId = Number(context.runId);
+            const actor = process.env.GITHUB_ACTOR;
+            if (typeof actor !== "string" || actor === "") {
+              throw new Error("qualifying rate gate actor is missing");
+            }
+            const current = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: currentRunId,
+            });
+            const workflowId = current.data?.workflow_id;
+            if (!Number.isSafeInteger(workflowId) || workflowId < 1) {
+              throw new Error("could not resolve the current workflow ID for the qualifying rate gate");
+            }
+            const cutoff = new Date(Date.now() - 180 * 60 * 1000);
+            const request = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: workflowId,
+              actor,
+              created: `>=${cutoff.toISOString()}`,
+              per_page: 100,
+              page: 1,
+            };
+            const response = await github.rest.actions.listWorkflowRuns(request);
+            const runs = response.data?.workflow_runs;
+            if (!Array.isArray(runs)) {
+              throw new Error("GitHub returned an invalid workflow run collection");
+            }
+            if (runs.length === 100) {
+              const overflow = await github.rest.actions.listWorkflowRuns({...request, page: 2});
+              if (!Array.isArray(overflow.data?.workflow_runs) || overflow.data.workflow_runs.length > 0) {
+                throw new Error("qualifying reporter run history exceeds the trusted bound");
+              }
+            }
+            for (const run of runs) {
+              const runId = Number(run.id);
+              if (!Number.isSafeInteger(runId) || runId < 1) {
+                throw new Error("GitHub returned an invalid workflow run ID");
+              }
+              if (runId === currentRunId) continue;
+              const createdAt = Date.parse(run.created_at || "");
+              if (!Number.isFinite(createdAt)) {
+                throw new Error("GitHub returned an invalid workflow run timestamp");
+              }
+              if (createdAt < cutoff.getTime()) continue;
+              const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId,
+                per_page: 100,
+                page: 1,
+              });
+              const artifactCount = Number(artifacts.data?.total_count);
+              if (
+                !Array.isArray(artifacts.data?.artifacts) ||
+                !Number.isSafeInteger(artifactCount) ||
+                artifactCount < 0 ||
+                artifactCount > 100
+              ) {
+                throw new Error("qualifying intake artifact history exceeds the trusted bound");
+              }
+              const receiptName = `qualifying-intake-${runId}`;
+              if (artifacts.data.artifacts.some((artifact) => artifact.name === receiptName && !artifact.expired)) {
+                core.notice(`Reporter ${actor} already used the qualifying intake window in run ${runId}.`);
+                return;
+              }
+            }
+            core.setOutput("allowed", "true");
+      - name: Materialize the accepted qualifying-intake receipt
+        if: ${{ steps.rate.outputs.allowed == 'true' }}
+        env:
+          TARGET_NUMBER: ${{ needs.intake_gate.outputs.target_number }}
+          RUN_KIND: ${{ needs.intake_gate.outputs.run_kind }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/qualifying-intake"
+          jq -n \
+            --arg run_id "${GITHUB_RUN_ID}" \
+            --arg actor "${GITHUB_ACTOR}" \
+            --arg target_number "${TARGET_NUMBER}" \
+            --arg run_kind "${RUN_KIND}" \
+            '{run_id:$run_id,actor:$actor,target_number:$target_number,run_kind:$run_kind}' \
+            > "${RUNNER_TEMP}/qualifying-intake/receipt.json"
+      - name: Reserve the reporter window with the trusted receipt
+        if: ${{ steps.rate.outputs.allowed == 'true' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qualifying-intake-${{ github.run_id }}
+          path: ${{ runner.temp }}/qualifying-intake/receipt.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
 
   trusted_issue_snapshot:
     name: Trusted bounded issue snapshot
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [intake_gate]
-    if: ${{ needs.intake_gate.outputs.eligible == 'true' }}
+    needs: [intake_gate, qualifying_rate_gate]
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' }}
     permissions:
       contents: read
       issues: read
@@ -232,19 +360,58 @@ jobs:
           include-hidden-files: false
 
   agent:
-    needs: [intake_gate, trusted_issue_snapshot]
-    if: ${{ needs.intake_gate.outputs.eligible == 'true' }}
+    needs: [intake_gate, qualifying_rate_gate, trusted_issue_snapshot]
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' }}
     permissions:
       actions: read
       contents: read
+  usage_accounting:
+    name: Record AI credit usage without public write authority
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [intake_gate, qualifying_rate_gate, agent]
+    if: always() && needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' && needs.agent.result != 'skipped'
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Load the pinned usage collector
+        uses: github/gh-aw-actions/setup@ea4b911d44a5336c74325a122a5fd9110b45ff06 # v0.87.4
+        with:
+          destination: ${{ runner.temp }}/gh-aw/actions
+          job-name: ${{ github.job }}
+      - name: Download the agent artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: agent
+          path: /tmp/gh-aw/
+      - name: Collect the exact pinned-runtime usage files
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/collect_usage_artifact_files.sh"
+      - name: Upload the daily-guard usage ledger entry
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: usage
+          path: |
+            /tmp/gh-aw/usage/aw_info.json
+            /tmp/gh-aw/usage/aw-info.jsonl
+            /tmp/gh-aw/usage/agent_usage.json
+            /tmp/gh-aw/usage/agent_usage.jsonl
+            /tmp/gh-aw/usage/detection_usage.jsonl
+            /tmp/gh-aw/usage/evals.jsonl
+            /tmp/gh-aw/usage/github_rate_limits.jsonl
+            /tmp/gh-aw/usage/agent/token_usage.jsonl
+            /tmp/gh-aw/usage/detection/token_usage.jsonl
+            /tmp/gh-aw/usage/activity/summary.json
+          if-no-files-found: error
+          retention-days: 2
   conclusion:
     # gh-aw v0.87.4 emits issue-write-capable noop/failure handlers even when
     # reporting is disabled. Keep that compiler-owned path unreachable; the
-    # trusted safe-output summary and Actions job status remain observable.
+    # dedicated read-only usage_accounting job records the daily AIC ledger.
     if: ${{ false }}
   safe_outputs:
-    needs: [intake_gate, trusted_issue_snapshot]
-    if: ${{ needs.intake_gate.outputs.eligible == 'true' }}
+    needs: [intake_gate, qualifying_rate_gate, trusted_issue_snapshot]
+    if: ${{ needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' }}
     permissions:
       actions: read
       contents: read

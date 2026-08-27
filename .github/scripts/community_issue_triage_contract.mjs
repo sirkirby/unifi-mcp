@@ -15,6 +15,7 @@ import {pathToFileURL} from "node:url";
 export const CONTRACT_VERSION = 3;
 export const SNAPSHOT_STRATEGY = "bounded-title-lexical-v3";
 export const MAX_TARGET_COMMENTS = 100;
+export const MAX_TIMELINE_EVENTS = 100;
 export const MAX_CANDIDATES = 5;
 export const MAX_SCANNED_ISSUES = 1000;
 export const MAX_TEXT_ITEM_BYTES = 256 * 1024;
@@ -386,6 +387,22 @@ export function normalizeComment(raw) {
   };
 }
 
+export function normalizeTimelineEvent(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("GitHub returned an invalid issue timeline event");
+  const id = assertSafePositiveInteger(raw.id, "timeline event id");
+  const event = normalizeNullableText(raw.event).toLowerCase();
+  if (event === "") fail("timeline event type is invalid");
+  return {
+    id,
+    event,
+    created_at: normalizeNullableText(raw.created_at),
+    actor: normalizeAuthor(raw.actor),
+    label: raw.label === null || raw.label === undefined
+      ? null
+      : normalizeNullableText(typeof raw.label === "string" ? raw.label : raw.label?.name),
+  };
+}
+
 function normalizeTrigger(trigger) {
   if (!exactKeys(trigger, ["event_name", "action", "actor", "issue_number", "comment_id"])) {
     fail("trigger identity contains unexpected fields");
@@ -398,17 +415,31 @@ function normalizeTrigger(trigger) {
 }
 
 /** Fail-closed deterministic eligibility for automatic community intake. */
-export function evaluateIntakeEligibility({eventName, action, actor, issue, eventComment = null, comments = []}) {
+export function evaluateIntakeEligibility({
+  eventName,
+  action,
+  actor,
+  issue,
+  eventComment = null,
+  comments = [],
+  timelineEvents = [],
+}) {
   const target = normalizeIssue(issue);
   if (!Array.isArray(comments) || comments.length > MAX_TARGET_COMMENTS) fail("eligibility comments exceed the trusted bound");
+  if (!Array.isArray(timelineEvents) || timelineEvents.length > MAX_TIMELINE_EVENTS) fail("eligibility timeline events exceed the trusted bound");
   const normalizedComments = comments.map(normalizeComment).sort((left, right) => left.id - right.id);
+  const normalizedTimelineEvents = timelineEvents.map(normalizeTimelineEvent).sort((left, right) => left.id - right.id);
   const triggerComment = eventComment === null ? null : normalizeComment(eventComment);
   const initialMarkerCount = normalizedComments.filter(
     (comment) => comment.author === ACTIONS_BOT && comment.body.includes(INITIAL_MARKER),
   ).length;
-  const continuationCount = normalizedComments.filter(
+  const continuationCommentCount = normalizedComments.filter(
     (comment) => comment.author === ACTIONS_BOT && comment.body.includes(CONTINUATION_MARKER),
   ).length;
+  const needsInfoRemovalCount = normalizedTimelineEvents.filter(
+    (event) => event.event === "unlabeled" && event.actor === ACTIONS_BOT && event.label === "needs-info",
+  ).length;
+  const continuationCount = continuationCommentCount + needsInfoRemovalCount;
   const needsInfoPresent = target.labels.includes("needs-info");
   const trigger = normalizeTrigger({
     event_name: eventName,
@@ -540,6 +571,20 @@ async function fetchBoundedComments(github, owner, repo, issueNumber) {
     if (overflow.data.length > 0) fail("target comment count exceeds the trusted bound");
   }
   return comments.sort((left, right) => left.id - right.id);
+}
+
+async function fetchBoundedTimelineEvents(github, owner, repo, issueNumber) {
+  const request = {owner, repo, issue_number: issueNumber, per_page: 100, page: 1};
+  const response = await github.rest.issues.listEventsForTimeline(request);
+  if (!Array.isArray(response?.data)) fail("GitHub returned an invalid issue timeline event collection");
+  if (response.data.length > MAX_TIMELINE_EVENTS) fail("target timeline event count exceeds the trusted bound");
+  const events = response.data.map(normalizeTimelineEvent);
+  if (events.length === MAX_TIMELINE_EVENTS) {
+    const overflow = await github.rest.issues.listEventsForTimeline({...request, page: 2});
+    if (!Array.isArray(overflow?.data)) fail("GitHub returned an invalid issue timeline event overflow response");
+    if (overflow.data.length > 0) fail("target timeline event count exceeds the trusted bound");
+  }
+  return events.sort((left, right) => left.id - right.id);
 }
 
 async function scanCandidates(github, owner, repo, target) {
@@ -705,7 +750,7 @@ export async function createTrustedSnapshot({
   expectedNeedsInfoPresent = false,
   randomBytes,
 }) {
-  if (!github?.rest?.issues?.get || !github?.rest?.issues?.getLabel || !github?.rest?.issues?.listComments || !github?.graphql) {
+  if (!github?.rest?.issues?.get || !github?.rest?.issues?.getLabel || !github?.rest?.issues?.listComments || !github?.rest?.issues?.listEventsForTimeline || !github?.graphql) {
     fail("createTrustedSnapshot requires an injected GitHub issue and GraphQL client");
   }
   assertSafePositiveInteger(targetNumber, "targetNumber");
@@ -742,6 +787,7 @@ export async function createTrustedSnapshot({
   if (targetInspection.sensitive) return snapshotResult(sensitiveBundle(bundle, "target"));
 
   const comments = await fetchBoundedComments(github, owner, repo, targetNumber);
+  const timelineEvents = await fetchBoundedTimelineEvents(github, owner, repo, targetNumber);
   const eventComment = normalizedTrigger.comment_id === null
     ? null
     : comments.find((comment) => comment.id === normalizedTrigger.comment_id) || null;
@@ -752,6 +798,7 @@ export async function createTrustedSnapshot({
     issue: target,
     eventComment,
     comments,
+    timelineEvents,
   });
   if (
     !eligibility.eligible || eligibility.run_kind !== runKind ||
@@ -985,6 +1032,7 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
   if (bundle.sensitivity?.scope === "target") return createMetadataEnvelope(bundle);
 
   const comments = await fetchBoundedComments(github, owner, repo, bundle.target_number);
+  const timelineEvents = await fetchBoundedTimelineEvents(github, owner, repo, bundle.target_number);
   inspectEvidence([...issueTextItems(target, "target"), ...commentsTextItems(comments)]);
   if (bundle.comments === null || comments.length !== bundle.comments.count || canonicalDigest(comments) !== bundle.comments.digest) {
     fail("target comments changed after the trusted snapshot");
@@ -999,6 +1047,7 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
     issue: target,
     eventComment,
     comments,
+    timelineEvents,
   });
   if (
     !eligibility.eligible || eligibility.run_kind !== bundle.run_kind ||
@@ -1170,7 +1219,12 @@ export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind
   const labelIntents = validateLabelIntents(proposal.label_intents, bundle.run_kind === "continuation");
   if (bundle.run_kind === "initial" && !new Set(["ready_for_maintainer", "missing_information", "repository_evidence"]).has(decision.kind)) fail("initial decision is not allowlisted");
   if (bundle.run_kind === "continuation" && decision.kind !== "missing_information") fail("incomplete continuation must request missing information");
-  rejectRelationshipSemanticsOutsideCarrier(decision, bundle);
+  if (bundle.run_kind === "initial") {
+    const hasNeedsInfo = labelIntents.some(({name}) => name === "needs-info");
+    if (decision.kind === "missing_information" && !hasNeedsInfo) fail("missing-information initial triage requires needs-info");
+    if (decision.kind !== "missing_information" && hasNeedsInfo) fail("needs-info is valid only for missing-information initial triage");
+  }
+  rejectRelationshipSemanticsOutsideCarrier(decision, bundle, labelIntents);
   return {proposal: {...proposal, label_intents: labelIntents, relationships, decision}, rendered: renderDecision(decision, relationships, bundle.run_kind), relationships};
 }
 
@@ -1327,10 +1381,13 @@ async function renderVerifiedDecision(decision, relationships, bundle, fetchRepo
   return appendRelationshipsAndFooter(evidence, decision, relationships, bundle.run_kind);
 }
 
-function rejectRelationshipSemanticsOutsideCarrier(decision, bundle) {
+function rejectRelationshipSemanticsOutsideCarrier(decision, bundle, labelIntents = []) {
   const values = [];
   if (typeof decision.quote === "string") values.push(decision.quote);
   if (typeof decision.reason === "string") values.push(decision.reason);
+  for (const intent of labelIntents) {
+    if (typeof intent?.rationale === "string") values.push(intent.rationale);
+  }
   for (const value of values) {
     const normalized = normalizePolicyText(value);
     if (
@@ -1429,7 +1486,7 @@ export async function validateAndRewriteAgentOutput({
     if (validated.proposal.label_intents.length < 1) fail("initial proposal requires at least one label intent");
     const hasNeedsInfo = validated.proposal.label_intents.some(({name}) => name === "needs-info");
     if (validated.proposal.decision.kind === "missing_information" && !hasNeedsInfo) fail("missing-information initial triage requires needs-info");
-    if (validated.proposal.decision.kind === "ready_for_maintainer" && hasNeedsInfo) fail("ready initial triage cannot add needs-info");
+    if (validated.proposal.decision.kind !== "missing_information" && hasNeedsInfo) fail("needs-info is valid only for missing-information initial triage");
   }
   if (bundle.status === "complete") {
     validated.rendered = await renderVerifiedDecision(

@@ -75,6 +75,16 @@ def _bot_comment(comment_id: int, marker: str) -> dict[str, object]:
     return comment
 
 
+def _bot_needs_info_removal(event_id: int) -> dict[str, object]:
+    return {
+        "id": event_id,
+        "event": "unlabeled",
+        "created_at": "2026-05-10T15:20:00Z",
+        "actor": {"login": "github-actions[bot]", "type": "Bot"},
+        "label": {"name": "needs-info"},
+    }
+
+
 def _candidate_node(issue: dict[str, object]) -> dict[str, object]:
     return {
         "number": issue["number"],
@@ -98,6 +108,7 @@ def _snapshot_payload(
         "op": "create",
         "issues": issues,
         "commentPages": {"1": comments or [], "2": []},
+        "timelinePages": {"1": [], "2": []},
         "graphqlPages": [[_candidate_node(item) for item in retained]],
     }
 
@@ -107,7 +118,7 @@ import * as contract from __MODULE__;
 import fs from "node:fs";
 
 const payload = JSON.parse(fs.readFileSync(0, "utf8"));
-const calls = {labels: [], get: [], comments: [], graphql: 0};
+const calls = {labels: [], get: [], comments: [], timeline: [], graphql: 0};
 const issues = new Map(Object.entries(payload.issues || {}).map(([key, value]) => [Number(key), value]));
 const github = {
   rest: {issues: {
@@ -128,6 +139,13 @@ const github = {
       calls.comments.push({issue_number: request.issue_number, page: request.page, per_page: request.per_page});
       if (payload.failComments) throw new Error("simulated comment fetch failure");
       const value = (payload.commentPages || {})[String(request.page)] ?? [];
+      if (value === "INVALID") return {data: {invalid: true}};
+      return {data: value};
+    },
+    listEventsForTimeline: async (request) => {
+      calls.timeline.push({issue_number: request.issue_number, page: request.page, per_page: request.per_page});
+      if (payload.failTimeline) throw new Error("simulated timeline fetch failure");
+      const value = (payload.timelinePages || {})[String(request.page)] ?? [];
       if (value === "INVALID") return {data: {invalid: true}};
       return {data: value};
     },
@@ -322,6 +340,7 @@ def _eligibility(
     issue: dict[str, object] | None = None,
     event_comment: dict[str, object] | None = None,
     comments: list[dict[str, object]] | None = None,
+    timeline_events: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     issue_payload = issue or _issue(TARGET_NUMBER)
     issue_payload.setdefault("pull_request", None)
@@ -336,6 +355,7 @@ def _eligibility(
                 "issue": issue_payload,
                 "eventComment": event_comment,
                 "comments": comments or [],
+                "timelineEvents": timeline_events or [],
             },
         }
     )
@@ -364,15 +384,12 @@ def test_source_and_compiled_workflow_activate_only_the_bounded_issue_events():
         "stale-check: full",
         "max-ai-credits: 75",
         "max-daily-ai-credits: 150",
-        "max-runs-per-window: 1",
-        "window: 180",
-        "events: [issues, issue_comment]",
-        "ignored-roles: []",
-        "group: community-issue-triage-${{ github.event.issue.number }}",
+        "group: community-issue-triage",
         "cancel-in-progress: false",
         "queue: single",
     ):
         assert setting in source
+    assert "user-rate-limit:" not in source
 
 
 def test_safe_output_surface_is_bounded_to_triage_labels_comments_and_needs_info_removal():
@@ -405,7 +422,7 @@ def test_safe_output_surface_is_bounded_to_triage_labels_comments_and_needs_info
 
 def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     source = WORKFLOW.read_text()
-    gate = source.split("  intake_gate:\n", 1)[1].split("\n  trusted_issue_snapshot:\n", 1)[0]
+    gate = source.split("  intake_gate:\n", 1)[1].split("\n  qualifying_rate_gate:\n", 1)[0]
     assert "permissions:\n      contents: read\n      issues: read\n" in gate
     assert "evaluateIntakeEligibility" in gate
     assert 'core.setOutput("eligible"' in gate
@@ -413,10 +430,21 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     assert 'core.setOutput("trigger_json"' in gate
     assert "github.rest.issues.get" in gate
     assert "github.paginate" in gate or "listComments" in gate
+    assert "listEventsForTimeline" in gate
+
+    rate_gate = source.split("  qualifying_rate_gate:\n", 1)[1].split("\n  trusted_issue_snapshot:\n", 1)[0]
+    assert "needs: [intake_gate]" in rate_gate
+    assert "listWorkflowRuns" in rate_gate
+    assert "listWorkflowRunArtifacts" in rate_gate
+    assert "180 * 60 * 1000" in rate_gate
+    assert 'core.setOutput("allowed", "false")' in rate_gate
+    assert 'core.setOutput("allowed", "true")' in rate_gate
+    assert "qualifying-intake-${{ github.run_id }}" in rate_gate
+    assert "if: ${{ steps.rate.outputs.allowed == 'true' }}" in rate_gate
 
     snapshot = source.split("  trusted_issue_snapshot:\n", 1)[1].split("\n  agent:\n", 1)[0]
-    assert "needs: [intake_gate]" in snapshot
-    assert "if: ${{ needs.intake_gate.outputs.eligible == 'true' }}" in snapshot
+    assert "needs: [intake_gate, qualifying_rate_gate]" in snapshot
+    assert "needs.qualifying_rate_gate.outputs.allowed == 'true'" in snapshot
     assert "${{ needs.intake_gate.outputs.run_kind }}" in snapshot
     assert "${{ needs.intake_gate.outputs.trigger_json }}" in snapshot
     assert "${{ needs.intake_gate.outputs.target_number }}" in snapshot
@@ -427,8 +455,9 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
             job = job_tail.split("\npre-agent-steps:", 1)[0]
         else:
             job = job_tail.split(f"\n  {boundary}:\n", 1)[0]
-        assert "intake_gate" in job
+        assert "intake_gate" in job and "qualifying_rate_gate" in job
         assert "needs.intake_gate.outputs.eligible == 'true'" in job
+        assert "needs.qualifying_rate_gate.outputs.allowed == 'true'" in job
 
 
 @pytest.mark.parametrize(
@@ -601,6 +630,72 @@ def test_reporter_marker_copies_never_satisfy_or_consume_trusted_marker_limits()
     assert accepted["continuation_count"] == 1
 
 
+def test_trusted_needs_info_removal_is_a_durable_continuation_receipt():
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    comments = [_bot_comment(1, INITIAL_MARKER)]
+    one_removal = [_bot_needs_info_removal(10)]
+    accepted = _eligibility(
+        action="edited",
+        issue=issue,
+        comments=comments,
+        timeline_events=one_removal,
+    )
+    assert accepted["eligible"] is True
+    assert accepted["continuation_count"] == 1
+
+    capped = _eligibility(
+        action="edited",
+        issue=issue,
+        comments=comments,
+        timeline_events=[*one_removal, _bot_needs_info_removal(11)],
+    )
+    assert capped["eligible"] is False
+    assert capped["reason"] == "continuation limit reached"
+    assert capped["continuation_count"] == 2
+
+
+def test_untrusted_needs_info_removal_never_consumes_the_continuation_limit():
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    event = _bot_needs_info_removal(10)
+    event["actor"] = {"login": "community-member", "type": "User"}
+    result = _eligibility(
+        action="edited",
+        issue=issue,
+        comments=[_bot_comment(1, INITIAL_MARKER)],
+        timeline_events=[event],
+    )
+    assert result["eligible"] is True
+    assert result["continuation_count"] == 0
+
+
+def test_snapshot_binds_a_prior_trusted_needs_info_removal():
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    payload = _snapshot_payload(comments=[_bot_comment(1, INITIAL_MARKER)])
+    payload["issues"][str(TARGET_NUMBER)] = issue
+    payload["timelinePages"]["1"] = [_bot_needs_info_removal(10)]
+    payload.update(
+        {
+            "runKind": "continuation",
+            "trigger": {
+                "event_name": "issues",
+                "action": "edited",
+                "actor": "community-member",
+                "issue_number": TARGET_NUMBER,
+                "comment_id": None,
+            },
+            "expectedInitialMarkerCount": 1,
+            "expectedContinuationCount": 1,
+            "expectedNeedsInfoPresent": True,
+        }
+    )
+    created = _create_snapshot(payload)
+    assert created["bundle"]["continuation_count"] == 1
+    assert created["calls"]["timeline"][0]["issue_number"] == TARGET_NUMBER
+
+
 def test_source_removes_agent_github_tools_and_uses_sealed_credential_free_source():
     source = WORKFLOW.read_text()
     assert "tools:\n  bash: false\n  cli-proxy: false\n  github: false\n" in source
@@ -633,8 +728,8 @@ def test_source_removes_agent_github_tools_and_uses_sealed_credential_free_sourc
 def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
     source = WORKFLOW.read_text()
     compiled = LOCK.read_text()
-    assert source.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 1
-    assert source.count("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c") == 2
+    assert source.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 3
+    assert source.count("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c") == 3
     assert source.count("artifact-ids: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}") == 2
     assert "name: trusted-intake-context-${{ github.run_id }}" in source
     assert "path: ${{ runner.temp }}/trusted-intake-download" in source
@@ -657,6 +752,21 @@ def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
     assert "overwrite: false" in source
     assert "include-hidden-files: false" in source
     assert "continue-on-error" not in source
+
+
+def test_usage_ledger_is_recorded_by_a_read_only_job_while_compiler_conclusion_stays_unreachable():
+    source = WORKFLOW.read_text()
+    accounting = source.split("  usage_accounting:\n", 1)[1].split("\n  conclusion:\n", 1)[0]
+    assert "permissions:\n      actions: read\n      contents: read\n" in accounting
+    assert "issues: write" not in accounting and "pull-requests: write" not in accounting
+    assert "name: agent" in accounting
+    assert "collect_usage_artifact_files.sh" in accounting
+    assert "name: usage" in accounting
+    assert "retention-days: 2" in accounting
+
+    conclusion = source.split("  conclusion:\n", 1)[1].split("\n  safe_outputs:\n", 1)[0]
+    assert "if: ${{ false }}" in conclusion
+    assert "usage_accounting" in conclusion
 
 
 def test_snapshot_job_outputs_only_artifact_id_and_digests():
@@ -800,7 +910,7 @@ def test_snapshot_fails_before_issue_reads_when_needs_info_label_is_unavailable(
     assert calls["graphql"] == 0
 
 
-@pytest.mark.parametrize("failure", ["target", "comments", "graphql", "candidate"])
+@pytest.mark.parametrize("failure", ["target", "comments", "timeline", "graphql", "candidate"])
 def test_snapshot_fails_closed_on_each_required_api_failure(failure: str):
     candidate = _issue(225)
     payload = _snapshot_payload(candidates=[candidate])
@@ -808,6 +918,8 @@ def test_snapshot_fails_closed_on_each_required_api_failure(failure: str):
         payload["failGet"] = [TARGET_NUMBER]
     elif failure == "comments":
         payload["failComments"] = True
+    elif failure == "timeline":
+        payload["failTimeline"] = True
     elif failure == "graphql":
         payload["failGraphql"] = True
     else:
@@ -827,6 +939,27 @@ def test_comment_pagination_proves_the_100_comment_bound():
     overflow = _run_contract(payload)
     assert overflow.returncode != 0
     assert "comment count exceeds" in overflow.stderr
+
+
+def test_timeline_pagination_proves_the_100_event_bound():
+    payload = _snapshot_payload()
+    payload["timelinePages"]["1"] = [
+        {
+            "id": index + 1,
+            "event": "labeled",
+            "created_at": "2026-05-10T15:20:00Z",
+            "actor": {"login": "maintainer", "type": "User"},
+            "label": {"name": "network"},
+        }
+        for index in range(100)
+    ]
+    created = _create_snapshot(payload)
+    assert [call["page"] for call in created["calls"]["timeline"]] == [1, 2]
+
+    payload["timelinePages"]["2"] = [_bot_needs_info_removal(101)]
+    overflow = _run_contract(payload)
+    assert overflow.returncode != 0
+    assert "timeline event count exceeds" in overflow.stderr
 
 
 def test_invalid_comment_page_and_graphql_page_fail_closed():
@@ -1316,6 +1449,7 @@ def test_freshness_accepts_exact_snapshot_and_refetches_all_evidence():
     calls = json.loads(result.stdout)["calls"]
     assert calls["get"] == [TARGET_NUMBER, 225]
     assert calls["comments"][0]["issue_number"] == TARGET_NUMBER
+    assert calls["timeline"][0]["issue_number"] == TARGET_NUMBER
 
 
 @pytest.mark.parametrize("drift", ["target", "comments", "candidate", "deleted_candidate"])
@@ -1335,6 +1469,39 @@ def test_freshness_fails_on_edits_additions_candidate_drift_or_delete(drift: str
     result = _run_contract(payload)
     assert result.returncode != 0
     assert "changed after" in result.stderr or "not found" in result.stderr
+
+
+def test_freshness_rejects_a_new_trusted_continuation_receipt():
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    payload = _snapshot_payload(comments=[_bot_comment(1, INITIAL_MARKER)])
+    payload["issues"][str(TARGET_NUMBER)] = issue
+    payload.update(
+        {
+            "runKind": "continuation",
+            "trigger": {
+                "event_name": "issues",
+                "action": "edited",
+                "actor": "community-member",
+                "issue_number": TARGET_NUMBER,
+                "comment_id": None,
+            },
+            "expectedInitialMarkerCount": 1,
+            "expectedContinuationCount": 0,
+            "expectedNeedsInfoPresent": True,
+        }
+    )
+    created = _create_snapshot(payload)
+    payload.update(
+        {
+            "op": "freshness",
+            "bundle": created["bundle"],
+            "timelinePages": {"1": [_bot_needs_info_removal(10)], "2": []},
+        }
+    )
+    result = _run_contract(payload)
+    assert result.returncode != 0
+    assert "eligibility changed" in result.stderr
 
 
 def test_normal_proposal_binds_receipts_and_requires_zero_candidate_array():
@@ -1492,6 +1659,28 @@ def test_v3_label_intents_require_one_to_four_unique_exact_allowlisted_entries(m
         labels[0]["agent_target"] = TARGET_NUMBER
     result = _render(bundle, _normal_proposal(bundle, label_intents=labels))
     assert result.returncode != 0
+
+
+@pytest.mark.parametrize(
+    "rationale",
+    [
+        "The report duplicates candidate 225 and should use the network label.",
+        "The lexical search found a similar prior report for this network behavior.",
+        "The trusted candidate receipt {receipt} supports applying the network label.",
+    ],
+)
+def test_label_rationales_cannot_smuggle_relationship_or_search_semantics(rationale: str):
+    bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
+    labels = [
+        {
+            "name": "network",
+            "rationale": rationale.format(receipt=bundle["candidates"][0]["receipt"]),
+            "confidence": "HIGH",
+        }
+    ]
+    result = _render(bundle, _normal_proposal(bundle, label_intents=labels))
+    assert result.returncode != 0
+    assert "relationship or search semantics" in result.stderr
 
 
 def test_initial_ready_for_maintainer_rewrites_only_fixed_trusted_acknowledgement_and_marker():
@@ -1851,6 +2040,29 @@ def test_missing_information_initial_decision_requires_the_needs_info_label():
     rejected = _run_contract({"op": "rewrite", "bundle": bundle, "output": output("network")})
     assert rejected.returncode != 0
     assert "requires needs-info" in rejected.stderr
+
+
+@pytest.mark.parametrize("decision_kind", ["ready_for_maintainer", "repository_evidence"])
+def test_needs_info_is_rejected_for_every_non_missing_information_initial_decision(decision_kind: str):
+    bundle = _create_snapshot()["bundle"]
+    labels = [
+        {
+            "name": "needs-info",
+            "rationale": "The first-pass result applies a bounded repository triage label.",
+            "confidence": "HIGH",
+        }
+    ]
+    if decision_kind == "repository_evidence":
+        decision = {
+            "kind": "repository_evidence",
+            "path": "docs/permissions.md",
+            "quote": "Read-only mode prevents mutation tools from changing controller state.",
+        }
+    else:
+        decision = {"kind": "ready_for_maintainer"}
+    result = _render(bundle, _normal_proposal(bundle, decision=decision, label_intents=labels))
+    assert result.returncode != 0
+    assert "needs-info is valid only" in result.stderr
 
 
 def test_repository_evidence_is_verified_from_one_unique_immutable_file_match():
