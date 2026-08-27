@@ -4,6 +4,7 @@ import copy
 import json
 import re
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -244,6 +245,142 @@ def _run_contract(payload: dict[str, object]) -> subprocess.CompletedProcess[str
         check=False,
         cwd=ROOT,
     )
+
+
+def _extract_github_script(step_name: str) -> str:
+    lines = WORKFLOW.read_text().splitlines()
+    step_index = next(index for index, line in enumerate(lines) if line.strip() == f"- name: {step_name}")
+    script_index = next(index for index in range(step_index + 1, len(lines)) if lines[index].strip() == "script: |")
+    script_indent = len(lines[script_index]) - len(lines[script_index].lstrip())
+    content_indent = script_indent + 2
+    content: list[str] = []
+    for line in lines[script_index + 1 :]:
+        indent = len(line) - len(line.lstrip())
+        if line.strip() and indent <= script_indent:
+            break
+        content.append(line[content_indent:] if len(line) >= content_indent else "")
+    return "\n".join(content)
+
+
+INLINE_GITHUB_SCRIPT_HARNESS = r"""
+import fs from "node:fs";
+import path from "node:path";
+import {createRequire} from "node:module";
+
+const require = createRequire(import.meta.url);
+const payload = JSON.parse(fs.readFileSync(0, "utf8"));
+const outputs = {};
+const notices = [];
+const warnings = [];
+const failures = [];
+const calls = [];
+const fail = (operation) => {
+  if ((payload.failOperations || []).includes(operation)) throw new Error(`simulated ${operation} failure`);
+};
+const responseForRun = (runId) => {
+  if (Number(runId) === Number(payload.runId || 100)) return payload.currentRun;
+  return (payload.workflowRunsById || {})[String(runId)];
+};
+const github = {rest: {actions: {
+  getWorkflowRun: async (request) => {
+    calls.push({operation: "getWorkflowRun", request});
+    fail("getWorkflowRun");
+    const data = responseForRun(request.run_id);
+    if (!data) throw new Error(`missing workflow run ${request.run_id}`);
+    return {data};
+  },
+  listWorkflowRuns: async (request) => {
+    calls.push({operation: "listWorkflowRuns", request});
+    fail("listWorkflowRuns");
+    const value = (payload.workflowRunPages || {})[String(request.page)] ?? [];
+    return {data: value === "INVALID" ? {workflow_runs: {invalid: true}} : {workflow_runs: value}};
+  },
+  listWorkflowRunArtifacts: async (request) => {
+    calls.push({operation: "listWorkflowRunArtifacts", request});
+    fail("listWorkflowRunArtifacts");
+    const value = (payload.artifactsByRun || {})[String(request.run_id)] ?? [];
+    if (value === "INVALID") return {data: {total_count: "invalid", artifacts: {invalid: true}}};
+    return {data: {total_count: value.length, artifacts: value}};
+  },
+  listArtifactsForRepo: async (request) => {
+    calls.push({operation: "listArtifactsForRepo", request});
+    fail("listArtifactsForRepo");
+    const artifacts = payload.repoArtifacts === "INVALID" ? {invalid: true} : (payload.repoArtifacts || []);
+    return {data: {total_count: payload.repoArtifactTotal ?? artifacts.length, artifacts}};
+  },
+}}};
+const core = {
+  setOutput: (name, value) => { outputs[name] = String(value); },
+  notice: (message) => { notices.push(String(message)); },
+  warning: (message) => { warnings.push(String(message)); },
+  setFailed: (message) => { failures.push(String(message)); },
+};
+const context = {runId: Number(payload.runId || 100), repo: {owner: "sirkirby", repo: "unifi-mcp"}};
+Date.now = () => Number(payload.now);
+for (const [name, value] of Object.entries(payload.env || {})) process.env[name] = String(value);
+
+let thrown = null;
+try {
+  await (async () => {
+__SCRIPT__
+  })();
+} catch (error) {
+  thrown = error instanceof Error ? error.message : String(error);
+}
+
+let reservation = null;
+const reservationPath = path.join(process.env.RUNNER_TEMP || "", "triage-aic-reservation", "reservation.json");
+if (reservationPath && fs.existsSync(reservationPath)) {
+  reservation = JSON.parse(fs.readFileSync(reservationPath, "utf8"));
+}
+let safeOutputs = [];
+if (process.env.GH_AW_SAFE_OUTPUTS && fs.existsSync(process.env.GH_AW_SAFE_OUTPUTS)) {
+  safeOutputs = fs.readFileSync(process.env.GH_AW_SAFE_OUTPUTS, "utf8")
+    .trim().split("\n").filter(Boolean).map(JSON.parse);
+}
+process.stdout.write(JSON.stringify({outputs, notices, warnings, failures, calls, thrown, reservation, safeOutputs}));
+"""
+
+
+def _run_github_script(
+    step_name: str,
+    payload: dict[str, object],
+    tmp_path: Path,
+) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
+    safe_outputs = tmp_path / "safe-outputs.jsonl"
+    merged = copy.deepcopy(payload)
+    merged.setdefault("runId", 100)
+    merged.setdefault("now", 1_800_000_000_000)
+    merged.setdefault(
+        "currentRun",
+        {
+            "id": merged["runId"],
+            "workflow_id": 55,
+            "created_at": "2027-01-15T08:00:00.000Z",
+        },
+    )
+    env = merged.setdefault("env", {})
+    assert isinstance(env, dict)
+    env.setdefault("GITHUB_ACTOR", "community-member")
+    env.setdefault("GITHUB_ACTOR_ID", "1234")
+    env.setdefault("RUNNER_TEMP", str(tmp_path))
+    env.setdefault("GH_AW_SAFE_OUTPUTS", str(safe_outputs))
+    env.setdefault("RESERVATION_NAME", "community-issue-triage-aic-reservation")
+    env.setdefault("MAX_AI_CREDITS", "75")
+    env.setdefault("MAX_DAILY_AI_CREDITS", "150")
+    script = INLINE_GITHUB_SCRIPT_HARNESS.replace(
+        "__SCRIPT__", "\n".join(f"    {line}" for line in _extract_github_script(step_name).splitlines())
+    )
+    result = subprocess.run(
+        ["node", "--input-type=module", "-e", script],
+        input=json.dumps(merged),
+        text=True,
+        capture_output=True,
+        check=False,
+        cwd=ROOT,
+    )
+    assert result.stdout, result.stderr
+    return result, json.loads(result.stdout)
 
 
 def _create_snapshot(payload: dict[str, object] | None = None) -> dict[str, object]:
@@ -487,6 +624,108 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
 
 
 @pytest.mark.parametrize(
+    ("age_ms", "expected_allowed"),
+    [
+        (180 * 60 * 1000, "true"),
+        (180 * 60 * 1000 + 1, "false"),
+    ],
+)
+def test_reporter_window_executes_exact_queue_age_boundary(
+    tmp_path: Path,
+    age_ms: int,
+    expected_allowed: str,
+):
+    now = 1_800_000_000_000
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "now": now,
+            "currentRun": {
+                "id": 100,
+                "workflow_id": 55,
+                "created_at": datetime.fromtimestamp(
+                    (now - age_ms) / 1000,
+                    tz=UTC,
+                )
+                .isoformat()
+                .replace("+00:00", "Z"),
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == expected_allowed
+    if expected_allowed == "false":
+        assert any("queue-age window" in notice for notice in observed["notices"])
+
+
+def test_reporter_window_executes_delayed_prior_receipt_check(tmp_path: Path):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "workflowRunPages": {
+                "1": [{"id": 90, "created_at": "2027-01-15T07:59:00.000Z"}],
+            },
+            "artifactsByRun": {
+                "90": [{"name": "qualifying-intake-90", "expired": False}],
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == "false"
+    assert any("already used" in notice for notice in observed["notices"])
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        (
+            {
+                "workflowRunPages": {
+                    "1": [{"id": index, "created_at": "2027-01-15T07:59:00.000Z"} for index in range(1, 101)],
+                    "2": [{"id": 101, "created_at": "2027-01-15T07:59:00.000Z"}],
+                },
+            },
+            "history exceeds",
+        ),
+        ({"failOperations": ["listWorkflowRuns"]}, "simulated listWorkflowRuns failure"),
+        (
+            {
+                "workflowRunPages": {"1": [{"id": 90, "created_at": "2027-01-15T07:59:00.000Z"}]},
+                "artifactsByRun": {"90": "INVALID"},
+            },
+            "artifact history exceeds",
+        ),
+        (
+            {
+                "workflowRunPages": {"1": [{"id": 90, "created_at": "2027-01-15T07:59:00.000Z"}]},
+                "artifactsByRun": {
+                    "90": [
+                        {"name": "qualifying-intake-90", "expired": False},
+                        {"name": "qualifying-intake-90", "expired": False},
+                    ]
+                },
+            },
+            "receipt history is duplicated",
+        ),
+    ],
+)
+def test_reporter_window_executes_overflow_malformed_and_api_failure_paths(
+    tmp_path: Path,
+    payload: dict[str, object],
+    message: str,
+):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        payload,
+        tmp_path,
+    )
+    assert observed["outputs"]["allowed"] == "false"
+    assert message in observed["thrown"]
+
+
+@pytest.mark.parametrize(
     "mutation",
     [
         "edited",
@@ -681,6 +920,60 @@ def test_trusted_needs_info_removal_is_a_durable_continuation_receipt():
     assert capped["continuation_count"] == 2
 
 
+def test_continuation_receipts_are_scoped_to_the_current_trusted_initial_marker():
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    initial = _bot_comment(2, INITIAL_MARKER)
+    initial["created_at"] = "2026-05-10T15:10:00Z"
+
+    historical_removal = _bot_needs_info_removal(10)
+    historical_removal["created_at"] = "2026-05-10T15:05:00Z"
+    historical_comment = _bot_comment(1, CONTINUATION_MARKER)
+    historical_comment["created_at"] = "2026-05-10T15:06:00Z"
+    current_removal = _bot_needs_info_removal(11)
+    current_removal["created_at"] = "2026-05-10T15:20:00Z"
+
+    result = _eligibility(
+        action="edited",
+        issue=issue,
+        comments=[historical_comment, initial],
+        timeline_events=[historical_removal, current_removal],
+    )
+    assert result["eligible"] is True
+    assert result["initial_marker_count"] == 1
+    assert result["continuation_count"] == 1
+
+
+@pytest.mark.parametrize("receipt_kind", ["initial", "continuation", "removal"])
+def test_trusted_continuation_receipt_timestamps_fail_closed(receipt_kind: str):
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    initial = _bot_comment(1, INITIAL_MARKER)
+    continuation = _bot_comment(2, CONTINUATION_MARKER)
+    removal = _bot_needs_info_removal(10)
+    if receipt_kind == "initial":
+        initial["created_at"] = "invalid"
+    elif receipt_kind == "continuation":
+        continuation["created_at"] = "invalid"
+    else:
+        removal["created_at"] = "invalid"
+    result = _run_contract(
+        {
+            "op": "eligibility",
+            "args": {
+                "eventName": "issues",
+                "action": "edited",
+                "actor": "community-member",
+                "issue": issue,
+                "comments": [initial, continuation],
+                "timelineEvents": [removal],
+            },
+        }
+    )
+    assert result.returncode != 0
+    assert "timestamp is invalid" in result.stderr
+
+
 def test_untrusted_needs_info_removal_never_consumes_the_continuation_limit():
     issue = _issue(TARGET_NUMBER)
     issue["labels"] = [{"name": "needs-info"}]
@@ -805,6 +1098,139 @@ def test_daily_budget_is_reserved_before_inference_and_usage_is_uploaded_before_
     conclusion = source.split("  conclusion:\n", 1)[1].split("\n  safe_outputs:\n", 1)[0]
     assert "if: ${{ false }}" in conclusion
     assert "usage_accounting" not in source
+
+
+def _aic_artifact(run_id: int, created_at: str, *, expired: bool = False) -> dict[str, object]:
+    return {
+        "name": "community-issue-triage-aic-reservation",
+        "created_at": created_at,
+        "expired": expired,
+        "workflow_run": {"id": run_id},
+    }
+
+
+@pytest.mark.parametrize(
+    ("artifacts", "runs", "expected_allowed", "expected_prior_calls"),
+    [
+        ([], {}, "true", 0),
+        (
+            [_aic_artifact(90, "2027-01-15T07:00:00.000Z")],
+            {"90": {"id": 90, "workflow_id": 55}},
+            "true",
+            1,
+        ),
+        (
+            [
+                _aic_artifact(90, "2027-01-15T07:00:00.000Z"),
+                _aic_artifact(91, "2027-01-15T06:00:00.000Z"),
+            ],
+            {
+                "90": {"id": 90, "workflow_id": 55},
+                "91": {"id": 91, "workflow_id": 55},
+            },
+            "false",
+            2,
+        ),
+        (
+            [_aic_artifact(90, "2027-01-14T08:00:00.000Z")],
+            {"90": {"id": 90, "workflow_id": 55}},
+            "true",
+            1,
+        ),
+        (
+            [_aic_artifact(90, "2027-01-14T07:59:59.999Z")],
+            {},
+            "true",
+            0,
+        ),
+        (
+            [_aic_artifact(90, "2027-01-15T07:00:00.000Z")],
+            {"90": {"id": 90, "workflow_id": 99}},
+            "true",
+            1,
+        ),
+    ],
+)
+def test_daily_budget_executes_reservation_totals_cutoff_and_workflow_scope(
+    tmp_path: Path,
+    artifacts: list[dict[str, object]],
+    runs: dict[str, object],
+    expected_allowed: str,
+    expected_prior_calls: int,
+):
+    _, observed = _run_github_script(
+        "Reserve the conservative daily AI credit budget",
+        {"repoArtifacts": artifacts, "workflowRunsById": runs},
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == expected_allowed
+    if expected_allowed == "true":
+        assert observed["failures"] == []
+        assert observed["reservation"] == {
+            "actor": "community-member",
+            "credits": 75,
+            "run_id": "100",
+            "workflow_id": "55",
+        }
+        prior_calls = [call for call in observed["calls"] if call["operation"] == "getWorkflowRun"]
+        assert len(prior_calls) == 1 + expected_prior_calls
+    else:
+        assert observed["reservation"] is None
+        assert observed["failures"] == [
+            "The conservative daily AI credit budget is exhausted; no public action was taken."
+        ]
+        assert observed["safeOutputs"] == [
+            {
+                "type": "noop",
+                "message": "The conservative daily AI credit budget is exhausted; no public action was taken.",
+            }
+        ]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "repoArtifacts": [
+                _aic_artifact(90, "2027-01-15T07:00:00.000Z"),
+                _aic_artifact(90, "2027-01-15T06:00:00.000Z"),
+            ],
+            "workflowRunsById": {"90": {"id": 90, "workflow_id": 55}},
+        },
+        {
+            "repoArtifacts": [_aic_artifact(90, "2027-01-15T07:00:00.000Z", expired=True)],
+        },
+        {"repoArtifacts": [], "repoArtifactTotal": 101},
+        {"repoArtifacts": "INVALID", "repoArtifactTotal": 1},
+        {"failOperations": ["listArtifactsForRepo"]},
+        {
+            "repoArtifacts": [_aic_artifact(90, "2027-01-15T07:00:00.000Z")],
+            "failOperations": ["getWorkflowRun"],
+        },
+    ],
+)
+def test_daily_budget_executes_duplicate_expired_overflow_malformed_and_api_failures(
+    tmp_path: Path,
+    payload: dict[str, object],
+):
+    _, observed = _run_github_script(
+        "Reserve the conservative daily AI credit budget",
+        payload,
+        tmp_path,
+    )
+    assert observed["outputs"]["allowed"] == "false"
+    assert observed["reservation"] is None
+    assert observed["failures"] == [
+        "The daily AI credit reservation could not be verified; no public action was taken."
+    ]
+    assert observed["safeOutputs"] == [
+        {
+            "type": "noop",
+            "message": "The daily AI credit reservation could not be verified; no public action was taken.",
+        }
+    ]
+    assert observed["warnings"]
 
 
 def test_snapshot_job_outputs_only_artifact_id_and_digests():

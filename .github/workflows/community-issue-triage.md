@@ -255,12 +255,19 @@ jobs:
                 !Array.isArray(artifacts.data?.artifacts) ||
                 !Number.isSafeInteger(artifactCount) ||
                 artifactCount < 0 ||
-                artifactCount > 100
+                artifactCount > 100 ||
+                artifacts.data.artifacts.length !== artifactCount
               ) {
                 throw new Error("qualifying intake artifact history exceeds the trusted bound");
               }
               const receiptName = `qualifying-intake-${runId}`;
-              if (artifacts.data.artifacts.some((artifact) => artifact.name === receiptName && !artifact.expired)) {
+              const matchingReceipts = artifacts.data.artifacts.filter(
+                (artifact) => artifact.name === receiptName && !artifact.expired,
+              );
+              if (matchingReceipts.length > 1) {
+                throw new Error("qualifying intake receipt history is duplicated");
+              }
+              if (matchingReceipts.length === 1) {
                 core.notice(`Reporter ${actor} already used the qualifying intake window in run ${runId}.`);
                 return;
               }

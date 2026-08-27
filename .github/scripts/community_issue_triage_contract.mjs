@@ -430,15 +430,28 @@ export function evaluateIntakeEligibility({
   const normalizedComments = comments.map(normalizeComment).sort((left, right) => left.id - right.id);
   const normalizedTimelineEvents = timelineEvents.map(normalizeTimelineEvent).sort((left, right) => left.id - right.id);
   const triggerComment = eventComment === null ? null : normalizeComment(eventComment);
-  const initialMarkerCount = normalizedComments.filter(
+  const initialMarkerComments = normalizedComments.filter(
     (comment) => comment.author === ACTIONS_BOT && comment.body.includes(INITIAL_MARKER),
-  ).length;
-  const continuationCommentCount = normalizedComments.filter(
-    (comment) => comment.author === ACTIONS_BOT && comment.body.includes(CONTINUATION_MARKER),
-  ).length;
-  const needsInfoRemovalCount = normalizedTimelineEvents.filter(
-    (event) => event.event === "unlabeled" && event.actor === ACTIONS_BOT && event.label === "needs-info",
-  ).length;
+  );
+  const initialMarkerCount = initialMarkerComments.length;
+  let continuationCommentCount = 0;
+  let needsInfoRemovalCount = 0;
+  if (initialMarkerCount === 1) {
+    const initialMarkerCreatedAt = Date.parse(initialMarkerComments[0].created_at);
+    if (!Number.isFinite(initialMarkerCreatedAt)) fail("trusted initial marker timestamp is invalid");
+    continuationCommentCount = normalizedComments.filter((comment) => {
+      if (comment.author !== ACTIONS_BOT || !comment.body.includes(CONTINUATION_MARKER)) return false;
+      const createdAt = Date.parse(comment.created_at);
+      if (!Number.isFinite(createdAt)) fail("trusted continuation marker timestamp is invalid");
+      return createdAt >= initialMarkerCreatedAt;
+    }).length;
+    needsInfoRemovalCount = normalizedTimelineEvents.filter((event) => {
+      if (event.event !== "unlabeled" || event.actor !== ACTIONS_BOT || event.label !== "needs-info") return false;
+      const createdAt = Date.parse(event.created_at);
+      if (!Number.isFinite(createdAt)) fail("trusted needs-info removal timestamp is invalid");
+      return createdAt >= initialMarkerCreatedAt;
+    }).length;
+  }
   const continuationCount = continuationCommentCount + needsInfoRemovalCount;
   const needsInfoPresent = target.labels.includes("needs-info");
   const trigger = normalizeTrigger({
@@ -482,7 +495,7 @@ export function evaluateIntakeEligibility({
     return {...base, reason: "edited issue event cannot bind a comment"};
   }
   if (!needsInfoPresent) return {...base, reason: "continuation requires needs-info"};
-  if (initialMarkerCount < 1) return {...base, reason: "continuation requires a trusted initial marker"};
+  if (initialMarkerCount !== 1) return {...base, reason: "continuation requires exactly one trusted initial marker"};
   if (continuationCount >= 2) return {...base, reason: "continuation limit reached"};
   return {...base, eligible: true, reason: "eligible continuation", run_kind: "continuation"};
 }
