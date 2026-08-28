@@ -216,15 +216,16 @@ Workspace `[tool.uv.sources]` overrides take precedence over the version range d
 
 `scripts/check_pin_alignment.py` validates the direct dependency bounds declared in each package's own `pyproject.toml` — it does not walk the full transitive/nested dependency chain (e.g., relay → shared → core, multiple hops deep). A downstream package can pass the gate while a deeper transitive package in the chain is still misaligned. When releasing a change that touches a multi-hop dependency chain, manually trace and verify bounds at each hop rather than trusting a single green run of this script.
 
-### `--api-core-floor-only` Flag — Cross-Package Bridge-Method Validation
+### Exact-Core-floor flags — Cross-Package Bridge-Method Validation
 
-When a downstream package (e.g., `unifi-api-server`) is changed to call new bridge methods added to an upstream shared package (`unifi-core`), run:
+When Network or API code calls new bridge methods added to `unifi-core`, run the matching exact-floor checks:
 
 ```bash
+python3 scripts/check_pin_alignment.py --network-core-floor-only
 python3 scripts/check_pin_alignment.py --api-core-floor-only
 ```
 
-This mode enforces that the downstream package's declared `unifi-core` floor bound in `pyproject.toml` is actually high enough to guarantee the new bridge methods exist — catching the case where code was written against an unreleased Core API before the floor bound was raised to match. Run this whenever a PR adds calls to newly-added `unifi-core` methods, in addition to the standard (no-flag) pin-alignment check.
+These modes enforce that each downstream package's declared `unifi-core` floor bound in `pyproject.toml` is actually high enough to guarantee the Core manager methods it calls exist. The standard no-flag check runs both contracts automatically. Use the focused flag while developing a change to either surface.
 
 ### Pre-tag wheel-metadata check
 

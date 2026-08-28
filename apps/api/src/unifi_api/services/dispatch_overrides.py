@@ -96,6 +96,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_get_firewall_policy_details": ("firewall_manager", "get_firewall_policy_by_id"),
     "unifi_update_firewall_policy": ("firewall_manager", "update_firewall_policy"),
     "unifi_reorder_firewall_policies": ("firewall_manager", "reorder_firewall_policies"),
+    "unifi_update_firewall_zone": ("firewall_manager", "update_firewall_zone"),
+    "unifi_delete_firewall_zone": ("firewall_manager", "delete_firewall_zone"),
     # Toggle tools: tool body needs current enabled flag to compute new state.
     "unifi_toggle_port_forward": ("firewall_manager", "toggle_port_forward"),
     "unifi_toggle_qos_rule_enabled": ("qos_manager", "toggle_qos_rule_enabled"),
@@ -264,6 +266,19 @@ def _rename_and_drop(
         return (), out
 
     return translate
+
+
+def _translate_firewall_zone_crud(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Normalize zone identifiers and names before preview or confirmed dispatch."""
+    out = {key: value for key, value in args.items() if key != "confirm"}
+    for key in ("zone_id", "name"):
+        value = out.get(key)
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                raise ValueError(f"{key} is required")
+            out[key] = value
+    return (), out
 
 
 def _pack_fields(
@@ -1584,6 +1599,9 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_create_firewall_group": _spec(
         _pack_fields("group_data", frozenset({"name", "group_type", "group_members"})), "group_data"
     ),
+    "unifi_create_firewall_zone": _spec(_translate_firewall_zone_crud, "name"),
+    "unifi_update_firewall_zone": _spec(_translate_firewall_zone_crud, "zone_id", "name"),
+    "unifi_delete_firewall_zone": _spec(_translate_firewall_zone_crud, "zone_id"),
     "unifi_create_oon_policy": _spec(_translate_create_oon_policy, "policy_data"),
     "unifi_create_port_forward": _spec(_translate_create_port_forward, "rule_data"),
     "unifi_create_simple_port_forward": _spec(_translate_create_simple_port_forward, "rule_data"),

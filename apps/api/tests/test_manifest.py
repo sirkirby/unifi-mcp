@@ -52,7 +52,7 @@ def test_loads_packaged_catalog_with_manager_binding(monkeypatch) -> None:
 def test_real_packaged_catalog_has_all_product_sentinels() -> None:
     registry = ManifestRegistry.load()
 
-    assert len(registry) == 268
+    assert len(registry) == 271
     assert registry.has("unifi_list_clients")
     assert registry.has("protect_list_cameras")
     assert registry.has("access_list_doors")

@@ -320,7 +320,7 @@ def test_repository_catalog_is_complete_with_only_streaming_exclusions() -> None
 
     payload = json.loads(generator.render_catalog(REPO_ROOT))
 
-    assert len(payload["actions"]) == 268
+    assert len(payload["actions"]) == 271
     assert [item["name"] for item in payload["excluded"]] == [
         "access_subscribe_events",
         "protect_subscribe_events",
@@ -339,6 +339,14 @@ def test_repository_catalog_is_complete_with_only_streaming_exclusions() -> None
     assert by_name["unifi_get_event_types"]["manager_method"] == "get_event_type_prefixes"
     assert by_name["unifi_archive_alarm"]["manager_method"] == "archive_alarm"
     assert by_name["unifi_archive_all_alarms"]["manager_method"] == "archive_all_alarms"
+    assert (
+        by_name["unifi_create_firewall_zone"]["manager_attr"],
+        by_name["unifi_create_firewall_zone"]["manager_method"],
+    ) == (
+        "firewall_manager",
+        "create_firewall_zone",
+    )
+    assert by_name["unifi_delete_firewall_zone"]["manager_method"] == "delete_firewall_zone"
 
 
 def test_repository_catalog_bindings_resolve_to_core_manager_methods() -> None:

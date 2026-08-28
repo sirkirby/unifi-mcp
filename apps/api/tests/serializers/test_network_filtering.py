@@ -102,10 +102,35 @@ def test_firewall_mutation_ack_dispatches_for_all_mutations() -> None:
         "unifi_create_firewall_group",
         "unifi_update_firewall_group",
         "unifi_delete_firewall_group",
+        "unifi_create_firewall_zone",
+        "unifi_update_firewall_zone",
+        "unifi_delete_firewall_zone",
     ):
         s = reg.serializer_for_tool(tool)
         out = s.serialize_action(True, tool_name=tool)
         assert out["render_hint"]["kind"] == "detail"
+
+
+def test_create_firewall_zone_ack_uses_canonical_v2_shape() -> None:
+    serializer = _registry().serializer_for_tool("unifi_create_firewall_zone")
+
+    out = serializer.serialize_action(
+        {
+            "_id": "v2-zone",
+            "external_id": "integration-zone-uuid",
+            "name": "IoT",
+            "network_ids": ["v2-network"],
+            "default_policy": "BLOCK",
+        },
+        tool_name="unifi_create_firewall_zone",
+    )
+
+    assert out["data"] == {
+        "id": "v2-zone",
+        "name": "IoT",
+        "networks": ["v2-network"],
+        "default_policy": "BLOCK",
+    }
 
 
 # ---- QoS rules ----

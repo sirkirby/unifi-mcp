@@ -38,6 +38,9 @@ How this script catches it
    succeeds, the declared pin permits a working upstream version. If it fails
    with ``ModuleNotFoundError`` (or pip itself fails with no matching version),
    the pin is stale and a fresh PyPI install would crash.
+7. Install the Network and API wheels against exactly their declared published
+   ``unifi-core`` floors and validate their manager-call contracts. This catches
+   newly used Core methods that ordinary imports do not execute.
 
 Exit code 0 on success, 1 on any failure. Diagnostic output is printed to
 stdout and is intended to be read directly from the CI log.
@@ -203,6 +206,49 @@ for name in registry.all_tools():
 if failures:
     raise SystemExit("\\n".join(failures))
 print(f"validated {len(registry)} catalog bindings against installed Core floor")
+"""
+
+_NETWORK_CORE_FLOOR_CONTRACT = """
+import ast, json
+from importlib.resources import files
+from unifi_network_mcp import runtime
+
+root = files("unifi_network_mcp")
+manifest = json.loads(root.joinpath("tools_manifest.json").read_text())
+manager_instances = {
+    name: value
+    for name, value in vars(runtime).items()
+    if name.endswith("_manager") and not name.startswith("get_")
+}
+checked = set()
+failures = []
+for module_name in sorted(set(manifest["module_map"].values())):
+    prefix = "unifi_network_mcp."
+    if not module_name.startswith(prefix):
+        failures.append(f"{module_name}: outside the Network package")
+        continue
+    relative = module_name.removeprefix(prefix).replace(".", "/") + ".py"
+    tree = ast.parse(root.joinpath(relative).read_text(), filename=module_name)
+    for node in ast.walk(tree):
+        call = node.func if isinstance(node, ast.Call) else None
+        if not isinstance(call, ast.Attribute) or not isinstance(call.value, ast.Name):
+            continue
+        manager_name = call.value.id
+        manager = manager_instances.get(manager_name)
+        if manager is None:
+            continue
+        key = (module_name, manager_name, call.attr)
+        if key in checked:
+            continue
+        checked.add(key)
+        method = getattr(type(manager), call.attr, None)
+        if method is None or not callable(method):
+            failures.append(f"{module_name}: missing {manager_name}.{call.attr}")
+if not checked:
+    failures.append("no direct Core manager call sites were discovered")
+if failures:
+    raise SystemExit("\\n".join(failures))
+print(f"validated {len(checked)} direct Core manager call sites against installed Core floor")
 """
 
 
@@ -383,8 +429,8 @@ def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, 
     return True, upgrade_message
 
 
-def api_core_floor_from_wheel(wheel: Path) -> str:
-    """Extract the API wheel's declared minimum unifi-core version."""
+def core_floor_from_wheel(wheel: Path, package_label: str) -> str:
+    """Extract a wheel's declared minimum unifi-core version."""
     with zipfile.ZipFile(wheel) as archive:
         metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
         metadata = archive.read(metadata_name).decode()
@@ -393,16 +439,33 @@ def api_core_floor_from_wheel(wheel: Path) -> str:
         None,
     )
     if requirement is None:
-        raise RuntimeError("API wheel does not declare a unifi-core dependency")
+        raise RuntimeError(f"{package_label} wheel does not declare a unifi-core dependency")
     match = re.search(r">=\s*([0-9]+(?:\.[0-9]+)*)", requirement)
     if match is None:
-        raise RuntimeError(f"API unifi-core dependency has no minimum version: {requirement}")
+        raise RuntimeError(f"{package_label} unifi-core dependency has no minimum version: {requirement}")
     return match.group(1)
 
 
-def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
-    """Install and contract-check the API against exactly its published Core floor."""
-    floor = api_core_floor_from_wheel(api_wheel)
+def api_core_floor_from_wheel(wheel: Path) -> str:
+    """Extract the API wheel's declared minimum unifi-core version."""
+    return core_floor_from_wheel(wheel, "API")
+
+
+def network_core_floor_from_wheel(wheel: Path) -> str:
+    """Extract the Network wheel's declared minimum unifi-core version."""
+    return core_floor_from_wheel(wheel, "Network")
+
+
+def check_core_floor_contract(
+    wheel: Path,
+    venv_dir: Path,
+    *,
+    package_label: str,
+    core_extras: str,
+    contract: str,
+) -> tuple[bool, str]:
+    """Install and contract-check a wheel against exactly its published Core floor."""
+    floor = core_floor_from_wheel(wheel, package_label)
     venv.create(venv_dir, with_pip=True, clear=True, symlinks=True)
     py = venv_dir / "bin" / "python"
     try:
@@ -416,12 +479,12 @@ def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
                 "--disable-pip-version-check",
                 "--index-url",
                 "https://pypi.org/simple",
-                f"unifi-core[network,protect,access]=={floor}",
-                str(api_wheel),
+                f"unifi-core[{core_extras}]=={floor}",
+                str(wheel),
             ]
         )
         run_capture([str(py), "-m", "pip", "check"])
-        result = run_capture([str(py), "-c", _API_CATALOG_FLOOR_CONTRACT])
+        result = run_capture([str(py), "-c", contract])
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or "").strip()[-3000:]
         return (
@@ -431,12 +494,40 @@ def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
     return True, f"Core floor {floor}: {(result.stdout or '').strip()}"
 
 
+def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
+    """Install and contract-check the API against exactly its published Core floor."""
+    return check_core_floor_contract(
+        api_wheel,
+        venv_dir,
+        package_label="API",
+        core_extras="network,protect,access",
+        contract=_API_CATALOG_FLOOR_CONTRACT,
+    )
+
+
+def check_network_core_floor(network_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
+    """Install and contract-check Network against exactly its published Core floor."""
+    return check_core_floor_contract(
+        network_wheel,
+        venv_dir,
+        package_label="Network",
+        core_extras="network",
+        contract=_NETWORK_CORE_FLOOR_CONTRACT,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    floor_group = parser.add_mutually_exclusive_group()
+    floor_group.add_argument(
         "--api-core-floor-only",
         action="store_true",
         help="Verify the API wheel against exactly its published minimum unifi-core version.",
+    )
+    floor_group.add_argument(
+        "--network-core-floor-only",
+        action="store_true",
+        help="Verify the Network wheel against exactly its published minimum unifi-core version.",
     )
     args = parser.parse_args()
     if shutil.which("uv") is None:
@@ -453,9 +544,15 @@ def main() -> int:
             ok, message = check_api_core_floor(api_wheel, tmp_path / "api-floor-venv")
             print(("PASS: " if ok else "FAIL: ") + message)
             return 0 if ok else 1
+        if args.network_core_floor_only:
+            network_wheel = build_wheel(REPO / "apps/network", tmp_path / "network")
+            ok, message = check_network_core_floor(network_wheel, tmp_path / "network-floor-venv")
+            print(("PASS: " if ok else "FAIL: ") + message)
+            return 0 if ok else 1
 
         failures: list[tuple[str, str]] = []
         upstream_wheels: dict[str, Path] = {}
+        downstream_wheels: dict[str, Path] = {}
         print("Building upstream wheels (workspace) -> --find-links source")
         for name, path in UPSTREAM_PACKAGES.items():
             wheel = build_wheel(path, find_links)
@@ -486,6 +583,7 @@ def main() -> int:
         print("Checking each downstream wheel over a vulnerable baseline against PyPI")
         for pkg in DOWNSTREAM_PACKAGES:
             wheel = build_wheel(pkg.src, tmp_path / "downstream" / pkg.dist_name)
+            downstream_wheels[pkg.dist_name] = wheel
             metadata_ok, metadata_msg = check_security_floors(pkg.dist_name, wheel)
             if not metadata_ok:
                 print(f"  [FAIL] {pkg.dist_name} ({wheel.name}) — {metadata_msg}")
@@ -536,7 +634,17 @@ def main() -> int:
             )
             return 1
 
-        api_wheel = build_wheel(REPO / "apps/api", tmp_path / "api-floor")
+        network_wheel = downstream_wheels["unifi-network-mcp"]
+        network_floor_ok, network_floor_message = check_network_core_floor(
+            network_wheel, tmp_path / "network-floor-venv"
+        )
+        print()
+        print(f"  [{'PASS' if network_floor_ok else 'FAIL'}] Network tools against published Core floor")
+        print(f"  {network_floor_message}")
+        if not network_floor_ok:
+            return 1
+
+        api_wheel = downstream_wheels["unifi-api-server"]
         floor_ok, floor_message = check_api_core_floor(api_wheel, tmp_path / "api-floor-venv")
         print()
         print(f"  [{'PASS' if floor_ok else 'FAIL'}] API catalog against published Core floor")

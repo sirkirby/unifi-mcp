@@ -39,6 +39,13 @@ def test_extracts_api_core_lower_bound_from_wheel_metadata(tmp_path: Path) -> No
     assert module.api_core_floor_from_wheel(wheel) == "0.4.23"
 
 
+def test_extracts_network_core_lower_bound_from_wheel_metadata(tmp_path: Path) -> None:
+    module = _module()
+    wheel = _wheel(tmp_path, "unifi-core[network]>=0.4.32,<0.5")
+
+    assert module.network_core_floor_from_wheel(wheel) == "0.4.32"
+
+
 @pytest.mark.parametrize("requirement", [None, "unifi-core<0.5"])
 def test_missing_core_floor_fails_closed(tmp_path: Path, requirement: str | None) -> None:
     module = _module()
@@ -52,6 +59,12 @@ def test_api_floor_contract_is_valid_python() -> None:
     module = _module()
 
     compile(module._API_CATALOG_FLOOR_CONTRACT, "<api-catalog-floor-contract>", "exec")
+
+
+def test_network_floor_contract_is_valid_python() -> None:
+    module = _module()
+
+    compile(module._NETWORK_CORE_FLOOR_CONTRACT, "<network-core-floor-contract>", "exec")
 
 
 def test_security_floor_check_accepts_explicit_safe_wheel_metadata(tmp_path: Path) -> None:

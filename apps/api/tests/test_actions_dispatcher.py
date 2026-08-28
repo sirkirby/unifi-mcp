@@ -1429,6 +1429,121 @@ def test_update_network_translator_forwards_firewall_zone_and_wan_monitor_fields
     assert kwargs == {"network_id": "wan-1", "update_data": fields}
 
 
+@pytest.mark.parametrize(
+    ("tool_name", "args", "expected_kwargs"),
+    [
+        ("unifi_create_firewall_zone", {"name": "IoT", "confirm": True}, {"name": "IoT"}),
+        (
+            "unifi_update_firewall_zone",
+            {"zone_id": "v2-zone", "name": "Devices", "confirm": True},
+            {"zone_id": "v2-zone", "name": "Devices"},
+        ),
+        ("unifi_delete_firewall_zone", {"zone_id": "v2-zone", "confirm": True}, {"zone_id": "v2-zone"}),
+    ],
+)
+def test_firewall_zone_crud_translators_drop_confirmation(
+    tool_name: str,
+    args: dict[str, object],
+    expected_kwargs: dict[str, object],
+) -> None:
+    positional, kwargs = DISPATCH_ARG_TRANSLATORS[tool_name](args)
+
+    assert positional == ()
+    assert kwargs == expected_kwargs
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "args", "expected_kwargs"),
+    [
+        ("unifi_create_firewall_zone", {"name": "  IoT  "}, {"name": "IoT"}),
+        (
+            "unifi_update_firewall_zone",
+            {"zone_id": "  v2-zone  ", "name": "  Devices  "},
+            {"zone_id": "v2-zone", "name": "Devices"},
+        ),
+        ("unifi_delete_firewall_zone", {"zone_id": "  v2-zone  "}, {"zone_id": "v2-zone"}),
+    ],
+)
+def test_firewall_zone_crud_translators_trim_strings(
+    tool_name: str,
+    args: dict[str, object],
+    expected_kwargs: dict[str, object],
+) -> None:
+    _, kwargs = DISPATCH_ARG_TRANSLATORS[tool_name](args)
+
+    assert kwargs == expected_kwargs
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "args", "field"),
+    [
+        ("unifi_create_firewall_zone", {"name": "   "}, "name"),
+        ("unifi_update_firewall_zone", {"zone_id": "z1", "name": "   "}, "name"),
+        ("unifi_delete_firewall_zone", {"zone_id": "   "}, "zone_id"),
+    ],
+)
+def test_firewall_zone_crud_translators_reject_blank_strings(
+    tool_name: str,
+    args: dict[str, object],
+    field: str,
+) -> None:
+    with pytest.raises(ValueError, match=rf"^{field} is required$"):
+        DISPATCH_ARG_TRANSLATORS[tool_name](args)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_name", "args", "method_name", "expected_args"),
+    [
+        (
+            "unifi_update_firewall_zone",
+            {"zone_id": "v2-zone", "name": "Devices"},
+            "update_firewall_zone",
+            ("v2-zone", "Devices"),
+        ),
+        (
+            "unifi_delete_firewall_zone",
+            {"zone_id": "v2-zone"},
+            "delete_firewall_zone",
+            ("v2-zone",),
+        ),
+    ],
+)
+async def test_dispatch_real_table_binds_firewall_zone_preview_tools_to_mutations(
+    tool_name: str,
+    args: dict[str, object],
+    method_name: str,
+    expected_args: tuple[object, ...],
+) -> None:
+    entry = ToolEntry(name=tool_name, product="network", category="firewall", manager="", method="")
+    registry = _registry_with(entry)
+    domain_manager = MagicMock()
+    setattr(domain_manager, method_name, AsyncMock(return_value=True))
+    domain_manager.get_firewall_zone_by_id = AsyncMock(return_value={"_id": "v2-zone", "name": "IoT"})
+    conn_manager = MagicMock(site="default")
+    conn_manager.set_site = AsyncMock()
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name=tool_name,
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args=args,
+        confirm=True,
+        dispatch_table=build_dispatch_table(),
+    )
+
+    expected_kwargs = dict(zip(args, expected_args, strict=True))
+    getattr(domain_manager, method_name).assert_awaited_once_with(**expected_kwargs)
+    domain_manager.get_firewall_zone_by_id.assert_not_awaited()
+
+
 def _ddns_factory():
     domain_manager = MagicMock()
     domain_manager.update_dynamic_dns = AsyncMock(return_value={"_id": "ddns001"})

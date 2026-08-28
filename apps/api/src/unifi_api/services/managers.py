@@ -91,7 +91,10 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
         "dpi_manager": lambda cm: DpiManager(cm, getattr(cm, "unifi_auth", None)),
         "dynamic_dns_manager": lambda cm: DynamicDnsManager(cm),
         "event_manager": lambda cm: EventManager(cm),
-        "firewall_manager": lambda cm: FirewallManager(cm),
+        # FirewallManager uses both V2 session auth and the public Integration
+        # API. Pass the connection's UniFiAuth so zone CRUD and policy ordering
+        # can supply X-API-Key when an API token is configured.
+        "firewall_manager": lambda cm: FirewallManager(cm, getattr(cm, "unifi_auth", None)),
         "gateway_settings_manager": lambda cm: GatewaySettingsManager(cm),
         "hotspot_manager": lambda cm: HotspotManager(cm),
         "network_manager": lambda cm: NetworkManager(cm),

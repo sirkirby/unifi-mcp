@@ -2538,6 +2538,28 @@
       }
     },
     {
+      "name": "unifi_create_firewall_zone",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "create_firewall_zone",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "description": "Name of the firewall zone (must be unique)",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_create_network",
       "product": "network",
       "category": "networks",
@@ -3122,6 +3144,28 @@
         },
         "required": [
           "policy_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_delete_firewall_zone",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "delete_firewall_zone",
+      "input_schema": {
+        "properties": {
+          "zone_id": {
+            "description": "V2 controller ObjectID from unifi_list_firewall_zones; not an Integration API UUID",
+            "type": "string"
+          }
+        },
+        "required": [
+          "zone_id"
         ],
         "type": "object",
         "additionalProperties": false
@@ -6206,6 +6250,33 @@
         "required": [
           "policy_id",
           "update_data"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_update_firewall_zone",
+      "product": "network",
+      "category": "firewall",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "firewall_manager",
+      "manager_method": "update_firewall_zone",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "description": "New name for the zone",
+            "type": "string"
+          },
+          "zone_id": {
+            "description": "V2 controller ObjectID from unifi_list_firewall_zones; not an Integration API UUID",
+            "type": "string"
+          }
+        },
+        "required": [
+          "zone_id",
+          "name"
         ],
         "type": "object",
         "additionalProperties": false

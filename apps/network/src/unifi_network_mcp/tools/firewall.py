@@ -776,7 +776,9 @@ async def reorder_firewall_policies(
 
 @server.tool(
     name="unifi_list_firewall_zones",
-    description="List controller firewall zones (V2 API).",
+    description="List controller firewall zones (V2 API). Returned IDs are V2 controller "
+    "ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and "
+    "network firewall_zone_id.",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def list_firewall_zones() -> Dict[str, Any]:
@@ -795,6 +797,163 @@ async def list_firewall_zones() -> Dict[str, Any]:
     except Exception as exc:
         logger.error("Error listing firewall zones: %s", exc, exc_info=True)
         return {"success": False, "error": f"Failed to list firewall zones: {exc}"}
+
+
+@server.tool(
+    name="unifi_create_firewall_zone",
+    description="Create a new firewall zone. Zones group networks for zone-based "
+    "firewall policy targeting. Network assignment happens separately via "
+    "firewall_zone_id on unifi_update_network. Requires a UniFi API key "
+    "(UNIFI_API_KEY). Returns a V2 controller ObjectID, not an Integration API UUID. "
+    "Requires confirmation.",
+    permission_category="firewall",
+    permission_action="create",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+)
+async def create_firewall_zone(
+    name: Annotated[str, Field(description="Name of the firewall zone (must be unique)")],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, creates the zone. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Creates a new firewall zone."""
+    name = name.strip()
+    if not name:
+        return {"success": False, "error": "name is required"}
+
+    if not confirm:
+        return create_preview(
+            resource_type="firewall_zone",
+            resource_data={"name": name, "networkIds": []},
+            resource_name=name,
+        )
+
+    try:
+        zone = await firewall_manager.create_firewall_zone(name)
+        return {
+            "success": True,
+            "message": f"Firewall zone '{name}' created successfully.",
+            "zone": firewall_zone_from_controller(zone).model_dump(exclude_none=True),
+        }
+    except Exception as e:
+        logger.error("Error creating firewall zone: %s", e, exc_info=True)
+        return {"success": False, "error": f"Failed to create firewall zone: {e}"}
+
+
+@server.tool(
+    name="unifi_update_firewall_zone",
+    description="Rename an existing firewall zone by ID. Only the name is mutable; "
+    "network membership is managed via firewall_zone_id on the network. Requires a "
+    "UniFi API key (UNIFI_API_KEY). The ID must come from unifi_list_firewall_zones; "
+    "it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+    permission_category="firewall",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def update_firewall_zone(
+    zone_id: Annotated[
+        str,
+        Field(description="V2 controller ObjectID from unifi_list_firewall_zones; not an Integration API UUID"),
+    ],
+    name: Annotated[str, Field(description="New name for the zone")],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, updates the zone. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Renames an existing firewall zone."""
+    if not zone_id:
+        return {"success": False, "error": "zone_id is required"}
+    name = name.strip()
+    if not name:
+        return {"success": False, "error": "name is required"}
+
+    if not confirm:
+        try:
+            current = await firewall_manager.get_firewall_zone_by_id(zone_id)
+            if current.get("default_zone"):
+                return {
+                    "success": False,
+                    "error": f"Cannot rename system-defined firewall zone '{current.get('name')}'.",
+                }
+            current_state = firewall_zone_from_controller(current).model_dump(exclude_none=True)
+            return update_preview(
+                resource_type="firewall_zone",
+                resource_id=zone_id,
+                resource_name=current_state.get("name") or zone_id,
+                current_state=current_state,
+                updates={"name": name},
+            )
+        except Exception as e:
+            logger.error("Error previewing firewall zone update %s: %s", zone_id, e, exc_info=True)
+            return {"success": False, "error": f"Failed to preview firewall zone update '{zone_id}': {e}"}
+
+    try:
+        success = await firewall_manager.update_firewall_zone(zone_id, name)
+        if success:
+            return {"success": True, "message": f"Firewall zone '{zone_id}' renamed to '{name}'."}
+        return {"success": False, "error": f"Failed to update firewall zone '{zone_id}'."}
+    except Exception as e:
+        logger.error("Error updating firewall zone %s: %s", zone_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to update firewall zone '{zone_id}': {e}"}
+
+
+@server.tool(
+    name="unifi_delete_firewall_zone",
+    description="Delete a firewall zone by ID. System-defined zones cannot be deleted. "
+    "Requires a UniFi API key (UNIFI_API_KEY). The ID must come from "
+    "unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. "
+    "Requires confirmation.",
+    permission_category="firewall",
+    permission_action="delete",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
+)
+async def delete_firewall_zone(
+    zone_id: Annotated[
+        str,
+        Field(description="V2 controller ObjectID from unifi_list_firewall_zones; not an Integration API UUID"),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, deletes the zone. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Deletes a firewall zone."""
+    if not zone_id:
+        return {"success": False, "error": "zone_id is required"}
+
+    if not confirm:
+        try:
+            current = await firewall_manager.get_firewall_zone_by_id(zone_id)
+            if current.get("default_zone"):
+                return {
+                    "success": False,
+                    "error": f"Cannot delete system-defined firewall zone '{current.get('name')}'.",
+                }
+            current_state = firewall_zone_from_controller(current).model_dump(exclude_none=True)
+            return delete_preview(
+                resource_type="firewall_zone",
+                resource_id=zone_id,
+                resource_data=current_state,
+                resource_name=current_state.get("name") or zone_id,
+                warnings=[
+                    "System-defined zones cannot be deleted.",
+                    "Reassign member networks and review policies before deleting this zone.",
+                ],
+            )
+        except Exception as e:
+            logger.error("Error previewing firewall zone deletion %s: %s", zone_id, e, exc_info=True)
+            return {"success": False, "error": f"Failed to preview firewall zone deletion '{zone_id}': {e}"}
+
+    try:
+        success = await firewall_manager.delete_firewall_zone(zone_id)
+        if success:
+            return {"success": True, "message": f"Firewall zone '{zone_id}' deleted successfully."}
+        return {"success": False, "error": f"Failed to delete firewall zone '{zone_id}'."}
+    except Exception as e:
+        logger.error("Error deleting firewall zone %s: %s", zone_id, e, exc_info=True)
+        return {"success": False, "error": f"Failed to delete firewall zone '{zone_id}': {e}"}
 
 
 # ---- Legacy Firewall Rules (v1 REST) ----

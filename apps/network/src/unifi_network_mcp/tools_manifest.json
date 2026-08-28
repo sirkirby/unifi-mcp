@@ -1,5 +1,5 @@
 {
-  "count": 189,
+  "count": 192,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -17,6 +17,7 @@
     "unifi_create_dynamic_dns": "unifi_network_mcp.tools.dynamic_dns",
     "unifi_create_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_create_firewall_policy": "unifi_network_mcp.tools.firewall",
+    "unifi_create_firewall_zone": "unifi_network_mcp.tools.firewall",
     "unifi_create_network": "unifi_network_mcp.tools.network",
     "unifi_create_oon_policy": "unifi_network_mcp.tools.oon",
     "unifi_create_port_forward": "unifi_network_mcp.tools.port_forwards",
@@ -37,6 +38,7 @@
     "unifi_delete_dynamic_dns": "unifi_network_mcp.tools.dynamic_dns",
     "unifi_delete_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_delete_firewall_policy": "unifi_network_mcp.tools.firewall",
+    "unifi_delete_firewall_zone": "unifi_network_mcp.tools.firewall",
     "unifi_delete_network": "unifi_network_mcp.tools.network",
     "unifi_delete_oon_policy": "unifi_network_mcp.tools.oon",
     "unifi_delete_port_forward": "unifi_network_mcp.tools.port_forwards",
@@ -171,6 +173,7 @@
     "unifi_update_dynamic_dns": "unifi_network_mcp.tools.dynamic_dns",
     "unifi_update_firewall_group": "unifi_network_mcp.tools.firewall",
     "unifi_update_firewall_policy": "unifi_network_mcp.tools.firewall",
+    "unifi_update_firewall_zone": "unifi_network_mcp.tools.firewall",
     "unifi_update_gateway_settings": "unifi_network_mcp.tools.gateway_settings",
     "unifi_update_network": "unifi_network_mcp.tools.network",
     "unifi_update_oon_policy": "unifi_network_mcp.tools.oon",
@@ -1876,6 +1879,106 @@
         }
       },
       "title": "Create Firewall Policy"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Create a new firewall zone. Zones group networks for zone-based firewall policy targeting. Network assignment happens separately via firewall_zone_id on unifi_update_network. Requires a UniFi API key (UNIFI_API_KEY). Returns a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "name": "unifi_create_firewall_zone",
+      "permission_action": "create",
+      "permission_category": "firewall",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, creates the zone. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "Name of the firewall zone (must be unique)",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Create Firewall Zone"
     },
     {
       "annotations": {
@@ -4026,6 +4129,106 @@
         }
       },
       "title": "Delete Firewall Policy"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Delete a firewall zone by ID. System-defined zones cannot be deleted. Requires a UniFi API key (UNIFI_API_KEY). The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "name": "unifi_delete_firewall_zone",
+      "permission_action": "delete",
+      "permission_category": "firewall",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, deletes the zone. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "zone_id": {
+              "description": "V2 controller ObjectID from unifi_list_firewall_zones; not an Integration API UUID",
+              "type": "string"
+            }
+          },
+          "required": [
+            "zone_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Delete Firewall Zone"
     },
     {
       "annotations": {
@@ -11719,7 +11922,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List controller firewall zones (V2 API).",
+      "description": "List controller firewall zones (V2 API). Returned IDs are V2 controller ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and network firewall_zone_id.",
       "name": "unifi_list_firewall_zones",
       "schema": {
         "input": {
@@ -16984,6 +17187,111 @@
         }
       },
       "title": "Update Firewall Policy"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Rename an existing firewall zone by ID. Only the name is mutable; network membership is managed via firewall_zone_id on the network. Requires a UniFi API key (UNIFI_API_KEY). The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "name": "unifi_update_firewall_zone",
+      "permission_action": "update",
+      "permission_category": "firewall",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, updates the zone. When false (default), returns a preview",
+              "type": "boolean"
+            },
+            "name": {
+              "description": "New name for the zone",
+              "type": "string"
+            },
+            "zone_id": {
+              "description": "V2 controller ObjectID from unifi_list_firewall_zones; not an Integration API UUID",
+              "type": "string"
+            }
+          },
+          "required": [
+            "zone_id",
+            "name"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Update Firewall Zone"
     },
     {
       "annotations": {

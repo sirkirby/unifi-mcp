@@ -134,7 +134,9 @@ class FirewallGroup:
         return asdict(self)
 
 
-@strawberry.type(description="A firewall zone (V2 /firewall/zone-matrix entry).")
+@strawberry.type(
+    description=("A firewall zone from the V2 controller API. Its ID is a V2 ObjectID, not an Integration API UUID.")
+)
 class FirewallZone:
     id: strawberry.ID | None
     name: str | None

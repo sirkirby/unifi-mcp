@@ -15,6 +15,7 @@ from unifi_api.db.session import get_sessionmaker
 from unifi_api.services.managers import (
     ManagerFactory,
     UnknownProduct,
+    _build_network_managers,
 )
 
 
@@ -90,6 +91,17 @@ async def test_factory_caches_connection_manager(tmp_path: Path, monkeypatch) ->
         cm2 = await factory.get_connection_manager(session, cid, "network")
     assert cm1 is cm2
     await engine.dispose()
+
+
+def test_firewall_manager_builder_receives_connection_auth() -> None:
+    auth = object()
+    cm = _FakeCM()
+    cm.unifi_auth = auth
+
+    manager = _build_network_managers()["firewall_manager"](cm)
+
+    assert manager._connection is cm
+    assert manager._auth is auth
 
 
 @pytest.mark.asyncio

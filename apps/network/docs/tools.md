@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 189 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 192 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy/meta-only workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`.
 
@@ -13,7 +13,7 @@ These are always registered regardless of mode:
 - `unifi_batch` — Execute multiple tools in parallel
 - `unifi_batch_status` — Check batch job status
 
-## Firewall (12 tools)
+## Firewall (15 tools)
 
 - `unifi_list_firewall_policies` — List all firewall policies
 - `unifi_get_firewall_policy_details` — Get policy details by ID
@@ -21,6 +21,9 @@ These are always registered regardless of mode:
 - `unifi_create_firewall_policy` — Create a V2 zone-based policy with schema validation
 - `unifi_update_firewall_policy` — Update policy fields
 - `unifi_list_firewall_zones` — List firewall zones (V2 API)
+- `unifi_create_firewall_zone` — Create a custom firewall zone
+- `unifi_update_firewall_zone` — Rename a custom firewall zone
+- `unifi_delete_firewall_zone` — Delete a custom firewall zone
 - `unifi_list_legacy_firewall_rules` — List legacy pre-zone-based firewall rules (V1 API)
 - `unifi_list_firewall_groups` — List firewall groups (address and port groups)
 - `unifi_get_firewall_group_details` — Get firewall group details by ID
