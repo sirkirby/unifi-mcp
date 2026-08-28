@@ -8,8 +8,9 @@ dependencies = [
     # API server registers controllers across all three products, so it
     # needs every product extra. unifi-core's optional extras pull in
     # aiounifi / uiprotect / py-unifi-access transparently. Access event
-    # identity and paged lookup require Core 0.4.30.
-    "unifi-core[network,protect,access]>=0.4.30,<0.5",
+    # identity and paged lookup require Core 0.4.30; shared MAC comparison
+    # across the GraphQL and SSE surfaces requires Core 0.4.31.
+    "unifi-core[network,protect,access]>=0.4.31,<0.5",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.52.1",
     "sqlalchemy[asyncio]>=2.0.51",

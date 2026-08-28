@@ -24,6 +24,7 @@ from typing import Any
 
 import strawberry
 from strawberry.types import Info
+from unifi_core.mac import mac_equal
 
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
@@ -1928,7 +1929,7 @@ class NetworkQuery:
         for c in raw:
             r = _raw(c)
             c_mac = r.get("mac") if isinstance(r, dict) else getattr(r, "mac", None)
-            if c_mac == mac:
+            if mac_equal(c_mac, mac):
                 inst = Client.from_manager_output(c)
                 inst._controller_id = controller
                 inst._site = site
@@ -2034,7 +2035,7 @@ class NetworkQuery:
         for d in raw:
             r = _raw(d)
             d_mac = r.get("mac") if isinstance(r, dict) else getattr(r, "mac", None)
-            if d_mac == mac:
+            if mac_equal(d_mac, mac):
                 inst = Device.from_manager_output(d)
                 inst._controller_id = controller
                 inst._site = site

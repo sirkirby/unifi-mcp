@@ -181,6 +181,8 @@ async def test_stream_network_device_events_filters_by_mac(tmp_path, monkeypatch
             {"id": "n1", "key": "STA_CONNECT", "mac": mac_a, "time": 1700000000},
             {"id": "n2", "key": "STA_CONNECT", "mac": mac_b, "time": 1700000001},
             {"id": "n3", "key": "STA_DISCONNECT", "mac": mac_a, "time": 1700000002},
+            {"id": "n4", "key": "STA_CONNECT", "time": 1700000003},
+            {"id": "n5", "key": "STA_CONNECT", "mac": "device-1", "time": 1700000004},
         ],
     )
     app.state.manager_factory.get_domain_manager = AsyncMock(return_value=fake_mgr)
@@ -191,7 +193,7 @@ async def test_stream_network_device_events_filters_by_mac(tmp_path, monkeypatch
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(
-            f"/v1/streams/network/devices/{mac_a}/events?controller={cid}",
+            f"/v1/streams/network/devices/{mac_a.upper().replace(':', '-')}/events?controller={cid}",
             headers={"Authorization": f"Bearer {key}"},
         )
     assert r.status_code == 200, r.text
@@ -200,4 +202,6 @@ async def test_stream_network_device_events_filters_by_mac(tmp_path, monkeypatch
     assert "id: n1" in body
     assert "id: n3" in body
     assert "id: n2" not in body
+    assert "id: n4" not in body
+    assert "id: n5" not in body
     assert "event: network.event" in body

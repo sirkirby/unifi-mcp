@@ -53,14 +53,14 @@ async def test_devices_list(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_device_detail(tmp_path, monkeypatch):
+async def test_device_detail_matches_equivalent_mac_format(tmp_path, monkeypatch):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")
     stub_managers(
         monkeypatch,
         {
             ("network", "device_manager", "get_devices"): [
-                {"mac": "ap:01", "name": "AP-Living", "model": "U7PRO"},
+                {"mac": "aa:bb:cc:dd:ee:01", "name": "AP-Living", "model": "U7PRO"},
             ],
         },
     )
@@ -68,13 +68,13 @@ async def test_device_detail(tmp_path, monkeypatch):
         app,
         key,
         f'''{{
-        network {{ device(controller: "{cid}", mac: "ap:01") {{
+        network {{ device(controller: "{cid}", mac: "AABBCCDDEE01") {{
             mac name
         }} }}
     }}''',
     )
     assert body.get("errors") is None, body
-    assert body["data"]["network"]["device"]["mac"] == "ap:01"
+    assert body["data"]["network"]["device"]["mac"] == "aa:bb:cc:dd:ee:01"
 
 
 @pytest.mark.asyncio

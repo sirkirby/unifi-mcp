@@ -51,14 +51,14 @@ async def test_clients_list(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_client_detail(tmp_path, monkeypatch):
+async def test_client_detail_matches_equivalent_mac_format(tmp_path, monkeypatch):
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await bootstrap(tmp_path, product="network")
     stub_managers(
         monkeypatch,
         {
             ("network", "client_manager", "get_clients"): [
-                {"mac": "aa:01", "hostname": "alpha"},
+                {"mac": "aa:bb:cc:dd:ee:01", "hostname": "alpha"},
             ],
         },
     )
@@ -66,13 +66,13 @@ async def test_client_detail(tmp_path, monkeypatch):
         app,
         key,
         f'''{{
-        network {{ client(controller: "{cid}", mac: "aa:01") {{
+        network {{ client(controller: "{cid}", mac: "AA-BB-CC-DD-EE-01") {{
             mac hostname
         }} }}
     }}''',
     )
     assert body.get("errors") is None, body
-    assert body["data"]["network"]["client"]["mac"] == "aa:01"
+    assert body["data"]["network"]["client"]["mac"] == "aa:bb:cc:dd:ee:01"
 
 
 @pytest.mark.asyncio

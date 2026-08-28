@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import StreamingResponse
+from unifi_core.mac import mac_equal
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -51,7 +52,7 @@ async def stream_network_device_events(
             serializer=serializer,
             redact_sensitive=request.app.state.config.policy.response.redact_sensitive_fields,
             last_event_id=last_event_id,
-            filter_fn=lambda evt: evt.get("mac") == mac,
+            filter_fn=lambda evt: mac_equal(evt.get("mac"), mac),
         ),
         media_type="text/event-stream",
         headers={
