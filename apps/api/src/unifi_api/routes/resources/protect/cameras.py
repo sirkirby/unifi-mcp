@@ -123,8 +123,8 @@ async def get_camera(
         await _maybe_set_site(cm, site_id)
         try:
             camera = await mgr.get_camera(camera_id)
-        except ValueError:
-            raise HTTPException(status_code=404, detail="camera not found")
+        except UniFiNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="camera not found") from exc
 
     type_class = request.app.state.type_registry.lookup("protect", "cameras/{id}")
     data = type_class.from_manager_output(camera).to_dict()

@@ -10,6 +10,7 @@ from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
+from unifi_core.exceptions import UniFiNotFoundError
 
 
 def _cfg(tmp_path):
@@ -148,7 +149,7 @@ async def test_get_camera_happy_and_404(tmp_path, monkeypatch) -> None:
     async def fake_get(self, camera_id):
         if camera_id == "cam-1":
             return target
-        raise ValueError(f"Camera not found: {camera_id}")
+        raise UniFiNotFoundError("camera", camera_id)
 
     from unifi_core.protect.managers.camera_manager import CameraManager
 
