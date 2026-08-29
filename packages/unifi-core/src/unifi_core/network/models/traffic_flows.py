@@ -370,12 +370,16 @@ def enrich_traffic_flow_statistics_dpi_names(
     application_names = {
         entry["id"]: entry["name"]
         for entry in applications
-        if isinstance(entry.get("id"), int) and isinstance(entry.get("name"), str)
+        if isinstance(entry.get("id"), int)
+        and not isinstance(entry.get("id"), bool)
+        and isinstance(entry.get("name"), str)
     }
     category_names = {
         entry["id"]: entry["name"]
         for entry in categories
-        if isinstance(entry.get("id"), int) and isinstance(entry.get("name"), str)
+        if isinstance(entry.get("id"), int)
+        and not isinstance(entry.get("id"), bool)
+        and isinstance(entry.get("name"), str)
     }
     top_applications = []
     for application in statistics.top_applications:

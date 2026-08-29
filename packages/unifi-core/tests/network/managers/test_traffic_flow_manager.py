@@ -229,6 +229,29 @@ async def test_statistics_preserves_order_and_resolves_partial_catalog_matches()
 
 
 @pytest.mark.asyncio
+async def test_statistics_ignores_boolean_catalog_ids():
+    class MalformedDpiCatalog:
+        async def get_full_dpi_catalog(self):
+            return {
+                "applications": [{"id": True, "name": "Not application one"}],
+                "categories": [{"id": True, "name": "Not category one"}],
+            }
+
+    response = dict(_STATS_RESPONSE)
+    response["top_all_traffic_by_application"] = [
+        {"application_id": 1, "bytes": 999, "category_id": 0},
+        {"application_id": 470, "bytes": 500, "category_id": 1},
+    ]
+    conn = _make_connection(response=response)
+    mgr = TrafficFlowManager(conn, dpi_manager=MalformedDpiCatalog())
+
+    result = await mgr.get_traffic_flow_statistics(period="DAY", top=30)
+
+    assert result["top_applications"][0]["application_name"] is None
+    assert result["top_applications"][1]["category_name"] is None
+
+
+@pytest.mark.asyncio
 async def test_statistics_is_cached_within_ttl():
     conn = _make_connection(response=_STATS_RESPONSE)
     mgr = TrafficFlowManager(conn)

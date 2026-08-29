@@ -102,8 +102,10 @@ async def test_full_catalog_does_not_cache_incomplete_category_pages(manager, co
         ({"data": [{"id": 2, "name": "Second"}], "totalCount": 3, "offset": 1}, "changed"),
         ({"data": [], "totalCount": 2, "offset": 1}, "incomplete"),
         ({"data": [{"id": 2, "name": "Second"}], "totalCount": 2, "offset": 0}, "incomplete"),
+        ({"data": [{"id": 2, "name": "Second"}], "totalCount": 2, "offset": 1.5}, "incomplete"),
+        ({"data": [{"id": 2, "name": "Second"}], "totalCount": 2, "offset": True}, "incomplete"),
     ],
-    ids=["duplicate-id", "changed-total", "empty-page", "wrong-offset"],
+    ids=["duplicate-id", "changed-total", "empty-page", "wrong-offset", "fractional-offset", "boolean-offset"],
 )
 async def test_full_catalog_rejects_invalid_later_pages(manager, connection, second_page, error):
     async def fake_request(path, params=None):

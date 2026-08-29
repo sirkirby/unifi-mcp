@@ -32,6 +32,15 @@ _DPI_CATALOG_CACHE_TTL = 900
 _DPI_CATALOG_PAGE_SIZE = 200
 
 
+def _parse_non_negative_integer(value: Any) -> int | None:
+    """Return a catalogue integer without accepting bools or fractional values."""
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    if isinstance(value, str) and value.isdecimal():
+        return int(value)
+    return None
+
+
 class DpiManager:
     """Manages DPI application and category lookups via the official UniFi API."""
 
@@ -154,11 +163,8 @@ class DpiManager:
 
             page_entries = list(page.get("data") or [])
             raw_total = page.get("totalCount")
-            if isinstance(raw_total, int) and not isinstance(raw_total, bool):
-                page_total = raw_total
-            elif isinstance(raw_total, str) and raw_total.isdecimal():
-                page_total = int(raw_total)
-            else:
+            page_total = _parse_non_negative_integer(raw_total)
+            if page_total is None:
                 raise RuntimeError(f"invalid DPI {resource} catalogue totalCount")
             if total_count is None:
                 total_count = page_total
@@ -166,8 +172,10 @@ class DpiManager:
                 raise RuntimeError(f"DPI {resource} catalogue changed during pagination")
 
             reported_offset = page.get("offset")
-            if reported_offset is not None and int(reported_offset) != offset:
-                raise RuntimeError(f"incomplete DPI {resource} catalogue")
+            if reported_offset is not None:
+                parsed_offset = _parse_non_negative_integer(reported_offset)
+                if parsed_offset is None or parsed_offset != offset:
+                    raise RuntimeError(f"incomplete DPI {resource} catalogue")
             if not page_entries and len(entries) < total_count:
                 raise RuntimeError(f"incomplete DPI {resource} catalogue")
             if len(entries) + len(page_entries) > total_count:
