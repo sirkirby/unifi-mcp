@@ -165,9 +165,11 @@ async def test_edge_camera_events(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("protect", "camera_manager", "list_cameras"): [
-                {"id": "cam-1", "name": "Front Door", "model": "G4PRO"},
-            ],
+            ("protect", "camera_manager", "get_camera"): {
+                "id": "cam-1",
+                "name": "Front Door",
+                "model": "G4PRO",
+            },
             ("protect", "event_manager", "list_events"): [
                 {"id": "evt-1", "type": "motion", "camera_id": "cam-1"},
                 {"id": "evt-2", "type": "ring", "camera_id": "cam-1"},
@@ -206,9 +208,11 @@ async def test_edge_camera_recordings(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("protect", "camera_manager", "list_cameras"): [
-                {"id": "cam-1", "name": "Garage", "model": "G5FLEX"},
-            ],
+            ("protect", "camera_manager", "get_camera"): {
+                "id": "cam-1",
+                "name": "Garage",
+                "model": "G5FLEX",
+            },
             ("protect", "recording_manager", "list_recordings"): [
                 {
                     "id": "rec-1",

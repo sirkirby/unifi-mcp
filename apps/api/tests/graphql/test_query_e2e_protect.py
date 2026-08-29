@@ -21,6 +21,7 @@ from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
+from unifi_core.exceptions import UniFiNotFoundError
 
 
 def _cfg(tmp_path: Path) -> ApiConfig:
@@ -73,6 +74,7 @@ def _stub_protect_managers(
     monkeypatch,
     *,
     cameras: list[Any] | None = None,
+    camera_details: dict[str, Any] | None = None,
     chimes: list[Any] | None = None,
     lights: list[Any] | None = None,
     sensors: list[Any] | None = None,
@@ -87,6 +89,7 @@ def _stub_protect_managers(
     """
     call_counts: dict[str, int] = {
         "list_cameras": 0,
+        "get_camera": 0,
         "list_chimes": 0,
         "list_lights": 0,
         "list_sensors": 0,
@@ -98,6 +101,16 @@ def _stub_protect_managers(
     async def _stub_list_cameras():
         call_counts["list_cameras"] += 1
         return cameras or []
+
+    async def _stub_get_camera(camera_id: str):
+        call_counts["get_camera"] += 1
+        if camera_details is not None:
+            camera = camera_details.get(camera_id)
+        else:
+            camera = next((camera for camera in (cameras or []) if camera.get("id") == camera_id), None)
+        if camera is None:
+            raise UniFiNotFoundError("camera", camera_id)
+        return camera
 
     async def _stub_list_chimes():
         call_counts["list_chimes"] += 1
@@ -125,6 +138,7 @@ def _stub_protect_managers(
 
     fake_camera_mgr = MagicMock()
     fake_camera_mgr.list_cameras = _stub_list_cameras
+    fake_camera_mgr.get_camera = _stub_get_camera
     fake_chime_mgr = MagicMock()
     fake_chime_mgr.list_chimes = _stub_list_chimes
     fake_light_mgr = MagicMock()
@@ -185,18 +199,12 @@ async def test_e2e_cameras_flat_list(tmp_path: Path, monkeypatch) -> None:
             "id": "cam1",
             "name": "Front Door",
             "model": "G4_PRO",
-            "firmware_version": "5.4.132",
-            "ip_address": "192.0.2.10",
-            "smart_detect_types": ["person", "vehicle"],
             "is_ptz": False,
         },
         {
             "id": "cam2",
             "name": "Garage",
             "model": "G5_FLEX",
-            "firmware_version": "5.4.131",
-            "ip_address": "192.0.2.11",
-            "smart_detect_types": [],
             "is_ptz": True,
         },
     ]
@@ -206,7 +214,7 @@ async def test_e2e_cameras_flat_list(tmp_path: Path, monkeypatch) -> None:
     query = f'''{{
       protect {{
         cameras(controller: "{cid}") {{
-          items {{ id name model firmwareVersion host smartDetectTypes isPtz }}
+          items {{ id name model isPtz }}
           nextCursor
         }}
       }}
@@ -220,10 +228,73 @@ async def test_e2e_cameras_flat_list(tmp_path: Path, monkeypatch) -> None:
         assert len(items) == 2
         assert {it["name"] for it in items} == {"Front Door", "Garage"}
         front_door = next(it for it in items if it["id"] == "cam1")
-        assert front_door["firmwareVersion"] == "5.4.132"
-        assert front_door["host"] == "192.0.2.10"
-        assert front_door["smartDetectTypes"] == ["person", "vehicle"]
         assert front_door["isPtz"] is False
+
+
+@pytest.mark.asyncio
+async def test_e2e_camera_detail_uses_get_camera(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    camera_summary = {"id": "cam1", "name": "Front Door", "model": "G4_PRO", "is_ptz": False}
+    camera_detail = {
+        **camera_summary,
+        "firmware_version": "5.4.132",
+        "ip_address": "192.0.2.10",
+        "smart_detect_types": ["person", "vehicle"],
+    }
+    call_counts = _stub_protect_managers(
+        monkeypatch,
+        cameras=[camera_summary],
+        camera_details={"cam1": camera_detail},
+    )
+
+    headers = {"Authorization": f"Bearer {key}"}
+    query = f'''{{
+      protect {{
+        camera(controller: "{cid}", id: "cam1") {{
+          id
+          name
+          firmwareVersion
+          host
+          smartDetectTypes
+          isPtz
+        }}
+      }}
+    }}'''
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post("/v1/graphql", headers=headers, json={"query": query})
+        assert r.status_code == 200
+        body = r.json()
+        assert body.get("errors") is None, body
+        camera = body["data"]["protect"]["camera"]
+        assert camera == {
+            "id": "cam1",
+            "name": "Front Door",
+            "firmwareVersion": "5.4.132",
+            "host": "192.0.2.10",
+            "smartDetectTypes": ["person", "vehicle"],
+            "isPtz": False,
+        }
+        assert call_counts["get_camera"] == 1
+        assert call_counts["list_cameras"] == 0
+
+
+@pytest.mark.asyncio
+async def test_e2e_camera_detail_not_found_is_nullable(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    call_counts = _stub_protect_managers(monkeypatch, camera_details={})
+
+    headers = {"Authorization": f"Bearer {key}"}
+    query = f'{{ protect {{ camera(controller: "{cid}", id: "missing") {{ id }} }} }}'
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post("/v1/graphql", headers=headers, json={"query": query})
+        assert r.status_code == 200
+        body = r.json()
+        assert body.get("errors") is None, body
+        assert body["data"]["protect"]["camera"] is None
+        assert call_counts["get_camera"] == 1
 
 
 # ---------------------------------------------------------------------------

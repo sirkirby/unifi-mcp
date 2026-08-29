@@ -6,10 +6,11 @@ Phase 6 PR3 Task D — wires every migrated protect read tool into a typed
 - Fetch helpers route through ``ctx.cache.get_or_fetch`` so concurrent
   resolvers in the same request share a single manager round-trip.
 - Page wrappers carry pagination cursors per LIST resolver.
-- DETAIL resolvers either filter the cached LIST snapshot by primary key
-  (``camera``, ``event`` -> events list, ``recording`` -> per-camera list)
-  or fetch per-id via cache when there is no list (``snapshot``,
-  ``cameraAnalytics``, ``cameraStreams``, ``eventThumbnail``).
+- DETAIL resolvers use a per-id manager method when one exists (``camera``),
+  filter the cached LIST snapshot when the list carries the full shape
+  (``event`` -> events list, ``recording`` -> per-camera list), or fetch
+  per-id via cache when there is no list (``snapshot``, ``cameraAnalytics``,
+  ``cameraStreams``, ``eventThumbnail``).
 - Wrapper-dict tools (``alarmStatus``, ``alarmProfiles``,
   ``recordingStatus``, ``viewers``) return the typed wrapper directly via
   ``Type.from_manager_output(raw)``.
@@ -30,6 +31,7 @@ from typing import Any
 
 import strawberry
 from strawberry.types import Info
+from unifi_core.exceptions import UniFiNotFoundError
 
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
@@ -202,6 +204,27 @@ async def _fetch_cameras(ctx: GraphQLContext, controller: str) -> list:
                 "protect",
             )
             return list(await mgr.list_cameras())
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
+async def _fetch_camera(ctx: GraphQLContext, controller: str, camera_id: str) -> Any:
+    key = f"protect/cameras/{controller}/{camera_id}"
+
+    async def _do() -> Any:
+        async with ctx.sessionmaker() as session:
+            mgr = await ctx.manager_factory.get_domain_manager(
+                session,
+                controller,
+                "protect",
+                "camera_manager",
+            )
+            await ctx.manager_factory.get_connection_manager(
+                session,
+                controller,
+                "protect",
+            )
+            return await mgr.get_camera(camera_id)
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -961,13 +984,15 @@ class ProtectQuery:
         id: strawberry.ID,
     ) -> Camera | None:
         ctx: GraphQLContext = info.context
-        raw = await _fetch_cameras(ctx, controller)
-        for c in raw:
-            if _id_of(c) == id:
-                inst = Camera.from_manager_output(c)
-                inst._controller_id = str(controller)
-                return inst
-        return None
+        try:
+            raw = await _fetch_camera(ctx, controller, str(id))
+        except UniFiNotFoundError:
+            return None
+        if raw is None:
+            return None
+        inst = Camera.from_manager_output(raw)
+        inst._controller_id = str(controller)
+        return inst
 
     @strawberry.field(
         permission_classes=[IsRead],

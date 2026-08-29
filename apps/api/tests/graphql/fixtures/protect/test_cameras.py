@@ -50,9 +50,11 @@ async def test_protect_camera_detail(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("protect", "camera_manager", "list_cameras"): [
-                {"id": "cam1", "name": "Front Door", "model": "G4_PRO"},
-            ],
+            ("protect", "camera_manager", "get_camera"): {
+                "id": "cam1",
+                "name": "Front Door",
+                "model": "G4_PRO",
+            },
         },
     )
     body = await graphql_query(
