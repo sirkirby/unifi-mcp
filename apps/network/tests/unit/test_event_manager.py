@@ -43,12 +43,47 @@ class TestEventManagerV2:
         assert events[0]["id"] == "evt1"
 
     @pytest.mark.asyncio
-    async def test_get_events_with_search_text(self, event_manager, mock_connection):
+    async def test_get_events_with_exact_event_key(self, event_manager, mock_connection):
         mock_connection.request.return_value = [{"data": [], "total_element_count": 0}]
-        await event_manager.get_events(event_type="CLIENT_CONNECTED")
+        await event_manager.get_events(event_type="CLIENT_CONNECTED_WIRELESS_2")
         call_args = mock_connection.request.call_args
         api_request = call_args[0][0]
-        assert api_request.data["searchText"] == "CLIENT_CONNECTED"
+        assert api_request.data["keys"] == ["CLIENT_CONNECTED_WIRELESS_2"]
+        assert api_request.data["searchText"] == ""
+
+    @pytest.mark.asyncio
+    async def test_get_events_paginates_past_v2_page_size_cap(self, event_manager, mock_connection):
+        first_page = [{"id": f"evt{i}"} for i in range(100)]
+        second_page = [{"id": f"evt{i}"} for i in range(100, 150)]
+        mock_connection.request.side_effect = [
+            [{"data": first_page, "total_page_count": 2}],
+            [{"data": second_page, "total_page_count": 2}],
+        ]
+
+        events = await event_manager.get_events(limit=150)
+
+        assert len(events) == 150
+        requests = [call.args[0] for call in mock_connection.request.call_args_list]
+        assert [request.data["pageNumber"] for request in requests] == [0, 1]
+        assert all(request.data["pageSize"] == 100 for request in requests)
+
+    @pytest.mark.asyncio
+    async def test_get_events_applies_arbitrary_start_across_pages(self, event_manager, mock_connection):
+        mock_connection.request.side_effect = [
+            [{"data": [{"id": f"evt{i}"} for i in range(100, 110)], "total_page_count": 12}],
+            [{"data": [{"id": f"evt{i}"} for i in range(110, 120)], "total_page_count": 12}],
+        ]
+
+        events = await event_manager.get_events(limit=10, start=105)
+
+        assert [event["id"] for event in events] == [f"evt{i}" for i in range(105, 115)]
+        requests = [call.args[0] for call in mock_connection.request.call_args_list]
+        assert [request.data["pageNumber"] for request in requests] == [10, 11]
+
+    @pytest.mark.asyncio
+    async def test_get_events_zero_limit_makes_no_request(self, event_manager, mock_connection):
+        assert await event_manager.get_events(limit=0) == []
+        mock_connection.request.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_get_events_uses_timestamp_range(self, event_manager, mock_connection):
@@ -121,10 +156,10 @@ class TestEventManagerLegacy:
     @pytest.mark.asyncio
     async def test_get_events_with_type_filter(self, event_manager, mock_connection):
         mock_connection.request.return_value = []
-        await event_manager.get_events(event_type="EVT_SW_")
+        await event_manager.get_events(event_type="EVT_SW_Connected")
         call_args = mock_connection.request.call_args
         api_request = call_args[0][0]
-        assert api_request.data["type"] == "EVT_SW_"
+        assert api_request.data["type"] == "EVT_SW_Connected"
 
     @pytest.mark.asyncio
     async def test_get_events_respects_limit(self, event_manager, mock_connection):
@@ -190,12 +225,29 @@ class TestEventManagerCommon:
 
         return EventManager(mock_connection)
 
-    def test_get_event_type_prefixes(self, event_manager):
-        prefixes = event_manager.get_event_type_prefixes()
-        assert len(prefixes) > 0
-        assert any(p["prefix"] == "EVT_SW_" for p in prefixes)
-        assert any(p["prefix"] == "EVT_AP_" for p in prefixes)
-        assert all("description" in p for p in prefixes)
+    @pytest.mark.asyncio
+    async def test_get_event_type_prefixes_returns_observed_exact_keys(self, event_manager, mock_connection):
+        event_manager._use_v2 = True
+        mock_connection.request.return_value = [
+            {
+                "data": [
+                    {"key": "CLIENT_DISCONNECTED_WIRELESS_2"},
+                    {"key": "CLIENT_CONNECTED_WIRELESS_2"},
+                    {"key": "CLIENT_DISCONNECTED_WIRELESS_2"},
+                    {"key": None},
+                ]
+            }
+        ]
+
+        event_types = await event_manager.get_event_type_prefixes()
+
+        assert [event_type["key"] for event_type in event_types] == [
+            "CLIENT_CONNECTED_WIRELESS_2",
+            "CLIENT_DISCONNECTED_WIRELESS_2",
+        ]
+        assert event_types[1]["prefix"] == "CLIENT_DISCONNECTED_WIRELESS_2"
+        assert event_types[1]["observed_count"] == 2
+        assert all("description" in event_type for event_type in event_types)
 
     def test_get_event_categories(self, event_manager):
         categories = event_manager.get_event_categories()
