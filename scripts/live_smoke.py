@@ -1446,6 +1446,24 @@ class LiveSmokeRunner:
         # SSIDs are capped at 32 bytes; use a compact stamp so the disposable
         # name stays inside the limit while remaining unique and recognizable.
         name = f"{RUN_PREFIX}-ssid-{datetime.now(UTC).strftime('%H%M%S')}-{secrets.token_hex(3)}"
+        initial_schedule = [
+            {
+                "duration_minutes": 60,
+                "name": "smoke window",
+                "start_days_of_week": ["mon"],
+                "start_hour": 1,
+                "start_minute": 0,
+            }
+        ]
+        updated_schedule = [
+            {
+                "duration_minutes": 90,
+                "name": "smoke window updated",
+                "start_days_of_week": ["tue", "thu"],
+                "start_hour": 2,
+                "start_minute": 15,
+            }
+        ]
         create = await self.call(
             "unifi_create_wlan",
             {
@@ -1456,6 +1474,9 @@ class LiveSmokeRunner:
                     "hide_ssid": True,
                     "ap_group_ids": [ap_group_id],
                     "ap_group_mode": "groups",
+                    "schedule_enabled": True,
+                    "schedule_reversed": True,
+                    "schedule_with_duration": initial_schedule,
                 },
                 "confirm": True,
             },
@@ -1506,6 +1527,19 @@ class LiveSmokeRunner:
                 {"wlan_id": wlan_id, "update_data": {"minrate_ng_data_rate_kbps": 6000}, "confirm": True},
                 "approved:update",
             )
+            schedule_update = await self.call(
+                "unifi_update_wlan",
+                {
+                    "wlan_id": wlan_id,
+                    "update_data": {
+                        "schedule": ["mon-fri|0100-0700"],
+                        "schedule_reversed": False,
+                        "schedule_with_duration": updated_schedule,
+                    },
+                    "confirm": True,
+                },
+                "approved:update",
+            )
             await self.call("unifi_get_wlan_details", {"wlan_id": wlan_id}, "approved:verify")
             details_payload = self.cache.by_tool.get("unifi_get_wlan_details", {})
             details = details_payload.get("details", {}) if isinstance(details_payload, dict) else {}
@@ -1514,12 +1548,17 @@ class LiveSmokeRunner:
                 "approved:verify-persisted",
                 visibility_update.success is True
                 and rate_update.success is True
+                and schedule_update.success is True
                 and details.get("name") == name
                 and details.get("enabled") is False
                 and details.get("security") == "open"
                 and details.get("hide_ssid") is False
-                and details.get("minrate_ng_data_rate_kbps") == 6000,
-                "name/security preserved; enabled=false, hide_ssid=false, and minrate=6000 persisted",
+                and details.get("minrate_ng_data_rate_kbps") == 6000
+                and details.get("schedule_enabled") is True
+                and details.get("schedule_reversed") is False
+                and details.get("schedule") == ["mon-fri|0100-0700"]
+                and details.get("schedule_with_duration") == updated_schedule,
+                "name/security preserved; visibility, minrate, and non-default schedule fields persisted",
             )
         finally:
             delete = await self.call(

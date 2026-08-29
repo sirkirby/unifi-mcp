@@ -467,6 +467,18 @@ def test_wlan_lifecycle_reads_back_and_cleans_up_disposable_wlan() -> None:
                     "security": "open",
                     "hide_ssid": False,
                     "minrate_ng_data_rate_kbps": 6000,
+                    "schedule_enabled": True,
+                    "schedule_reversed": False,
+                    "schedule": ["mon-fri|0100-0700"],
+                    "schedule_with_duration": [
+                        {
+                            "duration_minutes": 90,
+                            "name": "smoke window updated",
+                            "start_days_of_week": ["tue", "thu"],
+                            "start_hour": 2,
+                            "start_minute": 15,
+                        }
+                    ],
                 }
             }
         summary = {"resource_id": "wlan-smoke-1"} if tool == "unifi_create_wlan" else {}
@@ -481,10 +493,25 @@ def test_wlan_lifecycle_reads_back_and_cleans_up_disposable_wlan() -> None:
         "unifi_create_wlan",
         "unifi_update_wlan",
         "unifi_update_wlan",
+        "unifi_update_wlan",
         "unifi_get_wlan_details",
         "unifi_delete_wlan",
     ]
     assert calls[0][1]["wlan_data"]["enabled"] is False
+    assert calls[0][1]["wlan_data"]["schedule_reversed"] is True
+    assert calls[3][1]["update_data"] == {
+        "schedule": ["mon-fri|0100-0700"],
+        "schedule_reversed": False,
+        "schedule_with_duration": [
+            {
+                "duration_minutes": 90,
+                "name": "smoke window updated",
+                "start_days_of_week": ["tue", "thu"],
+                "start_hour": 2,
+                "start_minute": 15,
+            }
+        ],
+    }
     assert calls[-1][1] == {"wlan_id": "wlan-smoke-1", "confirm": True}
     assert runner.report.cleaned_resources == runner.report.created_resources
 
