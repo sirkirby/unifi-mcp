@@ -6942,7 +6942,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get a list of known event type prefixes for filtering events.\n\nUse these prefixes with unifi_list_events event_type parameter to filter specific event categories.",
+      "description": "Get recently observed exact event keys for filtering events.\n\nUse a returned key with the unifi_list_events event_type parameter. Keys are sampled from the 1,000 most recent events within the last 7 days, so event types absent from that sample are not included.",
       "name": "unifi_get_event_types",
       "schema": {
         "input": {
@@ -11628,13 +11628,13 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns timestamped event log entries (client connects/disconnects, device state changes, firmware updates, config changes) sorted newest-first. Filter by within_hours (default 24), event_type prefix (use unifi_get_event_types for valid prefixes), and paginate with start/limit. For critical alerts specifically, use unifi_list_alarms instead.",
+      "description": "Returns timestamped event log entries (client connects/disconnects, device state changes, firmware updates, config changes) sorted newest-first. Filter by within_hours (default 24), an exact event_type key (use unifi_get_event_types for recently observed keys), and paginate with start/limit. For critical alerts specifically, use unifi_list_alarms instead.",
       "name": "unifi_list_events",
       "schema": {
         "input": {
           "properties": {
             "event_type": {
-              "description": "Filter by event type prefix (e.g., 'EVT_WU_' for wireless user events, 'EVT_SW_' for switch events). Use unifi_get_event_types to see valid prefixes",
+              "description": "Filter by an exact event key (for example 'CLIENT_DISCONNECTED_WIRELESS_2'). Use unifi_get_event_types to see recently observed keys",
               "type": "string"
             },
             "limit": {
@@ -13690,13 +13690,13 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by event_type prefix, client/device mac, and limit. Use this for real-time monitoring; use unifi_list_events for historical queries.",
+      "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by exact event_type key, client/device mac, and limit. Use this for real-time monitoring; use unifi_list_events for historical queries.",
       "name": "unifi_recent_events",
       "schema": {
         "input": {
           "properties": {
             "event_type": {
-              "description": "Filter by event type prefix (e.g., 'EVT_WU_' for wireless user events). Use unifi_get_event_types for valid prefixes.",
+              "description": "Filter by an exact event key (for example 'CLIENT_CONNECTED_WIRELESS_2'). Use unifi_get_event_types for recently observed keys.",
               "type": "string"
             },
             "limit": {

@@ -3820,7 +3820,7 @@
       "permission_action": "read",
       "read_only_hint": true,
       "manager_attr": "event_manager",
-      "manager_method": "get_event_type_prefixes",
+      "manager_method": "get_event_types",
       "input_schema": {
         "properties": {},
         "type": "object",
@@ -4940,7 +4940,7 @@
       "input_schema": {
         "properties": {
           "event_type": {
-            "description": "Filter by event type prefix (e.g., 'EVT_WU_' for wireless user events, 'EVT_SW_' for switch events). Use unifi_get_event_types to see valid prefixes",
+            "description": "Filter by an exact event key (for example 'CLIENT_DISCONNECTED_WIRELESS_2'). Use unifi_get_event_types to see recently observed keys",
             "type": "string"
           },
           "limit": {
@@ -5390,7 +5390,7 @@
       "input_schema": {
         "properties": {
           "event_type": {
-            "description": "Filter by event type prefix (e.g., 'EVT_WU_' for wireless user events). Use unifi_get_event_types for valid prefixes.",
+            "description": "Filter by an exact event key (for example 'CLIENT_CONNECTED_WIRELESS_2'). Use unifi_get_event_types for recently observed keys.",
             "type": "string"
           },
           "limit": {

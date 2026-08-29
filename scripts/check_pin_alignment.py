@@ -217,7 +217,7 @@ print(f"validated {len(registry)} catalog bindings against installed Core floor"
 """
 
 _NETWORK_CORE_FLOOR_CONTRACT = """
-import ast, json
+import ast, asyncio, json
 from importlib.resources import files
 from unifi_network_mcp import runtime
 
@@ -256,6 +256,32 @@ if not checked:
     failures.append("no direct Core manager call sites were discovered")
 if runtime.traffic_flow_manager._dpi_manager is not runtime.dpi_manager:
     failures.append("traffic_flow_manager is not wired to the runtime DPI catalogue manager")
+async def fake_get_events(*, within, limit, **kwargs):
+    if within != 168 or limit != 1000:
+        raise AssertionError(f"event catalog sampled within={within}, limit={limit}")
+    return [
+        {"key": "CLIENT_CONNECTED_WIRELESS_2"},
+        {"key": "CLIENT_CONNECTED_WIRELESS_2"},
+        {"event": "CLIENT_ROAMED_2"},
+    ]
+runtime.event_manager.get_events = fake_get_events
+catalog = asyncio.run(runtime.event_manager.get_event_types())
+expected_catalog = [
+    {
+        "key": "CLIENT_CONNECTED_WIRELESS_2",
+        "prefix": "CLIENT_CONNECTED_WIRELESS_2",
+        "description": "Exact event key observed in the 1,000 most recent events within the last 7 days",
+        "observed_count": 2,
+    },
+    {
+        "key": "CLIENT_ROAMED_2",
+        "prefix": "CLIENT_ROAMED_2",
+        "description": "Exact event key observed in the 1,000 most recent events within the last 7 days",
+        "observed_count": 1,
+    },
+]
+if catalog != expected_catalog:
+    failures.append(f"event_manager.get_event_types returned {catalog!r}")
 if failures:
     raise SystemExit("\\n".join(failures))
 print(f"validated {len(checked)} direct Core manager call sites against installed Core floor")

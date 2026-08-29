@@ -297,7 +297,7 @@ async def get_event_types(
     site_id: str,
     controller=Depends(resolve_controller),
 ) -> dict:
-    """DETAIL — event_manager.get_event_type_prefixes (sync method, returns list)."""
+    """DETAIL — event_manager.get_event_types (async method, returns list)."""
     require_capability(controller, "network")
     factory = request.app.state.manager_factory
     sm = request.app.state.sessionmaker
@@ -309,7 +309,7 @@ async def get_event_types(
             "event_manager",
             site=site_id,
         )
-        result = mgr.get_event_type_prefixes()
+        result = mgr.get_event_types()
         if inspect.isawaitable(result):
             result = await result
     return _detail_response(request, result, "unifi_get_event_types")

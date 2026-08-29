@@ -753,7 +753,7 @@ type EventThumbnail {
   sizeBytes: Int
 }
 
-"""Wrapper for event-type prefix descriptors."""
+"""Wrapper for exact event-key descriptors."""
 type EventTypes {
   eventTypes: JSON!
 }
@@ -1362,7 +1362,9 @@ type NetworkQuery {
   """Get gateway (USG) security / NAT / connection-tracking settings."""
   gatewaySettings(controller: ID!, site: String! = "default"): GatewaySettings
 
-  """Get the controller's event-type prefix catalog."""
+  """
+  Get exact event keys sampled from the controller's 1,000 most recent events within the last 7 days.
+  """
   eventTypes(controller: ID!, site: String! = "default"): EventTypes
 
   """Get auto-backup schedule + retention settings."""
@@ -2342,7 +2344,7 @@ Read-only access to UniFi Network resources.
 - `dynamicDns: DynamicDnsPage!`  — List Dynamic DNS provider entries on the given controller/site (paginated).
 - `dynamicDnsEntry: DynamicDns`  — Look up a single Dynamic DNS entry by id.
 - `eventLog: EventLogPage!`  — List recent controller events (paginated).
-- `eventTypes: EventTypes`  — Get the controller's event-type prefix catalog.
+- `eventTypes: EventTypes`  — Get exact event keys sampled from the controller's 1,000 most recent events within the last 7 days.
 - `firewallGroup: FirewallGroup`  — Look up a single firewall group by id.
 - `firewallGroups: FirewallGroupPage!`  — List firewall address/port groups (paginated).
 - `firewallPolicies: FirewallRulePage!`  — List firewall policies/rules on the given controller/site (paginated).

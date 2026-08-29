@@ -237,9 +237,19 @@ async def test_event_types(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("network", "event_manager", "get_event_type_prefixes"): [
-                {"key": "EVT_AP", "label": "Access Point Events"},
-                {"key": "EVT_GW", "label": "Gateway Events"},
+            ("network", "event_manager", "get_event_types"): [
+                {
+                    "key": "CLIENT_CONNECTED_WIRELESS_2",
+                    "prefix": "CLIENT_CONNECTED_WIRELESS_2",
+                    "description": "Exact event key observed in the sample",
+                    "observed_count": 4,
+                },
+                {
+                    "key": "CLIENT_ROAMED_2",
+                    "prefix": "CLIENT_ROAMED_2",
+                    "description": "Exact event key observed in the sample",
+                    "observed_count": 9,
+                },
             ],
         },
     )
@@ -255,7 +265,20 @@ async def test_event_types(tmp_path, monkeypatch):
     assert body.get("errors") is None, body
     et = body["data"]["network"]["eventTypes"]
     assert et is not None
-    assert len(et["eventTypes"]) == 2
+    assert et["eventTypes"] == [
+        {
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "prefix": "CLIENT_CONNECTED_WIRELESS_2",
+            "description": "Exact event key observed in the sample",
+            "observed_count": 4,
+        },
+        {
+            "key": "CLIENT_ROAMED_2",
+            "prefix": "CLIENT_ROAMED_2",
+            "description": "Exact event key observed in the sample",
+            "observed_count": 9,
+        },
+    ]
 
 
 @pytest.mark.asyncio

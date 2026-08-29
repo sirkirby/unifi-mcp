@@ -199,7 +199,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_list_alarms` — List active alarms
 - `unifi_archive_alarm` — Archive a specific alarm
 - `unifi_archive_all_alarms` — Archive all active alarms
-- `unifi_get_event_types` — Get known event type prefixes
+- `unifi_get_event_types` — Get exact event keys observed in the 1,000 most recent events within the last 7 days
 
 ## Routing (5 tools)
 

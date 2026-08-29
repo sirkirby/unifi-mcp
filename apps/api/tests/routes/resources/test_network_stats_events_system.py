@@ -589,17 +589,24 @@ async def test_get_speedtest_results_list(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_get_event_types_detail(tmp_path, monkeypatch) -> None:
-    """event-types: event_manager.get_event_type_prefixes (synchronous, returns list)."""
+    """event-types: event_manager.get_event_types (async, returns exact keys)."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
 
-    def fake_get(self):
-        return [{"prefix": "EVT_WU_", "description": "Wireless user"}]
+    async def fake_get(self):
+        return [
+            {
+                "key": "CLIENT_CONNECTED_WIRELESS_2",
+                "prefix": "CLIENT_CONNECTED_WIRELESS_2",
+                "description": "Exact event key observed in the sample",
+                "observed_count": 4,
+            }
+        ]
 
     from unifi_core.network.managers.event_manager import EventManager
 
-    monkeypatch.setattr(EventManager, "get_event_type_prefixes", fake_get)
+    monkeypatch.setattr(EventManager, "get_event_types", fake_get)
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get(
@@ -607,7 +614,16 @@ async def test_get_event_types_detail(tmp_path, monkeypatch) -> None:
             headers={"Authorization": f"Bearer {key}"},
         )
     assert r.status_code == 200, r.text
-    assert r.json()["render_hint"]["kind"] == "detail"
+    body = r.json()
+    assert body["render_hint"]["kind"] == "detail"
+    assert body["data"]["event_types"] == [
+        {
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "prefix": "CLIENT_CONNECTED_WIRELESS_2",
+            "description": "Exact event key observed in the sample",
+            "observed_count": 4,
+        }
+    ]
 
 
 @pytest.mark.asyncio

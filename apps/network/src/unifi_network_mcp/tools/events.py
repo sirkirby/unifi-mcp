@@ -38,8 +38,8 @@ def _get_event_manager():
     description=(
         "Returns timestamped event log entries (client connects/disconnects, device "
         "state changes, firmware updates, config changes) sorted newest-first. "
-        "Filter by within_hours (default 24), event_type prefix (use unifi_get_event_types "
-        "for valid prefixes), and paginate with start/limit. "
+        "Filter by within_hours (default 24), an exact event_type key (use "
+        "unifi_get_event_types for recently observed keys), and paginate with start/limit. "
         "For critical alerts specifically, use unifi_list_alarms instead."
     ),
 )
@@ -50,7 +50,7 @@ async def list_events(
     event_type: Annotated[
         Optional[str],
         Field(
-            description="Filter by event type prefix (e.g., 'EVT_WU_' for wireless user events, 'EVT_SW_' for switch events). Use unifi_get_event_types to see valid prefixes"
+            description="Filter by an exact event key (for example 'CLIENT_DISCONNECTED_WIRELESS_2'). Use unifi_get_event_types to see recently observed keys"
         ),
     ] = None,
 ) -> Dict[str, Any]:
@@ -124,7 +124,7 @@ async def list_alarms(
     description=(
         "Get recent events from the in-memory websocket buffer. This is fast "
         "(no API call) and returns events received via the real-time websocket "
-        "stream. Supports filtering by event_type prefix, client/device mac, "
+        "stream. Supports filtering by exact event_type key, client/device mac, "
         "and limit. Use this for real-time monitoring; use unifi_list_events "
         "for historical queries."
     ),
@@ -134,7 +134,7 @@ async def unifi_recent_events(
     event_type: Annotated[
         Optional[str],
         Field(
-            description="Filter by event type prefix (e.g., 'EVT_WU_' for wireless user events). Use unifi_get_event_types for valid prefixes."
+            description="Filter by an exact event key (for example 'CLIENT_CONNECTED_WIRELESS_2'). Use unifi_get_event_types for recently observed keys."
         ),
     ] = None,
     mac: Annotated[
@@ -181,22 +181,25 @@ async def unifi_subscribe_events() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_event_types",
-    description="""Get a list of known event type prefixes for filtering events.
+    description="""Get recently observed exact event keys for filtering events.
 
-Use these prefixes with unifi_list_events event_type parameter to filter specific event categories.""",
+Use a returned key with the unifi_list_events event_type parameter. Keys are sampled from the 1,000 most recent events within the last 7 days, so event types absent from that sample are not included.""",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_event_types() -> Dict[str, Any]:
-    """Get list of event type prefixes."""
+    """Get recently observed exact event keys."""
     try:
         event_manager = _get_event_manager()
-        prefixes = event_manager.get_event_type_prefixes()
-        shaped = event_types_from_controller(prefixes)
+        event_types = await event_manager.get_event_types()
+        shaped = event_types_from_controller(event_types)
 
         return {
             "success": True,
             "event_types": shaped.event_types,
-            "usage": "Use prefix value with unifi_list_events event_type parameter",
+            "usage": (
+                "Use a key value with the unifi_list_events event_type parameter. "
+                "Keys are sampled from the 1,000 most recent events within the last 7 days."
+            ),
         }
     except Exception as e:
         logger.error("Error getting event types: %s", e, exc_info=True)

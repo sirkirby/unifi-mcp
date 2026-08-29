@@ -50,6 +50,9 @@ class _StubEventManager:
     async def get_events(self, **_kwargs):
         return self._records
 
+    async def get_event_types(self):
+        return self._records
+
 
 _V2_RECORD = {
     "id": "evt-0001",
@@ -115,3 +118,51 @@ async def test_list_events_still_maps_legacy_records(monkeypatch):
     assert event["mac"] == "aa:bb:cc:00:00:09"
     assert event["ip"] == "192.0.2.50"
     assert event["msg"] == "Client disconnected"
+
+
+@pytest.mark.asyncio
+async def test_get_event_types_returns_observed_exact_keys(monkeypatch):
+    from unifi_network_mcp.tools import events as events_module
+
+    observed = [
+        {
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "prefix": "CLIENT_CONNECTED_WIRELESS_2",
+            "description": "Exact event key observed in the 1,000 most recent events within the last 7 days",
+            "observed_count": 4,
+        }
+    ]
+    monkeypatch.setattr(
+        events_module,
+        "_get_event_manager",
+        lambda: _StubEventManager(observed),
+    )
+
+    result = await events_module.get_event_types()
+
+    assert result["success"] is True
+    assert result["event_types"] == observed
+    assert result["usage"] == (
+        "Use a key value with the unifi_list_events event_type parameter. "
+        "Keys are sampled from the 1,000 most recent events within the last 7 days."
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_event_types_returns_standard_error_when_discovery_fails(monkeypatch):
+    from unifi_network_mcp.tools import events as events_module
+
+    manager = _StubEventManager([])
+
+    async def fail_discovery():
+        raise RuntimeError("controller event query failed")
+
+    manager.get_event_types = fail_discovery
+    monkeypatch.setattr(events_module, "_get_event_manager", lambda: manager)
+
+    result = await events_module.get_event_types()
+
+    assert result == {
+        "success": False,
+        "error": "Failed to get event types: controller event query failed",
+    }

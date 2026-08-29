@@ -37,18 +37,26 @@ def _registry_with(tool: ToolEntry) -> ManifestRegistry:
 
 
 @pytest.mark.asyncio
-async def test_catalog_binding_is_authoritative_and_accepts_sync_result() -> None:
+async def test_catalog_binding_is_authoritative_and_awaits_event_types() -> None:
     entry = ToolEntry(
         name="unifi_get_event_types",
         product="network",
         category="events",
         manager="event_manager",
-        method="get_event_type_prefixes",
+        method="get_event_types",
         permission_action="read",
         read_only_hint=True,
     )
+    event_types = [
+        {
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "prefix": "CLIENT_CONNECTED_WIRELESS_2",
+            "description": "Exact event key observed in the 1,000 most recent events within the last 7 days",
+            "observed_count": 2,
+        }
+    ]
     manager = MagicMock()
-    manager.get_event_type_prefixes.return_value = {"EVT_WU_": "wireless"}
+    manager.get_event_types = AsyncMock(return_value=event_types)
     factory = MagicMock()
     factory.get_domain_manager = AsyncMock(return_value=manager)
     connection = MagicMock(site="default")
@@ -67,7 +75,7 @@ async def test_catalog_binding_is_authoritative_and_accepts_sync_result() -> Non
         confirm=False,
     )
 
-    assert result == {"EVT_WU_": "wireless"}
+    assert result == event_types
     factory.get_domain_manager.assert_awaited_once_with(
         session=session,
         controller_id="cid",
@@ -75,7 +83,7 @@ async def test_catalog_binding_is_authoritative_and_accepts_sync_result() -> Non
         attr_name="event_manager",
         site="default",
     )
-    manager.get_event_type_prefixes.assert_called_once_with()
+    manager.get_event_types.assert_awaited_once_with()
 
 
 def _dispatchable_entries() -> list[tuple[str, ToolEntry]]:

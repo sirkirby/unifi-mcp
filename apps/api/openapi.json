@@ -14305,7 +14305,7 @@
     },
     "/v1/sites/{site_id}/event-types": {
       "get": {
-        "description": "DETAIL \u2014 event_manager.get_event_type_prefixes (sync method, returns list).",
+        "description": "DETAIL \u2014 event_manager.get_event_types (async method, returns list).",
         "operationId": "get_event_types_v1_sites__site_id__event_types_get",
         "parameters": [
           {

@@ -336,7 +336,7 @@ def test_repository_catalog_is_complete_with_only_streaming_exclusions() -> None
         "get_alarms",
     )
     assert by_name["unifi_recent_events"]["manager_method"] == "get_recent_from_buffer"
-    assert by_name["unifi_get_event_types"]["manager_method"] == "get_event_type_prefixes"
+    assert by_name["unifi_get_event_types"]["manager_method"] == "get_event_types"
     assert by_name["unifi_archive_alarm"]["manager_method"] == "archive_alarm"
     assert by_name["unifi_archive_all_alarms"]["manager_method"] == "archive_all_alarms"
     assert (

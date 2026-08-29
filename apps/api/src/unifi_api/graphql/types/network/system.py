@@ -328,9 +328,9 @@ class SnmpSettings:
         return d
 
 
-@strawberry.type(description="Wrapper for event-type prefix descriptors.")
+@strawberry.type(description="Wrapper for exact event-key descriptors.")
 class EventTypes:
-    # The catalog of event-type prefixes is unstructured (varies by
+    # The catalog of observed event keys is unstructured (varies by
     # firmware), so each descriptor passes through as a plain dict.
     # Exposed as a ``JSON`` scalar on the GraphQL surface so the
     # heterogeneous payload survives without an enumerated sub-type.

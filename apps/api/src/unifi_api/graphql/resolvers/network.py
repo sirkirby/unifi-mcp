@@ -1171,7 +1171,7 @@ async def _fetch_event_types(
             )
             import inspect as _inspect
 
-            result = mgr.get_event_type_prefixes()
+            result = mgr.get_event_types()
             if _inspect.isawaitable(result):
                 result = await result
             return result
@@ -3485,7 +3485,9 @@ class NetworkQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description="Get the controller's event-type prefix catalog.",
+        description=(
+            "Get exact event keys sampled from the controller's 1,000 most recent events within the last 7 days."
+        ),
     )
     async def event_types(
         self,

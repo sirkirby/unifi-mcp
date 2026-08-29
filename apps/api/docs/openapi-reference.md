@@ -1277,7 +1277,7 @@ DETAIL kind currently; manager method is stats_manager.get_dpi_stats.
 ### `GET /v1/sites/{site_id}/event-types` — Get Event Types
 
 
-DETAIL — event_manager.get_event_type_prefixes (sync method, returns list).
+DETAIL — event_manager.get_event_types (async method, returns list).
 
 
 **Parameters:**

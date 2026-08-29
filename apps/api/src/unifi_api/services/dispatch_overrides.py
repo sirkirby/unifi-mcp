@@ -129,7 +129,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_list_events": ("event_manager", "get_events"),
     "unifi_list_alarms": ("event_manager", "get_alarms"),
     "unifi_recent_events": ("event_manager", "get_recent_from_buffer"),
-    "unifi_get_event_types": ("event_manager", "get_event_type_prefixes"),
+    "unifi_get_event_types": ("event_manager", "get_event_types"),
     "unifi_archive_alarm": ("event_manager", "archive_alarm"),
     "unifi_archive_all_alarms": ("event_manager", "archive_all_alarms"),
     # =========================================================================

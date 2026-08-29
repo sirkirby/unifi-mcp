@@ -160,13 +160,22 @@ def test_snmp_settings_detail_first_item_unwrap() -> None:
 
 def test_event_types_detail_serializer_shape() -> None:
     sample = [
-        {"prefix": "EVT_WU_", "description": "Wireless user events"},
-        {"prefix": "EVT_SW_", "description": "Switch events"},
+        {
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "prefix": "CLIENT_CONNECTED_WIRELESS_2",
+            "description": "Exact event key observed in the sample",
+            "observed_count": 4,
+        },
+        {
+            "key": "CLIENT_ROAMED_2",
+            "prefix": "CLIENT_ROAMED_2",
+            "description": "Exact event key observed in the sample",
+            "observed_count": 9,
+        },
     ]
     out = EventTypes.from_manager_output(sample).to_dict()
     assert EventTypes.render_hint("detail")["kind"] == "detail"
-    assert out["event_types"][0]["prefix"] == "EVT_WU_"
-    assert out["event_types"][1]["prefix"] == "EVT_SW_"
+    assert out["event_types"] == sample
 
 
 # ---- Auto-backup settings ----
