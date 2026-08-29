@@ -2893,7 +2893,14 @@ def run_api_actions_phase(args: argparse.Namespace) -> int:
 # - parity_collection_keys: the keys under the action's data payload that hold
 #   the item collection — we look at each in order and use the first present.
 API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str, Any] | None, tuple[str, ...]]] = [
-    ("network", "/v1/sites/{site}/clients", {"limit": 10}, "unifi_list_clients", {}, ("clients", "items")),
+    (
+        "network",
+        "/v1/sites/{site}/clients",
+        {"limit": 10},
+        "unifi_list_clients",
+        {"limit": 1000},
+        ("clients", "items"),
+    ),
     ("network", "/v1/sites/{site}/devices", {"limit": 10}, "unifi_list_devices", {}, ("devices", "items")),
     ("network", "/v1/sites/{site}/networks", {"limit": 10}, None, None, ()),
     ("network", "/v1/sites/{site}/wlans", {"limit": 10}, None, None, ()),
@@ -2910,6 +2917,15 @@ API_RESOURCES_SAMPLE: list[tuple[str, str, dict[str, Any], str | None, dict[str,
         ("visitors", "items"),
     ),
 ]
+
+# Network resource types intentionally expose MAC addresses as their public
+# identities, while the matching action rows can also carry private controller
+# ``id``/``_id`` values. Comparing the generic identifiers mixes namespaces and
+# reports false parity failures even when both surfaces contain the same device.
+API_RESOURCE_PARITY_ID_KEYS: dict[str, tuple[str, ...]] = {
+    "/v1/sites/{site}/clients": ("mac",),
+    "/v1/sites/{site}/devices": ("mac",),
+}
 
 
 def _items_id_set(items: Any, id_keys: tuple[str, ...] = ("id", "_id", "mac", "uuid")) -> set[str]:
@@ -3142,8 +3158,12 @@ def run_api_resources_phase(args: argparse.Namespace) -> int:
 
                 if a_status == 200 and isinstance(a_response, dict) and a_response.get("success"):
                     action_collection = _action_collection(a_response, parity_keys)
-                    resource_ids = _items_id_set(items)
-                    action_ids = _items_id_set(action_collection)
+                    parity_id_keys = API_RESOURCE_PARITY_ID_KEYS.get(
+                        path_tpl,
+                        ("id", "_id", "mac", "uuid"),
+                    )
+                    resource_ids = _items_id_set(items, parity_id_keys)
+                    action_ids = _items_id_set(action_collection, parity_id_keys)
                     is_subset = resource_ids.issubset(action_ids) if resource_ids else True
                     parity = {
                         "tool": parity_tool,

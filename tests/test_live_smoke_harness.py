@@ -159,6 +159,27 @@ def test_api_actions_have_no_baseline_failure_exemption():
     assert live_smoke._classify_api_action_result(True, False) == "regression"
 
 
+def test_api_resource_parity_uses_public_network_mac_identity_and_complete_client_collection():
+    import live_smoke
+
+    client_sample = next(
+        sample for sample in live_smoke.API_RESOURCES_SAMPLE if sample[1] == "/v1/sites/{site}/clients"
+    )
+    assert client_sample[4] == {"limit": 1000}
+    assert live_smoke.API_RESOURCE_PARITY_ID_KEYS == {
+        "/v1/sites/{site}/clients": ("mac",),
+        "/v1/sites/{site}/devices": ("mac",),
+    }
+
+    resource_rows = [{"mac": "aa:bb:cc:dd:ee:ff"}]
+    action_rows = [{"_id": "controller-object-id", "mac": "aa:bb:cc:dd:ee:ff"}]
+
+    assert live_smoke._items_id_set(resource_rows, ("mac",)) == live_smoke._items_id_set(
+        action_rows,
+        ("mac",),
+    )
+
+
 def test_live_api_non_default_read_contract_requires_projection_limit_and_metadata():
     import live_smoke
 
