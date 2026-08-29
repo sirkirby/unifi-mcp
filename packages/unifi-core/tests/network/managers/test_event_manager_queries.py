@@ -75,7 +75,7 @@ async def test_event_key_discovery_samples_recent_events_and_supports_legacy_eve
         ]
     )
 
-    event_types = await manager.get_event_type_prefixes()
+    event_types = await manager.get_event_types()
 
     manager.get_events.assert_awaited_once_with(within=168, limit=1000)
     assert event_types == [
@@ -98,4 +98,4 @@ async def test_event_key_discovery_samples_recent_events_and_supports_legacy_eve
 async def test_event_key_discovery_can_return_empty_catalog(manager: EventManager) -> None:
     manager.get_events = AsyncMock(return_value=[])
 
-    assert await manager.get_event_type_prefixes() == []
+    assert await manager.get_event_types() == []

@@ -497,12 +497,25 @@ class EventManager:
             logger.error("Error getting alarms (legacy): %s", e)
             raise self._explain_legacy_failure("/stat/alarm", e) from e
 
-    async def get_event_type_prefixes(self) -> List[Dict[str, Any]]:
+    def get_event_type_prefixes(self) -> List[Dict[str, str]]:
+        """Get legacy event type prefixes for backward compatibility."""
+        return [
+            {"prefix": "EVT_SW_", "description": "Switch events"},
+            {"prefix": "EVT_AP_", "description": "Access Point events"},
+            {"prefix": "EVT_GW_", "description": "Gateway events"},
+            {"prefix": "EVT_LAN_", "description": "LAN events"},
+            {"prefix": "EVT_WU_", "description": "WLAN User events (connect/disconnect)"},
+            {"prefix": "EVT_WG_", "description": "WLAN Guest events"},
+            {"prefix": "EVT_IPS_", "description": "IPS/IDS security events"},
+            {"prefix": "EVT_AD_", "description": "Admin events"},
+            {"prefix": "EVT_DPI_", "description": "Deep Packet Inspection events"},
+        ]
+
+    async def get_event_types(self) -> List[Dict[str, Any]]:
         """Get recently observed exact event keys for filtering.
 
-        The method name is retained for API-dispatch compatibility. Modern
-        controllers expose exact enum keys rather than the legacy ``EVT_*``
-        prefix catalog, so discover the usable values from recent events.
+        Modern controllers expose exact enum keys rather than the legacy
+        ``EVT_*`` prefix catalog, so discover usable values from recent events.
         """
         events = await self.get_events(within=168, limit=1000)
         counts: Dict[str, int] = {}

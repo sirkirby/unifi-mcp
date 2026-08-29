@@ -226,7 +226,7 @@ class TestEventManagerCommon:
         return EventManager(mock_connection)
 
     @pytest.mark.asyncio
-    async def test_get_event_type_prefixes_returns_observed_exact_keys(self, event_manager, mock_connection):
+    async def test_get_event_types_returns_observed_exact_keys(self, event_manager, mock_connection):
         event_manager._use_v2 = True
         mock_connection.request.return_value = [
             {
@@ -239,7 +239,7 @@ class TestEventManagerCommon:
             }
         ]
 
-        event_types = await event_manager.get_event_type_prefixes()
+        event_types = await event_manager.get_event_types()
 
         assert [event_type["key"] for event_type in event_types] == [
             "CLIENT_CONNECTED_WIRELESS_2",
@@ -248,6 +248,12 @@ class TestEventManagerCommon:
         assert event_types[1]["prefix"] == "CLIENT_DISCONNECTED_WIRELESS_2"
         assert event_types[1]["observed_count"] == 2
         assert all("description" in event_type for event_type in event_types)
+
+    def test_get_event_type_prefixes_remains_synchronous_for_compatibility(self, event_manager):
+        prefixes = event_manager.get_event_type_prefixes()
+
+        assert any(prefix["prefix"] == "EVT_SW_" for prefix in prefixes)
+        assert any(prefix["prefix"] == "EVT_AP_" for prefix in prefixes)
 
     def test_get_event_categories(self, event_manager):
         categories = event_manager.get_event_categories()
