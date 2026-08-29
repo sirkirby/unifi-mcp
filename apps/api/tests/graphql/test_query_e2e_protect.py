@@ -7,6 +7,7 @@ sibling in ``test_query_e2e_network.py``.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from datetime import datetime, timezone
@@ -288,13 +289,23 @@ async def test_e2e_camera_detail_not_found_is_nullable(tmp_path: Path, monkeypat
 
     headers = {"Authorization": f"Bearer {key}"}
     query = f'{{ protect {{ camera(controller: "{cid}", id: "missing") {{ id }} }} }}'
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
-        r = await c.post("/v1/graphql", headers=headers, json={"query": query})
-        assert r.status_code == 200
-        body = r.json()
-        assert body.get("errors") is None, body
-        assert body["data"]["protect"]["camera"] is None
-        assert call_counts["get_camera"] == 1
+    loop = asyncio.get_running_loop()
+    loop_errors: list[dict[str, Any]] = []
+    previous_handler = loop.get_exception_handler()
+    loop.set_exception_handler(lambda _loop, context: loop_errors.append(context))
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+            r = await c.post("/v1/graphql", headers=headers, json={"query": query})
+        await asyncio.sleep(0)
+    finally:
+        loop.set_exception_handler(previous_handler)
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("errors") is None, body
+    assert body["data"]["protect"]["camera"] is None
+    assert call_counts["get_camera"] == 1
+    assert loop_errors == []
 
 
 # ---------------------------------------------------------------------------

@@ -224,7 +224,10 @@ async def _fetch_camera(ctx: GraphQLContext, controller: str, camera_id: str) ->
                 controller,
                 "protect",
             )
-            return await mgr.get_camera(camera_id)
+            try:
+                return await mgr.get_camera(camera_id)
+            except UniFiNotFoundError:
+                return None
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -984,10 +987,7 @@ class ProtectQuery:
         id: strawberry.ID,
     ) -> Camera | None:
         ctx: GraphQLContext = info.context
-        try:
-            raw = await _fetch_camera(ctx, controller, str(id))
-        except UniFiNotFoundError:
-            return None
+        raw = await _fetch_camera(ctx, controller, str(id))
         if raw is None:
             return None
         inst = Camera.from_manager_output(raw)
