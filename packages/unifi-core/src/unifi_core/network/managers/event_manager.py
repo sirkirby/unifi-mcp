@@ -327,9 +327,15 @@ class EventManager:
         severities: Optional[List[str]],
     ) -> List[Dict[str, Any]]:
         """Get events using the v2 system-log API."""
+        if limit <= 0:
+            return []
+
         try:
             now_ms = int(time.time() * 1000)
             from_ms = now_ms - (within * 3600 * 1000)
+            page_size = min(limit, 100)
+            page_number = max(start, 0) // page_size
+            page_offset = max(start, 0) % page_size
 
             payload: Dict[str, Any] = {
                 "timestampFrom": from_ms,
@@ -337,29 +343,52 @@ class EventManager:
                 "severities": severities or _DEFAULT_SEVERITIES,
                 "categories": categories or _DEFAULT_CATEGORIES,
                 "type": "GENERAL",
-                "pageNumber": start // limit if limit > 0 else 0,
-                "pageSize": min(limit, 100),
+                "pageNumber": page_number,
+                "pageSize": page_size,
                 "searchText": "",
             }
 
             if event_type:
-                payload["searchText"] = event_type
+                # ``keys`` is the controller's exact event-key filter. ``searchText``
+                # searches rendered message text and silently returns the wrong result
+                # for values such as CLIENT_DISCONNECTED_WIRELESS_2.
+                payload["keys"] = [event_type]
 
-            api_request = ApiRequestV2(
-                method="post",
-                path="/system-log/all",
-                data=payload,
-            )
-            response = await self._connection.request(api_request)
+            events: List[Dict[str, Any]] = []
+            while len(events) < limit + page_offset:
+                payload["pageNumber"] = page_number
+                api_request = ApiRequestV2(
+                    method="post",
+                    path="/system-log/all",
+                    data=payload.copy(),
+                )
+                response = await self._connection.request(api_request)
 
-            # V2 response comes as [{"data": [...], "total_element_count": N}] or {"data": [...]}
-            if isinstance(response, list) and response and isinstance(response[0], dict) and "data" in response[0]:
-                return response[0]["data"]
-            if isinstance(response, dict):
-                return response.get("data", response.get("logs", []))
-            if isinstance(response, list):
-                return response
-            return []
+                envelope: Any = response
+                if isinstance(response, list) and response and isinstance(response[0], dict) and "data" in response[0]:
+                    envelope = response[0]
+
+                if isinstance(envelope, dict):
+                    page = envelope.get("data", envelope.get("logs", []))
+                    total_pages = envelope.get("total_page_count", envelope.get("totalPageCount"))
+                elif isinstance(envelope, list):
+                    page = envelope
+                    total_pages = None
+                else:
+                    page = []
+                    total_pages = None
+
+                if not isinstance(page, list) or not page:
+                    break
+                events.extend(event for event in page if isinstance(event, dict))
+                page_number += 1
+
+                if isinstance(total_pages, int) and page_number >= total_pages:
+                    break
+                if total_pages is None and len(page) < page_size:
+                    break
+
+            return events[page_offset : page_offset + limit]
         except Exception as e:
             logger.error("Error getting events (v2): %s", e)
             raise
@@ -468,18 +497,30 @@ class EventManager:
             logger.error("Error getting alarms (legacy): %s", e)
             raise self._explain_legacy_failure("/stat/alarm", e) from e
 
-    def get_event_type_prefixes(self) -> List[Dict[str, str]]:
-        """Get a list of known event type prefixes for filtering."""
+    async def get_event_type_prefixes(self) -> List[Dict[str, Any]]:
+        """Get recently observed exact event keys for filtering.
+
+        The method name is retained for API-dispatch compatibility. Modern
+        controllers expose exact enum keys rather than the legacy ``EVT_*``
+        prefix catalog, so discover the usable values from recent events.
+        """
+        events = await self.get_events(within=168, limit=1000)
+        counts: Dict[str, int] = {}
+        for event in events:
+            key = event.get("key") or event.get("event")
+            if isinstance(key, str) and key:
+                counts[key] = counts.get(key, 0) + 1
+
         return [
-            {"prefix": "EVT_SW_", "description": "Switch events"},
-            {"prefix": "EVT_AP_", "description": "Access Point events"},
-            {"prefix": "EVT_GW_", "description": "Gateway events"},
-            {"prefix": "EVT_LAN_", "description": "LAN events"},
-            {"prefix": "EVT_WU_", "description": "WLAN User events (connect/disconnect)"},
-            {"prefix": "EVT_WG_", "description": "WLAN Guest events"},
-            {"prefix": "EVT_IPS_", "description": "IPS/IDS security events"},
-            {"prefix": "EVT_AD_", "description": "Admin events"},
-            {"prefix": "EVT_DPI_", "description": "Deep Packet Inspection events"},
+            {
+                "key": key,
+                # Retain the old field for consumers of the existing response
+                # shape; its value is now an exact key, not a prefix.
+                "prefix": key,
+                "description": "Exact event key observed in the 1,000 most recent events within the last 7 days",
+                "observed_count": counts[key],
+            }
+            for key in sorted(counts)
         ]
 
     def get_event_categories(self) -> List[Dict[str, str]]:

@@ -41,6 +41,13 @@ def test_buffer_filter_by_event_type() -> None:
     assert {e["id"] for e in out} == {"e1", "e3"}
 
 
+def test_buffer_event_type_filter_requires_exact_key() -> None:
+    buf = EventBuffer(max_size=10, ttl_seconds=300)
+    buf.add({"id": "e1", "key": "CLIENT_CONNECTED_WIRELESS_2"})
+
+    assert buf.get_recent(event_type="CLIENT_CONNECTED") == []
+
+
 def test_buffer_clear() -> None:
     buf = EventBuffer(max_size=10, ttl_seconds=300)
     buf.add({"id": "e1"})

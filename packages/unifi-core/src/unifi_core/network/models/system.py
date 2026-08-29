@@ -517,9 +517,9 @@ def site_settings_from_controller(raw: Any) -> SiteSettings:
 
 
 class EventTypes(BaseModel):
-    """Wrapper for event-type prefix descriptors (read-only).
+    """Wrapper for exact event-key descriptors (read-only).
 
-    The catalog of event-type prefixes is unstructured (varies by firmware),
+    The catalog of observed event keys is unstructured (varies by firmware),
     so each descriptor passes through as a plain list exposed as JSON.
     """
 
