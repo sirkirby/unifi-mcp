@@ -206,13 +206,16 @@ class TrafficFlowTopDestination(BaseModel):
 class TrafficFlowTopApplication(BaseModel):
     """An application in a Top-Talkers ranking (by bytes).
 
-    ``application_id``/``category_id`` are DPI catalog ids; ``application_name``/
-    ``category_name`` are resolved via the DPI catalog and are null when the
-    catalog does not cover the application.
+    The V2 traffic-flow endpoint separates the low application ID from its
+    category. The Integration API catalogue uses the compound key
+    ``(category_id << 16) | application_id``. Resolved names are null when the
+    catalogue does not cover the entry; the original V2 IDs stay unchanged.
     """
 
     application_id: Optional[int] = Field(
-        default=None, description="DPI application id", json_schema_extra={"mutable": False}
+        default=None,
+        description="Low DPI application ID scoped to the V2 traffic-flow family",
+        json_schema_extra={"mutable": False},
     )
     category_id: Optional[int] = Field(
         default=None, description="DPI category id", json_schema_extra={"mutable": False}
@@ -351,3 +354,40 @@ def traffic_flow_statistics_from_controller(obj: Any) -> TrafficFlowStatistics:
             _top_policy_from_controller(p) for p in (_get(obj, "top_blocked_count_by_policy", []) or [])
         ],
     )
+
+
+def enrich_traffic_flow_statistics_dpi_names(
+    statistics: TrafficFlowStatistics,
+    applications: list[dict[str, Any]],
+    categories: list[dict[str, Any]],
+) -> TrafficFlowStatistics:
+    """Resolve V2 flow IDs against the Integration-API DPI catalogue.
+
+    This is a verified one-way annotation. Original V2 IDs and byte counts are
+    preserved and never made portable to the Integration-API tool family.
+    Missing application and category entries remain independently null.
+    """
+    application_names = {
+        entry["id"]: entry["name"]
+        for entry in applications
+        if isinstance(entry.get("id"), int) and isinstance(entry.get("name"), str)
+    }
+    category_names = {
+        entry["id"]: entry["name"]
+        for entry in categories
+        if isinstance(entry.get("id"), int) and isinstance(entry.get("name"), str)
+    }
+    top_applications = []
+    for application in statistics.top_applications:
+        application_name = None
+        if application.application_id is not None and application.category_id is not None:
+            application_name = application_names.get((application.category_id << 16) | application.application_id)
+        top_applications.append(
+            application.model_copy(
+                update={
+                    "application_name": application_name,
+                    "category_name": category_names.get(application.category_id),
+                }
+            )
+        )
+    return statistics.model_copy(update={"top_applications": top_applications})

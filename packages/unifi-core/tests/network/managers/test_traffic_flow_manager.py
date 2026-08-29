@@ -127,6 +127,108 @@ async def test_statistics_shapes_response():
 
 
 @pytest.mark.asyncio
+async def test_statistics_enriches_names_without_changing_v2_values():
+    class DpiCatalog:
+        async def get_full_dpi_catalog(self):
+            return {
+                "applications": [{"id": (4 << 16) | 470, "name": "Example Stream"}],
+                "categories": [{"id": 4, "name": "Media streaming services"}],
+            }
+
+    conn = _make_connection(response=_STATS_RESPONSE)
+    mgr = TrafficFlowManager(conn, dpi_manager=DpiCatalog())
+
+    result = await mgr.get_traffic_flow_statistics(period="DAY", top=30)
+
+    assert result["top_applications"] == [
+        {
+            "application_id": 470,
+            "category_id": 4,
+            "bytes": 999,
+            "application_name": "Example Stream",
+            "category_name": "Media streaming services",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_statistics_catalog_failure_is_best_effort_and_cached():
+    class FailingDpiCatalog:
+        def __init__(self):
+            self.calls = 0
+
+        async def get_full_dpi_catalog(self):
+            self.calls += 1
+            raise RuntimeError("API key unavailable")
+
+    conn = _make_connection(response=_STATS_RESPONSE)
+    dpi_catalog = FailingDpiCatalog()
+    mgr = TrafficFlowManager(conn, dpi_manager=dpi_catalog)
+
+    first = await mgr.get_traffic_flow_statistics(period="DAY", top=30)
+    second = await mgr.get_traffic_flow_statistics(period="DAY", top=30)
+
+    assert first == second
+    assert first["top_applications"] == [
+        {
+            "application_id": 470,
+            "category_id": 4,
+            "bytes": 999,
+            "application_name": None,
+            "category_name": None,
+        }
+    ]
+    assert conn.request.await_count == 1
+    assert dpi_catalog.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_statistics_preserves_order_and_resolves_partial_catalog_matches():
+    response = dict(_STATS_RESPONSE)
+    response["top_all_traffic_by_application"] = [
+        {"application_id": 470, "bytes": 999, "category_id": 4},
+        {"application_id": 471, "bytes": 500, "category_id": 5},
+        {"application_id": 472, "bytes": 250, "category_id": 6},
+    ]
+
+    class PartialDpiCatalog:
+        async def get_full_dpi_catalog(self):
+            return {
+                "applications": [{"id": (4 << 16) | 470, "name": "Application only"}],
+                "categories": [{"id": 5, "name": "Category only"}],
+            }
+
+    conn = _make_connection(response=response)
+    mgr = TrafficFlowManager(conn, dpi_manager=PartialDpiCatalog())
+
+    result = await mgr.get_traffic_flow_statistics(period="DAY", top=30)
+
+    assert result["top_applications"] == [
+        {
+            "application_id": 470,
+            "category_id": 4,
+            "bytes": 999,
+            "application_name": "Application only",
+            "category_name": None,
+        },
+        {
+            "application_id": 471,
+            "category_id": 5,
+            "bytes": 500,
+            "application_name": None,
+            "category_name": "Category only",
+        },
+        {
+            "application_id": 472,
+            "category_id": 6,
+            "bytes": 250,
+            "application_name": None,
+            "category_name": None,
+        },
+    ]
+
+
+@pytest.mark.asyncio
 async def test_statistics_is_cached_within_ttl():
     conn = _make_connection(response=_STATS_RESPONSE)
     mgr = TrafficFlowManager(conn)

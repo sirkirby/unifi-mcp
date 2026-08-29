@@ -7,21 +7,31 @@ event_manager for /system-log.
 """
 
 import json
-from typing import Any, Dict
+import logging
+from typing import Any, Dict, Protocol
 
 from aiounifi.models.api import ApiRequestV2
 
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.models.traffic_flows import (
     TrafficFlowQuery,
+    enrich_traffic_flow_statistics_dpi_names,
     traffic_flow_from_controller,
     traffic_flow_statistics_from_controller,
 )
+
+logger = logging.getLogger(__name__)
 
 _FLOWS_CACHE_TTL = 45  # seconds; short-lived, matching the 60s alerts-cache precedent
 
 # Periods accepted by /traffic-flow-latest-statistics (the UI's 1h/1D/1W/1M).
 _STATISTICS_PERIODS = ("HOUR", "DAY", "WEEK", "MONTH")
+
+
+class DpiCatalogProvider(Protocol):
+    """Narrow dependency used for read-only traffic-flow DPI annotation."""
+
+    async def get_full_dpi_catalog(self) -> Dict[str, list[dict[str, Any]]]: ...
 
 
 def validate_statistics_period(period: str) -> str:
@@ -71,8 +81,9 @@ _ALL_ARRAY_FIELDS = _FILTER_FIELDS + (
 class TrafficFlowManager:
     """Reads completed traffic flows from the controller's private v2 API."""
 
-    def __init__(self, connection_manager: ConnectionManager):
+    def __init__(self, connection_manager: ConnectionManager, dpi_manager: DpiCatalogProvider | None = None):
         self._connection = connection_manager
+        self._dpi_manager = dpi_manager
 
     def _build_body(self, query: TrafficFlowQuery) -> Dict[str, Any]:
         if query.time_from is None or query.time_to is None:
@@ -153,6 +164,18 @@ class TrafficFlowManager:
         if not isinstance(response, dict):
             response = {}
 
-        result = traffic_flow_statistics_from_controller(response).model_dump()
+        statistics = traffic_flow_statistics_from_controller(response)
+        if self._dpi_manager is not None and statistics.top_applications:
+            try:
+                dpi_catalog = await self._dpi_manager.get_full_dpi_catalog()
+                statistics = enrich_traffic_flow_statistics_dpi_names(
+                    statistics,
+                    applications=dpi_catalog.get("applications", []),
+                    categories=dpi_catalog.get("categories", []),
+                )
+            except Exception as exc:
+                logger.warning("Failed to enrich traffic-flow DPI names: %s", exc)
+
+        result = statistics.model_dump()
         self._connection._update_cache(cache_key, result, timeout=_FLOWS_CACHE_TTL)
         return result
