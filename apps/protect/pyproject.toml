@@ -7,8 +7,9 @@ requires-python = ">=3.13"
 dependencies = [
     "unifi-mcp-shared>=0.6.7,<0.7",
     # Protect managers in unifi-core import uiprotect; pull it in via the
-    # [protect] extra rather than declaring uiprotect here directly.
-    "unifi-core[protect]>=0.4.22,<0.5",
+    # [protect] extra rather than declaring uiprotect here directly. Camera
+    # detail fields require Core 0.4.35.
+    "unifi-core[protect]>=0.4.35,<0.5",
     "mcp[cli]>=1.28.1,<2",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
