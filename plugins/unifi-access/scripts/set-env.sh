@@ -70,6 +70,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLUGIN_NAME="$(basename "$PLUGIN_ROOT")"
 
+# Codex installs marketplace plugins as <plugin>/<version>/scripts, while the
+# source-tree, Claude, and OpenClaw layouts use <plugin>/scripts. Resolve the
+# semantic plugin name from the parent directory only for a known UniFi plugin.
+case "$PLUGIN_NAME" in
+  unifi-network|unifi-protect|unifi-access) ;;
+  *)
+    plugin_parent_name="$(basename "$(dirname "$PLUGIN_ROOT")")"
+    case "$plugin_parent_name" in
+      unifi-network|unifi-protect|unifi-access) PLUGIN_NAME="$plugin_parent_name" ;;
+    esac
+    ;;
+esac
+
 detect_package_pin() {
   for manifest in "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$PLUGIN_ROOT/.mcp.json"; do
     if [ -f "$manifest" ]; then

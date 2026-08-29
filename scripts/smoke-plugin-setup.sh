@@ -256,6 +256,34 @@ got_host=$(python3 -c "import json; print(json.load(open('mcp.json'))['env']['UN
 assert "openclaw JSON includes host env" "$got_host" "10.0.0.1"
 assert_not_contains "openclaw write stdout hides raw password" "$out" "hunter2secret"
 
+# 3h. Codex's versioned plugin cache still uses the semantic plugin name
+rm -rf "$work" && mkdir -p "$work/bin" && cd "$work"
+cat > "$work/bin/uvx" <<'SH'
+#!/bin/sh
+echo "uvx 0.0.0"
+SH
+cat > "$work/bin/codex" <<'SH'
+#!/bin/sh
+if [ "$1" = "mcp" ] && [ "$2" = "add" ]; then
+  printf '%s\n' "$3" > "$CODEX_CAPTURE_NAME"
+fi
+exit 0
+SH
+chmod +x "$work/bin/uvx" "$work/bin/codex"
+for plugin in "${PLUGINS[@]}"; do
+  versioned_root="$work/cache/example-marketplace/$plugin/9.8.7"
+  mkdir -p "$versioned_root/scripts"
+  cp "$REPO_ROOT/plugins/$plugin/scripts/set-env.sh" "$versioned_root/scripts/set-env.sh"
+  set +e
+  out=$(PATH="$work/bin:$PATH" CODEX_CAPTURE_NAME="$work/$plugin-name.txt" /bin/bash "$versioned_root/scripts/set-env.sh" --target codex \
+    UNIFI_TEST_HOST=10.0.0.1 2>&1)
+  ec=$?
+  set -e
+  assert "versioned-cache $plugin setup exits 0" "$ec" "0"
+  got_name=$(cat "$work/$plugin-name.txt" 2>/dev/null || true)
+  assert "versioned-cache $plugin uses semantic server name" "$got_name" "$plugin"
+done
+
 # --- 4. Bash version this test ran under (informational) ---
 echo ""
 echo "== 4. Test run info =="
