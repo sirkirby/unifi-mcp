@@ -181,13 +181,36 @@ async def test_e2e_cameras_flat_list(tmp_path: Path, monkeypatch) -> None:
     app, key, cid = await _bootstrap(tmp_path)
 
     fixture_cameras = [
-        {"id": "cam1", "name": "Front Door", "model": "G4_PRO"},
-        {"id": "cam2", "name": "Garage", "model": "G5_FLEX"},
+        {
+            "id": "cam1",
+            "name": "Front Door",
+            "model": "G4_PRO",
+            "firmware_version": "5.4.132",
+            "ip_address": "192.0.2.10",
+            "smart_detect_types": ["person", "vehicle"],
+            "is_ptz": False,
+        },
+        {
+            "id": "cam2",
+            "name": "Garage",
+            "model": "G5_FLEX",
+            "firmware_version": "5.4.131",
+            "ip_address": "192.0.2.11",
+            "smart_detect_types": [],
+            "is_ptz": True,
+        },
     ]
     _stub_protect_managers(monkeypatch, cameras=fixture_cameras)
 
     headers = {"Authorization": f"Bearer {key}"}
-    query = f'{{ protect {{ cameras(controller: "{cid}") {{ items {{ id name model }} nextCursor }} }} }}'
+    query = f'''{{
+      protect {{
+        cameras(controller: "{cid}") {{
+          items {{ id name model firmwareVersion host smartDetectTypes isPtz }}
+          nextCursor
+        }}
+      }}
+    }}'''
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.post("/v1/graphql", headers=headers, json={"query": query})
         assert r.status_code == 200
@@ -196,6 +219,11 @@ async def test_e2e_cameras_flat_list(tmp_path: Path, monkeypatch) -> None:
         items = body["data"]["protect"]["cameras"]["items"]
         assert len(items) == 2
         assert {it["name"] for it in items} == {"Front Door", "Garage"}
+        front_door = next(it for it in items if it["id"] == "cam1")
+        assert front_door["firmwareVersion"] == "5.4.132"
+        assert front_door["host"] == "192.0.2.10"
+        assert front_door["smartDetectTypes"] == ["person", "vehicle"]
+        assert front_door["isPtz"] is False
 
 
 # ---------------------------------------------------------------------------

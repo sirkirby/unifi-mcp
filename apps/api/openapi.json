@@ -388,6 +388,17 @@
             ],
             "title": "Channels"
           },
+          "firmware_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firmware Version"
+          },
           "hdr_mode": {
             "anyOf": [
               {
@@ -442,6 +453,17 @@
               }
             ],
             "title": "Is Motion Detected"
+          },
+          "is_ptz": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Ptz"
           },
           "is_recording": {
             "anyOf": [
@@ -530,6 +552,20 @@
               }
             ],
             "title": "Name"
+          },
+          "smart_detect_types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smart Detect Types"
           },
           "speaker_volume": {
             "anyOf": [

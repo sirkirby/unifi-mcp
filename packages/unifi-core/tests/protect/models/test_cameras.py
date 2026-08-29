@@ -21,7 +21,10 @@ SAMPLE = {
     "is_recording": True,
     "is_motion_detected": False,
     "is_smart_detected": False,
-    "host": "10.0.1.42",
+    "firmware_version": "5.4.132",
+    "ip_address": "10.0.1.42",
+    "smart_detect_types": ["person", "vehicle"],
+    "is_ptz": False,
     "channels": {"0": {"resolution": "3840x2160"}},
     "ir_led_mode": "auto",
     "hdr_mode": "auto",
@@ -46,6 +49,9 @@ class TestCameraModel:
         assert "id" in READ_ONLY_FIELDS
         assert "mac" in READ_ONLY_FIELDS
         assert "is_recording" in READ_ONLY_FIELDS
+        assert "firmware_version" in READ_ONLY_FIELDS
+        assert "smart_detect_types" in READ_ONLY_FIELDS
+        assert "is_ptz" in READ_ONLY_FIELDS
         assert "channels" in READ_ONLY_FIELDS
         assert "name" not in READ_ONLY_FIELDS
 
@@ -59,7 +65,15 @@ class TestCameraModel:
         assert cam.is_recording is True
         assert cam.ir_led_mode == "auto"
         assert cam.mic_volume == 80
+        assert cam.firmware_version == "5.4.132"
+        assert cam.host == "10.0.1.42"
+        assert cam.smart_detect_types == ["person", "vehicle"]
+        assert cam.is_ptz is False
         assert cam.channels == {"0": {"resolution": "3840x2160"}}
+
+    def test_from_controller_accepts_host_fallback(self) -> None:
+        cam = from_controller({"id": "cam-host", "host": "10.0.1.43"})
+        assert cam.host == "10.0.1.43"
 
     def test_from_controller_handles_missing_fields(self) -> None:
         cam = from_controller({"id": "cam002"})

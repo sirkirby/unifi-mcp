@@ -330,10 +330,13 @@ type Camera {
   model: String
   type: String
   state: String
+  firmwareVersion: String
   isRecording: Boolean
   isMotionDetected: Boolean
   isSmartDetected: Boolean
   host: String
+  smartDetectTypes: [String!]
+  isPtz: Boolean
   channels: JSON
   irLedMode: String
   hdrMode: String

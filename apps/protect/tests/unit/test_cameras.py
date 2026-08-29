@@ -808,11 +808,22 @@ class TestProtectGetCameraTool:
         from unifi_protect_mcp.tools.cameras import protect_get_camera
 
         mock_camera_manager.get_camera = AsyncMock(
-            return_value={"id": "cam-001", "name": "Front Door", "firmware_version": "4.69.55"}
+            return_value={
+                "id": "cam-001",
+                "name": "Front Door",
+                "firmware_version": "4.69.55",
+                "ip_address": "192.0.2.10",
+                "smart_detect_types": [],
+                "is_ptz": False,
+            }
         )
         result = await protect_get_camera("cam-001")
         assert result["success"] is True
         assert result["data"]["id"] == "cam-001"
+        assert result["data"]["firmware_version"] == "4.69.55"
+        assert result["data"]["host"] == "192.0.2.10"
+        assert result["data"]["smart_detect_types"] == []
+        assert result["data"]["is_ptz"] is False
 
     @pytest.mark.asyncio
     async def test_not_found(self, mock_camera_manager):

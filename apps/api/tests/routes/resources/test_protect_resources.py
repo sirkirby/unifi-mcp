@@ -138,7 +138,10 @@ async def test_get_camera_happy_and_404(tmp_path, monkeypatch) -> None:
         "type": "camera",
         "state": "CONNECTED",
         "is_recording": True,
+        "firmware_version": "5.4.132",
         "ip_address": "10.0.0.5",
+        "smart_detect_types": ["person", "package"],
+        "is_ptz": False,
         "channels": [],
     }
 
@@ -164,6 +167,10 @@ async def test_get_camera_happy_and_404(tmp_path, monkeypatch) -> None:
     assert ok.status_code == 200, ok.text
     body = ok.json()
     assert body["data"]["id"] == "cam-1"
+    assert body["data"]["firmware_version"] == "5.4.132"
+    assert body["data"]["host"] == "10.0.0.5"
+    assert body["data"]["smart_detect_types"] == ["person", "package"]
+    assert body["data"]["is_ptz"] is False
     assert body["render_hint"]["kind"] == "detail"
     assert miss.status_code == 404
 

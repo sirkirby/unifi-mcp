@@ -20,6 +20,9 @@ class Camera(BaseModel):
     model: Optional[str] = Field(default=None, description="Camera model", json_schema_extra={"mutable": False})
     type: Optional[str] = Field(default=None, description="Camera type", json_schema_extra={"mutable": False})
     state: Optional[str] = Field(default=None, description="Connection state", json_schema_extra={"mutable": False})
+    firmware_version: Optional[str] = Field(
+        default=None, description="Camera firmware version", json_schema_extra={"mutable": False}
+    )
     is_recording: Optional[bool] = Field(
         default=None, description="Whether camera is currently recording", json_schema_extra={"mutable": False}
     )
@@ -30,6 +33,14 @@ class Camera(BaseModel):
         default=None, description="Whether a smart detection is active", json_schema_extra={"mutable": False}
     )
     host: Optional[str] = Field(default=None, description="Camera IP/host", json_schema_extra={"mutable": False})
+    smart_detect_types: Optional[list[str]] = Field(
+        default=None,
+        description="Smart detection object types supported by the camera",
+        json_schema_extra={"mutable": False},
+    )
+    is_ptz: Optional[bool] = Field(
+        default=None, description="Whether the camera supports PTZ", json_schema_extra={"mutable": False}
+    )
     channels: Optional[Any] = Field(
         default=None,
         description="Channel configuration — controller returns dict or list of channel descriptors",
@@ -73,10 +84,13 @@ def from_controller(raw: Any) -> Camera:
         model=_get(raw, "model"),
         type=_get(raw, "type"),
         state=_get(raw, "state"),
+        firmware_version=_get(raw, "firmware_version"),
         is_recording=_get(raw, "is_recording"),
         is_motion_detected=_get(raw, "is_motion_detected"),
         is_smart_detected=_get(raw, "is_smart_detected"),
-        host=_get(raw, "host"),
+        host=_get(raw, "ip_address") or _get(raw, "host"),
+        smart_detect_types=_get(raw, "smart_detect_types"),
+        is_ptz=_get(raw, "is_ptz"),
         channels=channels,
         ir_led_mode=_get(raw, "ir_led_mode"),
         hdr_mode=_get(raw, "hdr_mode"),

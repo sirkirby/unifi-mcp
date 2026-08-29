@@ -52,10 +52,13 @@ class Camera:
     model: str | None
     type: str | None
     state: str | None
+    firmware_version: str | None
     is_recording: bool | None
     is_motion_detected: bool | None
     is_smart_detected: bool | None
     host: str | None
+    smart_detect_types: list[str] | None
+    is_ptz: bool | None
     channels: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     ir_led_mode: str | None
     hdr_mode: str | None
@@ -87,10 +90,13 @@ class Camera:
             model=_get(obj, "model"),
             type=_get(obj, "type"),
             state=_get(obj, "state"),
+            firmware_version=_get(obj, "firmware_version"),
             is_recording=_get(obj, "is_recording"),
             is_motion_detected=_get(obj, "is_motion_detected"),
             is_smart_detected=_get(obj, "is_smart_detected"),
             host=_get(obj, "ip_address") or _get(obj, "host"),
+            smart_detect_types=_get(obj, "smart_detect_types"),
+            is_ptz=_get(obj, "is_ptz"),
             channels=_get(obj, "channels") or [],
             ir_led_mode=_get(obj, "ir_led_mode"),
             hdr_mode=_get(obj, "hdr_mode"),

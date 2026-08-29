@@ -32,7 +32,10 @@ def test_camera_serializer_shape() -> None:
         "is_recording": True,
         "is_motion_detected": False,
         "is_smart_detected": False,
+        "firmware_version": "5.4.132",
         "ip_address": "10.0.0.50",
+        "smart_detect_types": ["person", "vehicle"],
+        "is_ptz": False,
         "channels": [{"id": 0, "name": "high"}],
     }
     out = Camera.from_manager_output(sample).to_dict()
@@ -41,6 +44,10 @@ def test_camera_serializer_shape() -> None:
     assert out["name"] == "Front Door"
     assert out["model"] == "G4 Pro"
     assert out["state"] == "CONNECTED"
+    assert out["firmware_version"] == "5.4.132"
+    assert out["host"] == "10.0.0.50"
+    assert out["smart_detect_types"] == ["person", "vehicle"]
+    assert out["is_ptz"] is False
 
 
 def test_event_serializer_shape() -> None:
