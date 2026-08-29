@@ -10,8 +10,9 @@ dependencies = [
     # [network] extra rather than declaring aiounifi here directly so
     # there's one source of truth.
     # WAN delegation validation requires Core 0.4.30. Firewall-zone CRUD
-    # requires the dual-API bridge added in Core 0.4.32.
-    "unifi-core[network]>=0.4.32,<0.5",
+    # requires the dual-API bridge added in Core 0.4.32. WLAN schedule-window
+    # validation requires Core 0.4.34.
+    "unifi-core[network]>=0.4.34,<0.5",
     "mcp[cli]>=1.28.1,<2",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.

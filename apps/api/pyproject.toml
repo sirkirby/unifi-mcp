@@ -11,8 +11,9 @@ dependencies = [
     # identity and paged lookup require Core 0.4.30; shared MAC comparison
     # across the GraphQL and SSE surfaces requires Core 0.4.31; firewall-zone
     # actions require Core 0.4.32; Access system-log event normalization
-    # requires Core 0.4.33.
-    "unifi-core[network,protect,access]>=0.4.33,<0.5",
+    # requires Core 0.4.33; WLAN schedule-window projection requires Core
+    # 0.4.34.
+    "unifi-core[network,protect,access]>=0.4.34,<0.5",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.52.1",
     "sqlalchemy[asyncio]>=2.0.51",
