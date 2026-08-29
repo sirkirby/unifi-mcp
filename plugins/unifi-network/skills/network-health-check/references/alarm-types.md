@@ -1,20 +1,19 @@
 # Alarm & Event Types Reference
 
-## Event Type Prefixes
+## Exact Event Keys
 
-Use with `unifi_list_events` `event_type` filter parameter.
+Call `unifi_get_event_types` to discover exact event keys observed recently on
+the controller. Pass a returned `key` unchanged to the `event_type` parameter of
+`unifi_list_events`.
 
-| Prefix | Category | Examples |
-|--------|----------|----------|
-| `EVT_SW_` | Switch | Connected, Lost_Contact, STP changes, port events |
-| `EVT_AP_` | Access Point | Connected, Lost_Contact, channel changes, radar detected |
-| `EVT_GW_` | Gateway | WAN transitions, failover, firmware updates |
-| `EVT_LAN_` | LAN | New device, IP conflict, DHCP events |
-| `EVT_WU_` | WLAN User | Client connect, disconnect, roam |
-| `EVT_WG_` | WLAN Guest | Guest client events |
-| `EVT_IPS_` | IPS/IDS | Blocked threats, anomalous traffic, security alerts |
-| `EVT_AD_` | Admin | Login, configuration changes, firmware updates |
-| `EVT_DPI_` | DPI | Deep Packet Inspection events |
+Do not pass legacy `EVT_*` prefixes, partial keys, or wildcard patterns. Modern
+controllers validate this parameter as an exact enum value. Available keys vary
+by controller version, features, and recent activity.
+
+Representative keys include `CLIENT_CONNECTED_WIRELESS_2`,
+`CLIENT_DISCONNECTED_WIRELESS_2`, `DEVICE_UNREACHABLE`,
+`NETWORK_WAN_FAILED_2`, and `THREAT_DETECTED_V3`. Treat these as examples only;
+use a key returned by `unifi_get_event_types` for the controller being checked.
 
 ## Alarm Severity Levels
 
@@ -28,15 +27,15 @@ Use with `unifi_list_events` `event_type` filter parameter.
 
 | Type | Severity | What It Means | What To Do |
 |------|----------|---------------|-----------|
-| `EVT_AP_Lost_Contact` | critical | AP stopped responding | Check power and uplink connectivity |
-| `EVT_AP_Connected` | info | AP came back online | Verify clients reconnected |
-| `EVT_SW_Lost_Contact` | critical | Switch offline | Check power, uplink, STP topology |
-| `EVT_SW_Connected` | info | Switch back online | Verify ports and VLANs recovered |
-| `EVT_GW_WANTransition` | warning | WAN failover or recovery | Check ISP status, failover config |
-| `EVT_IPS_*` | varies | Security event detected | Review threat details, check source |
+| `DEVICE_UNREACHABLE` | critical | A UniFi device stopped responding | Check power and uplink connectivity |
+| `DEVICE_RECONNECTED` | info | A UniFi device came back online | Verify clients and downlinks recovered |
+| `NETWORK_WAN_FAILED_2` | warning | WAN connectivity failed | Check ISP status and failover configuration |
+| `NETWORK_WAN_RESTORED_2` | info | WAN connectivity recovered | Verify primary-path stability |
+| `THREAT_DETECTED_V3` | varies | A security threat was detected | Review threat details and the source |
+| `TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT` | varies | Traffic from a known client was blocked | Review the client and blocking policy |
 
 ## Response Fields
 
 **Alarms** (`unifi_list_alarms`): `_id`, `msg`, `severity`, `type`, `timestamp`, device/client MAC
 
-**Events** (`unifi_list_events`): `_id`, `msg`, `time` (Unix timestamp), `type`
+**Events** (`unifi_list_events`): `_id`, `key`, `msg`, `time` (Unix timestamp), `severity`
