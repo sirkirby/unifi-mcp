@@ -8,7 +8,7 @@ dependencies = [
     "mcp[cli]>=1.28.1,<2",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
-    "cryptography>=50.0.0",
+    "cryptography>=50.0.1",
     "pydantic-settings>=2.14.2",
     "PyJWT>=2.13.0",
     "python-multipart>=0.0.31",
