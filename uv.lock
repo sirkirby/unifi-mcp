@@ -1856,7 +1856,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.0" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "omegaconf", specifier = ">=2.3.0" },
-    { name = "pydantic", specifier = ">=2.10.0" },
+    { name = "pydantic", specifier = ">=2.13.5" },
     { name = "pyjwt", specifier = ">=2.13.0" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "python-multipart", specifier = ">=0.0.31" },
