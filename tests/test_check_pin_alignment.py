@@ -222,6 +222,19 @@ def test_dependency_names_are_read_from_wheel_metadata(tmp_path: Path) -> None:
     }
 
 
+def test_release_candidate_wheels_exclude_unpublished_core(tmp_path: Path) -> None:
+    module = _module()
+    shared = tmp_path / "unifi_mcp_shared-0.6.10-py3-none-any.whl"
+    core = tmp_path / "unifi_core-0.4.38.dev1-py3-none-any.whl"
+
+    assert module.release_candidate_wheels(
+        {
+            "unifi-mcp-shared": shared,
+            "unifi-core": core,
+        }
+    ) == (shared,)
+
+
 def test_core_floor_contract_installs_branch_shared_wheel(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     module = _module()
     commands: list[list[str]] = []

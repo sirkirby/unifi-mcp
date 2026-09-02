@@ -26,10 +26,9 @@ How this script catches it
 1. Build a workspace wheel for every upstream and downstream package.
 2. For each downstream wheel, create a clean venv with no workspace context.
 3. ``pip install`` the downstream wheel with ``--find-links`` pointing at the
-   workspace upstream wheels and ``--index-url`` set to PyPI. This is the exact
-   resolution path a user hits, except that workspace upstream wheels are
-   available as an additional source so coordinated upstream-downstream PRs do
-   not falsely fail.
+   workspace upstream wheels and ``--index-url`` set to PyPI. Only upstreams
+   being released by the change are explicit install targets; other dependencies
+   must resolve to published versions allowed by the downstream metadata.
 4. Assert every built wheel explicitly declares the advisory-safe floors for
    vulnerable transitives exposed at its published install boundary.
 5. Preinstall the prior vulnerable workspace resolutions before every wheel,
@@ -356,6 +355,12 @@ def wheel_dependency_names(wheel: Path) -> set[str]:
         except InvalidRequirement:
             continue
     return names
+
+
+def release_candidate_wheels(upstream_wheels: dict[str, Path]) -> tuple[Path, ...]:
+    """Return only upstream wheels intentionally published by this release train."""
+    shared_wheel = upstream_wheels.get("unifi-mcp-shared")
+    return () if shared_wheel is None else (shared_wheel,)
 
 
 def _requirement_enforces_floor(requirement: Requirement, floor: str, allowed_marker: str | None) -> bool:
@@ -690,6 +695,7 @@ def main() -> int:
 
         print()
         print("Checking each downstream wheel over a vulnerable baseline against PyPI")
+        candidate_wheels = release_candidate_wheels(upstream_wheels)
         for pkg in DOWNSTREAM_PACKAGES:
             wheel = build_wheel(pkg.src, tmp_path / "downstream" / pkg.dist_name)
             downstream_wheels[pkg.dist_name] = wheel
@@ -704,7 +710,7 @@ def main() -> int:
                 wheel,
                 find_links,
                 venv_dir,
-                tuple(upstream_wheels.values()),
+                candidate_wheels,
             )
             status = "PASS" if ok else "FAIL"
             print(f"  [{status}] {pkg.dist_name} ({wheel.name}) — {metadata_msg}")

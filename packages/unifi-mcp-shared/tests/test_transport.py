@@ -2,10 +2,28 @@
 
 import asyncio
 import logging
+import socket
+from contextlib import suppress
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import uvicorn
+from mcp.client import Client
+from mcp.client.sse import sse_client
+from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import ToolAnnotations
+from pydantic import BaseModel
+from unifi_mcp_shared.server import UniFiMCPServer
 from unifi_mcp_shared.transport import resolve_http_config, run_transports
+
+
+class SSEEchoData(BaseModel):
+    value: str
+
+
+class SSEEchoResult(BaseModel):
+    success: bool
+    data: SSEEchoData
 
 
 class TestResolveHttpConfig:
@@ -194,3 +212,78 @@ class TestRunTransports:
 
         assert http_started.is_set(), "HTTP transport never started"
         assert http_was_cancelled, "HTTP transport was not cancelled when stdio exited"
+
+
+@pytest.mark.asyncio
+async def test_real_sdk_v2_sse_transport_completes_handshake() -> None:
+    """Exercise the production SSE branch against the SDK's real client."""
+    server = UniFiMCPServer(
+        "sse-transport-test",
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    )
+
+    @server.tool(
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+        structured_output=True,
+    )
+    async def sse_echo(value: str) -> SSEEchoResult:
+        return SSEEchoResult(success=True, data=SSEEchoData(value=value))
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+
+    real_uvicorn_server = uvicorn.Server
+    http_server: uvicorn.Server | None = None
+
+    def capture_uvicorn_server(config: uvicorn.Config) -> uvicorn.Server:
+        nonlocal http_server
+        http_server = real_uvicorn_server(config)
+        return http_server
+
+    with (
+        patch("unifi_mcp_shared.transport.os.getpid", return_value=1),
+        patch("uvicorn.Server", side_effect=capture_uvicorn_server),
+    ):
+        transport_task = asyncio.create_task(
+            run_transports(
+                server=server,
+                http_enabled=True,
+                host="127.0.0.1",
+                port=port,
+                http_transport="sse",
+                logger=logging.getLogger("test"),
+            )
+        )
+        try:
+            for _ in range(100):
+                try:
+                    reader, writer = await asyncio.open_connection("127.0.0.1", port)
+                except OSError:
+                    await asyncio.sleep(0.01)
+                    continue
+                writer.close()
+                await writer.wait_closed()
+                del reader
+                break
+            else:
+                raise RuntimeError("SDK v2 SSE test server did not start")
+
+            async with Client(sse_client(f"http://127.0.0.1:{port}/sse")) as client:
+                assert client.protocol_version == "2026-07-28"
+                listed = await client.list_tools()
+                assert [tool.name for tool in listed.tools] == ["sse_echo"]
+                result = await client.call_tool("sse_echo", {"value": "ready"})
+                assert result.structured_content == {
+                    "success": True,
+                    "data": {"value": "ready"},
+                }
+        finally:
+            if http_server is not None:
+                http_server.should_exit = True
+            try:
+                await asyncio.wait_for(transport_task, timeout=3.0)
+            except TimeoutError:
+                transport_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await transport_task
