@@ -20,22 +20,21 @@ from __future__ import annotations
 import json
 import logging
 import pathlib
-from typing import Any, Sequence
+from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
-from mcp.types import ContentBlock
+from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from unifi_core.redaction import redaction_marker_paths
 
 logger = logging.getLogger(__name__)
 
 
-class StrictKwargFastMCP(FastMCP):
+class StrictKwargFastMCP(MCPServer):
     """FastMCP subclass that rejects unknown top-level kwargs at dispatch time.
 
     Reads ``tools_manifest.json`` once at construction and caches the allowed
     top-level argument names per tool. Unknown keys at ``call_tool`` time
-    raise :class:`mcp.server.fastmcp.exceptions.ToolError` with a structured,
+    raise :class:`mcp.server.mcpserver.exceptions.ToolError` with a structured,
     human-readable message.
 
     Note: only top-level kwargs are checked. Inner dict shapes (e.g. a
@@ -57,7 +56,8 @@ class StrictKwargFastMCP(FastMCP):
         self,
         name: str,
         arguments: dict[str, Any],
-    ) -> Sequence[ContentBlock] | dict[str, Any]:
+        context: Context | None = None,
+    ) -> Any:
         """Dispatch a tool call after validating top-level kwargs.
 
         - Tools not present in the manifest cache (stale manifest, dynamically
@@ -92,7 +92,7 @@ class StrictKwargFastMCP(FastMCP):
                 f"Invalid params for '{name}': {field} is the redaction marker, not a real value. "
                 f"Omit {field} to keep the current value."
             )
-        return await super().call_tool(name, arguments)
+        return await super().call_tool(name, arguments, context=context)
 
 
 def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str]]:

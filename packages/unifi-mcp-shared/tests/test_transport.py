@@ -167,7 +167,7 @@ class TestRunTransports:
         http_started = asyncio.Event()
         http_was_cancelled = False
 
-        async def long_running_http():
+        async def long_running_http(**_kwargs):
             nonlocal http_was_cancelled
             http_started.set()
             try:

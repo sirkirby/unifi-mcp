@@ -7,7 +7,7 @@ from typing import Annotated, Callable
 from unittest.mock import MagicMock, patch
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer as FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import Field
 from unifi_mcp_shared.output_schema import (
@@ -257,12 +257,12 @@ class TestCreatePermissionedTool:
         tools = await server.list_tools()
         tool = next(t for t in tools if t.name == "fastmcp_schema_tool")
         assert tool.title == "FastMCP Schema Tool"
-        assert tool.outputSchema == get_unifi_tool_response_output_schema()
+        assert tool.output_schema == get_unifi_tool_response_output_schema()
 
-        content, structured_content = await server.call_tool("fastmcp_schema_tool", {})
-        assert content[0].type == "text"
-        assert '"success": true' in content[0].text
-        assert structured_content == {"success": True, "data": {"id": "abc"}}
+        result = await server.call_tool("fastmcp_schema_tool", {})
+        assert result.content[0].type == "text"
+        assert '"success": true' in result.content[0].text
+        assert result.structured_content == {"success": True, "data": {"id": "abc"}}
 
     def test_uses_function_name_when_no_name_given(self, mock_deps):
         pt = _create_pt(mock_deps)

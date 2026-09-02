@@ -46,6 +46,10 @@ def _timestamp_to_datetime(value: Any, *, fallback: datetime | None = None) -> d
     return datetime.now(timezone.utc)
 
 
+def _datetime_to_protocol_timestamp(value: datetime) -> str:
+    return value.isoformat().replace("+00:00", "Z")
+
+
 def _status_message(job_status: dict[str, Any], task_status: TaskStatus) -> str:
     if task_status == "failed":
         return str(job_status.get("error") or "Operation failed.")
@@ -68,8 +72,8 @@ def task_from_job_status(
         taskId=job_id,
         status=task_status,
         statusMessage=_status_message(job_status, task_status),
-        createdAt=created_at,
-        lastUpdatedAt=last_updated_at,
+        createdAt=_datetime_to_protocol_timestamp(created_at),
+        lastUpdatedAt=_datetime_to_protocol_timestamp(last_updated_at),
         ttl=ttl_ms,
         pollInterval=poll_interval_ms,
     )

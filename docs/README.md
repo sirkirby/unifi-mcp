@@ -17,6 +17,12 @@ Complete documentation for the UniFi MCP ecosystem.
 
 ## MCP Discovery and Lazy Tool Loading
 
+The Python servers run on MCP SDK 2.x and negotiate per connection. Current
+clients use the Discover-era protocol (`2026-07-28`), while clients that still
+use the Initialize handshake continue to negotiate the legacy protocol
+(`2025-11-25`) against the same server process. No process-level protocol
+switch is required.
+
 Standard MCP discovery is still `tools/list` followed by `tools/call`. The
 UniFi `*_tool_index`, `*_execute`, `*_batch`, and `*_load_tools` surfaces are
 optional lazy-loading extensions for filtered discovery and indirect execution, not replacements

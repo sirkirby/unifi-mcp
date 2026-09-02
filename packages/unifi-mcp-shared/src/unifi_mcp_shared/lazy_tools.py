@@ -180,7 +180,13 @@ class LazyToolLoader:
         finally:
             self._loading = False
 
-    async def intercept_call_tool(self, original_call_tool: Callable, name: str, arguments: dict) -> Any:
+    async def intercept_call_tool(
+        self,
+        original_call_tool: Callable,
+        name: str,
+        arguments: dict,
+        context: Any | None = None,
+    ) -> Any:
         """Intercept tool calls to load tools on-demand.
 
         Args:
@@ -198,7 +204,7 @@ class LazyToolLoader:
                 raise ValueError(f"Failed to load tool '{name}'")
 
         # Call the original method
-        return await original_call_tool(name, arguments)
+        return await original_call_tool(name, arguments, context=context)
 
 
 def setup_lazy_loading(server, tool_decorator: Callable, tool_module_map: Dict[str, str]) -> LazyToolLoader:
@@ -218,8 +224,8 @@ def setup_lazy_loading(server, tool_decorator: Callable, tool_module_map: Dict[s
     original_call_tool = server.call_tool
 
     @wraps(original_call_tool)
-    async def lazy_call_tool(name: str, arguments: dict):
-        return await loader.intercept_call_tool(original_call_tool, name, arguments)
+    async def lazy_call_tool(name: str, arguments: dict, context: Any | None = None):
+        return await loader.intercept_call_tool(original_call_tool, name, arguments, context=context)
 
     server.call_tool = lazy_call_tool
 

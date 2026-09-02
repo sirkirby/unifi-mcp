@@ -38,7 +38,9 @@ Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/api`.
 
 ### unifi-mcp-shared
 
-Shared MCP server patterns. Depends on `mcp` SDK and `omegaconf`.
+Shared MCP server patterns. Depends on MCP SDK 2.x and `omegaconf`. The shared
+server negotiates the current Discover-era and legacy Initialize-era protocols
+per connection, so one process can serve clients at either migration state.
 
 | Module | Purpose |
 |--------|---------|

@@ -16,6 +16,7 @@ servers are loaded simultaneously:
 import logging
 from typing import TYPE_CHECKING, Callable, List
 
+from mcp.server.mcpserver import Context
 from mcp.types import ToolAnnotations
 
 from unifi_mcp_shared.response_serialization import normalize_call_tool_result
@@ -206,13 +207,13 @@ def register_meta_tools(
         ),
         annotations=action_annotations,
     )
-    async def execute_handler(tool: str, arguments: dict = None) -> dict:
+    async def execute_handler(tool: str, arguments: dict = None, ctx: Context | None = None) -> dict:
         """Execute a tool synchronously."""
         if arguments is None:
             arguments = {}
 
         try:
-            result = await server.call_tool(tool, arguments)
+            result = await server.call_tool(tool, arguments, context=ctx)
             return normalize_call_tool_result(result)
         except Exception as e:
             logger.error("Error executing tool '%s': %s", tool, e, exc_info=True)
@@ -257,7 +258,7 @@ def register_meta_tools(
         ),
         annotations=action_annotations,
     )
-    async def batch_handler(operations: List[dict]) -> dict:
+    async def batch_handler(operations: List[dict], ctx: Context | None = None) -> dict:
         """Execute multiple operations in parallel."""
         if not operations:
             return {"error": "No operations specified", "jobs": []}
@@ -277,7 +278,7 @@ def register_meta_tools(
                 # Create a closure that captures the current tool and arguments
                 async def _make_executor(t, a):
                     async def _execute():
-                        result = await server.call_tool(t, a)
+                        result = await server.call_tool(t, a, context=ctx)
                         return normalize_call_tool_result(result)
 
                     return _execute
@@ -460,8 +461,6 @@ def register_load_tools(
         server_label: Human-readable server name for descriptions.
         domain_hint: Short description of the tool domain for LLM context.
     """
-    from mcp.server.fastmcp import Context
-
     load_name = f"{prefix}_load_tools"
     exec_name = f"{prefix}_execute"
     hint = domain_hint or _DEFAULT_DOMAIN_HINTS.get(prefix, "controller management")
@@ -509,7 +508,7 @@ def register_load_tools(
 
         if loaded:
             try:
-                await ctx.session.send_tool_list_changed()
+                await ctx.notify_tools_changed()
                 logger.info("Sent notifications/tools/list_changed after loading: %s", loaded)
             except Exception as e:
                 logger.warning("Failed to send tool_list_changed notification: %s", e)

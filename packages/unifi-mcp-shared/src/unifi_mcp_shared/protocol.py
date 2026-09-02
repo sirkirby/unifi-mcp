@@ -89,16 +89,12 @@ def structured_content_supported(protocol_revision: str | None) -> bool:
         return False
 
 
-def get_request_protocol_revision(server: Any) -> str | None:
-    """Read the negotiated revision for the current SDK-v1 request, if any.
-
-    This is the only SDK-v1-specific session metadata read. Replace this helper
-    when SDK v2 exposes protocol metadata through per-request envelopes.
-    """
+def get_request_protocol_revision(context: Any | None) -> str | None:
+    """Read the protocol revision negotiated for the current SDK v2 request."""
+    if context is None:
+        return None
     try:
-        context = server.get_context()
-        client_params = context.session.client_params
-        revision = client_params.protocolVersion if client_params is not None else None
+        revision = context.request_context.protocol_version
         return str(revision) if revision else None
     except (AttributeError, LookupError, RuntimeError, ValueError):
         return None
@@ -127,14 +123,15 @@ def create_mcp_tool_adapter(
     else:
         revision = get_protocol_revision()
 
-    if revision not in _KNOWN_REVISIONS:
-        raise ValueError(
-            f"Unsupported MCP protocol revision: '{revision}'. Known revisions: {sorted(_KNOWN_REVISIONS)}"
+    if revision not in _KNOWN_PROTOCOL_TARGETS:
+        logger.warning(
+            "[protocol] Ignoring legacy process-level MCP protocol target %s; "
+            "SDK v2 negotiates the protocol per client",
+            revision,
         )
-
-    if revision == DEFAULT_MCP_PROTOCOL_REVISION:
-        logger.debug("[protocol] Using MCP %s adapter (passthrough)", revision)
-        return fastmcp_tool_decorator
-
-    # Unreachable, but satisfies type checkers
-    raise ValueError(f"Unhandled MCP protocol revision: {revision}")
+    else:
+        logger.debug(
+            "[protocol] Legacy process-level MCP protocol target %s is informational; SDK v2 negotiates per client",
+            revision,
+        )
+    return fastmcp_tool_decorator

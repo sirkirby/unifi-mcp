@@ -101,11 +101,12 @@ def normalize_tool_annotations(annotations: Any | None) -> Dict[str, Any] | None
     if annotations is None:
         return None
 
-    source = (
-        annotations
-        if isinstance(annotations, dict)
-        else {field_name: getattr(annotations, field_name, None) for field_name in _ANNOTATION_FIELDS}
-    )
+    if isinstance(annotations, dict):
+        source = annotations
+    elif hasattr(annotations, "model_dump"):
+        source = annotations.model_dump(by_alias=True, exclude_none=True, exclude_unset=True)
+    else:
+        source = {field_name: getattr(annotations, field_name, None) for field_name in _ANNOTATION_FIELDS}
     normalized = {
         field_name: source[field_name]
         for field_name in _ANNOTATION_FIELDS

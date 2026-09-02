@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from unifi_core.config_helpers import parse_config_bool
 
 if TYPE_CHECKING:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
 VALID_HTTP_TRANSPORTS = {"streamable-http", "sse"}
 _TRANSPORT_LABELS = {"streamable-http": "Streamable HTTP", "sse": "HTTP SSE"}
@@ -72,7 +72,7 @@ def resolve_http_config(
 
 async def run_transports(
     *,
-    server: FastMCP,
+    server: MCPServer,
     http_enabled: bool,
     host: str,
     port: int,
@@ -109,9 +109,6 @@ async def run_transports(
     async def run_http() -> None:
         try:
             logger.info("Starting FastMCP %s server on %s:%s ...", transport_label, host, port)
-            server.settings.host = host
-            server.settings.port = port
-
             # Redirect uvicorn access logs to stderr to prevent stdout conflicts
             # when running alongside stdio transport (stdout is used for JSON-RPC)
             import uvicorn.config
@@ -119,9 +116,17 @@ async def run_transports(
             uvicorn.config.LOGGING_CONFIG["handlers"]["access"]["stream"] = "ext://sys.stderr"
 
             if http_transport == "streamable-http":
-                await server.run_streamable_http_async()
+                await server.run_streamable_http_async(
+                    host=host,
+                    port=port,
+                    transport_security=getattr(server, "transport_security", None),
+                )
             else:
-                await server.run_sse_async()
+                await server.run_sse_async(
+                    host=host,
+                    port=port,
+                    transport_security=getattr(server, "transport_security", None),
+                )
             logger.info("%s server exited.", transport_label)
         except SystemExit as se:
             logger.error(

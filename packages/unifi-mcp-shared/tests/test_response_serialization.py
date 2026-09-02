@@ -41,7 +41,7 @@ def _assert_mixed_content_compacted(compact, structured, explanatory_text, image
     summary = compact_content_text(structured, tool_name="unifi_test")
 
     assert isinstance(compact, CallToolResult)
-    assert compact.structuredContent == structured
+    assert compact.structured_content == structured
     assert len(compact.content) == 3
     assert isinstance(compact.content[0], TextContent)
     assert compact.content[0].text == summary
@@ -74,7 +74,7 @@ def _assert_non_identical_json_compacted(compact, structured, explanatory_text, 
     summary = compact_content_text(structured, tool_name="unifi_list_records")
 
     assert isinstance(compact, CallToolResult)
-    assert compact.structuredContent == structured
+    assert compact.structured_content == structured
     assert len(compact.content) == 3
     assert isinstance(compact.content[0], TextContent)
     assert compact.content[0].text == summary
@@ -126,7 +126,7 @@ def test_adaptive_compacts_supported_revision():
         tool_name="unifi_list_records",
     )
     assert isinstance(compact, CallToolResult)
-    assert compact.structuredContent["count"] == 250
+    assert compact.structured_content["count"] == 250
     assert compact.content
     assert "250" in compact.content[0].text
     assert "items" not in compact.content[0].text
@@ -166,7 +166,7 @@ def test_compact_override_works_without_revision():
         protocol_revision=None,
         tool_name="unifi_test",
     )
-    assert result.structuredContent["success"] is False
+    assert result.structured_content["success"] is False
     assert result.content
     assert "controller unavailable" in result.content[0].text
 
@@ -268,10 +268,10 @@ def test_compacting_direct_result_preserves_meta_and_error_status():
 
     assert compact is not original
     assert compact.meta == {"request_id": "req-123"}
-    assert compact.isError is True
-    assert compact.structuredContent == original.structuredContent
+    assert compact.is_error is True
+    assert compact.structured_content == original.structured_content
     assert compact.content
     assert compact.content[0].text == compact_content_text(
-        original.structuredContent,
+        original.structured_content,
         tool_name="unifi_test",
     )

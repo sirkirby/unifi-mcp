@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer as FastMCP
 from unifi_mcp_shared.metadata import (
     PROJECT_WEBSITE_URL,
     configure_mcp_server_metadata,
@@ -28,7 +28,7 @@ def test_mcp_icons_for_server_returns_packaged_png_data_uris() -> None:
     icons = mcp_icons_for_server("network")
 
     assert [icon.sizes for icon in icons] == [["48x48"], ["96x96"], ["192x192"]]
-    assert {icon.mimeType for icon in icons} == {"image/png"}
+    assert {icon.mime_type for icon in icons} == {"image/png"}
     for icon in icons:
         data = _decode_icon_src(icon.src)
         assert data.startswith(b"\x89PNG\r\n\x1a\n")
@@ -48,7 +48,7 @@ def test_configure_mcp_server_metadata_attaches_icons() -> None:
 
     configure_mcp_server_metadata(server, package_name="unifi-mcp-shared", icon_family="access")
 
-    options = server._mcp_server.create_initialization_options()
+    options = server._lowlevel_server.create_initialization_options()
     assert options.website_url == PROJECT_WEBSITE_URL
     assert options.icons is not None
     assert options.icons[0].sizes == ["48x48"]

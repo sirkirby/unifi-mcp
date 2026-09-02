@@ -178,7 +178,7 @@ async def _invoke_tool(server, tool) -> None:
     name = tool.name
     desc = tool.description or ""
     # FastMCP uses inputSchema, not parameters
-    input_schema = getattr(tool, "inputSchema", None) or {}
+    input_schema = getattr(tool, "input_schema", None) or {}
     schema_props = input_schema.get("properties", {}) if isinstance(input_schema, dict) else {}
     _print("Tool", {"name": name, "description": desc})
 

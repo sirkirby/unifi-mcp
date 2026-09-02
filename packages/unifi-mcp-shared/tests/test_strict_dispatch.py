@@ -7,8 +7,8 @@ import pathlib
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver import MCPServer as FastMCP
+from mcp.server.mcpserver.exceptions import ToolError
 from unifi_core.redaction import REDACTED
 from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP, _load_allowed_kwargs
 
@@ -97,6 +97,7 @@ async def test_known_kwargs_pass_through(acl_manifest: pathlib.Path) -> None:
     super_mock.assert_awaited_once_with(
         "unifi_create_acl_rule",
         {"name": "rule", "action": "REJECT", "enabled": True},
+        context=None,
     )
 
 
@@ -106,7 +107,7 @@ async def test_empty_kwargs_pass_through(acl_manifest: pathlib.Path) -> None:
     with patch.object(FastMCP, "call_tool", new=AsyncMock(return_value=sentinel)) as super_mock:
         result = await server.call_tool("unifi_list_devices", {})
     assert result is sentinel
-    super_mock.assert_awaited_once_with("unifi_list_devices", {})
+    super_mock.assert_awaited_once_with("unifi_list_devices", {}, context=None)
 
 
 async def test_no_args_tool_pass_through(acl_manifest: pathlib.Path) -> None:
@@ -116,7 +117,7 @@ async def test_no_args_tool_pass_through(acl_manifest: pathlib.Path) -> None:
     with patch.object(FastMCP, "call_tool", new=AsyncMock(return_value=sentinel)) as super_mock:
         result = await server.call_tool("unifi_no_args_tool", {})
     assert result is sentinel
-    super_mock.assert_awaited_once_with("unifi_no_args_tool", {})
+    super_mock.assert_awaited_once_with("unifi_no_args_tool", {}, context=None)
 
 
 async def test_no_args_tool_rejects_unknown_kwargs(acl_manifest: pathlib.Path) -> None:
@@ -136,7 +137,7 @@ async def test_dict_param_doesnt_recurse(acl_manifest: pathlib.Path) -> None:
     with patch.object(FastMCP, "call_tool", new=AsyncMock(return_value=sentinel)) as super_mock:
         result = await server.call_tool("unifi_update_policy", args)
     assert result is sentinel
-    super_mock.assert_awaited_once_with("unifi_update_policy", args)
+    super_mock.assert_awaited_once_with("unifi_update_policy", args, context=None)
 
 
 async def test_unknown_tool_delegates_to_super(acl_manifest: pathlib.Path) -> None:
@@ -146,7 +147,7 @@ async def test_unknown_tool_delegates_to_super(acl_manifest: pathlib.Path) -> No
     with patch.object(FastMCP, "call_tool", new=AsyncMock(return_value=sentinel)) as super_mock:
         result = await server.call_tool("unifi_not_in_manifest", {"anything": 1})
     assert result is sentinel
-    super_mock.assert_awaited_once_with("unifi_not_in_manifest", {"anything": 1})
+    super_mock.assert_awaited_once_with("unifi_not_in_manifest", {"anything": 1}, context=None)
 
 
 async def test_missing_required_not_double_reported(acl_manifest: pathlib.Path) -> None:
@@ -157,7 +158,7 @@ async def test_missing_required_not_double_reported(acl_manifest: pathlib.Path) 
     with patch.object(FastMCP, "call_tool", new=AsyncMock(return_value=sentinel)) as super_mock:
         result = await server.call_tool("unifi_create_acl_rule", {"name": "rule"})
     assert result is sentinel
-    super_mock.assert_awaited_once_with("unifi_create_acl_rule", {"name": "rule"})
+    super_mock.assert_awaited_once_with("unifi_create_acl_rule", {"name": "rule"}, context=None)
 
 
 # -----------------------------
@@ -199,7 +200,7 @@ async def test_marker_guard_allows_non_sensitive_field_equal_to_marker(acl_manif
     with patch.object(FastMCP, "call_tool", new=AsyncMock(return_value=sentinel)) as super_mock:
         result = await server.call_tool("unifi_create_acl_rule", args)
     assert result is sentinel
-    super_mock.assert_awaited_once_with("unifi_create_acl_rule", args)
+    super_mock.assert_awaited_once_with("unifi_create_acl_rule", args, context=None)
 
 
 async def test_marker_guard_runs_for_unknown_tools(tmp_path: pathlib.Path) -> None:

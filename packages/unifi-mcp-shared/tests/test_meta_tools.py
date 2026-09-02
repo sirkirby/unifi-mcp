@@ -7,7 +7,7 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer as FastMCP
 from mcp.types import (
     AudioContent,
     EmbeddedResource,
@@ -43,7 +43,7 @@ def _capture_tools():
 
 
 def _context():
-    return SimpleNamespace(session=SimpleNamespace(send_tool_list_changed=AsyncMock()))
+    return SimpleNamespace(notify_tools_changed=AsyncMock())
 
 
 def _register_test_meta_tools(*, server, prefix, start_async_tool=None, get_job_status=None):
@@ -252,14 +252,13 @@ async def test_fastmcp_execute_and_batch_expose_domain_payload(prefix):
         f"{prefix}_execute",
         {"tool": f"{prefix}_inner", "arguments": {}},
     )
-    assert len(execute) == 1
-    assert json.loads(execute[0].text) == payload
+    assert json.loads(execute.content[0].text) == payload
 
     batch = await server.call_tool(
         f"{prefix}_batch",
         {"operations": [{"tool": f"{prefix}_inner", "arguments": {}}]},
     )
-    job_id = json.loads(batch[0].text)["jobs"][0]["jobId"]
+    job_id = json.loads(batch.content[0].text)["jobs"][0]["jobId"]
 
     for _ in range(10):
         if (await store.status(job_id))["status"] == "done":
@@ -267,7 +266,7 @@ async def test_fastmcp_execute_and_batch_expose_domain_payload(prefix):
         await asyncio.sleep(0)
 
     status = await server.call_tool(f"{prefix}_batch_status", {"jobId": job_id})
-    status_payload = json.loads(status[0].text)
+    status_payload = json.loads(status.content[0].text)
     assert status_payload["status"] == "done"
     assert status_payload["result"] == payload
 
@@ -295,7 +294,7 @@ class TestRegisterLoadTools:
         assert result["loaded"] == ["unifi_list_clients"]
         assert result["errors"] is None
         lazy_loader.load_tool.assert_awaited_once_with("unifi_list_clients")
-        ctx.session.send_tool_list_changed.assert_awaited_once()
+        ctx.notify_tools_changed.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_unknown_tools_do_not_send_list_changed_notification(self):
@@ -316,7 +315,7 @@ class TestRegisterLoadTools:
         assert result["loaded"] == []
         assert result["errors"] == [{"tool": "unifi_unknown", "error": "Unknown tool"}]
         lazy_loader.load_tool.assert_not_awaited()
-        ctx.session.send_tool_list_changed.assert_not_awaited()
+        ctx.notify_tools_changed.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_failed_load_does_not_send_list_changed_notification(self):
@@ -336,7 +335,7 @@ class TestRegisterLoadTools:
 
         assert result["loaded"] == []
         assert result["errors"] == [{"tool": "unifi_list_clients", "error": "Failed to load"}]
-        ctx.session.send_tool_list_changed.assert_not_awaited()
+        ctx.notify_tools_changed.assert_not_awaited()
 
     def test_load_tools_description_uses_standard_notification_name(self):
         registered, tool_decorator = _capture_tools()

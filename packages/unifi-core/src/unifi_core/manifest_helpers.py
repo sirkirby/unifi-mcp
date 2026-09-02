@@ -42,12 +42,21 @@ def get_tool_annotations(server: Any) -> dict[str, dict[str, Any]]:
             if tool_annotations is None:
                 continue
 
-            # ToolAnnotations is a pydantic BaseModel; serialize only non-None fields
-            ann_dict = {}
-            for field_name in ("title", "readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"):
-                value = getattr(tool_annotations, field_name, None)
-                if value is not None:
-                    ann_dict[field_name] = value
+            # Preserve MCP wire aliases while excluding SDK defaults the tool did not declare.
+            if hasattr(tool_annotations, "model_dump"):
+                ann_dict = tool_annotations.model_dump(by_alias=True, exclude_none=True, exclude_unset=True)
+            else:
+                ann_dict = {
+                    field_name: value
+                    for field_name in (
+                        "title",
+                        "readOnlyHint",
+                        "destructiveHint",
+                        "idempotentHint",
+                        "openWorldHint",
+                    )
+                    if (value := getattr(tool_annotations, field_name, None)) is not None
+                }
 
             if ann_dict:
                 annotations_map[tool_name] = ann_dict

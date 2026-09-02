@@ -164,7 +164,7 @@ def measure_tool_result_sizes(raw: Any) -> dict[str, int]:
     """Measure content and structured result sizes without altering the result."""
     if isinstance(raw, CallToolResult):
         content = raw.content
-        structured = raw.structuredContent
+        structured = raw.structured_content
     elif isinstance(raw, tuple) and len(raw) == 2:
         content, structured = raw
     else:
@@ -567,9 +567,9 @@ class LiveSmokeRunner:
 
     def unwrap_result(self, raw: Any) -> dict[str, Any]:
         if isinstance(raw, CallToolResult):
-            if isinstance(raw.structuredContent, dict):
-                meta_result = raw.structuredContent.get("result")
-                return meta_result if isinstance(meta_result, dict) else raw.structuredContent
+            if isinstance(raw.structured_content, dict):
+                meta_result = raw.structured_content.get("result")
+                return meta_result if isinstance(meta_result, dict) else raw.structured_content
             content = raw.content
         else:
             content = raw[0] if isinstance(raw, tuple) and raw else raw
