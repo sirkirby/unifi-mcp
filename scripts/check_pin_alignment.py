@@ -49,6 +49,7 @@ stdout and is intended to be read directly from the CI log.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -292,13 +293,42 @@ def run_capture(args: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, check=True, capture_output=True, text=True, **kwargs)
 
 
-def build_wheel(src: Path, out_dir: Path) -> Path:
+def build_wheel(src: Path, out_dir: Path, *, pretend_version: str | None = None) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
-    run_capture(["uv", "build", "--wheel", str(src), "--out-dir", str(out_dir)])
+    env = os.environ.copy()
+    if pretend_version is not None:
+        env["SETUPTOOLS_SCM_PRETEND_VERSION"] = pretend_version
+    run_capture(
+        ["uv", "build", "--wheel", str(src), "--out-dir", str(out_dir)],
+        env=env,
+    )
     wheels = sorted(out_dir.glob("*.whl"), key=lambda p: p.stat().st_mtime)
     if not wheels:
         raise RuntimeError(f"uv build produced no wheel for {src}")
     return wheels[-1]
+
+
+def wheel_version(wheel: Path) -> Version:
+    """Read a wheel's distribution version from its metadata."""
+    with zipfile.ZipFile(wheel) as archive:
+        metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+        metadata = archive.read(metadata_name).decode()
+    raw_version = next(
+        line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.lower().startswith("version:")
+    )
+    return Version(raw_version)
+
+
+def build_release_candidate_wheel(src: Path, out_dir: Path) -> Path:
+    """Build branch code with the exact next stable version it will publish as."""
+    development_wheel = build_wheel(src, out_dir)
+    development_version = wheel_version(development_wheel)
+    if not development_version.is_prerelease and not development_version.is_devrelease:
+        return development_wheel
+
+    candidate_version = development_version.base_version
+    development_wheel.unlink()
+    return build_wheel(src, out_dir, pretend_version=candidate_version)
 
 
 def _normalize_distribution_name(name: str) -> str:
@@ -315,6 +345,17 @@ def wheel_requirements(wheel: Path) -> list[str]:
         metadata = archive.read(metadata_name).decode()
     prefix = "requires-dist:"
     return [line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.lower().startswith(prefix)]
+
+
+def wheel_dependency_names(wheel: Path) -> set[str]:
+    """Return normalized direct dependency names declared by a wheel."""
+    names: set[str] = set()
+    for raw_requirement in wheel_requirements(wheel):
+        try:
+            names.add(_normalize_distribution_name(Requirement(raw_requirement).name))
+        except InvalidRequirement:
+            continue
+    return names
 
 
 def _requirement_enforces_floor(requirement: Requirement, floor: str, allowed_marker: str | None) -> bool:
@@ -436,6 +477,7 @@ def check_downstream(
     venv_dir: Path,
     upstream_wheels: tuple[Path, ...],
 ) -> tuple[bool, str]:
+    declared_dependencies = wheel_dependency_names(downstream_wheel)
     upgrade_ok, upgrade_message, py = install_security_upgrade(
         pkg.dist_name,
         str(downstream_wheel),
@@ -446,7 +488,11 @@ def check_downstream(
         # exposing prerelease wheels through --find-links lets pip prefer the
         # latest stable PyPI release, which falsely rejects coordinated
         # upstream/downstream dependency migrations.
-        additional_targets=tuple(str(wheel) for wheel in upstream_wheels),
+        additional_targets=tuple(
+            str(wheel)
+            for wheel in upstream_wheels
+            if _normalize_distribution_name(wheel.stem.split("-")[0]) in declared_dependencies
+        ),
     )
     if not upgrade_ok:
         return False, upgrade_message
@@ -547,12 +593,7 @@ def check_core_floor_contract(
     return True, f"Core floor {floor}: {(result.stdout or '').strip()}"
 
 
-def check_api_core_floor(
-    api_wheel: Path,
-    venv_dir: Path,
-    *,
-    shared_wheel: Path | None = None,
-) -> tuple[bool, str]:
+def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
     """Install and contract-check the API against exactly its published Core floor."""
     return check_core_floor_contract(
         api_wheel,
@@ -560,7 +601,6 @@ def check_api_core_floor(
         package_label="API",
         core_extras="network,protect,access",
         contract=_API_CATALOG_FLOOR_CONTRACT,
-        additional_targets=(() if shared_wheel is None else (str(shared_wheel),)),
     )
 
 
@@ -620,7 +660,11 @@ def main() -> int:
         downstream_wheels: dict[str, Path] = {}
         print("Building upstream wheels (workspace) -> --find-links source")
         for name, path in UPSTREAM_PACKAGES.items():
-            wheel = build_wheel(path, find_links)
+            wheel = (
+                build_release_candidate_wheel(path, find_links)
+                if name == "unifi-mcp-shared"
+                else build_wheel(path, find_links)
+            )
             upstream_wheels[name] = wheel
             metadata_ok, metadata_msg = check_security_floors(name, wheel)
             print(f"  [{'PASS' if metadata_ok else 'FAIL'}] {name}: {wheel.name} — {metadata_msg}")
@@ -718,11 +762,7 @@ def main() -> int:
             return 1
 
         api_wheel = downstream_wheels["unifi-api-server"]
-        floor_ok, floor_message = check_api_core_floor(
-            api_wheel,
-            tmp_path / "api-floor-venv",
-            shared_wheel=upstream_wheels["unifi-mcp-shared"],
-        )
+        floor_ok, floor_message = check_api_core_floor(api_wheel, tmp_path / "api-floor-venv")
         print()
         print(f"  [{'PASS' if floor_ok else 'FAIL'}] API catalog against published Core floor")
         print(f"  {floor_message}")

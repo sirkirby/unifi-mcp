@@ -20,9 +20,14 @@ def _module():
     return module
 
 
-def _wheel_with_requirements(tmp_path: Path, requirements: list[str]) -> Path:
+def _wheel_with_requirements(
+    tmp_path: Path,
+    requirements: list[str],
+    *,
+    version: str = "1.0.0",
+) -> Path:
     wheel = tmp_path / "unifi_api_server-1.0.0-py3-none-any.whl"
-    lines = ["Metadata-Version: 2.4", "Name: unifi-api-server", "Version: 1.0.0"]
+    lines = ["Metadata-Version: 2.4", "Name: unifi-api-server", f"Version: {version}"]
     lines.extend(f"Requires-Dist: {requirement}" for requirement in requirements)
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr("unifi_api_server-1.0.0.dist-info/METADATA", "\n".join(lines) + "\n")
@@ -179,6 +184,42 @@ def test_security_upgrade_installs_additional_workspace_targets(
         "/tmp/shared.whl",
         "/tmp/core.whl",
     ]
+
+
+def test_release_candidate_wheel_rebuilds_dev_version_as_stable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _module()
+    development = _wheel_with_requirements(tmp_path, [], version="0.6.10.dev5+gabc123")
+    stable = tmp_path / "unifi_mcp_shared-0.6.10-py3-none-any.whl"
+    calls: list[str | None] = []
+
+    def fake_build_wheel(src: Path, out_dir: Path, *, pretend_version: str | None = None) -> Path:
+        calls.append(pretend_version)
+        if pretend_version is None:
+            return development
+        stable.touch()
+        return stable
+
+    monkeypatch.setattr(module, "build_wheel", fake_build_wheel)
+
+    result = module.build_release_candidate_wheel(tmp_path / "shared", tmp_path)
+
+    assert result == stable
+    assert calls == [None, "0.6.10"]
+
+
+def test_dependency_names_are_read_from_wheel_metadata(tmp_path: Path) -> None:
+    module = _module()
+    wheel = _wheel_with_requirements(
+        tmp_path,
+        ["unifi-mcp-shared>=0.6.10,<0.7", "unifi-core[network]>=0.4.37,<0.5"],
+    )
+
+    assert module.wheel_dependency_names(wheel) == {
+        "unifi-mcp-shared",
+        "unifi-core",
+    }
 
 
 def test_core_floor_contract_installs_branch_shared_wheel(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

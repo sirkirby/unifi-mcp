@@ -19,8 +19,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-from unifi_core.manifest_helpers import get_tool_annotations
-
+from unifi_mcp_shared.manifest_helpers import get_tool_annotations
 from unifi_mcp_shared.meta_tools import register_load_tools, register_meta_tools
 from unifi_mcp_shared.tool_loader import auto_load_tools
 
