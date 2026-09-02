@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from mcp.types import CreateTaskResult, Task
 from unifi_mcp_shared.tasks import (
     DEFAULT_TASK_POLL_INTERVAL_MS,
@@ -29,13 +27,13 @@ def test_task_from_running_job_status():
     )
 
     assert isinstance(task, Task)
-    assert task.taskId == "job-123"
+    assert task.task_id == "job-123"
     assert task.status == "working"
-    assert task.statusMessage == "Operation is in progress."
-    assert task.createdAt == datetime.fromtimestamp(1_700_000_000, tz=timezone.utc)
-    assert task.lastUpdatedAt == task.createdAt
+    assert task.status_message == "Operation is in progress."
+    assert task.created_at == "2023-11-14T22:13:20Z"
+    assert task.last_updated_at == task.created_at
     assert task.ttl == DEFAULT_TASK_TTL_MS
-    assert task.pollInterval == DEFAULT_TASK_POLL_INTERVAL_MS
+    assert task.poll_interval == DEFAULT_TASK_POLL_INTERVAL_MS
 
 
 def test_task_from_completed_job_status_uses_completion_timestamp():
@@ -53,11 +51,11 @@ def test_task_from_completed_job_status_uses_completion_timestamp():
     )
 
     assert task.status == "completed"
-    assert task.statusMessage == "Operation completed."
-    assert task.createdAt == datetime.fromtimestamp(1_700_000_000, tz=timezone.utc)
-    assert task.lastUpdatedAt == datetime.fromtimestamp(1_700_000_030, tz=timezone.utc)
+    assert task.status_message == "Operation completed."
+    assert task.created_at == "2023-11-14T22:13:20Z"
+    assert task.last_updated_at == "2023-11-14T22:13:50Z"
     assert task.ttl is None
-    assert task.pollInterval is None
+    assert task.poll_interval is None
 
 
 def test_task_from_failed_job_status_uses_error_message():
@@ -73,14 +71,14 @@ def test_task_from_failed_job_status_uses_error_message():
     )
 
     assert task.status == "failed"
-    assert task.statusMessage == "Controller rejected request"
+    assert task.status_message == "Controller rejected request"
 
 
 def test_unknown_job_status_maps_to_failed_task():
     task = task_from_job_status("missing", {"status": "unknown"})
 
     assert task.status == "failed"
-    assert task.statusMessage == "Operation failed."
+    assert task.status_message == "Operation failed."
 
 
 def test_task_to_dict_uses_protocol_field_names():
@@ -116,7 +114,7 @@ def test_create_task_result_from_job_validates_against_sdk_model():
     )
 
     parsed = CreateTaskResult.model_validate(payload)
-    assert parsed.task.taskId == "job-123"
+    assert parsed.task.task_id == "job-123"
     assert parsed.task.status == "working"
     assert payload["_meta"] == {MCP_MODEL_IMMEDIATE_RESPONSE_META: "Started operation. Poll tasks/get for status."}
 

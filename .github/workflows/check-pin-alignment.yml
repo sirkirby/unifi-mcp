@@ -28,10 +28,6 @@ on:
       - "scripts/check_pin_alignment.py"
       - ".github/workflows/check-pin-alignment.yml"
 
-env:
-  # hatch-vcs fallback for branches without an upstream-package tag in ancestry.
-  SETUPTOOLS_SCM_PRETEND_VERSION: "0.0.0.dev0"
-
 permissions:
   contents: read
 

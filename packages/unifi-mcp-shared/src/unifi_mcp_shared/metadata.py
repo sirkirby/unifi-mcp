@@ -84,8 +84,8 @@ def configure_mcp_server_metadata(
     website_url: str = PROJECT_WEBSITE_URL,
     icon_family: str | None = None,
 ) -> None:
-    """Attach app package metadata to FastMCP's underlying initialize response."""
-    mcp_server = getattr(server, "_mcp_server", None)
+    """Attach app package metadata to MCPServer's initialize/discover responses."""
+    mcp_server = getattr(server, "_lowlevel_server", None)
     if mcp_server is None:
         return
 

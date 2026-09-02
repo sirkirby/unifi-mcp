@@ -25,8 +25,8 @@ def _json_text_content(result: Any) -> Any:
 def normalize_call_tool_result(result: Any) -> Any:
     """Unwrap canonical MCP result envelopes without changing domain data."""
     if isinstance(result, CallToolResult):
-        if result.structuredContent is not None:
-            return result.structuredContent
+        if result.structured_content is not None:
+            return result.structured_content
         return _json_text_content(result.content)
     if isinstance(result, tuple) and len(result) == 2:
         content, structured = result
@@ -101,7 +101,7 @@ def serialize_call_tool_result(
         return result
 
     if isinstance(result, CallToolResult):
-        structured = result.structuredContent
+        structured = result.structured_content
         if structured is None:
             return result
         return result.model_copy(update={"content": _compact_content(result.content, structured, tool_name=tool_name)})
@@ -110,6 +110,6 @@ def serialize_call_tool_result(
         content, structured = result
         return CallToolResult(
             content=_compact_content(content, structured, tool_name=tool_name),
-            structuredContent=structured,
+            structured_content=structured,
         )
     return result

@@ -188,8 +188,8 @@ class TestProtectSearchDetections:
         from unifi_protect_mcp.runtime import server
 
         tools = {tool.name: tool for tool in await server.list_tools()}
-        assert tools["protect_search_detections"].annotations.readOnlyHint is True
-        assert tools["protect_search_detections"].annotations.openWorldHint is False
+        assert tools["protect_search_detections"].annotations.read_only_hint is True
+        assert tools["protect_search_detections"].annotations.open_world_hint is False
 
 
 # ---------------------------------------------------------------------------
@@ -245,5 +245,5 @@ class TestProtectDetectionSearchLabels:
         from unifi_protect_mcp.runtime import server
 
         tools = {tool.name: tool for tool in await server.list_tools()}
-        assert tools["protect_detection_search_labels"].annotations.readOnlyHint is True
-        assert tools["protect_detection_search_labels"].annotations.openWorldHint is False
+        assert tools["protect_detection_search_labels"].annotations.read_only_hint is True
+        assert tools["protect_detection_search_labels"].annotations.open_world_hint is False

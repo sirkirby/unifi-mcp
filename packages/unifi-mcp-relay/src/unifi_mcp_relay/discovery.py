@@ -221,7 +221,7 @@ def _relay_client_info() -> dict:
         "title": "UniFi MCP Relay",
         "version": _relay_version(),
         "websiteUrl": PROJECT_WEBSITE_URL,
-        "icons": [icon.model_dump(exclude_none=True) for icon in mcp_icons_for_server("relay")],
+        "icons": [icon.model_dump(by_alias=True, exclude_none=True) for icon in mcp_icons_for_server("relay")],
     }
 
 

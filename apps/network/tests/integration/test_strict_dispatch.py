@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
+from mcp.server.mcpserver.exceptions import ToolError
 
 from unifi_mcp_shared.server import UniFiMCPServer
 from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP

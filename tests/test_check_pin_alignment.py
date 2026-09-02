@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -19,9 +20,14 @@ def _module():
     return module
 
 
-def _wheel_with_requirements(tmp_path: Path, requirements: list[str]) -> Path:
+def _wheel_with_requirements(
+    tmp_path: Path,
+    requirements: list[str],
+    *,
+    version: str = "1.0.0",
+) -> Path:
     wheel = tmp_path / "unifi_api_server-1.0.0-py3-none-any.whl"
-    lines = ["Metadata-Version: 2.4", "Name: unifi-api-server", "Version: 1.0.0"]
+    lines = ["Metadata-Version: 2.4", "Name: unifi-api-server", f"Version: {version}"]
     lines.extend(f"Requires-Dist: {requirement}" for requirement in requirements)
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr("unifi_api_server-1.0.0.dist-info/METADATA", "\n".join(lines) + "\n")
@@ -142,3 +148,117 @@ def test_security_floor_check_rejects_prerelease_below_final_floor(tmp_path: Pat
 
     assert ok is False
     assert "cryptography>=50.0.0" in message
+
+
+def test_security_upgrade_installs_additional_workspace_targets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _module()
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(module.venv, "create", lambda *args, **kwargs: None)
+
+    def fake_run_capture(command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        if len(command) >= 2 and command[-2] == "-c" and "importlib.metadata" in command[-1]:
+            versions = "\n".join(
+                f"{name}={floor}" for name, floor in module.SECURITY_FLOORS["unifi-network-mcp"].items()
+            )
+            return subprocess.CompletedProcess(command, 0, stdout=versions, stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(module, "run_capture", fake_run_capture)
+
+    ok, _, _ = module.install_security_upgrade(
+        "unifi-network-mcp",
+        "/tmp/network.whl",
+        tmp_path,
+        tmp_path / "venv",
+        additional_targets=("/tmp/shared.whl", "/tmp/core.whl"),
+    )
+
+    assert ok is True
+    install_command = commands[1]
+    assert install_command[-3:] == [
+        "/tmp/network.whl",
+        "/tmp/shared.whl",
+        "/tmp/core.whl",
+    ]
+
+
+def test_release_candidate_wheel_rebuilds_dev_version_as_stable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _module()
+    development = _wheel_with_requirements(tmp_path, [], version="0.6.10.dev5+gabc123")
+    stable = tmp_path / "unifi_mcp_shared-0.6.10-py3-none-any.whl"
+    calls: list[str | None] = []
+
+    def fake_build_wheel(src: Path, out_dir: Path, *, pretend_version: str | None = None) -> Path:
+        calls.append(pretend_version)
+        if pretend_version is None:
+            return development
+        stable.touch()
+        return stable
+
+    monkeypatch.setattr(module, "build_wheel", fake_build_wheel)
+
+    result = module.build_release_candidate_wheel(tmp_path / "shared", tmp_path)
+
+    assert result == stable
+    assert calls == [None, "0.6.10"]
+
+
+def test_dependency_names_are_read_from_wheel_metadata(tmp_path: Path) -> None:
+    module = _module()
+    wheel = _wheel_with_requirements(
+        tmp_path,
+        ["unifi-mcp-shared>=0.6.10,<0.7", "unifi-core[network]>=0.4.37,<0.5"],
+    )
+
+    assert module.wheel_dependency_names(wheel) == {
+        "unifi-mcp-shared",
+        "unifi-core",
+    }
+
+
+def test_release_candidate_wheels_exclude_unpublished_core(tmp_path: Path) -> None:
+    module = _module()
+    shared = tmp_path / "unifi_mcp_shared-0.6.10-py3-none-any.whl"
+    core = tmp_path / "unifi_core-0.4.38.dev1-py3-none-any.whl"
+
+    assert module.release_candidate_wheels(
+        {
+            "unifi-mcp-shared": shared,
+            "unifi-core": core,
+        }
+    ) == (shared,)
+
+
+def test_core_floor_contract_installs_branch_shared_wheel(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    module = _module()
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(module.venv, "create", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "core_floor_from_wheel", lambda *args: "0.4.37")
+
+    def fake_run_capture(command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="contract passed", stderr="")
+
+    monkeypatch.setattr(module, "run_capture", fake_run_capture)
+
+    ok, _ = module.check_core_floor_contract(
+        tmp_path / "network.whl",
+        tmp_path / "venv",
+        package_label="Network",
+        core_extras="network",
+        contract="print('contract passed')",
+        additional_targets=("/tmp/shared.whl",),
+    )
+
+    assert ok is True
+    assert commands[0][-2:] == [
+        str(tmp_path / "network.whl"),
+        "/tmp/shared.whl",
+    ]

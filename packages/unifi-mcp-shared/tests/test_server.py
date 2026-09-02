@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from mcp.types import CallToolResult
@@ -26,7 +27,7 @@ async def test_adaptive_server_compacts_supported_client(monkeypatch):
     result = await server.call_tool("unifi_test", {})
 
     assert isinstance(result, CallToolResult)
-    assert result.structuredContent == {"success": True, "data": {"rows": [{"id": 1}]}}
+    assert result.structured_content == {"success": True, "data": {"rows": [{"id": 1}]}}
     assert result.content
     assert "rows" not in result.content[0].text
 
@@ -41,7 +42,8 @@ async def test_adaptive_server_preserves_old_client(monkeypatch):
 
     result = await server.call_tool("unifi_test", {})
 
-    assert isinstance(result, tuple)
+    assert isinstance(result, CallToolResult)
+    assert json.loads(result.content[0].text) == {"success": True, "data": {}}
 
 
 def test_unifi_server_retains_strict_dispatch_contract():

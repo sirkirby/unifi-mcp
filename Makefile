@@ -111,7 +111,7 @@ relay-test:
 	uv run --package unifi-mcp-relay pytest packages/unifi-mcp-relay/tests -v
 
 protocol-smoke:
-	uv run --package unifi-network-mcp python scripts/smoke_mcp_metadata.py --server all --registration-mode all
+	uv run --package unifi-network-mcp python scripts/smoke_mcp_metadata.py --server all --registration-mode all --client-mode all
 
 worker-install:
 	npm ci --prefix apps/worker

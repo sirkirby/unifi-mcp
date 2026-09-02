@@ -11,7 +11,6 @@ from unifi_core.confirmation import (
 )
 from unifi_core.formatting import error_response, success_response
 from unifi_core.jobs import JOBS, JobStore, get_job_status, start_async_tool
-from unifi_core.manifest_helpers import get_tool_annotations
 from unifi_core.policy_gate import PolicyGateChecker
 from unifi_core.validators import ResourceValidator, create_response
 
@@ -20,6 +19,7 @@ from unifi_mcp_shared.lazy_tools import (
     build_tool_module_map,
     setup_lazy_loading,
 )
+from unifi_mcp_shared.manifest_helpers import get_tool_annotations
 from unifi_mcp_shared.meta_tools import register_load_tools, register_meta_tools
 from unifi_mcp_shared.server import UniFiMCPServer
 from unifi_mcp_shared.tasks import (

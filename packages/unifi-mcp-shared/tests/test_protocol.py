@@ -30,15 +30,13 @@ def test_structured_content_not_assumed_for_old_or_unknown_revisions(revision):
 
 
 def test_request_protocol_revision_reads_current_sdk_session():
-    server = MagicMock()
-    server.get_context.return_value.session.client_params.protocolVersion = "2025-11-25"
-    assert get_request_protocol_revision(server) == "2025-11-25"
+    context = MagicMock()
+    context.request_context.protocol_version = "2025-11-25"
+    assert get_request_protocol_revision(context) == "2025-11-25"
 
 
 def test_request_protocol_revision_returns_none_outside_request():
-    server = MagicMock()
-    server.get_context.side_effect = ValueError("Context is not available outside of a request")
-    assert get_request_protocol_revision(server) is None
+    assert get_request_protocol_revision(None) is None
 
 
 class TestGetProtocolRevision:
@@ -85,15 +83,16 @@ class TestCreateMcpToolAdapter:
         adapter = create_mcp_tool_adapter(mock_decorator, protocol_revision="v1")
         assert adapter is mock_decorator
 
-    def test_unsupported_revision_raises(self):
+    def test_unknown_revision_is_ignored_for_per_client_negotiation(self, caplog):
         mock_decorator = MagicMock()
-        with pytest.raises(ValueError, match="Unsupported MCP protocol revision"):
-            create_mcp_tool_adapter(mock_decorator, protocol_revision="2026-06-18")
+        adapter = create_mcp_tool_adapter(mock_decorator, protocol_revision="2026-06-18")
+        assert adapter is mock_decorator
+        assert "negotiates the protocol per client" in caplog.text
 
-    def test_future_target_revision_is_not_runtime_supported(self):
+    def test_future_target_revision_uses_same_negotiated_adapter(self):
         mock_decorator = MagicMock()
-        with pytest.raises(ValueError, match="Unsupported MCP protocol revision"):
-            create_mcp_tool_adapter(mock_decorator, protocol_revision="2026-07-28")
+        adapter = create_mcp_tool_adapter(mock_decorator, protocol_revision="2026-07-28")
+        assert adapter is mock_decorator
 
     def test_v2_revision_alias_raises(self):
         mock_decorator = MagicMock()

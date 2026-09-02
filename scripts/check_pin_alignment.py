@@ -26,10 +26,9 @@ How this script catches it
 1. Build a workspace wheel for every upstream and downstream package.
 2. For each downstream wheel, create a clean venv with no workspace context.
 3. ``pip install`` the downstream wheel with ``--find-links`` pointing at the
-   workspace upstream wheels and ``--index-url`` set to PyPI. This is the exact
-   resolution path a user hits, except that workspace upstream wheels are
-   available as an additional source so coordinated upstream-downstream PRs do
-   not falsely fail.
+   workspace upstream wheels and ``--index-url`` set to PyPI. Only upstreams
+   being released by the change are explicit install targets; other dependencies
+   must resolve to published versions allowed by the downstream metadata.
 4. Assert every built wheel explicitly declares the advisory-safe floors for
    vulnerable transitives exposed at its published install boundary.
 5. Preinstall the prior vulnerable workspace resolutions before every wheel,
@@ -49,6 +48,7 @@ stdout and is intended to be read directly from the CI log.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -292,13 +292,42 @@ def run_capture(args: list[str], **kwargs) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, check=True, capture_output=True, text=True, **kwargs)
 
 
-def build_wheel(src: Path, out_dir: Path) -> Path:
+def build_wheel(src: Path, out_dir: Path, *, pretend_version: str | None = None) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
-    run_capture(["uv", "build", "--wheel", str(src), "--out-dir", str(out_dir)])
+    env = os.environ.copy()
+    if pretend_version is not None:
+        env["SETUPTOOLS_SCM_PRETEND_VERSION"] = pretend_version
+    run_capture(
+        ["uv", "build", "--wheel", str(src), "--out-dir", str(out_dir)],
+        env=env,
+    )
     wheels = sorted(out_dir.glob("*.whl"), key=lambda p: p.stat().st_mtime)
     if not wheels:
         raise RuntimeError(f"uv build produced no wheel for {src}")
     return wheels[-1]
+
+
+def wheel_version(wheel: Path) -> Version:
+    """Read a wheel's distribution version from its metadata."""
+    with zipfile.ZipFile(wheel) as archive:
+        metadata_name = next(name for name in archive.namelist() if name.endswith(".dist-info/METADATA"))
+        metadata = archive.read(metadata_name).decode()
+    raw_version = next(
+        line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.lower().startswith("version:")
+    )
+    return Version(raw_version)
+
+
+def build_release_candidate_wheel(src: Path, out_dir: Path) -> Path:
+    """Build branch code with the exact next stable version it will publish as."""
+    development_wheel = build_wheel(src, out_dir)
+    development_version = wheel_version(development_wheel)
+    if not development_version.is_prerelease and not development_version.is_devrelease:
+        return development_wheel
+
+    candidate_version = development_version.base_version
+    development_wheel.unlink()
+    return build_wheel(src, out_dir, pretend_version=candidate_version)
 
 
 def _normalize_distribution_name(name: str) -> str:
@@ -315,6 +344,23 @@ def wheel_requirements(wheel: Path) -> list[str]:
         metadata = archive.read(metadata_name).decode()
     prefix = "requires-dist:"
     return [line.split(":", 1)[1].strip() for line in metadata.splitlines() if line.lower().startswith(prefix)]
+
+
+def wheel_dependency_names(wheel: Path) -> set[str]:
+    """Return normalized direct dependency names declared by a wheel."""
+    names: set[str] = set()
+    for raw_requirement in wheel_requirements(wheel):
+        try:
+            names.add(_normalize_distribution_name(Requirement(raw_requirement).name))
+        except InvalidRequirement:
+            continue
+    return names
+
+
+def release_candidate_wheels(upstream_wheels: dict[str, Path]) -> tuple[Path, ...]:
+    """Return only upstream wheels intentionally published by this release train."""
+    shared_wheel = upstream_wheels.get("unifi-mcp-shared")
+    return () if shared_wheel is None else (shared_wheel,)
 
 
 def _requirement_enforces_floor(requirement: Requirement, floor: str, allowed_marker: str | None) -> bool:
@@ -368,6 +414,8 @@ def install_security_upgrade(
     install_target: str,
     find_links: Path,
     venv_dir: Path,
+    *,
+    additional_targets: tuple[str, ...] = (),
 ) -> tuple[bool, str, Path]:
     venv.create(venv_dir, with_pip=True, clear=True, symlinks=True)
     py = venv_dir / "bin" / "python"
@@ -399,6 +447,7 @@ def install_security_upgrade(
                 "--index-url",
                 "https://pypi.org/simple",
                 install_target,
+                *additional_targets,
             ]
         )
     except subprocess.CalledProcessError as exc:
@@ -426,12 +475,29 @@ def install_security_upgrade(
     return True, "vulnerable baseline upgraded to advisory-safe versions", py
 
 
-def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, venv_dir: Path) -> tuple[bool, str]:
+def check_downstream(
+    pkg: Downstream,
+    downstream_wheel: Path,
+    find_links: Path,
+    venv_dir: Path,
+    upstream_wheels: tuple[Path, ...],
+) -> tuple[bool, str]:
+    declared_dependencies = wheel_dependency_names(downstream_wheel)
     upgrade_ok, upgrade_message, py = install_security_upgrade(
         pkg.dist_name,
         str(downstream_wheel),
         find_links,
         venv_dir,
+        # Passing the branch-built upstream wheels as explicit install targets
+        # makes pip validate them against the downstream metadata. Merely
+        # exposing prerelease wheels through --find-links lets pip prefer the
+        # latest stable PyPI release, which falsely rejects coordinated
+        # upstream/downstream dependency migrations.
+        additional_targets=tuple(
+            str(wheel)
+            for wheel in upstream_wheels
+            if _normalize_distribution_name(wheel.stem.split("-")[0]) in declared_dependencies
+        ),
     )
     if not upgrade_ok:
         return False, upgrade_message
@@ -499,6 +565,7 @@ def check_core_floor_contract(
     package_label: str,
     core_extras: str,
     contract: str,
+    additional_targets: tuple[str, ...] = (),
 ) -> tuple[bool, str]:
     """Install and contract-check a wheel against exactly its published Core floor."""
     floor = core_floor_from_wheel(wheel, package_label)
@@ -517,6 +584,7 @@ def check_core_floor_contract(
                 "https://pypi.org/simple",
                 f"unifi-core[{core_extras}]=={floor}",
                 str(wheel),
+                *additional_targets,
             ]
         )
         run_capture([str(py), "-m", "pip", "check"])
@@ -541,7 +609,12 @@ def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
     )
 
 
-def check_network_core_floor(network_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
+def check_network_core_floor(
+    network_wheel: Path,
+    venv_dir: Path,
+    *,
+    shared_wheel: Path | None = None,
+) -> tuple[bool, str]:
     """Install and contract-check Network against exactly its published Core floor."""
     return check_core_floor_contract(
         network_wheel,
@@ -549,6 +622,7 @@ def check_network_core_floor(network_wheel: Path, venv_dir: Path) -> tuple[bool,
         package_label="Network",
         core_extras="network",
         contract=_NETWORK_CORE_FLOOR_CONTRACT,
+        additional_targets=(() if shared_wheel is None else (str(shared_wheel),)),
     )
 
 
@@ -591,7 +665,11 @@ def main() -> int:
         downstream_wheels: dict[str, Path] = {}
         print("Building upstream wheels (workspace) -> --find-links source")
         for name, path in UPSTREAM_PACKAGES.items():
-            wheel = build_wheel(path, find_links)
+            wheel = (
+                build_release_candidate_wheel(path, find_links)
+                if name == "unifi-mcp-shared"
+                else build_wheel(path, find_links)
+            )
             upstream_wheels[name] = wheel
             metadata_ok, metadata_msg = check_security_floors(name, wheel)
             print(f"  [{'PASS' if metadata_ok else 'FAIL'}] {name}: {wheel.name} — {metadata_msg}")
@@ -617,6 +695,7 @@ def main() -> int:
 
         print()
         print("Checking each downstream wheel over a vulnerable baseline against PyPI")
+        candidate_wheels = release_candidate_wheels(upstream_wheels)
         for pkg in DOWNSTREAM_PACKAGES:
             wheel = build_wheel(pkg.src, tmp_path / "downstream" / pkg.dist_name)
             downstream_wheels[pkg.dist_name] = wheel
@@ -626,7 +705,13 @@ def main() -> int:
                 failures.append((pkg.dist_name, metadata_msg))
                 continue
             venv_dir = tmp_path / "venvs" / pkg.dist_name
-            ok, msg = check_downstream(pkg, wheel, find_links, venv_dir)
+            ok, msg = check_downstream(
+                pkg,
+                wheel,
+                find_links,
+                venv_dir,
+                candidate_wheels,
+            )
             status = "PASS" if ok else "FAIL"
             print(f"  [{status}] {pkg.dist_name} ({wheel.name}) — {metadata_msg}")
             if not ok:
@@ -672,7 +757,9 @@ def main() -> int:
 
         network_wheel = downstream_wheels["unifi-network-mcp"]
         network_floor_ok, network_floor_message = check_network_core_floor(
-            network_wheel, tmp_path / "network-floor-venv"
+            network_wheel,
+            tmp_path / "network-floor-venv",
+            shared_wheel=upstream_wheels["unifi-mcp-shared"],
         )
         print()
         print(f"  [{'PASS' if network_floor_ok else 'FAIL'}] Network tools against published Core floor")
