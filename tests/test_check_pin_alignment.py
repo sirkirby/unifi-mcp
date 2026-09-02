@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -142,3 +143,68 @@ def test_security_floor_check_rejects_prerelease_below_final_floor(tmp_path: Pat
 
     assert ok is False
     assert "cryptography>=50.0.0" in message
+
+
+def test_security_upgrade_installs_additional_workspace_targets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _module()
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(module.venv, "create", lambda *args, **kwargs: None)
+
+    def fake_run_capture(command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        if len(command) >= 2 and command[-2] == "-c" and "importlib.metadata" in command[-1]:
+            versions = "\n".join(
+                f"{name}={floor}" for name, floor in module.SECURITY_FLOORS["unifi-network-mcp"].items()
+            )
+            return subprocess.CompletedProcess(command, 0, stdout=versions, stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(module, "run_capture", fake_run_capture)
+
+    ok, _, _ = module.install_security_upgrade(
+        "unifi-network-mcp",
+        "/tmp/network.whl",
+        tmp_path,
+        tmp_path / "venv",
+        additional_targets=("/tmp/shared.whl", "/tmp/core.whl"),
+    )
+
+    assert ok is True
+    install_command = commands[1]
+    assert install_command[-3:] == [
+        "/tmp/network.whl",
+        "/tmp/shared.whl",
+        "/tmp/core.whl",
+    ]
+
+
+def test_core_floor_contract_installs_branch_shared_wheel(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    module = _module()
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(module.venv, "create", lambda *args, **kwargs: None)
+    monkeypatch.setattr(module, "core_floor_from_wheel", lambda *args: "0.4.37")
+
+    def fake_run_capture(command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="contract passed", stderr="")
+
+    monkeypatch.setattr(module, "run_capture", fake_run_capture)
+
+    ok, _ = module.check_core_floor_contract(
+        tmp_path / "network.whl",
+        tmp_path / "venv",
+        package_label="Network",
+        core_extras="network",
+        contract="print('contract passed')",
+        additional_targets=("/tmp/shared.whl",),
+    )
+
+    assert ok is True
+    assert commands[0][-2:] == [
+        str(tmp_path / "network.whl"),
+        "/tmp/shared.whl",
+    ]

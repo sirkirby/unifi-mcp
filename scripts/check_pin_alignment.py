@@ -368,6 +368,8 @@ def install_security_upgrade(
     install_target: str,
     find_links: Path,
     venv_dir: Path,
+    *,
+    additional_targets: tuple[str, ...] = (),
 ) -> tuple[bool, str, Path]:
     venv.create(venv_dir, with_pip=True, clear=True, symlinks=True)
     py = venv_dir / "bin" / "python"
@@ -399,6 +401,7 @@ def install_security_upgrade(
                 "--index-url",
                 "https://pypi.org/simple",
                 install_target,
+                *additional_targets,
             ]
         )
     except subprocess.CalledProcessError as exc:
@@ -426,12 +429,24 @@ def install_security_upgrade(
     return True, "vulnerable baseline upgraded to advisory-safe versions", py
 
 
-def check_downstream(pkg: Downstream, downstream_wheel: Path, find_links: Path, venv_dir: Path) -> tuple[bool, str]:
+def check_downstream(
+    pkg: Downstream,
+    downstream_wheel: Path,
+    find_links: Path,
+    venv_dir: Path,
+    upstream_wheels: tuple[Path, ...],
+) -> tuple[bool, str]:
     upgrade_ok, upgrade_message, py = install_security_upgrade(
         pkg.dist_name,
         str(downstream_wheel),
         find_links,
         venv_dir,
+        # Passing the branch-built upstream wheels as explicit install targets
+        # makes pip validate them against the downstream metadata. Merely
+        # exposing prerelease wheels through --find-links lets pip prefer the
+        # latest stable PyPI release, which falsely rejects coordinated
+        # upstream/downstream dependency migrations.
+        additional_targets=tuple(str(wheel) for wheel in upstream_wheels),
     )
     if not upgrade_ok:
         return False, upgrade_message
@@ -499,6 +514,7 @@ def check_core_floor_contract(
     package_label: str,
     core_extras: str,
     contract: str,
+    additional_targets: tuple[str, ...] = (),
 ) -> tuple[bool, str]:
     """Install and contract-check a wheel against exactly its published Core floor."""
     floor = core_floor_from_wheel(wheel, package_label)
@@ -517,6 +533,7 @@ def check_core_floor_contract(
                 "https://pypi.org/simple",
                 f"unifi-core[{core_extras}]=={floor}",
                 str(wheel),
+                *additional_targets,
             ]
         )
         run_capture([str(py), "-m", "pip", "check"])
@@ -530,7 +547,12 @@ def check_core_floor_contract(
     return True, f"Core floor {floor}: {(result.stdout or '').strip()}"
 
 
-def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
+def check_api_core_floor(
+    api_wheel: Path,
+    venv_dir: Path,
+    *,
+    shared_wheel: Path | None = None,
+) -> tuple[bool, str]:
     """Install and contract-check the API against exactly its published Core floor."""
     return check_core_floor_contract(
         api_wheel,
@@ -538,10 +560,16 @@ def check_api_core_floor(api_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
         package_label="API",
         core_extras="network,protect,access",
         contract=_API_CATALOG_FLOOR_CONTRACT,
+        additional_targets=(() if shared_wheel is None else (str(shared_wheel),)),
     )
 
 
-def check_network_core_floor(network_wheel: Path, venv_dir: Path) -> tuple[bool, str]:
+def check_network_core_floor(
+    network_wheel: Path,
+    venv_dir: Path,
+    *,
+    shared_wheel: Path | None = None,
+) -> tuple[bool, str]:
     """Install and contract-check Network against exactly its published Core floor."""
     return check_core_floor_contract(
         network_wheel,
@@ -549,6 +577,7 @@ def check_network_core_floor(network_wheel: Path, venv_dir: Path) -> tuple[bool,
         package_label="Network",
         core_extras="network",
         contract=_NETWORK_CORE_FLOOR_CONTRACT,
+        additional_targets=(() if shared_wheel is None else (str(shared_wheel),)),
     )
 
 
@@ -626,7 +655,13 @@ def main() -> int:
                 failures.append((pkg.dist_name, metadata_msg))
                 continue
             venv_dir = tmp_path / "venvs" / pkg.dist_name
-            ok, msg = check_downstream(pkg, wheel, find_links, venv_dir)
+            ok, msg = check_downstream(
+                pkg,
+                wheel,
+                find_links,
+                venv_dir,
+                tuple(upstream_wheels.values()),
+            )
             status = "PASS" if ok else "FAIL"
             print(f"  [{status}] {pkg.dist_name} ({wheel.name}) — {metadata_msg}")
             if not ok:
@@ -672,7 +707,9 @@ def main() -> int:
 
         network_wheel = downstream_wheels["unifi-network-mcp"]
         network_floor_ok, network_floor_message = check_network_core_floor(
-            network_wheel, tmp_path / "network-floor-venv"
+            network_wheel,
+            tmp_path / "network-floor-venv",
+            shared_wheel=upstream_wheels["unifi-mcp-shared"],
         )
         print()
         print(f"  [{'PASS' if network_floor_ok else 'FAIL'}] Network tools against published Core floor")
@@ -681,7 +718,11 @@ def main() -> int:
             return 1
 
         api_wheel = downstream_wheels["unifi-api-server"]
-        floor_ok, floor_message = check_api_core_floor(api_wheel, tmp_path / "api-floor-venv")
+        floor_ok, floor_message = check_api_core_floor(
+            api_wheel,
+            tmp_path / "api-floor-venv",
+            shared_wheel=upstream_wheels["unifi-mcp-shared"],
+        )
         print()
         print(f"  [{'PASS' if floor_ok else 'FAIL'}] API catalog against published Core floor")
         print(f"  {floor_message}")
