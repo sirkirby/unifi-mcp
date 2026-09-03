@@ -212,14 +212,14 @@ class TestEventManagerREST:
         assert "page_size=10" in call_args[0][1]
 
     @pytest.mark.asyncio
-    async def test_list_events_limit_zero_requests_zero_page_size(self, event_mgr_proxy, cm_proxy):
-        """An explicit limit=0 asks the controller for zero events, not the 30 default."""
+    async def test_list_events_limit_zero_returns_empty_without_calling_controller(self, event_mgr_proxy, cm_proxy):
+        """An explicit limit=0 means zero results locally; page_size=0 is not trustworthy
+        across controllers (the reference Access controller treats it as uncapped)."""
         with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
-            mock_req.return_value = {"data": {"events": []}}
-            await event_mgr_proxy.list_events(limit=0)
+            events = await event_mgr_proxy.list_events(limit=0)
 
-        call_args = mock_req.call_args
-        assert "page_size=0" in call_args[0][1]
+        assert events == []
+        mock_req.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_list_events_no_proxy(self, event_mgr_none):

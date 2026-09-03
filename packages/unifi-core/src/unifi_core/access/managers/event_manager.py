@@ -373,6 +373,9 @@ class EventManager:
         if not self._cm.has_proxy:
             raise UniFiConnectionError("No proxy session available for list_events")
 
+        if limit == 0:
+            return []
+
         try:
             # The system_log/search endpoint requires a ``topic`` field.
             body: dict[str, Any] = {"topic": topic}
