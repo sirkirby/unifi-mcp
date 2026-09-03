@@ -16,6 +16,11 @@ dependencies = [
     # DPI name enrichment requires Core 0.4.36; exact Network event-key
     # filtering and discovery require Core 0.4.37.
     "unifi-core[network,protect,access]>=0.4.37,<0.5",
+    # The API server is a deployable Network client too. Pin the authentication
+    # transport exactly so a released API version has a reproducible login stack
+    # even when installed from PyPI without the workspace uv.lock.
+    "aiounifi==95",
+    "aiohttp==3.14.3",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.52.1",
     "sqlalchemy[asyncio]>=2.0.51",
