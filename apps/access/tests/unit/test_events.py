@@ -71,6 +71,13 @@ class TestEventBufferExtended:
         assert events[0]["seq"] == 4
         assert events[-1]["seq"] == 2
 
+    def test_buffer_limit_zero_returns_empty(self):
+        """An explicit limit=0 means zero results, not unlimited."""
+        buf = EventBuffer(max_size=10, ttl_seconds=300)
+        for i in range(5):
+            buf.add({"type": "test", "seq": i})
+        assert buf.get_recent(limit=0) == []
+
     def test_buffer_ttl_expiration(self):
         """Buffer skips events older than TTL."""
         buf = EventBuffer(max_size=10, ttl_seconds=1)
@@ -203,6 +210,16 @@ class TestEventManagerREST:
         assert body["start"] == "2026-03-01"
         assert body["end"] == "2026-03-17"
         assert "page_size=10" in call_args[0][1]
+
+    @pytest.mark.asyncio
+    async def test_list_events_limit_zero_requests_zero_page_size(self, event_mgr_proxy, cm_proxy):
+        """An explicit limit=0 asks the controller for zero events, not the 30 default."""
+        with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
+            mock_req.return_value = {"data": {"events": []}}
+            await event_mgr_proxy.list_events(limit=0)
+
+        call_args = mock_req.call_args
+        assert "page_size=0" in call_args[0][1]
 
     @pytest.mark.asyncio
     async def test_list_events_no_proxy(self, event_mgr_none):

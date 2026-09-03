@@ -71,6 +71,8 @@ class EventBuffer:
         cutoff = time.time() - self._ttl
         results: list[dict[str, Any]] = []
         for event in reversed(self._buffer):
+            if limit is not None and len(results) >= limit:
+                break
             if event.get("_buffered_at", 0) < cutoff:
                 continue
             if event_type and event.get("type") != event_type:
@@ -78,8 +80,6 @@ class EventBuffer:
             if door_id and event.get("door_id") != door_id:
                 continue
             results.append(event)
-            if limit and len(results) >= limit:
-                break
         return results
 
     def clear(self) -> None:
@@ -385,7 +385,7 @@ class EventManager:
             if user_id:
                 body["user_id"] = user_id
 
-            page_size = limit or 30
+            page_size = limit
             path = f"insights/system_log/search?page_size={page_size}&page_num=1&isAccess"
 
             data = await self._cm.proxy_request("POST", path, json=body)

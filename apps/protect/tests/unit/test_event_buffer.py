@@ -89,6 +89,13 @@ class TestEventBufferGetRecent:
         assert len(results) == 3
         assert results[0]["index"] == 9  # newest first
 
+    def test_limit_zero_returns_empty(self):
+        """An explicit limit=0 means zero results, not unlimited."""
+        buf = EventBuffer()
+        for i in range(10):
+            buf.add({"type": "motion", "index": i})
+        assert buf.get_recent(limit=0) == []
+
 
 # ---------------------------------------------------------------------------
 # get_recent - filters

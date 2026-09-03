@@ -126,6 +126,8 @@ class EventBuffer:
         cutoff = time.time() - self._ttl
         results: list[dict[str, Any]] = []
         for event in reversed(self._buffer):
+            if limit is not None and len(results) >= limit:
+                break
             if event.get("_buffered_at", 0) < cutoff:
                 continue
             if event_type and event.get("type") != event_type:
@@ -135,8 +137,6 @@ class EventBuffer:
             if min_confidence is not None and event.get("score", 100) < min_confidence:
                 continue
             results.append(event)
-            if limit and len(results) >= limit:
-                break
         return results
 
     def clear(self) -> None:
