@@ -31,13 +31,15 @@ How this script catches it
    must resolve to published versions allowed by the downstream metadata.
 4. Assert every built wheel explicitly declares the advisory-safe floors for
    vulnerable transitives exposed at its published install boundary.
-5. Preinstall the prior vulnerable workspace resolutions before every wheel,
+5. Assert deployable Network runtimes exactly pin ``aiounifi`` and ``aiohttp``
+   consistently, so a released app version identifies one authentication stack.
+6. Preinstall the prior vulnerable workspace resolutions before every wheel,
    then prove its metadata upgrades them to safe versions.
-6. Attempt a smoke import of the downstream's runtime entrypoint. If the import
+7. Attempt a smoke import of the downstream's runtime entrypoint. If the import
    succeeds, the declared pin permits a working upstream version. If it fails
    with ``ModuleNotFoundError`` (or pip itself fails with no matching version),
    the pin is stale and a fresh PyPI install would crash.
-7. Install the Network and API wheels against exactly their declared published
+8. Install the Network and API wheels against exactly their declared published
    ``unifi-core`` floors and validate their manager-call contracts. This catches
    newly used Core methods that ordinary imports do not execute.
 
@@ -92,6 +94,14 @@ SECURITY_FLOORS: dict[str, dict[str, str]] = {
         "starlette": "1.3.1",
         "click": "8.3.3",
     },
+}
+
+# Deployable applications must make the Network authentication stack
+# reproducible in their wheel metadata. Library packages intentionally retain
+# compatibility floors, but uvx/pip users do not consume the workspace lockfile.
+REPRODUCIBLE_RUNTIME_PINS: dict[str, tuple[str, ...]] = {
+    "unifi-network-mcp": ("aiounifi", "aiohttp"),
+    "unifi-api-server": ("aiounifi", "aiohttp"),
 }
 
 # These were the vulnerable workspace resolutions before the security update.
@@ -409,6 +419,45 @@ def check_security_floors(dist_name: str, wheel: Path) -> tuple[bool, str]:
     return True, "all advisory-safe Requires-Dist floors are explicit"
 
 
+def exact_runtime_pins(wheel: Path, names: tuple[str, ...]) -> tuple[bool, dict[str, str], str]:
+    """Return exact unconditional runtime pins declared by a wheel."""
+    declared: dict[str, list[Requirement]] = {}
+    for raw_requirement in wheel_requirements(wheel):
+        try:
+            requirement = Requirement(raw_requirement)
+        except InvalidRequirement:
+            continue
+        if requirement.marker is None:
+            declared.setdefault(_normalize_distribution_name(requirement.name), []).append(requirement)
+
+    pins: dict[str, str] = {}
+    failures: list[str] = []
+    for raw_name in names:
+        name = _normalize_distribution_name(raw_name)
+        requirements = declared.get(name, [])
+        exact_versions = {
+            specifier.version
+            for requirement in requirements
+            for specifier in requirement.specifier
+            if specifier.operator == "==" and "*" not in specifier.version
+        }
+        if len(requirements) != 1 or len(requirements[0].specifier) != 1 or len(exact_versions) != 1:
+            failures.append(f"{name} must have one unconditional exact == pin")
+            continue
+        version = exact_versions.pop()
+        try:
+            Version(version)
+        except InvalidVersion:
+            failures.append(f"{name} has invalid exact pin {version!r}")
+            continue
+        pins[name] = version
+
+    if failures:
+        return False, pins, "; ".join(failures)
+    rendered = ", ".join(f"{name}=={version}" for name, version in sorted(pins.items()))
+    return True, pins, f"reproducible runtime pins: {rendered}"
+
+
 def install_security_upgrade(
     dist_name: str,
     install_target: str,
@@ -717,6 +766,27 @@ def main() -> int:
             if not ok:
                 failures.append((pkg.dist_name, msg))
 
+        print()
+        print("Checking reproducible Network authentication runtime pins")
+        runtime_pin_sets: dict[str, dict[str, str]] = {}
+        for dist_name, names in REPRODUCIBLE_RUNTIME_PINS.items():
+            wheel = downstream_wheels[dist_name]
+            ok, pins, message = exact_runtime_pins(wheel, names)
+            print(f"  [{'PASS' if ok else 'FAIL'}] {dist_name} — {message}")
+            if ok:
+                runtime_pin_sets[dist_name] = pins
+            else:
+                failures.append((dist_name, message))
+
+        if len(runtime_pin_sets) == len(REPRODUCIBLE_RUNTIME_PINS):
+            distinct_pin_sets = {tuple(sorted(pins.items())) for pins in runtime_pin_sets.values()}
+            if len(distinct_pin_sets) != 1:
+                message = "Network and API wheels declare different aiounifi/aiohttp exact pins"
+                print(f"  [FAIL] cross-app alignment — {message}")
+                failures.append(("network-auth-runtime", message))
+            else:
+                print("  [PASS] cross-app alignment — Network and API pins match")
+
         if failures:
             print()
             print("=" * 70)
@@ -776,7 +846,7 @@ def main() -> int:
             return 1
 
         print()
-        print("All wheels enforce security floors; downstream upgrades, installs, and imports pass.")
+        print("All wheels enforce security floors and runtime pins; downstream upgrades, installs, and imports pass.")
         return 0
 
 

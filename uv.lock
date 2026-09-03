@@ -153,7 +153,7 @@ wheels = [
 
 [[package]]
 name = "aiounifi"
-version = "92"
+version = "95"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -161,9 +161,9 @@ dependencies = [
     { name = "pyotp" },
     { name = "segno" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/76/ab/a7066835ae47ec206707b5d0f467f19f1b7e3654900f91d1bc5f3004896b/aiounifi-92.tar.gz", hash = "sha256:773192640cb5a25b432ed8905bc08929b2403786bb8e9cc6ac7aac14e47555bb", size = 67171, upload-time = "2026-07-06T12:16:52.311Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/c9/ca2f96cc24a8f9ca02224bcb59a2c4e9c70dd6a0531db135389a80338a52/aiounifi-95.tar.gz", hash = "sha256:b6ace0dbb42ba5095c9aa7dd0bf882ae5240cad4ce88830c03a4fec69ab4c787", size = 67909, upload-time = "2026-08-28T17:15:44.226Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2e/e6/ffb077a9f91288b6c1c689746acd84ff4813ec075b2bce0577057ce8568d/aiounifi-92-py3-none-any.whl", hash = "sha256:016d85b306d62bb617d8f05706fb5e695655c7dc7a3671e06089a2829a8cf22e", size = 56616, upload-time = "2026-07-06T12:16:51.159Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/8b/65ab9e3dad409374e3887a31c87c07f838e10e2cfa3944387b88616ca935/aiounifi-95-py3-none-any.whl", hash = "sha256:e4d02fc8eb91c9bd672b963c811211c7a3681b889f82ed33c5a4a7cf7750e767", size = 56821, upload-time = "2026-08-28T17:15:43.139Z" },
 ]
 
 [[package]]
@@ -1877,7 +1877,9 @@ dev = [
 name = "unifi-api-server"
 source = { editable = "apps/api" }
 dependencies = [
+    { name = "aiohttp" },
     { name = "aiosqlite" },
+    { name = "aiounifi" },
     { name = "alembic" },
     { name = "argon2-cffi" },
     { name = "click" },
@@ -1910,7 +1912,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = "==3.14.3" },
     { name = "aiosqlite", specifier = ">=0.20.0" },
+    { name = "aiounifi", specifier = "==95" },
     { name = "alembic", specifier = ">=1.19.0" },
     { name = "argon2-cffi", specifier = ">=23.1.0" },
     { name = "click", specifier = ">=8.3.3" },
@@ -2094,6 +2098,7 @@ name = "unifi-network-mcp"
 source = { editable = "apps/network" }
 dependencies = [
     { name = "aiohttp" },
+    { name = "aiounifi" },
     { name = "click" },
     { name = "cryptography" },
     { name = "jsonschema" },
@@ -2122,7 +2127,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", specifier = ">=3.14.3" },
+    { name = "aiohttp", specifier = "==3.14.3" },
+    { name = "aiounifi", specifier = "==95" },
     { name = "click", specifier = ">=8.3.3" },
     { name = "cryptography", specifier = ">=50.0.1" },
     { name = "jsonschema", specifier = ">=4.17.0" },
