@@ -577,9 +577,11 @@ class AccessConnectionManager:
         """Perform one bounded request through one existing authenticated session."""
         request: tuple[aiohttp.ClientSession, str, dict[str, str]] | None = None
         if self.has_api_client and self._api_session is not None and not self._api_session.closed:
+            # The emergency-status endpoint returns one fixed-size state object,
+            # avoiding collection materialization for this connectivity check.
             request = (
                 self._api_session,
-                f"https://{self.host}:{self._api_port}/api/v1/developer/system/static",
+                f"https://{self.host}:{self._api_port}/api/v1/developer/doors/settings/emergency",
                 {"Authorization": f"Bearer {self._api_key}", "Accept": "application/json"},
             )
         elif self.has_proxy and self._proxy_session is not None and not self._proxy_session.closed:

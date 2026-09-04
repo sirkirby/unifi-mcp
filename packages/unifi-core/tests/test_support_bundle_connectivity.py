@@ -21,12 +21,25 @@ class _ResponseContext:
     def __init__(self, status: int) -> None:
         self.status = status
         self.exited = False
+        self.body_read = False
 
     async def __aenter__(self) -> _ResponseContext:
         return self
 
     async def __aexit__(self, *_args: object) -> None:
         self.exited = True
+
+    async def read(self) -> bytes:
+        self.body_read = True
+        return b"private-response-canary"
+
+    async def text(self) -> str:
+        self.body_read = True
+        return "private-response-canary"
+
+    async def json(self) -> dict[str, str]:
+        self.body_read = True
+        return {"private": "response-canary"}
 
 
 class _RaisingContext:
@@ -145,8 +158,9 @@ async def test_access_probe_prefers_existing_developer_session_and_never_reauthe
 
     assert result.outcome == "authentication"
     assert len(session.calls) == 1
-    assert session.calls[0][0][1].endswith("/api/v1/developer/system/static")
+    assert session.calls[0][0][1].endswith("/api/v1/developer/doors/settings/emergency")
     assert session.calls[0][1]["timeout"].total == 10
+    assert context.body_read is False
     manager._proxy_login.assert_not_awaited()
     manager.initialize.assert_not_awaited()
 
