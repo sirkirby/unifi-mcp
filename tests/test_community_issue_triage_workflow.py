@@ -76,7 +76,7 @@ def _bot_comment(comment_id: int, marker: str) -> dict[str, object]:
     return comment
 
 
-def _bot_needs_info_removal(event_id: int) -> dict[str, object]:
+def _bot_needs_info_removal(event_id: int | str) -> dict[str, object]:
     return {
         "id": event_id,
         "event": "unlabeled",
@@ -305,8 +305,17 @@ const github = {rest: {actions: {
   listArtifactsForRepo: async (request) => {
     calls.push({operation: "listArtifactsForRepo", request});
     fail("listArtifactsForRepo");
-    const artifacts = payload.repoArtifacts === "INVALID" ? {invalid: true} : (payload.repoArtifacts || []);
-    return {data: {total_count: payload.repoArtifactTotal ?? artifacts.length, artifacts}};
+    const configured = payload.repoArtifactsByName
+      ? payload.repoArtifactsByName[request.name] ?? []
+      : request.name === process.env.RESERVATION_NAME
+        ? payload.repoArtifacts || []
+        : [];
+    const artifacts = configured === "INVALID" ? {invalid: true} : configured;
+    const configuredTotal = payload.repoArtifactTotalsByName?.[request.name];
+    const totalCount = configuredTotal ?? (
+      request.name === process.env.RESERVATION_NAME ? payload.repoArtifactTotal : undefined
+    );
+    return {data: {total_count: totalCount ?? artifacts.length, artifacts}};
   },
 }, issues: {
   removeLabel: async (request) => {
@@ -376,7 +385,10 @@ def _run_github_script(
     env.setdefault("GITHUB_ACTOR_ID", "1234")
     env.setdefault("RUNNER_TEMP", str(tmp_path))
     env.setdefault("GH_AW_SAFE_OUTPUTS", str(safe_outputs))
-    env.setdefault("RESERVATION_NAME", "community-issue-triage-aic-reservation")
+    env.setdefault("RESERVATION_NAME", "community-issue-triage-aic-reservation-v2")
+    env.setdefault("LEGACY_RESERVATION_NAME", "community-issue-triage-aic-reservation")
+    env.setdefault("RESERVED_AI_CREDITS", "25")
+    env.setdefault("LEGACY_RESERVED_AI_CREDITS", "75")
     env.setdefault("MAX_AI_CREDITS", "75")
     env.setdefault("MAX_DAILY_AI_CREDITS", "150")
     script = INLINE_GITHUB_SCRIPT_HARNESS.replace(
@@ -618,6 +630,7 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     rate_gate = source.split("  qualifying_rate_gate:\n", 1)[1].split("\n  trusted_issue_snapshot:\n", 1)[0]
     assert "needs: [intake_gate]" in rate_gate
     assert "listWorkflowRuns" in rate_gate
+    assert "run.actor?.login" in rate_gate
     assert "listWorkflowRunArtifacts" in rate_gate
     assert "180 * 60 * 1000" in rate_gate
     assert 'Date.parse(current.data?.created_at || "")' in rate_gate
@@ -690,7 +703,13 @@ def test_reporter_window_executes_delayed_prior_receipt_check(tmp_path: Path):
         "Enforce one qualifying intake per reporter every three hours",
         {
             "workflowRunPages": {
-                "1": [{"id": 90, "created_at": "2027-01-15T07:59:00.000Z"}],
+                "1": [
+                    {
+                        "id": 90,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "community-member"},
+                    }
+                ],
             },
             "artifactsByRun": {
                 "90": [{"name": "qualifying-intake-90", "expired": False}],
@@ -703,14 +722,98 @@ def test_reporter_window_executes_delayed_prior_receipt_check(tmp_path: Path):
     assert any("already used" in notice for notice in observed["notices"])
 
 
+def test_reporter_window_ignores_receipts_from_other_actors_when_api_filter_is_ignored(tmp_path: Path):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "workflowRunPages": {
+                "1": [
+                    {
+                        "id": 90,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "another-reporter"},
+                    }
+                ],
+            },
+            "artifactsByRun": {
+                "90": [{"name": "qualifying-intake-90", "expired": False}],
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == "true"
+    assert not any(call["operation"] == "listWorkflowRunArtifacts" for call in observed["calls"])
+
+
+@pytest.mark.parametrize("run_actor", [None, {}, {"login": ""}])
+def test_reporter_window_fails_closed_on_malformed_historical_actor(
+    tmp_path: Path,
+    run_actor: object,
+):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "workflowRunPages": {
+                "1": [
+                    {
+                        "id": 90,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": run_actor,
+                    }
+                ],
+            },
+        },
+        tmp_path,
+    )
+    assert observed["outputs"]["allowed"] == "false"
+    assert "invalid workflow run actor" in observed["thrown"]
+
+
+def test_reporter_window_compares_github_logins_case_insensitively(tmp_path: Path):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "workflowRunPages": {
+                "1": [
+                    {
+                        "id": 90,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "Community-Member"},
+                    }
+                ],
+            },
+            "artifactsByRun": {
+                "90": [{"name": "qualifying-intake-90", "expired": False}],
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == "false"
+
+
 @pytest.mark.parametrize(
     ("payload", "message"),
     [
         (
             {
                 "workflowRunPages": {
-                    "1": [{"id": index, "created_at": "2027-01-15T07:59:00.000Z"} for index in range(1, 101)],
-                    "2": [{"id": 101, "created_at": "2027-01-15T07:59:00.000Z"}],
+                    "1": [
+                        {
+                            "id": index,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "community-member"},
+                        }
+                        for index in range(1, 101)
+                    ],
+                    "2": [
+                        {
+                            "id": 101,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "community-member"},
+                        }
+                    ],
                 },
             },
             "history exceeds",
@@ -718,14 +821,30 @@ def test_reporter_window_executes_delayed_prior_receipt_check(tmp_path: Path):
         ({"failOperations": ["listWorkflowRuns"]}, "simulated listWorkflowRuns failure"),
         (
             {
-                "workflowRunPages": {"1": [{"id": 90, "created_at": "2027-01-15T07:59:00.000Z"}]},
+                "workflowRunPages": {
+                    "1": [
+                        {
+                            "id": 90,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "community-member"},
+                        }
+                    ]
+                },
                 "artifactsByRun": {"90": "INVALID"},
             },
             "artifact history exceeds",
         ),
         (
             {
-                "workflowRunPages": {"1": [{"id": 90, "created_at": "2027-01-15T07:59:00.000Z"}]},
+                "workflowRunPages": {
+                    "1": [
+                        {
+                            "id": 90,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "community-member"},
+                        }
+                    ]
+                },
                 "artifactsByRun": {
                     "90": [
                         {"name": "qualifying-intake-90", "expired": False},
@@ -1103,7 +1222,7 @@ def test_daily_budget_is_reserved_before_inference_and_usage_is_uploaded_before_
     source = WORKFLOW.read_text()
     pre_agent = source.split("pre-agent-steps:\n", 1)[1].split("\npost-steps:\n", 1)[0]
     assert "community-issue-triage-aic-reservation" in pre_agent
-    assert "reserved + perRun > daily" in pre_agent
+    assert "reserved + reservedPerRun > daily" in pre_agent
     assert "listArtifactsForRepo" in pre_agent
     assert "getWorkflowRun" in pre_agent
     assert 'core.setOutput("allowed", "false")' in pre_agent
@@ -1126,9 +1245,44 @@ def test_daily_budget_is_reserved_before_inference_and_usage_is_uploaded_before_
     assert "usage_accounting" not in source
 
 
-def _aic_artifact(run_id: int, created_at: str, *, expired: bool = False) -> dict[str, object]:
+def test_privacy_safe_observation_job_records_durable_outcomes_without_write_permissions():
+    source = WORKFLOW.read_text()
+    compiled = LOCK.read_text()
+    for workflow in (source, compiled):
+        matched = re.search(
+            r"(?ms)^  observation:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+            workflow,
+        )
+        assert matched is not None
+        observation = matched.group("body")
+        assert "permissions: {}" in observation
+        assert "always()" in observation
+        assert "needs.intake_gate.result != 'skipped'" in observation
+        assert "needs.agent.outputs.aic" in observation
+        assert "needs.agent.result" in observation
+        assert "needs.safe_outputs.result" in observation
+        assert "GITHUB_STEP_SUMMARY" in observation
+        for forbidden in (
+            "github-token",
+            "issues: write",
+            "TARGET_TITLE",
+            "TARGET_BODY",
+            "TARGET_COMMENTS",
+            "TRIGGER_JSON",
+            "receipt",
+        ):
+            assert forbidden not in observation
+
+
+def _aic_artifact(
+    run_id: int,
+    created_at: str,
+    *,
+    expired: bool = False,
+    name: str = "community-issue-triage-aic-reservation-v2",
+) -> dict[str, object]:
     return {
-        "name": "community-issue-triage-aic-reservation",
+        "name": name,
         "created_at": created_at,
         "expired": expired,
         "workflow_run": {"id": run_id},
@@ -1146,16 +1300,16 @@ def _aic_artifact(run_id: int, created_at: str, *, expired: bool = False) -> dic
             1,
         ),
         (
-            [
-                _aic_artifact(90, "2027-01-15T07:00:00.000Z"),
-                _aic_artifact(91, "2027-01-15T06:00:00.000Z"),
-            ],
-            {
-                "90": {"id": 90, "workflow_id": 55},
-                "91": {"id": 91, "workflow_id": 55},
-            },
+            [_aic_artifact(run_id, "2027-01-15T07:00:00.000Z") for run_id in range(90, 95)],
+            {str(run_id): {"id": run_id, "workflow_id": 55} for run_id in range(90, 95)},
+            "true",
+            5,
+        ),
+        (
+            [_aic_artifact(run_id, "2027-01-15T07:00:00.000Z") for run_id in range(90, 96)],
+            {str(run_id): {"id": run_id, "workflow_id": 55} for run_id in range(90, 96)},
             "false",
-            2,
+            6,
         ),
         (
             [_aic_artifact(90, "2027-01-14T08:00:00.000Z")],
@@ -1195,8 +1349,10 @@ def test_daily_budget_executes_reservation_totals_cutoff_and_workflow_scope(
         assert observed["failures"] == []
         assert observed["reservation"] == {
             "actor": "community-member",
-            "credits": 75,
+            "credits": 25,
+            "max_ai_credits": 75,
             "run_id": "100",
+            "version": 2,
             "workflow_id": "55",
         }
         prior_calls = [call for call in observed["calls"] if call["operation"] == "getWorkflowRun"]
@@ -1257,6 +1413,28 @@ def test_daily_budget_executes_duplicate_expired_overflow_malformed_and_api_fail
         }
     ]
     assert observed["warnings"]
+
+
+def test_daily_budget_counts_live_legacy_reservations_at_their_original_75_credits(tmp_path: Path):
+    legacy_name = "community-issue-triage-aic-reservation"
+    artifacts = [
+        _aic_artifact(90, "2027-01-15T07:00:00.000Z", name=legacy_name),
+        _aic_artifact(91, "2027-01-15T06:00:00.000Z", name=legacy_name),
+    ]
+    _, observed = _run_github_script(
+        "Reserve the conservative daily AI credit budget",
+        {
+            "repoArtifactsByName": {legacy_name: artifacts},
+            "workflowRunsById": {
+                "90": {"id": 90, "workflow_id": 55},
+                "91": {"id": 91, "workflow_id": 55},
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == "false"
+    assert any("blocked at 150/150" in notice for notice in observed["notices"])
 
 
 def test_snapshot_job_outputs_only_artifact_id_and_digests():
@@ -1462,6 +1640,54 @@ def test_timeline_pagination_proves_the_100_event_bound():
     overflow = _run_contract(payload)
     assert overflow.returncode != 0
     assert "timeline event count exceeds" in overflow.stderr
+
+
+def test_timeline_event_ids_are_opaque_decimal_identifiers_not_javascript_safe_integers():
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    comments = [_bot_comment(1, INITIAL_MARKER)]
+    payload = _snapshot_payload(comments=comments)
+    payload["issues"][str(TARGET_NUMBER)] = issue
+    payload["timelinePages"]["1"] = [
+        {
+            "id": None,
+            "event": "cross-referenced",
+            "created_at": "2026-05-10T15:15:00Z",
+            "actor": {"login": "community-member", "type": "User"},
+            "label": None,
+        },
+        _bot_needs_info_removal("18446744073709551615"),
+        _bot_needs_info_removal(2**53),
+    ]
+    result = _eligibility(
+        action="edited",
+        issue=issue,
+        comments=comments,
+        timeline_events=payload["timelinePages"]["1"],
+    )
+    assert result["continuation_count"] == 2
+    assert result["eligible"] is False
+    assert result["reason"] == "continuation limit reached"
+
+
+@pytest.mark.parametrize("event_id", [None, 0, -1, 1.5, "1e6", "not-an-id"])
+def test_relevant_needs_info_removal_requires_a_positive_decimal_identifier(event_id: object):
+    result = _run_contract(
+        {
+            "op": "eligibility",
+            "args": {
+                "eventName": "issues",
+                "action": "edited",
+                "actor": "community-member",
+                "issue": _issue(TARGET_NUMBER),
+                "eventComment": None,
+                "comments": [],
+                "timelineEvents": [_bot_needs_info_removal(event_id)],
+            },
+        }
+    )
+    assert result.returncode != 0
+    assert "relevant timeline event id" in result.stderr
 
 
 def test_invalid_comment_page_and_graphql_page_fail_closed():
@@ -1833,6 +2059,7 @@ def test_target_size_and_sensitive_content_are_handled_before_later_fetches(body
         "openvpn_configuration: |\n  ***REDACTED***",
         "openvpn_configuration: >\n  [REDACTED]",
         "openvpn_configuration:\nstatus: unavailable",
+        "Testing endpoints with an authenticated session:\n\n| Endpoint | Result |\n| --- | --- |",
     ],
 )
 def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
@@ -1840,6 +2067,14 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
     payload["issues"][str(TARGET_NUMBER)]["body"] = body
     created = _create_snapshot(payload)
     assert created["bundle"]["status"] == "complete"
+
+
+@pytest.mark.parametrize("body", ["password:\n  actual-secret", "token: |\n  abcdefghijklmnop"])
+def test_indented_multiline_credentials_still_fail_closed(body: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = body
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
 
 
 def test_comment_and_candidate_sensitive_variants_are_metadata_only_and_stop_at_scope():
@@ -2727,6 +2962,26 @@ def test_repository_evidence_is_verified_from_one_unique_immutable_file_match():
     assert "unique" in duplicate.stderr
 
 
+def test_repository_evidence_accepts_bounded_immutable_python_source():
+    bundle = _create_snapshot()["bundle"]
+    path = "packages/unifi-mcp-shared/src/unifi_mcp_shared/meta_tools.py"
+    quote = "The tool delegates controller access through the shared manager boundary."
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "repository_evidence", "path": path, "quote": quote},
+        label_intents=[],
+    )
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {"items": [{"type": "add_comment", "body": proposal}]},
+            "repositoryFiles": {path: quote},
+        }
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_candidate_summary_distinguishes_skipped_search_from_zero_results():
     skipped_bundle = _create_snapshot(
         _snapshot_payload(candidates=[_issue(225)], comments=[])
@@ -2816,6 +3071,21 @@ def test_repository_evidence_path_quote_and_secret_defenses_remain_strict():
             "kind": "repository_evidence",
             "path": "docs/permissions.md",
             "quote": "Contact reporter@\u200bexample.com for the private deployment details.",
+        },
+        {
+            "kind": "repository_evidence",
+            "path": ".github/scripts/community_issue_triage_contract.mjs",
+            "quote": "This hidden workflow path remains outside the public evidence allowlist.",
+        },
+        {
+            "kind": "repository_evidence",
+            "path": "packages/unifi-mcp-shared/tests/test_meta_tools.py",
+            "quote": "Test-only source is not an allowlisted public repository evidence path.",
+        },
+        {
+            "kind": "repository_evidence",
+            "path": "packages/unifi-mcp-shared/src/unifi_mcp_shared/tools_manifest.json",
+            "quote": "Generated artifacts are not accepted as public repository evidence.",
         },
     )
     for decision in invalid:

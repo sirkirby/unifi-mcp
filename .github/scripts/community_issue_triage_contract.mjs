@@ -110,7 +110,8 @@ const MISSING_INFORMATION_TEXT = new Map([
 ]);
 const REPOSITORY_EVIDENCE_PATHS = [
   /^(?:README|CONTRIBUTING|SECURITY)\.md$/,
-  /^(?:docs|apps|packages)\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
+  /^docs\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
+  /^(?:apps|packages)\/[A-Za-z0-9][A-Za-z0-9._-]*\/src\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.py$/,
 ];
 const COMMENT_FOOTER =
   "This is an automated first-pass triage; a maintainer will make final decisions.";
@@ -128,6 +129,18 @@ function exactKeys(value, expected) {
 function assertSafePositiveInteger(value, name) {
   if (!Number.isSafeInteger(value) || value < 1) fail(`${name} must be a positive safe integer`);
   return value;
+}
+
+function validateRelevantTimelineIdentifier(value) {
+  if (typeof value !== "string" && typeof value !== "number") {
+    fail("relevant timeline event id must be a positive decimal identifier");
+  }
+  if (typeof value === "number" && (!Number.isInteger(value) || value < 1)) {
+    fail("relevant timeline event id must be a positive decimal identifier");
+  }
+  if (!POSITIVE_INTEGER_STRING_PATTERN.test(String(value))) {
+    fail("relevant timeline event id must be a positive decimal identifier");
+  }
 }
 
 function normalizeRunId(value) {
@@ -334,10 +347,15 @@ function containsSensitiveContent(value) {
     .normalize("NFKC")
     .replace(/\p{Default_Ignorable_Code_Point}/gu, "");
   if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
+  // Inline key/value detectors may intentionally span horizontal whitespace, but a
+  // Markdown line or paragraph break after prose such as "authenticated session:" is
+  // not a credential assignment. Preserve deliberate indented config values while
+  // preventing inline detectors from consuming an unindented following line.
+  const inlinePatternInput = normalized.replace(/\r?\n(?![ \t])/g, "\n,\n");
   return (
     containsControllerAddress(normalized) ||
     containsSensitiveConfigurationBlob(normalized) ||
-    SENSITIVE_PATTERNS.some((pattern) => pattern.test(normalized))
+    SENSITIVE_PATTERNS.some((pattern) => pattern.test(inlinePatternInput))
   );
 }
 
@@ -389,17 +407,24 @@ export function normalizeComment(raw) {
 
 export function normalizeTimelineEvent(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("GitHub returned an invalid issue timeline event");
-  const id = assertSafePositiveInteger(raw.id, "timeline event id");
   const event = normalizeNullableText(raw.event).toLowerCase();
   if (event === "") fail("timeline event type is invalid");
+  const label = raw.label === null || raw.label === undefined
+    ? null
+    : normalizeNullableText(typeof raw.label === "string" ? raw.label : raw.label?.name);
+  const actor = normalizeAuthor(raw.actor);
+  // GitHub returns null IDs for some cross-reference events and may return numeric
+  // IDs beyond JavaScript's safe-integer range. Only trusted bot needs-info removals
+  // affect the continuation count, so validate their IDs as opaque decimals.
+  const relevantNeedsInfoRemoval =
+    event === "unlabeled" && label === "needs-info" && actor === ACTIONS_BOT;
+  if (relevantNeedsInfoRemoval) validateRelevantTimelineIdentifier(raw.id);
   return {
-    id,
+    id: relevantNeedsInfoRemoval ? String(raw.id) : null,
     event,
     created_at: normalizeNullableText(raw.created_at),
-    actor: normalizeAuthor(raw.actor),
-    label: raw.label === null || raw.label === undefined
-      ? null
-      : normalizeNullableText(typeof raw.label === "string" ? raw.label : raw.label?.name),
+    actor,
+    label,
   };
 }
 
@@ -428,7 +453,9 @@ export function evaluateIntakeEligibility({
   if (!Array.isArray(comments) || comments.length > MAX_TARGET_COMMENTS) fail("eligibility comments exceed the trusted bound");
   if (!Array.isArray(timelineEvents) || timelineEvents.length > MAX_TIMELINE_EVENTS) fail("eligibility timeline events exceed the trusted bound");
   const normalizedComments = comments.map(normalizeComment).sort((left, right) => left.id - right.id);
-  const normalizedTimelineEvents = timelineEvents.map(normalizeTimelineEvent).sort((left, right) => left.id - right.id);
+  // Timeline IDs are opaque and may be null or exceed JavaScript's safe-integer
+  // range. Eligibility depends only on trusted event type, actor, label, and time.
+  const normalizedTimelineEvents = timelineEvents.map(normalizeTimelineEvent);
   const triggerComment = eventComment === null ? null : normalizeComment(eventComment);
   const initialMarkerComments = normalizedComments.filter(
     (comment) => comment.author === ACTIONS_BOT && comment.body.includes(INITIAL_MARKER),
@@ -597,7 +624,7 @@ async function fetchBoundedTimelineEvents(github, owner, repo, issueNumber) {
     if (!Array.isArray(overflow?.data)) fail("GitHub returned an invalid issue timeline event overflow response");
     if (overflow.data.length > 0) fail("target timeline event count exceeds the trusted bound");
   }
-  return events.sort((left, right) => left.id - right.id);
+  return events;
 }
 
 async function scanCandidates(github, owner, repo, target) {

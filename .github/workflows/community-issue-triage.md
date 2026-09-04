@@ -246,6 +246,13 @@ jobs:
                 throw new Error("GitHub returned an invalid workflow run ID");
               }
               if (runId === currentRunId) continue;
+              const runActor = run.actor?.login;
+              if (typeof runActor !== "string" || runActor === "") {
+                throw new Error("GitHub returned an invalid workflow run actor");
+              }
+              // The Actions endpoint has returned mixed actors even when the actor
+              // filter was supplied. Bind the reporter window ourselves.
+              if (runActor.toLowerCase() !== actor.toLowerCase()) continue;
               const createdAt = Date.parse(run.created_at || "");
               if (!Number.isFinite(createdAt)) {
                 throw new Error("GitHub returned an invalid workflow run timestamp");
@@ -404,10 +411,42 @@ jobs:
       actions: read
       contents: read
   conclusion:
-    # gh-aw v0.87.4 emits issue-write-capable noop/failure handlers even when
+    # gh-aw emits issue-write-capable noop/failure handlers even when
     # reporting is disabled. Keep that compiler-owned path unreachable; the agent
     # post-steps record actual usage without giving a reporting job write authority.
     if: ${{ false }}
+  observation:
+    name: Triage observation
+    needs: [intake_gate, qualifying_rate_gate, trusted_issue_snapshot, agent, safe_outputs]
+    if: ${{ always() && needs.intake_gate.result != 'skipped' }}
+    runs-on: ubuntu-slim
+    permissions: {}
+    steps:
+      - name: Record privacy-safe triage outcome
+        env:
+          TARGET_NUMBER: ${{ needs.intake_gate.outputs.target_number }}
+          RUN_KIND: ${{ needs.intake_gate.outputs.run_kind }}
+          INTAKE_RESULT: ${{ needs.intake_gate.result }}
+          RATE_ALLOWED: ${{ needs.qualifying_rate_gate.outputs.allowed }}
+          AGENT_RESULT: ${{ needs.agent.result }}
+          SAFE_OUTPUT_RESULT: ${{ needs.safe_outputs.result }}
+          SAFE_OUTPUT_STATUS: ${{ needs.safe_outputs.outputs.process_safe_outputs_status }}
+          SAFE_OUTPUT_ITEMS_APPLIED: ${{ needs.safe_outputs.outputs.process_safe_outputs_items_applied }}
+          AI_CREDITS: ${{ needs.agent.outputs.aic }}
+        run: |
+          {
+            echo "## Community issue triage observation"
+            echo
+            echo "- Target: issue #${TARGET_NUMBER:-unavailable}"
+            echo "- Run kind: ${RUN_KIND:-unavailable}"
+            echo "- Intake job: ${INTAKE_RESULT:-unavailable}"
+            echo "- Reporter rate gate allowed: ${RATE_ALLOWED:-unavailable}"
+            echo "- Agent job: ${AGENT_RESULT:-unavailable}"
+            echo "- Safe-output job: ${SAFE_OUTPUT_RESULT:-unavailable}"
+            echo "- Safe-output status: ${SAFE_OUTPUT_STATUS:-unavailable}"
+            echo "- Safe-output items applied: ${SAFE_OUTPUT_ITEMS_APPLIED:-unavailable}"
+            echo "- AI credits: ${AI_CREDITS:-unavailable}"
+          } >> "${GITHUB_STEP_SUMMARY}"
   safe_outputs:
     needs: [intake_gate, qualifying_rate_gate, trusted_issue_snapshot]
     if: ${{ needs.intake_gate.outputs.eligible == 'true' && needs.qualifying_rate_gate.outputs.allowed == 'true' && needs.agent.result == 'success' }}
@@ -419,7 +458,7 @@ jobs:
       - name: Require the current run's committed AI credit reservation
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: community-issue-triage-aic-reservation
+          name: community-issue-triage-aic-reservation-v2
           path: ${{ runner.temp }}/triage-aic-reservation
       - name: Check out the immutable validator source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -492,7 +531,10 @@ pre-agent-steps:
     uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
     env:
       GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
-      RESERVATION_NAME: community-issue-triage-aic-reservation
+      RESERVATION_NAME: community-issue-triage-aic-reservation-v2
+      LEGACY_RESERVATION_NAME: community-issue-triage-aic-reservation
+      RESERVED_AI_CREDITS: "25"
+      LEGACY_RESERVED_AI_CREDITS: "75"
       MAX_AI_CREDITS: "75"
       MAX_DAILY_AI_CREDITS: "150"
     with:
@@ -516,12 +558,19 @@ pre-agent-steps:
 
         core.setOutput("allowed", "false");
         const reservationName = process.env.RESERVATION_NAME;
-        const perRun = Number(process.env.MAX_AI_CREDITS);
+        const legacyReservationName = process.env.LEGACY_RESERVATION_NAME;
+        const reservedPerRun = Number(process.env.RESERVED_AI_CREDITS);
+        const legacyReservedPerRun = Number(process.env.LEGACY_RESERVED_AI_CREDITS);
+        const maxPerRun = Number(process.env.MAX_AI_CREDITS);
         const daily = Number(process.env.MAX_DAILY_AI_CREDITS);
         if (
           typeof reservationName !== "string" || reservationName === "" ||
-          !Number.isFinite(perRun) || perRun <= 0 ||
-          !Number.isFinite(daily) || daily < perRun
+          typeof legacyReservationName !== "string" || legacyReservationName === "" ||
+          reservationName === legacyReservationName ||
+          !Number.isFinite(reservedPerRun) || reservedPerRun <= 0 ||
+          !Number.isFinite(legacyReservedPerRun) || legacyReservedPerRun <= 0 ||
+          !Number.isFinite(maxPerRun) || maxPerRun < reservedPerRun ||
+          !Number.isFinite(daily) || daily < maxPerRun
         ) {
           block("The daily AI credit reservation configuration is invalid; no public action was taken.");
           return;
@@ -537,55 +586,60 @@ pre-agent-steps:
           if (!Number.isSafeInteger(workflowId) || workflowId < 1) {
             throw new Error("current workflow ID is invalid");
           }
-          const response = await github.rest.actions.listArtifactsForRepo({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            name: reservationName,
-            per_page: 100,
-            page: 1,
-          });
-          const totalCount = Number(response.data?.total_count);
-          const artifacts = response.data?.artifacts;
-          if (
-            !Array.isArray(artifacts) ||
-            !Number.isSafeInteger(totalCount) ||
-            totalCount < 0 ||
-            totalCount > 100 ||
-            artifacts.length !== totalCount
-          ) {
-            throw new Error("daily reservation artifact history exceeds the trusted bound");
-          }
-
           const cutoff = Date.now() - 24 * 60 * 60 * 1000;
           const reservedRunIds = new Set();
           let reserved = 0;
-          for (const artifact of artifacts) {
-            if (artifact?.name !== reservationName) {
-              throw new Error("GitHub returned an unexpected reservation artifact name");
-            }
-            const createdAt = Date.parse(artifact.created_at || "");
-            if (!Number.isFinite(createdAt)) {
-              throw new Error("GitHub returned an invalid reservation timestamp");
-            }
-            if (createdAt < cutoff) continue;
-            if (artifact.expired) {
-              throw new Error("a current-window reservation artifact is unexpectedly expired");
-            }
-            const runId = Number(artifact.workflow_run?.id);
-            if (!Number.isSafeInteger(runId) || runId < 1 || reservedRunIds.has(runId)) {
-              throw new Error("reservation workflow provenance is invalid or duplicated");
-            }
-            const run = await github.rest.actions.getWorkflowRun({
+          const reservationKinds = [
+            {name: reservationName, credits: reservedPerRun},
+            {name: legacyReservationName, credits: legacyReservedPerRun},
+          ];
+          for (const reservationKind of reservationKinds) {
+            const response = await github.rest.actions.listArtifactsForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              run_id: runId,
+              name: reservationKind.name,
+              per_page: 100,
+              page: 1,
             });
-            if (Number(run.data?.workflow_id) !== workflowId) continue;
-            reservedRunIds.add(runId);
-            reserved += perRun;
+            const totalCount = Number(response.data?.total_count);
+            const artifacts = response.data?.artifacts;
+            if (
+              !Array.isArray(artifacts) ||
+              !Number.isSafeInteger(totalCount) ||
+              totalCount < 0 ||
+              totalCount > 100 ||
+              artifacts.length !== totalCount
+            ) {
+              throw new Error("daily reservation artifact history exceeds the trusted bound");
+            }
+            for (const artifact of artifacts) {
+              if (artifact?.name !== reservationKind.name) {
+                throw new Error("GitHub returned an unexpected reservation artifact name");
+              }
+              const createdAt = Date.parse(artifact.created_at || "");
+              if (!Number.isFinite(createdAt)) {
+                throw new Error("GitHub returned an invalid reservation timestamp");
+              }
+              if (createdAt < cutoff) continue;
+              if (artifact.expired) {
+                throw new Error("a current-window reservation artifact is unexpectedly expired");
+              }
+              const runId = Number(artifact.workflow_run?.id);
+              if (!Number.isSafeInteger(runId) || runId < 1 || reservedRunIds.has(runId)) {
+                throw new Error("reservation workflow provenance is invalid or duplicated");
+              }
+              const run = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: runId,
+              });
+              if (Number(run.data?.workflow_id) !== workflowId) continue;
+              reservedRunIds.add(runId);
+              reserved += reservationKind.credits;
+            }
           }
 
-          if (reserved + perRun > daily) {
+          if (reserved + reservedPerRun > daily) {
             block("The conservative daily AI credit budget is exhausted; no public action was taken.");
             core.notice(`Daily AI credit reservation blocked at ${reserved}/${daily}.`);
             return;
@@ -597,8 +651,10 @@ pre-agent-steps:
             path.join(directory, "reservation.json"),
             JSON.stringify({
               actor: process.env.GITHUB_ACTOR,
-              credits: perRun,
+              credits: reservedPerRun,
+              max_ai_credits: maxPerRun,
               run_id: String(context.runId),
+              version: 2,
               workflow_id: String(workflowId),
             }),
             {encoding: "utf8", mode: 0o600},
@@ -613,7 +669,7 @@ pre-agent-steps:
     if: ${{ steps.reserve_daily_budget.outputs.allowed == 'true' }}
     uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
     with:
-      name: community-issue-triage-aic-reservation
+      name: community-issue-triage-aic-reservation-v2
       path: ${{ runner.temp }}/triage-aic-reservation/reservation.json
       if-no-files-found: error
       retention-days: 2
@@ -1127,9 +1183,10 @@ For every normal initial or incomplete-continuation proposal:
   `controller_version`, `sanitized_error`, `reproduction_steps`, `expected_actual`, and
   `live_controller_evidence`.
 - Repository evidence must come from the immutable local source and use `README.md`,
-  `CONTRIBUTING.md`, `SECURITY.md`, or a Markdown file under `docs/`, `apps/`, or
-  `packages/`. Copy one unique exact quote of 20 to 600 safe characters. Trusted code
-  independently fetches it at `GITHUB_SHA` and rejects any mismatch.
+  `CONTRIBUTING.md`, `SECURITY.md`, a Markdown file under `docs/`, or a Python source
+  file under an `apps/*/src/` or `packages/*/src/` tree. Copy one unique exact quote of
+  20 to 600 safe characters. Trusted code independently fetches it at `GITHUB_SHA` and
+  rejects any mismatch.
 - Never propose `triage-reviewed`, `duplicate`, `security`, closure, assignment, priority,
   approval, merge, branch, or pull-request actions.
 - If artifact or repository evidence cannot support a truthful result, emit no safe output
