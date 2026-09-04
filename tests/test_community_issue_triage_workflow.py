@@ -1707,6 +1707,28 @@ def test_relevant_needs_info_removal_requires_a_positive_decimal_identifier(even
     assert "relevant timeline event id" in result.stderr
 
 
+@pytest.mark.parametrize("actor", [None, {}, {"login": ""}])
+def test_needs_info_removal_requires_a_nonempty_actor(actor: object):
+    event = _bot_needs_info_removal(1)
+    event["actor"] = actor
+    result = _run_contract(
+        {
+            "op": "eligibility",
+            "args": {
+                "eventName": "issues",
+                "action": "edited",
+                "actor": "community-member",
+                "issue": _issue(TARGET_NUMBER),
+                "eventComment": None,
+                "comments": [],
+                "timelineEvents": [event],
+            },
+        }
+    )
+    assert result.returncode != 0
+    assert "timeline event actor is invalid" in result.stderr
+
+
 def test_invalid_comment_page_and_graphql_page_fail_closed():
     invalid_comments = _snapshot_payload()
     invalid_comments["commentPages"] = {"1": "INVALID"}
@@ -2202,6 +2224,10 @@ def test_multiline_credentials_still_fail_closed(body: str):
         "password: |\n  [REDACTED]",
         "password: >-\n  [REDACTED]",
         "password:\nTransport: stdio",
+        "password: [REDACTED]\ntoken: [REDACTED]",
+        "password:\n[REDACTED]\ntoken: [REDACTED]",
+        "password: [REDACTED]\n### **Steps to reproduce**\n1. Start",
+        "password: [REDACTED]\n[Transport](https://example.com): stdio",
         "session:\n\nnull",
         "authorization:\n\nunset",
         "password:\n\nField | Value\n--- | ---\nPassword | [REDACTED]",

@@ -523,9 +523,10 @@ function parseSensitiveLabelLine(line) {
 function isSafeStructuralBoundary(line) {
   const normalized = normalizeMarkdownContentLine(line);
   const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
-  if (heading) return SAFE_STRUCTURAL_LABEL_PATTERN.test(heading[1].trim());
-  const field = normalized.match(/^["']?([A-Za-z][A-Za-z0-9 _-]{0,80})["']?[ \t]*:/u);
-  return Boolean(field && SAFE_STRUCTURAL_LABEL_PATTERN.test(field[1].trim()));
+  if (heading) return SAFE_STRUCTURAL_LABEL_PATTERN.test(normalizeMarkdownTableLabel(heading[1]));
+  const field = splitMarkdownField(normalized);
+  const fieldLabel = field ? normalizeMarkdownTableLabel(field[0].replace(/^["']|["']$/gu, "")) : "";
+  return Boolean(field && SAFE_STRUCTURAL_LABEL_PATTERN.test(fieldLabel));
 }
 
 function containsSensitiveMultilineValue(value) {
@@ -540,6 +541,7 @@ function containsSensitiveMultilineValue(value) {
       for (let continuationIndex = index + 1; continuationIndex < lines.length; continuationIndex += 1) {
         const continuation = lines[continuationIndex];
         if (continuation.trim() === "") continue;
+        if (parseSensitiveLabelLine(continuation)) break;
         if (isSafeStructuralBoundary(continuation)) break;
         if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(continuation))) return true;
       }
@@ -570,11 +572,12 @@ function containsSensitiveMultilineValue(value) {
       continue;
     }
 
-    if (isSafeStructuralBoundary(lines[valueIndex])) continue;
+    if (parseSensitiveLabelLine(lines[valueIndex]) || isSafeStructuralBoundary(lines[valueIndex])) continue;
     if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(lines[valueIndex]))) return true;
     for (let continuationIndex = valueIndex + 1; continuationIndex < lines.length; continuationIndex += 1) {
       const continuation = lines[continuationIndex];
       if (continuation.trim() === "") continue;
+      if (parseSensitiveLabelLine(continuation)) break;
       if (isSafeStructuralBoundary(continuation)) break;
       if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(continuation))) return true;
     }
@@ -660,8 +663,9 @@ export function normalizeTimelineEvent(raw) {
   // GitHub returns null IDs for some cross-reference events and may return numeric
   // IDs beyond JavaScript's safe-integer range. Only trusted bot needs-info removals
   // affect the continuation count, so validate their IDs as opaque decimals.
-  const relevantNeedsInfoRemoval =
-    event === "unlabeled" && label === "needs-info" && actor === ACTIONS_BOT;
+  const candidateNeedsInfoRemoval = event === "unlabeled" && label === "needs-info";
+  if (candidateNeedsInfoRemoval && !actor) fail("needs-info removal timeline event actor is invalid");
+  const relevantNeedsInfoRemoval = candidateNeedsInfoRemoval && actor === ACTIONS_BOT;
   if (relevantNeedsInfoRemoval) validateRelevantTimelineIdentifier(raw.id);
   return {
     id: relevantNeedsInfoRemoval ? String(raw.id) : null,
