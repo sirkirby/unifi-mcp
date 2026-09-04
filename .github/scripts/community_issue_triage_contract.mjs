@@ -402,9 +402,12 @@ function decodeHtmlCharacterReferences(value) {
     ["lt", "<"],
     ["nbsp", " "],
     ["quot", '"'],
+    ["zerowidthspace", "\u200b"],
+    ["zwnj", "\u200c"],
+    ["zwj", "\u200d"],
   ]);
   return value
-    .replace(/&#(?:x([0-9a-f]{1,6})(?![0-9a-f])|([0-9]{1,7})(?![0-9]));?/giu, (match, hex, decimal) => {
+    .replace(/&#(?:x(0*[0-9a-f]{1,6})(?![0-9a-f])|(0*[0-9]{1,7})(?![0-9]));?/giu, (match, hex, decimal) => {
       const codePoint = Number.parseInt(hex || decimal, hex ? 16 : 10);
       return Number.isSafeInteger(codePoint) && codePoint > 0 && codePoint <= 0x10ffff &&
         !(codePoint >= 0xd800 && codePoint <= 0xdfff)
@@ -414,11 +417,42 @@ function decodeHtmlCharacterReferences(value) {
     .replace(/&([a-z]+);/giu, (match, name) => named.get(name.toLocaleLowerCase("en-US")) || match);
 }
 
+function stripInlineHtmlMarkup(value) {
+  let result = "";
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.startsWith("<!--", index)) {
+      const commentEnd = value.indexOf("-->", index + 4);
+      if (commentEnd !== -1) {
+        index = commentEnd + 2;
+        continue;
+      }
+    }
+    if (value[index] === "<" && /^<\/?[A-Za-z]/u.test(value.slice(index))) {
+      let quote = null;
+      let tagEnd = -1;
+      for (let candidate = index + 1; candidate < value.length; candidate += 1) {
+        const character = value[candidate];
+        if (quote !== null) {
+          if (character === quote) quote = null;
+        } else if (character === '"' || character === "'") {
+          quote = character;
+        } else if (character === ">") {
+          tagEnd = candidate;
+          break;
+        }
+      }
+      if (tagEnd !== -1) {
+        index = tagEnd;
+        continue;
+      }
+    }
+    result += value[index];
+  }
+  return result;
+}
+
 function normalizeMarkdownTableLabel(cell) {
-  let label = decodeHtmlCharacterReferences(cell)
-    .replace(/<!--[^\r\n]*?-->/gu, "")
-    .replace(/<\/?[A-Za-z][^<>\r\n]*>/gu, "")
-    .trim();
+  let label = stripInlineHtmlMarkup(decodeHtmlCharacterReferences(cell)).trim();
   let previous = "";
   while (label !== previous) {
     previous = label;
@@ -505,11 +539,6 @@ function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referen
     if (!cells) throw new Error("Markdown table boundary invariant failed");
     const nextIsSeparator = rowIndex + 1 < endIndex && isMarkdownTableSeparator(lines[rowIndex + 1]);
     const candidateSensitiveColumns = nextIsSeparator ? sensitiveMarkdownTableColumns(cells) : new Set();
-    if (nextIsSeparator && candidateSensitiveColumns.size > 0) {
-      sensitiveColumns = candidateSensitiveColumns;
-      rowIndex += 1;
-      continue;
-    }
     if (isMarkdownTableSeparator(lines[rowIndex])) continue;
     for (const cellIndex of sensitiveColumns) {
       const candidateValue = stripMarkdownWrappers(cells[cellIndex] || "");
@@ -561,11 +590,12 @@ function normalizeMarkdownContentLine(line) {
 }
 
 function splitMarkdownField(line) {
+  const normalizedLine = stripInlineHtmlMarkup(line);
   let bracketDepth = 0;
   let parenthesisDepth = 0;
   let escaped = false;
-  for (let index = 0; index < line.length; index += 1) {
-    const character = line[index];
+  for (let index = 0; index < normalizedLine.length; index += 1) {
+    const character = normalizedLine[index];
     if (escaped) {
       escaped = false;
       continue;
@@ -579,7 +609,7 @@ function splitMarkdownField(line) {
     else if (character === "(" && bracketDepth === 0) parenthesisDepth += 1;
     else if (character === ")" && bracketDepth === 0 && parenthesisDepth > 0) parenthesisDepth -= 1;
     else if ((character === ":" || character === "=") && bracketDepth === 0 && parenthesisDepth === 0) {
-      return [line.slice(0, index).trim(), line.slice(index + 1).trim()];
+      return [normalizedLine.slice(0, index).trim(), normalizedLine.slice(index + 1).trim()];
     }
   }
   return null;
@@ -687,9 +717,10 @@ function containsSensitiveMultilineValue(value) {
 }
 
 function containsSensitiveContent(value) {
-  const normalized = decodeHtmlCharacterReferences(
-    value.normalize("NFKC").replace(/\p{Default_Ignorable_Code_Point}/gu, ""),
-  ).replace(/\\+([:=])/gu, "$1");
+  const normalized = decodeHtmlCharacterReferences(value)
+    .normalize("NFKC")
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
+    .replace(/\\+([:=])/gu, "$1");
   if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
   // Inline key/value detectors may intentionally span horizontal whitespace, but a
   // Markdown line or paragraph break after prose such as "authenticated session:" is
