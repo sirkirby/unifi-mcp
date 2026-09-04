@@ -359,11 +359,16 @@ async def update_autobackup_settings(
         return {"success": False, "error": "No valid fields to update after validation."}
 
     if not confirm:
+        try:
+            current = await system_manager.get_autobackup_settings()
+        except Exception as e:
+            logger.error("Error preparing auto-backup settings preview: %s", e, exc_info=True)
+            return {"success": False, "error": f"Failed to prepare auto-backup settings preview: {e}"}
         return update_preview(
             resource_type="autobackup_settings",
             resource_id="super_mgmt",
             resource_name="Auto-Backup Settings",
-            current_state={},
+            current_state=current,
             updates=validated_data,
         )
 
