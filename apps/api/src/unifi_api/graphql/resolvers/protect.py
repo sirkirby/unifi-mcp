@@ -442,14 +442,28 @@ async def _fetch_alarm_profiles(ctx: GraphQLContext, controller: str) -> Any:
                 session,
                 controller,
                 "protect",
-                "alarm_manager",
+                "alarm_facade",
             )
             await ctx.manager_factory.get_connection_manager(
                 session,
                 controller,
                 "protect",
             )
-            return await mgr.list_arm_profiles()
+            profiles, complete = await mgr.list_profiles()
+            return {
+                "profiles": profiles,
+                "count": len(profiles),
+                "complete": complete,
+                "coverage_notice": (
+                    None
+                    if complete
+                    else (
+                        "Showing legacy Protect arm profiles: the UniFi-OS Alarm Manager "
+                        "(/api/v2/alarms) returned no profiles or is unavailable on this console, "
+                        "so v2-only profile fields such as state and state_set_at are not included."
+                    )
+                ),
+            }
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -1223,7 +1237,12 @@ class ProtectQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description="List configured alarm profiles ({profiles, count}).",
+        description=(
+            "List configured alarm profiles ({profiles, count, complete, coverageNotice}), including each "
+            "profile's state and state_set_at timestamp. Alarm Manager v2 profile "
+            "IDs are scoped to this read family; use arm_compatible to determine "
+            "whether a profile can be passed to legacy arm actions."
+        ),
     )
     async def alarm_profiles(
         self,

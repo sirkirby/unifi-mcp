@@ -181,7 +181,7 @@ Controls the UniFi Protect Alarm Manager (Protect 6.1+). Requires arm profiles c
 |------|------|-------------|
 | `protect_alarm_get_rule` | Read | Fetches a single UniFi Protect alarm rule by id (normalized: id, title, enabled, triggers, actions, scope, stats), including AI-powered a... |
 | `protect_alarm_get_status` | Read | Returns the current armed/disarmed state of the UniFi Protect Alarm Manager, including the active profile, raw status string, armed-at ti... |
-| `protect_alarm_list_profiles` | Read | Lists all configured UniFi Protect Alarm Manager profiles with their id, name, activation delay, schedule count, and automation count. |
+| `protect_alarm_list_profiles` | Read | Lists all configured UniFi Protect Alarm Manager profiles with their id, name, state, state_set_at timestamp, activation delay, schedule ... |
 | `protect_alarm_list_rules` | Read | Lists every UniFi Protect alarm rule, including AI-powered alarms (e.g. |
 | `protect_alarm_arm` | Mutate | Arms the UniFi Protect Alarm Manager. |
 | `protect_alarm_create_rule` | Mutate | Creates a new alarm rule via POST. |

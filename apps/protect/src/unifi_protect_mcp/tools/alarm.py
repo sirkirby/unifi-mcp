@@ -45,11 +45,18 @@ _ALARM_COVERAGE_NOTICE = (
     "returned no rules or is unavailable on this console, so AI-powered alarms "
     "(where supported) are not included."
 )
+_ALARM_PROFILE_COVERAGE_NOTICE = (
+    "Showing legacy Protect arm profiles: the UniFi-OS Alarm Manager "
+    "(/api/v2/alarms) returned no profiles or is unavailable on this console, "
+    "so v2-only profile fields such as state and state_set_at are not included."
+)
 
 
-def _with_alarm_coverage_meta(result: Dict[str, Any], complete: bool) -> Dict[str, Any]:
+def _with_alarm_coverage_meta(
+    result: Dict[str, Any], complete: bool, notice: str = _ALARM_COVERAGE_NOTICE
+) -> Dict[str, Any]:
     if not complete:
-        result["_meta"] = {_ALARM_COVERAGE_META: {"complete": False, "reason": _ALARM_COVERAGE_NOTICE}}
+        result["_meta"] = {_ALARM_COVERAGE_META: {"complete": False, "reason": notice}}
     return result
 
 
@@ -57,9 +64,13 @@ def _with_alarm_coverage_meta(result: Dict[str, Any], complete: bool) -> Dict[st
     name="protect_alarm_list_profiles",
     description=(
         "Lists all configured UniFi Protect Alarm Manager profiles with their id, "
-        "name, activation delay, schedule count, and automation count. Use this "
-        "to discover the arm profile id needed by protect_alarm_arm. Requires Protect "
-        "6.1+ with Alarm Manager configured in the web UI."
+        "name, state, state_set_at timestamp, activation delay, schedule count, "
+        "automation count, id_family, and arm_compatible flag. Alarm Manager v2 "
+        "profile IDs are scoped to this "
+        "read family and are not accepted by protect_alarm_arm; only profiles marked "
+        "arm_compatible can be used with that legacy arm action. Requires Protect "
+        "6.1+ with Alarm Manager configured in the web UI. Legacy fallback responses "
+        "include _meta with complete=false because v2-only fields are unavailable."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -67,16 +78,20 @@ async def protect_alarm_list_profiles() -> Dict[str, Any]:
     """List all arm profiles."""
     logger.info("protect_alarm_list_profiles tool called")
     try:
-        profiles = await alarm_manager.list_arm_profiles()
+        profiles, complete = await alarm_facade.list_profiles()
         raw = {"profiles": profiles, "count": len(profiles)}
         shaped_list = profile_list_from_controller(raw)
         shaped_profiles = [
             profile_from_controller(p).model_dump(exclude_none=True) for p in (shaped_list.profiles or [])
         ]
-        return {
-            "success": True,
-            "data": {**shaped_list.model_dump(exclude_none=True), "profiles": shaped_profiles},
-        }
+        return _with_alarm_coverage_meta(
+            {
+                "success": True,
+                "data": {**shaped_list.model_dump(exclude_none=True), "profiles": shaped_profiles},
+            },
+            complete,
+            _ALARM_PROFILE_COVERAGE_NOTICE,
+        )
     except Exception as e:
         logger.error("Error listing arm profiles: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list arm profiles: {e}"}
@@ -125,7 +140,8 @@ async def protect_alarm_arm(
         Optional[str],
         Field(
             description=(
-                "Arm profile UUID from protect_alarm_list_profiles. Omit to use the currently selected profile."
+                "Legacy Protect arm profile id. Do not pass Alarm Manager v2 UUIDs "
+                "from protect_alarm_list_profiles; omit to use the currently selected legacy profile."
             )
         ),
     ] = None,

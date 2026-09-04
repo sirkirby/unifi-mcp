@@ -575,6 +575,27 @@ def _alarm_facade_result(result: Any, _args: dict[str, Any], _manager: Any) -> d
     return out
 
 
+def _alarm_profile_list_result(result: Any, _args: dict[str, Any], _manager: Any) -> dict[str, Any]:
+    if not (
+        isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], list) and isinstance(result[1], bool)
+    ):
+        raise ValueError("Alarm facade returned an invalid profile list result")
+    profiles, complete = result
+    out: dict[str, Any] = {"profiles": profiles, "count": len(profiles)}
+    if not complete:
+        out["_meta"] = {
+            "com.github.sirkirby.unifi-mcp/alarm-coverage": {
+                "complete": False,
+                "reason": (
+                    "Showing legacy Protect arm profiles: the UniFi-OS Alarm Manager "
+                    "(/api/v2/alarms) returned no profiles or is unavailable on this console, "
+                    "so v2-only profile fields such as state and state_set_at are not included."
+                ),
+            }
+        }
+    return out
+
+
 def _delete_recording_result(result: Any, _args: dict[str, Any], _manager: Any) -> Any:
     if isinstance(result, dict) and result.get("supported") is False:
         raise ValueError(str(result.get("message") or "Individual recording deletion is not supported"))
@@ -1476,6 +1497,7 @@ DISPATCH_DIRECT_RESULT_ADAPTERS: dict[str, DirectResultAdapter] = {
 DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
     "protect_get_snapshot": _snapshot_result,
     "protect_recent_events": _recent_events_result,
+    "protect_alarm_list_profiles": _alarm_profile_list_result,
     "protect_alarm_create_rule": _alarm_facade_result,
     "protect_alarm_update_rule": _alarm_facade_result,
     "protect_alarm_delete_rule": _alarm_facade_result,

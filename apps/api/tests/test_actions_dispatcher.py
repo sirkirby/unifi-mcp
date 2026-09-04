@@ -3541,6 +3541,17 @@ def test_alarm_facade_result_adapter_unwraps_result_and_preserves_coverage() -> 
     assert fallback["_meta"]["com.github.sirkirby.unifi-mcp/alarm-coverage"]["complete"] is False
 
 
+def test_alarm_profile_result_adapter_preserves_incomplete_empty_fallback() -> None:
+    adapter = DISPATCH_RESULT_ADAPTERS["protect_alarm_list_profiles"]
+
+    assert adapter(([], True), {}, MagicMock()) == {"profiles": [], "count": 0}
+    fallback = adapter(([], False), {}, MagicMock())
+
+    assert fallback["profiles"] == []
+    assert fallback["count"] == 0
+    assert fallback["_meta"]["com.github.sirkirby.unifi-mcp/alarm-coverage"]["complete"] is False
+
+
 def test_delete_recording_result_adapter_rejects_unsupported_operation() -> None:
     adapter = DISPATCH_RESULT_ADAPTERS["protect_delete_recording"]
 

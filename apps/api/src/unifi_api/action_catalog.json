@@ -724,7 +724,7 @@
       "input_schema": {
         "properties": {
           "profile_id": {
-            "description": "Arm profile UUID from protect_alarm_list_profiles. Omit to use the currently selected profile.",
+            "description": "Legacy Protect arm profile id. Do not pass Alarm Manager v2 UUIDs from protect_alarm_list_profiles; omit to use the currently selected legacy profile.",
             "type": "string"
           }
         },
@@ -832,8 +832,8 @@
       "category": "alarm",
       "permission_action": "read",
       "read_only_hint": true,
-      "manager_attr": "alarm_manager",
-      "manager_method": "list_arm_profiles",
+      "manager_attr": "alarm_facade",
+      "manager_method": "list_profiles",
       "input_schema": {
         "properties": {},
         "type": "object",

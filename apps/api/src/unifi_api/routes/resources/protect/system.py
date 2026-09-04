@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.protect.managers.alarm_manager_service import AlarmManagerPermissionError
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -144,6 +145,12 @@ async def alarm_get_status(
 
 @router.get(
     "/sites/{site_id}/alarm-profiles",
+    description=(
+        "List configured alarm profiles, including each profile's state and "
+        "state_set_at timestamp. Alarm Manager v2 profile IDs are scoped to this "
+        "read family; use arm_compatible to determine whether a profile can be "
+        "passed to legacy arm actions."
+    ),
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["protect/system"],
 )
@@ -162,11 +169,17 @@ async def alarm_list_profiles(
             session,
             controller.id,
             "protect",
-            "alarm_manager",
+            "alarm_facade",
         )
         cm = await factory.get_connection_manager(session, controller.id, "protect")
         await _maybe_set_site(cm, site_id)
-        items = await mgr.list_arm_profiles()
+        try:
+            items, complete = await mgr.list_profiles()
+        except AlarmManagerPermissionError as exc:
+            # v2 refused (non-SuperAdmin) and the legacy fallback had no
+            # profiles to serve. Surface the actionable remediation instead
+            # of letting it escape as a bare 500.
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     cursor_obj = _decode_cursor(cursor)
     page, next_cursor = paginate(
@@ -194,11 +207,23 @@ async def alarm_list_profiles(
         serializer = registry.serializer_for_tool("protect_alarm_list_profiles")
         rows = [serializer.serialize(p) for p in page]
         hint = registry.render_hint_for_tool("protect_alarm_list_profiles")
-    return {
+    result = {
         "items": rows,
         "next_cursor": next_cursor.encode() if next_cursor else None,
         "render_hint": hint,
     }
+    if not complete:
+        result["_meta"] = {
+            "com.github.sirkirby.unifi-mcp/alarm-coverage": {
+                "complete": False,
+                "reason": (
+                    "Showing legacy Protect arm profiles: the UniFi-OS Alarm Manager "
+                    "(/api/v2/alarms) returned no profiles or is unavailable on this console, "
+                    "so v2-only profile fields such as state and state_set_at are not included."
+                ),
+            }
+        }
+    return result
 
 
 # ---------------------------------------------------------------------------
