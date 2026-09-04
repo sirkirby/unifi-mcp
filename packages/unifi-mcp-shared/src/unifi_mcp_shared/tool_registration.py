@@ -36,6 +36,7 @@ async def register_tools_for_mode(
     base_package: str,
     config: Any,
     logger: logging.Logger,
+    support_bundle_handler: Callable,
     prefix: str = "",
     server_label: str = "",
     register_meta_tools: Callable | None = None,
@@ -57,6 +58,7 @@ async def register_tools_for_mode(
         base_package: Dotted package path for tool modules (e.g. ``"unifi_network_mcp.tools"``).
         config: Server config object (used for ``enabled_categories``/``enabled_tools``).
         logger: Logger instance.
+        support_bundle_handler: Required runtime support-bundle service callback.
         prefix: Tool name prefix (e.g. ``"protect"``). Empty string for Network (uses ``"unifi"``).
         server_label: Human-readable server name (e.g. ``"UniFi Protect"``).
         register_meta_tools: Shared meta-tools registration function.
@@ -79,6 +81,7 @@ async def register_tools_for_mode(
         start_async_tool=start_async_tool,
         get_job_status=get_job_status,
         register_tool=register_tool,
+        support_bundle_handler=support_bundle_handler,
     )
     if prefix:
         meta_kwargs["prefix"] = prefix
@@ -92,7 +95,8 @@ async def register_tools_for_mode(
     if mode == "meta_only":
         logger.info("Tool registration mode: meta_only")
         logger.info(
-            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status",
+            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_get_support_bundle",
+            tool_prefix,
             tool_prefix,
             tool_prefix,
             tool_prefix,
@@ -107,7 +111,8 @@ async def register_tools_for_mode(
     elif mode == "lazy":
         logger.info("Tool registration mode: lazy")
         logger.info(
-            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_load_tools",
+            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_load_tools, %s_get_support_bundle",
+            tool_prefix,
             tool_prefix,
             tool_prefix,
             tool_prefix,

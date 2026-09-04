@@ -21,6 +21,7 @@ from unifi_protect_mcp.runtime import (
     connection_manager,
     event_manager,
     server,
+    support_bundle_service,
 )
 from unifi_protect_mcp.tool_index import register_tool, tool_index_handler
 from unifi_protect_mcp.utils.config_helpers import parse_config_bool
@@ -106,6 +107,7 @@ async def main_async():
         base_package="unifi_protect_mcp.tools",
         config=config,
         logger=logger,
+        support_bundle_handler=support_bundle_service.generate,
         prefix="protect",
         server_label="UniFi Protect",
     )

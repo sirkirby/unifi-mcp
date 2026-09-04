@@ -13,6 +13,7 @@ from unifi_mcp_relay.client import RelayClient
 from unifi_mcp_relay.config import RelayConfig
 from unifi_mcp_relay.discovery import ServerInfo, discover_all
 from unifi_mcp_relay.forwarder import ToolForwarder
+from unifi_mcp_relay.policy import filter_relay_tools, relay_call_rejection
 from unifi_mcp_relay.protocol import ToolInfo
 
 logger = logging.getLogger("unifi-mcp-relay")
@@ -57,7 +58,7 @@ class RelaySidecar:
 
         catalog: list[ToolInfo] = []
         for info in servers:
-            catalog.extend(info.tools)
+            catalog.extend(filter_relay_tools(info.tools))
         if not catalog:
             raise DiscoveryNotReadyError("configured local MCP servers returned an empty tool catalog")
 
@@ -117,6 +118,10 @@ class RelaySidecar:
         """
         if self._forwarder is None:
             return None, "Forwarder not initialized"
+
+        rejection = relay_call_rejection(tool_name, arguments)
+        if rejection is not None:
+            return None, rejection
 
         outcome = await self._forwarder.forward_with_error(tool_name, arguments)
         if isinstance(outcome, str):

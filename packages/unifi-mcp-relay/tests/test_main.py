@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from unifi_mcp_relay.config import RelayConfig
 from unifi_mcp_relay.main import DiscoveryNotReadyError, RelaySidecar, _catalog_snapshot
+from unifi_mcp_relay.policy import RELAY_EXCLUDED_ERROR
 
 
 @pytest.fixture
@@ -42,6 +43,30 @@ async def test_sidecar_discovers_and_builds_catalog(config):
             assert len(catalog) == 1
             assert catalog[0].name == "unifi_list_devices"
             mock_fwd_instance.open.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_sidecar_never_advertises_support_tools_from_stale_discovery(config):
+    sidecar = RelaySidecar(config)
+    from unifi_mcp_relay.discovery import ServerInfo
+    from unifi_mcp_relay.protocol import ToolInfo
+
+    mock_info = ServerInfo(
+        name="unifi-network-mcp",
+        url="http://localhost:3000",
+        tools=[
+            ToolInfo(name="unifi_get_support_bundle", description="Support", server_origin="unifi-network-mcp"),
+            ToolInfo(name="unifi_tool_index", description="Index", server_origin="unifi-network-mcp"),
+        ],
+    )
+    with (
+        patch("unifi_mcp_relay.main.discover_all", new_callable=AsyncMock, return_value=[mock_info]),
+        patch("unifi_mcp_relay.main.ToolForwarder") as forwarder_class,
+    ):
+        forwarder_class.return_value = AsyncMock()
+        catalog = await sidecar._discover_catalog()
+
+    assert [tool.name for tool in catalog] == ["unifi_tool_index"]
 
 
 @pytest.mark.asyncio
@@ -130,6 +155,26 @@ async def test_sidecar_tool_call_handler_returns_error_string(config):
     result, error = await sidecar._handle_tool_call("unifi_list_devices", {})
     assert result is None
     assert error == "Connection refused"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("unifi_get_support_bundle", {}),
+        ("unifi_execute", {"tool": "unifi_get_support_bundle"}),
+        ("unifi_batch", {"operations": [{"tool": "unifi_get_support_bundle"}]}),
+    ],
+)
+async def test_sidecar_rejects_support_calls_before_forwarder(config, tool_name, arguments):
+    sidecar = RelaySidecar(config)
+    sidecar._forwarder = AsyncMock()
+
+    result, error = await sidecar._handle_tool_call(tool_name, arguments)
+
+    assert result is None
+    assert error == RELAY_EXCLUDED_ERROR
+    sidecar._forwarder.forward_with_error.assert_not_awaited()
 
 
 @pytest.mark.asyncio

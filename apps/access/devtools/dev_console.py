@@ -195,9 +195,9 @@ async def main_async() -> None:
     logger.info("Access Developer console starting...")
 
     try:
-        import unifi_access_mcp.main  # noqa: F401, E402
+        import unifi_access_mcp.main as main_mod  # noqa: E402
         from unifi_access_mcp.jobs import get_job_status, start_async_tool  # noqa: E402
-        from unifi_access_mcp.runtime import connection_manager, server  # noqa: E402
+        from unifi_access_mcp.runtime import connection_manager, server, support_bundle_service  # noqa: E402
         from unifi_access_mcp.tool_index import register_tool, tool_index_handler  # noqa: E402
         from unifi_mcp_shared.meta_tools import register_meta_tools  # noqa: E402
         from unifi_mcp_shared.tool_loader import auto_load_tools  # noqa: E402
@@ -216,11 +216,12 @@ async def main_async() -> None:
 
         register_meta_tools(
             server=server,
-            tool_decorator=server.tool,
+            tool_decorator=main_mod._original_tool_decorator,
             tool_index_handler=tool_index_handler,
             start_async_tool=start_async_tool,
             get_job_status=get_job_status,
             register_tool=register_tool,
+            support_bundle_handler=support_bundle_service.generate,
             prefix="access",
             server_label="UniFi Access",
         )

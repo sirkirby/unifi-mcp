@@ -44,6 +44,117 @@ def test_forwarder_builds_routing_table(server_infos):
     assert fwd.get_server_url("nonexistent_tool") is None
 
 
+def test_forwarder_omits_support_tools_even_if_discovery_supplies_them(server_infos):
+    server_infos[0].tools.extend(
+        [
+            ToolInfo(
+                name="unifi_get_support_bundle",
+                description="Support",
+                server_origin="unifi-network-mcp",
+            ),
+            ToolInfo(name="unifi_tool_index", description="Index", server_origin="unifi-network-mcp"),
+        ]
+    )
+
+    fwd = ToolForwarder(server_infos)
+
+    assert fwd.get_server_url("unifi_get_support_bundle") is None
+    assert fwd.get_server_url("unifi_tool_index") == "http://localhost:3000"
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        ("unifi_get_support_bundle", {"probe": "summary"}),
+        ("unifi_execute", {"tool": "unifi_get_support_bundle", "arguments": {}}),
+        (
+            "unifi_batch",
+            {"operations": [{"tool": "unifi_list_devices"}, {"tool": "unifi_get_support_bundle"}]},
+        ),
+    ],
+)
+async def test_forwarder_rejects_direct_and_indirect_support_calls(server_infos, tool_name, arguments):
+    server_infos[0].tools.extend(
+        [
+            ToolInfo(name="unifi_get_support_bundle", description="Support", server_origin="unifi-network-mcp"),
+            ToolInfo(name="unifi_execute", description="Execute", server_origin="unifi-network-mcp"),
+            ToolInfo(name="unifi_batch", description="Batch", server_origin="unifi-network-mcp"),
+        ]
+    )
+    fwd = ToolForwarder(server_infos)
+
+    with patch.object(fwd, "_call", new_callable=AsyncMock) as mock_call:
+        assert await fwd.forward(tool_name, arguments) is None
+        error = await fwd.forward_with_error(tool_name, arguments)
+
+    assert "unavailable through the relay" in error
+    mock_call.assert_not_awaited()
+
+
+async def test_forwarder_filters_support_tools_from_tool_index_results(server_infos):
+    server_infos[0].tools.append(
+        ToolInfo(name="unifi_tool_index", description="Index", server_origin="unifi-network-mcp")
+    )
+    fwd = ToolForwarder(server_infos)
+    with patch.object(fwd, "_parse_tool_result") as parse:
+        parse.return_value = {
+            "tools": [
+                {"name": "unifi_get_support_bundle"},
+                {"name": "unifi_list_devices"},
+            ],
+            "count": 2,
+        }
+        mock_client = AsyncMock()
+        mock_client.request = AsyncMock(return_value={})
+        fwd._clients["http://localhost:3000"] = mock_client
+
+        result = await fwd._call("http://localhost:3000", "unifi_tool_index", {})
+
+    assert result == {"tools": [{"name": "unifi_list_devices"}], "count": 1}
+
+
+async def test_forwarder_rejects_indirect_tool_index_without_calling_server(server_infos):
+    server_infos[0].tools.append(
+        ToolInfo(name="unifi_execute", description="Execute", server_origin="unifi-network-mcp")
+    )
+    fwd = ToolForwarder(server_infos)
+
+    with patch.object(fwd, "_call", new_callable=AsyncMock) as mock_call:
+        error = await fwd.forward_with_error(
+            "unifi_execute",
+            {"tool": "unifi_tool_index", "arguments": {"include_schemas": True}},
+        )
+
+    assert "domain tools only" in error
+    mock_call.assert_not_awaited()
+
+
+async def test_batch_status_accepts_only_jobs_started_through_this_forwarder(server_infos):
+    server_infos[0].tools.extend(
+        [
+            ToolInfo(name="unifi_batch", description="Batch", server_origin="unifi-network-mcp"),
+            ToolInfo(name="unifi_batch_status", description="Status", server_origin="unifi-network-mcp"),
+        ]
+    )
+    fwd = ToolForwarder(server_infos)
+
+    with patch.object(fwd, "_call", new_callable=AsyncMock) as mock_call:
+        mock_call.return_value = {"jobs": [{"jobId": "relay-job", "tool": "unifi_list_devices"}]}
+        await fwd.forward_with_error(
+            "unifi_batch",
+            {"operations": [{"tool": "unifi_list_devices", "arguments": {}}]},
+        )
+
+        mock_call.reset_mock()
+        mock_call.return_value = {"status": "done", "result": {"success": True}}
+        accepted = await fwd.forward_with_error("unifi_batch_status", {"jobId": "relay-job"})
+        rejected = await fwd.forward_with_error("unifi_batch_status", {"jobId": "direct-or-stale-job"})
+
+    assert accepted == {"status": "done", "result": {"success": True}}
+    assert "only for jobs started through this relay connection" in rejected
+    mock_call.assert_awaited_once_with("http://localhost:3000", "unifi_batch_status", {"jobId": "relay-job"})
+
+
 def test_forwarder_creates_one_client_per_server(server_infos):
     fwd = ToolForwarder(server_infos)
     # Two servers -> two clients

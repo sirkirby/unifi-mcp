@@ -265,11 +265,11 @@ async def main_async() -> None:
         # Import main to apply permissioned_tool wrapper to server.tool
         # This handles permission_category/permission_action kwargs that
         # FastMCP's native .tool() decorator doesn't understand
-        import unifi_network_mcp.main  # noqa: F401, E402
+        import unifi_network_mcp.main as main_mod  # noqa: E402
         from unifi_mcp_shared.meta_tools import register_meta_tools  # noqa: E402
         from unifi_mcp_shared.tool_loader import auto_load_tools  # noqa: E402
         from unifi_network_mcp.jobs import get_job_status, start_async_tool  # noqa: E402
-        from unifi_network_mcp.runtime import connection_manager, server  # noqa: E402
+        from unifi_network_mcp.runtime import connection_manager, server, support_bundle_service  # noqa: E402
         from unifi_network_mcp.tool_index import register_tool, tool_index_handler  # noqa: E402
     except ModuleNotFoundError as e:
         if str(e).startswith("No module named 'mcp'"):
@@ -287,11 +287,12 @@ async def main_async() -> None:
         # Register meta-tools (tool_index, execute, batch, batch_status) for dev console
         register_meta_tools(
             server=server,
-            tool_decorator=server.tool,
+            tool_decorator=main_mod._original_tool_decorator,
             tool_index_handler=tool_index_handler,
             start_async_tool=start_async_tool,
             get_job_status=get_job_status,
             register_tool=register_tool,
+            support_bundle_handler=support_bundle_service.generate,
         )
 
         if not await _ensure_connected(connection_manager):

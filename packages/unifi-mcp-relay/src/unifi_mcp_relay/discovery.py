@@ -23,6 +23,7 @@ import aiohttp
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, mcp_icons_for_server
 from unifi_mcp_shared.protocol import DEFAULT_MCP_PROTOCOL_REVISION
 
+from unifi_mcp_relay.policy import filter_relay_tools
 from unifi_mcp_relay.protocol import ToolInfo
 
 logger = logging.getLogger("unifi-mcp-relay")
@@ -251,7 +252,7 @@ def _build_tools_from_index(index_result: dict, server_name: str) -> list[ToolIn
                 server_origin=server_name,
             )
         )
-    return tools
+    return filter_relay_tools(tools)
 
 
 def _build_tools_from_list(tools_list: list[dict], server_name: str) -> list[ToolInfo]:
@@ -268,7 +269,7 @@ def _build_tools_from_list(tools_list: list[dict], server_name: str) -> list[Too
                 server_origin=server_name,
             )
         )
-    return tools
+    return filter_relay_tools(tools)
 
 
 def _overlay_listed_metadata(
