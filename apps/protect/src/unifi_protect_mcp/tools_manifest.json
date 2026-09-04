@@ -1012,7 +1012,7 @@
         "input": {
           "properties": {
             "operations": {
-              "description": "Array of {tool, arguments} objects using tool names from protect_tool_index",
+              "description": "Array of {tool, arguments} objects using names from protect_tool_index in lazy mode, or known domain tool names in meta-only mode",
               "items": {
                 "properties": {
                   "arguments": {
@@ -1020,7 +1020,7 @@
                     "type": "object"
                   },
                   "tool": {
-                    "description": "Tool name from protect_tool_index",
+                    "description": "Tool name from protect_tool_index in lazy mode, or a known domain tool name in meta-only mode",
                     "type": "string"
                   }
                 },

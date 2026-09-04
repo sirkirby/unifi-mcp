@@ -328,7 +328,10 @@ def register_meta_tools(
                         "properties": {
                             "tool": {
                                 "type": "string",
-                                "description": f"Tool name from {idx_name}",
+                                "description": (
+                                    f"Tool name from {idx_name} in lazy mode, or a known domain tool name "
+                                    "in meta-only mode"
+                                ),
                             },
                             "arguments": {
                                 "type": "object",
@@ -336,7 +339,10 @@ def register_meta_tools(
                             },
                         },
                     },
-                    "description": f"Array of {{tool, arguments}} objects using tool names from {idx_name}",
+                    "description": (
+                        f"Array of {{tool, arguments}} objects using names from {idx_name} in lazy mode, "
+                        "or known domain tool names in meta-only mode"
+                    ),
                 },
             },
         },

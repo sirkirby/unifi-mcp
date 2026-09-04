@@ -72,12 +72,13 @@ module, so later client lists and index results can include its domain tools.
 **Cause:** A policy gate is denying the action at call time. Policy checks run
 before preview/confirmation, so `confirm=true` does not bypass a denied policy.
 
-**Fix:** Check [permissions.md](permissions.md) for the relevant category, set the
-current policy variable named in the error, and restart the server.
+**Fix:** Check [permissions.md](permissions.md) for the relevant category and set
+the exact policy variable named in the error.
 
-**Example:** To allow Network creation tools:
+**Example:** To allow Network creation tools when the Networks category gate is
+denying the call:
 ```bash
-export UNIFI_POLICY_NETWORK_CREATE=true
+export UNIFI_POLICY_NETWORK_NETWORKS_CREATE=true
 ```
 
 ### No tools visible at all

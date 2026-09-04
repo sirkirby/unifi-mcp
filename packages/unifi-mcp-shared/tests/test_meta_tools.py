@@ -96,6 +96,26 @@ def test_execute_tool_index_schema_accepts_null_arguments():
     assert arguments_schema["type"] == ["object", "null"]
 
 
+def test_batch_schema_explains_tool_discovery_by_registration_mode():
+    register_tool = Mock()
+    register_meta_tools(
+        server=SimpleNamespace(),
+        tool_decorator=_capture_tools()[1],
+        tool_index_handler=AsyncMock(return_value={}),
+        start_async_tool=AsyncMock(),
+        get_job_status=AsyncMock(),
+        register_tool=register_tool,
+        prefix="unifi",
+    )
+
+    batch_call = next(call for call in register_tool.call_args_list if call.kwargs["name"] == "unifi_batch")
+    operations_schema = batch_call.kwargs["input_schema"]["properties"]["operations"]
+    tool_description = operations_schema["items"]["properties"]["tool"]["description"]
+
+    assert "unifi_tool_index in lazy mode" in tool_description
+    assert "known domain tool name in meta-only mode" in tool_description
+
+
 def test_meta_tool_index_objects_contain_declared_annotations():
     TOOL_REGISTRY.clear()
     try:
