@@ -30,6 +30,7 @@ from unifi_core.protect.models.alarm_rules import (
     alarm_rule_to_legacy_create_body,
     alarm_rule_to_v2_body,
 )
+from unifi_core.protect.models.alarms import profile_from_controller
 
 _UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -66,6 +67,48 @@ class AlarmRulesFacade:
             return rules, True
         raw = await self._legacy.list_rules()
         return [alarm_rule_from_legacy(rule).model_dump(exclude_none=True) for rule in raw], False
+
+    async def list_profiles(self) -> tuple[list[dict[str, Any]], bool]:
+        """Return ``(profiles, complete)``.
+
+        Prefer the v2 Alarm Manager profile API, but fall back to the legacy
+        arm-profile API whenever v2 cannot serve profiles on this console — that
+        is, when it returns an empty list or rejects the request. ``complete`` is
+        True only when v2 actually served the profiles.
+
+        Transient/server failures (5xx, timeouts -> ``NvrError``) are NOT masked:
+        they propagate so a real v2 outage is never silently hidden behind legacy.
+        """
+        permission_error: AlarmManagerPermissionError | None = None
+        try:
+            profiles = await self._service.list_profiles()
+        except AlarmManagerPermissionError as exc:
+            permission_error = exc
+            profiles = None
+        except BadRequest:
+            profiles = None
+        if profiles:
+            shaped = []
+            for profile in profiles:
+                if not isinstance(profile, dict):
+                    continue
+                item = profile_from_controller(
+                    {**profile, "id_family": "alarm_manager_v2", "arm_compatible": False}
+                ).model_dump(exclude_none=True)
+                shaped.append(item)
+            return shaped, True
+        raw = await self._legacy.list_arm_profiles()
+        if raw:
+            return [
+                profile_from_controller({**profile, "id_family": "legacy_arm", "arm_compatible": True}).model_dump(
+                    exclude_none=True
+                )
+                for profile in raw
+                if isinstance(profile, dict)
+            ], False
+        if permission_error is not None:
+            raise permission_error
+        return [], False
 
     async def get_rule(self, rule_id: str) -> tuple[dict[str, Any], bool]:
         """Return ``(rule, complete)`` for one rule by id.

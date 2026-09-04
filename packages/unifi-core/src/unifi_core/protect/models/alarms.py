@@ -88,6 +88,30 @@ class AlarmProfile(BaseModel):
         description="Number of automations associated with this profile",
         json_schema_extra={"mutable": False},
     )
+    state: Optional[str] = Field(
+        default=None,
+        description=(
+            "Raw v2 arm state for this profile. Observed values: 'disarmed', 'arming' "
+            "(during a profile activation delay), 'armed', 'breached'. "
+            "Kept as a free-form string because the controller may report values not seen here."
+        ),
+        json_schema_extra={"mutable": False},
+    )
+    state_set_at: Optional[str] = Field(
+        default=None,
+        description="ISO timestamp when this profile state was set",
+        json_schema_extra={"mutable": False},
+    )
+    id_family: Optional[str] = Field(
+        default=None,
+        description="Profile ID namespace: alarm_manager_v2 or legacy_arm",
+        json_schema_extra={"mutable": False},
+    )
+    arm_compatible: Optional[bool] = Field(
+        default=None,
+        description="Whether this profile ID can be passed to protect_alarm_arm",
+        json_schema_extra={"mutable": False},
+    )
 
 
 class AlarmProfileList(BaseModel):
@@ -319,13 +343,18 @@ def status_from_controller(raw: Any) -> AlarmStatus:
 
 def profile_from_controller(raw: Any) -> AlarmProfile:
     """Build an AlarmProfile from a manager dict or object."""
+    alarm_ids = _get(raw, "alarm_ids")
     return AlarmProfile(
         id=_get(raw, "id"),
-        name=_get(raw, "name"),
+        name=_get(raw, "name") or _get(raw, "title"),
         record_everything=_get(raw, "record_everything"),
         activation_delay_ms=_get(raw, "activation_delay_ms"),
         schedule_count=_get(raw, "schedule_count"),
-        automation_count=_get(raw, "automation_count"),
+        automation_count=_get(raw, "automation_count", len(alarm_ids) if isinstance(alarm_ids, list) else None),
+        state=_get(raw, "state"),
+        state_set_at=_stringify_dt(_get(raw, "state_set_at")),
+        id_family=_get(raw, "id_family"),
+        arm_compatible=_get(raw, "arm_compatible"),
     )
 
 

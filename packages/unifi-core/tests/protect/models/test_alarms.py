@@ -168,6 +168,8 @@ class TestProfileFromController:
         assert profile.activation_delay_ms == 30000
         assert profile.schedule_count == 2
         assert profile.automation_count == 1
+        assert profile.state is None
+        assert profile.state_set_at is None
 
     def test_partial_dict(self) -> None:
         raw = {"id": "profile-002", "name": "Away"}
@@ -178,6 +180,8 @@ class TestProfileFromController:
         assert profile.activation_delay_ms is None
         assert profile.schedule_count is None
         assert profile.automation_count is None
+        assert profile.state is None
+        assert profile.state_set_at is None
 
     def test_empty_dict(self) -> None:
         profile = profile_from_controller({})
@@ -194,6 +198,34 @@ class TestProfileFromController:
         assert "schedule_count" in dumped
         assert "record_everything" not in dumped
         assert "activation_delay_ms" not in dumped
+
+    def test_v2_profile_shape_maps_supported_fields_only(self) -> None:
+        raw = {
+            "id": "019e9f9d-59a1-7ee3-8921-27f84a0086ea",
+            "title": "Away",
+            "state": "armed",
+            "state_set_at": "2026-09-04T09:00:00Z",
+            "alarm_ids": ["alarm-1", "alarm-2"],
+            "created_at": "2026-09-01T09:00:00Z",
+            "updated_at": "2026-09-04T09:00:00Z",
+        }
+
+        dumped = profile_from_controller(raw).model_dump(exclude_none=True)
+
+        assert dumped == {
+            "id": "019e9f9d-59a1-7ee3-8921-27f84a0086ea",
+            "name": "Away",
+            "automation_count": 2,
+            "state": "armed",
+            "state_set_at": "2026-09-04T09:00:00Z",
+        }
+
+    def test_v2_profile_unknown_state_passes_through(self) -> None:
+        raw = {"id": "profile-004", "title": "Away", "state": "arming"}
+
+        dumped = profile_from_controller(raw).model_dump(exclude_none=True)
+
+        assert dumped["state"] == "arming"
 
 
 class TestProfileListFromController:
