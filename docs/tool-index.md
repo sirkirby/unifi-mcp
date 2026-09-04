@@ -41,10 +41,14 @@ response.
 
 ### Tool Index
 
-`*_tool_index` returns the full known catalog from the generated manifest or
-runtime registry. By default it returns compact name and description entries.
-It can be filtered by `category` or `search`, and can include input/output
-schemas with `include_schemas=true`.
+In `lazy` mode, `*_tool_index` returns the full known catalog from the generated
+manifest. In `eager` mode, it returns the registered runtime catalog. In
+`meta_only` mode, it initially returns only the registered meta-tools. Domain
+tools can still be called through `*_execute` when their names are already
+known; that execution lazily registers the tool's module, so later index results
+can include those loaded domain tools. By default the index returns compact name
+and description entries. It can be filtered by `category` or `search`, and can
+include input/output schemas with `include_schemas=true`.
 
 Example:
 
@@ -55,7 +59,7 @@ Example:
 Use `*_tool_index` when:
 
 - the client has a limited context window
-- the server is in `lazy` or `meta_only` mode
+- the server is in `lazy` mode
 - the model needs searchable tool descriptions before choosing a tool
 - a relay or sidecar needs a manifest-backed full catalog
 
@@ -107,12 +111,13 @@ registered with MCP.
 |------|-------------------------------|---------------------|----------|
 | `eager` | Meta-tools plus all selected domain tools are registered directly | Standard `tools/list`; optional `*_tool_index` for compact filtering | Clients that handle large tool lists well, dev consoles, and parity checks |
 | `lazy` (default) | Meta-tools plus `*_load_tools` are registered initially | `*_tool_index` plus `*_execute`, or `*_load_tools` followed by `tools/list` refresh | Production LLM clients with limited context |
-| `meta_only` | Only the core meta-tools are registered initially | `*_tool_index` plus `*_execute`/`*_batch` | Maximum context control; clients that do not need direct domain tools |
+| `meta_only` | Only the core meta-tools are registered and indexed initially; executed domain modules are then registered | `*_execute`/`*_batch` with already-known domain tool names | Maximum initial context control; clients that already know the domain tools they need |
 
 Standard MCP-only clients remain supported in `eager` mode. In `lazy` and
 `meta_only` modes, `tools/list` is still correct: it reports the tools currently
-registered with the server, while the UniFi extension path exposes the larger
-manifest-backed catalog.
+registered with the server. The UniFi extension path exposes the larger
+manifest-backed catalog in `lazy` mode; `meta_only` starts both direct discovery
+surfaces with meta-tools and expands them only as known domain modules execute.
 
 ## Implementation Notes
 
@@ -124,9 +129,8 @@ manifest-backed catalog.
   `packages/unifi-mcp-shared/src/unifi_mcp_shared/lazy_tools.py`.
 - Generated manifests live in each app package as `tools_manifest.json` and are
   regenerated with `make manifest`.
-- The generated manifest is the source for compact discovery in lazy/meta-only
-  mode; direct MCP `tools/list` remains the source for currently registered
-  tools.
+- The generated manifest is the source for compact discovery in `lazy` mode;
+  direct MCP `tools/list` remains the source for currently registered tools.
 
 ## Extension Guidance
 

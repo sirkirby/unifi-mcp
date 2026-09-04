@@ -55,26 +55,32 @@ This is the default, so this error typically only occurs if you explicitly set i
 
 ### Tool not appearing in client tool list
 
-**Cause:** The tool's permission is disabled.
+Policy gates do not hide tools. In `lazy` mode, domain tools are discovered
+through `unifi_tool_index` and called through `unifi_execute`; they are not all
+registered directly with the client at startup. In `meta_only` mode, the index
+initially contains only meta-tools, and `unifi_execute` can run a domain tool
+when its name is already known. That execution lazily registers the tool's
+module, so later client lists and index results can include its domain tools.
 
 **Fix:**
-1. Check [permissions.md](permissions.md) for the relevant category
-2. Enable via environment variable:
-   ```bash
-   export UNIFI_PERMISSIONS_<CATEGORY>_<ACTION>=true
-   ```
-3. Restart the server
-
-**Example:** If `unifi_create_network` is missing:
-```bash
-export UNIFI_PERMISSIONS_NETWORKS_CREATE=true
-```
+1. Use the default `lazy` mode with `unifi_tool_index` for discovery
+2. Use `unifi_execute` to call the tool, or set `UNIFI_TOOL_REGISTRATION_MODE=eager` to register all tools directly
+3. In `eager` mode, check whether `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` is limiting registration
 
 ### Tool returns "permission denied" via unifi_execute
 
-**Cause:** In lazy/meta_only mode, `unifi_tool_index` shows all tools (from the static manifest), but disabled tools return permission errors when called.
+**Cause:** A policy gate is denying the action at call time. Policy checks run
+before preview/confirmation, so `confirm=true` does not bypass a denied policy.
 
-**Fix:** Same as above — enable the permission and restart.
+**Fix:** Check [permissions.md](permissions.md) for the relevant category and set
+the exact policy variable named in the error, then restart the server so it
+inherits the updated environment.
+
+**Example:** To allow Network creation tools when the Networks category gate is
+denying the call:
+```bash
+export UNIFI_POLICY_NETWORK_NETWORKS_CREATE=true
+```
 
 ### No tools visible at all
 

@@ -67,26 +67,30 @@ This is the default, so this error typically only occurs if you explicitly set i
 
 ### Tool not appearing in client tool list
 
-**Cause:** The tool's permission is disabled. All Access mutation tools are disabled by default.
+Policy gates do not hide tools. In `lazy` mode, domain tools are discovered
+through `access_tool_index` and called through `access_execute`; they are not all
+registered directly with the client at startup. In `meta_only` mode, the index
+initially contains only meta-tools, and `access_execute` can run a domain tool
+when its name is already known. That execution lazily registers the tool's
+module, so later client lists and index results can include its domain tools.
 
 **Fix:**
-1. Check [permissions.md](permissions.md) for the relevant category
-2. Enable via environment variable:
-   ```bash
-   export UNIFI_PERMISSIONS_<CATEGORY>_<ACTION>=true
-   ```
-3. Restart the server
-
-**Example:** If `access_unlock_door` is missing:
-```bash
-export UNIFI_PERMISSIONS_DOORS_UPDATE=true
-```
+1. Use the default `lazy` mode with `access_tool_index` for discovery
+2. Use `access_execute` to call the tool, or set `UNIFI_TOOL_REGISTRATION_MODE=eager` to register all tools directly
+3. In `eager` mode, check whether `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` is limiting registration
 
 ### Tool returns "permission denied" via access_execute
 
-**Cause:** In lazy/meta_only mode, `access_tool_index` shows all tools (from the static manifest), but disabled tools return permission errors when called.
+**Cause:** A policy gate is denying the action at call time. Policy checks run
+before preview/confirmation, so `confirm=true` does not bypass a denied policy.
 
-**Fix:** Same as above -- enable the permission and restart.
+**Fix:** Check [permissions.md](permissions.md) for the relevant category, set the
+current policy variable named in the error, and restart the server.
+
+**Example:** To allow Access door updates:
+```bash
+export UNIFI_POLICY_ACCESS_DOORS_UPDATE=true
+```
 
 ### No tools visible at all
 
@@ -143,7 +147,7 @@ docker run -i --rm \
   -e UNIFI_ACCESS_USERNAME=admin \
   -e UNIFI_ACCESS_PASSWORD=your-password \
   -e UNIFI_ACCESS_API_KEY=your-api-key \
-  -e UNIFI_PERMISSIONS_DOORS_UPDATE=true \
+  -e UNIFI_POLICY_ACCESS_DOORS_UPDATE=true \
   ghcr.io/sirkirby/unifi-access-mcp:latest
 ```
 

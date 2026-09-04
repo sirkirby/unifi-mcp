@@ -98,7 +98,7 @@ async def register_tools_for_mode(
             tool_prefix,
             tool_prefix,
         )
-        logger.info("   Use %s_execute to run any tool discovered via %s_tool_index", tool_prefix, tool_prefix)
+        logger.info("   Use %s_execute to run domain tools by name", tool_prefix)
         logger.info("   To load all tools directly: set UNIFI_TOOL_REGISTRATION_MODE=eager")
 
         setup_lazy_loading(server, original_tool_decorator)
