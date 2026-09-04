@@ -616,12 +616,31 @@ function normalizeMarkdownContentLine(line) {
 }
 
 function splitMarkdownField(line) {
-  const normalizedLine = stripInlineHtmlMarkup(line);
   let bracketDepth = 0;
   let parenthesisDepth = 0;
   let escaped = false;
-  for (let index = 0; index < normalizedLine.length; index += 1) {
-    const character = normalizedLine[index];
+  let htmlTag = false;
+  let htmlQuote = null;
+  let htmlComment = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (htmlComment) {
+      if (line.startsWith("-->", index)) {
+        htmlComment = false;
+        index += 2;
+      }
+      continue;
+    }
+    if (htmlTag) {
+      if (htmlQuote !== null) {
+        if (character === htmlQuote) htmlQuote = null;
+      } else if (character === '"' || character === "'") {
+        htmlQuote = character;
+      } else if (character === ">") {
+        htmlTag = false;
+      }
+      continue;
+    }
     if (escaped) {
       escaped = false;
       continue;
@@ -630,12 +649,21 @@ function splitMarkdownField(line) {
       escaped = true;
       continue;
     }
+    if (line.startsWith("<!--", index)) {
+      htmlComment = true;
+      index += 3;
+      continue;
+    }
+    if (character === "<" && /^<\/?[A-Za-z]/u.test(line.slice(index))) {
+      htmlTag = true;
+      continue;
+    }
     if (character === "[") bracketDepth += 1;
     else if (character === "]" && bracketDepth > 0) bracketDepth -= 1;
     else if (character === "(" && bracketDepth === 0) parenthesisDepth += 1;
     else if (character === ")" && bracketDepth === 0 && parenthesisDepth > 0) parenthesisDepth -= 1;
     else if ((character === ":" || character === "=") && bracketDepth === 0 && parenthesisDepth === 0) {
-      return [normalizedLine.slice(0, index).trim(), normalizedLine.slice(index + 1).trim()];
+      return [line.slice(0, index).trim(), line.slice(index + 1).trim()];
     }
   }
   return null;
@@ -653,6 +681,11 @@ function parseSensitiveLabelLine(line) {
   const headingLabel = heading ? normalizeMarkdownTableLabel(heading[1]) : "";
   if (heading && isSensitiveMultilineLabel(headingLabel)) {
     return { label: headingLabel, inlineValue: "" };
+  }
+  const standaloneSource = normalized.replace(/^['"]|['"]$/gu, "").trim();
+  const standaloneLabel = normalizeMarkdownTableLabel(standaloneSource);
+  if (standaloneLabel !== standaloneSource && isSensitiveMultilineLabel(standaloneLabel)) {
+    return { label: standaloneLabel, inlineValue: "" };
   }
   return null;
 }
