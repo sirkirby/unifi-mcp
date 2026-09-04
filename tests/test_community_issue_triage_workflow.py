@@ -1707,7 +1707,10 @@ def test_relevant_needs_info_removal_requires_a_positive_decimal_identifier(even
     assert "relevant timeline event id" in result.stderr
 
 
-@pytest.mark.parametrize("actor", [None, {}, {"login": ""}])
+@pytest.mark.parametrize(
+    "actor",
+    [None, {}, {"login": ""}, {"login": "   "}, "   ", {"login": "not a valid login!"}],
+)
 def test_needs_info_removal_requires_a_nonempty_actor(actor: object):
     event = _bot_needs_info_removal(1)
     event["actor"] = actor

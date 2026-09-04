@@ -612,6 +612,14 @@ function normalizeAuthor(value) {
   return typeof login === "string" ? login : null;
 }
 
+function isValidGitHubActorLogin(value) {
+  return (
+    typeof value === "string" &&
+    value.length <= 100 &&
+    /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\[bot\])?$/u.test(value)
+  );
+}
+
 function normalizeLabels(labels) {
   if (!Array.isArray(labels)) return [];
   return labels
@@ -664,7 +672,9 @@ export function normalizeTimelineEvent(raw) {
   // IDs beyond JavaScript's safe-integer range. Only trusted bot needs-info removals
   // affect the continuation count, so validate their IDs as opaque decimals.
   const candidateNeedsInfoRemoval = event === "unlabeled" && label === "needs-info";
-  if (candidateNeedsInfoRemoval && !actor) fail("needs-info removal timeline event actor is invalid");
+  if (candidateNeedsInfoRemoval && !isValidGitHubActorLogin(actor)) {
+    fail("needs-info removal timeline event actor is invalid");
+  }
   const relevantNeedsInfoRemoval = candidateNeedsInfoRemoval && actor === ACTIONS_BOT;
   if (relevantNeedsInfoRemoval) validateRelevantTimelineIdentifier(raw.id);
   return {
