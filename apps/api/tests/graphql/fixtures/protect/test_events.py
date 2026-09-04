@@ -264,13 +264,27 @@ async def test_protect_alarm_list_profiles(tmp_path, monkeypatch):
     stub_managers(
         monkeypatch,
         {
-            ("protect", "alarm_manager", "list_arm_profiles"): {
-                "profiles": [
-                    {"id": "prof1", "name": "Away"},
-                    {"id": "prof2", "name": "Home"},
+            ("protect", "alarm_facade", "list_profiles"): (
+                [
+                    {
+                        "id": "prof1",
+                        "name": "Away",
+                        "state": "armed",
+                        "state_set_at": "2026-09-04T12:00:00Z",
+                        "id_family": "alarm_manager_v2",
+                        "arm_compatible": False,
+                    },
+                    {
+                        "id": "prof2",
+                        "name": "Home",
+                        "state": "disarmed",
+                        "state_set_at": "2026-09-04T13:00:00Z",
+                        "id_family": "alarm_manager_v2",
+                        "arm_compatible": False,
+                    },
                 ],
-                "count": 2,
-            },
+                True,
+            ),
         },
     )
     body = await graphql_query(
@@ -280,13 +294,49 @@ async def test_protect_alarm_list_profiles(tmp_path, monkeypatch):
         protect {{ alarmProfiles(controller: "{cid}") {{
             count
             profiles
+            complete
+            coverageNotice
         }} }}
     }}''',
     )
     assert body.get("errors") is None, body
     result = body["data"]["protect"]["alarmProfiles"]
     assert result["count"] == 2
+    assert result["complete"] is True
+    assert result["coverageNotice"] is None
     assert {p["id"] for p in result["profiles"]} == {"prof1", "prof2"}
+    away = next(p for p in result["profiles"] if p["id"] == "prof1")
+    assert away["state"] == "armed"
+    assert away["state_set_at"] == "2026-09-04T12:00:00Z"
+    assert away["id_family"] == "alarm_manager_v2"
+    assert away["arm_compatible"] is False
+
+
+@pytest.mark.asyncio
+async def test_protect_alarm_list_profiles_marks_incomplete_fallback(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="protect")
+    stub_managers(
+        monkeypatch,
+        {("protect", "alarm_facade", "list_profiles"): ([], False)},
+    )
+
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        protect {{ alarmProfiles(controller: "{cid}") {{
+            count profiles complete coverageNotice
+        }} }}
+    }}''',
+    )
+
+    assert body.get("errors") is None, body
+    result = body["data"]["protect"]["alarmProfiles"]
+    assert result["count"] == 0
+    assert result["profiles"] == []
+    assert result["complete"] is False
+    assert "v2-only profile fields" in result["coverageNotice"]
 
 
 @pytest.mark.asyncio

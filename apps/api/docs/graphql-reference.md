@@ -234,6 +234,12 @@ type AlarmPage {
 type AlarmProfileList {
   profiles: JSON
   count: Int
+
+  """Whether the result has complete Alarm Manager v2 coverage."""
+  complete: Boolean
+
+  """Explains missing v2-only profile fields when complete is false."""
+  coverageNotice: String
 }
 
 """A UniFi Protect alarm rule (normalized; includes AI-powered alarms)."""
@@ -1630,7 +1636,9 @@ type ProtectQuery {
   """Get the alarm system arm-state snapshot."""
   alarmStatus(controller: ID!): AlarmStatus
 
-  """List configured alarm profiles ({profiles, count})."""
+  """
+  List configured alarm profiles ({profiles, count, complete, coverageNotice}), including each profile's state and state_set_at timestamp. Alarm Manager v2 profile IDs are scoped to this read family; use arm_compatible to determine whether a profile can be passed to legacy arm actions.
+  """
   alarmProfiles(controller: ID!): AlarmProfileList
 
   """
@@ -2407,7 +2415,7 @@ Read-only access to UniFi Protect resources.
 
 **Fields:**
 
-- `alarmProfiles: AlarmProfileList`  — List configured alarm profiles ({profiles, count}).
+- `alarmProfiles: AlarmProfileList`  — List configured alarm profiles ({profiles, count, complete, coverageNotice}), including each profile's state and state_set_at timestamp. Alarm Manager v2 profile IDs are scoped to this read family; use arm_compatible to determine whether a profile can be passed to legacy arm actions.
 - `alarmRule: AlarmRule`  — Fetch a single alarm rule (automation) by id.
 - `alarmRules: AlarmRuleList`  — List configured alarm rules / Alarm Manager automations ({rules, count}).
 - `alarmStatus: AlarmStatus`  — Get the alarm system arm-state snapshot.

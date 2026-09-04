@@ -179,7 +179,7 @@
               "type": "boolean"
             },
             "profile_id": {
-              "description": "Arm profile UUID from protect_alarm_list_profiles. Omit to use the currently selected profile.",
+              "description": "Legacy Protect arm profile id. Do not pass Alarm Manager v2 UUIDs from protect_alarm_list_profiles; omit to use the currently selected legacy profile.",
               "type": "string"
             }
           },
@@ -731,7 +731,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Lists all configured UniFi Protect Alarm Manager profiles with their id, name, activation delay, schedule count, and automation count. Use this to discover the arm profile id needed by protect_alarm_arm. Requires Protect 6.1+ with Alarm Manager configured in the web UI.",
+      "description": "Lists all configured UniFi Protect Alarm Manager profiles with their id, name, state, state_set_at timestamp, activation delay, schedule count, automation count, id_family, and arm_compatible flag. Alarm Manager v2 profile IDs are scoped to this read family and are not accepted by protect_alarm_arm; only profiles marked arm_compatible can be used with that legacy arm action. Requires Protect 6.1+ with Alarm Manager configured in the web UI. Legacy fallback responses include _meta with complete=false because v2-only fields are unavailable.",
       "name": "protect_alarm_list_profiles",
       "schema": {
         "input": {

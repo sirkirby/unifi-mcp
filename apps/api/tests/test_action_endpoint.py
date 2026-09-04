@@ -29,6 +29,7 @@ async def _bootstrap(
     *,
     redact_sensitive_fields: bool = True,
     product_kinds: str = "network",
+    scopes: str = "write",
 ):
     config = _cfg(tmp_path, redact_sensitive_fields=redact_sensitive_fields)
     app = create_app(config)
@@ -45,7 +46,7 @@ async def _bootstrap(
                 id=str(uuid.uuid4()),
                 prefix=material.prefix,
                 hash=hash_key(material.plaintext),
-                scopes="write",
+                scopes=scopes,
                 name="t",
                 created_at=datetime.now(timezone.utc),
             )
@@ -132,6 +133,83 @@ async def test_action_endpoint_enforces_confirmation_before_manager_interaction(
         assert confirmed_response.status_code == 200
         assert confirmed_response.json()["success"] is True
         manager.apply_unlock_door.assert_awaited_once_with(door_id="door-1", duration=2)
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_unwraps_alarm_profile_facade_tuple(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="protect", scopes="admin")
+
+    manager = MagicMock()
+    manager.list_profiles = AsyncMock(
+        return_value=(
+            [
+                {
+                    "id": "01a06cca-1111-4222-8333-444444444444",
+                    "name": "Away",
+                    "state": "armed",
+                    "state_set_at": "2026-09-04T12:00:00Z",
+                    "id_family": "alarm_manager_v2",
+                    "arm_compatible": False,
+                }
+            ],
+            True,
+        )
+    )
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/actions/protect_alarm_list_profiles",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {}, "confirm": False},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"] == {
+        "profiles": [
+            {
+                "id": "01a06cca-1111-4222-8333-444444444444",
+                "name": "Away",
+                "state": "armed",
+                "state_set_at": "2026-09-04T12:00:00Z",
+                "id_family": "alarm_manager_v2",
+                "arm_compatible": False,
+            }
+        ],
+        "count": 1,
+    }
+    assert "result" not in body["data"]
+    manager.list_profiles.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_preserves_incomplete_alarm_profile_coverage(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="protect", scopes="admin")
+
+    manager = MagicMock()
+    manager.list_profiles = AsyncMock(return_value=([], False))
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/actions/protect_alarm_list_profiles",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {}, "confirm": False},
+        )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["profiles"] == []
+    assert data["count"] == 0
+    assert data["_meta"]["com.github.sirkirby.unifi-mcp/alarm-coverage"]["complete"] is False
 
 
 @pytest.mark.parametrize(

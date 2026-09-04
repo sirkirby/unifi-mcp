@@ -135,6 +135,8 @@ class AlarmProfile:
     activation_delay_ms: int | None
     schedule_count: int | None
     automation_count: int | None
+    id_family: str | None
+    arm_compatible: bool | None
 
     _raw: strawberry.Private[dict[str, Any] | None] = None
 
@@ -143,7 +145,7 @@ class AlarmProfile:
         return {
             "kind": kind,
             "primary_key": "id",
-            "display_columns": ["name", "record_everything", "schedule_count"],
+            "display_columns": ["name", "id_family", "arm_compatible", "schedule_count"],
         }
 
     @classmethod
@@ -156,6 +158,8 @@ class AlarmProfile:
                 activation_delay_ms=obj.get("activation_delay_ms"),
                 schedule_count=obj.get("schedule_count"),
                 automation_count=obj.get("automation_count"),
+                id_family=obj.get("id_family"),
+                arm_compatible=obj.get("arm_compatible"),
             )
             inst._raw = dict(obj)
             return inst
@@ -168,6 +172,8 @@ class AlarmProfile:
                 activation_delay_ms=dumped.get("activation_delay_ms"),
                 schedule_count=dumped.get("schedule_count"),
                 automation_count=dumped.get("automation_count"),
+                id_family=dumped.get("id_family"),
+                arm_compatible=dumped.get("arm_compatible"),
             )
             inst._raw = dict(dumped)
             return inst
@@ -178,6 +184,8 @@ class AlarmProfile:
             activation_delay_ms=None,
             schedule_count=None,
             automation_count=None,
+            id_family=None,
+            arm_compatible=None,
         )
         return inst
 
@@ -321,6 +329,10 @@ class AlarmProfileList:
 
     profiles: strawberry.scalars.JSON | None  # type: ignore[name-defined]
     count: int | None
+    complete: bool | None = strawberry.field(description="Whether the result has complete Alarm Manager v2 coverage.")
+    coverage_notice: str | None = strawberry.field(
+        description="Explains missing v2-only profile fields when complete is false."
+    )
 
     _raw: strawberry.Private[dict[str, Any] | None] = None
     _fallback: strawberry.Private[str | None] = None
@@ -335,12 +347,19 @@ class AlarmProfileList:
             inst = cls(
                 profiles=obj.get("profiles") or [],
                 count=obj.get("count"),
+                complete=obj.get("complete", True),
+                coverage_notice=obj.get("coverage_notice"),
             )
             inst._raw = dict(obj)
             return inst
         if isinstance(obj, list):
             wrapper = {"profiles": list(obj), "count": len(obj)}
-            inst = cls(profiles=wrapper["profiles"], count=wrapper["count"])
+            inst = cls(
+                profiles=wrapper["profiles"],
+                count=wrapper["count"],
+                complete=True,
+                coverage_notice=None,
+            )
             inst._raw = wrapper
             return inst
         if hasattr(obj, "model_dump"):
@@ -348,10 +367,12 @@ class AlarmProfileList:
             inst = cls(
                 profiles=dumped.get("profiles") or [],
                 count=dumped.get("count"),
+                complete=dumped.get("complete", True),
+                coverage_notice=dumped.get("coverage_notice"),
             )
             inst._raw = dict(dumped)
             return inst
-        inst = cls(profiles=None, count=None)
+        inst = cls(profiles=None, count=None, complete=None, coverage_notice=None)
         inst._fallback = str(obj)
         return inst
 

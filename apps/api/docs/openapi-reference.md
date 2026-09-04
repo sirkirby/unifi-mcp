@@ -1908,6 +1908,9 @@ No native ``protect_get_sensor`` tool exists — filter from LIST.
 ### `GET /v1/sites/{site_id}/alarm-profiles` — Alarm List Profiles
 
 
+List configured alarm profiles, including each profile's state and state_set_at timestamp. Alarm Manager v2 profile IDs are scoped to this read family; use arm_compatible to determine whether a profile can be passed to legacy arm actions.
+
+
 **Parameters:**
 
 - `site_id` (path) (required)
