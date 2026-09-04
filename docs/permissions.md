@@ -166,7 +166,11 @@ Or in a Claude Desktop / MCP client config:
 | Denied tools visible to agents? | No — hidden at registration | Yes — always visible |
 | Where is access checked? | At server startup (registration) | At call time |
 | Agent feedback on denied action | Tool doesn't exist | Clear error with fix instructions |
-| Requires server restart to change? | Yes | No |
+| Restart after changing the launcher environment? | Yes | Yes — the new process must inherit it |
+
+Call-time enforcement means a denied tool stays discoverable and receives a
+fresh policy check on every invocation. It does not let a running process see
+environment changes made later in its parent shell or container configuration.
 
 ---
 
