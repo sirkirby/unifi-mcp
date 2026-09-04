@@ -207,7 +207,7 @@ def register_meta_tools(
         ),
         annotations=action_annotations,
     )
-    async def execute_handler(tool: str, arguments: dict = None, ctx: Context | None = None) -> dict:
+    async def execute_handler(tool: str, arguments: dict | None = None, ctx: Context | None = None) -> dict:
         """Execute a tool synchronously."""
         if arguments is None:
             arguments = {}
@@ -232,7 +232,7 @@ def register_meta_tools(
                     "description": f"Tool name from {idx_name} (e.g. '{prefix}_list_*')",
                 },
                 "arguments": {
-                    "type": "object",
+                    "type": ["object", "null"],
                     "description": "Tool parameters matching the schema from the tool index",
                 },
             },

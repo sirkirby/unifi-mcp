@@ -1732,7 +1732,10 @@
           "properties": {
             "arguments": {
               "description": "Tool parameters matching the schema from the tool index",
-              "type": "object"
+              "type": [
+                "object",
+                "null"
+              ]
             },
             "tool": {
               "description": "Tool name from protect_tool_index (e.g. 'protect_list_*')",

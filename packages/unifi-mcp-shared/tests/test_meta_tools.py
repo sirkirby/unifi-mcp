@@ -79,6 +79,23 @@ def test_tool_index_schema_describes_ranked_token_search():
     assert "no usable terms returns no tools" in description
 
 
+def test_execute_tool_index_schema_accepts_null_arguments():
+    register_tool = Mock()
+    register_meta_tools(
+        server=SimpleNamespace(),
+        tool_decorator=_capture_tools()[1],
+        tool_index_handler=AsyncMock(return_value={}),
+        start_async_tool=AsyncMock(),
+        get_job_status=AsyncMock(),
+        register_tool=register_tool,
+        prefix="unifi",
+    )
+
+    execute_call = next(call for call in register_tool.call_args_list if call.kwargs["name"] == "unifi_execute")
+    arguments_schema = execute_call.kwargs["input_schema"]["properties"]["arguments"]
+    assert arguments_schema["type"] == ["object", "null"]
+
+
 def test_meta_tool_index_objects_contain_declared_annotations():
     TOOL_REGISTRY.clear()
     try:
@@ -269,6 +286,33 @@ async def test_fastmcp_execute_and_batch_expose_domain_payload(prefix):
     status_payload = json.loads(status.content[0].text)
     assert status_payload["status"] == "done"
     assert status_payload["result"] == payload
+
+
+@pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
+async def test_fastmcp_execute_accepts_null_arguments(prefix):
+    payload = {"success": True, "data": {"id": "abc"}}
+    server = FastMCP(f"{prefix}-test")
+
+    @server.tool(name=f"{prefix}_inner", structured_output=True)
+    async def structured_inner() -> StructuredInnerResult:
+        return StructuredInnerResult(**payload)
+
+    register_meta_tools(
+        server=server,
+        tool_decorator=server.tool,
+        tool_index_handler=AsyncMock(return_value={}),
+        start_async_tool=AsyncMock(),
+        get_job_status=AsyncMock(),
+        register_tool=Mock(),
+        prefix=prefix,
+    )
+
+    execute = await server.call_tool(
+        f"{prefix}_execute",
+        {"tool": f"{prefix}_inner", "arguments": None},
+    )
+
+    assert json.loads(execute.content[0].text) == payload
 
 
 class TestRegisterLoadTools:
