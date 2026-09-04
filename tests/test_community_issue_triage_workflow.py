@@ -2306,6 +2306,29 @@ def test_sensitive_table_scanner_handles_many_header_like_rows_as_one_block():
 @pytest.mark.parametrize(
     "body",
     [
+        "Field | Value\n--- | ---\nOther | unavailable\nUsername | Password\n--- | ---\nadmin | hunter2long",
+        (
+            "Field | Value | Notes\n--- | --- | ---\nOther | unavailable | none\n"
+            "Name | API Token | Result\n--- | --- | ---\nMCP | abcdefghijklmnop | failed"
+        ),
+        "| Field |\n| --- |\n| Other |\n| Password |\n| --- |\n| hunter2long |",
+        "> Field | Value\n> --- | ---\n> Other | unavailable\n> Username | Password\n> --- | ---\n> admin | hunter2long",
+        (
+            "Field | Value\n--- | ---\nOther | unavailable\n"
+            "Username | [Password](https://example.com)\n--- | ---\nadmin | hunter2long"
+        ),
+    ],
+)
+def test_sensitive_table_scanner_recognizes_later_headers_in_contiguous_pipe_blocks(body: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = body
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
         "token:\nunavailable",
         "password:\n***REDACTED***",
         "session:\nmissing",

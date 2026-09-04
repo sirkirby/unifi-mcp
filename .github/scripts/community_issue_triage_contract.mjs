@@ -460,16 +460,28 @@ function markdownTableEndIndex(lines, firstRowIndex) {
   return endIndex;
 }
 
+function sensitiveMarkdownTableColumns(cells) {
+  const sensitiveColumns = new Set();
+  for (let cellIndex = 0; cellIndex < cells.length; cellIndex += 1) {
+    if (isSensitiveMultilineLabel(normalizeMarkdownTableLabel(cells[cellIndex]))) {
+      sensitiveColumns.add(cellIndex);
+    }
+  }
+  return sensitiveColumns;
+}
+
 function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referenceLabels, endIndex) {
   const headerCells = markdownTableCells(lines[headerIndex]) || [];
-  const sensitiveColumns = new Set();
-  for (let cellIndex = 0; cellIndex < headerCells.length; cellIndex += 1) {
-    const header = normalizeMarkdownTableLabel(headerCells[cellIndex]);
-    if (isSensitiveMultilineLabel(header)) sensitiveColumns.add(cellIndex);
-  }
+  let sensitiveColumns = sensitiveMarkdownTableColumns(headerCells);
   for (let rowIndex = separatorIndex + 1; rowIndex < endIndex; rowIndex += 1) {
     const cells = markdownTableCells(lines[rowIndex]);
     if (!cells) throw new Error("Markdown table boundary invariant failed");
+    if (rowIndex + 1 < endIndex && isMarkdownTableSeparator(lines[rowIndex + 1])) {
+      sensitiveColumns = sensitiveMarkdownTableColumns(cells);
+      rowIndex += 1;
+      continue;
+    }
+    if (isMarkdownTableSeparator(lines[rowIndex])) continue;
     for (const cellIndex of sensitiveColumns) {
       const candidateValue = stripMarkdownWrappers(cells[cellIndex] || "");
       if (
