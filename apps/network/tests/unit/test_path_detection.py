@@ -495,6 +495,31 @@ class TestPathDetection:
         await manager.cleanup()
 
     @pytest.mark.asyncio
+    async def test_each_retry_is_reported_as_in_progress_while_active(self):
+        manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=2, retry_delay=0)
+        controller = MagicMock()
+        controller.connectivity = MagicMock()
+        controller.connectivity.is_unifi_os = False
+        attempts = 0
+
+        async def login():
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise aiohttp.ClientConnectionError("temporary connection failure")
+            assert manager.support_status()["last_attempt"]["status"] == "in_progress"
+
+        controller.login = login
+
+        with patch("unifi_core.network.managers.connection_manager.Controller", return_value=controller):
+            with patch("unifi_core.network.controller_type.resolve_controller_type", return_value="direct"):
+                assert await manager.initialize() is True
+
+        assert attempts == 2
+        assert manager.support_status()["last_attempt"]["status"] == "succeeded"
+        await manager.cleanup()
+
+    @pytest.mark.asyncio
     async def test_auth_circuit_half_opens_after_cooldown_and_success_resets(self):
         manager = ConnectionManager("192.168.1.1", "admin", "secret", max_retries=1)
         controller = MagicMock()

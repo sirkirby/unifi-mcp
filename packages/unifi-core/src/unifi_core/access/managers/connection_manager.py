@@ -27,6 +27,13 @@ import aiohttp
 
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError
 from unifi_core.retry import RetryPolicy, retry_with_backoff
+from unifi_core.support_bundle import (
+    SafeConnectionAttempt,
+    connection_attempt_failed,
+    connection_attempt_not_configured,
+    connection_attempt_started,
+    connection_attempt_succeeded,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +90,15 @@ class AccessConnectionManager:
         self._api_client_available = False
         self._proxy_available = False
         self._initialized = False
+        self._support_attempt = SafeConnectionAttempt().model_dump(mode="json")
+        self._api_support_attempt = (
+            SafeConnectionAttempt().model_dump(mode="json") if api_key else connection_attempt_not_configured()
+        )
+        self._proxy_support_attempt = (
+            SafeConnectionAttempt().model_dump(mode="json")
+            if username and password
+            else connection_attempt_not_configured()
+        )
 
     # ------------------------------------------------------------------
     # SSL helper
@@ -137,9 +153,11 @@ class AccessConnectionManager:
                     "Ensure either an API key or username/password credentials are configured."
                 )
 
+        self._support_attempt = connection_attempt_started()
         try:
             await retry_with_backoff(_connect, policy=policy)
             self._initialized = True
+            self._support_attempt = connection_attempt_succeeded()
             logger.info(
                 "[access-cm] Connected to UniFi Access at %s (api_client=%s, proxy=%s)",
                 self.host,
@@ -148,6 +166,7 @@ class AccessConnectionManager:
             )
             return True
         except Exception as exc:
+            self._support_attempt = connection_attempt_failed(exc)
             logger.error(
                 "[access-cm] Failed to connect to UniFi Access at %s: %s",
                 self.host,
@@ -160,9 +179,11 @@ class AccessConnectionManager:
     async def _try_api_client(self) -> None:
         """Attempt to initialise the py-unifi-access API client."""
         if not self._api_key:
+            self._api_support_attempt = connection_attempt_not_configured()
             logger.debug("[access-cm] No API key configured; skipping API client path.")
             return
 
+        self._api_support_attempt = connection_attempt_started()
         try:
             from unifi_access_api import UnifiAccessApiClient
 
@@ -176,8 +197,10 @@ class AccessConnectionManager:
             )
             await self._api_client.authenticate()
             self._api_client_available = True
+            self._api_support_attempt = connection_attempt_succeeded()
             logger.info("[access-cm] API client authenticated on port %s", self._api_port)
         except Exception as exc:
+            self._api_support_attempt = connection_attempt_failed(exc)
             logger.warning(
                 "[access-cm] API client auth failed (non-fatal, will try proxy): %s",
                 exc,
@@ -192,9 +215,11 @@ class AccessConnectionManager:
     async def _try_proxy_session(self) -> None:
         """Attempt to establish a proxy session via UniFi OS Console login."""
         if not self.username or not self.password:
+            self._proxy_support_attempt = connection_attempt_not_configured()
             logger.debug("[access-cm] No username/password configured; skipping proxy path.")
             return
 
+        self._proxy_support_attempt = connection_attempt_started()
         try:
             self._proxy_session = aiohttp.ClientSession(
                 connector=aiohttp.TCPConnector(ssl=self._ssl_context),
@@ -202,8 +227,10 @@ class AccessConnectionManager:
             )
             await self._proxy_login()
             self._proxy_available = True
+            self._proxy_support_attempt = connection_attempt_succeeded()
             logger.info("[access-cm] Proxy session established via %s:%s", self.host, self.port)
         except Exception as exc:
+            self._proxy_support_attempt = connection_attempt_failed(exc)
             logger.warning(
                 "[access-cm] Proxy login failed (non-fatal if API client available): %s",
                 exc,
@@ -527,6 +554,20 @@ class AccessConnectionManager:
     def is_connected(self) -> bool:
         """Return ``True`` if at least one auth path is initialised."""
         return self._initialized and (self._api_client_available or self._proxy_available)
+
+    def support_status(self) -> dict[str, Any]:
+        """Return local connection facts safe for a community support bundle."""
+        return {
+            "initialized": self._initialized,
+            "connected": self.is_connected,
+            "tls_verification_enabled": self.verify_ssl,
+            "last_attempt": dict(self._support_attempt),
+            "developer_api_available": self.has_api_client,
+            "proxy_session_available": self.has_proxy,
+            "api_token_configured": self.has_api_key,
+            "developer_api_attempt": dict(self._api_support_attempt),
+            "proxy_session_attempt": dict(self._proxy_support_attempt),
+        }
 
     # ------------------------------------------------------------------
     # Websocket

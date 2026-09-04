@@ -18,6 +18,12 @@ from uiprotect.data import WSSubscriptionMessage
 from unifi_core.exceptions import UniFiConnectionError
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
 from unifi_core.retry import RetryPolicy, retry_with_backoff
+from unifi_core.support_bundle import (
+    SafeConnectionAttempt,
+    connection_attempt_failed,
+    connection_attempt_started,
+    connection_attempt_succeeded,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +71,7 @@ class ProtectConnectionManager:
         self._api_session: aiohttp.ClientSession | None = None
         self._ws_unsub: Callable[[], None] | None = None
         self._initialized = False
+        self._support_attempt = SafeConnectionAttempt().model_dump(mode="json")
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -100,9 +107,11 @@ class ProtectConnectionManager:
             # update() authenticates + fetches the full bootstrap (NVR, cameras, etc.)
             await self._client.update()
 
+        self._support_attempt = connection_attempt_started()
         try:
             await retry_with_backoff(_connect, policy=policy)
             self._initialized = True
+            self._support_attempt = connection_attempt_succeeded()
             logger.info(
                 "[protect-cm] Connected to UniFi Protect at %s:%s",
                 self.host,
@@ -110,6 +119,7 @@ class ProtectConnectionManager:
             )
             return True
         except Exception as exc:
+            self._support_attempt = connection_attempt_failed(exc)
             logger.error(
                 "[protect-cm] Failed to connect to UniFi Protect at %s:%s: %s",
                 self.host,
@@ -155,6 +165,23 @@ class ProtectConnectionManager:
     def has_api_key(self) -> bool:
         """Return ``True`` when a non-empty Protect public API key is configured."""
         return bool(self._api_key and self._api_key.strip())
+
+    def support_status(self) -> dict[str, Any]:
+        """Return local connection facts safe for a community support bundle."""
+        client_available = self._initialized and self._client is not None
+        bootstrap_available = bool(client_available and getattr(self._client, "bootstrap", None) is not None)
+        return {
+            "initialized": self._initialized,
+            "connected": self.is_connected,
+            "tls_verification_enabled": self.verify_ssl,
+            "last_attempt": dict(self._support_attempt),
+            "session_available": client_available,
+            "bootstrap_available": bootstrap_available,
+            "public_api_key_configured": self.has_api_key,
+            "websocket_state": (
+                "connected" if self._ws_unsub is not None else "disconnected" if client_available else "unknown"
+            ),
+        }
 
     def require_public_api_key(self, operation: str) -> None:
         """Raise an actionable error when a public Integration API call lacks an API key."""
