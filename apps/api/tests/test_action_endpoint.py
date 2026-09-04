@@ -433,7 +433,9 @@ async def test_action_endpoint_rejects_malformed_shared_read_shape(tmp_path, mon
 
     assert response.status_code == 500
     assert response.json()["detail"]["kind"] == "serializer_contract_error"
-    assert "shared read view returned dict" in response.json()["detail"]["detail"]
+    assert response.json()["detail"]["detail"] == (
+        "Failed to serialize action result. Contact the server administrator."
+    )
 
 
 @pytest.mark.asyncio
@@ -779,3 +781,45 @@ async def test_action_endpoint_unknown_controller(tmp_path, monkeypatch) -> None
             json={"site": "default", "controller": fake_cid, "args": {}, "confirm": False},
         )
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_type", ["unexpected", "capability", "contract", "registry"])
+async def test_action_exception_details_are_not_exposed(tmp_path, monkeypatch, error_type) -> None:
+    """Arbitrary exception messages must not reach action clients, even on opt-out."""
+    from unifi_api.serializers._base import SerializerContractError
+    from unifi_api.serializers._registry import SerializerRegistryError
+    from unifi_api.services import actions as actions_svc
+
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, redact_sensitive_fields=False)
+    private = "Traceback /private/server.py password=do-not-expose"
+    errors = {
+        "unexpected": RuntimeError(private),
+        "capability": actions_svc.CapabilityMismatch(private),
+        "contract": SerializerContractError(private),
+        "registry": SerializerRegistryError(private),
+    }
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(side_effect=errors[error_type]))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/actions/unifi_list_clients",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": {}, "confirm": False},
+        )
+    assert response.status_code == (500 if error_type in {"contract", "registry"} else 200)
+    for marker in ("Traceback", "/private/server.py", "do-not-expose", "RuntimeError"):
+        assert marker not in response.text
+    body = response.json()
+    if response.status_code == 500:
+        assert body["detail"]["tool"] == "unifi_list_clients"
+        assert body["detail"]["kind"] in {"serializer_contract_error", "serializer_missing"}
+    else:
+        assert body["success"] is False
+        assert "Failed to execute action" in body["error"]
+    async with app.state.sessionmaker() as session:
+        rows = (await session.execute(select(AuditLog))).scalars().all()
+        actions = [row for row in rows if row.target == "unifi_list_clients"]
+        assert len(actions) == 1
+        assert actions[0].outcome == "error"
+        assert actions[0].error_kind

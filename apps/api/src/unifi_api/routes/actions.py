@@ -232,7 +232,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
             )
             await session.commit()
             return {"success": False, "error": f"unknown tool: {tool_name}"}
-        except actions_svc.CapabilityMismatch as e:
+        except actions_svc.CapabilityMismatch:
             await write_audit(
                 session,
                 key_id_prefix=key_prefix,
@@ -242,7 +242,10 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 error_kind="capability_mismatch",
             )
             await session.commit()
-            return {"success": False, "error": str(e)}
+            return {
+                "success": False,
+                "error": "Failed to execute action: controller does not support this tool product.",
+            }
         except SerializerContractError as e:
             await write_audit(
                 session,
@@ -259,7 +262,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 detail={
                     "kind": "serializer_contract_error",
                     "tool": tool_name,
-                    "detail": str(e),
+                    "detail": "Failed to serialize action result. Contact the server administrator.",
                 },
             )
         except SerializerRegistryError as e:
@@ -278,7 +281,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 detail={
                     "kind": "serializer_missing",
                     "tool": tool_name,
-                    "detail": str(e),
+                    "detail": "Action serializer is unavailable. Contact the server administrator.",
                 },
             )
         except Exception as e:
@@ -292,4 +295,4 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 detail=str(e),
             )
             await session.commit()
-            return {"success": False, "error": f"{type(e).__name__}: {e}"}
+            return {"success": False, "error": "Failed to execute action. Check the server audit log for details."}

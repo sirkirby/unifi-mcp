@@ -58,7 +58,7 @@ async def lookup_by_ip(
             "error": f"No client found with IP: {ip_address}",
         }
     except Exception as e:
-        logger.error("Error looking up client by IP %s: %s", ip_address, e, exc_info=True)
+        logger.error("Error looking up client by IP [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to look up client by IP {ip_address}: {e}"}
 
 
@@ -112,7 +112,7 @@ async def list_clients(
             fields=fields,
         )
     except Exception as e:
-        logger.error("Error listing clients: %s", e, exc_info=True)
+        logger.error("Error listing clients: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to list clients: {e}"}
 
 
@@ -162,7 +162,7 @@ async def get_client_details(
             summary=summary,
         )
     except Exception as e:
-        logger.error("Error getting client details for %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error getting client details for [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to get client details for {mac_address}: {e}"}
 
 
@@ -188,7 +188,7 @@ async def list_blocked_clients() -> Dict[str, Any]:
             "blocked_clients": formatted_clients,
         }
     except Exception as e:
-        logger.error("Error listing blocked clients: %s", e, exc_info=True)
+        logger.error("Error listing blocked clients: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to list blocked clients: {e}"}
 
 
@@ -250,7 +250,7 @@ async def block_client(
             }
         return {"success": False, "error": f"Failed to block client {mac_address}."}
     except Exception as e:
-        logger.error("Error blocking client %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error blocking client [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to block client {mac_address}: {e}"}
 
 
@@ -314,7 +314,7 @@ async def unblock_client(
             }
         return {"success": False, "error": f"Failed to unblock client {mac_address}."}
     except Exception as e:
-        logger.error("Error unblocking client %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error unblocking client [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to unblock client {mac_address}: {e}"}
 
 
@@ -372,7 +372,7 @@ async def rename_client(
             }
         return {"success": False, "error": f"Failed to rename client {mac_address}."}
     except Exception as e:
-        logger.error("Error renaming client %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error renaming client [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to rename client {mac_address}: {e}"}
 
 
@@ -446,7 +446,7 @@ async def force_reconnect_client(
             "error": f"Failed to force reconnect for client {mac_address}.",
         }
     except Exception as e:
-        logger.error("Error forcing reconnect for client %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error forcing reconnect for client [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to force reconnect for client {mac_address}: {e}"}
 
 
@@ -513,7 +513,7 @@ async def forget_client(
             }
         return {"success": False, "error": f"Failed to forget client {mac_address}."}
     except Exception as e:
-        logger.error("Error forgetting client %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error forgetting client [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to forget client {mac_address}: {e}"}
 
 
@@ -608,7 +608,7 @@ async def authorize_guest(
             }
         return {"success": False, "error": f"Failed to authorize guest {mac_address}."}
     except Exception as e:
-        logger.error("Error authorizing guest %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error authorizing guest [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to authorize guest {mac_address}: {e}"}
 
 
@@ -679,7 +679,7 @@ async def unauthorize_guest(
             "error": f"Failed to unauthorize guest {mac_address}.",
         }
     except Exception as e:
-        logger.error("Error unauthorizing guest %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error unauthorizing guest [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to unauthorize guest {mac_address}: {e}"}
 
 
@@ -813,5 +813,5 @@ async def set_client_ip_settings(
             "error": f"Failed to update IP settings for client {mac_address}.",
         }
     except Exception as e:
-        logger.error("Error setting IP settings for %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error setting IP settings for [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to set IP settings for client {mac_address}: {e}"}
