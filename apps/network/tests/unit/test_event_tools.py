@@ -166,3 +166,26 @@ async def test_get_event_types_returns_standard_error_when_discovery_fails(monke
         "success": False,
         "error": "Failed to get event types: controller event query failed",
     }
+
+
+@pytest.mark.asyncio
+async def test_list_events_passes_categories_and_severities_through(monkeypatch):
+    """The manager already accepts categories/severities; the tool must expose and forward them."""
+    from unifi_network_mcp.tools import events as events_module
+
+    captured: dict = {}
+
+    class _CapturingEventManager(_StubEventManager):
+        async def get_events(self, **kwargs):
+            captured.update(kwargs)
+            return self._records
+
+    monkeypatch.setattr(events_module, "_get_event_manager", lambda: _CapturingEventManager([]))
+
+    result = await events_module.list_events(categories=["SECURITY"], severities=["HIGH", "CRITICAL"])
+
+    assert result["success"] is True
+    assert captured["categories"] == ["SECURITY"]
+    assert captured["severities"] == ["HIGH", "CRITICAL"]
+    assert result["filters"]["categories"] == ["SECURITY"]
+    assert result["filters"]["severities"] == ["HIGH", "CRITICAL"]
