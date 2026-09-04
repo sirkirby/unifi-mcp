@@ -81,6 +81,8 @@ const SENSITIVE_MULTILINE_LABEL_PATTERN =
   /^(?:(.+?)[ _-]+)?(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))$/iu;
 const SENSITIVE_LABEL_PROSE_WORD_PATTERN =
   /^(?:a|an|and|are|as|at|by|for|from|in|is|of|on|or|that|the|this|to|using|was|were|when|where|which|while|with)$/iu;
+const BENIGN_SESSION_PROSE_LABEL_PATTERN =
+  /^(?:debugging|observed|testing)[ _-]+authenticated[ _-]+session$/iu;
 const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
   /^["']?(?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|removed|hidden|masked|omitted|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?[.!]?$/iu;
 const MARKDOWN_TABLE_SEPARATOR_PATTERN =
@@ -393,15 +395,12 @@ function normalizeMarkdownTableLabel(cell) {
 
 function isSensitiveMultilineLabel(label) {
   const normalizedLabel = normalizeMarkdownTableLabel(label);
+  if (BENIGN_SESSION_PROSE_LABEL_PATTERN.test(normalizedLabel)) return false;
   const match = normalizedLabel.match(SENSITIVE_MULTILINE_LABEL_PATTERN);
   if (!match) return false;
   const prefix = (match[1] || "").trim();
   if (prefix === "") return true;
   const words = prefix.split(/[ _-]+/u).filter(Boolean);
-  if (
-    /session(?:[ _-]?id)?$/iu.test(normalizedLabel) &&
-    words.some((word) => /(?:ed|ing)$/iu.test(word))
-  ) return false;
   return (
     words.length <= 4 &&
     words.every(

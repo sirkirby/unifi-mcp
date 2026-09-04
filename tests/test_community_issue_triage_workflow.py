@@ -2121,6 +2121,8 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "SSH password:\nhunter2long",
         "Cloud API token:\nabcdefghijklmnop",
         "MCP API token:\nabcdefghijklmnop",
+        "Authenticated session:\nsession-identifier-value",
+        "Staging session:\nsession-identifier-value",
         "password:\n  [REDACTED]\n  actual-secret",
         "authorization:\n  disabled\n  Bearer abcdefghijklmnop",
         "token:\n  unavailable\n  abcdefghijklmnop",
