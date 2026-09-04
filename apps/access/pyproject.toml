@@ -9,8 +9,9 @@ dependencies = [
     # Access managers in unifi-core import unifi_access_api (PyPI name
     # py-unifi-access); pull it in via the [access] extra rather than
     # declaring py-unifi-access here directly. Access system-log event
-    # normalization and websocket topics require Core 0.4.33.
-    "unifi-core[access]>=0.4.33,<0.5",
+    # normalization and websocket topics require Core 0.4.33; explicit zero
+    # event limits require Core 0.4.39.
+    "unifi-core[access]>=0.4.39,<0.5",
     "mcp[cli]>=2.1.1,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security
     # floors explicit so upgrades cannot retain vulnerable installed versions.
