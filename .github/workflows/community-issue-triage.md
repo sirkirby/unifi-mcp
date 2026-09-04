@@ -19,6 +19,12 @@ permissions:
 strict: true
 engine:
   id: copilot
+  env:
+    # gh-aw v0.87.9 emits workflow-level OTLP credentials for trusted telemetry.
+    # Override them on the untrusted inference step; excluded-env provides the
+    # matching AWF denylist once compiler support is active.
+    GH_AW_OTLP_ENDPOINTS: "[]"
+    OTEL_EXPORTER_OTLP_HEADERS: "x-redacted=1"
   # Only accepted agent jobs enter this FIFO queue. Public issue events are first
   # filtered by the per-issue ingress and per-reporter qualifying gates below.
   concurrency:
@@ -32,6 +38,9 @@ sandbox:
     mounts:
       - /opt/gh-aw-trusted-intake:/opt/gh-aw-trusted-intake:ro
       - /opt/gh-aw-repository:/opt/gh-aw-repository:ro
+excluded-env:
+  - GH_AW_OTLP_ENDPOINTS
+  - OTEL_EXPORTER_OTLP_HEADERS
 network:
   allowed: [github]
 

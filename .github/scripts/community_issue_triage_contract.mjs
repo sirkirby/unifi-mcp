@@ -390,8 +390,35 @@ function stripMarkdownWrappers(value) {
   return value.replace(/^[`*_~]+|[`*_~]+$/gu, "").trim();
 }
 
+function decodeHtmlCharacterReferences(value) {
+  const named = new Map([
+    ["amp", "&"],
+    ["apos", "'"],
+    ["colon", ":"],
+    ["equals", "="],
+    ["gt", ">"],
+    ["hyphen", "-"],
+    ["lowbar", "_"],
+    ["lt", "<"],
+    ["nbsp", " "],
+    ["quot", '"'],
+  ]);
+  return value
+    .replace(/&#(?:x([0-9a-f]{1,6})(?![0-9a-f])|([0-9]{1,7})(?![0-9]));?/giu, (match, hex, decimal) => {
+      const codePoint = Number.parseInt(hex || decimal, hex ? 16 : 10);
+      return Number.isSafeInteger(codePoint) && codePoint > 0 && codePoint <= 0x10ffff &&
+        !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ? String.fromCodePoint(codePoint)
+        : match;
+    })
+    .replace(/&([a-z]+);/giu, (match, name) => named.get(name.toLocaleLowerCase("en-US")) || match);
+}
+
 function normalizeMarkdownTableLabel(cell) {
-  let label = cell.trim();
+  let label = decodeHtmlCharacterReferences(cell)
+    .replace(/<!--[^\r\n]*?-->/gu, "")
+    .replace(/<\/?[A-Za-z][^<>\r\n]*>/gu, "")
+    .trim();
   let previous = "";
   while (label !== previous) {
     previous = label;
@@ -476,8 +503,10 @@ function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referen
   for (let rowIndex = separatorIndex + 1; rowIndex < endIndex; rowIndex += 1) {
     const cells = markdownTableCells(lines[rowIndex]);
     if (!cells) throw new Error("Markdown table boundary invariant failed");
-    if (rowIndex + 1 < endIndex && isMarkdownTableSeparator(lines[rowIndex + 1])) {
-      sensitiveColumns = sensitiveMarkdownTableColumns(cells);
+    const nextIsSeparator = rowIndex + 1 < endIndex && isMarkdownTableSeparator(lines[rowIndex + 1]);
+    const candidateSensitiveColumns = nextIsSeparator ? sensitiveMarkdownTableColumns(cells) : new Set();
+    if (nextIsSeparator && candidateSensitiveColumns.size > 0) {
+      sensitiveColumns = candidateSensitiveColumns;
       rowIndex += 1;
       continue;
     }
@@ -503,6 +532,10 @@ function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referen
       ) {
         return true;
       }
+    }
+    if (nextIsSeparator) {
+      sensitiveColumns = candidateSensitiveColumns;
+      rowIndex += 1;
     }
   }
   return false;
@@ -654,10 +687,9 @@ function containsSensitiveMultilineValue(value) {
 }
 
 function containsSensitiveContent(value) {
-  const normalized = value
-    .normalize("NFKC")
-    .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
-    .replace(/\\+([:=])/gu, "$1");
+  const normalized = decodeHtmlCharacterReferences(
+    value.normalize("NFKC").replace(/\p{Default_Ignorable_Code_Point}/gu, ""),
+  ).replace(/\\+([:=])/gu, "$1");
   if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
   // Inline key/value detectors may intentionally span horizontal whitespace, but a
   // Markdown line or paragraph break after prose such as "authenticated session:" is

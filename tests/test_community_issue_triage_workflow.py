@@ -1218,6 +1218,7 @@ def test_source_removes_agent_github_tools_and_uses_sealed_credential_free_sourc
     assert "issue_read" not in source
     assert "search_code" not in source
     assert "get_file_contents" not in source
+    assert "excluded-env:\n  - GH_AW_OTLP_ENDPOINTS\n  - OTEL_EXPORTER_OTLP_HEADERS\n" in source
 
     compiled = LOCK.read_text()
     agent = compiled.split("\n  agent:\n", 1)[1].split("\n  conclusion:\n", 1)[0]
@@ -1237,6 +1238,7 @@ def test_source_removes_agent_github_tools_and_uses_sealed_credential_free_sourc
 def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
     source = WORKFLOW.read_text()
     compiled = LOCK.read_text()
+    agent = compiled.split("\n  agent:\n", 1)[1].split("\n  conclusion:\n", 1)[0]
     assert source.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 4
     assert source.count("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c") == 3
     assert source.count("artifact-ids: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}") == 2
@@ -1256,6 +1258,9 @@ def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
     assert "--mount /opt/gh-aw-trusted-intake:/opt/gh-aw-trusted-intake:rw" not in compiled
     assert "--mount /opt/gh-aw-repository:/opt/gh-aw-repository:ro" in compiled
     assert "--mount /opt/gh-aw-repository:/opt/gh-aw-repository:rw" not in compiled
+    assert "GH_AW_OTLP_ENDPOINTS: '[]'" in agent
+    assert "OTEL_EXPORTER_OTLP_HEADERS: x-redacted=1" in agent
+    assert "secrets.GH_AW_DEFAULT_OTLP_HEADERS" not in agent
     assert "/tmp/gh-aw/trusted-intake-context" not in source
     assert "retention-days: 1" in source
     assert "overwrite: false" in source
@@ -1851,6 +1856,8 @@ def test_snapshot_caps_retained_candidates_at_five():
         pytest.param(r"password\\\: hunter22", "sensitive_stop", id="triple-backslash-colon-password"),
         pytest.param(r"password\=hunter22", "sensitive_stop", id="markdown-escaped-equals-password"),
         pytest.param(r"password\\=hunter22", "sensitive_stop", id="double-backslash-equals-password"),
+        pytest.param("password&colon; hunter22", "sensitive_stop", id="html-named-colon-password"),
+        pytest.param("password&equals;hunter22", "sensitive_stop", id="html-named-equals-password"),
         pytest.param("password: admin", "sensitive_stop", id="five-character-colon-password"),
         pytest.param("password: disabled", "sensitive_stop", id="status-word-colon-password"),
         pytest.param("unifiPassword=P@ssw0rd!", "sensitive_stop", id="camel-case-password"),
@@ -2159,6 +2166,7 @@ def test_target_size_and_sensitive_content_are_handled_before_later_fetches(body
         "Observed authenticated session:\nThe endpoint returns 200",
         "Session timeout:\n30 minutes",
         "Authenticated session behavior:\nThe endpoint returns 200",
+        "Session <strong>timeout</strong>:\n30 minutes",
     ],
 )
 def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
@@ -2212,6 +2220,13 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "Server **password**:\nhunter2long",
         "[Server](https://example.com) password:\nhunter2long",
         "Server [password](https://example.com):\nhunter2long",
+        "Pass&#x77;ord:\nhunter2long",
+        "### Pass&#119;ord\nhunter2long",
+        "Username | Pass&#x77;ord\n--- | ---\nadmin | hunter2long",
+        "<strong>Password</strong>:\nhunter2long",
+        "Server <strong>password</strong>:\nhunter2long",
+        "<strong>Pass</strong>word:\nhunter2long",
+        "Pass<!-- hidden -->word:\nhunter2long",
         "Authenticated session:\nsession-identifier-value",
         "Staging session:\nsession-identifier-value",
         "the password:\nhunter2long",
@@ -2320,6 +2335,22 @@ def test_sensitive_table_scanner_handles_many_header_like_rows_as_one_block():
     ],
 )
 def test_sensitive_table_scanner_recognizes_later_headers_in_contiguous_pipe_blocks(body: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = body
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Password | Notes\n--- | ---\nhunter2long | failed\n--- | ---",
+        "| Password |\n| --- |\n| hunter2long |\n| --- |",
+        "> Password | Notes\n> --- | ---\n> hunter2long | failed\n> --- | ---",
+        "[Password](https://example.com) | Notes\n--- | ---\nhunter2long | failed\n--- | ---",
+    ],
+)
+def test_sensitive_table_scanner_checks_data_rows_before_embedded_header_transitions(body: str):
     payload = _snapshot_payload()
     payload["issues"][str(TARGET_NUMBER)]["body"] = body
     created = _create_snapshot(payload)
