@@ -229,15 +229,28 @@ jobs:
               per_page: 100,
               page: 1,
             };
-            const response = await github.rest.actions.listWorkflowRuns(request);
-            const runs = response.data?.workflow_runs;
-            if (!Array.isArray(runs)) {
-              throw new Error("GitHub returned an invalid workflow run collection");
-            }
-            if (runs.length === 100) {
-              const overflow = await github.rest.actions.listWorkflowRuns({...request, page: 2});
-              if (!Array.isArray(overflow.data?.workflow_runs) || overflow.data.workflow_runs.length > 0) {
-                throw new Error("qualifying reporter run history exceeds the trusted bound");
+            const runs = [];
+            const maxMixedActorPages = 10;
+            for (let page = 1; page <= maxMixedActorPages; page += 1) {
+              const response = await github.rest.actions.listWorkflowRuns({...request, page});
+              const pageRuns = response.data?.workflow_runs;
+              if (!Array.isArray(pageRuns) || pageRuns.length > request.per_page) {
+                throw new Error("GitHub returned an invalid workflow run collection");
+              }
+              for (const run of pageRuns) {
+                const runActor = run.actor?.login;
+                if (typeof runActor !== "string" || runActor === "") {
+                  throw new Error("GitHub returned an invalid workflow run actor");
+                }
+                if (runActor.toLowerCase() !== actor.toLowerCase()) continue;
+                runs.push(run);
+                if (runs.length > 100) {
+                  throw new Error("qualifying reporter run history exceeds the trusted bound");
+                }
+              }
+              if (pageRuns.length < request.per_page) break;
+              if (page === maxMixedActorPages) {
+                throw new Error("mixed-actor workflow run pagination exceeds the trusted bound");
               }
             }
             for (const run of runs) {
@@ -246,13 +259,6 @@ jobs:
                 throw new Error("GitHub returned an invalid workflow run ID");
               }
               if (runId === currentRunId) continue;
-              const runActor = run.actor?.login;
-              if (typeof runActor !== "string" || runActor === "") {
-                throw new Error("GitHub returned an invalid workflow run actor");
-              }
-              // The Actions endpoint has returned mixed actors even when the actor
-              // filter was supplied. Bind the reporter window ourselves.
-              if (runActor.toLowerCase() !== actor.toLowerCase()) continue;
               const createdAt = Date.parse(run.created_at || "");
               if (!Number.isFinite(createdAt)) {
                 throw new Error("GitHub returned an invalid workflow run timestamp");

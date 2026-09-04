@@ -746,6 +746,35 @@ def test_reporter_window_ignores_receipts_from_other_actors_when_api_filter_is_i
     assert not any(call["operation"] == "listWorkflowRunArtifacts" for call in observed["calls"])
 
 
+def test_reporter_window_paginates_past_mixed_actor_runs_when_api_filter_is_ignored(tmp_path: Path):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "workflowRunPages": {
+                "1": [
+                    {
+                        "id": index,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "another-reporter"},
+                    }
+                    for index in range(1, 101)
+                ],
+                "2": [
+                    {
+                        "id": 101,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "community-member"},
+                    }
+                ],
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == "true"
+    assert [call["request"]["page"] for call in observed["calls"] if call["operation"] == "listWorkflowRuns"] == [1, 2]
+
+
 @pytest.mark.parametrize("run_actor", [None, {}, {"login": ""}])
 def test_reporter_window_fails_closed_on_malformed_historical_actor(
     tmp_path: Path,
@@ -817,6 +846,22 @@ def test_reporter_window_compares_github_logins_case_insensitively(tmp_path: Pat
                 },
             },
             "history exceeds",
+        ),
+        (
+            {
+                "workflowRunPages": {
+                    str(page): [
+                        {
+                            "id": page * 100 + index,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "another-reporter"},
+                        }
+                        for index in range(100)
+                    ]
+                    for page in range(1, 11)
+                },
+            },
+            "mixed-actor workflow run pagination exceeds",
         ),
         ({"failOperations": ["listWorkflowRuns"]}, "simulated listWorkflowRuns failure"),
         (
@@ -2146,6 +2191,9 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "SSH password:\nhunter2long",
         "Cloud API token:\nabcdefghijklmnop",
         "MCP API token:\nabcdefghijklmnop",
+        "Password for controller:\nhunter2long",
+        "API token used by MCP:\nabcdefghijklmnop",
+        "Password used with controller:\nhunter2long",
         "Authenticated session:\nsession-identifier-value",
         "Staging session:\nsession-identifier-value",
         "the password:\nhunter2long",

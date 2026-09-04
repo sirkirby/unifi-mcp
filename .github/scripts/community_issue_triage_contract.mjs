@@ -78,9 +78,11 @@ const SENSITIVE_PATTERNS = [
   /\bbypass\p{L}*\b[^\r\n]{0,40}\b(?:auth(?:entication|orization)?)\b/iu,
 ];
 const SENSITIVE_MULTILINE_LABEL_PATTERN =
-  /^(?:(.+?)[ _-]+)?(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))$/iu;
+  /^(?:(.*?)[ _-]+)?(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?:[ _-]+(.*))?$/iu;
 const SENSITIVE_LABEL_PROSE_WORD_PATTERN =
   /^(?:and|are|as|at|by|for|from|in|is|of|on|or|that|to|using|was|were|when|where|which|while|with)$/iu;
+const SENSITIVE_LABEL_SUFFIX_PROSE_WORD_PATTERN =
+  /^(?:and|are|is|or|that|was|were|when|where|which|while)$/iu;
 const BENIGN_SESSION_PROSE_LABEL_PATTERN =
   /^(?:debugging|observed|testing)[ _-]+authenticated[ _-]+session$/iu;
 const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
@@ -399,13 +401,20 @@ function isSensitiveMultilineLabel(label) {
   const match = normalizedLabel.match(SENSITIVE_MULTILINE_LABEL_PATTERN);
   if (!match) return false;
   const prefix = (match[1] || "").trim();
-  if (prefix === "") return true;
-  const words = prefix.split(/[ _-]+/u).filter(Boolean);
+  const suffix = (match[2] || "").trim();
+  const isShortLabelFragment = (fragment, prosePattern) => {
+    if (fragment === "") return true;
+    const words = fragment.split(/[ _-]+/u).filter(Boolean);
+    return (
+      words.length <= 4 &&
+      words.every(
+        (word) => /^[\p{L}\p{N}][\p{L}\p{N}.'-]*$/u.test(word) && !prosePattern.test(word),
+      )
+    );
+  };
   return (
-    words.length <= 4 &&
-    words.every(
-      (word) => /^[\p{L}\p{N}][\p{L}\p{N}.'-]*$/u.test(word) && !SENSITIVE_LABEL_PROSE_WORD_PATTERN.test(word),
-    )
+    isShortLabelFragment(prefix, SENSITIVE_LABEL_PROSE_WORD_PATTERN) &&
+    isShortLabelFragment(suffix, SENSITIVE_LABEL_SUFFIX_PROSE_WORD_PATTERN)
   );
 }
 
