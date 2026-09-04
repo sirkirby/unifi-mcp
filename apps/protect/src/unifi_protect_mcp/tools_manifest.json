@@ -1738,7 +1738,7 @@
               ]
             },
             "tool": {
-              "description": "Tool name from protect_tool_index (e.g. 'protect_list_*')",
+              "description": "Domain tool name (e.g. 'protect_list_*'); discover it through protect_tool_index in lazy mode",
               "type": "string"
             }
           },

@@ -526,7 +526,7 @@
               ]
             },
             "tool": {
-              "description": "Tool name from access_tool_index (e.g. 'access_list_*')",
+              "description": "Domain tool name (e.g. 'access_list_*'); discover it through access_tool_index in lazy mode",
               "type": "string"
             }
           },

@@ -4850,7 +4850,7 @@
               ]
             },
             "tool": {
-              "description": "Tool name from unifi_tool_index (e.g. 'unifi_list_*')",
+              "description": "Domain tool name (e.g. 'unifi_list_*'); discover it through unifi_tool_index in lazy mode",
               "type": "string"
             }
           },

@@ -114,7 +114,8 @@ def register_meta_tools(
             f"Model-friendly discovery extension for {server_label} tools. "
             f"This server manages {hint}. "
             "Standard MCP clients should use tools/list first; this compact index is an "
-            "optional UniFi extension for filtered discovery in lazy/meta-only workflows. "
+            "optional UniFi extension for filtered discovery. In meta_only mode, it "
+            "intentionally contains only meta-tools. "
             f"Returns names and descriptions by default. "
             f"Use 'category' to filter by area (e.g. clients, firewall, devices), "
             f"'search' for keyword matching, or 'include_schemas' for full parameter schemas. "
@@ -199,8 +200,10 @@ def register_meta_tools(
         name=exec_name,
         title=exec_title,
         description=(
-            f"Execute a {server_label} tool discovered via {idx_name}. "
+            f"Execute a named {server_label} tool. "
             f"This server manages {hint}. "
+            f"In lazy mode, use {idx_name} to discover domain tool names. In meta_only "
+            "mode, the domain tool name must already be known. "
             "This is an indirect execution wrapper for lazy/meta-only workflows; "
             "standard MCP clients may call directly registered tools with tools/call. "
             f"For bulk/parallel operations, use {batch_name} instead."
@@ -229,7 +232,9 @@ def register_meta_tools(
             "properties": {
                 "tool": {
                     "type": "string",
-                    "description": f"Tool name from {idx_name} (e.g. '{prefix}_list_*')",
+                    "description": (
+                        f"Domain tool name (e.g. '{prefix}_list_*'); discover it through {idx_name} in lazy mode"
+                    ),
                 },
                 "arguments": {
                     "type": ["object", "null"],
@@ -252,7 +257,7 @@ def register_meta_tools(
         title=batch_title,
         description=(
             f"Execute multiple {server_label} tools in parallel through an indirect execution wrapper. "
-            f"Use {idx_name} to discover tool names when they are not directly registered. "
+            f"Use {idx_name} to discover tool names in lazy mode when they are not directly registered. "
             f"Returns job IDs for each operation. Use {status_name} to check progress and get results. "
             f"For single operations, use {exec_name} instead (returns result directly)."
         ),
