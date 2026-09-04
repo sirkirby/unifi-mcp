@@ -420,7 +420,16 @@ function markdownReferenceDefinitionLabels(lines) {
 }
 
 function isResolvedPlaceholderReference(candidate, referenceLabels) {
-  const match = candidate.match(/^\[([^\]\r\n]+)\]$/u);
+  let normalized = candidate.trim();
+  if (
+    normalized.length >= 2 &&
+    ((normalized.startsWith('"') && normalized.endsWith('"')) ||
+      (normalized.startsWith("'") && normalized.endsWith("'")))
+  ) {
+    normalized = normalized.slice(1, -1).trim();
+  }
+  normalized = stripMarkdownWrappers(normalized);
+  const match = normalized.match(/^\[([^\]\r\n]+)\]$/u);
   return Boolean(match && referenceLabels.has(match[1].trim().toLocaleLowerCase("en-US")));
 }
 
