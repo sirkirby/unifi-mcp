@@ -289,6 +289,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow, including h
 
 UniFi MCP is maintained as an independent open-source project. Sponsorship helps cover the ongoing AI costs behind building, testing, and maintaining the project, plus live controller compatibility testing, release maintenance, documentation, and issue triage across the Network, Protect, Access, API, relay, and plugin packages.
 
+For a reproducible Network, Protect, or Access MCP problem, generate and review a [sanitized support bundle](docs/support-bundles.md) before opening a public bug report. Support bundles are safer than ordinary diagnostic logs but remain sanitized, not anonymous.
+
 - [Sponsor on GitHub](https://github.com/sponsors/sirkirby)
 - [See what sponsorship funds](https://unifimcp.com/sponsor/)
 

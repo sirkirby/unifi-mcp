@@ -132,6 +132,17 @@ const MISSING_INFORMATION_TEXT = new Map([
   ["expected_actual", "The expected behavior and the actual behavior observed."],
   ["live_controller_evidence", "Sanitized live-controller evidence showing the result."],
 ]);
+const SUPPORT_BUNDLE_GUIDE_URL =
+  "https://github.com/sirkirby/unifi-mcp/blob/main/docs/support-bundles.md";
+const SUPPORT_REQUEST_TEXT = new Map([
+  ["network_support_summary", `Run \`unifi_get_support_bundle\` with \`probe="summary"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["protect_support_summary", `Run \`protect_get_support_bundle\` with \`probe="summary"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["access_support_summary", `Run \`access_get_support_bundle\` with \`probe="summary"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["network_support_connectivity", `If you agree to one bounded controller request, run \`unifi_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["protect_support_connectivity", `If you agree to one bounded controller request, run \`protect_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["access_support_connectivity", `If you agree to one bounded controller request, run \`access_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["protect_support_sensor_shape", `If the server reports this probe as supported and you agree to structural collection, run \`protect_get_support_bundle\` with \`probe="resource_shape"\` and \`resource="sensors"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+]);
 const REPOSITORY_EVIDENCE_PATHS = [
   /^(?:README|CONTRIBUTING|SECURITY)\.md$/,
   /^docs\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
@@ -1958,7 +1969,13 @@ function normalizeReason(value) {
   if (normalized !== value) fail("relationship reason must already be normalized");
   const length = [...normalized].length;
   if (length < 20 || length > 240 || !/[\p{L}\p{N}]/u.test(normalized)) fail("relationship reason must contain 20 to 240 safe visible characters");
-  if (/[<>@#]/u.test(normalized) || /https?:\/\//iu.test(normalized) || containsSensitiveContent(normalized)) fail("relationship reason contains unsafe syntax");
+  if (
+    /[<>@#]/u.test(normalized) ||
+    /https?:\/\//iu.test(normalized) ||
+    /\b(?:unifi|protect|access)_get_support_bundle\b/iu.test(normalized) ||
+    /\b(?:attach(?:ed|ing|ment|ments)?|bundles?|downloads?|files?|json|links?|logs?|outputs?|pastes?|payloads?|screenshots?|submits?|uploads?)\b/iu.test(normalized) ||
+    containsSensitiveContent(normalized)
+  ) fail("relationship reason contains unsafe syntax");
   return normalized;
 }
 
@@ -1977,10 +1994,14 @@ function validateDecision(decision, expectedKind) {
   if (!decision || typeof decision !== "object" || Array.isArray(decision) || typeof decision.kind !== "string") fail("proposal decision is invalid");
   if (expectedKind && decision.kind !== expectedKind) fail(`proposal carrier requires a ${expectedKind} decision`);
   if (decision.kind === "missing_information") {
-    if (!exactKeys(decision, ["kind", "fields"])) fail(`${decision.kind} decision contains unexpected fields`);
-    if (!Array.isArray(decision.fields) || decision.fields.length < 1 || decision.fields.length > 3 || new Set(decision.fields).size !== decision.fields.length || !decision.fields.every((field) => MISSING_INFORMATION_FIELDS.has(field))) {
-      fail(`${decision.kind} decision requires 1 to 3 unique allowlisted fields`);
+    const hasSupportRequest = Object.hasOwn(decision, "support_request");
+    const expectedKeys = hasSupportRequest ? ["kind", "fields", "support_request"] : ["kind", "fields"];
+    if (!exactKeys(decision, expectedKeys)) fail(`${decision.kind} decision contains unexpected fields`);
+    const minimumFields = hasSupportRequest ? 0 : 1;
+    if (!Array.isArray(decision.fields) || decision.fields.length < minimumFields || decision.fields.length > 3 || new Set(decision.fields).size !== decision.fields.length || !decision.fields.every((field) => MISSING_INFORMATION_FIELDS.has(field))) {
+      fail(`${decision.kind} decision requires up to 3 unique allowlisted fields and cannot be empty without one support request`);
     }
+    if (hasSupportRequest && !SUPPORT_REQUEST_TEXT.has(decision.support_request)) fail("missing_information support request is invalid");
     return decision;
   }
   if (decision.kind === "repository_evidence") {
@@ -2010,14 +2031,16 @@ function validateDecision(decision, expectedKind) {
 
 function relationshipText(relationships) {
   return relationships.slice(0, 1).map(
-    (relationship) => `Candidate #${relationship.candidate_number}: ${relationship.verdict} — ${relationship.reason}`,
+    (relationship) => `Candidate #${relationship.candidate_number}: ${relationship.verdict}`,
   );
 }
 
 function renderDecision(decision, relationships, runKind = "initial") {
   let body;
   if (decision.kind === "missing_information") {
-    body = "To make this report actionable, please provide:\n\n" + decision.fields.map((field) => `- ${MISSING_INFORMATION_TEXT.get(field)}`).join("\n");
+    const requests = decision.fields.map((field) => MISSING_INFORMATION_TEXT.get(field));
+    if (decision.support_request) requests.push(SUPPORT_REQUEST_TEXT.get(decision.support_request));
+    body = "To make this report actionable, please provide:\n\n" + requests.map((request) => `- ${request}`).join("\n");
   } else if (decision.kind === "repository_evidence") {
     body = `Repository evidence (${decision.path}):\n\n> ${decision.quote}`;
   } else if (decision.kind === "ready_for_maintainer") {
