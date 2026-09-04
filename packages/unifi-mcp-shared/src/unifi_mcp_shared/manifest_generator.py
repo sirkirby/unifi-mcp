@@ -29,6 +29,12 @@ class _ManifestLazyLoader:
         return False
 
 
+async def _manifest_support_bundle_handler(*, probe: str = "summary", resource: str | None = None) -> dict[str, Any]:
+    """Non-executing build-time handler used only to expose the tool schema."""
+    del probe, resource
+    return {"success": False, "error": "Support bundle collection is unavailable during manifest generation."}
+
+
 def _build_module_map(
     *,
     project_root: Path,
@@ -95,6 +101,7 @@ def _generate_manifest(
         start_async_tool=jobs_mod.start_async_tool,
         get_job_status=jobs_mod.get_job_status,
         register_tool=tool_index_mod.register_tool,
+        support_bundle_handler=_manifest_support_bundle_handler,
         prefix=meta_prefix,
         server_label=server_label,
     )

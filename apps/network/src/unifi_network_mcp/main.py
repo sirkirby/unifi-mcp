@@ -20,6 +20,7 @@ from unifi_network_mcp.runtime import (
     config,
     connection_manager,
     server,
+    support_bundle_service,
 )
 from unifi_network_mcp.tool_index import register_tool, tool_index_handler
 from unifi_network_mcp.utils.diagnostics import diagnostics_enabled, wrap_tool
@@ -77,6 +78,7 @@ async def main_async():
         base_package="unifi_network_mcp.tools",
         config=config,
         logger=logger,
+        support_bundle_handler=support_bundle_service.generate,
     )
 
     # ---- Start transports ----

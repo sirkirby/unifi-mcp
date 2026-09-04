@@ -14,6 +14,8 @@ import pkgutil
 from types import ModuleType
 from typing import List, Optional, Set
 
+from unifi_mcp_shared.meta_tools import is_meta_tool
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,8 +38,9 @@ def auto_load_tools(
         enabled_tools: If set, load all modules but remove tools not in this list
                       (requires *server* parameter).
         server: FastMCP server instance (required if *enabled_tools* is set).
-        meta_tools: Set of meta-tool names to always keep when filtering by
-                    *enabled_tools*. Defaults to the standard five lazy-loading meta-tools.
+        meta_tools: Additional exact tool names to keep when filtering by
+                    *enabled_tools*. Prefix-specific shared meta-tools are detected
+                    automatically with :func:`is_meta_tool`.
     """
     try:
         tools_pkg: ModuleType = importlib.import_module(base_package)
@@ -81,16 +84,7 @@ def auto_load_tools(
     # If enabled_tools is specified, remove any tools not in the list
     if enabled_tools and server:
         enabled_set = set(enabled_tools)
-        # Always keep meta-tools
-        if meta_tools is None:
-            meta_tools = {
-                "unifi_tool_index",
-                "unifi_execute",
-                "unifi_batch",
-                "unifi_batch_status",
-                "unifi_load_tools",
-            }
-        enabled_set.update(meta_tools)
+        enabled_set.update(meta_tools or set())
 
         try:
 
@@ -98,7 +92,7 @@ def auto_load_tools(
                 tools = await server.list_tools()
                 removed = []
                 for tool in tools:
-                    if tool.name not in enabled_set:
+                    if tool.name not in enabled_set and not is_meta_tool(tool.name):
                         try:
                             server.remove_tool(tool.name)
                             removed.append(tool.name)

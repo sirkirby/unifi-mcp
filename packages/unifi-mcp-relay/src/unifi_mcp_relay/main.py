@@ -12,7 +12,8 @@ from typing import Any
 from unifi_mcp_relay.client import RelayClient
 from unifi_mcp_relay.config import RelayConfig
 from unifi_mcp_relay.discovery import ServerInfo, discover_all
-from unifi_mcp_relay.forwarder import ToolForwarder
+from unifi_mcp_relay.forwarder import RelayBatchJobs, ToolForwarder
+from unifi_mcp_relay.policy import filter_relay_tools, relay_call_rejection
 from unifi_mcp_relay.protocol import ToolInfo
 
 logger = logging.getLogger("unifi-mcp-relay")
@@ -34,6 +35,9 @@ class RelaySidecar:
         self._config = config
         self._client = RelayClient(config)
         self._forwarder: ToolForwarder | None = None
+        # Shared by replacement forwarders, including completions of in-flight
+        # calls on the old one. Never shared across separate relay instances.
+        self._batch_jobs: RelayBatchJobs = {}
         self._catalog: list[ToolInfo] = []
         self._advertised_catalog: tuple[ToolInfo, ...] = ()
         self._refresh_task: asyncio.Task | None = None
@@ -57,11 +61,11 @@ class RelaySidecar:
 
         catalog: list[ToolInfo] = []
         for info in servers:
-            catalog.extend(info.tools)
+            catalog.extend(filter_relay_tools(info.tools))
         if not catalog:
             raise DiscoveryNotReadyError("configured local MCP servers returned an empty tool catalog")
 
-        forwarder = ToolForwarder(servers)
+        forwarder = ToolForwarder(servers, batch_jobs=self._batch_jobs)
         await forwarder.open()
 
         # Close old forwarder only after the replacement is ready, so a
@@ -117,6 +121,10 @@ class RelaySidecar:
         """
         if self._forwarder is None:
             return None, "Forwarder not initialized"
+
+        rejection = relay_call_rejection(tool_name, arguments)
+        if rejection is not None:
+            return None, rejection
 
         outcome = await self._forwarder.forward_with_error(tool_name, arguments)
         if isinstance(outcome, str):

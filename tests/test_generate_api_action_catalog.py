@@ -176,6 +176,18 @@ def test_generator_meta_tool_suffixes_match_shared_contract() -> None:
     )
 
     assert tuple(ast.literal_eval(assignment.value)) == generator.META_TOOL_SUFFIXES
+    assert "_get_support_bundle" in generator.META_TOOL_SUFFIXES
+
+
+def test_generated_api_catalog_excludes_support_bundle_meta_tools() -> None:
+    catalog = json.loads((REPO_ROOT / "apps/api/src/unifi_api/action_catalog.json").read_text())
+    names = {tool["name"] for tool in catalog["actions"]}
+
+    assert not names & {
+        "unifi_get_support_bundle",
+        "protect_get_support_bundle",
+        "access_get_support_bundle",
+    }
 
 
 @pytest.mark.parametrize(

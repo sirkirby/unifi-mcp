@@ -7,7 +7,13 @@ from importlib.metadata import version
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unifi_mcp_relay.discovery import LEGACY_MCP_PROTOCOL_REVISION, McpHttpClient, _relay_client_info
+from unifi_mcp_relay.discovery import (
+    LEGACY_MCP_PROTOCOL_REVISION,
+    McpHttpClient,
+    _build_tools_from_index,
+    _build_tools_from_list,
+    _relay_client_info,
+)
 from unifi_mcp_shared.protocol import DEFAULT_MCP_PROTOCOL_REVISION
 
 
@@ -73,6 +79,28 @@ def test_relay_client_info_matches_current_initialize_metadata():
     assert base64.b64decode(info["icons"][0]["src"].removeprefix("data:image/png;base64,")).startswith(
         b"\x89PNG\r\n\x1a\n"
     )
+
+
+def test_discovery_filters_support_tools_from_index_and_eager_list():
+    index = _build_tools_from_index(
+        {
+            "tools": [
+                {"name": "unifi_tool_index", "schema": {"input": {}}},
+                {"name": "unifi_get_support_bundle", "schema": {"input": {}}},
+            ]
+        },
+        "unifi-network-mcp",
+    )
+    listed = _build_tools_from_list(
+        [
+            {"name": "protect_get_support_bundle", "inputSchema": {}},
+            {"name": "protect_tool_index", "inputSchema": {}},
+        ],
+        "unifi-protect-mcp",
+    )
+
+    assert [tool.name for tool in index] == ["unifi_tool_index"]
+    assert [tool.name for tool in listed] == ["protect_tool_index"]
 
 
 @pytest.mark.asyncio

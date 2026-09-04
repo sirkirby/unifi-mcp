@@ -14,10 +14,13 @@ servers are loaded simultaneously:
 """
 
 import logging
-from typing import TYPE_CHECKING, Callable, List
+import time
+import uuid
+from typing import TYPE_CHECKING, Callable, List, Literal
 
 from mcp.server.mcpserver import Context
 from mcp.types import ToolAnnotations
+from pydantic import SkipValidation
 
 from unifi_mcp_shared.response_serialization import normalize_call_tool_result
 from unifi_mcp_shared.tool_index import normalize_tool_annotations
@@ -33,6 +36,7 @@ META_TOOL_SUFFIXES: tuple[str, ...] = (
     "_batch",
     "_batch_status",
     "_load_tools",
+    "_get_support_bundle",
 )
 
 
@@ -49,6 +53,16 @@ _DEFAULT_DOMAIN_HINTS = {
 }
 
 
+def _duration_bucket(duration_ms: float) -> str:
+    if duration_ms < 100:
+        return "under_100ms"
+    if duration_ms < 1_000:
+        return "100ms_1s"
+    if duration_ms < 5_000:
+        return "1s_5s"
+    return "over_5s"
+
+
 def register_meta_tools(
     server,
     tool_decorator: Callable,
@@ -56,6 +70,7 @@ def register_meta_tools(
     start_async_tool: Callable,
     get_job_status: Callable,
     register_tool: Callable,
+    support_bundle_handler: Callable,
     prefix: str = "unifi",
     server_label: str = "UniFi Network",
     domain_hint: str | None = None,
@@ -67,6 +82,7 @@ def register_meta_tools(
     - {prefix}_execute: Execute a single tool (returns result directly)
     - {prefix}_batch: Execute multiple tools in parallel (returns job IDs)
     - {prefix}_batch_status: Check batch job progress
+    - {prefix}_get_support_bundle: Generate privacy-bounded support evidence
 
     Args:
         server: FastMCP server instance (for call_tool access)
@@ -75,6 +91,7 @@ def register_meta_tools(
         start_async_tool: Function to start async jobs
         get_job_status: Function to get job status
         register_tool: Function to register in tool index
+        support_bundle_handler: Runtime support-bundle service callback.
         prefix: Tool name prefix (e.g. "unifi", "protect", "access").
         server_label: Human-readable server name for descriptions
                       (e.g. "UniFi Network", "UniFi Protect").
@@ -85,12 +102,14 @@ def register_meta_tools(
     exec_name = f"{prefix}_execute"
     batch_name = f"{prefix}_batch"
     status_name = f"{prefix}_batch_status"
+    support_name = f"{prefix}_get_support_bundle"
 
     hint = domain_hint or _DEFAULT_DOMAIN_HINTS.get(prefix, "controller management")
     idx_title = f"{server_label} Tool Index"
     exec_title = f"{server_label} Execute Tool"
     batch_title = f"{server_label} Batch Execute"
     status_title = f"{server_label} Batch Status"
+    support_title = f"{server_label} Support Bundle"
     read_annotations = ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -102,6 +121,84 @@ def register_meta_tools(
         destructiveHint=False,
         idempotentHint=False,
         openWorldHint=False,
+    )
+
+    # =========================================================================
+    # SUPPORT: {prefix}_get_support_bundle
+    # This uses the original server decorator and a dedicated safe audit line;
+    # it must never pass through ordinary diagnostic argument/result logging.
+    # =========================================================================
+    @tool_decorator(
+        name=support_name,
+        title=support_title,
+        description=(
+            f"Generate a sanitized, reviewable {server_label} support bundle. "
+            "The default summary is local/cache-only. Live connectivity or resource-shape probes "
+            "are bounded and may be unavailable for this product. The result excludes raw logs, "
+            "credentials, controller payload values, and arbitrary exception text. Review the "
+            "bundle before sharing it publicly."
+        ),
+        annotations=read_annotations,
+    )
+    async def _support_bundle_wrapper(
+        probe: SkipValidation[Literal["summary", "connectivity", "resource_shape"]] = "summary",
+        resource: SkipValidation[str | None] = None,
+    ) -> dict:
+        # Preserve the advertised schema, but validate only inside the service's
+        # privacy boundary: Pydantic errors otherwise echo rejected input values.
+        try:
+            correlation_id = uuid.uuid4().hex
+            started = time.monotonic()
+            result = await support_bundle_handler(probe=probe, resource=resource)
+            if not isinstance(result, dict):
+                result = {"success": False, "error": "Failed to generate support bundle."}
+            outcome = "success" if result.get("success") is True else "failed"
+            duration_bucket = _duration_bucket((time.monotonic() - started) * 1000)
+        except Exception:
+            result = {"success": False, "error": "Failed to generate support bundle."}
+            correlation_id = uuid.uuid4().hex
+            outcome = "failed"
+            duration_bucket = "unknown"
+        safe_probe = (
+            probe if isinstance(probe, str) and probe in {"summary", "connectivity", "resource_shape"} else "invalid"
+        )
+        logger.info(
+            "Support bundle audit correlation_id=%s probe=%s outcome=%s duration=%s",
+            correlation_id,
+            safe_probe,
+            outcome,
+            duration_bucket,
+        )
+        return result
+
+    register_tool(
+        name=support_name,
+        title=support_title,
+        description=(
+            f"Generate sanitized {server_label} support evidence for user review. "
+            "Summary is local/cache-only; live probes are bounded and explicitly allowlisted."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "probe": {
+                    "type": "string",
+                    "enum": ["summary", "connectivity", "resource_shape"],
+                    "default": "summary",
+                },
+                "resource": {"type": ["string", "null"], "default": None},
+            },
+        },
+        output_schema={
+            "type": "object",
+            "properties": {
+                "success": {"type": "boolean"},
+                "data": {"type": "object"},
+                "error": {"type": "string"},
+            },
+            "required": ["success"],
+        },
+        annotations=normalize_tool_annotations(read_annotations),
     )
 
     # =========================================================================
@@ -446,7 +543,14 @@ def register_meta_tools(
         annotations=normalize_tool_annotations(read_annotations),
     )
 
-    logger.info("Registered meta-tools: %s, %s, %s, %s", idx_name, exec_name, batch_name, status_name)
+    logger.info(
+        "Registered meta-tools: %s, %s, %s, %s, %s",
+        idx_name,
+        exec_name,
+        batch_name,
+        status_name,
+        support_name,
+    )
 
 
 def register_load_tools(

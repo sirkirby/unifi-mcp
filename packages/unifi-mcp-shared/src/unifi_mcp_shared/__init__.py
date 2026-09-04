@@ -22,6 +22,12 @@ from unifi_mcp_shared.lazy_tools import (
 from unifi_mcp_shared.manifest_helpers import get_tool_annotations
 from unifi_mcp_shared.meta_tools import register_load_tools, register_meta_tools
 from unifi_mcp_shared.server import UniFiMCPServer
+from unifi_mcp_shared.support_bundle import (
+    LiveProbeGate,
+    SupportBundleAdapter,
+    SupportBundleEvidence,
+    SupportBundleService,
+)
 from unifi_mcp_shared.tasks import (
     DEFAULT_TASK_POLL_INTERVAL_MS,
     DEFAULT_TASK_TTL_MS,
@@ -42,6 +48,10 @@ __all__ = [
     "MCP_RELATED_TASK_META",
     "PolicyGateChecker",
     "ResourceValidator",
+    "SupportBundleAdapter",
+    "SupportBundleEvidence",
+    "SupportBundleService",
+    "LiveProbeGate",
     "UniFiMCPServer",
     "DEFAULT_TASK_POLL_INTERVAL_MS",
     "DEFAULT_TASK_TTL_MS",

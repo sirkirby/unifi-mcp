@@ -503,6 +503,7 @@ class LiveSmokeRunner:
             "base_package": self.config["base_package"],
             "config": runtime_mod.config,
             "logger": bootstrap_mod.logger,
+            "support_bundle_handler": runtime_mod.support_bundle_service.generate,
         }
         if self.config.get("prefix"):
             kwargs["prefix"] = self.config["prefix"]
