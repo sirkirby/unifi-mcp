@@ -166,6 +166,52 @@ async def test_access_probe_prefers_existing_developer_session_and_never_reauthe
 
 
 @pytest.mark.asyncio
+async def test_access_probe_uses_existing_proxy_session_without_reading_body_or_reauthenticating() -> None:
+    context = _ResponseContext(200)
+    session = _Session(context)
+    manager = AccessConnectionManager("controller.example.invalid", "private-user", "private-password")
+    manager._initialized = True
+    manager._proxy_available = True
+    manager._proxy_session = session
+    manager._csrf_token = "private-csrf-token"
+    manager._proxy_login = AsyncMock()
+    manager.initialize = AsyncMock()
+
+    result = await manager.support_connectivity_probe()
+
+    assert result.outcome == "success"
+    assert len(session.calls) == 1
+    assert session.calls[0][0][1].endswith("/proxy/access/api/v2/access/info")
+    assert session.calls[0][1]["headers"] == {"X-CSRF-Token": "private-csrf-token"}
+    assert session.calls[0][1]["timeout"].total == 10
+    assert session.calls[0][1]["allow_redirects"] is False
+    assert session.calls[0][1]["ssl"] is manager._ssl_context
+    assert context.body_read is False
+    manager._proxy_login.assert_not_awaited()
+    manager.initialize.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_unavailable_probe_paths_emit_fixed_audit_events(caplog: pytest.LogCaptureFixture) -> None:
+    managers = (
+        ("network", ConnectionManager("controller.example.invalid", "private-user", "private-password")),
+        ("protect", ProtectConnectionManager("controller.example.invalid", "private-user", "private-password")),
+        ("access", AccessConnectionManager("controller.example.invalid", "private-user", "private-password")),
+    )
+
+    with caplog.at_level(logging.INFO):
+        for product, manager in managers:
+            result = await manager.support_connectivity_probe()
+            assert result.outcome == "connection"
+            assert result.duration_bucket == "unknown"
+            assert f"Support connectivity audit product={product} outcome=connection duration=unknown" in caplog.text
+
+    assert "private-user" not in caplog.text
+    assert "private-password" not in caplog.text
+    assert "controller.example.invalid" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_probe_failure_logs_only_fixed_audit_fields(caplog: pytest.LogCaptureFixture) -> None:
     canary = "private-user private-password https://controller.example.invalid"
     session = _Session(_RaisingContext(aiohttp.ClientConnectionError(canary)))

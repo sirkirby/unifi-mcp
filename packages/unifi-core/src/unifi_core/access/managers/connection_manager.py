@@ -591,7 +591,13 @@ class AccessConnectionManager:
                 {"X-CSRF-Token": self._csrf_token},
             )
         if request is None:
-            return connectivity_probe_result("connection", None)
+            result = connectivity_probe_result("connection", None)
+            logger.info(
+                "Support connectivity audit product=access outcome=%s duration=%s",
+                result.outcome,
+                result.duration_bucket,
+            )
+            return result
 
         session, url, headers = request
         started = time.perf_counter()

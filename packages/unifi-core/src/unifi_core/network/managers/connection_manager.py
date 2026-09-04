@@ -408,7 +408,13 @@ class ConnectionManager:
         session = self._aiohttp_session
         controller = self.controller
         if not self._initialized or controller is None or session is None or session.closed:
-            return connectivity_probe_result("connection", None)
+            result = connectivity_probe_result("connection", None)
+            logger.info(
+                "Support connectivity audit product=network outcome=%s duration=%s",
+                result.outcome,
+                result.duration_bucket,
+            )
+            return result
 
         is_unifi_os = self._unifi_os_override
         if is_unifi_os is None:

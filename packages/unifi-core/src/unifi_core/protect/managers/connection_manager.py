@@ -192,7 +192,13 @@ class ProtectConnectionManager:
         client = self._client
         session = getattr(client, "_session", None) if client is not None else None
         if not self._initialized or client is None or session is None or session.closed:
-            return connectivity_probe_result("connection", None)
+            result = connectivity_probe_result("connection", None)
+            logger.info(
+                "Support connectivity audit product=protect outcome=%s duration=%s",
+                result.outcome,
+                result.duration_bucket,
+            )
+            return result
 
         started = time.perf_counter()
         try:
