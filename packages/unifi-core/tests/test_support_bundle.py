@@ -280,11 +280,11 @@ def test_list_tuple_sampling_is_bounded_and_variant_truncation_is_reported() -> 
         ("resource",): PathRule(PathMode.IDENTIFIER_MAP),
         ("resource", "[]"): PathRule(PathMode.OBJECT_FIELDS, frozenset(fields)),
     }
-    variants = [{name: index for index, name in enumerate(fields) if mask & (1 << index)} for mask in range(1, 13)]
+    variants = [{name: index for index, name in enumerate(fields) if mask & (1 << index)} for mask in range(1, 21)]
     extraction = extract_structural_shape(tuple(variants), policy=policy)
     assert extraction.shape.kind is ShapeKind.SEQUENCE
     assert extraction.shape.item_count is CountBucket.SIX_TO_TWENTY
-    assert len(extraction.shape.variants) == 8
+    assert len(extraction.shape.variants) == 16
     assert extraction.sanitization.variants_truncated is True
 
     bounded = extract_structural_shape([{"co2": 1}] * 101, policy=policy)
@@ -517,7 +517,7 @@ def test_oversized_shape_is_pruned_as_whole_nodes(monkeypatch: pytest.MonkeyPatc
     variant = StructuralShape(kind=ShapeKind.OBJECT, fields=fields, unknown_fields=CountBucket.ZERO)
     large_shape = StructuralShape(
         kind=ShapeKind.IDENTIFIER_MAP,
-        variants=tuple(variant.model_copy(deep=True) for _ in range(8)),
+        variants=tuple(variant.model_copy(deep=True) for _ in range(16)),
         item_count=CountBucket.OVER_ONE_HUNDRED,
     )
     payload = _bundle().model_dump(mode="json")

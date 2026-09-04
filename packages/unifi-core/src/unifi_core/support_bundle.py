@@ -35,10 +35,10 @@ MAX_BUNDLE_BYTES = 32 * 1024
 MAX_COLLECTION_ITEMS = 100
 MAX_DEPTH = 6
 MAX_FIELDS_PER_OBJECT = 64
-MAX_FIELD_NAME_LENGTH = 64
+MAX_FIELD_NAME_LENGTH = 96
 MAX_VERSION_LENGTH = 64
-MAX_NODES = 2_048
-MAX_SHAPE_VARIANTS = 8
+MAX_NODES = 2_000
+MAX_SHAPE_VARIANTS = 16
 SHARING_NOTICE = "Review this bundle before posting it publicly."
 
 _VERSION_RE = re.compile(
@@ -47,7 +47,7 @@ _VERSION_RE = re.compile(
 )
 _PYTHON_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 _RFC3339_UTC_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?Z$")
-_FIELD_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_FIELD_RE = re.compile(r"^[a-z][a-z0-9_]{0,95}$")
 
 
 class _ClosedModel(BaseModel):
@@ -134,13 +134,20 @@ class CountBucket(str, Enum):
 class ServerFeatureFlag(str, Enum):
     DIAGNOSTICS_ENABLED = "diagnostics_enabled"
     DIAGNOSTICS_DISABLED = "diagnostics_disabled"
+    RESPONSE_REDACTION_ENABLED = "response_redaction_enabled"
+    RESPONSE_REDACTION_DISABLED = "response_redaction_disabled"
 
 
 class DependencyPackage(str, Enum):
     AIOUNIFI = "aiounifi"
+    MCP = "mcp"
+    PYDANTIC = "pydantic"
     PY_UNIFI_ACCESS = "py-unifi-access"
+    UNIFI_ACCESS_MCP = "unifi-access-mcp"
     UNIFI_CORE = "unifi-core"
     UNIFI_MCP_SHARED = "unifi-mcp-shared"
+    UNIFI_NETWORK_MCP = "unifi-network-mcp"
+    UNIFI_PROTECT_MCP = "unifi-protect-mcp"
     UIPROTECT = "uiprotect"
 
 
@@ -432,8 +439,8 @@ class SanitizerBounds(_ClosedModel):
     max_collection_items: Literal[100] = MAX_COLLECTION_ITEMS
     max_depth: Literal[6] = MAX_DEPTH
     max_fields_per_object: Literal[64] = MAX_FIELDS_PER_OBJECT
-    max_nodes: Literal[2048] = MAX_NODES
-    max_shape_variants: Literal[8] = MAX_SHAPE_VARIANTS
+    max_nodes: Literal[2000] = MAX_NODES
+    max_shape_variants: Literal[16] = MAX_SHAPE_VARIANTS
 
 
 class SanitizationSection(_ClosedModel):
@@ -460,13 +467,34 @@ _SERVER_IDENTITIES: Final = MappingProxyType(
 _DEPENDENCIES_BY_PRODUCT: Final = MappingProxyType(
     {
         Product.NETWORK: frozenset(
-            {DependencyPackage.AIOUNIFI, DependencyPackage.UNIFI_CORE, DependencyPackage.UNIFI_MCP_SHARED}
+            {
+                DependencyPackage.AIOUNIFI,
+                DependencyPackage.MCP,
+                DependencyPackage.PYDANTIC,
+                DependencyPackage.UNIFI_CORE,
+                DependencyPackage.UNIFI_MCP_SHARED,
+                DependencyPackage.UNIFI_NETWORK_MCP,
+            }
         ),
         Product.PROTECT: frozenset(
-            {DependencyPackage.UIPROTECT, DependencyPackage.UNIFI_CORE, DependencyPackage.UNIFI_MCP_SHARED}
+            {
+                DependencyPackage.MCP,
+                DependencyPackage.PYDANTIC,
+                DependencyPackage.UNIFI_CORE,
+                DependencyPackage.UNIFI_MCP_SHARED,
+                DependencyPackage.UNIFI_PROTECT_MCP,
+                DependencyPackage.UIPROTECT,
+            }
         ),
         Product.ACCESS: frozenset(
-            {DependencyPackage.PY_UNIFI_ACCESS, DependencyPackage.UNIFI_CORE, DependencyPackage.UNIFI_MCP_SHARED}
+            {
+                DependencyPackage.MCP,
+                DependencyPackage.PYDANTIC,
+                DependencyPackage.PY_UNIFI_ACCESS,
+                DependencyPackage.UNIFI_ACCESS_MCP,
+                DependencyPackage.UNIFI_CORE,
+                DependencyPackage.UNIFI_MCP_SHARED,
+            }
         ),
     }
 )
