@@ -426,8 +426,8 @@ class ConnectionManager:
                 return True
 
             logger.info("Attempting to connect to Unifi controller at %s...", self.host)
-            self._support_attempt = connection_attempt_started()
             for attempt in range(self._max_retries):
+                self._support_attempt = connection_attempt_started()
                 try:
                     if self.controller:
                         self.controller = None

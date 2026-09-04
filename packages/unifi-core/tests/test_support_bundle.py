@@ -322,6 +322,12 @@ def test_error_classification_never_serializes_exception_text() -> None:
     assert category is ErrorCategory.AUTHENTICATION
     assert status is None
 
+    AuthenticationRateLimitError = type("AuthenticationRateLimitError", (Exception,), {})
+    category, status, remediation = classify_error(AuthenticationRateLimitError(secret))
+    assert category is ErrorCategory.RATE_LIMITED
+    assert status is None
+    assert remediation.value == "wait_and_retry"
+
     class _HostileStatusError(Exception):
         @property
         def status(self) -> int:

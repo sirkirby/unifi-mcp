@@ -80,7 +80,8 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 - Hardcoding host, port, credentials, or feature flags in Python source is **banned** — use `config.yaml` with `${oc.env:VAR,default}` or `UNIFI_`-prefixed env vars
 - Permission category strings MUST be defined in `<app>/categories.py` (`NETWORK_CATEGORY_MAP`, etc.)
 - Tool-to-module mappings MUST be in `TOOL_MODULE_MAP` in `<app>/categories.py`
-- Validation models MUST be pydantic BaseModel classes in `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py` — never inline JSON schema dicts in tool functions or app-local schemas modules
+- Product-specific validation models MUST be pydantic BaseModel classes in `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py` — never inline JSON schema dicts in tool functions or app-local schemas modules
+- Cross-product privacy contracts that use one discriminated schema for Network, Protect, and Access MUST remain a single closed model in a dedicated root `unifi-core` domain module (currently `unifi_core/support_bundle.py`); do not duplicate that contract under each server
 - No monkey-patches in production code
 - **Anchor:** `apps/network/src/unifi_network_mcp/config/config.yaml`
 

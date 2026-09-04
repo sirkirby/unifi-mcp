@@ -209,7 +209,9 @@ def classify_error(exc: BaseException) -> tuple[ErrorCategory, int | None, Remed
         return ErrorCategory.CONNECTION, status, RemediationCode.CHECK_CONNECTIVITY
 
     name = type(exc).__name__
-    if name in {"LoginRequired", "Unauthorized", "TwoFaTokenRequired", "AuthenticationRateLimitError"}:
+    if name == "AuthenticationRateLimitError":
+        return ErrorCategory.RATE_LIMITED, status, RemediationCode.WAIT_AND_RETRY
+    if name in {"LoginRequired", "Unauthorized", "TwoFaTokenRequired"}:
         return ErrorCategory.AUTHENTICATION, status, RemediationCode.CHECK_CREDENTIALS
     if name in {"Forbidden", "NoPermission"}:
         return ErrorCategory.PERMISSION, status, RemediationCode.CHECK_PERMISSIONS
