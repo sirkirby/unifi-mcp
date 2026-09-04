@@ -216,16 +216,15 @@ Workspace `[tool.uv.sources]` overrides take precedence over the version range d
 
 `scripts/check_pin_alignment.py` validates the direct dependency bounds declared in each package's own `pyproject.toml` — it does not walk the full transitive/nested dependency chain (e.g., relay → shared → core, multiple hops deep). A downstream package can pass the gate while a deeper transitive package in the chain is still misaligned. When releasing a change that touches a multi-hop dependency chain, manually trace and verify bounds at each hop rather than trusting a single green run of this script.
 
-### Exact-Core-floor flags — Cross-Package Bridge-Method Validation
+### `--api-core-floor-only` Flag — Cross-Package Bridge-Method Validation
 
-When Network or API code calls new bridge methods added to `unifi-core`, run the matching exact-floor checks:
+When a downstream package (e.g., `unifi-api-server`) is changed to call new bridge methods added to an upstream shared package (`unifi-core`), run:
 
 ```bash
-python3 scripts/check_pin_alignment.py --network-core-floor-only
 python3 scripts/check_pin_alignment.py --api-core-floor-only
 ```
 
-These modes enforce that each downstream package's declared `unifi-core` floor bound in `pyproject.toml` is actually high enough to guarantee the Core manager methods it calls exist. The standard no-flag check runs both contracts automatically. Use the focused flag while developing a change to either surface.
+This mode enforces that the downstream package's declared `unifi-core` floor bound in `pyproject.toml` is actually high enough to guarantee the new bridge methods exist — catching the case where code was written against an unreleased Core API before the floor bound was raised to match. Run this whenever a PR adds calls to newly-added `unifi-core` methods, in addition to the standard (no-flag) pin-alignment check.
 
 ### Pre-tag wheel-metadata check
 
@@ -290,6 +289,18 @@ Open `scripts/generate_release_notes.py` and locate `APP_CONFIGS`. Each entry is
 
 ---
 
+## Procedure G.5: Pre-Tag Full Release-Wide Smoke Matrix Gate
+
+Even when the merged diff touches only one package (e.g., a Core-only PR), do not tag from that PR's own targeted live validation alone. Run the full release-wide safe-phase smoke matrix across every live-validated surface (network, protect, access, api) before pushing any tag. A single package's isolated pass does not prove the other surfaces still function against the same rebased head — regressions in unrelated surfaces have shipped from Core-only changes that looked locally safe.
+
+```bash
+uv run python scripts/live_smoke.py --server network --phase safe
+uv run python scripts/live_smoke.py --server protect --phase safe
+uv run python scripts/live_smoke.py --server access --phase safe
+```
+
+All must exit 0 with zero failed/exception records before the first tag in the release is pushed — this is a gate on Procedure F, not just a post-tag check.
+
 ## Procedure H: Release Validation
 
 After pushing a tag:
@@ -306,6 +317,7 @@ After pushing a tag:
    ```
    All three must exit 0 with zero failed/exception records. This is the final release validation gate.
    **Do not invoke with bare `python3 scripts/live_smoke.py`** — the system Python lacks the workspace dependencies and the harness will fail at import time.
+6. **Post-publish installed-wheel verification:** After PyPI confirms the new version, install it into a clean environment (`pip install --upgrade <pypi-name>==<version>`) and re-run the relevant `live_smoke.py --phase safe` invocation against the *installed* package, not the local worktree. This catches packaging defects that only manifest in the built wheel and are invisible when testing from source.
 
 ---
 
