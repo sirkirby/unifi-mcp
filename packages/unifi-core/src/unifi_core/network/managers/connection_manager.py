@@ -20,6 +20,13 @@ from aiounifi.errors import (
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
+from unifi_core.support_bundle import (
+    SafeConnectionAttempt,
+    connection_attempt_failed,
+    connection_attempt_started,
+    connection_attempt_succeeded,
+)
+
 logger = logging.getLogger("unifi-network-mcp")
 
 # Auth-circuit cool-down: first terminal failure blocks reconnects for the base
@@ -268,6 +275,7 @@ class ConnectionManager:
         self._reconnect_block_until: float = 0.0
         self._reconnect_block_count: int = 0
         self._auth_generation = 0
+        self._support_attempt = SafeConnectionAttempt().model_dump(mode="json")
 
         # Path detection state
         self._unifi_os_override: Optional[bool] = None
@@ -293,6 +301,7 @@ class ConnectionManager:
         return message
 
     def _record_connection_error(self, error: BaseException) -> str:
+        self._support_attempt = connection_attempt_failed(error)
         self._last_connection_error = self._sanitize_connection_error(error)
         return self._last_connection_error
 
@@ -373,6 +382,24 @@ class ConnectionManager:
         """Whether the last authentication attempt failed terminally with no success since."""
         return self._reconnect_block_error is not None
 
+    def support_status(self) -> dict[str, Any]:
+        """Return local connection facts safe for a community support bundle."""
+        session_available = bool(self._aiohttp_session and not self._aiohttp_session.closed)
+        controller_type = "unknown"
+        if self._unifi_os_override is True:
+            controller_type = "proxy"
+        elif self._unifi_os_override is False:
+            controller_type = "direct"
+        return {
+            "initialized": self._initialized,
+            "connected": bool(self._initialized and self.controller and session_available),
+            "tls_verification_enabled": self.verify_ssl,
+            "last_attempt": dict(self._support_attempt),
+            "session_available": session_available,
+            "controller_type": controller_type,
+            "reconnect_circuit": "open" if self.reconnect_blocked else "closed",
+        }
+
     async def _discard_connection(self) -> None:
         if self._aiohttp_session and not self._aiohttp_session.closed:
             await self._aiohttp_session.close()
@@ -399,6 +426,7 @@ class ConnectionManager:
                 return True
 
             logger.info("Attempting to connect to Unifi controller at %s...", self.host)
+            self._support_attempt = connection_attempt_started()
             for attempt in range(self._max_retries):
                 try:
                     if self.controller:
@@ -500,6 +528,7 @@ class ConnectionManager:
                     self._initialized = True
                     self._auth_generation += 1
                     self._last_connection_error = None
+                    self._support_attempt = connection_attempt_succeeded()
                     self._clear_reconnect_block()
                     logger.info("Successfully connected to Unifi controller at %s for site '%s'", self.host, self.site)
                     self._invalidate_cache()
@@ -595,6 +624,7 @@ class ConnectionManager:
             self._initialized = True
             self._auth_generation += 1
             self._last_connection_error = None
+            self._support_attempt = connection_attempt_succeeded()
             self._clear_reconnect_block()
             logger.info("Controller session re-authenticated successfully")
             return True

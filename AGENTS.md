@@ -73,6 +73,7 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 - All log output MUST go to stderr (stdout is reserved for JSON-RPC in stdio mode)
 - Use `%s` format strings in logger calls, not f-strings, for lazy evaluation
 - Configuration errors SHOULD fail fast at startup with clear guidance
+- Privacy-boundary support-bundle code is the narrow exception to the ordinary tool `exc_info=True` rule: it MUST NOT log the original exception, traceback, arguments, raw collected payload, or returned bundle. It may log only fixed allowlisted fields such as probe enum, normalized error category, duration bucket, and an independently generated correlation ID.
 
 ### Hard Bans
 
