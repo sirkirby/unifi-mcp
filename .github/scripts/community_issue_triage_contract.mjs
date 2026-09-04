@@ -476,7 +476,10 @@ function containsSensitiveTable(value) {
 }
 
 function normalizeMarkdownContentLine(line) {
-  return line.trim().replace(/^(?:>[ \t]*)+/u, "").replace(/^(?:[-*+][ \t]+)+/u, "");
+  return line
+    .trim()
+    .replace(/^(?:>[ \t]*)+/u, "")
+    .replace(/^(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/u, "");
 }
 
 function splitMarkdownField(line) {
@@ -541,13 +544,18 @@ function isSafeStructuralBoundary(line) {
 
 function containsSensitiveMultilineValue(value) {
   const lines = value.split(/\r?\n/);
+  const referenceLabels = markdownReferenceDefinitionLabels(lines);
   for (let index = 0; index < lines.length; index += 1) {
     const labelMatch = parseSensitiveLabelAt(lines, index);
     if (!labelMatch) continue;
 
     const inlineValue = labelMatch.inlineValue;
     if (inlineValue !== "") {
-      if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(stripMarkdownWrappers(inlineValue))) return true;
+      const normalizedInlineValue = stripMarkdownWrappers(inlineValue);
+      if (
+        !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizedInlineValue) ||
+        isResolvedPlaceholderReference(normalizedInlineValue, referenceLabels)
+      ) return true;
       for (let continuationIndex = index + 1; continuationIndex < lines.length; continuationIndex += 1) {
         const continuation = lines[continuationIndex];
         if (continuation.trim() === "") continue;
@@ -576,14 +584,18 @@ function containsSensitiveMultilineValue(value) {
           lines,
           valueIndex,
           nextContentIndex,
-          markdownReferenceDefinitionLabels(lines),
+          referenceLabels,
         )
       ) return true;
       continue;
     }
 
     if (parseSensitiveLabelAt(lines, valueIndex) || isSafeStructuralBoundary(lines[valueIndex])) continue;
-    if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(lines[valueIndex]))) return true;
+    const normalizedFirstValue = normalizeMarkdownContentLine(lines[valueIndex]);
+    if (
+      !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizedFirstValue) ||
+      isResolvedPlaceholderReference(normalizedFirstValue, referenceLabels)
+    ) return true;
     for (let continuationIndex = valueIndex + 1; continuationIndex < lines.length; continuationIndex += 1) {
       const continuation = lines[continuationIndex];
       if (continuation.trim() === "") continue;
