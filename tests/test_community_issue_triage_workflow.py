@@ -2330,7 +2330,10 @@ def test_sensitive_table_scanner_handles_many_header_like_rows_as_one_block():
             "Name | API Token | Result\n--- | --- | ---\nMCP | abcdefghijklmnop | failed"
         ),
         "| Field |\n| --- |\n| Other |\n| Password |\n| --- |\n| hunter2long |",
-        "> Field | Value\n> --- | ---\n> Other | unavailable\n> Username | Password\n> --- | ---\n> admin | hunter2long",
+        (
+            "> Field | Value\n> --- | ---\n> Other | unavailable\n"
+            "> Username | Password\n> --- | ---\n> admin | hunter2long"
+        ),
         (
             "Field | Value\n--- | ---\nOther | unavailable\n"
             "Username | [Password](https://example.com)\n--- | ---\nadmin | hunter2long"
