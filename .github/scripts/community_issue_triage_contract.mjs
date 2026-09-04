@@ -638,7 +638,8 @@ function containsSensitiveMultilineValue(value) {
 function containsSensitiveContent(value) {
   const normalized = value
     .normalize("NFKC")
-    .replace(/\p{Default_Ignorable_Code_Point}/gu, "");
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
+    .replace(/\\([:=])/gu, "$1");
   if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
   // Inline key/value detectors may intentionally span horizontal whitespace, but a
   // Markdown line or paragraph break after prose such as "authenticated session:" is
