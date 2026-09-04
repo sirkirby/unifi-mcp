@@ -78,6 +78,10 @@ def test_tool_index_schema_describes_ranked_token_search():
     assert "at most 20" in description
     assert "no usable terms returns no tools" in description
 
+    tool_description = index_call.kwargs["description"]
+    assert "manifest-backed in lazy mode" in tool_description
+    assert "in meta-only mode it starts with registered meta-tools" in tool_description
+
 
 def test_execute_tool_index_schema_accepts_null_arguments():
     register_tool = Mock()
@@ -111,9 +115,11 @@ def test_batch_schema_explains_tool_discovery_by_registration_mode():
     batch_call = next(call for call in register_tool.call_args_list if call.kwargs["name"] == "unifi_batch")
     operations_schema = batch_call.kwargs["input_schema"]["properties"]["operations"]
     tool_description = operations_schema["items"]["properties"]["tool"]["description"]
+    arguments_description = operations_schema["items"]["properties"]["arguments"]["description"]
 
     assert "unifi_tool_index in lazy mode" in tool_description
     assert "known domain tool name in meta-only mode" in tool_description
+    assert arguments_description == "Tool parameters matching the domain tool's input schema"
 
 
 def test_meta_tool_index_objects_contain_declared_annotations():

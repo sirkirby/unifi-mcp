@@ -53,7 +53,7 @@
               "items": {
                 "properties": {
                   "arguments": {
-                    "description": "Tool parameters matching the schema from the tool index",
+                    "description": "Tool parameters matching the domain tool's input schema",
                     "type": "object"
                   },
                   "tool": {
@@ -519,7 +519,7 @@
         "input": {
           "properties": {
             "arguments": {
-              "description": "Tool parameters matching the schema from the tool index",
+              "description": "Tool parameters matching the domain tool's input schema",
               "type": [
                 "object",
                 "null"
@@ -2916,7 +2916,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Discover UniFi Access tools (door locks, access readers, credentials, visitors, access policies, and entry events) through the manifest-backed tool index. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
+      "description": "Discover UniFi Access tools (door locks, access readers, credentials, visitors, access policies, and entry events) through the compact tool index. The catalog is manifest-backed in lazy mode; in meta-only mode it starts with registered meta-tools and expands after domain modules execute. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "access_tool_index",
       "schema": {
         "input": {

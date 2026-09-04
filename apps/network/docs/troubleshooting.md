@@ -73,7 +73,8 @@ module, so later client lists and index results can include its domain tools.
 before preview/confirmation, so `confirm=true` does not bypass a denied policy.
 
 **Fix:** Check [permissions.md](permissions.md) for the relevant category and set
-the exact policy variable named in the error.
+the exact policy variable named in the error, then restart the server so it
+inherits the updated environment.
 
 **Example:** To allow Network creation tools when the Networks category gate is
 denying the call:

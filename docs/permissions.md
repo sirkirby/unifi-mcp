@@ -210,7 +210,9 @@ Pass `confirm=true` in any mutating tool call to execute immediately, regardless
 ## Troubleshooting
 
 ### "Action is disabled by policy" error
-The relevant policy gate is set to `false`. The error message includes the exact variable to set. Enable it and re-call — no server restart required.
+The relevant policy gate is set to `false`. The error message includes the exact
+variable to set. Enable it, restart the server so it inherits the updated
+environment, and re-call the tool.
 
 ### Mutation executed without asking for confirmation
 `UNIFI_TOOL_PERMISSION_MODE` (or the server-specific variant) is set to `bypass`, or the legacy `UNIFI_AUTO_CONFIRM=true` is present. Remove or set to `confirm` to re-enable the preview step.

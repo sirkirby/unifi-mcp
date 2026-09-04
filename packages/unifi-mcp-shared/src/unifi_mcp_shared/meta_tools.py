@@ -142,7 +142,9 @@ def register_meta_tools(
         name=idx_name,
         title=idx_title,
         description=(
-            f"Discover {server_label} tools ({hint}) through the manifest-backed tool index. "
+            f"Discover {server_label} tools ({hint}) through the compact tool index. "
+            "The catalog is manifest-backed in lazy mode; in meta-only mode it starts with "
+            "registered meta-tools and expands after domain modules execute. "
             "Standard MCP clients should prefer tools/list when it exposes the needed tools."
         ),
         input_schema={
@@ -239,7 +241,7 @@ def register_meta_tools(
                 },
                 "arguments": {
                     "type": ["object", "null"],
-                    "description": "Tool parameters matching the schema from the tool index",
+                    "description": "Tool parameters matching the domain tool's input schema",
                 },
             },
         },
@@ -335,7 +337,7 @@ def register_meta_tools(
                             },
                             "arguments": {
                                 "type": "object",
-                                "description": "Tool parameters matching the schema from the tool index",
+                                "description": "Tool parameters matching the domain tool's input schema",
                             },
                         },
                     },
