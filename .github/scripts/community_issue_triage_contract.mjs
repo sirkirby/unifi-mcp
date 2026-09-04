@@ -79,6 +79,7 @@ const SENSITIVE_PATTERNS = [
 ];
 const SENSITIVE_MULTILINE_LABEL_PATTERN =
   /^(?:(.*?)[ _-]+)?(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?:[ _-]+(.*))?$/iu;
+const UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN = /&[A-Za-z][A-Za-z0-9]+;/u;
 const SENSITIVE_LABEL_PROSE_WORD_PATTERN =
   /^(?:and|are|as|at|by|for|from|in|is|of|on|or|that|to|using|was|were|when|where|which|while|with)$/iu;
 const SENSITIVE_LABEL_RELATIONAL_PREFIX_PATTERN =
@@ -481,6 +482,9 @@ function normalizeMarkdownTableLabel(cell) {
 
 function isSensitiveMultilineLabel(label) {
   const normalizedLabel = normalizeMarkdownTableLabel(label);
+  // A complete HTML5 named-reference table would add thousands of security-critical
+  // aliases. Fail closed when a candidate label still contains one we did not decode.
+  if (UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN.test(normalizedLabel)) return true;
   if (BENIGN_SESSION_PROSE_LABEL_PATTERN.test(normalizedLabel)) return false;
   const match = normalizedLabel.match(SENSITIVE_MULTILINE_LABEL_PATTERN);
   if (!match) return false;
