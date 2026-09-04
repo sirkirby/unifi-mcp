@@ -452,16 +452,24 @@ function isResolvedPlaceholderReference(candidate, referenceLabels) {
   return Boolean(match && referenceLabels.has(match[1].trim().toLocaleLowerCase("en-US")));
 }
 
-function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referenceLabels) {
+function markdownTableEndIndex(lines, firstRowIndex) {
+  let endIndex = firstRowIndex;
+  while (endIndex < lines.length && markdownTableCells(lines[endIndex]) !== null) {
+    endIndex += 1;
+  }
+  return endIndex;
+}
+
+function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referenceLabels, endIndex) {
   const headerCells = markdownTableCells(lines[headerIndex]) || [];
   const sensitiveColumns = new Set();
   for (let cellIndex = 0; cellIndex < headerCells.length; cellIndex += 1) {
     const header = normalizeMarkdownTableLabel(headerCells[cellIndex]);
     if (isSensitiveMultilineLabel(header)) sensitiveColumns.add(cellIndex);
   }
-  for (let rowIndex = separatorIndex + 1; rowIndex < lines.length; rowIndex += 1) {
+  for (let rowIndex = separatorIndex + 1; rowIndex < endIndex; rowIndex += 1) {
     const cells = markdownTableCells(lines[rowIndex]);
-    if (!cells) break;
+    if (!cells) throw new Error("Markdown table boundary invariant failed");
     for (const cellIndex of sensitiveColumns) {
       const candidateValue = stripMarkdownWrappers(cells[cellIndex] || "");
       if (
@@ -492,13 +500,10 @@ function containsSensitiveTable(value) {
   const lines = value.split(/\r?\n/);
   const referenceLabels = markdownReferenceDefinitionLabels(lines);
   for (let headerIndex = 0; headerIndex + 1 < lines.length; headerIndex += 1) {
-    if (
-      markdownTableCells(lines[headerIndex]) !== null &&
-      isMarkdownTableSeparator(lines[headerIndex + 1]) &&
-      containsSensitiveTableValue(lines, headerIndex, headerIndex + 1, referenceLabels)
-    ) {
-      return true;
-    }
+    if (markdownTableCells(lines[headerIndex]) === null || !isMarkdownTableSeparator(lines[headerIndex + 1])) continue;
+    const endIndex = markdownTableEndIndex(lines, headerIndex + 2);
+    if (containsSensitiveTableValue(lines, headerIndex, headerIndex + 1, referenceLabels, endIndex)) return true;
+    headerIndex = endIndex - 1;
   }
   return false;
 }
@@ -613,6 +618,7 @@ function containsSensitiveMultilineValue(value) {
           valueIndex,
           nextContentIndex,
           referenceLabels,
+          markdownTableEndIndex(lines, nextContentIndex + 1),
         )
       ) return true;
       continue;

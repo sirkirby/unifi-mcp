@@ -2292,6 +2292,17 @@ def test_multiline_credentials_still_fail_closed(body: str):
     assert created["bundle"]["status"] == "sensitive_stop"
 
 
+def test_sensitive_table_scanner_handles_many_header_like_rows_as_one_block():
+    rows = ["Field | Value", "--- | ---"]
+    for _ in range(2_000):
+        rows.extend(("Other | unavailable", "--- | ---"))
+    rows.append("Password | hunter2long")
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "\n".join(rows)
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
+
+
 @pytest.mark.parametrize(
     "body",
     [
