@@ -48,6 +48,23 @@ _RAW_LEGACY = {
     "conditions": [{"type": "motion"}],
     "actions": [{"type": "webhook"}],
 }
+_RAW_V2_PROFILE = {
+    "id": "019e9f9d-59a1-7ee3-8921-27f84a0086ea",
+    "title": "Away",
+    "state": "armed",
+    "state_set_at": "2026-09-04T09:00:00Z",
+    "alarm_ids": ["alarm-1", "alarm-2"],
+    "created_at": "2026-09-01T09:00:00Z",
+    "updated_at": "2026-09-04T09:00:00Z",
+}
+_RAW_LEGACY_PROFILE = {
+    "id": "66a5c92a0022f903e4000401",
+    "name": "Home",
+    "record_everything": False,
+    "activation_delay_ms": 30000,
+    "schedule_count": 1,
+    "automation_count": 3,
+}
 # A legacy automation whose controller-assigned id carries a `_new` suffix, and
 # whose condition has no `type` key (so the canonical trigger_id normalizes to
 # None and is dropped) — the shape that breaks update/create round-trips.
@@ -77,7 +94,7 @@ def _facade(
     # service_err is shorthand for a v2 403; list_exc/get_exc inject other v2 errors.
     # They are mutually exclusive — combining them would silently ignore service_err.
     assert not (service_err and (list_exc or get_exc)), "pass service_err OR list_exc/get_exc, not both"
-    _perm = AlarmManagerPermissionError("x") if service_err else None
+    _perm = AlarmManagerPermissionError("SuperAdmin is required for Alarm Manager v2") if service_err else None
     service.list_rules = AsyncMock(side_effect=list_exc or _perm, return_value=service_list)
     service.get_rule = AsyncMock(side_effect=get_exc or _perm, return_value=service_get)
     service.list_rules_raw = AsyncMock(side_effect=list_exc or _perm, return_value=service_list)
@@ -90,6 +107,8 @@ def _facade(
     legacy.create_rule = AsyncMock(return_value=_RAW_LEGACY)
     legacy.update_rule = AsyncMock(return_value=_RAW_LEGACY)
     legacy.delete_rule = AsyncMock(return_value={"deleted": True, "rule_id": "66a5c92a0022f903e4000400"})
+    service.list_profiles = AsyncMock(side_effect=list_exc or _perm, return_value=service_list)
+    legacy.list_arm_profiles = AsyncMock(return_value=legacy_list)
     return AlarmRulesFacade(service, legacy)
 
 
@@ -148,6 +167,77 @@ async def test_list_rules_propagates_v2_server_error():
     # v2 5xx (NvrError) is a real/transient outage -> surface it; do NOT mask with legacy.
     with pytest.raises(NvrError):
         await _facade(list_exc=NvrError("500"), legacy_list=[_RAW_LEGACY]).list_rules()
+
+
+@pytest.mark.asyncio
+async def test_list_profiles_prefers_alarm_manager_profiles_and_reports_complete():
+    profiles, complete = await _facade(
+        service_list=[_RAW_V2_PROFILE], legacy_list=[_RAW_LEGACY_PROFILE]
+    ).list_profiles()
+
+    assert complete is True
+    assert profiles == [
+        {
+            "id": "019e9f9d-59a1-7ee3-8921-27f84a0086ea",
+            "name": "Away",
+            "automation_count": 2,
+            "state": "armed",
+            "state_set_at": "2026-09-04T09:00:00Z",
+            "id_family": "alarm_manager_v2",
+            "arm_compatible": False,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_list_profiles_falls_back_to_legacy_when_v2_empty():
+    profiles, complete = await _facade(service_list=[], legacy_list=[_RAW_LEGACY_PROFILE]).list_profiles()
+
+    assert complete is False
+    assert profiles[0]["id"] == "66a5c92a0022f903e4000401"
+    assert profiles[0]["name"] == "Home"
+    assert profiles[0]["automation_count"] == 3
+    assert profiles[0]["id_family"] == "legacy_arm"
+    assert profiles[0]["arm_compatible"] is True
+    assert "state" not in profiles[0]
+    assert "state_set_at" not in profiles[0]
+
+
+@pytest.mark.asyncio
+async def test_list_profiles_falls_back_on_v2_client_error():
+    profiles, complete = await _facade(list_exc=BadRequest("404"), legacy_list=[_RAW_LEGACY_PROFILE]).list_profiles()
+
+    assert complete is False
+    assert profiles[0]["name"] == "Home"
+
+
+@pytest.mark.asyncio
+async def test_list_profiles_preserves_empty_behavior_when_both_backends_empty():
+    profiles, complete = await _facade(service_list=[], legacy_list=[]).list_profiles()
+
+    assert complete is False
+    assert profiles == []
+
+
+@pytest.mark.asyncio
+async def test_list_profiles_preserves_permission_error_when_legacy_has_no_profiles():
+    with pytest.raises(AlarmManagerPermissionError, match="SuperAdmin"):
+        await _facade(service_err=True, legacy_list=[]).list_profiles()
+
+
+@pytest.mark.asyncio
+async def test_list_profiles_uses_legacy_profiles_after_permission_error_when_available():
+    profiles, complete = await _facade(service_err=True, legacy_list=[_RAW_LEGACY_PROFILE]).list_profiles()
+
+    assert complete is False
+    assert profiles[0]["id_family"] == "legacy_arm"
+    assert profiles[0]["arm_compatible"] is True
+
+
+@pytest.mark.asyncio
+async def test_list_profiles_propagates_v2_server_error():
+    with pytest.raises(NvrError):
+        await _facade(list_exc=NvrError("500"), legacy_list=[_RAW_LEGACY_PROFILE]).list_profiles()
 
 
 @pytest.mark.asyncio

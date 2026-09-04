@@ -50,6 +50,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+from uiprotect.exceptions import BadRequest
+
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
 
@@ -57,6 +59,13 @@ logger = logging.getLogger(__name__)
 
 # Values of ``nvr.armMode.status`` that mean "not armed".
 _DISARMED_STATUSES = {"disabled", "disarmed", "off", "inactive"}
+_LEGACY_PROFILE_ID_NOT_FOUND_ERROR = (
+    "The legacy Protect arm endpoint did not recognize this profile_id. Alarm Manager "
+    "v2 ids returned by protect_alarm_list_profiles are not accepted by that endpoint; "
+    "use a profile marked arm_compatible=true, or omit profile_id to use the currently "
+    "selected legacy profile. A v2 arming endpoint is not implemented because its "
+    "contract has not been verified."
+)
 
 
 class AlarmManager:
@@ -172,11 +181,16 @@ class AlarmManager:
 
     async def _select_profile(self, profile_id: str) -> None:
         """PATCH ``arm`` to set which profile is active."""
-        await self._cm.client.api_request(
-            "arm",
-            method="patch",
-            json={"armProfileId": profile_id},
-        )
+        try:
+            await self._cm.client.api_request(
+                "arm",
+                method="patch",
+                json={"armProfileId": profile_id},
+            )
+        except BadRequest as exc:
+            if _is_arm_profile_not_found(exc):
+                raise ValueError(_LEGACY_PROFILE_ID_NOT_FOUND_ERROR) from exc
+            raise
 
     # ------------------------------------------------------------------
     # Preview (for confirm=false tool responses)
@@ -442,6 +456,25 @@ def _ms_to_iso(value: Any) -> Optional[str]:
     if ms <= 0:
         return None
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
+
+
+def _is_arm_profile_not_found(exc: BaseException) -> bool:
+    """Return true when Protect rejected a legacy arm profile selection."""
+    if any(_payload_is_arm_profile_not_found(arg) for arg in exc.args):
+        return True
+    text = str(exc)
+    return "armProfile" in text and ("NOT_FOUND" in text or "Status: 404" in text or "not found" in text.lower())
+
+
+def _payload_is_arm_profile_not_found(value: Any) -> bool:
+    if isinstance(value, dict):
+        entity = value.get("entity")
+        name = value.get("name")
+        error = str(value.get("error") or "")
+        return entity == "armProfile" and (name == "NOT_FOUND" or "not found" in error.lower())
+    if isinstance(value, (list, tuple)):
+        return any(_payload_is_arm_profile_not_found(item) for item in value)
+    return False
 
 
 def _require_rule_id(rule_id: Any) -> str:
