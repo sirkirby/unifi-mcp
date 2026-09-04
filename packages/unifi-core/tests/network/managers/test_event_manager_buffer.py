@@ -48,6 +48,14 @@ def test_buffer_event_type_filter_requires_exact_key() -> None:
     assert buf.get_recent(event_type="CLIENT_CONNECTED") == []
 
 
+def test_buffer_limit_zero_returns_empty() -> None:
+    """An explicit limit=0 means zero results, not unlimited."""
+    buf = EventBuffer(max_size=10, ttl_seconds=300)
+    buf.add({"id": "e1", "key": "EVT_LU_Connected"})
+    buf.add({"id": "e2", "key": "EVT_LU_Disconnected"})
+    assert buf.get_recent(limit=0) == []
+
+
 def test_buffer_clear() -> None:
     buf = EventBuffer(max_size=10, ttl_seconds=300)
     buf.add({"id": "e1"})

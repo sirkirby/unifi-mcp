@@ -49,6 +49,8 @@ class EventBuffer:
         cutoff = time.time() - self._ttl
         out: list[dict[str, Any]] = []
         for event in reversed(self._buffer):
+            if limit is not None and len(out) >= limit:
+                break
             if event.get("_buffered_at", 0) < cutoff:
                 continue
             if event_type and event.get("key") != event_type:
@@ -56,8 +58,6 @@ class EventBuffer:
             if mac and not mac_equal(event.get("mac"), mac):
                 continue
             out.append(event)
-            if limit and len(out) >= limit:
-                break
         return out
 
     def clear(self) -> None:
