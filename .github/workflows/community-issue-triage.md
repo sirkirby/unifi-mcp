@@ -201,11 +201,15 @@ jobs:
             core.setOutput("allowed", "false");
             const currentRunId = Number(context.runId);
             const actor = process.env.GITHUB_ACTOR;
+            const isValidActorLogin = (value) =>
+              typeof value === "string" &&
+              value.length <= 100 &&
+              /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\[bot\])?$/.test(value);
             if (!Number.isSafeInteger(currentRunId) || currentRunId < 1) {
               throw new Error("qualifying rate gate run ID is invalid");
             }
-            if (typeof actor !== "string" || actor === "") {
-              throw new Error("qualifying rate gate actor is missing");
+            if (!isValidActorLogin(actor)) {
+              throw new Error("qualifying rate gate actor is invalid");
             }
             const current = await github.rest.actions.getWorkflowRun({
               owner: context.repo.owner,
@@ -248,7 +252,7 @@ jobs:
               }
               for (const run of pageRuns) {
                 const runActor = run.actor?.login;
-                if (typeof runActor !== "string" || runActor === "") {
+                if (!isValidActorLogin(runActor)) {
                   throw new Error("GitHub returned an invalid workflow run actor");
                 }
                 if (runActor.toLowerCase() !== actor.toLowerCase()) continue;
@@ -648,7 +652,11 @@ pre-agent-steps:
                 repo: context.repo.repo,
                 run_id: runId,
               });
-              if (Number(run.data?.workflow_id) !== workflowId) continue;
+              const reservationWorkflowId = Number(run.data?.workflow_id);
+              if (!Number.isSafeInteger(reservationWorkflowId) || reservationWorkflowId < 1) {
+                throw new Error("reservation workflow ID is invalid");
+              }
+              if (reservationWorkflowId !== workflowId) continue;
               reservedRunIds.add(runId);
               reserved += reservationKind.credits;
             }

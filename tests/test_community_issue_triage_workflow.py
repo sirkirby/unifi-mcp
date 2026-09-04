@@ -775,7 +775,10 @@ def test_reporter_window_paginates_past_mixed_actor_runs_when_api_filter_is_igno
     assert [call["request"]["page"] for call in observed["calls"] if call["operation"] == "listWorkflowRuns"] == [1, 2]
 
 
-@pytest.mark.parametrize("run_actor", [None, {}, {"login": ""}])
+@pytest.mark.parametrize(
+    "run_actor",
+    [None, {}, {"login": ""}, {"login": "   "}, {"login": "not a valid login!"}],
+)
 def test_reporter_window_fails_closed_on_malformed_historical_actor(
     tmp_path: Path,
     run_actor: object,
@@ -1456,6 +1459,14 @@ def test_daily_budget_rejects_a_reservation_below_the_per_run_hard_cap(tmp_path:
         {
             "repoArtifacts": [_aic_artifact(90, "2027-01-15T07:00:00.000Z")],
             "failOperations": ["getWorkflowRun"],
+        },
+        {
+            "repoArtifacts": [_aic_artifact(90, "2027-01-15T07:00:00.000Z")],
+            "workflowRunsById": {"90": {"id": 90}},
+        },
+        {
+            "repoArtifacts": [_aic_artifact(90, "2027-01-15T07:00:00.000Z")],
+            "workflowRunsById": {"90": {"id": 90, "workflow_id": "not-a-number"}},
         },
     ],
 )
@@ -2253,6 +2264,10 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "password: [REDACTED] <!-- hunter2long -->",
         'password: [REDACTED] <span title="hunter2long"></span>',
         "pass<!-- hunter2long -->word: [REDACTED]",
+        "Pass<?hunter2long?>word: [REDACTED]",
+        "Pass<!HUNTER2LONG>word: [REDACTED]",
+        "Pass<![CDATA[hunter2long]]>word: [REDACTED]",
+        "Pass<!--\nhunter2long-->word: [REDACTED]",
         '<span title="hunter2long">Password</span>: [REDACTED]',
         "<span hunter2long>Password</span>: [REDACTED]",
         "<span data-hunter2long>Password</span>: [REDACTED]",
@@ -2262,8 +2277,16 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "### <span hunter2long>Password</span>\n[REDACTED]",
         '<strong>Password</strong><span title="hunter2long"></span>\n[REDACTED]',
         "<strong>Password</strong><span data-hunter2long></span>\n[REDACTED]",
+        "### Pass<?hunter2long?>word\n[REDACTED]",
+        "Pass<![CDATA[hunter2long]]>word\n---\n[REDACTED]",
+        '<strong\ntitle="hunter2long">Password</strong>: [REDACTED]',
+        "<span\ndata-hunter2long>Password</span>: [REDACTED]",
+        '### <strong\ntitle="hunter2long">Password</strong>\n[REDACTED]',
+        "<span\ndata-hunter2long>Password</span>\n[REDACTED]",
         'Username | <span title="hunter2long">Password</span>\n--- | ---\nadmin | [REDACTED]',
         "Username | <hunter2long>Password</hunter2long>\n--- | ---\nadmin | [REDACTED]",
+        "Username | Pass<?hunter2long?>word\n--- | ---\nadmin | [REDACTED]",
+        'Username | <strong\ntitle="hunter2long">Password</strong>\n--- | ---\nadmin | [REDACTED]',
         "Authenticated session:\nsession-identifier-value",
         "Staging session:\nsession-identifier-value",
         "the password:\nhunter2long",
@@ -2432,6 +2455,8 @@ def test_sensitive_table_scanner_checks_data_rows_before_embedded_header_transit
         "API token was:\nunavailable",
         "Pass&ZeroWidthSpace;word=\n[REDACTED]",
         "Pass<!-- hidden -->word: [REDACTED]",
+        "Pass<?redacted?>word: [REDACTED]",
+        "<strong\n>Password</strong>: [REDACTED]",
         "Pass&NoBreak;word=\n[REDACTED]",
         "Pass&shyword=\n[REDACTED]",
         "API&nbspkey:\nunavailable",

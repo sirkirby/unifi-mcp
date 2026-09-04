@@ -451,7 +451,38 @@ function stripInlineHtmlMarkup(value, discardedValues = null) {
         continue;
       }
     }
-    if (value[index] === "<" && /^<\/?[A-Za-z]/u.test(value.slice(index))) {
+    if (value.startsWith("<?", index)) {
+      const instructionEnd = value.indexOf("?>", index + 2);
+      if (instructionEnd !== -1) {
+        discardedValues?.push(value.slice(index + 2, instructionEnd));
+        index = instructionEnd + 1;
+        continue;
+      }
+      result += value.slice(index);
+      break;
+    }
+    if (value.startsWith("<![CDATA[", index)) {
+      const cdataEnd = value.indexOf("]]>", index + 9);
+      if (cdataEnd !== -1) {
+        discardedValues?.push(value.slice(index + 9, cdataEnd));
+        index = cdataEnd + 2;
+        continue;
+      }
+      result += value.slice(index);
+      break;
+    }
+    if (value[index] === "<" && value[index + 1] === "!" && /[A-Z]/u.test(value[index + 2] || "")) {
+      const declarationEnd = value.indexOf(">", index + 2);
+      if (declarationEnd !== -1) {
+        discardedValues?.push(value.slice(index + 2, declarationEnd));
+        index = declarationEnd;
+        continue;
+      }
+      result += value.slice(index);
+      break;
+    }
+    const tagNameStart = value[index + 1] === "/" ? index + 2 : index + 1;
+    if (value[index] === "<" && /[A-Za-z]/u.test(value[tagNameStart] || "")) {
       let quote = null;
       let tagEnd = -1;
       for (let candidate = index + 1; candidate < value.length; candidate += 1) {
@@ -493,6 +524,61 @@ function hasSensitiveDiscardedLabelMarkup(value) {
     );
     return normalized !== "" && !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalized);
   });
+}
+
+function collapseRawHtmlMarkupNewlines(value) {
+  let result = "";
+  let mode = null;
+  let terminator = null;
+  let quote = null;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (mode === null && character === "<") {
+      if (value.startsWith("<!--", index)) {
+        mode = "terminated";
+        terminator = "-->";
+      } else if (value.startsWith("<?", index)) {
+        mode = "terminated";
+        terminator = "?>";
+      } else if (value.startsWith("<![CDATA[", index)) {
+        mode = "terminated";
+        terminator = "]]>";
+      } else if (value[index + 1] === "!" && /[A-Z]/u.test(value[index + 2] || "")) {
+        mode = "terminated";
+        terminator = ">";
+      } else {
+        const nameIndex = value[index + 1] === "/" ? index + 2 : index + 1;
+        if (/[A-Za-z]/u.test(value[nameIndex] || "")) mode = "tag";
+      }
+    }
+
+    if (mode !== null && character === "\r" && value[index + 1] === "\n") {
+      result += " ";
+      index += 1;
+      continue;
+    }
+    if (mode !== null && character === "\n") {
+      result += " ";
+      continue;
+    }
+
+    result += character;
+    if (mode === "tag") {
+      if (quote !== null) {
+        if (character === quote) quote = null;
+      } else if (character === '"' || character === "'") {
+        quote = character;
+      } else if (character === ">") {
+        mode = null;
+      }
+    } else if (mode === "terminated" && value.startsWith(terminator, index)) {
+      result += terminator.slice(1);
+      index += terminator.length - 1;
+      mode = null;
+      terminator = null;
+    }
+  }
+  return result;
 }
 
 function normalizeMarkdownTableLabel(cell) {
@@ -685,7 +771,26 @@ function splitMarkdownField(line) {
       index += 3;
       continue;
     }
-    if (character === "<" && /^<\/?[A-Za-z]/u.test(line.slice(index))) {
+    if (line.startsWith("<?", index)) {
+      const instructionEnd = line.indexOf("?>", index + 2);
+      if (instructionEnd === -1) return null;
+      index = instructionEnd + 1;
+      continue;
+    }
+    if (line.startsWith("<![CDATA[", index)) {
+      const cdataEnd = line.indexOf("]]>", index + 9);
+      if (cdataEnd === -1) return null;
+      index = cdataEnd + 2;
+      continue;
+    }
+    if (character === "<" && line[index + 1] === "!" && /[A-Z]/u.test(line[index + 2] || "")) {
+      const declarationEnd = line.indexOf(">", index + 2);
+      if (declarationEnd === -1) return null;
+      index = declarationEnd;
+      continue;
+    }
+    const tagNameStart = line[index + 1] === "/" ? index + 2 : index + 1;
+    if (character === "<" && /[A-Za-z]/u.test(line[tagNameStart] || "")) {
       htmlTag = true;
       continue;
     }
@@ -829,6 +934,7 @@ function containsSensitiveContent(value) {
     .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
     .replace(/\\+([:=])/gu, "$1");
   if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
+  const markdownPatternInput = collapseRawHtmlMarkupNewlines(normalized);
   // Inline key/value detectors may intentionally span horizontal whitespace, but a
   // Markdown line or paragraph break after prose such as "authenticated session:" is
   // not a credential assignment. Preserve deliberate indented config values while
@@ -839,8 +945,8 @@ function containsSensitiveContent(value) {
   return (
     containsControllerAddress(normalized) ||
     containsSensitiveConfigurationBlob(normalized) ||
-    containsSensitiveTable(normalized) ||
-    containsSensitiveMultilineValue(normalized) ||
+    containsSensitiveTable(markdownPatternInput) ||
+    containsSensitiveMultilineValue(markdownPatternInput) ||
     SENSITIVE_PATTERNS.some((pattern) => pattern.test(inlinePatternInput))
   );
 }
