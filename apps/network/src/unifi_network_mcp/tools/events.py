@@ -5,7 +5,7 @@ This module provides MCP tools to view events and manage alarms on a UniFi Netwo
 """
 
 import logging
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field
@@ -39,7 +39,9 @@ def _get_event_manager():
         "Returns timestamped event log entries (client connects/disconnects, device "
         "state changes, firmware updates, config changes) sorted newest-first. "
         "Filter by within_hours (default 24), an exact event_type key (use "
-        "unifi_get_event_types for recently observed keys), and paginate with start/limit. "
+        "unifi_get_event_types for recently observed keys), categories (for example "
+        "['SECURITY']) and severities (for example ['HIGH', 'CRITICAL']) on v2 controllers, "
+        "and paginate with start/limit. "
         "For critical alerts specifically, use unifi_list_alarms instead."
     ),
 )
@@ -53,6 +55,18 @@ async def list_events(
             description="Filter by an exact event key (for example 'CLIENT_DISCONNECTED_WIRELESS_2'). Use unifi_get_event_types to see recently observed keys"
         ),
     ] = None,
+    categories: Annotated[
+        Optional[List[str]],
+        Field(
+            description="Filter by v2 system-log categories (for example ['SECURITY', 'DEVICES']). Ignored on legacy controllers"
+        ),
+    ] = None,
+    severities: Annotated[
+        Optional[List[str]],
+        Field(
+            description="Filter by v2 system-log severities (for example ['HIGH', 'CRITICAL']). Ignored on legacy controllers"
+        ),
+    ] = None,
 ) -> Dict[str, Any]:
     """List events with optional filtering."""
     try:
@@ -62,6 +76,8 @@ async def list_events(
             limit=limit,
             start=start,
             event_type=event_type,
+            categories=categories,
+            severities=severities,
         )
 
         shaped = [event_log_from_controller(e).model_dump(exclude_none=True) for e in events]
@@ -74,6 +90,8 @@ async def list_events(
                 "limit": limit,
                 "start": start,
                 "event_type": event_type,
+                "categories": categories,
+                "severities": severities,
             },
             "events": shaped,
         }
