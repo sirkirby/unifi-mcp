@@ -2252,6 +2252,11 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "Pass<!-- hidden -->word:\nhunter2long",
         "password: [REDACTED] <!-- hunter2long -->",
         'password: [REDACTED] <span title="hunter2long"></span>',
+        "pass<!-- hunter2long -->word: [REDACTED]",
+        '<span title="hunter2long">Password</span>: [REDACTED]',
+        '### <span title="hunter2long">Password</span>\n[REDACTED]',
+        '<strong>Password</strong><span title="hunter2long"></span>\n[REDACTED]',
+        'Username | <span title="hunter2long">Password</span>\n--- | ---\nadmin | [REDACTED]',
         "Authenticated session:\nsession-identifier-value",
         "Staging session:\nsession-identifier-value",
         "the password:\nhunter2long",
@@ -2355,6 +2360,14 @@ def test_unterminated_inline_html_scan_is_bounded():
     assert created["bundle"]["status"] == "complete"
 
 
+@pytest.mark.parametrize("marker", ["[", "*", "_", "~", "`"])
+def test_oversized_malformed_markdown_labels_fail_closed_in_bounded_time(marker: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = marker * 100_000 + "\nhunter2long"
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -2411,13 +2424,13 @@ def test_sensitive_table_scanner_checks_data_rows_before_embedded_header_transit
         "Password is:\n[REDACTED]",
         "API token was:\nunavailable",
         "Pass&ZeroWidthSpace;word=\n[REDACTED]",
+        "Pass<!-- hidden -->word: [REDACTED]",
         "Pass&NoBreak;word=\n[REDACTED]",
         "Pass&shyword=\n[REDACTED]",
         "API&nbspkey:\nunavailable",
         "API&ThinSpace;key:\n[REDACTED]",
         "API&emsp13;key:\n[REDACTED]",
         "&Pfr;assword:\n[REDACTED]",
-        "<strong class=x>Password</strong>=\n[REDACTED]",
         "> password:\n> [REDACTED]",
         "password: |\n  [REDACTED]",
         "password: >-\n  [REDACTED]",

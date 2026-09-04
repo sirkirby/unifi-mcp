@@ -87,6 +87,7 @@ const SENSITIVE_LABEL_RELATIONAL_PREFIX_PATTERN =
 const SENSITIVE_LABEL_SUFFIX_PATTERN =
   /^(?:value|is|was|are|were|(?:for|of|in|from|on|at|to)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2}|(?:value[ _-]+)?used[ _-]+(?:by|with|for|in)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2})$/iu;
 const MAX_MARKDOWN_LABEL_NORMALIZATION_PASSES = 32;
+const MAX_MARKDOWN_LABEL_LENGTH = 1_024;
 const UNSTABLE_MARKDOWN_LABEL_SENTINEL = "&UnstableMarkdownLabel;";
 const BENIGN_SESSION_PROSE_LABEL_PATTERN =
   /^(?:debugging|observed|testing)[ _-]+authenticated[ _-]+session$/iu;
@@ -438,12 +439,13 @@ function decodeHtmlCharacterReferences(value) {
     .replace(namedPattern, (match, name) => named.get(name.toLocaleLowerCase("en-US")) || match);
 }
 
-function stripInlineHtmlMarkup(value) {
+function stripInlineHtmlMarkup(value, discardedValues = null) {
   let result = "";
   for (let index = 0; index < value.length; index += 1) {
     if (value.startsWith("<!--", index)) {
       const commentEnd = value.indexOf("-->", index + 4);
       if (commentEnd !== -1) {
+        discardedValues?.push(value.slice(index + 4, commentEnd));
         index = commentEnd + 2;
         continue;
       }
@@ -463,6 +465,11 @@ function stripInlineHtmlMarkup(value) {
         }
       }
       if (tagEnd !== -1) {
+        const tag = value.slice(index + 1, tagEnd);
+        const attributes = tag.replace(/^\/?[A-Za-z][^\s/>]*/u, "");
+        for (const match of attributes.matchAll(/\s+[^\s=/>]+\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gu)) {
+          discardedValues?.push(match[1] ?? match[2] ?? match[3] ?? "");
+        }
         index = tagEnd;
         continue;
       }
@@ -474,7 +481,21 @@ function stripInlineHtmlMarkup(value) {
   return result;
 }
 
+function hasSensitiveDiscardedLabelMarkup(value) {
+  const discardedValues = [];
+  stripInlineHtmlMarkup(value, discardedValues);
+  return discardedValues.some((discarded) => {
+    const normalized = stripMarkdownWrappers(
+      decodeHtmlCharacterReferences(discarded)
+        .normalize("NFKC")
+        .replace(/\p{Default_Ignorable_Code_Point}/gu, ""),
+    );
+    return normalized !== "" && !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalized);
+  });
+}
+
 function normalizeMarkdownTableLabel(cell) {
+  if (cell.length > MAX_MARKDOWN_LABEL_LENGTH) return UNSTABLE_MARKDOWN_LABEL_SENTINEL;
   let label = stripInlineHtmlMarkup(decodeHtmlCharacterReferences(cell)).trim();
   for (let pass = 0; pass < MAX_MARKDOWN_LABEL_NORMALIZATION_PASSES; pass += 1) {
     const normalized = label
@@ -557,14 +578,22 @@ function sensitiveMarkdownTableColumns(cells) {
   return sensitiveColumns;
 }
 
+function hasSensitiveDiscardedTableLabel(cells) {
+  return cells.some(
+    (cell) => isSensitiveMultilineLabel(normalizeMarkdownTableLabel(cell)) && hasSensitiveDiscardedLabelMarkup(cell),
+  );
+}
+
 function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referenceLabels, endIndex) {
   const headerCells = markdownTableCells(lines[headerIndex]) || [];
+  if (hasSensitiveDiscardedTableLabel(headerCells)) return true;
   let sensitiveColumns = sensitiveMarkdownTableColumns(headerCells);
   for (let rowIndex = separatorIndex + 1; rowIndex < endIndex; rowIndex += 1) {
     const cells = markdownTableCells(lines[rowIndex]);
     if (!cells) throw new Error("Markdown table boundary invariant failed");
     const nextIsSeparator = rowIndex + 1 < endIndex && isMarkdownTableSeparator(lines[rowIndex + 1]);
     const candidateSensitiveColumns = nextIsSeparator ? sensitiveMarkdownTableColumns(cells) : new Set();
+    if (nextIsSeparator && hasSensitiveDiscardedTableLabel(cells)) return true;
     if (isMarkdownTableSeparator(lines[rowIndex])) continue;
     for (const cellIndex of sensitiveColumns) {
       const candidateValue = stripMarkdownWrappers(cells[cellIndex] || "");
@@ -581,9 +610,10 @@ function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referen
       const candidateValue = stripMarkdownWrappers(cells[cellIndex + 1]);
       if (
         isSensitiveMultilineLabel(label) &&
-        candidateValue !== "" &&
-        (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(candidateValue) ||
-          isResolvedPlaceholderReference(candidateValue, referenceLabels))
+        (hasSensitiveDiscardedLabelMarkup(cells[cellIndex]) ||
+          (candidateValue !== "" &&
+            (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(candidateValue) ||
+              isResolvedPlaceholderReference(candidateValue, referenceLabels))))
       ) {
         return true;
       }
@@ -674,18 +704,28 @@ function parseSensitiveLabelLine(line) {
   const field = splitMarkdownField(normalized);
   const fieldLabel = field ? normalizeMarkdownTableLabel(field[0].replace(/^["']|["']$/gu, "")) : "";
   if (field && isSensitiveMultilineLabel(fieldLabel)) {
-    const inlineValue = /^[>|](?:[+-]?[1-9]?|[1-9]?[+-]?)$/u.test(field[1]) ? "" : field[1];
+    const inlineValue = hasSensitiveDiscardedLabelMarkup(field[0])
+      ? UNSTABLE_MARKDOWN_LABEL_SENTINEL
+      : /^[>|](?:[+-]?[1-9]?|[1-9]?[+-]?)$/u.test(field[1])
+        ? ""
+        : field[1];
     return { label: fieldLabel, inlineValue };
   }
   const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
   const headingLabel = heading ? normalizeMarkdownTableLabel(heading[1]) : "";
   if (heading && isSensitiveMultilineLabel(headingLabel)) {
-    return { label: headingLabel, inlineValue: "" };
+    return {
+      label: headingLabel,
+      inlineValue: hasSensitiveDiscardedLabelMarkup(heading[1]) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
+    };
   }
   const standaloneSource = normalized.replace(/^['"]|['"]$/gu, "").trim();
   const standaloneLabel = normalizeMarkdownTableLabel(standaloneSource);
   if (standaloneLabel !== standaloneSource && isSensitiveMultilineLabel(standaloneLabel)) {
-    return { label: standaloneLabel, inlineValue: "" };
+    return {
+      label: standaloneLabel,
+      inlineValue: hasSensitiveDiscardedLabelMarkup(standaloneSource) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
+    };
   }
   return null;
 }
@@ -696,8 +736,15 @@ function parseSensitiveLabelAt(lines, index) {
   if (index + 1 >= lines.length) return null;
   const underline = normalizeMarkdownContentLine(lines[index + 1]);
   if (!/^(?:={3,}|-{3,})$/u.test(underline)) return null;
-  const label = normalizeMarkdownTableLabel(normalizeMarkdownContentLine(lines[index]));
-  return isSensitiveMultilineLabel(label) ? { label, inlineValue: "", valueIndex: index + 2 } : null;
+  const labelSource = normalizeMarkdownContentLine(lines[index]);
+  const label = normalizeMarkdownTableLabel(labelSource);
+  return isSensitiveMultilineLabel(label)
+    ? {
+        label,
+        inlineValue: hasSensitiveDiscardedLabelMarkup(labelSource) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
+        valueIndex: index + 2,
+      }
+    : null;
 }
 
 function isSafeStructuralBoundary(line) {
