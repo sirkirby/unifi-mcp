@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Callable, List, Literal
 
 from mcp.server.mcpserver import Context
 from mcp.types import ToolAnnotations
+from pydantic import SkipValidation
 
 from unifi_mcp_shared.response_serialization import normalize_call_tool_result
 from unifi_mcp_shared.tool_index import normalize_tool_annotations
@@ -140,9 +141,11 @@ def register_meta_tools(
         annotations=read_annotations,
     )
     async def _support_bundle_wrapper(
-        probe: Literal["summary", "connectivity", "resource_shape"] = "summary",
-        resource: str | None = None,
+        probe: SkipValidation[Literal["summary", "connectivity", "resource_shape"]] = "summary",
+        resource: SkipValidation[str | None] = None,
     ) -> dict:
+        # Preserve the advertised schema, but validate only inside the service's
+        # privacy boundary: Pydantic errors otherwise echo rejected input values.
         try:
             correlation_id = uuid.uuid4().hex
             started = time.monotonic()
@@ -156,7 +159,9 @@ def register_meta_tools(
             correlation_id = uuid.uuid4().hex
             outcome = "failed"
             duration_bucket = "unknown"
-        safe_probe = probe if probe in {"summary", "connectivity", "resource_shape"} else "invalid"
+        safe_probe = (
+            probe if isinstance(probe, str) and probe in {"summary", "connectivity", "resource_shape"} else "invalid"
+        )
         logger.info(
             "Support bundle audit correlation_id=%s probe=%s outcome=%s duration=%s",
             correlation_id,

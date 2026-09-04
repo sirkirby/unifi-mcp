@@ -16,6 +16,9 @@ logger = logging.getLogger("unifi-mcp-relay")
 _MAX_RELAY_BATCH_JOBS = 1_000
 _RELAY_BATCH_STATUS_ERROR = "Batch status is available only for jobs started through this relay connection."
 
+# Scope provenance to the backend URL as well as the product status tool.
+type RelayBatchJobs = dict[tuple[str, str], dict[str, None]]
+
 
 class ToolForwarder:
     """Routes tool calls to the correct local MCP server.
@@ -24,13 +27,13 @@ class ToolForwarder:
     The routing table maps tool names to server URLs derived from discovery results.
     """
 
-    def __init__(self, server_infos: list[ServerInfo]) -> None:
+    def __init__(self, server_infos: list[ServerInfo], *, batch_jobs: RelayBatchJobs | None = None) -> None:
         self._tool_to_url: dict[str, str] = {}
         self._clients: dict[str, McpHttpClient] = {}
         self._lazy_load_tool_by_url: dict[str, str] = {}
         self._lazy_advertised_tools_by_url: dict[str, set[str]] = {}
         self._loaded_lazy_tools_by_url: dict[str, set[str]] = {}
-        self._relay_batch_jobs: dict[str, dict[str, None]] = {}
+        self._relay_batch_jobs: RelayBatchJobs = batch_jobs if batch_jobs is not None else {}
         for info in server_infos:
             for tool in filter_relay_tools(info.tools):
                 self._tool_to_url[tool.name] = info.url
@@ -187,7 +190,8 @@ class ToolForwarder:
         if not job_ids:
             return None
 
-        known = self._relay_batch_jobs.get(tool_name, {})
+        url = self.get_server_url(tool_name)
+        known = self._relay_batch_jobs.get((url, tool_name), {}) if url is not None else {}
         if any(not isinstance(job_id, str) or job_id not in known for job_id in job_ids):
             return _RELAY_BATCH_STATUS_ERROR
         return None
@@ -200,7 +204,10 @@ class ToolForwarder:
             return
 
         status_name = f"{tool_name[: -len('_batch')]}_batch_status"
-        known = self._relay_batch_jobs.setdefault(status_name, {})
+        url = self.get_server_url(tool_name)
+        if url is None:
+            return
+        known = self._relay_batch_jobs.setdefault((url, status_name), {})
         for job in jobs:
             if not isinstance(job, dict):
                 continue

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -43,6 +44,68 @@ async def test_sidecar_discovers_and_builds_catalog(config):
             assert len(catalog) == 1
             assert catalog[0].name == "unifi_list_devices"
             mock_fwd_instance.open.assert_called_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replacement_url", ["http://localhost:3000", "http://localhost:3001"])
+@pytest.mark.parametrize("in_flight", [False, True])
+async def test_batch_provenance_survives_refresh_only_for_same_backend(config, replacement_url, in_flight):
+    from unifi_mcp_relay.discovery import ServerInfo
+    from unifi_mcp_relay.protocol import ToolInfo
+
+    tools = [ToolInfo(name=name, description=name) for name in ("unifi_batch", "unifi_batch_status")]
+    original = ServerInfo(name="network", url=config.servers[0], tools=tools)
+    replacement = ServerInfo(name="network", url=replacement_url, tools=tools)
+    sidecar = RelaySidecar(config)
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def batch_call(*args):
+        started.set()
+        await finish.wait()
+        return {"jobs": [{"jobId": "relay-created-job"}]}
+
+    with (
+        patch("unifi_mcp_relay.main.discover_all", AsyncMock(side_effect=[[original], [replacement], [replacement]])),
+        patch("unifi_mcp_relay.forwarder.ToolForwarder.open", AsyncMock()),
+        patch("unifi_mcp_relay.forwarder.ToolForwarder.close", AsyncMock()),
+    ):
+        await sidecar._discover_catalog()
+        old_forwarder = sidecar._forwarder
+        old_forwarder._call = AsyncMock(side_effect=batch_call)
+        pending = asyncio.create_task(sidecar._handle_tool_call("unifi_batch", {"operations": []}))
+        await started.wait()
+        if not in_flight:
+            finish.set()
+            await pending
+        await sidecar._discover_catalog()
+        assert sidecar._forwarder is not old_forwarder
+        finish.set()
+        await pending
+
+        status_call = AsyncMock(return_value={"status": "running"})
+        sidecar._forwarder._call = status_call
+        result, error = await sidecar._handle_tool_call("unifi_batch_status", {"jobId": "relay-created-job"})
+        if replacement_url == original.url:
+            assert result == {"status": "running"}
+            assert error is None
+            status_call.assert_awaited_once()
+        else:
+            assert result is None
+            assert "only for jobs started" in error
+            status_call.assert_not_awaited()
+
+        status_call.reset_mock()
+        _, error = await sidecar._handle_tool_call("unifi_batch_status", {"jobId": "foreign-job"})
+        assert "only for jobs started" in error
+        status_call.assert_not_awaited()
+
+        fresh_sidecar = RelaySidecar(config)
+        await fresh_sidecar._discover_catalog()
+        fresh_sidecar._forwarder._call = status_call
+        _, error = await fresh_sidecar._handle_tool_call("unifi_batch_status", {"jobId": "relay-created-job"})
+        assert "only for jobs started" in error
+        status_call.assert_not_awaited()
 
 
 @pytest.mark.asyncio

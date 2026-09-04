@@ -244,14 +244,14 @@ class SupportBundleService:
         return {"success": True, "data": bundle.model_dump(mode="json")}
 
     def _validate_request(self, probe: object, resource: object) -> str | None:
-        if probe not in {"summary", "connectivity", "resource_shape"}:
+        if not isinstance(probe, str) or probe not in {"summary", "connectivity", "resource_shape"}:
             return "Failed to generate support bundle: unsupported probe."
         if probe in {"summary", "connectivity"} and resource is not None:
             return "Failed to generate support bundle: resource is only valid for resource_shape."
         if probe == "resource_shape":
             if resource is None:
                 return "Failed to generate support bundle: resource_shape requires a resource."
-            if (self._adapter.product, resource) not in _RESOURCE_EXPOSURES:
+            if not isinstance(resource, str) or (self._adapter.product, resource) not in _RESOURCE_EXPOSURES:
                 return "Failed to generate support bundle: unsupported resource for this product."
         return None
 

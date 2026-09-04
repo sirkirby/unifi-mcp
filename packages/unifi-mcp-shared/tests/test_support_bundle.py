@@ -6,7 +6,7 @@ import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from unifi_core.support_bundle import (
@@ -22,6 +22,8 @@ from unifi_core.support_bundle import (
     SummaryProbe,
     connection_attempt_succeeded,
 )
+from unifi_mcp_shared.meta_tools import register_meta_tools
+from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
 from unifi_mcp_shared.support_bundle import (
     LiveProbeGate,
     SupportBundleEvidence,
@@ -29,6 +31,53 @@ from unifi_mcp_shared.support_bundle import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+@pytest.mark.parametrize(
+    "product,prefix", [(Product.NETWORK, "unifi"), (Product.PROTECT, "protect"), (Product.ACCESS, "access")]
+)
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"probe": "private-canary-token"},
+        {"probe": ["private-canary-token"]},
+        {"probe": {"secret": "private-canary-token"}},
+        {"probe": None},
+        {"probe": 42},
+        {"probe": "resource_shape", "resource": {"secret": "private-canary-token"}},
+        {"probe": "resource_shape", "resource": ["private-canary-token"]},
+        {"resource": ["private-canary-token"]},
+    ],
+)
+async def test_mcp_support_validation_never_echoes_rejected_input(product, prefix, arguments, caplog):
+    service, adapter = _service(product)
+    server = StrictKwargFastMCP("support-validation-test")
+    register_meta_tools(
+        server=server,
+        tool_decorator=server.tool,
+        tool_index_handler=AsyncMock(return_value={}),
+        start_async_tool=AsyncMock(),
+        get_job_status=AsyncMock(),
+        register_tool=Mock(),
+        support_bundle_handler=service.generate,
+        prefix=prefix,
+    )
+    with caplog.at_level("INFO"):
+        result = await server.call_tool(f"{prefix}_get_support_bundle", arguments)
+
+    payload = json.loads(result.content[0].text)
+    assert payload["success"] is False
+    assert payload["error"].startswith("Failed to generate support bundle")
+    assert "private-canary-token" not in result.model_dump_json()
+    assert "private-canary-token" not in caplog.text
+    assert "traceback" not in caplog.text.lower()
+    audits = [record.message for record in caplog.records if "Support bundle audit" in record.message]
+    assert len(audits) == 1
+    assert "outcome=failed" in audits[0]
+    adapter.collect.assert_not_awaited()
+
+    tool = next(tool for tool in await server.list_tools() if tool.name == f"{prefix}_get_support_bundle")
+    assert tool.input_schema["properties"]["probe"]["enum"] == ["summary", "connectivity", "resource_shape"]
 
 
 def _evidence(product: Product, *, probe: str = "summary") -> SupportBundleEvidence:

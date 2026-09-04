@@ -12,7 +12,7 @@ from typing import Any
 from unifi_mcp_relay.client import RelayClient
 from unifi_mcp_relay.config import RelayConfig
 from unifi_mcp_relay.discovery import ServerInfo, discover_all
-from unifi_mcp_relay.forwarder import ToolForwarder
+from unifi_mcp_relay.forwarder import RelayBatchJobs, ToolForwarder
 from unifi_mcp_relay.policy import filter_relay_tools, relay_call_rejection
 from unifi_mcp_relay.protocol import ToolInfo
 
@@ -35,6 +35,9 @@ class RelaySidecar:
         self._config = config
         self._client = RelayClient(config)
         self._forwarder: ToolForwarder | None = None
+        # Shared by replacement forwarders, including completions of in-flight
+        # calls on the old one. Never shared across separate relay instances.
+        self._batch_jobs: RelayBatchJobs = {}
         self._catalog: list[ToolInfo] = []
         self._advertised_catalog: tuple[ToolInfo, ...] = ()
         self._refresh_task: asyncio.Task | None = None
@@ -62,7 +65,7 @@ class RelaySidecar:
         if not catalog:
             raise DiscoveryNotReadyError("configured local MCP servers returned an empty tool catalog")
 
-        forwarder = ToolForwarder(servers)
+        forwarder = ToolForwarder(servers, batch_jobs=self._batch_jobs)
         await forwarder.open()
 
         # Close old forwarder only after the replacement is ready, so a
