@@ -37,6 +37,22 @@ def _deps():
 class TestRegisterToolsForMode:
     """Tests for the tool visibility surfaces in each registration mode."""
 
+    @pytest.mark.parametrize("mode", ["lazy", "meta_only", "eager"])
+    async def test_legacy_apps_can_omit_support_handler(self, mode, caplog):
+        deps = _deps()
+        deps.pop("support_bundle_handler")
+        with caplog.at_level("INFO"):
+            await register_tools_for_mode(
+                mode=mode,
+                server=_server(),
+                base_package="unifi_network_mcp.tools",
+                config=_config(),
+                logger=logging.getLogger("test"),
+                **deps,
+            )
+        assert "support_bundle_handler" not in deps["register_meta_tools"].call_args.kwargs
+        assert "get_support_bundle" not in caplog.text
+
     @pytest.mark.asyncio
     async def test_lazy_mode_registers_meta_tools_load_tools_and_lazy_loader(self):
         server = _server()
