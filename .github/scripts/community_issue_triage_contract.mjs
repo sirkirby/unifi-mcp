@@ -78,7 +78,9 @@ const SENSITIVE_PATTERNS = [
   /\bbypass\p{L}*\b[^\r\n]{0,40}\b(?:auth(?:entication|orization)?)\b/iu,
 ];
 const SENSITIVE_MULTILINE_LABEL_PATTERN =
-  /^(?:(?:access|account|actual|admin|api|authenticated|camera|client|controller|current|database|db|device|gateway|github|mqtt|network|new|nvr|old|os|protect|redis|service|site|smtp|unifi|user|webhook|wifi|wireless)[ _-]+){0,3}(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))$/iu;
+  /^(?:(.+?)[ _-]+)?(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))$/iu;
+const SENSITIVE_LABEL_PROSE_WORD_PATTERN =
+  /^(?:a|an|and|are|as|at|by|for|from|in|is|of|on|or|that|the|this|to|using|was|were|when|where|which|while|with)$/iu;
 const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
   /^["']?(?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|removed|hidden|masked|omitted|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?[.!]?$/iu;
 const MARKDOWN_TABLE_SEPARATOR_PATTERN =
@@ -389,6 +391,20 @@ function normalizeMarkdownTableLabel(cell) {
   return stripMarkdownWrappers(label);
 }
 
+function isSensitiveMultilineLabel(label) {
+  const match = normalizeMarkdownTableLabel(label).match(SENSITIVE_MULTILINE_LABEL_PATTERN);
+  if (!match) return false;
+  const prefix = (match[1] || "").trim();
+  if (prefix === "") return true;
+  const words = prefix.split(/[ _-]+/u).filter(Boolean);
+  return (
+    words.length <= 4 &&
+    words.every(
+      (word) => /^[\p{L}\p{N}][\p{L}\p{N}.'-]*$/u.test(word) && !SENSITIVE_LABEL_PROSE_WORD_PATTERN.test(word),
+    )
+  );
+}
+
 function markdownReferenceDefinitionLabels(lines) {
   const labels = new Set();
   for (const line of lines) {
@@ -409,7 +425,7 @@ function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referen
   const sensitiveColumns = new Set();
   for (let cellIndex = 0; cellIndex < headerCells.length; cellIndex += 1) {
     const header = normalizeMarkdownTableLabel(headerCells[cellIndex]);
-    if (SENSITIVE_MULTILINE_LABEL_PATTERN.test(header)) sensitiveColumns.add(cellIndex);
+    if (isSensitiveMultilineLabel(header)) sensitiveColumns.add(cellIndex);
   }
   for (let rowIndex = separatorIndex + 1; rowIndex < lines.length; rowIndex += 1) {
     const cells = markdownTableCells(lines[rowIndex]);
@@ -428,7 +444,7 @@ function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referen
       const label = normalizeMarkdownTableLabel(cells[cellIndex]);
       const candidateValue = stripMarkdownWrappers(cells[cellIndex + 1]);
       if (
-        SENSITIVE_MULTILINE_LABEL_PATTERN.test(label) &&
+        isSensitiveMultilineLabel(label) &&
         candidateValue !== "" &&
         (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(candidateValue) ||
           isResolvedPlaceholderReference(candidateValue, referenceLabels))
@@ -459,16 +475,41 @@ function normalizeMarkdownContentLine(line) {
   return line.trim().replace(/^(?:>[ \t]*)+/u, "").replace(/^(?:[-*+][ \t]+)+/u, "");
 }
 
+function splitMarkdownField(line) {
+  let bracketDepth = 0;
+  let parenthesisDepth = 0;
+  let escaped = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (character === "[") bracketDepth += 1;
+    else if (character === "]" && bracketDepth > 0) bracketDepth -= 1;
+    else if (character === "(" && bracketDepth === 0) parenthesisDepth += 1;
+    else if (character === ")" && bracketDepth === 0 && parenthesisDepth > 0) parenthesisDepth -= 1;
+    else if (character === ":" && bracketDepth === 0 && parenthesisDepth === 0) {
+      return [line.slice(0, index).trim(), line.slice(index + 1).trim()];
+    }
+  }
+  return null;
+}
+
 function parseSensitiveLabelLine(line) {
   const normalized = normalizeMarkdownContentLine(line);
-  const field = normalized.match(/^["']?(.+?)["']?[ \t]*:[ \t]*(.*?)[ \t]*$/u);
-  const fieldLabel = field ? normalizeMarkdownTableLabel(field[1]) : "";
-  if (field && SENSITIVE_MULTILINE_LABEL_PATTERN.test(fieldLabel)) {
-    return { label: fieldLabel, inlineValue: field[2].trim() };
+  const field = splitMarkdownField(normalized);
+  const fieldLabel = field ? normalizeMarkdownTableLabel(field[0].replace(/^["']|["']$/gu, "")) : "";
+  if (field && isSensitiveMultilineLabel(fieldLabel)) {
+    return { label: fieldLabel, inlineValue: field[1] };
   }
   const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
   const headingLabel = heading ? normalizeMarkdownTableLabel(heading[1]) : "";
-  if (heading && SENSITIVE_MULTILINE_LABEL_PATTERN.test(headingLabel)) {
+  if (heading && isSensitiveMultilineLabel(headingLabel)) {
     return { label: headingLabel, inlineValue: "" };
   }
   return null;
