@@ -389,7 +389,7 @@ def _run_github_script(
     env.setdefault("LEGACY_RESERVATION_NAME", "community-issue-triage-aic-reservation")
     env.setdefault("RESERVED_AI_CREDITS", "25")
     env.setdefault("LEGACY_RESERVED_AI_CREDITS", "75")
-    env.setdefault("MAX_AI_CREDITS", "75")
+    env.setdefault("MAX_AI_CREDITS", "25")
     env.setdefault("MAX_DAILY_AI_CREDITS", "150")
     script = INLINE_GITHUB_SCRIPT_HARNESS.replace(
         "__SCRIPT__", "\n".join(f"    {line}" for line in _extract_github_script(step_name).splitlines())
@@ -542,7 +542,7 @@ def test_source_and_compiled_workflow_activate_only_the_bounded_issue_events():
         "reaction: none",
         "status-comment: false",
         "stale-check: full",
-        "max-ai-credits: 75",
+        "max-ai-credits: 25",
         "max-daily-ai-credits: 150",
         "group: community-issue-triage-agent",
         "queue: max",
@@ -1220,6 +1220,10 @@ def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
 
 def test_daily_budget_is_reserved_before_inference_and_usage_is_uploaded_before_releasing_agent_queue():
     source = WORKFLOW.read_text()
+    assert "max-ai-credits: 25" in source
+    assert 'RESERVED_AI_CREDITS: "25"' in source
+    assert 'MAX_AI_CREDITS: "25"' in source
+    assert "maxPerRun !== reservedPerRun" in source
     pre_agent = source.split("pre-agent-steps:\n", 1)[1].split("\npost-steps:\n", 1)[0]
     assert "community-issue-triage-aic-reservation" in pre_agent
     assert "reserved + reservedPerRun > daily" in pre_agent
@@ -1350,7 +1354,7 @@ def test_daily_budget_executes_reservation_totals_cutoff_and_workflow_scope(
         assert observed["reservation"] == {
             "actor": "community-member",
             "credits": 25,
-            "max_ai_credits": 75,
+            "max_ai_credits": 25,
             "run_id": "100",
             "version": 2,
             "workflow_id": "55",
@@ -1368,6 +1372,19 @@ def test_daily_budget_executes_reservation_totals_cutoff_and_workflow_scope(
                 "message": "The conservative daily AI credit budget is exhausted; no public action was taken.",
             }
         ]
+
+
+def test_daily_budget_rejects_a_reservation_below_the_per_run_hard_cap(tmp_path: Path):
+    _, observed = _run_github_script(
+        "Reserve the conservative daily AI credit budget",
+        {"env": {"RESERVED_AI_CREDITS": "25", "MAX_AI_CREDITS": "75"}},
+        tmp_path,
+    )
+    assert observed["outputs"]["allowed"] == "false"
+    assert observed["reservation"] is None
+    assert observed["failures"] == [
+        "The daily AI credit reservation configuration is invalid; no public action was taken."
+    ]
 
 
 @pytest.mark.parametrize(
@@ -2060,6 +2077,7 @@ def test_target_size_and_sensitive_content_are_handled_before_later_fetches(body
         "openvpn_configuration: >\n  [REDACTED]",
         "openvpn_configuration:\nstatus: unavailable",
         "Testing endpoints with an authenticated session:\n\n| Endpoint | Result |\n| --- | --- |",
+        "Testing endpoints with an authenticated session:\n\nEndpoint | Result\n--- | ---",
     ],
 )
 def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
@@ -2069,12 +2087,117 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
     assert created["bundle"]["status"] == "complete"
 
 
-@pytest.mark.parametrize("body", ["password:\n  actual-secret", "token: |\n  abcdefghijklmnop"])
-def test_indented_multiline_credentials_still_fail_closed(body: str):
+@pytest.mark.parametrize(
+    "body",
+    [
+        "password:\n  actual-secret",
+        "token: |\n  abcdefghijklmnop",
+        "password:\nactual-secret",
+        "token:\nabcdefghijklmnop",
+        "api key:\nmy-real-secret-123",
+        "cookie:\nsession-cookie-value",
+        "session:\nsession-identifier-value",
+        "authorization:\nBearer abcdefghijklmnop",
+        "password:\n\nactual-secret",
+        "token:\n\nabcdefghijklmnop",
+        "api key:\n\nmy-real-secret-123",
+        "cookie:\n\nsession-cookie-value",
+        "session:\n\nsession-identifier-value",
+        "authorization:\n\nBearer abcdefghijklmnop",
+        "controller password:\nactual-secret",
+        "admin password:\nactual-secret",
+        "GitHub token:\nabcdefghijklmnop",
+        "SNMP community:\nprivate123",
+        "client secret:\nmy-secret-value",
+        "password:\n  [REDACTED]\n  actual-secret",
+        "authorization:\n  disabled\n  Bearer abcdefghijklmnop",
+        "token:\n  unavailable\n  abcdefghijklmnop",
+        "cookie:\n  missing\n  session-cookie-value",
+        "session:\n  unset\n  session-identifier-value",
+        "password:\n[REDACTED]\nactual-secret",
+        "token:\nunavailable\nabcdefghijklmnop",
+        "authorization:\ndisabled\nBearer abcdefghijklmnop",
+        "password:\n[REDACTED]\n\nactual-secret",
+        "password:\n\n| Field | Value |\n| --- | --- |\n| Password | actual-secret |",
+        "password:\n\nField | Value\n--- | ---\nPassword | actual-secret",
+        "password:\n\n| Username | Password |\n| --- | --- |\n| admin | actual-secret |",
+        "password:\n\nUsername | Password\n--- | ---\nadmin | actual-secret",
+        "Credentials:\n\n| Username | Password |\n| --- | --- |\n| admin | actual-secret |",
+        "Credentials:\n\nField | Value\n--- | ---\nPassword | actual-secret",
+        "| Username | Password |\n| --- | --- |\n| admin | actual-secret |",
+        "Username | Password\n--- | ---\nadmin | actual-secret",
+        "Configuration:\n\n| Username | Password |\n| --- | --- |\n| admin | actual-secret |",
+        "| Username | [Password](https://example.com) |\n| --- | --- |\n| admin | actual-secret |",
+        "| Username | **[Password](https://example.com/docs_(old))** |\n| --- | --- |\n| admin | actual-secret |",
+        "> | Username | Password |\n> | --- | --- |\n> | admin | actual-secret |",
+        "| Username | [Password][pwd] |\n| --- | --- |\n| admin | actual-secret |",
+        "| Username | ![Password](https://example.com/icon.png) |\n| --- | --- |\n| admin | actual-secret |",
+        "| Password |\n| --- |\n| hunter2long |",
+        "Username | [Password]\n--- | ---\nadmin | hunter2long\n\n[Password]: https://example.com",
+        "Username | ![Password]\n--- | ---\nadmin | hunter2long\n\n[Password]: https://example.com/icon.png",
+        "| Password |\n| --- |\n| [REDACTED](hunter2long) |",
+        "| Password |\n| --- |\n| ![REDACTED](hunter2long) |",
+        "Field | Value\n--- | ---\nPassword | [REDACTED](hunter2long)",
+        "| Password |\n| --- |\n| [REDACTED][secret] |\n\n[secret]: hunter2long",
+        "| Password |\n| --- |\n| [REDACTED] |\n\n[REDACTED]: hunter2long",
+        "| Password |\n| --- |\n| [REDACTED] |\n\n[REDACTED]:\n  hunter2long",
+        "> | Password |\n> | --- |\n> | [REDACTED] |\n>\n> [REDACTED]:\n>   hunter2long",
+        'Field | Value\n--- | ---\nPassword | [REDACTED]\n\n[REDACTED]: https://example.com "hunter2long"',
+        'Field | Value\n--- | ---\nPassword | [REDACTED]\n\n[REDACTED]:\n  https://example.com "hunter2long"',
+        "Username | [Password](https://example.com/a\\|b)\n--- | ---\nadmin | hunter2long",
+        "Username | ![Password](https://example.com/a\\|b)\n--- | ---\nadmin | hunter2long",
+        "Username | [Password][pwd\\|ref]\n--- | ---\nadmin | hunter2long\n\n[pwd|ref]: https://example.com",
+        "password: [REDACTED]\nactual-secret",
+        "password: [REDACTED]\n\nactual-secret",
+        "- password: [REDACTED]\n  actual-secret",
+        "password:\n[REDACTED]\nvalue: actual-secret",
+        "password:\n[REDACTED]\n\nactual value: actual-secret",
+        "password:\n[REDACTED]\n  value: actual-secret",
+        "password:\n[REDACTED]\nvalue:\nhunter2long",
+        "password:\n[REDACTED]\n  value:\n  hunter2long",
+        "password: [REDACTED]\nvalue:\nhunter2long",
+        "### Password\nhunter2long",
+        "password:\n[REDACTED]\n\n### Actual password\nhunter2long",
+        "> password: [REDACTED]\n> actual-secret",
+    ],
+)
+def test_multiline_credentials_still_fail_closed(body: str):
     payload = _snapshot_payload()
     payload["issues"][str(TARGET_NUMBER)]["body"] = body
     created = _create_snapshot(payload)
     assert created["bundle"]["status"] == "sensitive_stop"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "token:\nunavailable",
+        "password:\n***REDACTED***",
+        "session:\nmissing",
+        "authorization:\ndisabled",
+        "token:\n\nunavailable",
+        "password:\n\n[REDACTED]",
+        "session:\n\nnull",
+        "authorization:\n\nunset",
+        "password:\n\nField | Value\n--- | ---\nPassword | [REDACTED]",
+        "Credentials:\n\nUsername | Password\n--- | ---\nadmin | [REDACTED]",
+        "Username | Password\n--- | ---\nadmin | [REDACTED]",
+        "> Username | Password\n> --- | ---\n> admin | [REDACTED]",
+        "Username | [Password][pwd]\n--- | ---\nadmin | [REDACTED]",
+        "| Password |\n| --- |\n| [REDACTED] |",
+        "Field | Value\n--- | ---\nPassword | `[REDACTED]`",
+        "Field | Value\n--- | ---\nPassword | **[REDACTED]**",
+        "Credentials:\n[REDACTED]\n\nTransport:\nstdio",
+        "password:\n[REDACTED]\n\nSteps to reproduce:\n1. Start",
+        "password: [REDACTED]\n\nTransport: stdio",
+        "password:\n[REDACTED]\n\nTransport: stdio",
+    ],
+)
+def test_multiline_redacted_and_status_values_remain_non_sensitive(body: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = body
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
 
 
 def test_comment_and_candidate_sensitive_variants_are_metadata_only_and_stop_at_scope():
@@ -2962,9 +3085,16 @@ def test_repository_evidence_is_verified_from_one_unique_immutable_file_match():
     assert "unique" in duplicate.stderr
 
 
-def test_repository_evidence_accepts_bounded_immutable_python_source():
+@pytest.mark.parametrize(
+    "path",
+    [
+        "packages/unifi-mcp-shared/src/unifi_mcp_shared/meta_tools.py",
+        "packages/unifi-core/src/unifi_core/network/models/_validators.py",
+        "apps/network/src/unifi_network_mcp/__init__.py",
+    ],
+)
+def test_repository_evidence_accepts_bounded_immutable_python_source(path: str):
     bundle = _create_snapshot()["bundle"]
-    path = "packages/unifi-mcp-shared/src/unifi_mcp_shared/meta_tools.py"
     quote = "The tool delegates controller access through the shared manager boundary."
     proposal = _normal_proposal(
         bundle,

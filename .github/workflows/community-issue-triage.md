@@ -36,7 +36,7 @@ network:
   allowed: [github]
 
 timeout-minutes: 10
-max-ai-credits: 75
+max-ai-credits: 25
 max-daily-ai-credits: 150
 
 jobs:
@@ -535,7 +535,7 @@ pre-agent-steps:
       LEGACY_RESERVATION_NAME: community-issue-triage-aic-reservation
       RESERVED_AI_CREDITS: "25"
       LEGACY_RESERVED_AI_CREDITS: "75"
-      MAX_AI_CREDITS: "75"
+      MAX_AI_CREDITS: "25"
       MAX_DAILY_AI_CREDITS: "150"
     with:
       github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -569,7 +569,7 @@ pre-agent-steps:
           reservationName === legacyReservationName ||
           !Number.isFinite(reservedPerRun) || reservedPerRun <= 0 ||
           !Number.isFinite(legacyReservedPerRun) || legacyReservedPerRun <= 0 ||
-          !Number.isFinite(maxPerRun) || maxPerRun < reservedPerRun ||
+          !Number.isFinite(maxPerRun) || maxPerRun !== reservedPerRun ||
           !Number.isFinite(daily) || daily < maxPerRun
         ) {
           block("The daily AI credit reservation configuration is invalid; no public action was taken.");

@@ -77,6 +77,14 @@ const SENSITIVE_PATTERNS = [
   /\b(?:auth(?:entication|orization)?)[^\r\n]{0,40}\bbypass\p{L}*\b/iu,
   /\bbypass\p{L}*\b[^\r\n]{0,40}\b(?:auth(?:entication|orization)?)\b/iu,
 ];
+const SENSITIVE_MULTILINE_LABEL_PATTERN =
+  /(?:^|[ _-])(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))$/iu;
+const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
+  /^["']?(?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|removed|hidden|masked|omitted|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?[.!]?$/iu;
+const MARKDOWN_TABLE_SEPARATOR_PATTERN =
+  /^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/u;
+const SAFE_STRUCTURAL_LABEL_PATTERN =
+  /^(?:actual behavior|additional context|environment|expected behavior|installation(?: method)?|logs?|steps(?: to reproduce)?|transport|version)$/iu;
 const BENIGN_SECURITY_CONTEXT_PATTERNS = [
   /^\s*unauthenticated (?:users|requests) (?:correctly )?(?:receive|return) 401(?: unauthorized)?(?: as expected)?[.!]?\s*$/iu,
   /^\s*(?:the )?api denies unauthenticated requests[.!]?\s*$/iu,
@@ -111,7 +119,7 @@ const MISSING_INFORMATION_TEXT = new Map([
 const REPOSITORY_EVIDENCE_PATHS = [
   /^(?:README|CONTRIBUTING|SECURITY)\.md$/,
   /^docs\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
-  /^(?:apps|packages)\/[A-Za-z0-9][A-Za-z0-9._-]*\/src\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.py$/,
+  /^(?:apps|packages)\/[A-Za-z0-9][A-Za-z0-9._-]*\/src\/[A-Za-z0-9_][A-Za-z0-9_-]*(?:\/[A-Za-z0-9_][A-Za-z0-9_-]*)*\.py$/,
 ];
 const COMMENT_FOOTER =
   "This is an automated first-pass triage; a maintainer will make final decisions.";
@@ -342,6 +350,189 @@ function containsControllerAddress(value) {
   return false;
 }
 
+function markdownTableCells(line) {
+  const trimmed = line.trim().replace(/^(?:>[ \t]*)+/u, "");
+  const cells = [];
+  let cell = "";
+  let backslashRun = 0;
+  let sawDelimiter = false;
+  for (const character of trimmed) {
+    if (character === "|" && backslashRun % 2 === 0) {
+      cells.push(cell.trim());
+      cell = "";
+      backslashRun = 0;
+      sawDelimiter = true;
+      continue;
+    }
+    cell += character;
+    backslashRun = character === "\\" ? backslashRun + 1 : 0;
+  }
+  if (!sawDelimiter) return null;
+  cells.push(cell.trim());
+  if (cells[0] === "") cells.shift();
+  if (cells.at(-1) === "") cells.pop();
+  return cells;
+}
+
+function isMarkdownTableSeparator(line) {
+  return MARKDOWN_TABLE_SEPARATOR_PATTERN.test(line.trim().replace(/^(?:>[ \t]*)+/u, ""));
+}
+
+function stripMarkdownWrappers(value) {
+  return value.replace(/^[`*_~]+|[`*_~]+$/gu, "").trim();
+}
+
+function normalizeMarkdownTableLabel(cell) {
+  let label = stripMarkdownWrappers(cell);
+  const link = label.match(/^!?\[([^\]\r\n]+)\](?:(?:\([^\r\n]+\)|\[[^\]\r\n]*\]))?$/u);
+  if (link) label = link[1];
+  return stripMarkdownWrappers(label);
+}
+
+function markdownReferenceDefinitionLabels(lines) {
+  const labels = new Set();
+  for (const line of lines) {
+    const normalized = line.trim().replace(/^(?:>[ \t]*)+/u, "");
+    const match = normalized.match(/^\[([^\]\r\n]+)\]:/u);
+    if (match) labels.add(match[1].trim().toLocaleLowerCase("en-US"));
+  }
+  return labels;
+}
+
+function isResolvedPlaceholderReference(candidate, referenceLabels) {
+  const match = candidate.match(/^\[([^\]\r\n]+)\]$/u);
+  return Boolean(match && referenceLabels.has(match[1].trim().toLocaleLowerCase("en-US")));
+}
+
+function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referenceLabels) {
+  const headerCells = markdownTableCells(lines[headerIndex]) || [];
+  const sensitiveColumns = new Set();
+  for (let cellIndex = 0; cellIndex < headerCells.length; cellIndex += 1) {
+    const header = normalizeMarkdownTableLabel(headerCells[cellIndex]);
+    if (SENSITIVE_MULTILINE_LABEL_PATTERN.test(header)) sensitiveColumns.add(cellIndex);
+  }
+  for (let rowIndex = separatorIndex + 1; rowIndex < lines.length; rowIndex += 1) {
+    const cells = markdownTableCells(lines[rowIndex]);
+    if (!cells) break;
+    for (const cellIndex of sensitiveColumns) {
+      const candidateValue = stripMarkdownWrappers(cells[cellIndex] || "");
+      if (
+        candidateValue !== "" &&
+        (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(candidateValue) ||
+          isResolvedPlaceholderReference(candidateValue, referenceLabels))
+      ) {
+        return true;
+      }
+    }
+    for (let cellIndex = 0; cellIndex + 1 < cells.length; cellIndex += 1) {
+      const label = normalizeMarkdownTableLabel(cells[cellIndex]);
+      const candidateValue = stripMarkdownWrappers(cells[cellIndex + 1]);
+      if (
+        SENSITIVE_MULTILINE_LABEL_PATTERN.test(label) &&
+        candidateValue !== "" &&
+        (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(candidateValue) ||
+          isResolvedPlaceholderReference(candidateValue, referenceLabels))
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function containsSensitiveTable(value) {
+  const lines = value.split(/\r?\n/);
+  const referenceLabels = markdownReferenceDefinitionLabels(lines);
+  for (let headerIndex = 0; headerIndex + 1 < lines.length; headerIndex += 1) {
+    if (
+      markdownTableCells(lines[headerIndex]) !== null &&
+      isMarkdownTableSeparator(lines[headerIndex + 1]) &&
+      containsSensitiveTableValue(lines, headerIndex, headerIndex + 1, referenceLabels)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function normalizeMarkdownContentLine(line) {
+  return line.trim().replace(/^(?:>[ \t]*)+/u, "").replace(/^(?:[-*+][ \t]+)+/u, "");
+}
+
+function parseSensitiveLabelLine(line) {
+  const normalized = normalizeMarkdownContentLine(line);
+  const field = normalized.match(/^["']?(.+?)["']?[ \t]*:[ \t]*(.*?)[ \t]*$/u);
+  if (field && SENSITIVE_MULTILINE_LABEL_PATTERN.test(field[1].trim())) {
+    return { label: field[1].trim(), inlineValue: field[2].trim() };
+  }
+  const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
+  if (heading && SENSITIVE_MULTILINE_LABEL_PATTERN.test(heading[1].trim())) {
+    return { label: heading[1].trim(), inlineValue: "" };
+  }
+  return null;
+}
+
+function isSafeStructuralBoundary(line) {
+  const normalized = normalizeMarkdownContentLine(line);
+  const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
+  if (heading) return SAFE_STRUCTURAL_LABEL_PATTERN.test(heading[1].trim());
+  const field = normalized.match(/^["']?([A-Za-z][A-Za-z0-9 _-]{0,80})["']?[ \t]*:/u);
+  return Boolean(field && SAFE_STRUCTURAL_LABEL_PATTERN.test(field[1].trim()));
+}
+
+function containsSensitiveMultilineValue(value) {
+  const lines = value.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const labelMatch = parseSensitiveLabelLine(lines[index]);
+    if (!labelMatch) continue;
+
+    const inlineValue = labelMatch.inlineValue;
+    if (inlineValue !== "") {
+      if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(stripMarkdownWrappers(inlineValue))) return true;
+      for (let continuationIndex = index + 1; continuationIndex < lines.length; continuationIndex += 1) {
+        const continuation = lines[continuationIndex];
+        if (continuation.trim() === "") continue;
+        if (isSafeStructuralBoundary(continuation)) break;
+        if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(continuation))) return true;
+      }
+      continue;
+    }
+
+    let valueIndex = index + 1;
+    while (valueIndex < lines.length && lines[valueIndex].trim() === "") valueIndex += 1;
+    if (valueIndex >= lines.length) continue;
+
+    let nextContentIndex = valueIndex + 1;
+    while (nextContentIndex < lines.length && lines[nextContentIndex].trim() === "") {
+      nextContentIndex += 1;
+    }
+    if (
+      markdownTableCells(lines[valueIndex]) !== null &&
+      nextContentIndex < lines.length &&
+      isMarkdownTableSeparator(lines[nextContentIndex])
+    ) {
+      if (
+        containsSensitiveTableValue(
+          lines,
+          valueIndex,
+          nextContentIndex,
+          markdownReferenceDefinitionLabels(lines),
+        )
+      ) return true;
+      continue;
+    }
+
+    if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(lines[valueIndex].trim())) return true;
+    for (let continuationIndex = valueIndex + 1; continuationIndex < lines.length; continuationIndex += 1) {
+      const continuation = lines[continuationIndex];
+      if (continuation.trim() === "") continue;
+      if (isSafeStructuralBoundary(continuation)) break;
+      if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(continuation))) return true;
+    }
+  }
+  return false;
+}
+
 function containsSensitiveContent(value) {
   const normalized = value
     .normalize("NFKC")
@@ -355,6 +546,8 @@ function containsSensitiveContent(value) {
   return (
     containsControllerAddress(normalized) ||
     containsSensitiveConfigurationBlob(normalized) ||
+    containsSensitiveTable(normalized) ||
+    containsSensitiveMultilineValue(normalized) ||
     SENSITIVE_PATTERNS.some((pattern) => pattern.test(inlinePatternInput))
   );
 }
