@@ -2216,6 +2216,8 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "API token used by MCP:\nabcdefghijklmnop",
         "Current token value:\nabcdefghijklmnop",
         "Password used with controller:\nhunter2long",
+        "Password is:\nhunter2long",
+        "API token was:\nabcdefghijklmnop",
         "Value for API token:\nabcdefghijklmnop",
         "Value of controller password:\nhunter2long",
         "Current value for password:\nhunter2long",
@@ -2231,6 +2233,10 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "Pass&NoBreak;word=\nhunter2long",
         "Pass&NegativeThinSpace;word=\nhunter2long",
         "Pass&InvisibleTimes;word=\nhunter2long",
+        "Pass&shyword=\nhunter2long",
+        "### Pass&shyword\nhunter2long",
+        "Username | Pass&shyword\n--- | ---\nadmin | hunter2long",
+        "API&nbspkey:\nmy-real-secret-123",
         "API&ThinSpace;key:\nmy-real-secret-123",
         "API&NonBreakingSpace;key:\nmy-real-secret-123",
         "API&emsp13;key:\nmy-real-secret-123",
@@ -2314,6 +2320,7 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "![Password](https://example.com/icon.png):\nhunter2long",
         "[Password][credential]:\nhunter2long\n\n[credential]: https://example.com",
         "**[Password](https://example.com)**:\nhunter2long",
+        "[" * 64 + "Password" + "]" * 64 + ":\nhunter2long",
         "password:\n[REDACTED]\n\n### Actual password\nhunter2long",
         "> password: [REDACTED]\n> actual-secret",
     ],
@@ -2334,6 +2341,13 @@ def test_sensitive_table_scanner_handles_many_header_like_rows_as_one_block():
     payload["issues"][str(TARGET_NUMBER)]["body"] = "\n".join(rows)
     created = _create_snapshot(payload)
     assert created["bundle"]["status"] == "sensitive_stop"
+
+
+def test_unterminated_inline_html_scan_is_bounded():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "<a" * 100_000
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
 
 
 @pytest.mark.parametrize(
@@ -2387,8 +2401,12 @@ def test_sensitive_table_scanner_checks_data_rows_before_embedded_header_transit
         "authorization:\ndisabled",
         "token:\n\nunavailable",
         "password:\n\n[REDACTED]",
+        "Password is:\n[REDACTED]",
+        "API token was:\nunavailable",
         "Pass&ZeroWidthSpace;word=\n[REDACTED]",
         "Pass&NoBreak;word=\n[REDACTED]",
+        "Pass&shyword=\n[REDACTED]",
+        "API&nbspkey:\nunavailable",
         "API&ThinSpace;key:\n[REDACTED]",
         "API&emsp13;key:\n[REDACTED]",
         "&Pfr;assword:\n[REDACTED]",

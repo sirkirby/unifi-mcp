@@ -85,7 +85,9 @@ const SENSITIVE_LABEL_PROSE_WORD_PATTERN =
 const SENSITIVE_LABEL_RELATIONAL_PREFIX_PATTERN =
   /^(?:current[ _-]+)?value(?:[ _-]+(?:for|of)(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2})?$/iu;
 const SENSITIVE_LABEL_SUFFIX_PATTERN =
-  /^(?:value|(?:for|of|in|from|on|at|to)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2}|(?:value[ _-]+)?used[ _-]+(?:by|with|for|in)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2})$/iu;
+  /^(?:value|is|was|are|were|(?:for|of|in|from|on|at|to)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2}|(?:value[ _-]+)?used[ _-]+(?:by|with|for|in)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2})$/iu;
+const MAX_MARKDOWN_LABEL_NORMALIZATION_PASSES = 32;
+const UNSTABLE_MARKDOWN_LABEL_SENTINEL = "&UnstableMarkdownLabel;";
 const BENIGN_SESSION_PROSE_LABEL_PATTERN =
   /^(?:debugging|observed|testing)[ _-]+authenticated[ _-]+session$/iu;
 const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
@@ -421,6 +423,10 @@ function decodeHtmlCharacterReferences(value) {
     ["zwnj", "\u200c"],
     ["zwj", "\u200d"],
   ]);
+  const namedPattern = new RegExp(
+    `&(${[...named.keys()].sort((left, right) => right.length - left.length).join("|")});?`,
+    "giu",
+  );
   return value
     .replace(/&#(?:x(0*[0-9a-f]{1,6})(?![0-9a-f])|(0*[0-9]{1,7})(?![0-9]));?/giu, (match, hex, decimal) => {
       const codePoint = Number.parseInt(hex || decimal, hex ? 16 : 10);
@@ -429,7 +435,7 @@ function decodeHtmlCharacterReferences(value) {
         ? String.fromCodePoint(codePoint)
         : match;
     })
-    .replace(/&([a-z]+);/giu, (match, name) => named.get(name.toLocaleLowerCase("en-US")) || match);
+    .replace(namedPattern, (match, name) => named.get(name.toLocaleLowerCase("en-US")) || match);
 }
 
 function stripInlineHtmlMarkup(value) {
@@ -460,6 +466,8 @@ function stripInlineHtmlMarkup(value) {
         index = tagEnd;
         continue;
       }
+      result += value.slice(index);
+      break;
     }
     result += value[index];
   }
@@ -468,16 +476,16 @@ function stripInlineHtmlMarkup(value) {
 
 function normalizeMarkdownTableLabel(cell) {
   let label = stripInlineHtmlMarkup(decodeHtmlCharacterReferences(cell)).trim();
-  let previous = "";
-  while (label !== previous) {
-    previous = label;
-    label = label
+  for (let pass = 0; pass < MAX_MARKDOWN_LABEL_NORMALIZATION_PASSES; pass += 1) {
+    const normalized = label
       .replace(/!?\[([^\]\r\n]+)\]\((?:\\.|[^()\\\r\n]|\([^()\r\n]*\))*\)/gu, "$1")
       .replace(/!?\[([^\]\r\n]+)\]\[[^\]\r\n]*\]/gu, "$1")
       .replace(/!?\[([^\]\r\n]+)\]/gu, "$1")
       .replace(/(\*{1,3}|_{1,3}|~{2}|`+)(.+?)\1/gu, "$2");
+    if (normalized === label) return stripMarkdownWrappers(label);
+    label = normalized;
   }
-  return stripMarkdownWrappers(label);
+  return UNSTABLE_MARKDOWN_LABEL_SENTINEL;
 }
 
 function isSensitiveMultilineLabel(label) {
