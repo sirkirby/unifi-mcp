@@ -70,13 +70,14 @@ This is the default, so this error typically only occurs if you explicitly set i
 Policy gates do not hide tools. In `lazy` mode, domain tools are discovered
 through `access_tool_index` and called through `access_execute`; they are not all
 registered directly with the client at startup. In `meta_only` mode, the index
-contains only meta-tools, and `access_execute` can run a domain tool when its
-name is already known.
+initially contains only meta-tools, and `access_execute` can run a domain tool
+when its name is already known. That execution lazily registers the tool's
+module, so later client lists and index results can include its domain tools.
 
 **Fix:**
 1. Use the default `lazy` mode with `access_tool_index` for discovery
 2. Use `access_execute` to call the tool, or set `UNIFI_TOOL_REGISTRATION_MODE=eager` to register all tools directly
-3. Check whether `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` is limiting registration
+3. In `eager` mode, check whether `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` is limiting registration
 
 ### Tool returns "permission denied" via access_execute
 

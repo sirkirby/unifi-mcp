@@ -218,9 +218,11 @@ The relevant policy gate is set to `false`. The error message includes the exact
 ### Tool not appearing in tool index at all
 Policy gates never remove tools from registration or discovery. Index contents
 depend on the registration mode: `lazy` uses the generated manifest for the
-full catalog, `eager` indexes the registered catalog, and `meta_only`
-intentionally indexes only meta-tools. If a tool is missing in `lazy` mode, the
-manifest may be stale; run `make network-manifest` to regenerate it.
+full catalog, `eager` indexes the registered catalog, and `meta_only` initially
+indexes only meta-tools. Executing a known domain tool in `meta_only` lazily
+registers its module, so later index results can include those loaded tools. If
+a tool is missing in `lazy` mode, the manifest may be stale; run
+`make network-manifest` to regenerate it.
 
 ### Legacy variables not taking effect
 Ensure the variable name matches the old format exactly (`UNIFI_PERMISSIONS_<CAT>_<ACTION>`). Check stderr logs for the deprecation warning confirming the variable was detected. If the new `UNIFI_POLICY_` variable is also set, the new one takes precedence.
