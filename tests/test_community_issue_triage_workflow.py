@@ -2078,6 +2078,7 @@ def test_target_size_and_sensitive_content_are_handled_before_later_fetches(body
         "openvpn_configuration:\nstatus: unavailable",
         "Testing endpoints with an authenticated session:\n\n| Endpoint | Result |\n| --- | --- |",
         "Testing endpoints with an authenticated session:\n\nEndpoint | Result\n--- | ---",
+        "Testing with an authenticated session:\nThe endpoint returns 200",
     ],
 )
 def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
@@ -2157,6 +2158,9 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "password:\n[REDACTED]\n  value:\n  hunter2long",
         "password: [REDACTED]\nvalue:\nhunter2long",
         "### Password\nhunter2long",
+        "### **Password**\nhunter2long",
+        "### [Password](https://example.com)\nhunter2long",
+        "**Password**:\nhunter2long",
         "password:\n[REDACTED]\n\n### Actual password\nhunter2long",
         "> password: [REDACTED]\n> actual-secret",
     ],
@@ -2177,6 +2181,7 @@ def test_multiline_credentials_still_fail_closed(body: str):
         "authorization:\ndisabled",
         "token:\n\nunavailable",
         "password:\n\n[REDACTED]",
+        "> password:\n> [REDACTED]",
         "session:\n\nnull",
         "authorization:\n\nunset",
         "password:\n\nField | Value\n--- | ---\nPassword | [REDACTED]",
@@ -3077,6 +3082,8 @@ def test_repository_evidence_is_verified_from_one_unique_immutable_file_match():
     assert accepted.returncode == 0, accepted.stderr
     rendered = json.loads(accepted.stdout)["output"]["items"][0]["body"]
     assert quote in rendered
+    assert "The repository source currently states:" in rendered
+    assert "repository documentation currently states" not in rendered
     assert "triage_proposal" not in rendered
 
     payload["repositoryFiles"]["docs/permissions.md"] = f"{quote}\n{quote}"
@@ -3110,6 +3117,8 @@ def test_repository_evidence_accepts_bounded_immutable_python_source(path: str):
         }
     )
     assert result.returncode == 0, result.stderr
+    rendered = json.loads(result.stdout)["output"]["items"][0]["body"]
+    assert "The repository source currently states:" in rendered
 
 
 def test_candidate_summary_distinguishes_skipped_search_from_zero_results():

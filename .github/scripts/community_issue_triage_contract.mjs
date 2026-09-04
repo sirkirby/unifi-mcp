@@ -78,7 +78,7 @@ const SENSITIVE_PATTERNS = [
   /\bbypass\p{L}*\b[^\r\n]{0,40}\b(?:auth(?:entication|orization)?)\b/iu,
 ];
 const SENSITIVE_MULTILINE_LABEL_PATTERN =
-  /(?:^|[ _-])(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))$/iu;
+  /^(?:(?:access|account|actual|admin|api|authenticated|camera|client|controller|current|database|db|device|gateway|github|mqtt|network|new|nvr|old|os|protect|redis|service|site|smtp|unifi|user|webhook|wifi|wireless)[ _-]+){0,3}(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))$/iu;
 const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
   /^["']?(?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|removed|hidden|masked|omitted|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?[.!]?$/iu;
 const MARKDOWN_TABLE_SEPARATOR_PATTERN =
@@ -462,12 +462,14 @@ function normalizeMarkdownContentLine(line) {
 function parseSensitiveLabelLine(line) {
   const normalized = normalizeMarkdownContentLine(line);
   const field = normalized.match(/^["']?(.+?)["']?[ \t]*:[ \t]*(.*?)[ \t]*$/u);
-  if (field && SENSITIVE_MULTILINE_LABEL_PATTERN.test(field[1].trim())) {
-    return { label: field[1].trim(), inlineValue: field[2].trim() };
+  const fieldLabel = field ? normalizeMarkdownTableLabel(field[1]) : "";
+  if (field && SENSITIVE_MULTILINE_LABEL_PATTERN.test(fieldLabel)) {
+    return { label: fieldLabel, inlineValue: field[2].trim() };
   }
   const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
-  if (heading && SENSITIVE_MULTILINE_LABEL_PATTERN.test(heading[1].trim())) {
-    return { label: heading[1].trim(), inlineValue: "" };
+  const headingLabel = heading ? normalizeMarkdownTableLabel(heading[1]) : "";
+  if (heading && SENSITIVE_MULTILINE_LABEL_PATTERN.test(headingLabel)) {
+    return { label: headingLabel, inlineValue: "" };
   }
   return null;
 }
@@ -522,7 +524,7 @@ function containsSensitiveMultilineValue(value) {
       continue;
     }
 
-    if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(lines[valueIndex].trim())) return true;
+    if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(lines[valueIndex]))) return true;
     for (let continuationIndex = valueIndex + 1; continuationIndex < lines.length; continuationIndex += 1) {
       const continuation = lines[continuationIndex];
       if (continuation.trim() === "") continue;
@@ -1591,7 +1593,7 @@ async function renderRepositoryEvidence(decision, bundle, fetchRepositoryFile) {
   const path = decision.path.split("/").map(encodeURIComponent).join("/");
   const sourceUrl = `https://github.com/${bundle.repository}/blob/${bundle.workflow_sha}/${path}#L${startLine}-L${endLine}`;
   return (
-    "The repository documentation currently states:\n\n" +
+    "The repository source currently states:\n\n" +
     decision.quote.split("\n").map((line) => `> ${line}`).join("\n") +
     `\n\nSource: ${sourceUrl}`
   );
