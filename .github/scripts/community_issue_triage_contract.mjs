@@ -392,11 +392,16 @@ function normalizeMarkdownTableLabel(cell) {
 }
 
 function isSensitiveMultilineLabel(label) {
-  const match = normalizeMarkdownTableLabel(label).match(SENSITIVE_MULTILINE_LABEL_PATTERN);
+  const normalizedLabel = normalizeMarkdownTableLabel(label);
+  const match = normalizedLabel.match(SENSITIVE_MULTILINE_LABEL_PATTERN);
   if (!match) return false;
   const prefix = (match[1] || "").trim();
   if (prefix === "") return true;
   const words = prefix.split(/[ _-]+/u).filter(Boolean);
+  if (
+    /session(?:[ _-]?id)?$/iu.test(normalizedLabel) &&
+    words.some((word) => /(?:ed|ing)$/iu.test(word))
+  ) return false;
   return (
     words.length <= 4 &&
     words.every(
@@ -505,7 +510,8 @@ function parseSensitiveLabelLine(line) {
   const field = splitMarkdownField(normalized);
   const fieldLabel = field ? normalizeMarkdownTableLabel(field[0].replace(/^["']|["']$/gu, "")) : "";
   if (field && isSensitiveMultilineLabel(fieldLabel)) {
-    return { label: fieldLabel, inlineValue: field[1] };
+    const inlineValue = /^[>|](?:[+-]?[1-9]?|[1-9]?[+-]?)$/u.test(field[1]) ? "" : field[1];
+    return { label: fieldLabel, inlineValue };
   }
   const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
   const headingLabel = heading ? normalizeMarkdownTableLabel(heading[1]) : "";
@@ -565,6 +571,7 @@ function containsSensitiveMultilineValue(value) {
       continue;
     }
 
+    if (isSafeStructuralBoundary(lines[valueIndex])) continue;
     if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(lines[valueIndex]))) return true;
     for (let continuationIndex = valueIndex + 1; continuationIndex < lines.length; continuationIndex += 1) {
       const continuation = lines[continuationIndex];
@@ -585,7 +592,9 @@ function containsSensitiveContent(value) {
   // Markdown line or paragraph break after prose such as "authenticated session:" is
   // not a credential assignment. Preserve deliberate indented config values while
   // preventing inline detectors from consuming an unindented following line.
-  const inlinePatternInput = normalized.replace(/\r?\n(?![ \t])/g, "\n,\n");
+  const inlinePatternInput = normalized
+    .replace(/(:[ \t]*)[>|](?:[+-]?[1-9]?|[1-9]?[+-]?)[ \t]*(?=\r?\n)/gu, "$1")
+    .replace(/\r?\n(?![ \t])/g, "\n,\n");
   return (
     containsControllerAddress(normalized) ||
     containsSensitiveConfigurationBlob(normalized) ||

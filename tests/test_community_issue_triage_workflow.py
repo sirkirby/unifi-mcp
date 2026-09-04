@@ -2079,6 +2079,9 @@ def test_target_size_and_sensitive_content_are_handled_before_later_fetches(body
         "Testing endpoints with an authenticated session:\n\n| Endpoint | Result |\n| --- | --- |",
         "Testing endpoints with an authenticated session:\n\nEndpoint | Result\n--- | ---",
         "Testing with an authenticated session:\nThe endpoint returns 200",
+        "Testing authenticated session:\nThe endpoint returns 200",
+        "Debugging authenticated session:\nThe endpoint returns 200",
+        "Observed authenticated session:\nThe endpoint returns 200",
     ],
 )
 def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
@@ -2194,6 +2197,9 @@ def test_multiline_credentials_still_fail_closed(body: str):
         "token:\n\nunavailable",
         "password:\n\n[REDACTED]",
         "> password:\n> [REDACTED]",
+        "password: |\n  [REDACTED]",
+        "password: >-\n  [REDACTED]",
+        "password:\nTransport: stdio",
         "session:\n\nnull",
         "authorization:\n\nunset",
         "password:\n\nField | Value\n--- | ---\nPassword | [REDACTED]",
