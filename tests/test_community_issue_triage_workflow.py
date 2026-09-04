@@ -2352,6 +2352,9 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "### [Password](https://example.com)\nhunter2long",
         "Password\n--------\nhunter2long",
         "Password\n========\nhunter2long",
+        "Password\nhunter2long",
+        "Password\nsecret",
+        "Testing authenticated session:\nsession-identifier-value",
         "**Password**:\nhunter2long",
         "**Password**\nhunter2long",
         "[Password](https://example.com)\nhunter2long",
@@ -2390,10 +2393,19 @@ def test_unterminated_inline_html_scan_is_bounded():
     assert created["bundle"]["status"] == "complete"
 
 
+def test_oversized_non_label_line_does_not_become_a_sensitive_label():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "<a" * 100_000 + "\nordinary follow-up"
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
+
+
 @pytest.mark.parametrize("marker", ["[", "*", "_", "~", "`"])
 def test_oversized_malformed_markdown_labels_fail_closed_in_bounded_time(marker: str):
     payload = _snapshot_payload()
-    payload["issues"][str(TARGET_NUMBER)]["body"] = marker * 100_000 + "\nhunter2long"
+    payload["issues"][str(TARGET_NUMBER)]["body"] = (
+        marker * 50_000 + "Password" + marker * 50_000 + "\nhunter2long"
+    )
     created = _create_snapshot(payload)
     assert created["bundle"]["status"] == "sensitive_stop"
 
@@ -2450,6 +2462,7 @@ def test_sensitive_table_scanner_checks_data_rows_before_embedded_header_transit
         "token:\n\nunavailable",
         "password:\n\n[REDACTED]",
         "**Password**\n[REDACTED]",
+        "Password\n[REDACTED]",
         "<strong>Password</strong>\nunavailable",
         "Password is:\n[REDACTED]",
         "API token was:\nunavailable",

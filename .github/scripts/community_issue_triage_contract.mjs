@@ -92,8 +92,13 @@ const UNSTABLE_MARKDOWN_LABEL_SENTINEL = "&UnstableMarkdownLabel;";
 const SAFE_INLINE_LABEL_TAGS = new Set(["b", "code", "del", "em", "i", "kbd", "s", "span", "strong", "sub", "sup", "u"]);
 const BENIGN_SESSION_PROSE_LABEL_PATTERN =
   /^(?:debugging|observed|testing)[ _-]+authenticated[ _-]+session$/iu;
+const BENIGN_SESSION_PROSE_VALUE_PATTERN = /^(?:the[ _-]+)?endpoint[ _-]+returns[ _-]+\d{3}[.!]?$/iu;
 const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
   /^["']?(?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|removed|hidden|masked|omitted|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?[.!]?$/iu;
+const SENSITIVE_LABEL_CANDIDATE_PATTERN =
+  /(?:^|[^A-Za-z0-9])(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|pin(?:[ _-]?code)?|community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?=$|[^A-Za-z0-9])/iu;
+const BARE_SENSITIVE_MULTILINE_LABEL_PATTERN =
+  /^(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))$/iu;
 const MARKDOWN_TABLE_SEPARATOR_PATTERN =
   /^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/u;
 const SAFE_STRUCTURAL_LABEL_PATTERN =
@@ -601,7 +606,6 @@ function isSensitiveMultilineLabel(label) {
   // A complete HTML5 named-reference table would add thousands of security-critical
   // aliases. Fail closed when a candidate label still contains one we did not decode.
   if (UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN.test(normalizedLabel)) return true;
-  if (BENIGN_SESSION_PROSE_LABEL_PATTERN.test(normalizedLabel)) return false;
   const match = normalizedLabel.match(SENSITIVE_MULTILINE_LABEL_PATTERN);
   if (!match) return false;
   const prefix = (match[1] || "").trim();
@@ -815,7 +819,7 @@ function parseSensitiveLabelLine(line) {
       : /^[>|](?:[+-]?[1-9]?|[1-9]?[+-]?)$/u.test(field[1])
         ? ""
         : field[1];
-    return { label: fieldLabel, inlineValue };
+    return { label: fieldLabel, inlineValue, structural: true };
   }
   const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
   const headingLabel = heading ? normalizeMarkdownTableLabel(heading[1]) : "";
@@ -823,17 +827,39 @@ function parseSensitiveLabelLine(line) {
     return {
       label: headingLabel,
       inlineValue: hasSensitiveDiscardedLabelMarkup(heading[1]) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
+      structural: true,
     };
   }
   const standaloneSource = normalized.replace(/^['"]|['"]$/gu, "").trim();
+  if (standaloneSource.length > MAX_MARKDOWN_LABEL_LENGTH) {
+    const isCandidate =
+      SENSITIVE_LABEL_CANDIDATE_PATTERN.test(standaloneSource) ||
+      UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN.test(standaloneSource) ||
+      hasSensitiveDiscardedLabelMarkup(standaloneSource);
+    return isCandidate
+      ? { label: UNSTABLE_MARKDOWN_LABEL_SENTINEL, inlineValue: "", structural: false }
+      : null;
+  }
   const standaloneLabel = normalizeMarkdownTableLabel(standaloneSource);
-  if (standaloneLabel !== standaloneSource && isSensitiveMultilineLabel(standaloneLabel)) {
+  const normalizedMarkup = standaloneLabel !== standaloneSource;
+  if (
+    (normalizedMarkup && isSensitiveMultilineLabel(standaloneLabel)) ||
+    (!normalizedMarkup && BARE_SENSITIVE_MULTILINE_LABEL_PATTERN.test(standaloneLabel))
+  ) {
     return {
       label: standaloneLabel,
       inlineValue: hasSensitiveDiscardedLabelMarkup(standaloneSource) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
+      structural: false,
     };
   }
   return null;
+}
+
+function isBenignValueForSensitiveLabel(value, label) {
+  return (
+    BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(value) ||
+    (BENIGN_SESSION_PROSE_LABEL_PATTERN.test(label) && BENIGN_SESSION_PROSE_VALUE_PATTERN.test(value))
+  );
 }
 
 function parseSensitiveLabelAt(lines, index) {
@@ -848,9 +874,14 @@ function parseSensitiveLabelAt(lines, index) {
     ? {
         label,
         inlineValue: hasSensitiveDiscardedLabelMarkup(labelSource) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
+        structural: true,
         valueIndex: index + 2,
       }
     : null;
+}
+
+function isSensitiveStructuralBoundaryAt(lines, index) {
+  return parseSensitiveLabelAt(lines, index)?.structural === true;
 }
 
 function isSafeStructuralBoundary(line) {
@@ -873,15 +904,15 @@ function containsSensitiveMultilineValue(value) {
     if (inlineValue !== "") {
       const normalizedInlineValue = stripMarkdownWrappers(inlineValue);
       if (
-        !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizedInlineValue) ||
+        !isBenignValueForSensitiveLabel(normalizedInlineValue, labelMatch.label) ||
         isResolvedPlaceholderReference(normalizedInlineValue, referenceLabels)
       ) return true;
       for (let continuationIndex = index + 1; continuationIndex < lines.length; continuationIndex += 1) {
         const continuation = lines[continuationIndex];
         if (continuation.trim() === "") continue;
-        if (parseSensitiveLabelAt(lines, continuationIndex)) break;
+        if (isSensitiveStructuralBoundaryAt(lines, continuationIndex)) break;
         if (isSafeStructuralBoundary(continuation)) break;
-        if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(continuation))) return true;
+        if (!isBenignValueForSensitiveLabel(normalizeMarkdownContentLine(continuation), labelMatch.label)) return true;
       }
       continue;
     }
@@ -911,18 +942,18 @@ function containsSensitiveMultilineValue(value) {
       continue;
     }
 
-    if (parseSensitiveLabelAt(lines, valueIndex) || isSafeStructuralBoundary(lines[valueIndex])) continue;
+    if (isSensitiveStructuralBoundaryAt(lines, valueIndex) || isSafeStructuralBoundary(lines[valueIndex])) continue;
     const normalizedFirstValue = normalizeMarkdownContentLine(lines[valueIndex]);
     if (
-      !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizedFirstValue) ||
+      !isBenignValueForSensitiveLabel(normalizedFirstValue, labelMatch.label) ||
       isResolvedPlaceholderReference(normalizedFirstValue, referenceLabels)
     ) return true;
     for (let continuationIndex = valueIndex + 1; continuationIndex < lines.length; continuationIndex += 1) {
       const continuation = lines[continuationIndex];
       if (continuation.trim() === "") continue;
-      if (parseSensitiveLabelAt(lines, continuationIndex)) break;
+      if (isSensitiveStructuralBoundaryAt(lines, continuationIndex)) break;
       if (isSafeStructuralBoundary(continuation)) break;
-      if (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalizeMarkdownContentLine(continuation))) return true;
+      if (!isBenignValueForSensitiveLabel(normalizeMarkdownContentLine(continuation), labelMatch.label)) return true;
     }
   }
   return false;
