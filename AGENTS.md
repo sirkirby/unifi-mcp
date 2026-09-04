@@ -68,6 +68,8 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 
 ### Logging
 
+- Network client/device managers and tools log operation context and exception class only; never log MAC/IP addresses, names, update payloads, exception messages, or tracebacks. This is a narrow privacy exception to the ordinary tool `exc_info=True` rule because controller exceptions can embed those values.
+
 - All log output MUST go to stderr (stdout is reserved for JSON-RPC in stdio mode)
 - Use `%s` format strings in logger calls, not f-strings, for lazy evaluation
 - Configuration errors SHOULD fail fast at startup with clear guidance

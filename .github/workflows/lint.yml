@@ -1,5 +1,8 @@
 name: "Lint: Ruff"
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, develop]

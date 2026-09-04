@@ -100,7 +100,7 @@ async def list_devices(
             summary=summary,
         )
     except Exception as e:
-        logger.error("Error listing devices: %s", e, exc_info=True)
+        logger.error("Error listing devices: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to list devices: {e}"}
 
 
@@ -156,7 +156,7 @@ async def get_device_details(
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error("Error getting device details for %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error getting device details for [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to get device details for {mac_address}: {e}"}
 
 
@@ -205,7 +205,7 @@ async def reboot_device(
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error("Error rebooting device %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error rebooting device [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to reboot device {mac_address}: {e}"}
 
 
@@ -253,7 +253,7 @@ async def rename_device(
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error("Error renaming device %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error renaming device [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to rename device {mac_address}: {e}"}
 
 
@@ -306,7 +306,7 @@ async def adopt_device(
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error("Error adopting device %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error adopting device [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to adopt device {mac_address}: {e}"}
 
 
@@ -363,7 +363,7 @@ async def upgrade_device(
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error("Error upgrading device %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error upgrading device [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to upgrade device {mac_address}: {e}"}
 
 
@@ -403,7 +403,7 @@ async def get_device_radio(
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error("Error getting radio info for %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error getting radio info for [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to get radio info for device {mac_address}: {e}"}
 
 
@@ -560,7 +560,7 @@ async def update_device_radio(
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error("Error updating radio on %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error updating radio on [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to update radio on device {mac_address}: {e}"}
 
 
@@ -605,7 +605,7 @@ async def locate_device(
             return {"success": True, "message": f"Locate mode {state} on device '{device_mac}'."}
         return {"success": False, "error": f"Failed to set locate mode on '{device_mac}'."}
     except Exception as e:
-        logger.error("Error setting locate mode on %s: %s", device_mac, e, exc_info=True)
+        logger.error("Error setting locate mode on [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to set locate mode on {device_mac}: {e}"}
 
 
@@ -644,7 +644,7 @@ async def force_provision_device(
             return {"success": True, "message": f"Force provision initiated for device '{device_mac}'."}
         return {"success": False, "error": f"Failed to force provision device '{device_mac}'."}
     except Exception as e:
-        logger.error("Error force provisioning %s: %s", device_mac, e, exc_info=True)
+        logger.error("Error force provisioning [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to force provision device {device_mac}: {e}"}
 
 
@@ -683,7 +683,7 @@ async def trigger_speedtest(
             }
         return {"success": False, "error": f"Failed to trigger speedtest on '{gateway_mac}'."}
     except Exception as e:
-        logger.error("Error triggering speedtest on %s: %s", gateway_mac, e, exc_info=True)
+        logger.error("Error triggering speedtest on [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to trigger speedtest on {gateway_mac}: {e}"}
 
 
@@ -705,7 +705,7 @@ async def get_speedtest_status(
             "status": status,
         }
     except Exception as e:
-        logger.error("Error getting speedtest status for %s: %s", gateway_mac, e, exc_info=True)
+        logger.error("Error getting speedtest status for [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to get speedtest status for {gateway_mac}: {e}"}
 
 
@@ -762,7 +762,7 @@ async def list_rogue_aps(
             summary=summary,
         )
     except Exception as e:
-        logger.error("Error listing rogue APs: %s", e, exc_info=True)
+        logger.error("Error listing rogue APs: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to list rogue APs: {e}"}
 
 
@@ -817,7 +817,7 @@ async def trigger_rf_scan(
             }
         return {"success": False, "error": f"Failed to trigger RF scan on AP '{ap_mac}'."}
     except Exception as e:
-        logger.error("Error triggering RF scan on %s: %s", ap_mac, e, exc_info=True)
+        logger.error("Error triggering RF scan on [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to trigger RF scan on AP '{ap_mac}': {e}"}
 
 
@@ -850,7 +850,7 @@ async def get_rf_scan_results(
             "scan_results": results,
         }
     except Exception as e:
-        logger.error("Error getting RF scan results for %s: %s", ap_mac, e, exc_info=True)
+        logger.error("Error getting RF scan results for [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to get RF scan results for AP '{ap_mac}': {e}"}
 
 
@@ -873,7 +873,7 @@ async def list_available_channels() -> Dict[str, Any]:
             "channels": channels,
         }
     except Exception as e:
-        logger.error("Error listing available channels: %s", e, exc_info=True)
+        logger.error("Error listing available channels: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to list available channels: {e}"}
 
 
@@ -928,7 +928,7 @@ async def set_device_led(
             return {"success": True, "message": f"LED override set to '{led_state}' on device '{device_mac}'."}
         return {"success": False, "error": f"Failed to set LED override on '{device_mac}'."}
     except Exception as e:
-        logger.error("Error setting LED override on %s: %s", device_mac, e, exc_info=True)
+        logger.error("Error setting LED override on [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to set LED override on {device_mac}: {e}"}
 
 
@@ -968,7 +968,7 @@ async def toggle_device(
             return {"success": True, "message": f"Device '{device_mac}' has been {state}."}
         return {"success": False, "error": f"Failed to set disabled state on '{device_mac}'."}
     except Exception as e:
-        logger.error("Error toggling device %s: %s", device_mac, e, exc_info=True)
+        logger.error("Error toggling device [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to toggle device {device_mac}: {e}"}
 
 
@@ -1012,7 +1012,7 @@ async def set_site_leds(
             return {"success": True, "message": f"Site-wide LEDs have been {state}."}
         return {"success": False, "error": "Failed to set site-wide LED state."}
     except Exception as e:
-        logger.error("Error setting site LEDs: %s", e, exc_info=True)
+        logger.error("Error setting site LEDs: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to set site-wide LED state: {e}"}
 
 
@@ -1054,7 +1054,7 @@ async def get_pdu_outlets(
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error("Error getting PDU outlets for %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error getting PDU outlets for [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to get PDU outlets for {mac_address}: {e}"}
 
 
@@ -1201,7 +1201,7 @@ async def set_outlet_state(
     except UniFiNotFoundError as e:
         return {"success": False, "error": str(e)}
     except Exception as e:
-        logger.error("Error setting outlet state on %s: %s", mac_address, e, exc_info=True)
+        logger.error("Error setting outlet state on [redacted]: %s", type(e).__name__)
         return {
             "success": False,
             "error": f"Failed to set outlet state on PDU {mac_address}: {e}",

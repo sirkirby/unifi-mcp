@@ -43,7 +43,10 @@ new_sqlite_classes = ["RelayObject"]`;
       observability: true,
     });
     assert.ok(result.includes("[[routes]]"));
-    assert.ok(result.includes("mcp.example.com"));
+    assert.deepEqual(
+      result.split("\n").filter((line) => line.startsWith("pattern = ")),
+      ['pattern = "mcp.example.com"'],
+    );
     assert.ok(result.includes("[observability]"));
   });
 
