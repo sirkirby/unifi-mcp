@@ -89,6 +89,7 @@ const SENSITIVE_LABEL_SUFFIX_PATTERN =
 const MAX_MARKDOWN_LABEL_NORMALIZATION_PASSES = 32;
 const MAX_MARKDOWN_LABEL_LENGTH = 1_024;
 const UNSTABLE_MARKDOWN_LABEL_SENTINEL = "&UnstableMarkdownLabel;";
+const SAFE_INLINE_LABEL_TAGS = new Set(["b", "code", "del", "em", "i", "kbd", "s", "span", "strong", "sub", "sup", "u"]);
 const BENIGN_SESSION_PROSE_LABEL_PATTERN =
   /^(?:debugging|observed|testing)[ _-]+authenticated[ _-]+session$/iu;
 const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
@@ -466,10 +467,10 @@ function stripInlineHtmlMarkup(value, discardedValues = null) {
       }
       if (tagEnd !== -1) {
         const tag = value.slice(index + 1, tagEnd);
-        const attributes = tag.replace(/^\/?[A-Za-z][^\s/>]*/u, "");
-        for (const match of attributes.matchAll(/\s+[^\s=/>]+\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gu)) {
-          discardedValues?.push(match[1] ?? match[2] ?? match[3] ?? "");
-        }
+        const tagName = tag.match(/^\/?([A-Za-z][^\s/>]*)/u)?.[1] || "";
+        const attributes = tag.replace(/^\/?[A-Za-z][^\s/>]*/u, "").replace(/\/?\s*$/u, "").trim();
+        if (!SAFE_INLINE_LABEL_TAGS.has(tagName.toLocaleLowerCase("en-US"))) discardedValues?.push(tagName);
+        if (attributes !== "") discardedValues?.push(attributes);
         index = tagEnd;
         continue;
       }
