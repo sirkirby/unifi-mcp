@@ -81,8 +81,10 @@ const SENSITIVE_MULTILINE_LABEL_PATTERN =
   /^(?:(.*?)[ _-]+)?(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?:[ _-]+(.*))?$/iu;
 const SENSITIVE_LABEL_PROSE_WORD_PATTERN =
   /^(?:and|are|as|at|by|for|from|in|is|of|on|or|that|to|using|was|were|when|where|which|while|with)$/iu;
-const SENSITIVE_LABEL_SUFFIX_PROSE_WORD_PATTERN =
-  /^(?:and|are|is|or|that|was|were|when|where|which|while)$/iu;
+const SENSITIVE_LABEL_RELATIONAL_PREFIX_PATTERN =
+  /^(?:current[ _-]+)?value(?:[ _-]+(?:for|of)(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2})?$/iu;
+const SENSITIVE_LABEL_SUFFIX_PATTERN =
+  /^(?:value|(?:for|of|in|from|on|at|to)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2}|(?:value[ _-]+)?used[ _-]+(?:by|with|for|in)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2})$/iu;
 const BENIGN_SESSION_PROSE_LABEL_PATTERN =
   /^(?:debugging|observed|testing)[ _-]+authenticated[ _-]+session$/iu;
 const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
@@ -389,9 +391,16 @@ function stripMarkdownWrappers(value) {
 }
 
 function normalizeMarkdownTableLabel(cell) {
-  let label = stripMarkdownWrappers(cell);
-  const link = label.match(/^!?\[([^\]\r\n]+)\](?:(?:\([^\r\n]+\)|\[[^\]\r\n]*\]))?$/u);
-  if (link) label = link[1];
+  let label = cell.trim();
+  let previous = "";
+  while (label !== previous) {
+    previous = label;
+    label = label
+      .replace(/!?\[([^\]\r\n]+)\]\((?:\\.|[^()\\\r\n]|\([^()\r\n]*\))*\)/gu, "$1")
+      .replace(/!?\[([^\]\r\n]+)\]\[[^\]\r\n]*\]/gu, "$1")
+      .replace(/!?\[([^\]\r\n]+)\]/gu, "$1")
+      .replace(/(\*{1,3}|_{1,3}|~{2}|`+)(.+?)\1/gu, "$2");
+  }
   return stripMarkdownWrappers(label);
 }
 
@@ -412,10 +421,11 @@ function isSensitiveMultilineLabel(label) {
       )
     );
   };
-  return (
-    isShortLabelFragment(prefix, SENSITIVE_LABEL_PROSE_WORD_PATTERN) &&
-    isShortLabelFragment(suffix, SENSITIVE_LABEL_SUFFIX_PROSE_WORD_PATTERN)
-  );
+  const validPrefix =
+    isShortLabelFragment(prefix, SENSITIVE_LABEL_PROSE_WORD_PATTERN) ||
+    SENSITIVE_LABEL_RELATIONAL_PREFIX_PATTERN.test(prefix);
+  if (!validPrefix) return false;
+  return suffix === "" || SENSITIVE_LABEL_SUFFIX_PATTERN.test(suffix);
 }
 
 function markdownReferenceDefinitionLabels(lines) {
