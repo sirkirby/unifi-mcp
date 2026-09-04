@@ -9,7 +9,7 @@ public contract; they perform no controller I/O and import no app packages.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from unifi_core.network.models.clients import _is_online, client_from_controller
@@ -290,7 +290,7 @@ def _device_base(device: dict[str, Any]) -> dict[str, Any]:
         "ip": device.get("ip", ""),
         "status": state_map.get(state, f"unknown_state ({state})"),
         "uptime": str(timedelta(seconds=device.get("uptime", 0))) if device.get("uptime") else "N/A",
-        "last_seen": datetime.fromtimestamp(device.get("last_seen", 0)).isoformat()
+        "last_seen": datetime.fromtimestamp(device.get("last_seen", 0), tz=timezone.utc).isoformat()
         if device.get("last_seen")
         else "N/A",
         "firmware": device.get("version", ""),
