@@ -578,7 +578,7 @@ function splitMarkdownField(line) {
     else if (character === "]" && bracketDepth > 0) bracketDepth -= 1;
     else if (character === "(" && bracketDepth === 0) parenthesisDepth += 1;
     else if (character === ")" && bracketDepth === 0 && parenthesisDepth > 0) parenthesisDepth -= 1;
-    else if (character === ":" && bracketDepth === 0 && parenthesisDepth === 0) {
+    else if ((character === ":" || character === "=") && bracketDepth === 0 && parenthesisDepth === 0) {
       return [line.slice(0, index).trim(), line.slice(index + 1).trim()];
     }
   }
