@@ -9,6 +9,7 @@ websocket subscription, and graceful shutdown.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Callable
 
 import aiohttp
@@ -19,10 +20,13 @@ from unifi_core.exceptions import UniFiConnectionError
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
+    ConnectivityProbe,
     SafeConnectionAttempt,
     connection_attempt_failed,
     connection_attempt_started,
     connection_attempt_succeeded,
+    connectivity_http_outcome,
+    connectivity_probe_result,
 )
 
 logger = logging.getLogger(__name__)
@@ -182,6 +186,39 @@ class ProtectConnectionManager:
                 "connected" if self._ws_unsub is not None else "disconnected" if client_available else "unknown"
             ),
         }
+
+    async def support_connectivity_probe(self) -> ConnectivityProbe:
+        """Perform one bounded request through the existing private session."""
+        client = self._client
+        session = getattr(client, "_session", None) if client is not None else None
+        if not self._initialized or client is None or session is None or session.closed:
+            return connectivity_probe_result("connection", None)
+
+        started = time.perf_counter()
+        try:
+            url = client._url.with_path("/proxy/protect/api/nvr")
+            async with session.request(
+                "GET",
+                url,
+                headers=client.headers or {},
+                timeout=aiohttp.ClientTimeout(total=10),
+                ssl=False if not self.verify_ssl else None,
+                allow_redirects=False,
+            ) as response:
+                outcome = connectivity_http_outcome(response.status)
+        except TimeoutError:
+            outcome = "timeout"
+        except (aiohttp.ClientError, OSError):
+            outcome = "connection"
+        except Exception:
+            outcome = "unknown"
+        result = connectivity_probe_result(outcome, (time.perf_counter() - started) * 1000)
+        logger.info(
+            "Support connectivity audit product=protect outcome=%s duration=%s",
+            result.outcome,
+            result.duration_bucket,
+        )
+        return result
 
     def require_public_api_key(self, operation: str) -> None:
         """Raise an actionable error when a public Integration API call lacks an API key."""
