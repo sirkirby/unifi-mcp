@@ -36,7 +36,7 @@ async def register_tools_for_mode(
     base_package: str,
     config: Any,
     logger: logging.Logger,
-    support_bundle_handler: Callable,
+    support_bundle_handler: Callable | None = None,
     prefix: str = "",
     server_label: str = "",
     register_meta_tools: Callable | None = None,
@@ -58,7 +58,7 @@ async def register_tools_for_mode(
         base_package: Dotted package path for tool modules (e.g. ``"unifi_network_mcp.tools"``).
         config: Server config object (used for ``enabled_categories``/``enabled_tools``).
         logger: Logger instance.
-        support_bundle_handler: Required runtime support-bundle service callback.
+        support_bundle_handler: Optional runtime callback; legacy callers can omit it.
         prefix: Tool name prefix (e.g. ``"protect"``). Empty string for Network (uses ``"unifi"``).
         server_label: Human-readable server name (e.g. ``"UniFi Protect"``).
         register_meta_tools: Shared meta-tools registration function.
@@ -81,8 +81,9 @@ async def register_tools_for_mode(
         start_async_tool=start_async_tool,
         get_job_status=get_job_status,
         register_tool=register_tool,
-        support_bundle_handler=support_bundle_handler,
     )
+    if support_bundle_handler is not None:
+        meta_kwargs["support_bundle_handler"] = support_bundle_handler
     if prefix:
         meta_kwargs["prefix"] = prefix
         meta_kwargs["server_label"] = server_label
@@ -91,16 +92,17 @@ async def register_tools_for_mode(
     register_meta_tools(**meta_kwargs)
 
     tool_prefix = prefix or "unifi"
+    support_hint = f", {tool_prefix}_get_support_bundle" if support_bundle_handler is not None else ""
 
     if mode == "meta_only":
         logger.info("Tool registration mode: meta_only")
         logger.info(
-            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_get_support_bundle",
+            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status%s",
             tool_prefix,
             tool_prefix,
             tool_prefix,
             tool_prefix,
-            tool_prefix,
+            support_hint,
         )
         logger.info("   Use %s_execute to run domain tools by name", tool_prefix)
         logger.info("   To load all tools directly: set UNIFI_TOOL_REGISTRATION_MODE=eager")
@@ -111,13 +113,13 @@ async def register_tools_for_mode(
     elif mode == "lazy":
         logger.info("Tool registration mode: lazy")
         logger.info(
-            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_load_tools, %s_get_support_bundle",
+            "   Meta-tools: %s_tool_index, %s_execute, %s_batch, %s_batch_status, %s_load_tools%s",
             tool_prefix,
             tool_prefix,
             tool_prefix,
             tool_prefix,
             tool_prefix,
-            tool_prefix,
+            support_hint,
         )
         logger.info("   Use %s_execute to run any tool - works with all clients", tool_prefix)
 

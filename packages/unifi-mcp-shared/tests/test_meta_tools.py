@@ -172,6 +172,28 @@ def test_meta_tool_index_objects_contain_declared_annotations():
 
 
 @pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
+async def test_legacy_positional_meta_registration_does_not_advertise_support(prefix, caplog):
+    server = FastMCP("legacy-app")
+    registered = Mock()
+    with caplog.at_level("INFO"):
+        register_meta_tools(
+            server,
+            server.tool,
+            AsyncMock(),
+            AsyncMock(),
+            AsyncMock(),
+            registered,
+            prefix,
+            "Legacy app",
+            "legacy domain",
+        )
+    names = {tool.name for tool in await server.list_tools()}
+    assert names == {f"{prefix}_{suffix}" for suffix in ("tool_index", "execute", "batch", "batch_status")}
+    assert {call.kwargs["name"] for call in registered.call_args_list} == names
+    assert "get_support_bundle" not in caplog.text
+
+
+@pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
 async def test_support_bundle_schema_annotations_and_behavior(prefix):
     handler = AsyncMock(return_value={"success": True, "data": {"schema_version": 1}})
     registered, tool_decorator = _capture_tools()

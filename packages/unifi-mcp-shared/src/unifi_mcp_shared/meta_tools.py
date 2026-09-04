@@ -70,10 +70,11 @@ def register_meta_tools(
     start_async_tool: Callable,
     get_job_status: Callable,
     register_tool: Callable,
-    support_bundle_handler: Callable,
     prefix: str = "unifi",
     server_label: str = "UniFi Network",
     domain_hint: str | None = None,
+    *,
+    support_bundle_handler: Callable | None = None,
 ) -> None:
     """Register meta-tools with the MCP server.
 
@@ -91,7 +92,8 @@ def register_meta_tools(
         start_async_tool: Function to start async jobs
         get_job_status: Function to get job status
         register_tool: Function to register in tool index
-        support_bundle_handler: Runtime support-bundle service callback.
+        support_bundle_handler: Optional runtime callback. Omit for legacy apps
+            that do not expose support bundles.
         prefix: Tool name prefix (e.g. "unifi", "protect", "access").
         server_label: Human-readable server name for descriptions
                       (e.g. "UniFi Network", "UniFi Protect").
@@ -128,78 +130,82 @@ def register_meta_tools(
     # This uses the original server decorator and a dedicated safe audit line;
     # it must never pass through ordinary diagnostic argument/result logging.
     # =========================================================================
-    @tool_decorator(
-        name=support_name,
-        title=support_title,
-        description=(
-            f"Generate a sanitized, reviewable {server_label} support bundle. "
-            "The default summary is local/cache-only. Live connectivity or resource-shape probes "
-            "are bounded and may be unavailable for this product. The result excludes raw logs, "
-            "credentials, controller payload values, and arbitrary exception text. Review the "
-            "bundle before sharing it publicly."
-        ),
-        annotations=read_annotations,
-    )
-    async def _support_bundle_wrapper(
-        probe: SkipValidation[Literal["summary", "connectivity", "resource_shape"]] = "summary",
-        resource: SkipValidation[str | None] = None,
-    ) -> dict:
-        # Preserve the advertised schema, but validate only inside the service's
-        # privacy boundary: Pydantic errors otherwise echo rejected input values.
-        try:
-            correlation_id = uuid.uuid4().hex
-            started = time.monotonic()
-            result = await support_bundle_handler(probe=probe, resource=resource)
-            if not isinstance(result, dict):
-                result = {"success": False, "error": "Failed to generate support bundle."}
-            outcome = "success" if result.get("success") is True else "failed"
-            duration_bucket = _duration_bucket((time.monotonic() - started) * 1000)
-        except Exception:
-            result = {"success": False, "error": "Failed to generate support bundle."}
-            correlation_id = uuid.uuid4().hex
-            outcome = "failed"
-            duration_bucket = "unknown"
-        safe_probe = (
-            probe if isinstance(probe, str) and probe in {"summary", "connectivity", "resource_shape"} else "invalid"
-        )
-        logger.info(
-            "Support bundle audit correlation_id=%s probe=%s outcome=%s duration=%s",
-            correlation_id,
-            safe_probe,
-            outcome,
-            duration_bucket,
-        )
-        return result
+    if support_bundle_handler is not None:
 
-    register_tool(
-        name=support_name,
-        title=support_title,
-        description=(
-            f"Generate sanitized {server_label} support evidence for user review. "
-            "Summary is local/cache-only; live probes are bounded and explicitly allowlisted."
-        ),
-        input_schema={
-            "type": "object",
-            "properties": {
-                "probe": {
-                    "type": "string",
-                    "enum": ["summary", "connectivity", "resource_shape"],
-                    "default": "summary",
+        @tool_decorator(
+            name=support_name,
+            title=support_title,
+            description=(
+                f"Generate a sanitized, reviewable {server_label} support bundle. "
+                "The default summary is local/cache-only. Live connectivity or resource-shape probes "
+                "are bounded and may be unavailable for this product. The result excludes raw logs, "
+                "credentials, controller payload values, and arbitrary exception text. Review the "
+                "bundle before sharing it publicly."
+            ),
+            annotations=read_annotations,
+        )
+        async def _support_bundle_wrapper(
+            probe: SkipValidation[Literal["summary", "connectivity", "resource_shape"]] = "summary",
+            resource: SkipValidation[str | None] = None,
+        ) -> dict:
+            # Preserve the advertised schema, but validate only inside the service's
+            # privacy boundary: Pydantic errors otherwise echo rejected input values.
+            try:
+                correlation_id = uuid.uuid4().hex
+                started = time.monotonic()
+                result = await support_bundle_handler(probe=probe, resource=resource)
+                if not isinstance(result, dict):
+                    result = {"success": False, "error": "Failed to generate support bundle."}
+                outcome = "success" if result.get("success") is True else "failed"
+                duration_bucket = _duration_bucket((time.monotonic() - started) * 1000)
+            except Exception:
+                result = {"success": False, "error": "Failed to generate support bundle."}
+                correlation_id = uuid.uuid4().hex
+                outcome = "failed"
+                duration_bucket = "unknown"
+            safe_probe = (
+                probe
+                if isinstance(probe, str) and probe in {"summary", "connectivity", "resource_shape"}
+                else "invalid"
+            )
+            logger.info(
+                "Support bundle audit correlation_id=%s probe=%s outcome=%s duration=%s",
+                correlation_id,
+                safe_probe,
+                outcome,
+                duration_bucket,
+            )
+            return result
+
+        register_tool(
+            name=support_name,
+            title=support_title,
+            description=(
+                f"Generate sanitized {server_label} support evidence for user review. "
+                "Summary is local/cache-only; live probes are bounded and explicitly allowlisted."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "probe": {
+                        "type": "string",
+                        "enum": ["summary", "connectivity", "resource_shape"],
+                        "default": "summary",
+                    },
+                    "resource": {"type": ["string", "null"], "default": None},
                 },
-                "resource": {"type": ["string", "null"], "default": None},
             },
-        },
-        output_schema={
-            "type": "object",
-            "properties": {
-                "success": {"type": "boolean"},
-                "data": {"type": "object"},
-                "error": {"type": "string"},
+            output_schema={
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "data": {"type": "object"},
+                    "error": {"type": "string"},
+                },
+                "required": ["success"],
             },
-            "required": ["success"],
-        },
-        annotations=normalize_tool_annotations(read_annotations),
-    )
+            annotations=normalize_tool_annotations(read_annotations),
+        )
 
     # =========================================================================
     # DISCOVERY: {prefix}_tool_index
@@ -543,14 +549,10 @@ def register_meta_tools(
         annotations=normalize_tool_annotations(read_annotations),
     )
 
-    logger.info(
-        "Registered meta-tools: %s, %s, %s, %s, %s",
-        idx_name,
-        exec_name,
-        batch_name,
-        status_name,
-        support_name,
-    )
+    names = [idx_name, exec_name, batch_name, status_name]
+    if support_bundle_handler is not None:
+        names.append(support_name)
+    logger.info("Registered meta-tools: %s", ", ".join(names))
 
 
 def register_load_tools(
