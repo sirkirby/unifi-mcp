@@ -17144,7 +17144,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update specific fields of an existing V2 zone-based firewall policy by ID. Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule.",
+      "description": "Update specific fields of an existing V2 zone-based firewall policy by ID. Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. To change policy order use unifi_reorder_firewall_policies; index is rejected here.",
       "name": "unifi_update_firewall_policy",
       "permission_action": "update",
       "permission_category": "firewall_policies",
@@ -17160,7 +17160,7 @@
               "type": "string"
             },
             "update_data": {
-              "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule.",
+              "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. index is not accepted here; use unifi_reorder_firewall_policies to change order.",
               "type": "object"
             }
           },

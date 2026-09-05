@@ -474,8 +474,8 @@ async def create_firewall_policy(
     description=(
         "Update specific fields of an existing V2 zone-based firewall policy by ID. "
         "Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, "
-        "protocol, ip_version, index, logging, connection_state_type, connection_states, "
-        "schedule."
+        "protocol, ip_version, logging, connection_state_type, connection_states, "
+        "schedule. To change policy order use unifi_reorder_firewall_policies; index is rejected here."
     ),
     permission_category="firewall_policies",
     permission_action="update",
@@ -494,7 +494,8 @@ async def update_firewall_policy(
             description=(
                 "Dictionary of V2 zone-based fields to update: name, action "
                 "(ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, "
-                "index, logging, connection_state_type, connection_states, schedule."
+                "logging, connection_state_type, connection_states, schedule. "
+                "index is not accepted here; use unifi_reorder_firewall_policies to change order."
             )
         ),
     ],
@@ -509,6 +510,16 @@ async def update_firewall_policy(
         return {"success": False, "error": "policy_id is required"}
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
+    if "index" in update_data:
+        # The V2 policy endpoint accepts the request and silently ignores index,
+        # which then surfaces as "did not apply changes to: index" after the write.
+        return {
+            "success": False,
+            "error": (
+                "index cannot be changed with unifi_update_firewall_policy; the controller "
+                "ignores it on this endpoint. Use unifi_reorder_firewall_policies to change policy order."
+            ),
+        }
 
     try:
         validated_data = normalize_policy_update(update_data)

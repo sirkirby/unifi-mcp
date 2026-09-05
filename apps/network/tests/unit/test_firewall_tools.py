@@ -909,6 +909,23 @@ class TestUpdateFirewallPolicyV2Fields:
         assert result["preview"]["proposed"]["connection_states"] == ["NEW", "BOGUS"]
 
     @pytest.mark.asyncio
+    async def test_v2_update_rejects_index_and_points_at_reorder(self):
+        """index is not a write field on the V2 policy endpoint; the controller accepts
+        the request and silently leaves the order unchanged. Reject it up front and
+        name the tool that does reorder."""
+        from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+        result = await update_firewall_policy(
+            policy_id="pol_zone_001",
+            update_data={"index": 2000, "enabled": True},
+            confirm=False,
+        )
+
+        assert result["success"] is False
+        assert "index" in result["error"]
+        assert "unifi_reorder_firewall_policies" in result["error"]
+
+    @pytest.mark.asyncio
     async def test_v2_update_drops_unknown_key(self):
         """Model-based update silently drops unknown keys (not in MUTABLE_FIELDS).
 
