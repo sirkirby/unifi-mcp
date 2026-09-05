@@ -2017,8 +2017,8 @@ function validateDecision(decision, expectedKind, bundle) {
       // Use existing receipt-bound labels, never agent-proposed labels or prose.
       const labels = bundle.target.data.labels;
       const products = labels.filter((label) => ["network", "protect", "access"].includes(label));
-      if (labels.includes("api") || products.length !== 1 || products[0] !== decision.support_request.split("_", 1)[0]) {
-        fail("missing_information support request product must match one existing MCP component label");
+      if (labels.includes("security") || labels.includes("api") || products.length !== 1 || products[0] !== decision.support_request.split("_", 1)[0]) {
+        fail("missing_information support request product must match one existing MCP component label on a non-security, non-API report");
       }
     }
     return decision;
