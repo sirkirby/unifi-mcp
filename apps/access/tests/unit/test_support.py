@@ -1,9 +1,10 @@
 """Tests for the Access support-bundle adapter."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from unifi_access_mcp.support import AccessSupportBundleAdapter
-from unifi_core.support_bundle import connection_attempt_succeeded
+from unifi_core.support_bundle import connection_attempt_succeeded, connectivity_probe_result
 
 
 def _manager(*, developer: bool, proxy: bool):
@@ -18,7 +19,8 @@ def _manager(*, developer: bool, proxy: bool):
             "api_token_configured": True,
             "developer_api_attempt": connection_attempt_succeeded(),
             "proxy_session_attempt": connection_attempt_succeeded(),
-        }
+        },
+        support_connectivity_probe=AsyncMock(return_value=connectivity_probe_result("permission", 50)),
     )
 
 
@@ -41,3 +43,12 @@ async def test_access_single_successful_auth_path_is_reported():
 
     assert developer.controller.api_surface == "integration"
     assert proxy.controller.api_surface == "controller_v2"
+
+
+async def test_access_connectivity_uses_manager_one_shot_result():
+    manager = _manager(developer=True, proxy=False)
+    evidence = await AccessSupportBundleAdapter(manager).collect("connectivity", None)
+
+    assert evidence.probe.outcome == "permission"
+    assert evidence.probe.duration_bucket == "under_100ms"
+    manager.support_connectivity_probe.assert_awaited_once_with()
