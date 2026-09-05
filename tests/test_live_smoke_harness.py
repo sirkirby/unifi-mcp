@@ -116,6 +116,54 @@ def test_support_environment_never_mutates_parent_and_overrides_bypass(monkeypat
     assert support_smoke.os.environ["UNIFI_NETWORK_TOOL_PERMISSION_MODE"] == "bypass"
 
 
+@pytest.mark.parametrize("config_source", ["environment", "dotenv", "relative"])
+def test_support_rejects_custom_yaml_credentials_before_launch(monkeypatch, tmp_path, config_source):
+    from unittest.mock import Mock
+
+    import support_smoke
+
+    config = tmp_path / "config/config.yaml"
+    config.parent.mkdir()
+    config.write_text("unifi:\n  host: private.example\n  username: private-user\n  password: private-password\n")
+    if config_source != "relative":
+        external = tmp_path / "custom.yaml"
+        config.rename(external)
+        if config_source == "environment":
+            monkeypatch.setenv("CONFIG_PATH", str(external))
+        else:
+            (tmp_path / ".env").write_text(f"CONFIG_PATH={external}\n")
+    start = Mock()
+    monkeypatch.setattr(support_smoke, "stdio_client", start)
+    with pytest.raises(support_smoke.SupportSmokeError, match="custom_config_unsupported"):
+        support_smoke.support_environment(tmp_path, "lazy")
+    assert asyncio.run(support_smoke.run_support_phase("network", tmp_path))["success"] is False
+    start.assert_not_called()
+
+
+@pytest.mark.parametrize("source", ["environment", "dotenv"])
+def test_support_child_cannot_import_pythonpath_shadow_package(monkeypatch, tmp_path, source):
+    import subprocess
+
+    import support_smoke
+
+    shadow = tmp_path / "shadow"
+    package = shadow / "unifi_network_mcp"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("raise AssertionError('shadow app imported')\n")
+    if source == "environment":
+        monkeypatch.setenv("PYTHONPATH", str(shadow))
+        monkeypatch.setenv("PYTHONHOME", str(shadow))
+    else:
+        (tmp_path / ".env").write_text(f"PYTHONPATH={shadow}\nPYTHONHOME={shadow}\n")
+    env = support_smoke.support_environment(tmp_path, "lazy")
+    assert "PYTHONPATH" not in env and "PYTHONHOME" not in env
+    assert env["PYTHONNOUSERSITE"] == env["PYTHONSAFEPATH"] == env["PYTHON_DOTENV_DISABLED"] == "1"
+    result = subprocess.run(
+        [sys.executable, "-c", "import unifi_network_mcp"], env=env, cwd=shadow, capture_output=True
+    )
+    assert result.returncode == 0
+
+
 @pytest.mark.parametrize("secret", ['quoted"password', r"back\slash", "café-秘密", "unifi"])
 def test_support_canaries_handle_json_escaping_without_public_package_collisions(support_payload, secret):
     import support_smoke
@@ -190,6 +238,9 @@ def test_support_log_boundary_excludes_startup_but_checks_probe_output(monkeypat
 
     @asynccontextmanager
     async def transport(parameters, *, errlog):
+        assert Path(parameters.cwd).is_dir()
+        assert not list(Path(parameters.cwd).iterdir())
+        assert Path(parameters.cwd) != tmp_path
         errlog.write("Ordinary startup: private.example\n")
         captured.append(errlog)
         yield (None, None)

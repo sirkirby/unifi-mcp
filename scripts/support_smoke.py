@@ -42,8 +42,14 @@ def require(condition: bool, code: str) -> None:
 def support_environment(root: Path, mode: str) -> dict[str, str]:
     env = dict(os.environ)
     env.update({key: value for key, value in dotenv_values(root / ".env").items() if value is not None})
+    require(not env.get("CONFIG_PATH") and not (root / "config/config.yaml").exists(), "custom_config_unsupported")
+    for key in ("PYTHONPATH", "PYTHONHOME"):
+        env.pop(key, None)
     env.update(
         {
+            "PYTHONNOUSERSITE": "1",
+            "PYTHONSAFEPATH": "1",
+            "PYTHON_DOTENV_DISABLED": "1",
             "UNIFI_TOOL_REGISTRATION_MODE": mode,
             "UNIFI_TOOL_PERMISSION_MODE": "confirm",
             "UNIFI_AUTO_CONFIRM": "false",
@@ -219,6 +225,8 @@ async def run_support_phase(server: str, root: Path, plugin_root: Path | None = 
     records = []
     # One fresh cache for plugin launchers proves resolution outside the user's cache.
     with tempfile.TemporaryDirectory(prefix="unifi-support-install-") as cache:
+        launch_root = Path(cache) / "cwd"
+        launch_root.mkdir()
         for product in products:
             for mode in MODES:
                 try:
@@ -229,7 +237,7 @@ async def run_support_phase(server: str, root: Path, plugin_root: Path | None = 
                         command, arguments, version = plugin_command(plugin_root, product, env)
                         env["UV_CACHE_DIR"] = cache
                     private_canaries(env)  # Reject unsupported short canaries before starting a server.
-                    parameters = StdioServerParameters(command=command, args=arguments, env=env, cwd=root)
+                    parameters = StdioServerParameters(command=command, args=arguments, env=env, cwd=launch_root)
                     with tempfile.TemporaryFile(mode="w+") as stderr:
                         probe_log_start = 0
 

@@ -151,6 +151,10 @@ Ordinary startup diagnostics are outside this support-tool privacy check and may
 they remain private and must not be posted as support evidence.
 Non-empty configured identity/secret values shorter than four characters stop the phase before server startup,
 because reliable token matching cannot be claimed for those values. They are never silently excluded.
+This phase accepts credentials from the process environment or the repository `.env` only. `CONFIG_PATH`
+and a repository-local `config/config.yaml` are rejected before launch, since literal YAML credentials are
+not covered by its environment canaries. Child servers start in an empty directory with automatic dotenv
+loading and Python path/home/user-site overrides disabled, preserving installed-package isolation.
 
 For installed-wheel verification, use an isolated Python environment with the app wheels installed and invoke
 `uv run --no-project --python /path/to/venv/bin/python scripts/live_smoke.py --server all --phase support`.
