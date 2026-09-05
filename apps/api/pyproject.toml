@@ -78,8 +78,12 @@ version-file = "src/unifi_api/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/unifi_api"]
+# The repository's logs/ ignore rule also matches these packaged HTML templates.
+# Artifacts bypass VCS ignores without adding duplicate force-include entries.
+artifacts = ["src/unifi_api/templates/admin/logs/*.html"]
 
 [tool.hatch.build.targets.sdist]
+artifacts = ["src/unifi_api/templates/admin/logs/*.html"]
 include = [
     "/src/unifi_api",
     "/alembic",
