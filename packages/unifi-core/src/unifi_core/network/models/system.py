@@ -57,6 +57,18 @@ class SnmpSettings(BaseModel):
         default=None,
         description="SNMP community string (e.g., 'public')",
     )
+    enabled_v3: Optional[bool] = Field(
+        default=None,
+        description="Enable or disable SNMPv3 on the site (controller key enabledV3); independent of 'enabled'",
+    )
+    username: Optional[str] = Field(
+        default=None,
+        description="SNMPv3 user name",
+    )
+    x_password: Optional[str] = Field(
+        default=None,
+        description="SNMPv3 password (secret; redacted at egress)",
+    )
 
     # --- read-only context ---
     port: Optional[int] = Field(
@@ -187,18 +199,29 @@ def snmp_from_controller(raw: Any) -> SnmpSettings:
     return SnmpSettings(
         enabled=_get(raw, "enabled"),
         community=_get(raw, "community"),
+        enabled_v3=_get(raw, "enabledV3", "enabled_v3"),
+        username=_get(raw, "username"),
+        x_password=_get(raw, "x_password"),
         port=_get(raw, "port"),
         version=_get(raw, "version"),
     )
 
 
+# Model field -> controller key, where the spellings differ (reverse of wlans._CONTROLLER_ALIASES).
+_SNMP_CONTROLLER_ALIASES = {"enabled_v3": "enabledV3"}
+
+
 def snmp_to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
-    """Filter a partial dict to only SNMP mutable keys.
+    """Filter a partial dict to only SNMP mutable keys, in the controller's spelling.
 
     Read-only fields and unrecognised keys are dropped.
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
-    return {k: v for k, v in fields.items() if k in SNMPSETTINGS_MUTABLE_FIELDS and v is not None}
+    return {
+        _SNMP_CONTROLLER_ALIASES.get(k, k): v
+        for k, v in fields.items()
+        if k in SNMPSETTINGS_MUTABLE_FIELDS and v is not None
+    }
 
 
 # ---------------------------------------------------------------------------

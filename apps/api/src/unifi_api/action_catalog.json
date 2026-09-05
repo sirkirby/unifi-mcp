@@ -6500,17 +6500,26 @@
       "input_schema": {
         "properties": {
           "community": {
-            "description": "SNMP community string (e.g., 'public'). Omit to keep the current value",
+            "description": "SNMP v1/v2c community string (e.g., 'public'). Omit to keep the current value",
             "type": "string"
           },
           "enabled": {
-            "description": "Set to true to enable SNMP on the site, false to disable it",
+            "description": "Enable (true) or disable (false) SNMP v1/v2c. Omit to keep the current value",
             "type": "boolean"
+          },
+          "enabled_v3": {
+            "description": "Enable (true) or disable (false) SNMPv3. Omit to keep the current value",
+            "type": "boolean"
+          },
+          "username": {
+            "description": "SNMPv3 user name. Omit to keep the current value",
+            "type": "string"
+          },
+          "x_password": {
+            "description": "SNMPv3 password. Omit to keep the current value; shown redacted in previews and results",
+            "type": "string"
           }
         },
-        "required": [
-          "enabled"
-        ],
         "type": "object",
         "additionalProperties": false
       }
