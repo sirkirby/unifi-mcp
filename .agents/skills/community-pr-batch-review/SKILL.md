@@ -35,8 +35,11 @@ design fit; an available agent slot is not a reason to perform an unwanted revie
 Respect available slots. A useful four-slot layout is the orchestrator, two domain
 reviewers and one rotating independent verifier. Without delegated execution,
 run the same packets sequentially. Use internal agents, not new user-owned tasks.
-Do not recursively multiply reviewers. Explicit user authorization for parallel
-work takes precedence over a host compatibility mapping that defaults to sequential.
+Do not recursively multiply reviewers. Parallel work requires both authorization
+under the active instructions and host support for delegated execution. A user
+may override a repository preference for sequential work, but cannot create host
+capabilities, increase available slots, or override higher-priority restrictions.
+If delegation is unavailable or prohibited, run the packets sequentially.
 
 Give each domain reviewer one bounded packet, usually one to three related PRs.
 Provide pinned revisions, trusted rules, relevant anchors, hypotheses to check,

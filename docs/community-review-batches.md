@@ -30,6 +30,9 @@ are advisory inputs, not a required additional agent pass.
 Use one orchestrator and up to three workers on a host with four total slots.
 If fewer slots are available, run the same packets sequentially. Do not nest
 agents or create user-facing tasks for internal review assignments.
+Parallel work requires authorization under the active instructions and host support
+for delegation. User authorization may override a repository's sequential preference;
+it cannot override host capability limits or higher-priority restrictions.
 
 | Role | Owns | Does not own |
 | --- | --- | --- |
@@ -250,8 +253,9 @@ Keep its core short: triggers, authorization scope, grouping, dispatch, synthesi
 evidence invalidation and handoff. Put templates and worked examples in references;
 link existing review/live/release skills rather than copying their rules. Validate
 repo skill synchronization and governance compatibility at promotion time, including
-the host's sequential-only compatibility mapping. Keep changing batch results out
-of the skill and leave no old PR status presented as current. See the
+whether a sequential-only mapping is a repository preference or an actual host
+restriction. Honor capability limits and higher-priority instructions. Keep changing
+batch results out of the skill and leave no old PR status presented as current. See the
 [pilot lessons](../.agents/skills/community-pr-batch-review/references/pilot-lessons.md)
 for observed execution and review failures that shaped the current instructions.
 
