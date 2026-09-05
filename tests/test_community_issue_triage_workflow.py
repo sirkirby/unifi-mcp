@@ -2430,6 +2430,17 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "<!HUNTER2LONG Password:\n[REDACTED]",
         "[Password](hunter2long): [REDACTED]",
         "### [Password](hunter2long)\n[REDACTED]",
+        "[Password](https://example.com): [REDACTED]",
+        "[Password](/): [REDACTED]",
+        "[Password](./): [REDACTED]",
+        "[Password](../): [REDACTED]",
+        "[Password](#): [REDACTED]",
+        "[Password]([REDACTED]",
+        "[Password][docs]: [REDACTED]\n\n[docs]: https://example.com/hunter2long",
+        "[Pass&ThinSpace;word][docs]: [REDACTED]\nTransport: stdio\n[docs]: https://example.com/hunter2long",
+        "[&Pfr;assword][docs]: [REDACTED]\nTransport: stdio\n[docs]: https://example.com",
+        "[Pass&Unknown;word][docs]: [REDACTED]\nTransport: stdio\n[docs]: https://example.com",
+        "Username | [Password][pwd]\n--- | ---\nadmin | [REDACTED]",
         '[Password](https://example.com "hunter2long"): [REDACTED]',
         "[Password](https://example.com 'hunter2long'): [REDACTED]",
         "[Password](https://example.com (hunter2long)): [REDACTED]",
@@ -2478,6 +2489,20 @@ def test_unterminated_inline_html_scan_is_bounded():
 def test_oversized_non_label_line_does_not_become_a_sensitive_label():
     payload = _snapshot_payload()
     payload["issues"][str(TARGET_NUMBER)]["body"] = "<a" * 100_000 + "\nordinary follow-up"
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
+
+
+def test_oversized_non_sensitive_unmatched_markdown_is_bounded():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "[" * 100_000 + "ordinary follow-up"
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
+
+
+def test_oversized_non_link_brackets_with_one_closer_are_bounded():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "[" * 100_000 + "] ordinary follow-up"
     created = _create_snapshot(payload)
     assert created["bundle"]["status"] == "complete"
 
@@ -2543,12 +2568,6 @@ def test_sensitive_table_scanner_checks_data_rows_before_embedded_header_transit
         "password:\n\n[REDACTED]",
         "**Password**\n[REDACTED]",
         "Password\n[REDACTED]",
-        "[Password](https://example.com): [REDACTED]",
-        "[Password](/): [REDACTED]",
-        "[Password](./): [REDACTED]",
-        "[Password](../): [REDACTED]",
-        "[Password](#): [REDACTED]",
-        "[Password]([REDACTED]",
         "[Password:\n[REDACTED]",
         "<span Password:\n[REDACTED]",
         "<span\nPassword:\n[REDACTED]",
@@ -2588,7 +2607,6 @@ def test_sensitive_table_scanner_checks_data_rows_before_embedded_header_transit
         "Username | Password\n--- | ---\nadmin | [REDACTED]",
         "Password | Notes\n--- | ---\nunavailable | Token\n--- | ---\nfoo | [REDACTED]",
         "> Username | Password\n> --- | ---\n> admin | [REDACTED]",
-        "Username | [Password][pwd]\n--- | ---\nadmin | [REDACTED]",
         "| Password |\n| --- |\n| [REDACTED] |",
         "Field | Value\n--- | ---\nPassword | `[REDACTED]`",
         "Field | Value\n--- | ---\nPassword | **[REDACTED]**",

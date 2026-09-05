@@ -530,12 +530,30 @@ function hasSensitiveDiscardedLabelMarkup(value) {
 
   const discardedDestinations = [];
   stripMarkdownInlineLinkDestinations(value, discardedDestinations);
-  return discardedDestinations.some((discarded) => {
-    const normalized = decodeHtmlCharacterReferences(discarded).trim();
-    return !/^(?:https?:\/\/[^\s<>]+|(?:\/|\.\.?\/|#)[^\s<>]*|<https?:\/\/[^\s<>]+>)$/iu.test(
-      normalized,
-    );
-  });
+  if (discardedDestinations.length > 0) return true;
+  const rendered = value.replace(/[`*_~]+/gu, "");
+  const sensitiveCandidate =
+    SENSITIVE_LABEL_CANDIDATE_PATTERN.test(rendered) || UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN.test(rendered);
+  return sensitiveCandidate && hasClosedMarkdownLabel(rendered);
+}
+
+function hasClosedMarkdownLabel(value) {
+  let open = false;
+  let escaped = false;
+  for (const character of value) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+    } else if (character === "[") {
+      open = true;
+    } else if (character === "]" && open) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function recoverMalformedSensitiveField(line) {
@@ -673,9 +691,13 @@ function stripMarkdownInlineLinkDestinations(value, discardedDestinations) {
         break;
       }
     }
-    if (labelEnd === -1 || value[labelEnd + 1] !== "(") {
-      result += value[index];
-      index += 1;
+    if (labelEnd === -1) {
+      result += value.slice(index);
+      break;
+    }
+    if (value[labelEnd + 1] !== "(") {
+      result += value.slice(index, labelEnd + 1);
+      index = labelEnd + 1;
       continue;
     }
 
