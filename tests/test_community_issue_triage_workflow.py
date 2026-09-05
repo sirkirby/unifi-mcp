@@ -3789,7 +3789,9 @@ def test_trusted_support_request_codes_render_one_fixed_tool_probe_and_guide(
     code: str,
     expected: tuple[str, str],
 ):
-    bundle = _create_snapshot()["bundle"]
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": code.split("_", 1)[0]}]
+    bundle = _create_snapshot(payload)["bundle"]
     labels = [
         {
             "name": "needs-info",
@@ -3811,6 +3813,89 @@ def test_trusted_support_request_codes_render_one_fixed_tool_probe_and_guide(
     assert rendered.count(SUPPORT_GUIDE_URL) == 1
     if code == "protect_support_sensor_shape":
         assert 'resource="sensors"' in rendered
+
+
+@pytest.mark.parametrize("code", SUPPORT_REQUESTS)
+@pytest.mark.parametrize(
+    "component_labels",
+    [
+        [],
+        ["network"],
+        ["protect"],
+        ["access"],
+        ["network", "protect"],
+        ["api"],
+        ["network", "api"],
+        ["Network"],
+        ["network-support"],
+    ],
+)
+def test_support_requests_require_one_matching_existing_product_label(code: str, component_labels: list[str]):
+    product = code.split("_", 1)[0]
+    if component_labels == [product]:
+        pytest.skip("Matching cases are covered by the rendering test")
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": label} for label in component_labels]
+    bundle = _create_snapshot(payload)["bundle"]
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "missing_information", "fields": [], "support_request": code},
+        label_intents=[
+            {
+                "name": "needs-info",
+                "rationale": "The report needs bounded product evidence for diagnosis.",
+                "confidence": "HIGH",
+            }
+        ],
+    )
+    result = _render(bundle, proposal, "missing_information")
+    assert result.returncode != 0
+    assert "support request product" in result.stderr
+
+
+def test_proposed_product_label_cannot_authorize_a_support_request():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = []
+    bundle = _create_snapshot(payload)["bundle"]
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "missing_information", "fields": [], "support_request": "network_support_summary"},
+        label_intents=[
+            {
+                "name": "needs-info",
+                "rationale": "The report needs bounded product evidence for diagnosis.",
+                "confidence": "HIGH",
+            },
+            {
+                "name": "network",
+                "rationale": "The agent infers this report concerns the Network server.",
+                "confidence": "HIGH",
+            },
+        ],
+    )
+    result = _render(bundle, proposal, "missing_information")
+    assert result.returncode != 0
+    assert "support request product" in result.stderr
+
+
+def test_missing_product_label_still_allows_ordinary_missing_information():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = []
+    bundle = _create_snapshot(payload)["bundle"]
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "missing_information", "fields": ["package_version"]},
+        label_intents=[
+            {
+                "name": "needs-info",
+                "rationale": "The report needs an exact package version for diagnosis.",
+                "confidence": "HIGH",
+            }
+        ],
+    )
+    result = _render(bundle, proposal, "missing_information")
+    assert result.returncode == 0, result.stderr
+    assert "get_support_bundle" not in json.loads(result.stdout)["rendered"]
 
 
 def test_support_request_can_accompany_allowlisted_missing_fields():
@@ -3868,15 +3953,45 @@ def test_support_request_rejects_unknown_or_multiple_codes(support_request: obje
         "The linked JSON proves matching Network behavior in this report.",
         "Please attach raw diagnostic logs so maintainers can inspect the failure.",
         "Upload the sanitized output so the issue can be diagnosed.",
+        "The supplied evidence was inspected and confirms this behavior.",
+        "I reviewed the attachment and verified the reported behavior.",
+        "Could you provide the support bundle for further diagnosis?",
+        "The logs have already been examined for the reported failure.",
     ],
 )
-def test_agent_free_form_text_cannot_claim_attachment_inspection_or_render_support_tool_names(reason: str):
+@pytest.mark.parametrize("field", ["relationship", "label"])
+def test_agent_free_form_text_cannot_claim_attachment_inspection_or_render_support_tool_names(reason: str, field: str):
     bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
     proposal = json.loads(_normal_proposal(bundle))
-    proposal["relationships"][0]["reason"] = reason
+    if field == "relationship":
+        proposal["relationships"][0]["reason"] = reason
+    else:
+        proposal["label_intents"] = [{"name": "network", "rationale": reason, "confidence": "HIGH"}]
     result = _render(bundle, _canonical(proposal))
     assert result.returncode != 0
     assert "unsafe syntax" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "Both reports concern malformed payloads.",
+        "The workflow uploads artifact files.",
+        "The JSON output omits a documented field.",
+        "Both reports describe the same logs and screenshots symptom.",
+        "The maintainer must review the reproduction steps.",
+    ],
+)
+@pytest.mark.parametrize("field", ["relationship", "label"])
+def test_benign_artifact_nouns_are_allowed_in_agent_rationales(reason: str, field: str):
+    bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
+    proposal = json.loads(_normal_proposal(bundle))
+    if field == "relationship":
+        proposal["relationships"][0]["reason"] = reason
+    else:
+        proposal["label_intents"] = [{"name": "network", "rationale": reason, "confidence": "HIGH"}]
+    result = _render(bundle, _canonical(proposal))
+    assert result.returncode == 0, result.stderr
 
 
 def test_relationship_reason_is_not_rendered_into_the_public_comment():

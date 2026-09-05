@@ -1171,6 +1171,10 @@ Do not perform substitute network research. You have no GitHub MCP or GitHub cre
    sensor serialization mismatch. Do not request a support bundle for non-MCP components,
    sensitive/security reports, or pre-start/tool-registration failures. A missing bundle
    alone is never enough to add `needs-info` when deterministic form fields are sufficient.
+   The trusted target snapshot must already have exactly one matching `network`, `protect`,
+   or `access` label and no `api` label. Agent-proposed labels do not establish a product.
+   If that existing label evidence is missing or ambiguous, request ordinary allowlisted
+   missing-information fields instead of a support probe.
 9. Separate facts, inferences, and unknowns. Give one concrete next action for the
    reporter or maintainer.
 

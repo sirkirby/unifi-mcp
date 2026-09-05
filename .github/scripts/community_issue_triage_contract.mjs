@@ -1958,6 +1958,17 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
   return createMetadataEnvelope(bundle);
 }
 
+const SUPPORT_ARTIFACT = String.raw`\b(?:attachments?|bundles?|files?|json|links?|logs?|outputs?|payloads?|screenshots?|evidence)\b`;
+const SUPPORT_INSPECTION = String.raw`\b(?:inspected|reviewed|read|downloaded|opened|analyzed|examined|checked|verified)\b`;
+const UNSAFE_SUPPORT_REASON_PATTERNS = [
+  // Claims of inspection, including passive voice. Ordinary artifact nouns are safe.
+  new RegExp(`${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  new RegExp(`${SUPPORT_ARTIFACT}[^.!?;]{0,120}${SUPPORT_INSPECTION}`, "iu"),
+  new RegExp(String.raw`\b(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:proves?|confirms?|shows?|demonstrates?|establishes?)\b`, "iu"),
+  // Direct requests belong in the fixed support_request renderer, never free text.
+  new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\byou\s+(?:(?:must|should|can|could|need to)\s+)?)(?:attach|upload|provide|paste|submit|send|share|download)\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+];
+
 function normalizeReason(value) {
   if (typeof value !== "string") fail("relationship reason must be a string");
   const normalized = value
@@ -1973,7 +1984,7 @@ function normalizeReason(value) {
     /[<>@#]/u.test(normalized) ||
     /https?:\/\//iu.test(normalized) ||
     /\b(?:unifi|protect|access)_get_support_bundle\b/iu.test(normalized) ||
-    /\b(?:attach(?:ed|ing|ment|ments)?|bundles?|downloads?|files?|json|links?|logs?|outputs?|pastes?|payloads?|screenshots?|submits?|uploads?)\b/iu.test(normalized) ||
+    UNSAFE_SUPPORT_REASON_PATTERNS.some((pattern) => pattern.test(normalized)) ||
     containsSensitiveContent(normalized)
   ) fail("relationship reason contains unsafe syntax");
   return normalized;
@@ -1990,7 +2001,7 @@ function validateRelationships(value, bundle) {
   });
 }
 
-function validateDecision(decision, expectedKind) {
+function validateDecision(decision, expectedKind, bundle) {
   if (!decision || typeof decision !== "object" || Array.isArray(decision) || typeof decision.kind !== "string") fail("proposal decision is invalid");
   if (expectedKind && decision.kind !== expectedKind) fail(`proposal carrier requires a ${expectedKind} decision`);
   if (decision.kind === "missing_information") {
@@ -2002,6 +2013,14 @@ function validateDecision(decision, expectedKind) {
       fail(`${decision.kind} decision requires up to 3 unique allowlisted fields and cannot be empty without one support request`);
     }
     if (hasSupportRequest && !SUPPORT_REQUEST_TEXT.has(decision.support_request)) fail("missing_information support request is invalid");
+    if (hasSupportRequest) {
+      // Use existing receipt-bound labels, never agent-proposed labels or prose.
+      const labels = bundle.target.data.labels;
+      const products = labels.filter((label) => ["network", "protect", "access"].includes(label));
+      if (labels.includes("api") || products.length !== 1 || products[0] !== decision.support_request.split("_", 1)[0]) {
+        fail("missing_information support request product must match one existing MCP component label");
+      }
+    }
     return decision;
   }
   if (decision.kind === "repository_evidence") {
@@ -2111,7 +2130,7 @@ export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind
   if (proposal.version !== CONTRACT_VERSION || proposal.kind !== "triage_proposal") fail("normal proposal version or kind is invalid");
   if (proposal.target_receipt !== bundle.target.receipt || proposal.comments_receipt !== bundle.comments.receipt || proposal.trigger_receipt !== bundle.trigger_receipt || proposal.run_kind !== bundle.run_kind) fail("normal proposal intake binding mismatch");
   const relationships = validateRelationships(proposal.relationships, bundle);
-  const decision = validateDecision(proposal.decision, expectedDecisionKind);
+  const decision = validateDecision(proposal.decision, expectedDecisionKind, bundle);
   const labelIntents = validateLabelIntents(proposal.label_intents, true);
   if (bundle.run_kind === "initial" && !new Set(["ready_for_maintainer", "missing_information", "repository_evidence"]).has(decision.kind)) fail("initial decision is not allowlisted");
   if (bundle.run_kind === "continuation" && decision.kind !== "missing_information") fail("incomplete continuation must request missing information");
