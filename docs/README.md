@@ -47,6 +47,9 @@ export UNIFI_TOOL_REGISTRATION_MODE=lazy  # default, recommended
 
 ### Core Guides
 
+#### [Sanitized Support Bundles](support-bundles.md)
+Generate, review, and share privacy-bounded Network, Protect, or Access troubleshooting evidence without treating ordinary diagnostic logs as public-safe.
+
 #### [Context Optimization Comparison](context-optimization-comparison.md)
 Visual guide comparing eager vs lazy vs meta-only modes:
 - Side-by-side token usage diagrams
@@ -165,6 +168,7 @@ See [CLAUDE.md](../CLAUDE.md) for project development guidelines.
 
 ### Core Documentation (docs/)
 - [context-optimization-comparison.md](context-optimization-comparison.md) - Mode comparison
+- [support-bundles.md](support-bundles.md) - Sanitized support-bundle workflow and privacy contract
 - [tool-index.md](tool-index.md) - Tool index documentation
 - [sponsor/](sponsor/) - Sponsorship landing page
 
