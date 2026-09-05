@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 import pytest
-from aiounifi.errors import AiounifiException, ResponseError
+from aiounifi.errors import AiounifiException, Forbidden, LoginRequired, NoPermission, ResponseError, Unauthorized
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
 from unifi_core.network.managers.nat_manager import CACHE_PREFIX_NAT, NAT_UNAVAILABLE_HINT, NatManager
 
@@ -214,9 +214,9 @@ class TestUpdate:
 
 class TestDeleteAndToggle:
     async def test_delete_sends_delete_and_invalidates(self) -> None:
-        manager, connection = _manager()
+        manager, connection = _manager([STORED])
         assert await manager.delete_nat_rule(RULE_ID) is True
-        request = connection.requests[0]
+        request = connection.requests[-1]
         assert (request.method, request.path) == ("delete", f"/nat/{RULE_ID}")
         assert CACHE_PREFIX_NAT in connection.invalidated
 
@@ -271,3 +271,73 @@ class TestLogging:
         assert "192.0.2.53" not in caplog.text and "private" not in caplog.text
         assert all(record.exc_info is None for record in caplog.records)
         assert "RuntimeError" in caplog.text
+
+
+class TestReviewFindings:
+    """Cases the review pass added."""
+
+    @pytest.mark.parametrize("response", [None, "oops", {"data": "oops"}])
+    async def test_unparseable_list_response_raises_and_is_not_cached(self, response: Any) -> None:
+        manager, connection = _manager(response)
+        with pytest.raises(UniFiOperationError):
+            await manager.list_nat_rules()
+        assert connection.cache == {}
+
+    @pytest.mark.parametrize("response", [None, [], {"data": []}])
+    async def test_empty_create_response_raises(self, response: Any) -> None:
+        manager, _ = _manager(response)
+        with pytest.raises(UniFiOperationError):
+            await manager.create_nat_rule(dnat())
+
+    async def test_failed_create_invalidates_the_cache(self) -> None:
+        manager, connection = _manager([STORED])
+        await manager.list_nat_rules()
+        connection._error = RuntimeError("controller said no")
+        with pytest.raises(RuntimeError):
+            await manager.create_nat_rule(dnat())
+        assert CACHE_PREFIX_NAT in connection.invalidated
+
+    async def test_auto_rule_index_reads_a_fresh_list_and_skips_predefined_rules(self) -> None:
+        predefined = dict(STORED, _id="rule-p", rule_index=40000, is_predefined=True)
+        manager, connection = _manager([STORED], [STORED, predefined], [STORED])
+        await manager.list_nat_rules()  # warm the cache
+        await manager.create_nat_rule(dnat(rule_index=None))
+        assert [r.method for r in connection.requests] == ["get", "get", "post"]
+        assert connection.requests[-1].data["rule_index"] == STORED["rule_index"] + 1
+
+    @pytest.mark.parametrize("rule_id", ["rule-9", "../../../../../api/s/default/cmd/sitemgr", "x?y=1"])
+    async def test_delete_resolves_the_id_before_sending(self, rule_id: str) -> None:
+        manager, connection = _manager([STORED])
+        with pytest.raises(UniFiNotFoundError):
+            await manager.delete_nat_rule(rule_id)
+        assert [r.method for r in connection.requests] == ["get"]
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            LoginRequired("Call https://host/nat received 401 Unauthorized"),
+            Forbidden("Call https://host/nat received 403 Forbidden"),
+            NoPermission({"errorCode": 404, "message": "api.err.NoPermission"}),
+            Unauthorized({"errorCode": 405, "message": "api.err.Unauthorized"}),
+        ],
+    )
+    async def test_auth_errors_are_never_mapped_to_the_endpoint_hint(self, error: Exception) -> None:
+        manager, _ = _manager(error=error)
+        with pytest.raises(type(error)) as exc:
+            await manager.list_nat_rules()
+        assert NAT_UNAVAILABLE_HINT not in str(exc.value)
+
+    async def test_missing_endpoint_is_logged_by_class_only(self, caplog: pytest.LogCaptureFixture) -> None:
+        manager, _ = _manager(error=ResponseError("Call https://host/nat received 404 Not Found"))
+        with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
+            with pytest.raises(UniFiOperationError):
+                await manager.list_nat_rules()
+        assert "ResponseError" in caplog.text
+        assert "host" not in caplog.text
+        assert all(record.exc_info is None for record in caplog.records)
+
+    async def test_toggle_defaults_a_missing_enabled_to_true(self) -> None:
+        stored = {k: v for k, v in STORED.items() if k != "enabled"}
+        manager, connection = _manager([stored])
+        await manager.toggle_nat_rule(RULE_ID)
+        assert connection.requests[-1].data["enabled"] is True

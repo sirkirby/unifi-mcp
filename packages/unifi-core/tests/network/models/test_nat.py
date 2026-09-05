@@ -376,3 +376,94 @@ class TestUpdateError:
 
     def test_type_switch_to_masquerade_is_clean_after_retirement(self) -> None:
         assert self._error(dnat(), {"type": "MASQUERADE", "out_interface": "wan"}) is None
+
+
+class TestReviewFindings:
+    """Cases the review pass added; each names the production change that breaks it."""
+
+    def test_unobserved_type_in_update_retires_nothing(self) -> None:
+        merged = merge_nat_update(dnat(), {"type": "FUTURE"})
+        assert merged["ip_address"] == "192.0.2.53" and merged["port"] == "53"
+
+    def test_unobserved_filter_type_in_update_retires_nothing(self) -> None:
+        stored = dnat(source_filter={**NONE_FILTER, "filter_type": "IID_AND_PORT", "port": "53"})
+        merged = merge_nat_update(stored, {"source_filter": {"filter_type": "IID_AND_PORT", "invert_port": True}})
+        assert merged["source_filter"]["port"] == "53"
+        merged = merge_nat_update(dnat(), {"destination_filter": {"filter_type": "IID_AND_PORT"}})
+        assert merged["destination_filter"]["address"] == "192.0.2.53"
+
+    def test_none_inside_a_filter_is_dropped_without_a_stored_filter(self) -> None:
+        stored = dnat()
+        del stored["source_filter"]
+        merged = merge_nat_update(stored, {"source_filter": {"filter_type": "NONE", "address": None}})
+        assert merged["source_filter"] == {"filter_type": "NONE"}
+
+    @pytest.mark.parametrize("port", ["٥٣", "５３"])
+    def test_port_digits_must_be_ascii(self, port: str) -> None:
+        assert nat_rule_error(dnat(port=port)) is not None
+        assert nat_rule_error(dnat(source_filter={"filter_type": "ADDRESS_AND_PORT", "port": port})) is not None
+
+    def test_dnat_requires_a_destination_filter_at_all(self) -> None:
+        error = nat_rule_error(dnat(destination_filter=None))
+        assert error is not None and "destination_filter" in error
+
+    def test_rule_index_rejects_bool(self) -> None:
+        error = nat_rule_error(dnat(rule_index=True))
+        assert error is not None and "rule_index" in error
+
+    def test_swapping_a_stale_translation_on_a_masquerade_is_reported(self) -> None:
+        stored = {
+            "type": "MASQUERADE",
+            "out_interface": "wan-1",
+            "port": "53",
+            "source_filter": dict(NONE_FILTER),
+            "destination_filter": dict(NONE_FILTER),
+        }
+        error = nat_update_error(stored, merge_nat_update(stored, {"port": "80"}))
+        assert error is not None and "port" in error and "'MASQUERADE'" in error
+
+    def test_swapping_a_stale_selector_under_none_is_reported(self) -> None:
+        stored = dnat(source_filter={**NONE_FILTER, "address": "198.51.100.5"})
+        merged = merge_nat_update(stored, {"source_filter": {"address": "203.0.113.0/24"}})
+        error = nat_update_error(stored, merged)
+        assert error is not None and "source_filter.address" in error
+
+    def test_restating_a_stored_error_is_still_ignored(self) -> None:
+        stored = dnat(source_filter={**NONE_FILTER, "address": "198.51.100.5"})
+        merged = merge_nat_update(stored, {"enabled": False})
+        assert nat_update_error(stored, merged) is None
+
+    def test_clearing_a_required_key_is_reported(self) -> None:
+        stored = dnat()
+        del stored["in_interface"]
+        merged = merge_nat_update(stored, {"in_interface": ""})
+        error = nat_update_error(stored, merged)
+        assert error is not None and "in_interface" in error
+
+    @pytest.mark.parametrize("value", [["DNAT"], {"a": 1}, 7])
+    def test_non_string_type_is_a_value_error_not_a_type_error(self, value) -> None:
+        error = nat_rule_error(dnat(type=value))
+        assert error is not None and "type" in error
+        with pytest.raises(ValueError):
+            normalize_nat_create(dnat(type=value))
+        assert merge_nat_update(dnat(), {"type": value})["type"] == value
+        with pytest.raises(ValueError):
+            from_controller(dnat(type=value))
+
+    def test_non_string_filter_type_is_a_value_error(self) -> None:
+        bad = dnat(destination_filter={"filter_type": ["X"], "address": "192.0.2.1"})
+        error = nat_rule_error(bad)
+        assert error is not None and "destination_filter.filter_type" in error
+        merged = merge_nat_update(dnat(), {"destination_filter": {"filter_type": ["X"]}})
+        assert merged["destination_filter"]["filter_type"] == ["X"]
+
+    @pytest.mark.parametrize(
+        "fields", [{"enabled": "yes"}, {"rule_index": "3"}, {"description": {"a": 1}}, {"source_filter": "NONE"}]
+    )
+    def test_wrong_value_types_are_rejected_before_the_controller(self, fields) -> None:
+        with pytest.raises(ValueError):
+            normalize_nat_update(fields)
+
+    def test_normalize_update_drops_none_inside_filters(self) -> None:
+        out = normalize_nat_update({"source_filter": {"filter_type": "none", "address": None, "port": None}})
+        assert out == {"source_filter": {"filter_type": "NONE"}}

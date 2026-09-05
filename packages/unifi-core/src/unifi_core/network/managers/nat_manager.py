@@ -8,18 +8,23 @@ API endpoint: /proxy/network/v2/api/site/{site}/nat
   POST   /nat        — create a rule (rule_index must be unique)
   PUT    /nat/{id}   — replace a rule (full document)
   DELETE /nat/{id}   — delete a rule
-There is no GET /nat/{id}; lookups use list + filter.
+There is no GET /nat/{id}; lookups use list + filter, and every per-id method
+resolves the id against the list before sending it, so the path segment is
+always a controller-issued id.
 
-Zone-based firewall consoles answer this endpoint; a 404/405 on the list means
-the site has no UniFi gateway or runs a Network version before 9.0.
+Zone-based firewall consoles answer this endpoint; a 404/405 on the list, or a
+body the client cannot decode, means the site has no UniFi gateway or runs a
+Network version before 9.0.
 
-Logging here carries operation names and exception class names only: NAT rules
-hold addresses and network ids, and controller error text can echo the payload.
+This module's own logger calls carry operation names and exception class names
+only: NAT rules hold addresses and network ids, and controller error text can
+echo the payload. The connection layer below logs on its own terms.
 """
 
 import logging
 from typing import Any, Dict, List, Optional
 
+from aiounifi.errors import Forbidden, LoginRequired, NoPermission, Unauthorized
 from aiounifi.models.api import ApiRequestV2
 
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError, http_status
@@ -36,8 +41,10 @@ logger = logging.getLogger("unifi-network-mcp")
 CACHE_PREFIX_NAT = "nat_rules"
 NAT_UNAVAILABLE_HINT = (
     "The controller did not serve the NAT rules endpoint. NAT rules need Network 9.0+ with a UniFi gateway "
-    "(zone-based firewall); USG sites and older controllers do not expose them."
+    "(zone-based firewall); USG sites and older controllers do not expose them. A wrong site name answers the "
+    "same way."
 )
+_AUTH_ERRORS = (LoginRequired, Forbidden, NoPermission, Unauthorized)
 
 
 class NatManager:
@@ -46,10 +53,10 @@ class NatManager:
     def __init__(self, connection_manager: ConnectionManager):
         self._connection = connection_manager
 
-    async def list_nat_rules(self) -> List[Dict[str, Any]]:
-        """Get all NAT rules (cached)."""
+    async def list_nat_rules(self, refresh: bool = False) -> List[Dict[str, Any]]:
+        """Get all NAT rules (cached unless ``refresh``)."""
         cache_key = f"{CACHE_PREFIX_NAT}_{self._connection.site}"
-        cached = self._connection.get_cached(cache_key)
+        cached = None if refresh else self._connection.get_cached(cache_key)
         if cached is not None:
             return cached
 
@@ -58,11 +65,15 @@ class NatManager:
         try:
             response = await self._connection.request(ApiRequestV2(method="get", path="/nat"))
         except Exception as e:
-            if http_status(e) in (404, 405):
+            if not isinstance(e, _AUTH_ERRORS) and http_status(e) in (404, 405):
+                logger.warning("NAT rules endpoint unavailable: %s", type(e).__name__)
                 raise UniFiOperationError(NAT_UNAVAILABLE_HINT) from e
             logger.error("Error listing NAT rules: %s", type(e).__name__)
             raise
-        rules = _as_list(response)
+        rules = _rules_from(response)
+        if rules is None:
+            logger.warning("NAT rules endpoint returned no decodable data")
+            raise UniFiOperationError(NAT_UNAVAILABLE_HINT)
         self._connection._update_cache(cache_key, rules)
         return rules
 
@@ -79,16 +90,18 @@ class NatManager:
         return match
 
     async def create_nat_rule(self, rule_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a NAT rule.
+        """Create a NAT rule and return the stored document.
 
-        Unknown keys and invalid rules raise ``ValueError`` before any request.
-        ``rule_index`` is assigned as one past the highest existing index when
-        omitted, since the controller rejects a duplicate.
+        Unknown keys, wrong value types and invalid rules raise ``ValueError``
+        before any request. ``rule_index`` is assigned as one past the highest
+        user-rule index on a fresh list when omitted, since the controller
+        rejects a duplicate.
         """
         payload = normalize_nat_create(rule_data)
         if "rule_index" not in payload:
-            existing = (r.get("rule_index") for r in await self.list_nat_rules())
-            payload["rule_index"] = max((i for i in existing if isinstance(i, int)), default=0) + 1
+            rules = await self.list_nat_rules(refresh=True)
+            indexes = (r.get("rule_index") for r in rules if not r.get("is_predefined"))
+            payload["rule_index"] = max((i for i in indexes if isinstance(i, int)), default=0) + 1
 
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
@@ -96,10 +109,14 @@ class NatManager:
             response = await self._connection.request(ApiRequestV2(method="post", path="/nat", data=payload))
         except Exception as e:
             logger.error("Error creating NAT rule: %s", type(e).__name__)
+            self._invalidate_cache()
             raise
         self._invalidate_cache()
-        created = _as_list(response)
-        return created[0] if created else response
+        created = _rules_from(response)
+        if not created:
+            logger.warning("NAT rule create returned no decodable data")
+            raise UniFiOperationError("The controller accepted the NAT rule create but returned no rule document.")
+        return created[0]
 
     async def update_nat_rule(self, rule_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update a NAT rule by merging a partial update over the stored rule and PUTting it back.
@@ -115,7 +132,12 @@ class NatManager:
         return await self._put_update(rule_id, current, update)
 
     async def delete_nat_rule(self, rule_id: str) -> bool:
-        """Delete a NAT rule. Returns True on success; controller errors propagate."""
+        """Delete a NAT rule. Returns True on success; controller errors propagate.
+
+        Raises:
+            UniFiNotFoundError: If the rule does not exist.
+        """
+        await self.get_nat_rule(rule_id)
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
         try:
@@ -154,11 +176,17 @@ class NatManager:
         self._connection._invalidate_cache(CACHE_PREFIX_NAT)
 
 
-def _as_list(response: Any) -> List[Dict[str, Any]]:
-    """Accept a bare list or a ``{"data": [...]}`` envelope; wrap a bare object."""
+def _rules_from(response: Any) -> Optional[List[Dict[str, Any]]]:
+    """Rule documents from a bare list, a ``{"data": [...]}`` envelope or a bare object; ``None`` otherwise.
+
+    The connection layer hands back ``None`` when the body was not JSON (an
+    error page, a login redirect), which must not read as "no rules".
+    """
     if isinstance(response, list):
-        return response
+        return [r for r in response if isinstance(r, dict)]
     if isinstance(response, dict):
-        data = response.get("data")
-        return data if isinstance(data, list) else [response]
-    return []
+        data = response.get("data", response)
+        if isinstance(data, list):
+            return [r for r in data if isinstance(r, dict)]
+        return [data] if isinstance(data, dict) else None
+    return None
