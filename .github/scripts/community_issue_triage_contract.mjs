@@ -132,6 +132,16 @@ const MISSING_INFORMATION_TEXT = new Map([
   ["expected_actual", "The expected behavior and the actual behavior observed."],
   ["live_controller_evidence", "Sanitized live-controller evidence showing the result."],
 ]);
+const SUPPORT_BUNDLE_GUIDE_URL =
+  "https://github.com/sirkirby/unifi-mcp/blob/main/docs/support-bundles.md";
+const SUPPORT_REQUEST_TEXT = new Map([
+  ["network_support_summary", `Run \`unifi_get_support_bundle\` with \`probe="summary"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["protect_support_summary", `Run \`protect_get_support_bundle\` with \`probe="summary"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["access_support_summary", `Run \`access_get_support_bundle\` with \`probe="summary"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["network_support_connectivity", `If you agree to one bounded controller request, run \`unifi_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["protect_support_connectivity", `If you agree to one bounded controller request, run \`protect_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["access_support_connectivity", `If you agree to one bounded controller request, run \`access_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+]);
 const REPOSITORY_EVIDENCE_PATHS = [
   /^(?:README|CONTRIBUTING|SECURITY)\.md$/,
   /^docs\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
@@ -1947,6 +1957,20 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
   return createMetadataEnvelope(bundle);
 }
 
+const SUPPORT_ARTIFACT = String.raw`\b(?:attachments?|bundles?|files?|json|links?|logs?|outputs?|payloads?|screenshots?|evidence)\b`;
+const SUPPORT_INSPECTION = String.raw`\b(?:inspected|reviewed|read|downloaded|opened|analyzed|examined|checked|verified|viewed|saw|seen|observed|looked at|parsed|scanned|studied|evaluated)\b`;
+const SUPPORT_REQUEST_ACTION = String.raw`(?:attach|upload|provide|paste|submit|send|share|download|generate|run|collect|capture|execute|invoke|export|produce|fetch|retrieve|obtain)`;
+const UNSAFE_SUPPORT_REASON_PATTERNS = [
+  // Claims of inspection, including passive voice. Ordinary artifact nouns are safe.
+  new RegExp(`${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  new RegExp(`${SUPPORT_ARTIFACT}[^.!?;]{0,120}${SUPPORT_INSPECTION}`, "iu"),
+  new RegExp(String.raw`\b(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:proves?|confirms?|shows?|demonstrates?|establishes?)\b`, "iu"),
+  // Direct requests belong in the fixed support_request renderer, never free text.
+  new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\byou\s+(?:(?:must|should|can|could|need to)\s+)?)${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  // Third-person directions are requests too, not factual label rationales.
+  new RegExp(String.raw`\b(?:reporters?|users?|authors?|contributors?|maintainers?|they)\s+(?:must|should|can|could|may|might|will|would|needs? to|ha(?:s|ve) to|ought to|(?:is|are) (?:asked|requested|required|expected|encouraged) to)\s+(?:(?:also|now|please|then|first|probably)\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+];
+
 function normalizeReason(value) {
   if (typeof value !== "string") fail("relationship reason must be a string");
   const normalized = value
@@ -1958,7 +1982,13 @@ function normalizeReason(value) {
   if (normalized !== value) fail("relationship reason must already be normalized");
   const length = [...normalized].length;
   if (length < 20 || length > 240 || !/[\p{L}\p{N}]/u.test(normalized)) fail("relationship reason must contain 20 to 240 safe visible characters");
-  if (/[<>@#]/u.test(normalized) || /https?:\/\//iu.test(normalized) || containsSensitiveContent(normalized)) fail("relationship reason contains unsafe syntax");
+  if (
+    /[<>@#]/u.test(normalized) ||
+    /https?:\/\//iu.test(normalized) ||
+    /\b(?:unifi|protect|access)_get_support_bundle\b/iu.test(normalized) ||
+    UNSAFE_SUPPORT_REASON_PATTERNS.some((pattern) => pattern.test(normalized)) ||
+    containsSensitiveContent(normalized)
+  ) fail("relationship reason contains unsafe syntax");
   return normalized;
 }
 
@@ -1973,13 +2003,25 @@ function validateRelationships(value, bundle) {
   });
 }
 
-function validateDecision(decision, expectedKind) {
+function validateDecision(decision, expectedKind, bundle) {
   if (!decision || typeof decision !== "object" || Array.isArray(decision) || typeof decision.kind !== "string") fail("proposal decision is invalid");
   if (expectedKind && decision.kind !== expectedKind) fail(`proposal carrier requires a ${expectedKind} decision`);
   if (decision.kind === "missing_information") {
-    if (!exactKeys(decision, ["kind", "fields"])) fail(`${decision.kind} decision contains unexpected fields`);
-    if (!Array.isArray(decision.fields) || decision.fields.length < 1 || decision.fields.length > 3 || new Set(decision.fields).size !== decision.fields.length || !decision.fields.every((field) => MISSING_INFORMATION_FIELDS.has(field))) {
-      fail(`${decision.kind} decision requires 1 to 3 unique allowlisted fields`);
+    const hasSupportRequest = Object.hasOwn(decision, "support_request");
+    const expectedKeys = hasSupportRequest ? ["kind", "fields", "support_request"] : ["kind", "fields"];
+    if (!exactKeys(decision, expectedKeys)) fail(`${decision.kind} decision contains unexpected fields`);
+    const minimumFields = hasSupportRequest ? 0 : 1;
+    if (!Array.isArray(decision.fields) || decision.fields.length < minimumFields || decision.fields.length > 3 || new Set(decision.fields).size !== decision.fields.length || !decision.fields.every((field) => MISSING_INFORMATION_FIELDS.has(field))) {
+      fail(`${decision.kind} decision requires up to 3 unique allowlisted fields and cannot be empty without one support request`);
+    }
+    if (hasSupportRequest && !SUPPORT_REQUEST_TEXT.has(decision.support_request)) fail("missing_information support request is invalid");
+    if (hasSupportRequest) {
+      // Use existing receipt-bound labels, never agent-proposed labels or prose.
+      const labels = bundle.target.data.labels;
+      const products = labels.filter((label) => ["network", "protect", "access"].includes(label));
+      if (labels.includes("security") || labels.includes("api") || products.length !== 1 || products[0] !== decision.support_request.split("_", 1)[0]) {
+        fail("missing_information support request product must match one existing MCP component label on a non-security, non-API report");
+      }
     }
     return decision;
   }
@@ -2010,14 +2052,16 @@ function validateDecision(decision, expectedKind) {
 
 function relationshipText(relationships) {
   return relationships.slice(0, 1).map(
-    (relationship) => `Candidate #${relationship.candidate_number}: ${relationship.verdict} — ${relationship.reason}`,
+    (relationship) => `Candidate #${relationship.candidate_number}: ${relationship.verdict}`,
   );
 }
 
 function renderDecision(decision, relationships, runKind = "initial") {
   let body;
   if (decision.kind === "missing_information") {
-    body = "To make this report actionable, please provide:\n\n" + decision.fields.map((field) => `- ${MISSING_INFORMATION_TEXT.get(field)}`).join("\n");
+    const requests = decision.fields.map((field) => MISSING_INFORMATION_TEXT.get(field));
+    if (decision.support_request) requests.push(SUPPORT_REQUEST_TEXT.get(decision.support_request));
+    body = "To make this report actionable, please provide:\n\n" + requests.map((request) => `- ${request}`).join("\n");
   } else if (decision.kind === "repository_evidence") {
     body = `Repository evidence (${decision.path}):\n\n> ${decision.quote}`;
   } else if (decision.kind === "ready_for_maintainer") {
@@ -2088,7 +2132,7 @@ export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind
   if (proposal.version !== CONTRACT_VERSION || proposal.kind !== "triage_proposal") fail("normal proposal version or kind is invalid");
   if (proposal.target_receipt !== bundle.target.receipt || proposal.comments_receipt !== bundle.comments.receipt || proposal.trigger_receipt !== bundle.trigger_receipt || proposal.run_kind !== bundle.run_kind) fail("normal proposal intake binding mismatch");
   const relationships = validateRelationships(proposal.relationships, bundle);
-  const decision = validateDecision(proposal.decision, expectedDecisionKind);
+  const decision = validateDecision(proposal.decision, expectedDecisionKind, bundle);
   const labelIntents = validateLabelIntents(proposal.label_intents, true);
   if (bundle.run_kind === "initial" && !new Set(["ready_for_maintainer", "missing_information", "repository_evidence"]).has(decision.kind)) fail("initial decision is not allowlisted");
   if (bundle.run_kind === "continuation" && decision.kind !== "missing_information") fail("incomplete continuation must request missing information");

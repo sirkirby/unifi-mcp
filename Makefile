@@ -1,6 +1,6 @@
 .PHONY: help sync build check test lint format format-check format-fix manifest generate api-action-catalog \
        check-api-action-catalog server-manifests skill-references check-skill-references check-generated \
-       pre-commit ci core-test shared-test catalog-test protocol-smoke \
+       support-skills check-support-skills pre-commit ci core-test shared-test catalog-test protocol-smoke \
        docs-test relay-test worker-install worker-test worker-typecheck worker-build worker-check docker-relay \
        docker-build docker-up docker-down docker-logs
 
@@ -22,6 +22,7 @@ help:
 	@echo "  make ci             Lint + generated drift checks + tests"
 	@echo "  make server-manifests  Regenerate server.json for all apps (MCP Registry)"
 	@echo "  make skill-references  Update skill tool tables from manifests"
+	@echo "  make support-skills Generate product support-bundle skills"
 	@echo "  make pre-commit     Format + generate + lint + test + drift checks"
 	@echo "  make docs-test      Run documentation site contract tests"
 	@echo ""
@@ -54,7 +55,7 @@ shared-test:
 	uv run --package unifi-mcp-shared pytest packages/unifi-mcp-shared/tests -v
 
 catalog-test:
-	uv run pytest tests/test_community_issue_triage_workflow.py tests/test_generate_api_action_catalog.py tests/test_live_smoke_harness.py -v
+	uv run --all-packages pytest tests/test_community_issue_triage_workflow.py tests/test_generate_api_action_catalog.py tests/test_generate_support_skills.py tests/test_live_smoke_harness.py -v
 
 docs-test:
 	uv run python -m unittest discover -s tests/docs -p 'test_*.py' -v
@@ -78,7 +79,7 @@ format-fix:
 	uv run ruff format .
 	uv run ruff check . --fix
 
-generate: manifest
+generate: manifest support-skills
 
 manifest:
 	$(MAKE) -C apps/network manifest
@@ -105,7 +106,13 @@ skill-references:
 check-skill-references:
 	python3 scripts/generate_skill_references.py --check
 
-check-generated: check-skill-references check-api-action-catalog
+support-skills:
+	uv run python scripts/generate_support_skills.py
+
+check-support-skills:
+	uv run python scripts/generate_support_skills.py --check
+
+check-generated: check-skill-references check-api-action-catalog check-support-skills
 
 relay-test:
 	uv run --package unifi-mcp-relay pytest packages/unifi-mcp-relay/tests -v
