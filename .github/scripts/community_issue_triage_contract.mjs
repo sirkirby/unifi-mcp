@@ -584,12 +584,91 @@ function collapseRawHtmlMarkupNewlines(value) {
   return result;
 }
 
+function stripMarkdownInlineLinkDestinations(value) {
+  let result = "";
+  for (let index = 0; index < value.length; ) {
+    const labelStart = value[index] === "!" && value[index + 1] === "[" ? index + 1 : index;
+    if (value[labelStart] !== "[") {
+      result += value[index];
+      index += 1;
+      continue;
+    }
+
+    let labelEnd = -1;
+    let escaped = false;
+    for (let cursor = labelStart + 1; cursor < value.length; cursor += 1) {
+      const character = value[cursor];
+      if (character === "\r" || character === "\n") break;
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === "]") {
+        labelEnd = cursor;
+        break;
+      }
+    }
+    if (labelEnd === -1 || value[labelEnd + 1] !== "(") {
+      result += value[index];
+      index += 1;
+      continue;
+    }
+
+    let destinationEnd = -1;
+    let depth = 0;
+    let titleQuote = null;
+    escaped = false;
+    for (let cursor = labelEnd + 1; cursor < value.length; cursor += 1) {
+      const character = value[cursor];
+      if (character === "\r" || character === "\n") break;
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (titleQuote !== null) {
+        if (character === titleQuote) titleQuote = null;
+      } else if (
+        depth === 1 &&
+        (character === '"' || character === "'") &&
+        /[ \t]/u.test(value[cursor - 1] || "")
+      ) {
+        titleQuote = character;
+      } else if (character === "(") {
+        depth += 1;
+      } else if (character === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          destinationEnd = cursor;
+          break;
+        }
+      }
+    }
+    if (destinationEnd === -1) {
+      const visibleLabel = value.slice(labelStart + 1, labelEnd);
+      const remainder = value.slice(labelEnd + 2).trim();
+      const candidateLabel = visibleLabel.replace(/[`*_~]+/gu, "");
+      if (
+        remainder !== "" &&
+        !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(stripMarkdownWrappers(remainder)) &&
+        SENSITIVE_LABEL_CANDIDATE_PATTERN.test(stripMarkdownWrappers(candidateLabel))
+      ) {
+        return UNSTABLE_MARKDOWN_LABEL_SENTINEL;
+      }
+      result += visibleLabel;
+      break;
+    }
+
+    result += value.slice(labelStart + 1, labelEnd);
+    index = destinationEnd + 1;
+  }
+  return result;
+}
+
 function normalizeMarkdownTableLabel(cell) {
   if (cell.length > MAX_MARKDOWN_LABEL_LENGTH) return UNSTABLE_MARKDOWN_LABEL_SENTINEL;
   let label = stripInlineHtmlMarkup(decodeHtmlCharacterReferences(cell)).trim();
   for (let pass = 0; pass < MAX_MARKDOWN_LABEL_NORMALIZATION_PASSES; pass += 1) {
-    const normalized = label
-      .replace(/!?\[([^\]\r\n]+)\]\((?:\\.|[^()\\\r\n]|\([^()\r\n]*\))*\)/gu, "$1")
+    const normalized = stripMarkdownInlineLinkDestinations(label)
       .replace(/!?\[([^\]\r\n]+)\]\[[^\]\r\n]*\]/gu, "$1")
       .replace(/!?\[([^\]\r\n]+)\]/gu, "$1")
       .replace(/(\*{1,3}|_{1,3}|~{2}|`+)(.+?)\1/gu, "$2");
@@ -669,9 +748,11 @@ function sensitiveMarkdownTableColumns(cells) {
 }
 
 function hasSensitiveDiscardedTableLabel(cells) {
-  return cells.some(
-    (cell) => isSensitiveMultilineLabel(normalizeMarkdownTableLabel(cell)) && hasSensitiveDiscardedLabelMarkup(cell),
-  );
+  return cells.some((cell) => {
+    const label = normalizeMarkdownTableLabel(cell);
+    return label === UNSTABLE_MARKDOWN_LABEL_SENTINEL ||
+      (isSensitiveMultilineLabel(label) && hasSensitiveDiscardedLabelMarkup(cell));
+  });
 }
 
 function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referenceLabels, endIndex) {
@@ -825,7 +906,10 @@ function parseSensitiveLabelLine(line) {
   if (heading && isSensitiveMultilineLabel(headingLabel)) {
     return {
       label: headingLabel,
-      inlineValue: hasSensitiveDiscardedLabelMarkup(heading[1]) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
+      inlineValue:
+        headingLabel === UNSTABLE_MARKDOWN_LABEL_SENTINEL || hasSensitiveDiscardedLabelMarkup(heading[1])
+          ? UNSTABLE_MARKDOWN_LABEL_SENTINEL
+          : "",
       structural: true,
     };
   }
@@ -844,7 +928,10 @@ function parseSensitiveLabelLine(line) {
   if (isSensitiveMultilineLabel(standaloneLabel)) {
     return {
       label: standaloneLabel,
-      inlineValue: hasSensitiveDiscardedLabelMarkup(standaloneSource) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
+      inlineValue:
+        standaloneLabel === UNSTABLE_MARKDOWN_LABEL_SENTINEL || hasSensitiveDiscardedLabelMarkup(standaloneSource)
+          ? UNSTABLE_MARKDOWN_LABEL_SENTINEL
+          : "",
       structural: normalizedMarkup,
     };
   }
