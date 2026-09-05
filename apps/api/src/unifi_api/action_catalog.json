@@ -2526,7 +2526,7 @@
       "input_schema": {
         "properties": {
           "policy_data": {
-            "description": "V2 zone-based firewall policy dict. Required: name, action (ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), destination (same structure). For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. Optional: enabled, description, protocol, connection_state_type, connection_states, ip_version, schedule, logging.",
+            "description": "V2 zone-based firewall policy dict. Required: name, action (ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), destination (same structure). For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. For clients: matching_target='CLIENT', client_macs=[...]. Ports on either side: port_matching_type='SPECIFIC' + port='53,853' or 'OBJECT' + port_group_id. Optional: enabled, description, protocol, connection_state_type, connection_states, ip_version, schedule, logging.",
             "type": "object"
           }
         },
@@ -6243,7 +6243,7 @@
             "type": "string"
           },
           "update_data": {
-            "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule.",
+            "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule. Partial source/destination dicts are merged with the current policy; port_matching_type='SPECIFIC' needs port, 'OBJECT' needs port_group_id, and switching to another port_matching_type (or a side off CLIENT) retires the stored port/port_group_id/client_macs automatically.",
             "type": "object"
           }
         },

@@ -22,11 +22,15 @@ from unifi_core.network.models.firewall import (
     firewall_zone_from_controller,
     from_controller,
     legacy_firewall_rule_from_controller,
+    normalize_policy_enums,
     normalize_policy_update,
+    policy_update_targeting_error,
+    retire_stale_selectors,
     to_controller_update,
     to_group_create,
     to_zone_create,
     to_zone_update,
+    validate_policy_targeting,
 )
 
 
@@ -195,6 +199,223 @@ class TestNormalizePolicyUpdate:
     def test_rejects_legacy_invalid_or_empty_updates(self, fields: dict, message: str) -> None:
         with pytest.raises(ValueError, match=message):
             normalize_policy_update(fields)
+
+
+class TestNormalizePolicyEnumsEndpoints:
+    def test_upper_cases_endpoint_enums_on_both_sides(self) -> None:
+        result = normalize_policy_enums(
+            {
+                "source": {"zone_id": "z1", "matching_target": "client", "client_macs": ["aa:bb"]},
+                "destination": {
+                    "zone_id": "z2",
+                    "matching_target": "ip",
+                    "matching_target_type": "specific",
+                    "ips": ["10.0.0.1"],
+                    "port_matching_type": "specific",
+                    "port": "53",
+                },
+            }
+        )
+
+        assert result["source"]["matching_target"] == "CLIENT"
+        assert result["destination"]["matching_target"] == "IP"
+        assert result["destination"]["matching_target_type"] == "SPECIFIC"
+        assert result["destination"]["port_matching_type"] == "SPECIFIC"
+        assert result["destination"]["port"] == "53"
+
+    def test_strips_and_upper_cases_padded_enum_values(self) -> None:
+        result = normalize_policy_enums(
+            {"destination": {"port_matching_type": " specific ", "matching_target": "any "}}
+        )
+
+        assert result["destination"] == {"port_matching_type": "SPECIFIC", "matching_target": "ANY"}
+
+    def test_leaves_non_string_and_non_dict_endpoints_alone(self) -> None:
+        result = normalize_policy_enums(
+            {"source": {"zone_id": "z1", "matching_target": None}, "destination": "not-a-dict"}
+        )
+
+        assert result["source"] == {"zone_id": "z1", "matching_target": None}
+        assert result["destination"] == "not-a-dict"
+
+    def test_normalize_policy_update_inherits_endpoint_enums(self) -> None:
+        result = normalize_policy_update({"destination": {"port_matching_type": "object", "port_group_id": "g1"}})
+
+        assert result == {"destination": {"port_matching_type": "OBJECT", "port_group_id": "g1"}}
+
+
+class TestValidatePolicyTargeting:
+    def _policy(self, **destination):
+        return {
+            "source": {"zone_id": "z1", "matching_target": "ANY"},
+            "destination": {"zone_id": "z2", "matching_target": "ANY", **destination},
+        }
+
+    def test_existing_ip_and_network_rules_still_apply(self) -> None:
+        assert "matching_target_type" in validate_policy_targeting(self._policy(matching_target="IP"))
+        assert "network_ids" in validate_policy_targeting(
+            self._policy(matching_target="NETWORK", matching_target_type="OBJECT")
+        )
+
+    def test_client_target_requires_client_macs(self) -> None:
+        assert "client_macs" in validate_policy_targeting(self._policy(matching_target="CLIENT"))
+        assert "client_macs" in validate_policy_targeting(self._policy(matching_target="CLIENT", client_macs=[]))
+        assert (
+            validate_policy_targeting(self._policy(matching_target="CLIENT", client_macs=["aa:bb:cc:dd:ee:ff"])) is None
+        )
+
+    def test_specific_port_matching_requires_port(self) -> None:
+        error = validate_policy_targeting(self._policy(port_matching_type="SPECIFIC"))
+        assert error is not None and "destination.port" in error
+
+    def test_object_port_matching_requires_port_group_id(self) -> None:
+        error = validate_policy_targeting(self._policy(port_matching_type="OBJECT"))
+        assert error is not None and "port_group_id" in error
+        assert validate_policy_targeting(self._policy(port_matching_type="OBJECT", port_group_id="g1")) is None
+
+    @pytest.mark.parametrize(
+        "port", ["53", "53,853", "1000-2000", "22,1000-2000,443", "53-53", "1", "65535", "1-65535"]
+    )
+    def test_accepts_well_formed_port_strings(self, port: str) -> None:
+        assert validate_policy_targeting(self._policy(port_matching_type="SPECIFIC", port=port)) is None
+
+    @pytest.mark.parametrize("port", ["", "0", "65536", "70000", "53, 853", "900-800", "abc", "53-", 53])
+    def test_rejects_malformed_port_strings(self, port) -> None:
+        error = validate_policy_targeting(self._policy(port_matching_type="SPECIFIC", port=port))
+        assert error is not None and "port" in error
+
+    def test_unknown_targets_and_port_types_pass_through(self) -> None:
+        assert validate_policy_targeting(self._policy(matching_target="APP", app_ids=["x"])) is None
+        assert validate_policy_targeting(self._policy(port_matching_type="SOMETHING_NEW")) is None
+
+    def test_any_port_matching_needs_nothing(self) -> None:
+        assert validate_policy_targeting(self._policy(port_matching_type="ANY")) is None
+        assert validate_policy_targeting({"source": None, "destination": None}) is None
+
+    def test_non_dict_endpoint_is_rejected(self) -> None:
+        error = validate_policy_targeting({"source": "ANY", "destination": None})
+        assert error is not None and "source" in error and "object" in error
+
+    @pytest.mark.parametrize(
+        ("extra", "expected"),
+        [
+            ({"port": "53"}, "port_matching_type"),
+            ({"port_matching_type": "ANY", "port": "53"}, "port_matching_type"),
+            ({"port_group_id": "g1"}, "port_matching_type"),
+            ({"port_matching_type": "SPECIFIC", "port": "53", "port_group_id": "g1"}, "port_matching_type"),
+            ({"client_macs": ["aa:bb:cc:dd:ee:ff"]}, "matching_target"),
+        ],
+    )
+    def test_selector_without_its_activating_enum_is_rejected(self, extra: dict, expected: str) -> None:
+        """A selector the controller would ignore must not pass validation silently."""
+        error = validate_policy_targeting(self._policy(**extra))
+        assert error is not None and expected in error
+
+    @pytest.mark.parametrize("port", ["53\n", " 53"])
+    def test_rejects_port_strings_with_stray_whitespace(self, port: str) -> None:
+        error = validate_policy_targeting(self._policy(port_matching_type="SPECIFIC", port=port))
+        assert error is not None and "\n" not in error
+
+    @pytest.mark.parametrize("macs", ["aa:bb:cc:dd:ee:ff", ["zz"], [" "], [None]])
+    def test_client_macs_must_be_a_list_of_valid_macs(self, macs) -> None:
+        error = validate_policy_targeting(self._policy(matching_target="CLIENT", client_macs=macs))
+        assert error is not None and "client_macs" in error
+
+    def test_client_macs_accepts_mixed_case_and_dashes(self) -> None:
+        assert (
+            validate_policy_targeting(self._policy(matching_target="CLIENT", client_macs=["AA-BB-CC-DD-EE-FF"])) is None
+        )
+
+
+class TestPolicyUpdateTargetingError:
+    _stored = {"zone_id": "z2", "matching_target": "ANY", "port_matching_type": "ANY"}
+
+    def test_partial_update_is_validated_as_merged(self) -> None:
+        current = {"destination": dict(self._stored)}
+        assert policy_update_targeting_error(current, {"destination": {"port_matching_type": "OBJECT"}}) is not None
+        assert (
+            policy_update_targeting_error(current, {"destination": {"port_matching_type": "SPECIFIC", "port": "53"}})
+            is None
+        )
+
+    def test_untouched_side_is_not_revalidated(self) -> None:
+        current = {"source": {"zone_id": "x", "matching_target": "IP"}, "destination": dict(self._stored)}
+        assert (
+            policy_update_targeting_error(current, {"destination": {"port_matching_type": "SPECIFIC", "port": "53"}})
+            is None
+        )
+
+    def test_preexisting_error_on_the_updated_side_is_not_held_against_the_update(self) -> None:
+        current = {"destination": {"zone_id": "z2", "matching_target": "NETWORK", "network_ids": ["n1"]}}
+        assert (
+            policy_update_targeting_error(current, {"destination": {"port_matching_type": "SPECIFIC", "port": "53"}})
+            is None
+        )
+
+    def test_new_error_is_reported_even_when_a_different_one_preexists(self) -> None:
+        current = {"destination": {"zone_id": "z2", "matching_target": "NETWORK", "network_ids": ["n1"]}}
+        error = policy_update_targeting_error(current, {"destination": {"port": "53"}})
+        assert error is not None and "port_matching_type" in error
+
+    def test_replacing_an_invalid_selector_with_another_invalid_value_is_still_reported(self) -> None:
+        current = {"source": {"zone_id": "z", "matching_target": "CLIENT", "client_macs": []}}
+        error = policy_update_targeting_error(current, {"source": {"client_macs": ["zz"]}})
+        assert error is not None and "zz" in error
+
+    def test_missing_or_non_dict_stored_side_validates_the_update_alone(self) -> None:
+        assert (
+            policy_update_targeting_error(
+                {"destination": None}, {"destination": {"zone_id": "z", "matching_target": "ANY"}}
+            )
+            is None
+        )
+        assert "object" in policy_update_targeting_error({"source": "junk"}, {"source": "ANY"})
+
+
+class TestRetireStaleSelectors:
+    def test_switching_port_matching_to_any_retires_the_stored_port(self) -> None:
+        stored = {"zone_id": "z", "matching_target": "ANY", "port_matching_type": "SPECIFIC", "port": "53"}
+        assert retire_stale_selectors(stored, {"port_matching_type": "ANY"}) == {
+            "port_matching_type": "ANY",
+            "port": None,
+        }
+
+    def test_switching_between_specific_and_object_retires_the_other_selector(self) -> None:
+        specific = {"port_matching_type": "SPECIFIC", "port": "53"}
+        as_object = retire_stale_selectors(specific, {"port_matching_type": "OBJECT", "port_group_id": "g1"})
+        assert as_object == {"port_matching_type": "OBJECT", "port_group_id": "g1", "port": None}
+
+        obj = {"port_matching_type": "OBJECT", "port_group_id": "g1"}
+        as_specific = retire_stale_selectors(obj, {"port_matching_type": "SPECIFIC", "port": "53"})
+        assert as_specific == {"port_matching_type": "SPECIFIC", "port": "53", "port_group_id": None}
+
+    def test_switching_client_target_away_retires_client_macs(self) -> None:
+        stored = {"matching_target": "CLIENT", "client_macs": ["aa:bb:cc:dd:ee:ff"]}
+        assert retire_stale_selectors(stored, {"matching_target": "ANY"}) == {
+            "matching_target": "ANY",
+            "client_macs": None,
+        }
+
+    def test_update_that_does_not_touch_the_activator_is_unchanged(self) -> None:
+        stored = {"port_matching_type": "SPECIFIC", "port": "53"}
+        assert retire_stale_selectors(stored, {"port": "53,853"}) == {"port": "53,853"}
+        assert retire_stale_selectors(stored, {"zone_id": "z2"}) == {"zone_id": "z2"}
+
+    def test_update_that_sets_the_selector_itself_is_unchanged(self) -> None:
+        stored = {"port_matching_type": "SPECIFIC", "port": "53"}
+        update = {"port_matching_type": "ANY", "port": ""}
+        assert retire_stale_selectors(stored, update) == update
+
+    def test_non_dict_inputs_pass_through(self) -> None:
+        assert retire_stale_selectors(None, {"port_matching_type": "ANY"}) == {"port_matching_type": "ANY"}
+        assert retire_stale_selectors({"port": "53"}, "ANY") == "ANY"
+
+    def test_retired_update_validates_clean(self) -> None:
+        current = {
+            "destination": {"zone_id": "z", "matching_target": "ANY", "port_matching_type": "SPECIFIC", "port": "53"}
+        }
+        update = {"destination": retire_stale_selectors(current["destination"], {"port_matching_type": "ANY"})}
+        assert policy_update_targeting_error(current, update) is None
 
 
 class TestFirewallGroupFieldSets:

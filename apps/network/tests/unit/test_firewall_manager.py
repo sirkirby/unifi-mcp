@@ -199,6 +199,24 @@ class TestUpdateFirewallPolicyEndpoint:
         assert payload["source"]["network_ids"] == ["net001"]
 
     @pytest.mark.asyncio
+    async def test_none_inside_an_endpoint_removes_the_key_from_the_payload(self, firewall_manager, mock_connection):
+        """A retired selector (value None) must not be sent as null; the controller stores selectors only
+        under their activating enum, so the key is dropped from the merged endpoint."""
+        raw = copy.deepcopy(SAMPLE_POLICY_RAW)
+        raw["destination"].update({"port_matching_type": "SPECIFIC", "port": "53"})
+        policy = _make_firewall_policy(raw)
+
+        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[policy]):
+            await firewall_manager.update_firewall_policy(
+                "pol001", {"destination": {"port_matching_type": "ANY", "port": None}}
+            )
+
+        payload = mock_connection.request.call_args[0][0].data
+        assert payload["destination"]["port_matching_type"] == "ANY"
+        assert "port" not in payload["destination"]
+        assert payload["destination"]["zone_id"] == "zone-external"
+
+    @pytest.mark.asyncio
     async def test_does_not_mutate_cached_policy(self, firewall_manager, mock_connection):
         """The cached FirewallPolicy.raw must be unchanged after update."""
         policy = _make_firewall_policy()
