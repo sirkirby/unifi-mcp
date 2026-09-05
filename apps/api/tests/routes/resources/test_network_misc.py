@@ -279,6 +279,36 @@ async def test_get_snmp_settings_happy_path(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_mgmt_settings_happy_path(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    fake = [{"x_ssh_enabled": True, "x_ssh_password": "clear", "x_ssh_sha512passwd": "$6$hash", "auto_upgrade": True}]
+
+    async def fake_get(self, section):
+        assert section == "mgmt"
+        return fake
+
+    from unifi_core.network.managers.system_manager import SystemManager
+
+    monkeypatch.setattr(SystemManager, "get_settings", fake_get)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/mgmt-settings?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["render_hint"]["kind"] == "detail"
+    assert body["data"]["x_ssh_enabled"] is True
+    assert body["data"]["x_ssh_password"] == "***REDACTED***"
+    assert body["data"]["ssh_password_hash_set"] is True
+    assert "$6$hash" not in r.text
+
+
+@pytest.mark.asyncio
 async def test_get_gateway_settings_happy_path(tmp_path, monkeypatch) -> None:
     """Gateway (USG) settings singleton projects through the detail route."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")

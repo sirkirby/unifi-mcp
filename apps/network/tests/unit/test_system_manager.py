@@ -338,3 +338,31 @@ class TestGetNetworkHealth:
 
         assert result == health_data
         mock_connection._update_cache.assert_called_once_with("health_default", health_data, timeout=10)
+
+
+@pytest.mark.asyncio
+async def test_update_settings_mgmt_sends_only_the_supplied_keys():
+    """A partial PUT: the controller merges; a fetch-merge-put would echo the
+    stored SSH hash, management key and API token back to it."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from unifi_core.network.managers.system_manager import SystemManager
+
+    conn = MagicMock()
+    conn.site = "default"
+    conn.get_cached = MagicMock(return_value=None)
+    conn._update_cache = MagicMock()
+    conn._invalidate_cache = MagicMock()
+    conn.ensure_connected = AsyncMock(return_value=True)
+    conn.request = AsyncMock(
+        side_effect=[
+            [{"_id": "m1", "key": "mgmt", "x_ssh_sha512passwd": "$6$hash", "x_mgmt_key": "k"}],
+            {"meta": {"rc": "ok"}},
+        ]
+    )
+
+    assert await SystemManager(conn).update_settings("mgmt", {"x_ssh_enabled": False}) is True
+
+    put = conn.request.call_args_list[-1].args[0]
+    assert put.method == "put" and put.path == "/set/setting/mgmt"
+    assert put.data == {"x_ssh_enabled": False, "_id": "m1", "key": "mgmt"}

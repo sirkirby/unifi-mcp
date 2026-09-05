@@ -3981,6 +3981,20 @@
       }
     },
     {
+      "name": "unifi_get_mgmt_settings",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "manager_attr": "system_manager",
+      "manager_method": "get_settings",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_get_network_details",
       "product": "network",
       "category": "network",
@@ -6294,6 +6308,28 @@
         "properties": {
           "update_data": {
             "description": "Dictionary of gateway settings fields to update. See tool description.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "update_data"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_update_mgmt_settings",
+      "product": "network",
+      "category": "mgmt",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "manager_attr": "system_manager",
+      "manager_method": "update_settings",
+      "input_schema": {
+        "properties": {
+          "update_data": {
+            "description": "Dict of management fields to change (keys listed in the tool description)",
             "type": "object"
           }
         },

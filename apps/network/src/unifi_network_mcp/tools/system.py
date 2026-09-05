@@ -12,8 +12,11 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.network.models.system import (
+    MGMTSETTINGS_MUTABLE_FIELDS,
     autobackup_to_controller_update,
     backup_from_controller,
+    mgmt_from_controller,
+    mgmt_to_controller_update,
     network_health_from_controller,
     site_settings_from_controller,
     snmp_from_controller,
@@ -207,6 +210,147 @@ async def update_snmp_settings(
     except Exception as e:
         logger.error("Error updating SNMP settings: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to update SNMP settings: {e}"}
+
+
+def _error_detail(exc: BaseException) -> str:
+    """What to tell the caller about a failed settings call: the controller's
+    ``api.err.*`` code when it sent one, else the exception class.
+
+    Never the message: the settings document carries secrets (the device-SSH
+    password) and a controller validation error can quote it.
+    """
+    body = exc.args[0] if exc.args else None
+    meta = body.get("meta") if isinstance(body, dict) else None
+    msg = meta.get("msg") if isinstance(meta, dict) else None
+    if isinstance(msg, str) and msg.startswith("api.err.") and msg.replace(".", "").isalnum():
+        return msg
+    return type(exc).__name__
+
+
+_MGMT_FIELDS_TEXT = (
+    "x_ssh_enabled (bool), x_ssh_username (str), x_ssh_auth_password_enabled (bool), "
+    "x_ssh_password (str, secret, applied to every adopted device), x_ssh_keys (list of key objects; "
+    "replaces the whole authorised-key list on every device), "
+    "debug_tools_enabled (bool), auto_upgrade (bool), auto_upgrade_hour (int 0-23)"
+)
+
+
+@server.tool(
+    name="unifi_get_mgmt_settings",
+    description="Get the site's device management settings (the mgmt site setting): whether device SSH is "
+    "enabled, the SSH user name, whether password login is allowed, the authorised public keys, debug "
+    "tools, automatic firmware upgrades and their hour. The SSH password is shown redacted; the stored "
+    "password hash, management key and API token are reported only as present/absent.",
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def get_mgmt_settings() -> Dict[str, Any]:
+    """Implementation for getting device management settings."""
+    logger.info("unifi_get_mgmt_settings tool called")
+    try:
+        settings_list = await system_manager.get_settings("mgmt")
+        shaped = mgmt_from_controller(settings_list).model_dump(exclude_none=False)
+        return redact_sensitive_fields(
+            {"success": True, "site": system_manager._connection.site, "mgmt_settings": shaped},
+            redact_sensitive=should_redact_sensitive_fields(),
+        )
+    except Exception as e:
+        logger.error("Error getting management settings: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get management settings: {_error_detail(e)}"}
+
+
+@server.tool(
+    name="unifi_update_mgmt_settings",
+    description="Update the site's device management settings (device SSH, debug tools, automatic upgrades). "
+    "Pass only the fields you want to change — current values are automatically preserved. "
+    "Every field is a key inside the update_data dict: " + _MGMT_FIELDS_TEXT + ". "
+    "SSH changes apply to every adopted device on its next provision and a previous password is not "
+    "recoverable from the stored hash. Requires confirmation.",
+    permission_category="mgmt",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def update_mgmt_settings(
+    update_data: Annotated[
+        Dict[str, Any],
+        Field(description="Dict of management fields to change (keys listed in the tool description)"),
+    ],
+    confirm: Annotated[
+        bool,
+        Field(description="When true, applies the update. When false (default), returns a preview"),
+    ] = False,
+) -> Dict[str, Any]:
+    """Update device management settings.
+
+    Only the fields passed are sent; the controller keeps the rest of the
+    record (a fetch-merge-put would echo the stored SSH hash, management key
+    and API token back to it). Errors are reported by controller error code
+    or exception class, never by message.
+    """
+    logger.info("unifi_update_mgmt_settings tool called (confirm=%s)", confirm)
+    redact_sensitive = should_redact_sensitive_fields()
+    if not update_data:
+        return {"success": False, "error": "No settings provided to update."}
+    try:
+        validated_data = mgmt_to_controller_update(update_data)
+    except ValueError as e:
+        # The model raises a value-free message naming the field and the failure kind.
+        return {"success": False, "error": f"Failed to validate management settings: {e}"}
+    if not validated_data:
+        return {
+            "success": False,
+            "error": f"No valid fields to update after validation. Updatable keys: {sorted(MGMTSETTINGS_MUTABLE_FIELDS)}",
+        }
+
+    warnings: list[str] = []
+    if validated_data.get("x_ssh_enabled") is False:
+        warnings.append("Disabling device SSH applies to every adopted device; verify console access before disabling.")
+    if "x_ssh_password" in validated_data or "x_ssh_username" in validated_data:
+        warnings.append(
+            "SSH credential changes apply to every adopted device on its next provision; "
+            "the previous password is not recoverable from the stored hash."
+        )
+    if "x_ssh_keys" in validated_data:
+        warnings.append(
+            "x_ssh_keys replaces the whole authorised-key list on every adopted device: keys not "
+            "included here are removed, and every key included gets root-equivalent access."
+        )
+
+    if not confirm:
+        try:
+            settings_list = await system_manager.get_settings("mgmt")
+            current = mgmt_from_controller(settings_list).model_dump(exclude_none=False)
+            return redact_sensitive_fields(
+                update_preview(
+                    resource_type="mgmt_settings",
+                    resource_id="mgmt",
+                    resource_name="Device Management Settings",
+                    current_state=current,
+                    updates=validated_data,
+                    warnings=warnings or None,
+                ),
+                redact_sensitive=redact_sensitive,
+            )
+        except Exception as e:
+            logger.error("Error preparing management settings preview: %s", type(e).__name__)
+            return {"success": False, "error": f"Failed to prepare management settings preview: {_error_detail(e)}"}
+
+    try:
+        # A copy: the manager adds _id and key to the dict it is given.
+        success = await system_manager.update_settings("mgmt", dict(validated_data))
+        if success:
+            return redact_sensitive_fields(
+                {
+                    "success": True,
+                    "site": system_manager._connection.site,
+                    "mgmt_settings": validated_data,
+                    "warnings": warnings,
+                },
+                redact_sensitive=redact_sensitive,
+            )
+        return {"success": False, "error": "Failed to update management settings."}
+    except Exception as e:
+        logger.error("Error updating management settings: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to update management settings: {_error_detail(e)}"}
 
 
 # ---- Backup Management ----

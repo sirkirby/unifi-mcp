@@ -19,7 +19,7 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 
 | Server | Status | Tools | Package |
 |--------|--------|-------|---------|
-| [Network](apps/network/) | Stable | 193 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
+| [Network](apps/network/) | Stable | 195 | [`unifi-network-mcp`](https://pypi.org/project/unifi-network-mcp/) |
 | [Protect](apps/protect/) | Stable | 62 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 37 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 
@@ -227,7 +227,7 @@ For the full configuration reference including permissions, transports, and adva
 
 ## Secret redaction
 
-Tool and API responses redact known controller secret fields by default — Wi-Fi passphrases, VPN private/preshared keys, whole VPN config blobs (imported WireGuard/OpenVPN `.conf`/`.ovpn` files), API tokens, SNMP community strings, and Access credential token/PIN values come back as `***REDACTED***`. This keeps secrets out of agent context and logs.
+Tool and API responses redact known controller secret fields by default — Wi-Fi passphrases, VPN private/preshared keys, whole VPN config blobs (imported WireGuard/OpenVPN `.conf`/`.ovpn` files), API tokens, SNMP community strings, device-SSH credentials and the management key, and Access credential token/PIN values come back as `***REDACTED***`. This keeps secrets out of agent context and logs.
 
 When a trusted local administration workflow genuinely needs raw values, disable redaction for that process with `UNIFI_REDACT_SENSITIVE_FIELDS=false` or a server-specific override such as `UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_PROTECT_REDACT_SENSITIVE_FIELDS=false`, `UNIFI_ACCESS_REDACT_SENSITIVE_FIELDS=false`, or `UNIFI_API_REDACT_SENSITIVE_FIELDS=false`. To keep an existing secret during an update, simply omit the field — do **not** pass the `***REDACTED***` marker back; doing so is rejected so the placeholder can never be written as a real secret. See [`PRIVACY.md`](PRIVACY.md) for the full list of redacted fields.
 
@@ -251,7 +251,7 @@ This is a monorepo with shared packages:
 
 ```
 apps/
-  network/          # UniFi Network MCP server (stable, 193 tools)
+  network/          # UniFi Network MCP server (stable, 195 tools)
   protect/          # UniFi Protect MCP server (stable, 62 tools)
   access/           # UniFi Access MCP server (stable, 37 tools)
   api/              # Independent REST + GraphQL API server (beta)

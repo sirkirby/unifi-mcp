@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 # ---------------------------------------------------------------------------
 # SnmpSettings
@@ -112,6 +112,78 @@ class AutoBackupSettings(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# MgmtSettings
+# ---------------------------------------------------------------------------
+
+
+class MgmtSettings(BaseModel):
+    """The ``mgmt`` site setting: the device-SSH management plane.
+
+    Field names match the controller's keys (verified on Network 10.6.102).
+    This is field selection, not a redaction exception: the model does not
+    carry the three stored credentials (``x_ssh_sha512passwd``, ``x_mgmt_key``,
+    ``x_api_token``) at all. Each is reported by a read-only presence flag,
+    named ``<meaning>_set`` and derived from a key the model deliberately
+    omits (the mapping is ``_MGMT_STORED_SECRETS``), so no redaction policy can
+    hand out a device root hash or the adoption key. ``x_ssh_password`` is the
+    mutable, write-side secret and is redacted at egress like every other
+    secret field.
+    """
+
+    # --- mutable ---
+    x_ssh_enabled: Optional[bool] = Field(default=None, description="Enable SSH on adopted devices")
+    x_ssh_username: Optional[str] = Field(default=None, description="Device SSH user name")
+    x_ssh_auth_password_enabled: Optional[bool] = Field(
+        default=None, description="Allow password authentication for device SSH"
+    )
+    x_ssh_password: Optional[str] = Field(
+        default=None, description="Device SSH password (secret; redacted at egress). Applied to every adopted device"
+    )
+    x_ssh_keys: Optional[List[Any]] = Field(
+        default=None, description="Authorised public keys for device SSH (list of key objects)"
+    )
+    debug_tools_enabled: Optional[bool] = Field(default=None, description="Enable device debug tools")
+    auto_upgrade: Optional[bool] = Field(default=None, description="Automatically upgrade device firmware")
+    auto_upgrade_hour: Optional[int] = Field(default=None, description="Hour of day (0-23) for automatic upgrades")
+
+    # --- read-only context ---
+    x_ssh_bind_wildcard: Optional[bool] = Field(
+        default=None, description="Whether device SSH binds all interfaces", json_schema_extra={"mutable": False}
+    )
+    advanced_feature_enabled: Optional[bool] = Field(
+        default=None, description="Advanced features enabled on the site", json_schema_extra={"mutable": False}
+    )
+    unifi_idp_enabled: Optional[bool] = Field(
+        default=None, description="UniFi Identity integration enabled", json_schema_extra={"mutable": False}
+    )
+    wifiman_enabled: Optional[bool] = Field(
+        default=None, description="WiFiman integration enabled", json_schema_extra={"mutable": False}
+    )
+    ssh_password_hash_set: Optional[bool] = Field(
+        default=None,
+        description="Whether a device SSH password hash is stored (the hash is never returned)",
+        json_schema_extra={"mutable": False},
+    )
+    mgmt_key_set: Optional[bool] = Field(
+        default=None,
+        description="Whether a management key is stored (the key is never returned)",
+        json_schema_extra={"mutable": False},
+    )
+    api_token_set: Optional[bool] = Field(
+        default=None,
+        description="Whether a management API token is stored (the token is never returned)",
+        json_schema_extra={"mutable": False},
+    )
+
+    @field_validator("auto_upgrade_hour")
+    @classmethod
+    def _hour_of_day(cls, value: Optional[int]) -> Optional[int]:
+        if value is not None and not 0 <= value <= 23:
+            raise ValueError("auto_upgrade_hour must be between 0 and 23")
+        return value
+
+
+# ---------------------------------------------------------------------------
 # Field sets
 # ---------------------------------------------------------------------------
 
@@ -122,6 +194,15 @@ SNMPSETTINGS_MUTABLE_FIELDS: frozenset[str] = frozenset(
 SNMPSETTINGS_READ_ONLY_FIELDS: frozenset[str] = frozenset(
     name
     for name, field in SnmpSettings.model_fields.items()
+    if (field.json_schema_extra or {}).get("mutable", True) is False
+)
+
+MGMTSETTINGS_MUTABLE_FIELDS: frozenset[str] = frozenset(
+    name for name, field in MgmtSettings.model_fields.items() if (field.json_schema_extra or {}).get("mutable", True)
+)
+MGMTSETTINGS_READ_ONLY_FIELDS: frozenset[str] = frozenset(
+    name
+    for name, field in MgmtSettings.model_fields.items()
     if (field.json_schema_extra or {}).get("mutable", True) is False
 )
 
@@ -188,6 +269,64 @@ def snmp_to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     ``None`` values are dropped; boolean ``False`` is preserved.
     """
     return {k: v for k, v in fields.items() if k in SNMPSETTINGS_MUTABLE_FIELDS and v is not None}
+
+
+# ---------------------------------------------------------------------------
+# Public factory helpers — MgmtSettings
+# ---------------------------------------------------------------------------
+
+_MGMT_STORED_SECRETS = {
+    "ssh_password_hash_set": "x_ssh_sha512passwd",
+    "mgmt_key_set": "x_mgmt_key",
+    "api_token_set": "x_api_token",
+}
+
+
+def mgmt_from_controller(raw: Any) -> MgmtSettings:
+    """Build a MgmtSettings from a ``mgmt`` settings record (list or dict).
+
+    The model is the allowlist: only its fields leave here, and the stored
+    credentials are reduced to presence booleans.
+    """
+    if isinstance(raw, list):
+        raw = raw[0] if raw else {}
+    if not isinstance(raw, dict):
+        return MgmtSettings()
+    values: Dict[str, Any] = {
+        name: raw.get(name) for name in MgmtSettings.model_fields if name not in _MGMT_STORED_SECRETS
+    }
+    for flag, secret_key in _MGMT_STORED_SECRETS.items():
+        values[flag] = bool(raw.get(secret_key))
+    return MgmtSettings(**values)
+
+
+def mgmt_to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a partial ``mgmt`` update and return the values to send.
+
+    Unknown, read-only and presence-flag keys raise ``ValueError`` naming
+    them (the anchor pattern in ``acl.py``: a typo must not become a silent
+    drop on the highest-blast-radius write in the server). ``None`` values are
+    dropped; boolean ``False`` is preserved; values are returned coerced to
+    their declared types. Raises ``ValueError`` for an out-of-range value.
+    """
+    unknown = sorted(k for k in fields if k not in MGMTSETTINGS_MUTABLE_FIELDS)
+    if unknown:
+        raise ValueError(
+            f"Unknown or read-only fields: {unknown}. Allowed fields: {sorted(MGMTSETTINGS_MUTABLE_FIELDS)}"
+        )
+    updates = {k: v for k, v in fields.items() if v is not None}
+    try:
+        validated = MgmtSettings(**updates)
+    except ValidationError as exc:
+        # Name the field and the failure kind only: pydantic's own message
+        # quotes the submitted value, which may be the SSH password.
+        problems = ", ".join(
+            f"{'.'.join(str(p) for p in err['loc']) or 'update_data'}: {err['type']}" for err in exc.errors()
+        )
+        raise ValueError(f"invalid mgmt update ({problems})") from None
+    # The coerced values go to the controller, not the caller's spellings
+    # ("true" for a bool, "12" for the hour).
+    return validated.model_dump(include=set(updates))
 
 
 # ---------------------------------------------------------------------------

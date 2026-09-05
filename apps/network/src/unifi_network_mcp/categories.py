@@ -41,6 +41,7 @@ NETWORK_CATEGORY_MAP = {
     "voucher": "vouchers",
     "usergroup": "usergroups",
     "route": "routes",
+    "mgmt": "mgmt",
     "snmp": "snmp",
     "acl": "acl_rules",
     "client_group": "client_groups",

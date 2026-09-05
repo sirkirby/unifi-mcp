@@ -84,6 +84,7 @@ from unifi_api.graphql.types.network.system import (
     AutoBackupSettings,
     Backup,
     EventTypes,
+    MgmtSettings,
     NetworkHealth,
     SiteSettings,
     SnmpSettings,
@@ -1232,6 +1233,22 @@ async def _fetch_snmp_settings(
         key,
         "get_settings",
         "snmp",
+    )
+
+
+async def _fetch_mgmt_settings(
+    ctx: GraphQLContext,
+    controller: str,
+    site: str,
+) -> Any:
+    key = f"network/mgmt-settings/{controller}/{site}"
+    return await _system_mgr_fetch(
+        ctx,
+        controller,
+        site,
+        key,
+        "get_settings",
+        "mgmt",
     )
 
 
@@ -3466,6 +3483,22 @@ class NetworkQuery:
         if raw is None:
             return None
         return SnmpSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.",
+    )
+    async def mgmt_settings(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+    ) -> MgmtSettings | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_mgmt_settings(ctx, controller, site)
+        if raw is None:
+            return None
+        return MgmtSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
 
     @strawberry.field(
         permission_classes=[IsRead],

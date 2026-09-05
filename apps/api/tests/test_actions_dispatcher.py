@@ -3640,3 +3640,19 @@ def test_create_port_profile_translator_requires_name_and_forward() -> None:
 
     with pytest.raises(ValueError):
         translator({"name": "Access"})
+
+
+def test_mgmt_get_translator_targets_the_mgmt_section() -> None:
+    _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_get_mgmt_settings"]({})
+    assert kwargs == {"section": "mgmt"}
+
+
+def test_mgmt_update_translator_validates_and_rejects_empty_or_unknown() -> None:
+    _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_update_mgmt_settings"]({"update_data": {"x_ssh_enabled": "true"}})
+    assert kwargs == {"section": "mgmt", "settings_data": {"x_ssh_enabled": True}}
+    with pytest.raises(ValueError, match="empty"):
+        DISPATCH_ARG_TRANSLATORS["unifi_update_mgmt_settings"]({"update_data": {"x_ssh_username": None}})
+    with pytest.raises(ValueError, match="x_mgmt_key"):
+        DISPATCH_ARG_TRANSLATORS["unifi_update_mgmt_settings"](
+            {"update_data": {"x_ssh_enabled": False, "x_mgmt_key": "k"}}
+        )
