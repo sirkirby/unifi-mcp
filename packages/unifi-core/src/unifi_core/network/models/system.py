@@ -158,6 +158,17 @@ def _get(obj: Any, *keys: str, default: Any = None) -> Any:
     return default
 
 
+def _as_bool(value: Any) -> Optional[bool]:
+    """Coerce a controller flag to bool: bool, 0/1, or "true"/"false"; else ``None`` (absent)."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return bool(value)
+    if isinstance(value, str) and value.lower() in ("true", "false"):
+        return value.lower() == "true"
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Public factory helpers — SnmpSettings
 # ---------------------------------------------------------------------------
@@ -473,6 +484,31 @@ class SiteSettings(BaseModel):
         description="Regulatory country code (numeric)",
         json_schema_extra={"mutable": False},
     )
+    timezone: Optional[str] = Field(
+        default=None,
+        description="Site timezone (IANA name, from the locale section)",
+        json_schema_extra={"mutable": False},
+    )
+    connectivity_enabled: Optional[bool] = Field(
+        default=None,
+        description="Whether the connectivity monitor is enabled",
+        json_schema_extra={"mutable": False},
+    )
+    connectivity_uplink_type: Optional[str] = Field(
+        default=None,
+        description="Connectivity monitor uplink type (e.g., 'gateway')",
+        json_schema_extra={"mutable": False},
+    )
+    ntp_servers: Optional[List[str]] = Field(
+        default=None,
+        description="Configured NTP servers, blank slots omitted",
+        json_schema_extra={"mutable": False},
+    )
+    ntp_setting_preference: Optional[str] = Field(
+        default=None,
+        description="NTP setting preference ('auto' or 'manual')",
+        json_schema_extra={"mutable": False},
+    )
 
 
 SITESETTINGS_MUTABLE_FIELDS: frozenset[str] = frozenset()
@@ -485,14 +521,25 @@ def site_settings_from_controller(raw: Any) -> SiteSettings:
     The system manager returns ``{"raw": [...], "sections": {key: dict}}``.
     Pull display fields from the sections that own them: ``super_identity``
     owns the site display name and the controller's persisted ``_id``;
-    ``country`` owns the regulatory code.
+    ``country`` the regulatory code; ``locale`` the timezone; ``connectivity``
+    the connectivity monitor; ``ntp`` the time servers. The model is the
+    allowlist: a section's other keys (the connectivity section carries a mesh
+    PSK) never reach the result.
     """
     if not isinstance(raw, dict):
         return SiteSettings()
 
     sections = raw.get("sections") if isinstance(raw.get("sections"), dict) else {}
-    identity = sections.get("super_identity", {}) if isinstance(sections.get("super_identity"), dict) else {}
-    country_section = sections.get("country", {}) if isinstance(sections.get("country"), dict) else {}
+
+    def section(key: str) -> Dict[str, Any]:
+        value = sections.get(key)
+        return value if isinstance(value, dict) else {}
+
+    identity = section("super_identity")
+    country_section = section("country")
+    locale = section("locale")
+    connectivity = section("connectivity")
+    ntp = section("ntp")
 
     site_id = _get(identity, "_id", "site_id") or _get(raw, "_id", "site_id")
     name = _get(identity, "name") or _get(raw, "name")
@@ -503,11 +550,19 @@ def site_settings_from_controller(raw: Any) -> SiteSettings:
     except (TypeError, ValueError):
         country = None
 
+    ntp_servers = [ntp.get(f"ntp_server_{i}") for i in range(1, 5)]
+    ntp_servers = [server for server in ntp_servers if isinstance(server, str) and server]
+
     return SiteSettings(
         site_id=site_id,
         name=name,
         role=role,
         country=country,
+        timezone=_get(locale, "timezone") or None,
+        connectivity_enabled=_as_bool(connectivity.get("enabled")),
+        connectivity_uplink_type=_get(connectivity, "uplink_type") or None,
+        ntp_servers=ntp_servers if ntp else None,
+        ntp_setting_preference=_get(ntp, "setting_preference") or None,
     )
 
 
