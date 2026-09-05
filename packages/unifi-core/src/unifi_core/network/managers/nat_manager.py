@@ -24,7 +24,7 @@ echo the payload. The connection layer below logs on its own terms.
 import logging
 from typing import Any, Dict, List, Optional
 
-from aiounifi.errors import Forbidden, LoginRequired, NoPermission, Unauthorized
+from aiounifi.errors import Forbidden, LoginRequired, NoPermission, TwoFaTokenRequired, Unauthorized
 from aiounifi.models.api import ApiRequestV2
 
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError, http_status
@@ -44,7 +44,7 @@ NAT_UNAVAILABLE_HINT = (
     "(zone-based firewall); USG sites and older controllers do not expose them. A wrong site name answers the "
     "same way."
 )
-_AUTH_ERRORS = (LoginRequired, Forbidden, NoPermission, Unauthorized)
+_AUTH_ERRORS = (LoginRequired, Forbidden, NoPermission, TwoFaTokenRequired, Unauthorized)
 
 
 class NatManager:
@@ -115,7 +115,10 @@ class NatManager:
         created = _rules_from(response)
         if not created:
             logger.warning("NAT rule create returned no decodable data")
-            raise UniFiOperationError("The controller accepted the NAT rule create but returned no rule document.")
+            raise UniFiOperationError(
+                "The controller answered the NAT rule create without a rule document; the rule may have been "
+                "created. List the rules before retrying."
+            )
         return created[0]
 
     async def update_nat_rule(self, rule_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -182,11 +185,9 @@ def _rules_from(response: Any) -> Optional[List[Dict[str, Any]]]:
     The connection layer hands back ``None`` when the body was not JSON (an
     error page, a login redirect), which must not read as "no rules".
     """
-    if isinstance(response, list):
-        return [r for r in response if isinstance(r, dict)]
-    if isinstance(response, dict):
-        data = response.get("data", response)
-        if isinstance(data, list):
-            return [r for r in data if isinstance(r, dict)]
-        return [data] if isinstance(data, dict) else None
+    data = response.get("data", response) if isinstance(response, dict) else response
+    if isinstance(data, dict):
+        return [data]
+    if isinstance(data, list) and all(isinstance(r, dict) for r in data):
+        return data
     return None

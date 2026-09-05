@@ -467,3 +467,11 @@ class TestReviewFindings:
     def test_normalize_update_drops_none_inside_filters(self) -> None:
         out = normalize_nat_update({"source_filter": {"filter_type": "none", "address": None, "port": None}})
         assert out == {"source_filter": {"filter_type": "NONE"}}
+
+
+class TestReReviewFindings:
+    @pytest.mark.parametrize("value", [[], {}])
+    def test_falsy_non_string_type_is_a_message_not_a_type_error(self, value) -> None:
+        error = nat_rule_error(dnat(type=value))
+        assert error is not None and "type" in error
+        assert merge_nat_update(dnat(), {"type": value})["type"] == value

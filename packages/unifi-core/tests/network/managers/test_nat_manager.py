@@ -10,7 +10,15 @@ import logging
 from typing import Any
 
 import pytest
-from aiounifi.errors import AiounifiException, Forbidden, LoginRequired, NoPermission, ResponseError, Unauthorized
+from aiounifi.errors import (
+    AiounifiException,
+    Forbidden,
+    LoginRequired,
+    NoPermission,
+    ResponseError,
+    TwoFaTokenRequired,
+    Unauthorized,
+)
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
 from unifi_core.network.managers.nat_manager import CACHE_PREFIX_NAT, NAT_UNAVAILABLE_HINT, NatManager
 
@@ -341,3 +349,28 @@ class TestReviewFindings:
         manager, connection = _manager([stored])
         await manager.toggle_nat_rule(RULE_ID)
         assert connection.requests[-1].data["enabled"] is True
+
+
+class TestReReviewFindings:
+    async def test_empty_rule_list_is_a_real_answer(self) -> None:
+        manager, connection = _manager([])
+        assert await manager.list_nat_rules() == []
+        assert connection.cache == {f"{CACHE_PREFIX_NAT}_default": []}
+
+    async def test_list_of_non_rules_raises_and_is_not_cached(self) -> None:
+        manager, connection = _manager(["oops"])
+        with pytest.raises(UniFiOperationError):
+            await manager.list_nat_rules()
+        assert connection.cache == {}
+
+    async def test_two_factor_error_is_not_mapped_to_the_endpoint_hint(self) -> None:
+        error = TwoFaTokenRequired({"errorCode": 404, "message": "api.err.Ubic2faTokenRequired"})
+        manager, _ = _manager(error=error)
+        with pytest.raises(TwoFaTokenRequired):
+            await manager.list_nat_rules()
+
+    async def test_empty_create_response_names_the_ambiguity(self) -> None:
+        manager, _ = _manager(None)
+        with pytest.raises(UniFiOperationError) as exc:
+            await manager.create_nat_rule(dnat())
+        assert "may have been created" in str(exc.value)

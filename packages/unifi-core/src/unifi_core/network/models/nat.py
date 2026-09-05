@@ -279,11 +279,11 @@ def _rule_problems(fields: Dict[str, Any]) -> List[Problem]:
     """Every validation problem on a full rule document, in check order."""
     problems: List[Problem] = []
     rule_type = fields.get("type")
-    if not rule_type:
-        problems.append(("type", "type is required: 'DNAT', 'SNAT' or 'MASQUERADE'."))
-    elif not isinstance(rule_type, str):
+    if rule_type is not None and not isinstance(rule_type, str):
         problems.append(("type", "type %r must be a string." % (rule_type,)))
         rule_type = None
+    elif not rule_type:
+        problems.append(("type", "type is required: 'DNAT', 'SNAT' or 'MASQUERADE'."))
     for key in _REQUIRED_BY_TYPE.get(rule_type, ()):
         if not fields.get(key):
             problems.append((key, "%s is required when type is '%s'." % (key, rule_type)))
