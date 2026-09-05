@@ -55,6 +55,8 @@ Ask for:
 
 Username and password are required.
 
+If the user would rather not store the password in the client's settings (where every process the client spawns inherits it), offer the indirect form instead: `UNIFI_NETWORK_PASSWORD_FILE=<path>` for a file holding the password, or `UNIFI_NETWORK_PASSWORD_COMMAND=<command>` for a command whose stdout is the password (for example a Keychain, `pass` or 1Password lookup). The command is not run through a shell. Set exactly one of the three password variables; the server refuses to start if two are set. On the Claude target `set-env.sh` only adds keys, so if a plain `UNIFI_NETWORK_PASSWORD` was saved earlier, remove it from `.claude/settings.local.json` before switching; the Codex and OpenClaw targets replace the whole server entry.
+
 ### Optional API Key
 
 After collecting username and password, explain that UniFi API key support is experimental and limited to read-only operations and a subset of tools. Ask whether to configure an API key too.

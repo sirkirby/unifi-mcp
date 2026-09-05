@@ -21,6 +21,19 @@ The Protect server supports server-specific environment variables with the `UNIF
 
 **Resolution order:** `UNIFI_PROTECT_*` > `UNIFI_*` > YAML config > hardcoded default.
 
+### Keeping the password out of the client environment
+
+`UNIFI_PROTECT_PASSWORD` and `UNIFI_PROTECT_API_KEY` (and their `UNIFI_*` fallbacks) each accept two indirect spellings, so the secret only ever exists inside the server process:
+
+| Variable | Value |
+|----------|-------|
+| `UNIFI_PROTECT_PASSWORD_FILE` | Path to a file whose contents are the password (Docker and systemd secrets convention). Trailing newlines are dropped. |
+| `UNIFI_PROTECT_PASSWORD_COMMAND` | A command whose stdout is the password, for example `security find-generic-password -a alice -s unifi-mcp -w` or `pass show unifi/admin`. |
+
+The command is split like a shell would (`shlex`) but is not run through a shell, so `$VAR`, pipes and redirects are passed to the program literally, and backslashes are escape characters (on Windows write paths with forward slashes). Its stdin is closed, so a helper that prompts fails immediately instead of reading the MCP stream. Set exactly one spelling per level: `UNIFI_PROTECT_PASSWORD` next to `UNIFI_PROTECT_PASSWORD_FILE` refuses to start as ambiguous. A missing, empty, multi-line or oversized file, a non-zero exit, or empty or multi-line output also refuse to start (exit code 6) with the variable name in the log; stdout of a failing command is never logged, and only the tail of its stderr is. `UNIFI_PROTECT_API_KEY_FILE` and `UNIFI_PROTECT_API_KEY_COMMAND` behave the same way.
+
+Two boundaries to know about. The indirections are honoured only from the environment the server process was started with (an exported variable, the MCP client's `env` block, Docker `environment:` or `env_file:`), never from a `.env` file the server itself loads from its working directory, so a `.env` inside an untrusted project cannot make the server run a program or read a file. The command also runs with that starting environment, so helper settings such as `PASSWORD_STORE_DIR` or `GPG_TTY` must be set there too, not in a `.env`. And the command's arguments are visible to every local user in `ps`, so never put a token in the command itself; let the helper look it up. The value is read once at startup and never refreshed, so it should be a password or long-lived key, not a rotating token. Keep the secret file at mode `600` (Docker `secrets:` mounts default to `0444`, so set `mode: 0400`); on POSIX the server logs a warning otherwise.
+
 ## Server Settings
 
 | Variable | Default | Description |
