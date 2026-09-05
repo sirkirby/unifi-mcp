@@ -259,25 +259,38 @@ unifi_create_firewall_policy:
 
 **Name:** DNS traffic redirected to approved resolvers
 
-**What to check:** Verify a LAN-in or LAN-local rule exists that intercepts DNS traffic (UDP/TCP port 53) from client VLANs and either blocks external DNS or redirects to an approved resolver IP. Check that no rule explicitly allows port 53 to arbitrary destinations before such a rule.
+**What to check:** For every zone that carries client networks, verify that direct DNS egress to the External zone is blocked on port 53 (and ideally 853, DNS-over-TLS), with only the approved resolvers exempt. V2 zone-based policies match on port (`port_matching_type` `SPECIFIC` with a `port` string, or `OBJECT` with a `port_group_id`), so the whole benchmark is programmatic on Network 9.0+ with a UniFi gateway. Legacy (pre-zone-based) sites evaluate the same intent against `unifi_list_legacy_firewall_rules` using `dst_port` and `dst_firewallgroup_ids`.
 
 **MCP tools needed:**
-- `unifi_list_firewall_policies` — check for port 53 rules in LAN_IN and LAN_LOCAL rulesets
-- `unifi_list_networks` — enumerate client-facing VLANs
+- `unifi_list_networks` — enumerate client-facing networks and the zone each belongs to (`firewall_zone_id`)
+- `unifi_list_firewall_zones` — identify the External zone ID
+- `unifi_list_firewall_policies` with `include_predefined: true` and `summary: false` — the full policy objects, including `port_matching_type`, `port`, `port_group_id`, `match_opposite_ips`, `connection_state_type`, `ip_version`
+- `unifi_list_firewall_groups` — resolve `port_group_id` / `ip_group_id` references to their members
+
+**Procedure:**
+
+1. Build the set of client zones: every zone that contains at least one client-facing network (ignore zones that only hold WAN, VPN-server or management interfaces unless clients live there).
+2. For each client zone → External pair, take the policies whose `source.zone_id` and `destination.zone_id` match and walk them by `index` ascending. `index` values repeat across zone pairs, so scope the walk to the pair.
+3. A policy **covers DNS** when its protocol is `all`, `tcp`, `udp` or `tcp_udp` and its destination port set includes 53: `port_matching_type: ANY` covers everything; `SPECIFIC` covers 53 when the `port` string lists it or a range contains it; `OBJECT` covers 53 when the referenced port group contains it. Treat `match_opposite_ports: true` as the complement.
+4. **Pass** for the pair when the first DNS-covering policy that is `enabled` and reached in the walk is a `BLOCK` or `REJECT` with `connection_state_type: ALL`, and every earlier DNS-covering `ALLOW` is one of the two accepted resolver exceptions:
+   - a destination exception — `destination.matching_target: IP` scoped to the approved resolver IPs (external resolvers), or
+   - a source exception on the BLOCK itself — `source.matching_target: IP` with `match_opposite_ips: true` against a group holding the approved resolver (local resolver such as a Pi-hole).
+   Any other DNS-covering `ALLOW` ordered before the block (including `port_matching_type: ANY` allows to External) is a finding, because it lets clients reach arbitrary resolvers.
+5. **Alternative evidence:** a Destination NAT rule that redirects port 53 to the approved resolver on every client network satisfies the intent, with two extra conditions: the zone → resolver-zone pair must ALLOW the redirected traffic (NAT happens before forward filtering, so the rewritten packet is judged on the resolver's zone pair), and no such DNAT may exist on the resolver's own VLAN (same-subnet replies bypass the reverse translation). NAT rules are not yet exposed through MCP; check Settings → Policy Table → NAT in the UniFi UI and record the evidence in the report.
+6. **Fail** otherwise. IPv6 note: the block should be `ip_version: BOTH` and the resolver exception must include the resolver's IPv6 address, unless IPv6 is disabled on the client networks. DNS-over-HTTPS (443) cannot be distinguished at this layer and is out of scope for this benchmark.
 
 **Severity:** warning
 
-**How to fix:** This benchmark cannot be fully enforced through the firewall surface alone. V2 zone-based firewall policies do not match on port, so a literal "block UDP/TCP 53 except to approved resolvers" rule isn't expressible at this layer. The benchmark therefore splits into a **partial firewall fix** (what MCP can do today) and a **manual UniFi UI step** (the rest):
-
-**Part 1 — partial firewall fix (programmatic):** Allow client traffic to reach approved resolver IPs externally. This handles the legitimate-DNS path but does not block port-53 traffic to other destinations.
+**How to fix:** Create one BLOCK per client zone → External on ports 53 and 853, with the resolver exempted on the side that matches its location. Create the ALLOW before the BLOCK; new custom policies append after existing custom policies and before built-ins, so creation order is evaluation order.
 
 ```yaml
-# Security intent: clients may reach the approved DNS resolver IPs externally.
-# This is the firewall-layer half of the benchmark.
+# Security intent, external resolvers: approved resolver IPs are reachable, all other external DNS is blocked.
 unifi_create_firewall_policy:
   name: "EGR-02 Allow approved DNS resolvers"
   action: ALLOW
   enabled: true
+  protocol: tcp_udp
+  ip_version: BOTH
   source:
     zone_id: <client zone ID>
     matching_target: ANY
@@ -285,18 +298,52 @@ unifi_create_firewall_policy:
     zone_id: <External zone ID>
     matching_target: IP
     matching_target_type: SPECIFIC
-    ips: [<approved resolver IP>, ...]
+    ips: [<approved resolver IPv4>, <approved resolver IPv6>]
+    port_matching_type: SPECIFIC
+    port: "53,853"
+
+unifi_create_firewall_policy:
+  name: "EGR-02 Block other external DNS"
+  action: BLOCK
+  enabled: true
+  protocol: tcp_udp
+  ip_version: BOTH
+  connection_state_type: ALL
+  source:
+    zone_id: <client zone ID>
+    matching_target: ANY
+  destination:
+    zone_id: <External zone ID>
+    matching_target: ANY
+    port_matching_type: SPECIFIC
+    port: "53,853"
 ```
 
-**Part 2 — full enforcement (operator action in the UniFi UI):** To block direct egress on port 53 to non-approved resolvers and prevent client-side DNS bypass, configure either:
+```yaml
+# Security intent, local resolver (Pi-hole style): only the resolver may reach external DNS.
+# A destination ALLOW cannot express this (the resolver is not in the External zone), and a plain
+# BLOCK would cut the resolver's own upstream queries and take DNS down for every VLAN.
+unifi_create_firewall_policy:
+  name: "EGR-02 Block external DNS except resolver"
+  action: BLOCK
+  enabled: true
+  protocol: tcp_udp
+  ip_version: BOTH
+  connection_state_type: ALL
+  source:
+    zone_id: <client zone ID>
+    matching_target: IP
+    matching_target_type: OBJECT
+    ip_group_id: <address group holding the resolver IP>
+    match_opposite_ips: true
+  destination:
+    zone_id: <External zone ID>
+    matching_target: ANY
+    port_matching_type: SPECIFIC
+    port: "53,853"
+```
 
-- A **traffic rule** (UniFi UI: Settings → Security → Traffic Rules) that drops outbound TCP/UDP port 53 from client networks, OR
-- A **DNS-redirect** policy (UniFi UI: Settings → Security → DNS Filtering or Network → DNS) that intercepts all client DNS and forwards to the approved resolver.
-
-Neither is currently exposed through MCP tooling. Tracked separately for future MCP coverage.
-
-**Auditing this benchmark:** A programmatic audit can confirm Part 1 (the firewall ALLOW rule exists pointing at approved resolver IPs). Part 2 cannot be confirmed via MCP today and must be checked manually in the UniFi UI. Flag the benchmark as `partial-pass` if Part 1 is satisfied but Part 2 cannot be verified programmatically.
-
+Repeat the block for every client zone, including the zone the resolver lives in. When the UniFi gateway itself is the resolver, either recipe is safe: its upstream queries originate in the Gateway zone, which client-zone → External policies never see. The `dns-egress-lock-external` and `dns-egress-lock-local` templates in the firewall-manager skill apply these recipes.
 
 ---
 

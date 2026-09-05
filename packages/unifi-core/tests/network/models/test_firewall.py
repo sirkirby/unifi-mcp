@@ -22,11 +22,13 @@ from unifi_core.network.models.firewall import (
     firewall_zone_from_controller,
     from_controller,
     legacy_firewall_rule_from_controller,
+    normalize_policy_enums,
     normalize_policy_update,
     to_controller_update,
     to_group_create,
     to_zone_create,
     to_zone_update,
+    validate_policy_targeting,
 )
 
 
@@ -195,6 +197,89 @@ class TestNormalizePolicyUpdate:
     def test_rejects_legacy_invalid_or_empty_updates(self, fields: dict, message: str) -> None:
         with pytest.raises(ValueError, match=message):
             normalize_policy_update(fields)
+
+
+class TestNormalizePolicyEnumsEndpoints:
+    def test_upper_cases_endpoint_enums_on_both_sides(self) -> None:
+        result = normalize_policy_enums(
+            {
+                "source": {"zone_id": "z1", "matching_target": "client", "client_macs": ["aa:bb"]},
+                "destination": {
+                    "zone_id": "z2",
+                    "matching_target": "ip",
+                    "matching_target_type": "specific",
+                    "ips": ["10.0.0.1"],
+                    "port_matching_type": "specific",
+                    "port": "53",
+                },
+            }
+        )
+
+        assert result["source"]["matching_target"] == "CLIENT"
+        assert result["destination"]["matching_target"] == "IP"
+        assert result["destination"]["matching_target_type"] == "SPECIFIC"
+        assert result["destination"]["port_matching_type"] == "SPECIFIC"
+        assert result["destination"]["port"] == "53"
+
+    def test_leaves_non_string_and_non_dict_endpoints_alone(self) -> None:
+        result = normalize_policy_enums(
+            {"source": {"zone_id": "z1", "matching_target": None}, "destination": "not-a-dict"}
+        )
+
+        assert result["source"] == {"zone_id": "z1", "matching_target": None}
+        assert result["destination"] == "not-a-dict"
+
+    def test_normalize_policy_update_inherits_endpoint_enums(self) -> None:
+        result = normalize_policy_update({"destination": {"port_matching_type": "object", "port_group_id": "g1"}})
+
+        assert result == {"destination": {"port_matching_type": "OBJECT", "port_group_id": "g1"}}
+
+
+class TestValidatePolicyTargeting:
+    def _policy(self, **destination):
+        return {
+            "source": {"zone_id": "z1", "matching_target": "ANY"},
+            "destination": {"zone_id": "z2", "matching_target": "ANY", **destination},
+        }
+
+    def test_existing_ip_and_network_rules_still_apply(self) -> None:
+        assert "matching_target_type" in validate_policy_targeting(self._policy(matching_target="IP"))
+        assert "network_ids" in validate_policy_targeting(
+            self._policy(matching_target="NETWORK", matching_target_type="OBJECT")
+        )
+
+    def test_client_target_requires_client_macs(self) -> None:
+        assert "client_macs" in validate_policy_targeting(self._policy(matching_target="CLIENT"))
+        assert "client_macs" in validate_policy_targeting(self._policy(matching_target="CLIENT", client_macs=[]))
+        assert (
+            validate_policy_targeting(self._policy(matching_target="CLIENT", client_macs=["aa:bb:cc:dd:ee:ff"])) is None
+        )
+
+    def test_specific_port_matching_requires_port(self) -> None:
+        error = validate_policy_targeting(self._policy(port_matching_type="SPECIFIC"))
+        assert error is not None and "destination.port" in error
+
+    def test_object_port_matching_requires_port_group_id(self) -> None:
+        error = validate_policy_targeting(self._policy(port_matching_type="OBJECT"))
+        assert error is not None and "port_group_id" in error
+        assert validate_policy_targeting(self._policy(port_matching_type="OBJECT", port_group_id="g1")) is None
+
+    @pytest.mark.parametrize("port", ["53", "53,853", "1000-2000", "22,1000-2000,443"])
+    def test_accepts_well_formed_port_strings(self, port: str) -> None:
+        assert validate_policy_targeting(self._policy(port_matching_type="SPECIFIC", port=port)) is None
+
+    @pytest.mark.parametrize("port", ["", "0", "70000", "53, 853", "900-800", "abc", "53-", 53])
+    def test_rejects_malformed_port_strings(self, port) -> None:
+        error = validate_policy_targeting(self._policy(port_matching_type="SPECIFIC", port=port))
+        assert error is not None and "port" in error
+
+    def test_unknown_targets_and_port_types_pass_through(self) -> None:
+        assert validate_policy_targeting(self._policy(matching_target="APP", app_ids=["x"])) is None
+        assert validate_policy_targeting(self._policy(port_matching_type="SOMETHING_NEW")) is None
+
+    def test_any_port_matching_needs_nothing(self) -> None:
+        assert validate_policy_targeting(self._policy(port_matching_type="ANY")) is None
+        assert validate_policy_targeting({"source": "not-a-dict", "destination": None}) is None
 
 
 class TestFirewallGroupFieldSets:

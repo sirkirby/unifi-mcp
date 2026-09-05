@@ -28,6 +28,7 @@ FirewallZone.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -527,6 +528,17 @@ def legacy_policy_error(fields: Dict[str, Any]) -> str | None:
     return None
 
 
+_ENDPOINT_ENUM_KEYS = ("matching_target", "matching_target_type", "port_matching_type")
+_PORT_TOKEN = re.compile(r"^(\d{1,5})(?:-(\d{1,5}))?$")
+
+
+def _normalize_endpoint_enums(endpoint: Any) -> Any:
+    """Upper-case the enum-valued keys inside a source/destination endpoint dict."""
+    if not isinstance(endpoint, dict):
+        return endpoint
+    return {k: (v.upper() if k in _ENDPOINT_ENUM_KEYS and isinstance(v, str) else v) for k, v in endpoint.items()}
+
+
 def normalize_policy_enums(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Upper-case the controller's V2 firewall enum values."""
     normalized = dict(fields)
@@ -542,7 +554,69 @@ def normalize_policy_enums(fields: Dict[str, Any]) -> Dict[str, Any]:
     states = normalized.get("connection_states")
     if isinstance(states, list):
         normalized["connection_states"] = [state.upper() if isinstance(state, str) else state for state in states]
+    for side in ("source", "destination"):
+        if side in normalized:
+            normalized[side] = _normalize_endpoint_enums(normalized[side])
     return normalized
+
+
+def _port_string_error(direction: str, value: Any) -> str | None:
+    """Validate a V2 ``port`` string: comma-separated ports or ``low-high`` ranges, 1-65535."""
+    if not isinstance(value, str) or not value:
+        return "%s.port must be a non-empty string when port_matching_type is 'SPECIFIC'." % direction
+    for token in value.split(","):
+        match = _PORT_TOKEN.match(token)
+        if not match:
+            return "%s.port '%s' is not a comma-separated list of ports or low-high ranges." % (direction, value)
+        low = int(match.group(1))
+        high = int(match.group(2)) if match.group(2) else low
+        if not (1 <= low <= 65535 and 1 <= high <= 65535) or low > high:
+            return "%s.port '%s' must use ports 1-65535 with ranges written low-high." % (direction, value)
+    return None
+
+
+def validate_policy_targeting(fields: Dict[str, Any]) -> str | None:
+    """Validate V2 zone-based source/destination targeting.
+
+    Returns an error message or ``None``. Enforces the requirements of the
+    matching targets and port matching types this project has observed on
+    live controllers (ANY / IP / NETWORK / CLIENT; ANY / SPECIFIC / OBJECT).
+    Other values pass through untouched so newer controller targets (App,
+    Web, Region, ...) keep working through update calls.
+    """
+    for direction in ("source", "destination"):
+        ep = fields.get(direction, {})
+        if not isinstance(ep, dict):
+            continue
+        target = ep.get("matching_target")
+        if target in ("IP", "NETWORK") and not ep.get("matching_target_type"):
+            expected = "'SPECIFIC' or 'OBJECT'" if target == "IP" else "'OBJECT'"
+            return "%s.matching_target_type is required when matching_target is '%s'. Use %s." % (
+                direction,
+                target,
+                expected,
+            )
+        if target == "IP":
+            target_type = ep.get("matching_target_type")
+            if target_type == "OBJECT" and not ep.get("ip_group_id"):
+                return (
+                    "%s.ip_group_id is required when matching_target is 'IP' with matching_target_type 'OBJECT'."
+                    % direction
+                )
+            if target_type != "OBJECT" and not ep.get("ips"):
+                return "%s.ips array is required when matching_target is 'IP'." % direction
+        if target == "NETWORK" and not ep.get("network_ids"):
+            return "%s.network_ids array is required when matching_target is 'NETWORK'." % direction
+        if target == "CLIENT" and not ep.get("client_macs"):
+            return "%s.client_macs array is required when matching_target is 'CLIENT'." % direction
+        port_type = ep.get("port_matching_type")
+        if port_type == "SPECIFIC":
+            port_error = _port_string_error(direction, ep.get("port"))
+            if port_error:
+                return port_error
+        elif port_type == "OBJECT" and not ep.get("port_group_id"):
+            return "%s.port_group_id is required when port_matching_type is 'OBJECT'." % direction
+    return None
 
 
 def _normalize_endpoint_macs(endpoint: Any) -> Any:

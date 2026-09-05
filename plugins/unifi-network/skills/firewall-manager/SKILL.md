@@ -68,6 +68,8 @@ Read `references/policy-templates.yaml` directly — do not invent new templates
 | `block-bittorrent` | "block torrents / P2P" |
 | `work-vpn-split-tunnel` | "VPN but keep printer access" |
 | `camera-isolation` | "lock cameras to NVR only" |
+| `dns-egress-lock-external` | "force DNS through Quad9/Cloudflare" / block external DNS with public resolvers |
+| `dns-egress-lock-local` | "force everything through the Pi-hole" / block external DNS with a LAN resolver |
 
 To apply a template:
 
