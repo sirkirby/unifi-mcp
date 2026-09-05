@@ -234,7 +234,7 @@ Each device record now includes additional fields alongside the existing MAC, na
 - [Permissions](docs/permissions.md) — Permission system, category defaults, how to enable high-risk tools
 - [Tool Catalog](docs/tools.md) — All 193 tools organized by category
 - [Transports](docs/transports.md) — stdio, Streamable HTTP, and SSE setup
-- [Troubleshooting](docs/troubleshooting.md) — Connection issues, SSL, missing tools
+- [Troubleshooting and support bundles](docs/troubleshooting.md) — Reviewed support evidence, connection issues, SSL, missing tools
 
 ## Development
 

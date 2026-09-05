@@ -23,6 +23,8 @@ body:
           required: true
         - label: I have removed credentials, tokens, API keys, IP addresses, and other private data from the report.
           required: true
+        - label: If I provide a support bundle, I reviewed it locally before pasting or attaching it.
+          required: false
   - type: dropdown
     id: component
     attributes:
@@ -137,10 +139,22 @@ body:
       description: Optional — which `unifi_*` tools the agent invoked, with arguments. Copy from the agent's tool-call output.
       render: shell
   - type: textarea
+    id: support_bundle
+    attributes:
+      label: Support bundle (optional)
+      description: >-
+        Generate `unifi_get_support_bundle`, `protect_get_support_bundle`, or
+        `access_get_support_bundle`, then review it before pasting fenced JSON or
+        dragging a reviewed `.json` file here. Review must happen before paste or
+        drag-and-drop because an attachment on a public issue is publicly
+        accessible. Never attach raw configuration, logs, controller responses,
+        credentials, or private identifiers in its place. Guide:
+        https://github.com/sirkirby/unifi-mcp/blob/main/docs/support-bundles.md
+  - type: textarea
     id: raw_tool_output
     attributes:
       label: Raw tool output (sanitized)
-      description: Paste the raw response from the relevant tool call. Scrub MACs/IPs/SSIDs/hostnames before posting.
+      description: Prefer the generated support bundle above. Include raw tool output only when a maintainer specifically needs it, and manually remove credentials, MACs, IPs, SSIDs, hostnames, and other private data before posting.
       render: json
   - type: textarea
     id: expected
@@ -171,7 +185,7 @@ body:
     id: logs
     attributes:
       label: Relevant logs or output
-      description: Paste sanitized logs, tracebacks, or command output.
+      description: Prefer the generated support bundle above. Ordinary diagnostics are not automatically public-safe; include logs, tracebacks, or command output only when specifically needed and after manual sanitization.
       render: shell
     validations:
       required: false

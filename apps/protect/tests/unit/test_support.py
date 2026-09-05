@@ -1,8 +1,9 @@
 """Tests for the Protect support-bundle adapter."""
 
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
-from unifi_core.support_bundle import connection_attempt_succeeded
+from unifi_core.support_bundle import connection_attempt_succeeded, connectivity_probe_result
 from unifi_protect_mcp.support import ProtectSupportBundleAdapter
 
 
@@ -17,7 +18,8 @@ def _manager(*, connected: bool = True):
             "bootstrap_available": connected,
             "public_api_key_configured": True,
             "websocket_state": "connected" if connected else "unknown",
-        }
+        },
+        support_connectivity_probe=AsyncMock(return_value=connectivity_probe_result("timeout", 10_000)),
     )
 
 
@@ -50,3 +52,12 @@ async def test_protect_resource_shape_is_explicitly_unsupported_after_gate_zero(
         "resource": "sensors",
         "shape": None,
     }
+
+
+async def test_protect_connectivity_uses_manager_one_shot_result():
+    manager = _manager()
+    evidence = await ProtectSupportBundleAdapter(manager).collect("connectivity", None)
+
+    assert evidence.probe.outcome == "timeout"
+    assert evidence.probe.duration_bucket == "over_5s"
+    manager.support_connectivity_probe.assert_awaited_once_with()

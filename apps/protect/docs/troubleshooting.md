@@ -1,5 +1,9 @@
 # Troubleshooting
 
+## Generate a reviewed support bundle first
+
+If the server starts, run `protect_get_support_bundle(probe="summary")` and review the JSON locally before sharing it. Use `probe="connectivity"` only after agreeing to one bounded read-only NVR request. The conditional sensor `resource_shape` probe currently returns `unsupported`. See the canonical [support bundle guide](../../../docs/support-bundles.md) for the privacy boundary, direct and marketplace flows, and pre-start fallback. Ordinary `UNIFI_MCP_DIAGNOSTICS` logs are not automatically safe to post publicly.
+
 ## Connection Issues
 
 ### Cannot connect to controller
