@@ -10,7 +10,7 @@ Use the channel that matches what you need:
 | Need | Where to go |
 |------|-------------|
 | Setup help, configuration questions, or troubleshooting | [GitHub Discussions](https://github.com/sirkirby/unifi-mcp/discussions) |
-| Reproducible MCP bugs | Generate and review a [sanitized support bundle](docs/support-bundles.md), then [open a bug report](https://github.com/sirkirby/unifi-mcp/issues/new/choose) |
+| Reproducible bugs (MCP servers, Relay, Worker/CLI, API, or plugins) | [Open a bug report](https://github.com/sirkirby/unifi-mcp/issues/new/choose). For Network, Protect, or Access servers that can start and register tools, include a reviewed [sanitized support bundle](docs/support-bundles.md); otherwise use the manual form fields. |
 | Feature requests or design discussion | [Open a feature request](https://github.com/sirkirby/unifi-mcp/issues/new/choose) or start a discussion |
 | Security vulnerabilities | [Report privately through GitHub Security Advisories](https://github.com/sirkirby/unifi-mcp/security/advisories) |
 

@@ -16,6 +16,19 @@ TOOLS = (
 
 
 class SupportBundleDocumentationTests(unittest.TestCase):
+    def test_support_routing_covers_all_components_and_pre_start_failures(self) -> None:
+        text = (ROOT / "SUPPORT.md").read_text()
+        bug_route = next(line for line in text.splitlines() if line.startswith("| Reproducible"))
+        for component in ("MCP", "Relay", "Worker/CLI", "API", "plugins"):
+            self.assertIn(component, bug_route)
+        self.assertIn("issues/new/choose", bug_route)
+        self.assertIn("can start and register tools", bug_route)
+        self.assertIn("manual form fields", bug_route)
+
+        readme = (ROOT / "README.md").read_text()
+        self.assertIn("if the server can start and register tools", readme)
+        self.assertIn("manual form fields instead", readme)
+
     def test_canonical_guide_covers_workflow_and_privacy_contract(self) -> None:
         guide = (ROOT / GUIDE_PATH).read_text()
         for tool in TOOLS:

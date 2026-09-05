@@ -3984,6 +3984,15 @@ def test_support_request_rejects_unknown_or_multiple_codes(support_request: obje
         "Reporters ought to send the evidence for further diagnosis.",
         "The reporter should also upload the support bundle.",
         "The user has to submit the output for diagnosis.",
+        "Please generate a support bundle for diagnosis.",
+        "The reporter should run the support bundle.",
+        "I viewed the attached support bundle and found matching behavior.",
+        "I saw the supplied JSON for this reported behavior.",
+        "I have seen the attached logs for this reported behavior.",
+        "I looked at the supplied JSON for this reported behavior.",
+        "I observed the supplied output for this reported behavior.",
+        "I parsed the attached support bundle for this reported behavior.",
+        "I scanned the supplied payload for this reported behavior.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
@@ -4009,6 +4018,8 @@ def test_agent_free_form_text_cannot_claim_attachment_inspection_or_render_suppo
         "The maintainer must review the reproduction steps.",
         "The reporter uploads artifact files in the failing workflow.",
         "The author should describe the reproduction steps.",
+        "The workflow generates a support bundle during the failing job.",
+        "The reporter runs the export workflow that produces JSON.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])

@@ -1958,16 +1958,17 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
 }
 
 const SUPPORT_ARTIFACT = String.raw`\b(?:attachments?|bundles?|files?|json|links?|logs?|outputs?|payloads?|screenshots?|evidence)\b`;
-const SUPPORT_INSPECTION = String.raw`\b(?:inspected|reviewed|read|downloaded|opened|analyzed|examined|checked|verified)\b`;
+const SUPPORT_INSPECTION = String.raw`\b(?:inspected|reviewed|read|downloaded|opened|analyzed|examined|checked|verified|viewed|saw|seen|observed|looked at|parsed|scanned|studied|evaluated)\b`;
+const SUPPORT_REQUEST_ACTION = String.raw`(?:attach|upload|provide|paste|submit|send|share|download|generate|run|collect|capture|execute|invoke|export|produce|fetch|retrieve|obtain)`;
 const UNSAFE_SUPPORT_REASON_PATTERNS = [
   // Claims of inspection, including passive voice. Ordinary artifact nouns are safe.
   new RegExp(`${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
   new RegExp(`${SUPPORT_ARTIFACT}[^.!?;]{0,120}${SUPPORT_INSPECTION}`, "iu"),
   new RegExp(String.raw`\b(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:proves?|confirms?|shows?|demonstrates?|establishes?)\b`, "iu"),
   // Direct requests belong in the fixed support_request renderer, never free text.
-  new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\byou\s+(?:(?:must|should|can|could|need to)\s+)?)(?:attach|upload|provide|paste|submit|send|share|download)\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\byou\s+(?:(?:must|should|can|could|need to)\s+)?)${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
   // Third-person directions are requests too, not factual label rationales.
-  new RegExp(String.raw`\b(?:reporters?|users?|authors?|contributors?|maintainers?|they)\s+(?:must|should|can|could|may|might|will|would|needs? to|ha(?:s|ve) to|ought to|(?:is|are) (?:asked|requested|required|expected|encouraged) to)\s+(?:(?:also|now|please|then|first|probably)\s+)?(?:attach|upload|provide|paste|submit|send|share|download)\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  new RegExp(String.raw`\b(?:reporters?|users?|authors?|contributors?|maintainers?|they)\s+(?:must|should|can|could|may|might|will|would|needs? to|ha(?:s|ve) to|ought to|(?:is|are) (?:asked|requested|required|expected|encouraged) to)\s+(?:(?:also|now|please|then|first|probably)\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
 ];
 
 function normalizeReason(value) {
