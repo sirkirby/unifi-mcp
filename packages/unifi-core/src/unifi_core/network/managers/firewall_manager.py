@@ -392,6 +392,13 @@ class FirewallManager:
 
             # Deep merge preserves nested sub-objects (source, destination, schedule, etc.)
             merged_data = deep_merge(policy_to_update.raw, updates)
+            # None inside an endpoint means "remove this key": the controller stores a
+            # selector (port, port_group_id, client_macs) only under its activating enum,
+            # and the update path retires a selector by setting it to None.
+            for side in ("source", "destination"):
+                endpoint = merged_data.get(side)
+                if isinstance(endpoint, dict):
+                    merged_data[side] = {k: v for k, v in endpoint.items() if v is not None}
 
             logger.info("Updating firewall policy %s via single-policy endpoint", policy_id)
 

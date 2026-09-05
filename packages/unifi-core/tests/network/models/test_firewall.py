@@ -25,6 +25,7 @@ from unifi_core.network.models.firewall import (
     normalize_policy_enums,
     normalize_policy_update,
     policy_update_targeting_error,
+    retire_stale_selectors,
     to_controller_update,
     to_group_create,
     to_zone_create,
@@ -314,7 +315,8 @@ class TestValidatePolicyTargeting:
 
     @pytest.mark.parametrize("port", ["53\n", " 53"])
     def test_rejects_port_strings_with_stray_whitespace(self, port: str) -> None:
-        assert validate_policy_targeting(self._policy(port_matching_type="SPECIFIC", port=port)) is not None
+        error = validate_policy_targeting(self._policy(port_matching_type="SPECIFIC", port=port))
+        assert error is not None and "\n" not in error
 
     @pytest.mark.parametrize("macs", ["aa:bb:cc:dd:ee:ff", ["zz"], [" "], [None]])
     def test_client_macs_must_be_a_list_of_valid_macs(self, macs) -> None:
@@ -365,6 +367,52 @@ class TestPolicyUpdateTargetingError:
             is None
         )
         assert "object" in policy_update_targeting_error({"source": "junk"}, {"source": "ANY"})
+
+
+class TestRetireStaleSelectors:
+    def test_switching_port_matching_to_any_retires_the_stored_port(self) -> None:
+        stored = {"zone_id": "z", "matching_target": "ANY", "port_matching_type": "SPECIFIC", "port": "53"}
+        assert retire_stale_selectors(stored, {"port_matching_type": "ANY"}) == {
+            "port_matching_type": "ANY",
+            "port": None,
+        }
+
+    def test_switching_between_specific_and_object_retires_the_other_selector(self) -> None:
+        specific = {"port_matching_type": "SPECIFIC", "port": "53"}
+        as_object = retire_stale_selectors(specific, {"port_matching_type": "OBJECT", "port_group_id": "g1"})
+        assert as_object == {"port_matching_type": "OBJECT", "port_group_id": "g1", "port": None}
+
+        obj = {"port_matching_type": "OBJECT", "port_group_id": "g1"}
+        as_specific = retire_stale_selectors(obj, {"port_matching_type": "SPECIFIC", "port": "53"})
+        assert as_specific == {"port_matching_type": "SPECIFIC", "port": "53", "port_group_id": None}
+
+    def test_switching_client_target_away_retires_client_macs(self) -> None:
+        stored = {"matching_target": "CLIENT", "client_macs": ["aa:bb:cc:dd:ee:ff"]}
+        assert retire_stale_selectors(stored, {"matching_target": "ANY"}) == {
+            "matching_target": "ANY",
+            "client_macs": None,
+        }
+
+    def test_update_that_does_not_touch_the_activator_is_unchanged(self) -> None:
+        stored = {"port_matching_type": "SPECIFIC", "port": "53"}
+        assert retire_stale_selectors(stored, {"port": "53,853"}) == {"port": "53,853"}
+        assert retire_stale_selectors(stored, {"zone_id": "z2"}) == {"zone_id": "z2"}
+
+    def test_update_that_sets_the_selector_itself_is_unchanged(self) -> None:
+        stored = {"port_matching_type": "SPECIFIC", "port": "53"}
+        update = {"port_matching_type": "ANY", "port": ""}
+        assert retire_stale_selectors(stored, update) == update
+
+    def test_non_dict_inputs_pass_through(self) -> None:
+        assert retire_stale_selectors(None, {"port_matching_type": "ANY"}) == {"port_matching_type": "ANY"}
+        assert retire_stale_selectors({"port": "53"}, "ANY") == "ANY"
+
+    def test_retired_update_validates_clean(self) -> None:
+        current = {
+            "destination": {"zone_id": "z", "matching_target": "ANY", "port_matching_type": "SPECIFIC", "port": "53"}
+        }
+        update = {"destination": retire_stale_selectors(current["destination"], {"port_matching_type": "ANY"})}
+        assert policy_update_targeting_error(current, update) is None
 
 
 class TestFirewallGroupFieldSets:

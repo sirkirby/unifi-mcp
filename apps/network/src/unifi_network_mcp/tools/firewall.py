@@ -20,6 +20,7 @@ from unifi_core.network.models.firewall import (
     normalize_policy_enums,
     normalize_policy_update,
     policy_update_targeting_error,
+    retire_stale_selectors,
     validate_policy_targeting,
 )
 from unifi_core.network.read_views import LEGACY_ENGINE_HINT, shape_firewall_policy_list
@@ -497,6 +498,9 @@ async def update_firewall_policy(
         # incomplete on its own. Untouched endpoints are not re-validated, and an
         # error the stored endpoint already has (state this tool did not author)
         # is not held against an update that leaves it unchanged.
+        for side in ("source", "destination"):
+            if side in validated_data:
+                validated_data[side] = retire_stale_selectors(current.get(side), validated_data[side])
         targeting_error = policy_update_targeting_error(current, validated_data)
         if targeting_error:
             return {"success": False, "error": targeting_error}
