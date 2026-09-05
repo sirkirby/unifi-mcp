@@ -261,3 +261,12 @@ async def test_client_manager_include_offline_selects_all_client_path() -> None:
 
     assert result == [{"mac": "offline"}]
     manager.get_all_clients.assert_awaited_once_with()
+
+
+def test_shape_device_list_last_seen_is_utc_aware() -> None:
+    """last_seen must be a timezone-aware UTC ISO string, not the server's local time."""
+    device = {"_id": "d1", "mac": "aa", "name": "AP", "type": "uap", "state": 1, "last_seen": 1_700_000_000}
+
+    shaped = shape_device_list([device], site="default")
+
+    assert shaped["devices"][0]["last_seen"] == "2023-11-14T22:13:20+00:00"
