@@ -214,7 +214,7 @@ Compact mode is the recommended default when building summaries or feeding event
 - [Permissions](docs/permissions.md) -- Permission system, category defaults, how to enable mutations
 - [Tool Catalog](docs/tools.md) -- All 62 tools organized by category
 - [Event Streaming](docs/events.md) -- Real-time event architecture, MCP resources, polling
-- [Troubleshooting](docs/troubleshooting.md) -- Connection issues, SSL, missing tools
+- [Troubleshooting and support bundles](docs/troubleshooting.md) -- Reviewed support evidence, connection issues, SSL, missing tools
 
 ## Development
 
