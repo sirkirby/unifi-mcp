@@ -13,6 +13,7 @@ from pydantic import Field
 from unifi_core.confirmation import preview_response
 from unifi_core.network.models.events import event_log_from_controller
 from unifi_core.network.models.system import alarm_from_controller, event_types_from_controller
+from unifi_mcp_shared.argument_aliases import mac_aliases
 from unifi_network_mcp.runtime import server
 
 logger = logging.getLogger(__name__)
@@ -121,6 +122,7 @@ async def list_alarms(
 
 @server.tool(
     name="unifi_recent_events",
+    argument_aliases=mac_aliases("mac"),
     description=(
         "Get recent events from the in-memory websocket buffer. This is fast "
         "(no API call) and returns events received via the real-time websocket "

@@ -14,7 +14,12 @@ from unifi_mcp_shared.output_schema import (
     UniFiToolResponse,
     get_unifi_tool_response_output_schema,
 )
-from unifi_mcp_shared.permissioned_tool import _infer_input_schema, create_permissioned_tool
+from unifi_mcp_shared.permissioned_tool import (
+    PERMISSIONED_TOOL_KWARGS,
+    _infer_input_schema,
+    create_import_safe_tool_decorator,
+    create_permissioned_tool,
+)
 
 
 @pytest.fixture
@@ -34,6 +39,7 @@ def mock_deps():
         annotations=None,
         permission_category=None,
         permission_action=None,
+        argument_aliases=None,
     ):
         registered_tools[name] = {
             "title": title,
@@ -44,6 +50,7 @@ def mock_deps():
             "annotations": annotations,
             "permission_category": permission_category,
             "permission_action": permission_action,
+            "argument_aliases": argument_aliases,
         }
 
     def fake_tool_decorator(*args, **kwargs):
@@ -530,3 +537,134 @@ class TestInferInputSchema:
 
         assert schema["properties"]["callback"] == {"type": "string"}
         assert schema["properties"]["limit"] == {"type": "integer", "minimum": 1}
+
+
+class TestArgumentAliases:
+    """argument_aliases= on the decorator is recorded, validated and described, never seen by FastMCP."""
+
+    def _register(self, mock_deps, **aliases):
+        pt = _create_pt(mock_deps)
+
+        @pt(name="alias_tool", description="Look up a client.", argument_aliases=aliases)
+        async def alias_tool(mac_address: str):
+            return {"success": True}
+
+        return alias_tool
+
+    def test_aliases_recorded_in_registry(self, mock_deps):
+        self._register(mock_deps, device_mac="mac_address", client_mac="mac_address")
+        assert mock_deps["registered_tools"]["alias_tool"]["argument_aliases"] == {
+            "device_mac": "mac_address",
+            "client_mac": "mac_address",
+        }
+
+    def test_aliases_not_passed_to_fastmcp(self, mock_deps):
+        self._register(mock_deps, device_mac="mac_address")
+        assert "argument_aliases" not in mock_deps["mcp_tool_kwargs"]["alias_tool"]
+
+    def test_note_appended_to_registry_and_fastmcp_description(self, mock_deps):
+        self._register(mock_deps, device_mac="mac_address", client_mac="mac_address", mac="mac_address")
+        expected = (
+            "Look up a client. Argument aliases: device_mac, client_mac, mac are accepted for mac_address "
+            "(deprecated spellings; prefer mac_address)."
+        )
+        assert mock_deps["registered_tools"]["alias_tool"]["description"] == expected
+        assert mock_deps["mcp_tool_kwargs"]["alias_tool"]["description"] == expected
+
+    def test_note_closes_an_unterminated_description_first(self, mock_deps):
+        pt = _create_pt(mock_deps)
+
+        @pt(name="open_tool", description="Block a client by MAC address", argument_aliases={"mac": "mac_address"})
+        async def open_tool(mac_address: str):
+            return {"success": True}
+
+        assert mock_deps["registered_tools"]["open_tool"]["description"].startswith(
+            "Block a client by MAC address. Argument aliases: mac is accepted for mac_address"
+        )
+
+    def test_note_falls_back_to_the_docstring_when_no_description(self, mock_deps):
+        pt = _create_pt(mock_deps)
+
+        @pt(name="doc_tool", argument_aliases={"mac": "mac_address"})
+        async def doc_tool(mac_address: str):
+            """Look up by MAC."""
+            return {"success": True}
+
+        expected = (
+            "Look up by MAC. Argument aliases: mac is accepted for mac_address "
+            "(deprecated spelling; prefer mac_address)."
+        )
+        assert mock_deps["registered_tools"]["doc_tool"]["description"] == expected
+        assert mock_deps["mcp_tool_kwargs"]["doc_tool"]["description"] == expected
+
+    def test_aliases_validated_against_an_explicit_input_schema(self, mock_deps):
+        pt = _create_pt(mock_deps)
+        schema = {"type": "object", "properties": {"ap_mac": {"type": "string"}}}
+
+        @pt(name="explicit_tool", description="Scan.", input_schema=schema, argument_aliases={"mac": "ap_mac"})
+        async def explicit_tool(**kwargs):
+            return {"success": True}
+
+        assert mock_deps["registered_tools"]["explicit_tool"]["argument_aliases"] == {"mac": "ap_mac"}
+        with pytest.raises(ValueError, match="not a declared parameter"):
+
+            @pt(name="explicit_bad", description="Scan.", input_schema=schema, argument_aliases={"mac": "mac_address"})
+            async def explicit_bad(**kwargs):
+                return {"success": True}
+
+    def test_no_aliases_leaves_description_and_registry_untouched(self, mock_deps):
+        pt = _create_pt(mock_deps)
+
+        @pt(name="plain_tool", description="Plain.")
+        async def plain_tool(mac_address: str):
+            return {"success": True}
+
+        assert mock_deps["registered_tools"]["plain_tool"]["description"] == "Plain."
+        assert mock_deps["registered_tools"]["plain_tool"]["argument_aliases"] is None
+
+    def test_alias_colliding_with_parameter_raises(self, mock_deps):
+        with pytest.raises(ValueError, match="collides"):
+            self._register(mock_deps, mac_address="mac_address")
+
+    def test_canonical_missing_from_schema_raises(self, mock_deps):
+        with pytest.raises(ValueError, match="device_mac"):
+            self._register(mock_deps, mac="device_mac")
+
+    def test_sensitive_alias_for_non_sensitive_canonical_raises(self, mock_deps):
+        with pytest.raises(ValueError, match="sensitive"):
+            self._register(mock_deps, x_password="mac_address")
+
+    def test_aliases_with_permissions_path(self, mock_deps):
+        pt = _create_pt(mock_deps)
+
+        @pt(
+            name="gated_alias_tool",
+            description="Reboot.",
+            permission_category="devices",
+            permission_action="update",
+            argument_aliases={"device_mac": "mac_address"},
+        )
+        async def gated_alias_tool(mac_address: str, confirm: bool = False):
+            return {"success": True}
+
+        assert mock_deps["registered_tools"]["gated_alias_tool"]["argument_aliases"] == {"device_mac": "mac_address"}
+        assert "argument_aliases" not in mock_deps["mcp_tool_kwargs"]["gated_alias_tool"]
+
+
+class TestImportSafeToolDecorator:
+    """The import-time wrapper strips exactly the kwargs permissioned_tool consumes."""
+
+    def test_strips_every_permissioned_kwarg(self):
+        seen = {}
+
+        def original(*args, **kwargs):
+            seen.update(kwargs)
+            return lambda func: func
+
+        wrapper = create_import_safe_tool_decorator(original)
+        extra = {key: object() for key in PERMISSIONED_TOOL_KWARGS}
+        wrapper(name="t", description="d", **extra)
+        assert seen == {"name": "t", "description": "d"}
+
+    def test_argument_aliases_is_a_permissioned_kwarg(self):
+        assert "argument_aliases" in PERMISSIONED_TOOL_KWARGS

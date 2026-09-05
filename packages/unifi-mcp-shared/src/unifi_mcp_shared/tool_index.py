@@ -41,6 +41,7 @@ class ToolMetadata:
         output_schema: Optional JSON Schema describing the tool's output structure
         auth_method: Auth strategy hint -- "local_only" (default), "api_key_only", or "either"
         annotations: MCP ToolAnnotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
+        argument_aliases: Deprecated parameter spellings accepted at dispatch, ``{alias: canonical}``
     """
 
     name: str
@@ -52,6 +53,7 @@ class ToolMetadata:
     annotations: Dict[str, Any] | None = None  # MCP ToolAnnotations (readOnlyHint, destructiveHint, etc.)
     permission_category: str | None = None  # Permission category (e.g., "networks", "devices")
     permission_action: str | None = None  # Permission action (e.g., "create", "update", "delete")
+    argument_aliases: Dict[str, str] | None = None  # {alias: canonical}, rewritten by ArgumentAliasMixin
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary, excluding None values."""
@@ -176,6 +178,7 @@ def register_tool(
     annotations: Dict[str, Any] | None = None,
     permission_category: str | None = None,
     permission_action: str | None = None,
+    argument_aliases: Dict[str, str] | None = None,
 ) -> None:
     """Register a tool in the global registry.
 
@@ -189,6 +192,7 @@ def register_tool(
         annotations: MCP ToolAnnotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
         permission_category: Permission category (e.g., "networks", "devices")
         permission_action: Permission action (e.g., "create", "update", "delete")
+        argument_aliases: Deprecated parameter spellings accepted at dispatch, ``{alias: canonical}``
     """
     if input_schema is None:
         input_schema = {"type": "object", "properties": {}}
@@ -203,6 +207,7 @@ def register_tool(
         annotations=annotations,
         permission_category=permission_category,
         permission_action=permission_action,
+        argument_aliases=argument_aliases or None,
     )
 
     TOOL_REGISTRY[name] = metadata
@@ -312,21 +317,31 @@ def _load_manifest_cached(manifest_path: Path) -> Dict[str, Any] | None:
     return manifest
 
 
+def manifest_tool_entry(meta: ToolMetadata, *, annotations: Dict[str, Any] | None) -> Dict[str, Any]:
+    """Build one ``tools_manifest.json`` entry (also the eager tool-index shape) from registry metadata."""
+    tool_data: Dict[str, Any] = {
+        "name": meta.name,
+        "description": meta.description,
+        "schema": {"input": meta.input_schema},
+    }
+    if meta.title:
+        tool_data["title"] = meta.title
+    if meta.output_schema:
+        tool_data["schema"]["output"] = meta.output_schema
+    if annotations:
+        tool_data["annotations"] = annotations
+    if meta.permission_category:
+        tool_data["permission_category"] = meta.permission_category
+    if meta.permission_action:
+        tool_data["permission_action"] = meta.permission_action
+    if meta.argument_aliases:
+        tool_data["argument_aliases"] = dict(meta.argument_aliases)
+    return tool_data
+
+
 def _tools_from_registry() -> list:
     """Build tool list from the runtime TOOL_REGISTRY (fallback for non-lazy mode)."""
-    return [
-        {
-            "name": meta.name,
-            **({"title": meta.title} if meta.title is not None else {}),
-            "description": meta.description,
-            "schema": {
-                "input": meta.input_schema,
-                **({"output": meta.output_schema} if meta.output_schema else {}),
-            },
-            **({"annotations": meta.annotations} if meta.annotations is not None else {}),
-        }
-        for meta in TOOL_REGISTRY.values()
-    ]
+    return [manifest_tool_entry(meta, annotations=meta.annotations) for meta in TOOL_REGISTRY.values()]
 
 
 # ---------------------------------------------------------------------------

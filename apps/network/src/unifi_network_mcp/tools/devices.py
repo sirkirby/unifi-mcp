@@ -27,6 +27,7 @@ from unifi_core.network.models.devices import validate_radio_update
 from unifi_core.network.read_views import shape_device_details, shape_device_list, shape_rogue_ap_list
 
 # Import the global FastMCP server instance, config, and managers
+from unifi_mcp_shared.argument_aliases import mac_aliases
 from unifi_network_mcp.runtime import device_manager, server
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,7 @@ async def list_devices(
 
 @server.tool(
     name="unifi_get_device_details",
+    argument_aliases=mac_aliases("mac_address"),
     description=(
         "Returns device data for one device by MAC address. By default (summary=false) returns the "
         "full raw device object — all controller-reported fields including radio tables, port tables, "
@@ -162,6 +164,7 @@ async def get_device_details(
 
 @server.tool(
     name="unifi_reboot_device",
+    argument_aliases=mac_aliases("mac_address"),
     description="Reboot a specific device by MAC address",
     permission_category="devices",
     permission_action="update",
@@ -211,6 +214,7 @@ async def reboot_device(
 
 @server.tool(
     name="unifi_rename_device",
+    argument_aliases=mac_aliases("mac_address"),
     description="Rename a device in the Unifi Network controller by MAC address",
     permission_category="devices",
     permission_action="update",
@@ -259,6 +263,7 @@ async def rename_device(
 
 @server.tool(
     name="unifi_adopt_device",
+    argument_aliases=mac_aliases("mac_address"),
     description="Adopt a pending device into the Unifi Network by MAC address",
     permission_category="devices",
     permission_action="create",
@@ -312,6 +317,7 @@ async def adopt_device(
 
 @server.tool(
     name="unifi_upgrade_device",
+    argument_aliases=mac_aliases("mac_address"),
     description="Initiate a firmware upgrade for a device by MAC address (uses cached firmware by default)",
     permission_category="devices",
     permission_action="update",
@@ -372,6 +378,7 @@ RADIO_BAND_LABELS = {"ng": "2.4GHz", "na": "5GHz", "6e": "6GHz", "wifi6e": "6GHz
 
 @server.tool(
     name="unifi_get_device_radio",
+    argument_aliases=mac_aliases("mac_address"),
     description=(
         "Get radio configuration and live statistics for a device with radios (AP, or UDM/gateway with built-in WiFi). "
         "Returns per-band config (channel, tx_power, channel width, min_rssi) "
@@ -409,6 +416,7 @@ async def get_device_radio(
 
 @server.tool(
     name="unifi_update_device_radio",
+    argument_aliases=mac_aliases("mac_address"),
     description=(
         "Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). "
         "Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), "
@@ -569,6 +577,7 @@ async def update_device_radio(
 
 @server.tool(
     name="unifi_locate_device",
+    argument_aliases=mac_aliases("device_mac"),
     description="Toggle device locate mode (LED blinking) to physically identify a device. "
     "Works on any UniFi device (switches, APs, gateways). Requires confirmation.",
     permission_category="devices",
@@ -611,6 +620,7 @@ async def locate_device(
 
 @server.tool(
     name="unifi_force_provision_device",
+    argument_aliases=mac_aliases("device_mac"),
     description="Force re-provision a device, pushing the current configuration from the "
     "controller to the device. Works on any UniFi device (switches, APs, gateways). "
     "Useful after manual changes or to resolve config drift. Requires confirmation.",
@@ -653,6 +663,7 @@ async def force_provision_device(
 
 @server.tool(
     name="unifi_trigger_speedtest",
+    argument_aliases=mac_aliases("gateway_mac"),
     description="Trigger a speedtest on the gateway device. Returns immediately; "
     "use unifi_get_speedtest_status to poll for results.",
     permission_category="devices",
@@ -689,6 +700,7 @@ async def trigger_speedtest(
 
 @server.tool(
     name="unifi_get_speedtest_status",
+    argument_aliases=mac_aliases("gateway_mac"),
     description="Check the status of a running speedtest on the gateway.",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -768,6 +780,7 @@ async def list_rogue_aps(
 
 @server.tool(
     name="unifi_trigger_rf_scan",
+    argument_aliases=mac_aliases("ap_mac"),
     description=(
         "Trigger an RF spectrum scan on an access point. Requires confirmation. "
         "The scan takes 5-10 minutes to complete. Some APs have a dedicated scanning radio "
@@ -823,6 +836,7 @@ async def trigger_rf_scan(
 
 @server.tool(
     name="unifi_get_rf_scan_results",
+    argument_aliases=mac_aliases("ap_mac"),
     description=(
         "Get RF spectrum scan results for an access point. "
         "Returns per-channel interference levels (dBm), utilization (%), and BSS counts for each radio band. "
@@ -882,6 +896,7 @@ async def list_available_channels() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_set_device_led",
+    argument_aliases=mac_aliases("device_mac"),
     description=(
         "Set the LED override state on a specific device. "
         "Use 'on' to force LEDs on, 'off' to force them off, or 'default' to use site-wide setting. "
@@ -934,6 +949,7 @@ async def set_device_led(
 
 @server.tool(
     name="unifi_toggle_device",
+    argument_aliases=mac_aliases("device_mac"),
     description=(
         "Enable or disable a device without unadopting it. "
         "A disabled device remains adopted but stops passing traffic. "
@@ -1021,6 +1037,7 @@ async def set_site_leds(
 
 @server.tool(
     name="unifi_get_pdu_outlets",
+    argument_aliases=mac_aliases("mac_address"),
     description=(
         "Return per-outlet state for a UniFi Smart Power PDU (UP6 / USP-Strip). "
         "Combines the device's sensed outlet_table (live relay_state, cycle_enabled, "
@@ -1060,6 +1077,7 @@ async def get_pdu_outlets(
 
 @server.tool(
     name="unifi_set_outlet_state",
+    argument_aliases=mac_aliases("mac_address"),
     description=(
         "Set per-outlet relay state (on/off) and optionally cycle_enabled on a UniFi "
         "Smart Power PDU (UP6 / USP-Strip). The controller stores per-outlet desired "

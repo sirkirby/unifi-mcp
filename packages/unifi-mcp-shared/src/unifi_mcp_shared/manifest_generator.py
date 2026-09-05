@@ -21,6 +21,7 @@ from typing import Any
 
 from unifi_mcp_shared.manifest_helpers import get_tool_annotations
 from unifi_mcp_shared.meta_tools import register_load_tools, register_meta_tools
+from unifi_mcp_shared.tool_index import manifest_tool_entry
 from unifi_mcp_shared.tool_loader import auto_load_tools
 
 
@@ -146,27 +147,10 @@ def _generate_manifest(
     else:
         logger.warning("   No tool annotations found in FastMCP registry")
 
-    tools: list[dict[str, Any]] = []
-    for tool_name in sorted(tool_registry.keys()):
-        meta = tool_registry[tool_name]
-
-        tool_data: dict[str, Any] = {
-            "name": meta.name,
-            "description": meta.description,
-            "schema": {"input": meta.input_schema},
-        }
-        if meta.title:
-            tool_data["title"] = meta.title
-        if meta.output_schema:
-            tool_data["schema"]["output"] = meta.output_schema
-        if tool_name in annotations_map:
-            tool_data["annotations"] = annotations_map[tool_name]
-        if meta.permission_category:
-            tool_data["permission_category"] = meta.permission_category
-        if meta.permission_action:
-            tool_data["permission_action"] = meta.permission_action
-
-        tools.append(tool_data)
+    tools = [
+        manifest_tool_entry(tool_registry[tool_name], annotations=annotations_map.get(tool_name))
+        for tool_name in sorted(tool_registry.keys())
+    ]
 
     module_map = _build_module_map(
         project_root=project_root,

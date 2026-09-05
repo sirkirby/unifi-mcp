@@ -199,7 +199,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Adopt a pending device into the Unifi Network by MAC address",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Adopt a pending device into the Unifi Network by MAC address. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_adopt_device",
       "permission_action": "create",
       "permission_category": "devices",
@@ -492,7 +497,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Authorize a guest client to access the guest network by MAC address",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Authorize a guest client to access the guest network by MAC address. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_authorize_guest",
       "permission_action": "update",
       "permission_category": "clients",
@@ -734,7 +744,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Block a client/device from the network by MAC address",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Block a client/device from the network by MAC address. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_block_client",
       "permission_action": "update",
       "permission_category": "clients",
@@ -834,7 +849,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Configure link aggregation (LACP/LAG) on a switch. Bonds consecutive ports for increased bandwidth. Most switches support up to 8 aggregate sessions. Ports must be sequential and same speed. The master port override must include: op_mode='aggregate', aggregate_members=[list of port indices], and lag_idx=<group number starting at 1>. Member ports (all except the master) must be REMOVED from the overrides array \u2014 the controller auto-manages them. Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Configure link aggregation (LACP/LAG) on a switch. Bonds consecutive ports for increased bandwidth. Most switches support up to 8 aggregate sessions. Ports must be sequential and same speed. The master port override must include: op_mode='aggregate', aggregate_members=[list of port indices], and lag_idx=<group number starting at 1>. Member ports (all except the master) must be REMOVED from the overrides array \u2014 the controller auto-manages them. Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_configure_port_aggregation",
       "permission_action": "update",
       "permission_category": "switch",
@@ -939,7 +959,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Configure port mirroring on a switch. Mirrors traffic from one port to a destination port for packet capture/analysis. Most switches support only 1 mirror session. Fetch current overrides with unifi_get_switch_ports, set op_mode='mirror' and mirror_port_idx on the source port, then send all overrides. Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Configure port mirroring on a switch. Mirrors traffic from one port to a destination port for packet capture/analysis. Most switches support only 1 mirror session. Fetch current overrides with unifi_get_switch_ports, set op_mode='mirror' and mirror_port_idx on the source port, then send all overrides. Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_configure_port_mirror",
       "permission_action": "update",
       "permission_category": "switch",
@@ -4873,7 +4898,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Force re-provision a device, pushing the current configuration from the controller to the device. Works on any UniFi device (switches, APs, gateways). Useful after manual changes or to resolve config drift. Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Force re-provision a device, pushing the current configuration from the controller to the device. Works on any UniFi device (switches, APs, gateways). Useful after manual changes or to resolve config drift. Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_force_provision_device",
       "permission_action": "update",
       "permission_category": "devices",
@@ -4973,7 +5003,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Force a client to reconnect to the network (kick) by MAC address",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Force a client to reconnect to the network (kick) by MAC address. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_force_reconnect_client",
       "permission_action": "update",
       "permission_category": "clients",
@@ -5073,7 +5108,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Remove/forget a client from the controller's known client history by MAC address. This permanently deletes the client record including its name, notes, fixed IP settings, and historical stats. The client will reappear as a new unknown device if it reconnects.",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Remove/forget a client from the controller's known client history by MAC address. This permanently deletes the client record including its name, notes, fixed IP settings, and historical stats. The client will reappear as a new unknown device if it reconnects. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_forget_client",
       "permission_action": "update",
       "permission_category": "clients",
@@ -5621,7 +5661,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns client data for one client by MAC address. By default (summary=false) returns the full raw client object \u2014 all controller-reported fields, with the typed/normalized shape (ISO timestamps, derived status, null-safe name/hostname) layered on top of the merged live /stat/sta + /rest/user data. Set summary=true to trim to selected sections via include (basic, network, wireless, traffic, fingerprint, all). For a summary of all clients, use unifi_list_clients.",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Returns client data for one client by MAC address. By default (summary=false) returns the full raw client object \u2014 all controller-reported fields, with the typed/normalized shape (ISO timestamps, derived status, null-safe name/hostname) layered on top of the merged live /stat/sta + /rest/user data. Set summary=true to trim to selected sections via include (basic, network, wireless, traffic, fingerprint, all). For a summary of all clients, use unifi_list_clients. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_get_client_details",
       "schema": {
         "input": {
@@ -5721,7 +5766,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get per-client DPI traffic data by application or category. Note: requires Traffic Identification to be enabled on the controller, which is separate from Device Identification.",
+      "argument_aliases": {
+        "device_mac": "client_mac",
+        "mac": "client_mac",
+        "mac_address": "client_mac"
+      },
+      "description": "Get per-client DPI traffic data by application or category. Note: requires Traffic Identification to be enabled on the controller, which is separate from Device Identification. Argument aliases: mac_address, device_mac, mac are accepted for client_mac (deprecated spellings; prefer client_mac).",
       "name": "unifi_get_client_dpi_traffic",
       "schema": {
         "input": {
@@ -5909,7 +5959,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get client session history. Note: this endpoint tracks hotspot/captive portal authorization sessions, not general WiFi connect/disconnect events. Returns empty without a guest portal configured. For WiFi roaming events, use the event log instead.",
+      "argument_aliases": {
+        "device_mac": "client_mac",
+        "mac": "client_mac",
+        "mac_address": "client_mac"
+      },
+      "description": "Get client session history. Note: this endpoint tracks hotspot/captive portal authorization sessions, not general WiFi connect/disconnect events. Returns empty without a guest portal configured. For WiFi roaming events, use the event log instead. Argument aliases: mac_address, device_mac, mac are accepted for client_mac (deprecated spellings; prefer client_mac).",
       "name": "unifi_get_client_sessions",
       "schema": {
         "input": {
@@ -6106,7 +6161,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get detailed WiFi statistics for a single wireless client including signal, noise, satisfaction, tx/rx rates, retries, roam count, channel, radio, ESSID, and more.",
+      "argument_aliases": {
+        "device_mac": "client_mac",
+        "mac": "client_mac",
+        "mac_address": "client_mac"
+      },
+      "description": "Get detailed WiFi statistics for a single wireless client including signal, noise, satisfaction, tx/rx rates, retries, roam count, channel, radio, ESSID, and more. Argument aliases: mac_address, device_mac, mac are accepted for client_mac (deprecated spellings; prefer client_mac).",
       "name": "unifi_get_client_wifi_details",
       "schema": {
         "input": {
@@ -6385,7 +6445,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns device data for one device by MAC address. By default (summary=false) returns the full raw device object \u2014 all controller-reported fields including radio tables, port tables, system stats, WAN info, firmware details. Set summary=true to trim to selected sections via include (basic, ports, radios, stats, uplink, lldp, all).\n\nPort fields (summary mode):\n- last_seen_mac: last MAC that sent traffic on port (may be wireless client traffic, not reliable)\n- lldp_neighbor: actual connected infrastructure device (from LLDP, reliable for switches/APs)\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,ports' (switches); summary=true,include='basic,radios' (APs).",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Returns device data for one device by MAC address. By default (summary=false) returns the full raw device object \u2014 all controller-reported fields including radio tables, port tables, system stats, WAN info, firmware details. Set summary=true to trim to selected sections via include (basic, ports, radios, stats, uplink, lldp, all).\n\nPort fields (summary mode):\n- last_seen_mac: last MAC that sent traffic on port (may be wireless client traffic, not reliable)\n- lldp_neighbor: actual connected infrastructure device (from LLDP, reliable for switches/APs)\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,ports' (switches); summary=true,include='basic,radios' (APs). Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_get_device_details",
       "schema": {
         "input": {
@@ -6485,7 +6550,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get radio configuration and live statistics for a device with radios (AP, or UDM/gateway with built-in WiFi). Returns per-band config (channel, tx_power, channel width, min_rssi) and live stats (actual tx_power, channel utilization, client count, retries).",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Get radio configuration and live statistics for a device with radios (AP, or UDM/gateway with built-in WiFi). Returns per-band config (channel, tx_power, channel width, min_rssi) and live stats (actual tx_power, channel utilization, client count, retries). Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_get_device_radio",
       "schema": {
         "input": {
@@ -7580,7 +7650,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get LLDP neighbor discovery table for a switch. Shows what devices are connected to each port by their LLDP-advertised chassis ID and descriptions. Use unifi_list_devices to find switch MAC addresses.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Get LLDP neighbor discovery table for a switch. Shows what devices are connected to each port by their LLDP-advertised chassis ID and descriptions. Use unifi_list_devices to find switch MAC addresses. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_get_lldp_neighbors",
       "schema": {
         "input": {
@@ -8041,7 +8116,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Return per-outlet state for a UniFi Smart Power PDU (UP6 / USP-Strip). Combines the device's sensed outlet_table (live relay_state, cycle_enabled, has_relay, has_metering) with the controller's desired outlet_overrides so callers see both reported and intended state per outlet. Returns an error if the device is not a PDU.",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Return per-outlet state for a UniFi Smart Power PDU (UP6 / USP-Strip). Combines the device's sensed outlet_table (live relay_state, cycle_enabled, has_relay, has_metering) with the controller's desired outlet_overrides so callers see both reported and intended state per outlet. Returns an error if the device is not a PDU. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_get_pdu_outlets",
       "schema": {
         "input": {
@@ -8317,7 +8397,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get live port statistics for a switch. Returns per-port data including link speed, duplex, PoE draw (voltage/current/power), error counters, MAC table count, bytes per second, and enabled state. Use unifi_list_devices to find switch MAC addresses.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Get live port statistics for a switch. Returns per-port data including link speed, duplex, PoE draw (voltage/current/power), error counters, MAC table count, bytes per second, and enabled state. Use unifi_list_devices to find switch MAC addresses. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_get_port_stats",
       "schema": {
         "input": {
@@ -8501,7 +8586,13 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get RF spectrum scan results for an access point. Returns per-channel interference levels (dBm), utilization (%), and BSS counts for each radio band. Trigger a scan first with unifi_trigger_rf_scan if no results are available. Scans take 5-10 minutes \u2014 if spectrum_scanning is true, the scan is still in progress.",
+      "argument_aliases": {
+        "client_mac": "ap_mac",
+        "device_mac": "ap_mac",
+        "mac": "ap_mac",
+        "mac_address": "ap_mac"
+      },
+      "description": "Get RF spectrum scan results for an access point. Returns per-channel interference levels (dBm), utilization (%), and BSS counts for each radio band. Trigger a scan first with unifi_trigger_rf_scan if no results are available. Scans take 5-10 minutes \u2014 if spectrum_scanning is true, the scan is still in progress. Argument aliases: mac_address, device_mac, client_mac, mac are accepted for ap_mac (deprecated spellings; prefer ap_mac).",
       "name": "unifi_get_rf_scan_results",
       "schema": {
         "input": {
@@ -9031,7 +9122,13 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Check the status of a running speedtest on the gateway.",
+      "argument_aliases": {
+        "client_mac": "gateway_mac",
+        "device_mac": "gateway_mac",
+        "mac": "gateway_mac",
+        "mac_address": "gateway_mac"
+      },
+      "description": "Check the status of a running speedtest on the gateway. Argument aliases: mac_address, device_mac, client_mac, mac are accepted for gateway_mac (deprecated spellings; prefer gateway_mac).",
       "name": "unifi_get_speedtest_status",
       "schema": {
         "input": {
@@ -9174,7 +9271,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get switch hardware capabilities including max ACL rules, max VLANs, max aggregation sessions, max mirror sessions, STP config, and jumbo frame status. Use unifi_list_devices to find switch MAC addresses.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Get switch hardware capabilities including max ACL rules, max VLANs, max aggregation sessions, max mirror sessions, STP config, and jumbo frame status. Use unifi_list_devices to find switch MAC addresses. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_get_switch_capabilities",
       "schema": {
         "input": {
@@ -9266,7 +9368,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get port assignments for a specific switch. Shows which port profile is assigned to each port, port names, and PoE mode. Use unifi_list_devices to find switch MAC addresses.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Get port assignments for a specific switch. Shows which port profile is assigned to each port, port names, and PoE mode. Use unifi_list_devices to find switch MAC addresses. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_get_switch_ports",
       "schema": {
         "input": {
@@ -13344,7 +13451,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Toggle device locate mode (LED blinking) to physically identify a device. Works on any UniFi device (switches, APs, gateways). Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Toggle device locate mode (LED blinking) to physically identify a device. Works on any UniFi device (switches, APs, gateways). Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_locate_device",
       "permission_action": "update",
       "permission_category": "devices",
@@ -13541,7 +13653,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Power cycle PoE on a specific switch port. This briefly cuts power to the connected PoE device, causing it to reboot. Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Power cycle PoE on a specific switch port. This briefly cuts power to the connected PoE device, causing it to reboot. Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_power_cycle_port",
       "permission_action": "update",
       "permission_category": "switch",
@@ -13646,7 +13763,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Reboot a specific device by MAC address",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Reboot a specific device by MAC address. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_reboot_device",
       "permission_action": "update",
       "permission_category": "devices",
@@ -13744,7 +13866,12 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by exact event_type key, client/device mac, and limit. Use this for real-time monitoring; use unifi_list_events for historical queries.",
+      "argument_aliases": {
+        "client_mac": "mac",
+        "device_mac": "mac",
+        "mac_address": "mac"
+      },
+      "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by exact event_type key, client/device mac, and limit. Use this for real-time monitoring; use unifi_list_events for historical queries. Argument aliases: mac_address, device_mac, client_mac are accepted for mac (deprecated spellings; prefer mac).",
       "name": "unifi_recent_events",
       "schema": {
         "input": {
@@ -13843,7 +13970,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Rename a client/device in the Unifi Network controller by MAC address",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Rename a client/device in the Unifi Network controller by MAC address. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_rename_client",
       "permission_action": "update",
       "permission_category": "clients",
@@ -13948,7 +14080,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Rename a device in the Unifi Network controller by MAC address",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Rename a device in the Unifi Network controller by MAC address. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_rename_device",
       "permission_action": "update",
       "permission_category": "devices",
@@ -14263,7 +14400,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Set fixed IP address and/or local DNS record for a client device.\n\nAllows configuring:\n- Fixed IP: Assign a static IP address to a client (DHCP reservation)\n- Local DNS: Create a local DNS hostname for the client (UniFi Network 7.2+)\n\nEither setting can be enabled/disabled independently.",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Set fixed IP address and/or local DNS record for a client device.\n\nAllows configuring:\n- Fixed IP: Assign a static IP address to a client (DHCP reservation)\n- Local DNS: Create a local DNS hostname for the client (UniFi Network 7.2+)\n\nEither setting can be enabled/disabled independently. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_set_client_ip_settings",
       "permission_action": "update",
       "permission_category": "clients",
@@ -14379,7 +14521,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Set the LED override state on a specific device. Use 'on' to force LEDs on, 'off' to force them off, or 'default' to use site-wide setting. Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Set the LED override state on a specific device. Use 'on' to force LEDs on, 'off' to force them off, or 'default' to use site-wide setting. Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_set_device_led",
       "permission_action": "update",
       "permission_category": "devices",
@@ -14484,7 +14631,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Enable or disable jumbo frames on a switch. Note: the UniFi controller requires jumbo frames to be enabled via the UI at least once before the API can toggle it. If you get JumboFrameChangeNotAllowed, enable it in the UI first. Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Enable or disable jumbo frames on a switch. Note: the UniFi controller requires jumbo frames to be enabled via the UI at least once before the API can toggle it. If you get JumboFrameChangeNotAllowed, enable it in the UI first. Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_set_jumbo_frames",
       "permission_action": "update",
       "permission_category": "switch",
@@ -14589,7 +14741,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Set per-outlet relay state (on/off) and optionally cycle_enabled on a UniFi Smart Power PDU (UP6 / USP-Strip). The controller stores per-outlet desired state in the outlet_overrides array on the device document; this tool reads the existing array, replaces only the entry whose index matches outlet_index, and PUTs the full array back -- preserving all sibling outlets' overrides (name, relay_state, cycle_enabled) verbatim. If no override exists for the target outlet yet, one is created from the outlet's current sensed state. Use unifi_get_pdu_outlets first to inspect current state.",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Set per-outlet relay state (on/off) and optionally cycle_enabled on a UniFi Smart Power PDU (UP6 / USP-Strip). The controller stores per-outlet desired state in the outlet_overrides array on the device document; this tool reads the existing array, replaces only the entry whose index matches outlet_index, and PUTs the full array back -- preserving all sibling outlets' overrides (name, relay_state, cycle_enabled) verbatim. If no override exists for the target outlet yet, one is created from the outlet's current sensed state. Use unifi_get_pdu_outlets first to inspect current state. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_set_outlet_state",
       "permission_action": "update",
       "permission_category": "devices",
@@ -14803,7 +14960,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Assign a port profile to a specific switch port. IMPORTANT: This sends ALL port overrides as a full replacement. Fetch current overrides with unifi_get_switch_ports first, modify the target port, and send the complete array. Missing ports revert to defaults. Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Assign a port profile to a specific switch port. IMPORTANT: This sends ALL port overrides as a full replacement. Fetch current overrides with unifi_get_switch_ports first, modify the target port, and send the complete array. Missing ports revert to defaults. Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_set_switch_port_profile",
       "permission_action": "update",
       "permission_category": "switch",
@@ -14992,7 +15154,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Enable or disable a device without unadopting it. A disabled device remains adopted but stops passing traffic. Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Enable or disable a device without unadopting it. A disabled device remains adopted but stops passing traffic. Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_toggle_device",
       "permission_action": "update",
       "permission_category": "devices",
@@ -15752,7 +15919,13 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Trigger an RF spectrum scan on an access point. Requires confirmation. The scan takes 5-10 minutes to complete. Some APs have a dedicated scanning radio and scan without going offline; others briefly go off-channel which may cause momentary client disconnections. Poll unifi_get_rf_scan_results periodically \u2014 results appear only after the scan finishes. Returns per-channel interference levels and utilization across all bands.",
+      "argument_aliases": {
+        "client_mac": "ap_mac",
+        "device_mac": "ap_mac",
+        "mac": "ap_mac",
+        "mac_address": "ap_mac"
+      },
+      "description": "Trigger an RF spectrum scan on an access point. Requires confirmation. The scan takes 5-10 minutes to complete. Some APs have a dedicated scanning radio and scan without going offline; others briefly go off-channel which may cause momentary client disconnections. Poll unifi_get_rf_scan_results periodically \u2014 results appear only after the scan finishes. Returns per-channel interference levels and utilization across all bands. Argument aliases: mac_address, device_mac, client_mac, mac are accepted for ap_mac (deprecated spellings; prefer ap_mac).",
       "name": "unifi_trigger_rf_scan",
       "permission_action": "update",
       "permission_category": "devices",
@@ -15852,7 +16025,13 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Trigger a speedtest on the gateway device. Returns immediately; use unifi_get_speedtest_status to poll for results.",
+      "argument_aliases": {
+        "client_mac": "gateway_mac",
+        "device_mac": "gateway_mac",
+        "mac": "gateway_mac",
+        "mac_address": "gateway_mac"
+      },
+      "description": "Trigger a speedtest on the gateway device. Returns immediately; use unifi_get_speedtest_status to poll for results. Argument aliases: mac_address, device_mac, client_mac, mac are accepted for gateway_mac (deprecated spellings; prefer gateway_mac).",
       "name": "unifi_trigger_speedtest",
       "permission_action": "update",
       "permission_category": "devices",
@@ -15952,7 +16131,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Revoke authorization for a guest client by MAC address",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Revoke authorization for a guest client by MAC address. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_unauthorize_guest",
       "permission_action": "update",
       "permission_category": "clients",
@@ -16052,7 +16236,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Unblock a previously blocked client/device by MAC address",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Unblock a previously blocked client/device by MAC address. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_unblock_client",
       "permission_action": "update",
       "permission_category": "clients",
@@ -16680,7 +16869,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), min_rssi_enabled, min_rssi, assisted_roaming_enabled (802.11k/v), antenna_gain (dBi), vwire_enabled, sens_level_enabled, sens_level. Use unifi_get_device_radio first to see current settings.",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), min_rssi_enabled, min_rssi, assisted_roaming_enabled (802.11k/v), antenna_gain (dBi), vwire_enabled, sens_level_enabled, sens_level. Use unifi_get_device_radio first to see current settings. Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_update_device_radio",
       "permission_action": "update",
       "permission_category": "devices",
@@ -18203,7 +18397,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update STP (Spanning Tree Protocol) configuration for a switch. stp_priority valid values: 4096, 8192, 12288, ..., 61440 (default: 32768). stp_version: 'stp' or 'rstp' (default). Requires confirmation.",
+      "argument_aliases": {
+        "client_mac": "device_mac",
+        "mac": "device_mac",
+        "mac_address": "device_mac"
+      },
+      "description": "Update STP (Spanning Tree Protocol) configuration for a switch. stp_priority valid values: 4096, 8192, 12288, ..., 61440 (default: 32768). stp_version: 'stp' or 'rstp' (default). Requires confirmation. Argument aliases: mac_address, client_mac, mac are accepted for device_mac (deprecated spellings; prefer device_mac).",
       "name": "unifi_update_switch_stp",
       "permission_action": "update",
       "permission_category": "switch",
@@ -18870,7 +19069,12 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Initiate a firmware upgrade for a device by MAC address (uses cached firmware by default)",
+      "argument_aliases": {
+        "client_mac": "mac_address",
+        "device_mac": "mac_address",
+        "mac": "mac_address"
+      },
+      "description": "Initiate a firmware upgrade for a device by MAC address (uses cached firmware by default). Argument aliases: device_mac, client_mac, mac are accepted for mac_address (deprecated spellings; prefer mac_address).",
       "name": "unifi_upgrade_device",
       "permission_action": "update",
       "permission_category": "devices",

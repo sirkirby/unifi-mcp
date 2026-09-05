@@ -13,9 +13,35 @@ from typing import Any, Callable
 from unifi_core.permission import _infer_input_schema
 from unifi_core.policy_gate import resolve_permission_mode
 
+from unifi_mcp_shared.argument_aliases import append_argument_alias_note, validate_argument_aliases
 from unifi_mcp_shared.metadata import tool_title_from_name
 from unifi_mcp_shared.output_schema import apply_unifi_tool_response_signature, get_unifi_tool_response_output_schema
 from unifi_mcp_shared.tool_index import normalize_tool_annotations
+
+#: Decorator kwargs consumed by ``permissioned_tool`` that FastMCP's ``tool()`` must never see.
+PERMISSIONED_TOOL_KWARGS: tuple[str, ...] = (
+    "permission_category",
+    "permission_action",
+    "auth",
+    "input_schema",
+    "output_schema",
+    "argument_aliases",
+)
+
+
+def create_import_safe_tool_decorator(original_tool_decorator: Callable) -> Callable:
+    """Wrap ``server.tool`` so tool modules import cleanly before ``permissioned_tool`` is installed.
+
+    Strips :data:`PERMISSIONED_TOOL_KWARGS` and delegates. No permission checks
+    happen here; ``setup_permissioned_tool`` replaces this wrapper at startup.
+    """
+
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        for key in PERMISSIONED_TOOL_KWARGS:
+            kwargs.pop(key, None)
+        return original_tool_decorator(*args, **kwargs)
+
+    return wrapper
 
 
 def setup_permissioned_tool(
@@ -85,6 +111,7 @@ def create_permissioned_tool(
         category = d_kwargs.pop("permission_category", None)
         action = d_kwargs.pop("permission_action", None)
         auth_method = d_kwargs.pop("auth", None)
+        argument_aliases = d_kwargs.pop("argument_aliases", None)
 
         # Default to local_only when auth is not specified (backward compatible)
         resolved_auth = auth_method if auth_method else "local_only"
@@ -111,6 +138,17 @@ def create_permissioned_tool(
             if input_schema is None:
                 input_schema = _infer_input_schema(func, tool_name, logger)
 
+            # Aliases never reach FastMCP (they are not schema); they are validated
+            # against the schema here, recorded in the index, and named in the
+            # description so an agent sees which spellings the tool takes.
+            aliases: dict[str, str] | None = None
+            if argument_aliases:
+                aliases = validate_argument_aliases(
+                    str(tool_name), argument_aliases, (input_schema or {}).get("properties", {})
+                )
+                description = append_argument_alias_note(description or inspect.getdoc(func) or "", aliases)
+                d_kwargs["description"] = description
+
             # Fast path: no permissions requested, just register.
             if not category or not action:
                 register_tool_fn(
@@ -121,6 +159,7 @@ def create_permissioned_tool(
                     output_schema=output_schema,
                     auth_method=resolved_auth,
                     annotations=annotations,
+                    argument_aliases=aliases,
                 )
                 wrapped = (
                     wrap_tool_fn(func, tool_name or getattr(func, "__name__", "<tool>"))
@@ -141,6 +180,7 @@ def create_permissioned_tool(
                 annotations=annotations,
                 permission_category=category,
                 permission_action=action,
+                argument_aliases=aliases,
             )
 
             # Wrap function with policy gate + bypass injection

@@ -27,6 +27,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 
 from unifi_core.auth import UniFiAuth
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, configure_mcp_server_metadata
+from unifi_mcp_shared.permissioned_tool import create_import_safe_tool_decorator
 from unifi_mcp_shared.response_policy import resolve_mcp_content_mode, should_redact_response_sensitive_fields
 from unifi_mcp_shared.server import UniFiMCPServer
 from unifi_mcp_shared.support_bundle import (
@@ -84,28 +85,6 @@ def get_auth() -> UniFiAuth:
     return UniFiAuth(api_key=api_key if api_key else None)
 
 
-def _create_permissioned_tool_wrapper(original_tool_decorator):
-    """Wrap the FastMCP tool decorator to handle permission kwargs.
-
-    This wrapper strips `permission_category` and `permission_action` kwargs
-    before passing to the original FastMCP decorator. This allows tool modules
-    to be imported directly (for testing, etc.) without errors.
-
-    The actual permission checking is done in main.py's permissioned_tool,
-    which replaces this wrapper at startup. This wrapper just ensures imports
-    don't fail when tools have permission kwargs.
-    """
-
-    def wrapper(*args, **kwargs):
-        # Strip permission-related kwargs that FastMCP doesn't understand
-        kwargs.pop("permission_category", None)
-        kwargs.pop("permission_action", None)
-        kwargs.pop("auth", None)
-        return original_tool_decorator(*args, **kwargs)
-
-    return wrapper
-
-
 @lru_cache
 def get_server() -> UniFiMCPServer:
     """Create the FastMCP server instance exactly once."""
@@ -149,7 +128,7 @@ def get_server() -> UniFiMCPServer:
     # permissioned_tool.py) and uses it as the bottom of the decorator chain.
     # This ensures Layer 3 delegates to the protocol adapter.
     server._original_tool = create_mcp_tool_adapter(server.tool)
-    server.tool = _create_permissioned_tool_wrapper(server._original_tool)
+    server.tool = create_import_safe_tool_decorator(server._original_tool)
 
     return server
 
