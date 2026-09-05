@@ -519,13 +519,22 @@ function stripInlineHtmlMarkup(value, discardedValues = null) {
 function hasSensitiveDiscardedLabelMarkup(value) {
   const discardedValues = [];
   stripInlineHtmlMarkup(value, discardedValues);
-  return discardedValues.some((discarded) => {
+  if (discardedValues.some((discarded) => {
     const normalized = stripMarkdownWrappers(
       decodeHtmlCharacterReferences(discarded)
         .normalize("NFKC")
         .replace(/\p{Default_Ignorable_Code_Point}/gu, ""),
     );
     return normalized !== "" && !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalized);
+  })) return true;
+
+  const discardedDestinations = [];
+  stripMarkdownInlineLinkDestinations(value, discardedDestinations);
+  return discardedDestinations.some((discarded) => {
+    const normalized = decodeHtmlCharacterReferences(discarded).trim();
+    return !/^(?:https?:\/\/[^\s<>]+|(?:\/|\.\.?\/|#)[^\s<>]*|<https?:\/\/[^\s<>]+>)$/iu.test(
+      normalized,
+    );
   });
 }
 
@@ -640,7 +649,7 @@ function collapseRawHtmlMarkupNewlines(value) {
   };
 }
 
-function stripMarkdownInlineLinkDestinations(value) {
+function stripMarkdownInlineLinkDestinations(value, discardedDestinations) {
   let result = "";
   for (let index = 0; index < value.length; ) {
     const labelStart = value[index] === "!" && value[index + 1] === "[" ? index + 1 : index;
@@ -714,6 +723,7 @@ function stripMarkdownInlineLinkDestinations(value) {
       break;
     }
 
+    discardedDestinations?.push(value.slice(labelEnd + 2, destinationEnd));
     result += value.slice(labelStart + 1, labelEnd);
     index = destinationEnd + 1;
   }
