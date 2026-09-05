@@ -529,29 +529,75 @@ function hasSensitiveDiscardedLabelMarkup(value) {
   });
 }
 
+function recoverMalformedSensitiveField(line) {
+  const rendered = line.replace(/[`*_~]+/gu, "");
+  for (let index = 0; index < rendered.length; index += 1) {
+    if (rendered[index] !== ":" && rendered[index] !== "=") continue;
+    const prefix = rendered.slice(0, index);
+    const candidate = prefix.match(SENSITIVE_LABEL_CANDIDATE_PATTERN);
+    if (!candidate || candidate.index === undefined) continue;
+    const candidateStart = candidate.index + (/^[^A-Za-z0-9]/u.test(candidate[0]) ? 1 : 0);
+    return {
+      label: UNSTABLE_MARKDOWN_LABEL_SENTINEL,
+      value: rendered.slice(index + 1).trim(),
+      discardedPrefix: prefix.slice(0, candidateStart).trim(),
+    };
+  }
+  return null;
+}
+
+function hasUnsafeMalformedSensitivePrefix(prefix) {
+  if (prefix === "") return false;
+  if (prefix === "<!--" || prefix === "<?xml" || prefix === "<![CDATA[" || prefix === "<!DOCTYPE") return false;
+  const tag = prefix.match(/^<\/?([A-Za-z][A-Za-z0-9:._-]*)$/u);
+  return !tag || !SAFE_INLINE_LABEL_TAGS.has(tag[1].toLocaleLowerCase("en-US"));
+}
+
+function exposeSensitiveMalformedFields(value) {
+  return value
+    .split(/\r?\n|\r/u)
+    .map((line) => {
+      const recovered = recoverMalformedSensitiveField(line);
+      if (!recovered) return line;
+      const recoveredValue = hasUnsafeMalformedSensitivePrefix(recovered.discardedPrefix)
+        ? UNSTABLE_MARKDOWN_LABEL_SENTINEL
+        : recovered.value;
+      return `${recovered.label}: ${recoveredValue}`;
+    })
+    .join("\n");
+}
+
 function collapseRawHtmlMarkupNewlines(value) {
   let result = "";
   let mode = null;
   let terminator = null;
   let quote = null;
+  let markupStart = -1;
   for (let index = 0; index < value.length; index += 1) {
     const character = value[index];
     if (mode === null && character === "<") {
       if (value.startsWith("<!--", index)) {
         mode = "terminated";
         terminator = "-->";
+        markupStart = index;
       } else if (value.startsWith("<?", index)) {
         mode = "terminated";
         terminator = "?>";
+        markupStart = index;
       } else if (value.startsWith("<![CDATA[", index)) {
         mode = "terminated";
         terminator = "]]>";
+        markupStart = index;
       } else if (value[index + 1] === "!" && /[A-Z]/u.test(value[index + 2] || "")) {
         mode = "terminated";
         terminator = ">";
+        markupStart = index;
       } else {
         const nameIndex = value[index + 1] === "/" ? index + 2 : index + 1;
-        if (/[A-Za-z]/u.test(value[nameIndex] || "")) mode = "tag";
+        if (/[A-Za-z]/u.test(value[nameIndex] || "")) {
+          mode = "tag";
+          markupStart = index;
+        }
       }
     }
 
@@ -573,15 +619,25 @@ function collapseRawHtmlMarkupNewlines(value) {
         quote = character;
       } else if (character === ">") {
         mode = null;
+        markupStart = -1;
       }
     } else if (mode === "terminated" && value.startsWith(terminator, index)) {
       result += terminator.slice(1);
       index += terminator.length - 1;
       mode = null;
       terminator = null;
+      markupStart = -1;
     }
   }
-  return result;
+  if (mode === null || markupStart === -1) return {value: result, sensitiveUnterminated: false};
+  const unterminated = value.slice(markupStart);
+  const newlineIndex = unterminated.search(/[\r\n]/u);
+  if (newlineIndex === -1) return {value: result, sensitiveUnterminated: false};
+  const exposed = exposeSensitiveMalformedFields(unterminated);
+  return {
+    value: result,
+    sensitiveUnterminated: containsSensitiveTable(exposed) || containsSensitiveMultilineValue(exposed),
+  };
 }
 
 function stripMarkdownInlineLinkDestinations(value) {
@@ -819,6 +875,7 @@ function normalizeMarkdownContentLine(line) {
 function splitMarkdownField(line) {
   let bracketDepth = 0;
   let parenthesisDepth = 0;
+  let unmatchedClosingMarkdown = false;
   let escaped = false;
   let htmlTag = false;
   let htmlQuote = null;
@@ -843,6 +900,7 @@ function splitMarkdownField(line) {
       continue;
     }
     if (escaped) {
+      if (character === "]" || character === ")") unmatchedClosingMarkdown = true;
       escaped = false;
       continue;
     }
@@ -880,11 +938,21 @@ function splitMarkdownField(line) {
     }
     if (character === "[") bracketDepth += 1;
     else if (character === "]" && bracketDepth > 0) bracketDepth -= 1;
+    else if (character === "]") unmatchedClosingMarkdown = true;
     else if (character === "(" && bracketDepth === 0) parenthesisDepth += 1;
     else if (character === ")" && bracketDepth === 0 && parenthesisDepth > 0) parenthesisDepth -= 1;
+    else if (character === ")" && bracketDepth === 0) unmatchedClosingMarkdown = true;
     else if ((character === ":" || character === "=") && bracketDepth === 0 && parenthesisDepth === 0) {
+      if (unmatchedClosingMarkdown) {
+        const recovered = recoverMalformedSensitiveField(line);
+        if (recovered) return [recovered.label, recovered.value];
+      }
       return [line.slice(0, index).trim(), line.slice(index + 1).trim()];
     }
+  }
+  if (bracketDepth > 0 || parenthesisDepth > 0) {
+    const recovered = recoverMalformedSensitiveField(line);
+    if (recovered) return [recovered.label, recovered.value];
   }
   return null;
 }
@@ -1062,7 +1130,8 @@ function containsSensitiveContent(value) {
     .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
     .replace(/\\+([:=])/gu, "$1");
   if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
-  const markdownPatternInput = collapseRawHtmlMarkupNewlines(normalized);
+  const markdown = collapseRawHtmlMarkupNewlines(normalized);
+  const markdownPatternInput = markdown.value;
   // Inline key/value detectors may intentionally span horizontal whitespace, but a
   // Markdown line or paragraph break after prose such as "authenticated session:" is
   // not a credential assignment. Preserve deliberate indented config values while
@@ -1071,6 +1140,7 @@ function containsSensitiveContent(value) {
     .replace(/(:[ \t]*)[>|](?:[+-]?[1-9]?|[1-9]?[+-]?)[ \t]*(?=\r?\n)/gu, "$1")
     .replace(/\r?\n(?![ \t])/g, "\n,\n");
   return (
+    markdown.sensitiveUnterminated ||
     containsControllerAddress(normalized) ||
     containsSensitiveConfigurationBlob(normalized) ||
     containsSensitiveTable(markdownPatternInput) ||
