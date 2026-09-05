@@ -11,6 +11,7 @@ REDACTED = "***REDACTED***"
 _SENSITIVE_SEGMENTS = frozenset(
     {
         "password",
+        "passwd",
         "passphrase",
         "psk",
         "secret",
@@ -38,6 +39,7 @@ _SENSITIVE_EXACT = frozenset(
         "auth_key",
         "authkey",
         "x_iapp_key",
+        "x_mgmt_key",
         "xiappkey",
         "community",
         "snmp_community",
@@ -79,6 +81,7 @@ _SENSITIVE_COMPOUNDS = frozenset(
         "presharedkey",
         "authkey",
         "xiappkey",
+        "xmgmtkey",
         "snmpcommunity",
         "tlsauth",
         "tlscrypt",
@@ -96,6 +99,18 @@ def _segments(key: str) -> list[str]:
     return [part for part in re.split(r"[^A-Za-z0-9]+", camel_split.lower()) if part]
 
 
+def _is_boolean_flag(value: Any) -> bool:
+    """A boolean is state, never secret material.
+
+    ``x_ssh_auth_password_enabled`` says whether password login is on and
+    ``ssh_password_hash_set`` whether a hash is stored; the secrets live in
+    other keys. Only the value decision is relaxed: the key stays sensitive
+    for :func:`is_sensitive_key`, so the write-back guard is unchanged, and a
+    string under such a key is still hidden.
+    """
+    return isinstance(value, bool)
+
+
 def is_sensitive_key(key: Any) -> bool:
     """Return true when a mapping key conventionally carries secret material."""
     if not isinstance(key, str) or not key:
@@ -110,6 +125,9 @@ def is_sensitive_key(key: Any) -> bool:
     if compound in _SENSITIVE_COMPOUNDS:
         return True
     for index, part in enumerate(parts):
+        if part.endswith("passwd") and part != "passwd":
+            # Hash-prefixed spellings: sha512passwd, md5passwd, bcryptpasswd.
+            return True
         if part not in _SENSITIVE_SEGMENTS:
             continue
         if part == "token" and index + 1 < len(parts) and parts[index + 1] in {"count", "counts"}:
@@ -141,7 +159,7 @@ def redact_value(
     decision stays routed through :func:`is_sensitive_key` rather than a
     local hard-coded field list.
     """
-    if not redact_sensitive or value is None:
+    if not redact_sensitive or value is None or _is_boolean_flag(value):
         return value
     return marker if is_sensitive_key(key) else value
 
@@ -158,7 +176,7 @@ def redact_sensitive_fields(
     if isinstance(obj, Mapping):
         return {
             key: marker
-            if value is not None and is_sensitive_key(key)
+            if value is not None and not _is_boolean_flag(value) and is_sensitive_key(key)
             else redact_sensitive_fields(value, redact_sensitive=redact_sensitive, marker=marker)
             for key, value in obj.items()
         }
