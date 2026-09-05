@@ -420,6 +420,39 @@ class ConnectivityProbe(_ClosedModel):
     outcome: Literal["success", "authentication", "permission", "timeout", "connection", "unknown"]
 
 
+ConnectivityOutcome = Literal["success", "authentication", "permission", "timeout", "connection", "unknown"]
+
+
+def connectivity_http_outcome(status: int) -> ConnectivityOutcome:
+    """Reduce an HTTP status to the fixed connectivity outcome vocabulary."""
+    if 200 <= status < 300:
+        return "success"
+    if status == 401:
+        return "authentication"
+    if status == 403:
+        return "permission"
+    return "unknown"
+
+
+def connectivity_probe_result(outcome: ConnectivityOutcome, duration_ms: float | None) -> ConnectivityProbe:
+    """Build fixed, privacy-safe connectivity evidence from an outcome and elapsed time."""
+    if duration_ms is None:
+        duration_bucket = "unknown"
+    elif duration_ms < 100:
+        duration_bucket = "under_100ms"
+    elif duration_ms < 1_000:
+        duration_bucket = "100ms_1s"
+    elif duration_ms < 5_000:
+        duration_bucket = "1s_5s"
+    else:
+        duration_bucket = "over_5s"
+    return ConnectivityProbe(
+        status=EvidenceStatus.AVAILABLE if outcome == "success" else EvidenceStatus.UNAVAILABLE,
+        duration_bucket=duration_bucket,
+        outcome=outcome,
+    )
+
+
 class ResourceShapeProbe(_ClosedModel):
     probe: Literal["resource_shape"] = "resource_shape"
     status: EvidenceStatus
