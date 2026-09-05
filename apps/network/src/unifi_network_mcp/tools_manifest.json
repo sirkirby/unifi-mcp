@@ -1787,7 +1787,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Create a V2 zone-based firewall policy with schema validation. Required: name, action (ALLOW/BLOCK/REJECT), source (zone_id + matching_target), destination (same structure). For specific IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. Use unifi_list_firewall_zones to discover zone_ids; unifi_list_networks for network_ids.",
+      "description": "Create a V2 zone-based firewall policy with schema validation. Required: name, action (ALLOW/BLOCK/REJECT), source (zone_id + matching_target), destination (same structure). For specific IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. For port targeting (same source/destination dict): port_matching_type='SPECIFIC', port='445' (a single string, not a 'ports' array). Use unifi_list_firewall_zones to discover zone_ids; unifi_list_networks for network_ids.",
       "name": "unifi_create_firewall_policy",
       "permission_action": "create",
       "permission_category": "firewall_policies",
@@ -1799,7 +1799,7 @@
               "type": "boolean"
             },
             "policy_data": {
-              "description": "V2 zone-based firewall policy dict. Required: name, action (ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), destination (same structure). For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. Optional: enabled, description, protocol, connection_state_type, connection_states, ip_version, schedule, logging.",
+              "description": "V2 zone-based firewall policy dict. Required: name, action (ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), destination (same structure). For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. For port targeting: port_matching_type='SPECIFIC', port='445' (a single string, not a 'ports' array). Optional: enabled, description, protocol, connection_state_type, connection_states, ip_version, schedule, logging.",
               "type": "object"
             }
           },
