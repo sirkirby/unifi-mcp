@@ -13,6 +13,9 @@ Thanks for helping improve UniFi MCP. Please follow the
 - Do not include UniFi credentials, API keys, tokens, controller addresses, or
   other private deployment details in public issues, discussions, pull requests,
   screenshots, or logs.
+- For a Network, Protect, or Access MCP bug, prefer a reviewed
+  [sanitized support bundle](docs/support-bundles.md) over raw tool output or
+  diagnostic logs.
 - Report suspected vulnerabilities privately through
   [GitHub Security Advisories](https://github.com/sirkirby/unifi-mcp/security/advisories),
   not public issues.
@@ -230,4 +233,5 @@ Tests use `pytest-asyncio` for async support and `aioresponses` for HTTP mocking
 
 ## Questions?
 
-Open an issue or discussion at https://github.com/sirkirby/unifi-mcp/issues
+Review the [support bundle guide](docs/support-bundles.md), then open an issue or
+discussion at https://github.com/sirkirby/unifi-mcp/issues
