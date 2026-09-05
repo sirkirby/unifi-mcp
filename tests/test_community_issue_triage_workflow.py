@@ -3039,7 +3039,14 @@ def test_initial_ready_for_maintainer_rewrites_only_fixed_trusted_acknowledgemen
     )
     label_item = next(item for item in rewritten if item["type"] == "add_labels")
     assert label_item["item_number"] == TARGET_NUMBER
-    assert label_item["labels"] == [intent | {"suggest": True} for intent in labels]
+    assert label_item["labels"] == [
+        intent
+        | {
+            "rationale": "Automated label suggestion; a maintainer must verify this classification.",
+            "suggest": True,
+        }
+        for intent in labels
+    ]
     assert "triage_proposal" not in _canonical(rewritten)
 
 
@@ -3651,7 +3658,7 @@ def test_repository_evidence_path_quote_and_secret_defenses_remain_strict():
         assert result.returncode != 0
 
 
-def test_summary_html_escapes_all_trusted_rendered_assessments():
+def test_summary_replaces_free_form_relationship_assessments_with_trusted_text():
     bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
     proposal = json.loads(_normal_proposal(bundle))
     proposal["relationships"][0]["reason"] = (
@@ -3667,8 +3674,9 @@ def test_summary_html_escapes_all_trusted_rendered_assessments():
     assert result.returncode == 0, result.stderr
     rewritten = json.loads(result.stdout)
     assert rewritten["summary"]["relationships"][0]["reason_html"] == (
-        "The evidence says A &amp; B overlap enough to require maintainer confirmation."
+        "Automated relationship assessment; a maintainer must verify this result."
     )
+    assert proposal["relationships"][0]["reason"] not in json.dumps(rewritten)
     assert "triage_proposal" not in rewritten["output"]["items"][0]["body"]
 
 
@@ -4047,19 +4055,37 @@ def test_support_request_rejects_unknown_or_multiple_codes(support_request: obje
         "I have already carefully reviewed the logs for this behavior.",
         "The reporter personally inspected the evidence for this behavior.",
         "I've reviewed the JSON output and confirmed this behavior.",
+        "I independently reviewed the logs and confirmed this behavior.",
+        "Kindly upload the support bundle for diagnosis.",
+        "Please ask the reporter to securely upload the support bundle.",
+        "Publication can be requested with arbitrary words unknown to this validator.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
-def test_agent_free_form_text_cannot_claim_attachment_inspection_or_render_support_tool_names(reason: str, field: str):
+def test_free_form_rationales_never_escape_the_trusted_publication_boundary(reason: str, field: str):
     bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
     proposal = json.loads(_normal_proposal(bundle))
     if field == "relationship":
         proposal["relationships"][0]["reason"] = reason
     else:
         proposal["label_intents"] = [{"name": "network", "rationale": reason, "confidence": "HIGH"}]
-    result = _render(bundle, _canonical(proposal))
-    assert result.returncode != 0
-    assert "unsafe syntax" in result.stderr
+    output = {
+        "items": [
+            {"type": "add_comment", "body": _canonical(proposal)},
+            {"type": "add_labels", "labels": proposal["label_intents"]},
+        ]
+    }
+    result = _run_contract({"op": "rewrite", "bundle": bundle, "output": output})
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)
+    assert reason not in json.dumps(rewritten)
+    assert rewritten["proposal"]["relationships"][0]["reason"] == (
+        "Automated relationship assessment; a maintainer must verify this result."
+    )
+    labels = next(item for item in rewritten["output"]["items"] if item["type"] == "add_labels")
+    assert labels["labels"][0]["rationale"] == (
+        "Automated label suggestion; a maintainer must verify this classification."
+    )
 
 
 @pytest.mark.parametrize(
@@ -4094,6 +4120,8 @@ def test_agent_free_form_text_cannot_claim_attachment_inspection_or_render_suppo
         "Ask the reporter to describe the reproduction steps.",
         "Could we ask the reporter to describe the reproduction steps?",
         "The form asks users to upload files during normal operation.",
+        "The maintainer reviewed both reports and found no evidence of the same failure.",
+        "The parser reads attachments using the wrong encoding.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
@@ -4118,6 +4146,43 @@ def test_relationship_reason_is_not_rendered_into_the_public_comment():
     rendered = json.loads(result.stdout)["rendered"]
     assert "Candidate #225: UNCERTAIN" in rendered
     assert reason not in rendered
+
+
+@pytest.mark.parametrize("verdict", ["RELATED", "NOT_RELATED", "UNCERTAIN"])
+@pytest.mark.parametrize("kind", ["ready_for_maintainer", "missing_information", "repository_evidence"])
+def test_fixed_rationale_boundary_covers_all_public_decisions_and_verdicts(verdict: str, kind: str):
+    bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
+    reason = "Kindly publish these arbitrary words that must never leave validation."
+    quote = "Use confirmation mode for state-changing controller operations."
+    decision: dict[str, object] = {"kind": kind}
+    labels = []
+    if kind == "missing_information":
+        decision["fields"] = ["package_version"]
+        labels = [{"name": "needs-info", "rationale": reason, "confidence": "HIGH"}]
+    elif kind == "repository_evidence":
+        decision.update({"path": "docs/permissions.md", "quote": quote})
+    proposal = json.loads(_normal_proposal(bundle, decision=decision, verdicts=[verdict], label_intents=labels))
+    proposal["relationships"][0]["reason"] = reason
+    items = [{"type": "add_comment", "body": _canonical(proposal)}]
+    if labels:
+        items.append({"type": "add_labels", "labels": labels})
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {"items": items},
+            "repositoryFiles": {"docs/permissions.md": quote},
+        }
+    )
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)
+    assert reason not in json.dumps(rewritten)
+    assert rewritten["proposal"]["relationships"][0]["verdict"] == verdict
+    assert rewritten["summary"]["relationships"][0]["verdict_html"] == verdict
+    if kind == "missing_information":
+        assert "exact unifi-mcp package version" in rewritten["output"]["items"][0]["body"]
+    elif kind == "repository_evidence":
+        assert quote in rewritten["output"]["items"][0]["body"]
 
 
 @pytest.mark.parametrize(

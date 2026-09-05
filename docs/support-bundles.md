@@ -123,6 +123,8 @@ This lets bounded automated triage recognize the supplied evidence. Do not use a
 
 Alternatively, save the response as a `.json` file and inspect the local file before dragging it into GitHub. Dragging a file into GitHub begins publication/upload. An attachment on a public issue is publicly accessible. Automated triage treats an attachment only as an indication that a file was supplied; it does not open, download, or inspect the attachment.
 
+Automated triage publishes fixed trusted text for label suggestions and relationship assessments, including workflow summaries. Free-form rationale text is validated as input but is never published. Requests for support evidence come only from the allowlisted request renderer, not from those rationales.
+
 ## If the tool is missing or the server cannot start
 
 If the support tool is missing:

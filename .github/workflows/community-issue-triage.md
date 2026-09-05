@@ -1209,6 +1209,11 @@ For every normal initial or incomplete-continuation proposal:
 - Each label rationale must be 20 to 240 normalized, specific, safe visible characters.
   Confidence is exactly `LOW`, `MEDIUM`, or `HIGH`. The proposal `label_intents` must
   exactly match the `add_labels` array, including order.
+  These rationales are untrusted validation input, not public prose. After checking
+  exact equality and safety, trusted code replaces every label rationale and relationship
+  reason with fixed text in suggested labels, workflow summaries, and rewritten proposals.
+  No free-form rationale is published, regardless of its wording. Support requests are
+  published only through the allowlisted decision fields and `support_request` codes.
 - The comment body is canonical JSON with no extra whitespace and alphabetically sorted
   keys at every level. Its exact top-level structure is:
   `{"comments_receipt":"<comments receipt>","decision":<decision>,"kind":"triage_proposal","label_intents":[<label intent>],"relationships":[<relationship>],"run_kind":"<artifact run kind>","target_receipt":"<target receipt>","trigger_receipt":"<trigger receipt>","version":3}`.

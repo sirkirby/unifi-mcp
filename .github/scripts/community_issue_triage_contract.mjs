@@ -1957,36 +1957,10 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
   return createMetadataEnvelope(bundle);
 }
 
-const SUPPORT_ARTIFACT = String.raw`\b(?:attachments?|bundles?|files?|json|links?|logs?|outputs?|payloads?|screenshots?|evidence)\b`;
-// Cover tense/aspect changes so "is reviewing" is not safer than "reviewed".
-const SUPPORT_INSPECTION = String.raw`\b(?:inspect(?:s|ed|ing)?|review(?:s|ed|ing)?|read(?:s|ing)?|download(?:s|ed|ing)?|open(?:s|ed|ing)?|analy[sz](?:e[ds]?|ing)|examin(?:e[ds]?|ing)|check(?:s|ed|ing)?|verif(?:y|ies|ied|ying)|view(?:s|ed|ing)?|see(?:s|ing)?|saw|seen|observ(?:e[ds]?|ing)|look(?:s|ed|ing)? at|pars(?:e[ds]?|ing)|scan(?:s|ned|ning)?|stud(?:y|ies|ied|ying)|evaluat(?:e[ds]?|ing))\b`;
-const SUPPORT_REQUEST_ACTION = String.raw`(?:attach(?:es|ed|ing)?|upload(?:s|ed|ing)?|provid(?:e[ds]?|ing)|past(?:e[ds]?|ing)|submit(?:s|ted|ting)?|send(?:s|ing)?|sent|shar(?:e[ds]?|ing)|download(?:s|ed|ing)?|generat(?:e[ds]?|ing)|run(?:s|ning)?|ran|collect(?:s|ed|ing)?|captur(?:e[ds]?|ing)|execut(?:e[ds]?|ing)|invok(?:e[ds]?|ing)|export(?:s|ed|ing)?|produc(?:e[ds]?|ing)|fetch(?:es|ed|ing)?|retriev(?:e[ds]?|ing)|obtain(?:s|ed|ing)?)`;
-const SUPPORT_REQUEST_ACTOR = String.raw`(?:reporters?|users?|authors?|contributors?|maintainers?|I|we|he|she|they|you)`;
-const SUPPORT_REQUEST_MODAL = String.raw`(?:must|should|shall|can|could|may|might|will|would)`;
-const SUPPORT_PASSIVE_OBLIGATION = String.raw`(?:is|are|am|was|were|be|been|being)\s+(?:asked|requested|required|expected|encouraged|supposed) to`;
-const SUPPORT_REQUEST_OBLIGATION = String.raw`(?:${SUPPORT_REQUEST_MODAL}|needs?(?: to)?|ha(?:s|ve) to|ought to|${SUPPORT_PASSIVE_OBLIGATION})`;
-const SUPPORT_SUPPLIED_ARTIFACT = String.raw`\b(?:attachments?\b|(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT})`;
-const SUPPORT_INSPECTION_AUXILIARIES = String.raw`(?:(?:am|is|are|was|were|have|has|had|been|being|already|just|also|now|previously|personally|carefully|thoroughly|recently|actually)\s+){0,6}`;
-const UNSAFE_SUPPORT_REASON_PATTERNS = [
-  // Inspection needs claim context: a human actor, supplied evidence, or past
-  // passive assessment. Routine descriptions such as "the parser reads JSON"
-  // and "JSON is parsed incorrectly" do not claim attachment inspection.
-  new RegExp(String.raw`\b${SUPPORT_REQUEST_ACTOR}(?:\s+|['’](?:ve|re|m|d|s)\s+)${SUPPORT_INSPECTION_AUXILIARIES}${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
-  new RegExp(`${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_SUPPLIED_ARTIFACT}`, "iu"),
-  new RegExp(`${SUPPORT_SUPPLIED_ARTIFACT}[^.!?;]{0,120}${SUPPORT_INSPECTION}`, "iu"),
-  new RegExp(String.raw`${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:was|were|ha(?:s|ve|d)\s+(?:already\s+)?been)\b[^.!?;]{0,30}${SUPPORT_INSPECTION}`, "iu"),
-  new RegExp(String.raw`\b(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:proves?|confirms?|shows?|demonstrates?|establishes?)\b`, "iu"),
-  // Direct requests belong in the fixed support_request renderer, never free text.
-  new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\byou\s+(?:${SUPPORT_REQUEST_OBLIGATION}\s+)?)${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
-  // Delegating a support request is still a request, not a factual rationale.
-  new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\b${SUPPORT_REQUEST_ACTOR}\s+${SUPPORT_REQUEST_OBLIGATION}\s+|\b${SUPPORT_REQUEST_MODAL}\s+(?:(?:the|a|an|our)\s+)?${SUPPORT_REQUEST_ACTOR}\s+)(?:ask|request|tell|instruct|encourage|require)\s+(?:that\s+)?(?:(?:the|a|an|this|that|our)\s+)?(?:${SUPPORT_REQUEST_ACTOR}|me|us|him|her|them)\s+(?:to\s+)?(?:(?:also|now|please|then|first)\s+)?(?:${SUPPORT_REQUEST_OBLIGATION}\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
-  // Personal directions are requests too, not factual label rationales.
-  new RegExp(String.raw`\b${SUPPORT_REQUEST_ACTOR}\s+${SUPPORT_REQUEST_OBLIGATION}\s+(?:(?:also|now|please|then|first|probably)\s+)?(?:${SUPPORT_PASSIVE_OBLIGATION}\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
-  // Questions invert the same modal and actor: "Could the reporter upload ...?".
-  new RegExp(String.raw`\b${SUPPORT_REQUEST_MODAL}\s+(?:(?:the|a|an|this|that|these|those|our)\s+)?${SUPPORT_REQUEST_ACTOR}\s+(?:(?:also|now|please|then|first|probably)\s+)?(?:${SUPPORT_PASSIVE_OBLIGATION}\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
-  // Artifact-first directions include "should be uploaded" and "needs uploading".
-  new RegExp(String.raw`${SUPPORT_ARTIFACT}[^.!?;]{0,120}\b${SUPPORT_REQUEST_OBLIGATION}\b[^.!?;]{0,60}\b${SUPPORT_REQUEST_ACTION}\b`, "iu"),
-];
+const PUBLIC_LABEL_RATIONALE =
+  "Automated label suggestion; a maintainer must verify this classification.";
+const PUBLIC_RELATIONSHIP_REASON =
+  "Automated relationship assessment; a maintainer must verify this result.";
 
 function normalizeReason(value) {
   if (typeof value !== "string") fail("relationship reason must be a string");
@@ -2002,8 +1976,6 @@ function normalizeReason(value) {
   if (
     /[<>@#]/u.test(normalized) ||
     /https?:\/\//iu.test(normalized) ||
-    /\b(?:unifi|protect|access)_get_support_bundle\b/iu.test(normalized) ||
-    UNSAFE_SUPPORT_REASON_PATTERNS.some((pattern) => pattern.test(normalized)) ||
     containsSensitiveContent(normalized)
   ) fail("relationship reason contains unsafe syntax");
   return normalized;
@@ -2140,7 +2112,9 @@ export function validateSensitiveProposal({carrier, bundle}) {
   return {proposal, rendered: "Sensitive intake stop: Maintainer attention is required.", relationships: []};
 }
 
-/** Validate the sole canonical carrier and return text rendered entirely by trusted code. */
+/** Validate the carrier; proposal reasons remain untrusted internal input here.
+ * Publication must use validateAndRewriteAgentOutput, which replaces all reasons.
+ */
 export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind}) {
   validateBundle(bundle);
   if (bundle.status === "sensitive_stop") return validateSensitiveProposal({carrier, bundle});
@@ -2447,8 +2421,24 @@ export async function validateAndRewriteAgentOutput({
 
   if (labelsItem) {
     labelsItem.item_number = targetNumber;
-    for (const label of labelsItem.labels) label.suggest = true;
+    for (const label of labelsItem.labels) {
+      label.rationale = PUBLIC_LABEL_RATIONALE;
+      label.suggest = true;
+    }
   }
+
+  // Preserve exact input comparison above, then replace every rationale before
+  // returning anything that can reach safe outputs, summaries, or caller logs.
+  const publicRelationships = validated.relationships.map((relationship) => ({
+    ...relationship, reason: PUBLIC_RELATIONSHIP_REASON,
+  }));
+  const publicProposal = {...validated.proposal};
+  if (Array.isArray(publicProposal.label_intents)) {
+    publicProposal.label_intents = publicProposal.label_intents.map((intent) => ({
+      ...intent, rationale: PUBLIC_LABEL_RATIONALE,
+    }));
+  }
+  if (Array.isArray(publicProposal.relationships)) publicProposal.relationships = publicRelationships;
 
   const renderedStrings = [];
   for (const item of trustedOutput.items) {
@@ -2461,11 +2451,11 @@ export async function validateAndRewriteAgentOutput({
   return {
     output: trustedOutput,
     carrier: carrier.type,
-    proposal: validated.proposal,
+    proposal: publicProposal,
     summary: {
       heading_html: "Trusted rendered proposal",
       rendered_html: escapedRendered,
-      relationships: validated.relationships.map(({candidate_number, verdict, reason}) => ({
+      relationships: publicRelationships.map(({candidate_number, verdict, reason}) => ({
         candidate_number,
         verdict_html: escapeHtml(verdict),
         reason_html: escapeHtml(reason),
