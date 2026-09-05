@@ -6,6 +6,7 @@ from typing import Any
 
 from unifi_core.support_bundle import (
     ConnectionSection,
+    ConnectivityProbe,
     ControllerCapabilityFlag,
     ControllerSection,
     EvidenceStatus,
@@ -43,7 +44,11 @@ class NetworkSupportBundleAdapter:
         probe_section = (
             SummaryProbe(status=EvidenceStatus.AVAILABLE if connected else EvidenceStatus.UNAVAILABLE)
             if probe == "summary"
-            else await self._connection_manager.support_connectivity_probe()
+            else ConnectivityProbe(
+                status=EvidenceStatus.UNSUPPORTED,
+                duration_bucket="unknown",
+                outcome="unknown",
+            )
         )
         return SupportBundleEvidence(
             controller=ControllerSection(

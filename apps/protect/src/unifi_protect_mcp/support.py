@@ -6,6 +6,7 @@ from typing import Any
 
 from unifi_core.support_bundle import (
     ConnectionSection,
+    ConnectivityProbe,
     ControllerCapabilityFlag,
     ControllerSection,
     EvidenceStatus,
@@ -47,7 +48,11 @@ class ProtectSupportBundleAdapter:
                 resource="sensors",
             )
         else:
-            probe_section = await self._connection_manager.support_connectivity_probe()
+            probe_section = ConnectivityProbe(
+                status=EvidenceStatus.UNSUPPORTED,
+                duration_bucket="unknown",
+                outcome="unknown",
+            )
         return SupportBundleEvidence(
             controller=ControllerSection(
                 status=EvidenceStatus.AVAILABLE if connected else EvidenceStatus.NOT_CONNECTED,
