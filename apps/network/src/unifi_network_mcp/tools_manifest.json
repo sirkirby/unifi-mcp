@@ -8774,7 +8774,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get current site settings (e.g., country code, timezone, connectivity monitoring).",
+      "description": "Get current site settings: site identity, regulatory country code, timezone, connectivity monitor (enabled, uplink type) and NTP servers.",
       "name": "unifi_get_site_settings",
       "schema": {
         "input": {
