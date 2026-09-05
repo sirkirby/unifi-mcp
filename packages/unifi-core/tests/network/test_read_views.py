@@ -289,13 +289,24 @@ def test_shape_firewall_policy_list_summary_hides_selectors_the_controller_ignor
                 "port_matching_type": "SPECIFIC",
                 "port_group_id": "g1",
             },
-        }
+        },
+        {
+            "_id": "p-no-enum",
+            "name": "No enum at all",
+            "enabled": True,
+            "action": "ALLOW",
+            "index": 2,
+            "source": {"zone_id": "z1", "matching_target": "ANY", "port": "53"},
+            "destination": {"zone_id": "z2", "matching_target": "ANY"},
+        },
     ]
 
-    entry = shape_firewall_policy_list(policies, site="default", summary=True)["policies"][0]
+    entry, no_enum = shape_firewall_policy_list(policies, site="default", summary=True)["policies"]
 
     assert entry["source"] == {"zone_id": "z1", "matching_target": "ANY"}
     assert entry["destination"] == {"zone_id": "z2", "matching_target": "ANY", "port_matching_type": "SPECIFIC"}
+    # Every observed controller emits port_matching_type; a port with no enum at all is treated as inert.
+    assert no_enum["source"] == {"zone_id": "z1", "matching_target": "ANY"}
 
 
 def test_shape_rogue_ap_list_applies_filters_pagination_and_shape() -> None:

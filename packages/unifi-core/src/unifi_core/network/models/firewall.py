@@ -571,7 +571,7 @@ def _port_string_error(direction: str, value: Any) -> str | None:
         match = _PORT_TOKEN.fullmatch(token)
         if not match:
             return (
-                "%s.port '%s' must be a comma-separated list of ports or low-high ranges "
+                "%s.port %r must be a comma-separated list of ports or low-high ranges "
                 "with no spaces, e.g. '53,853' or '1000-2000'." % (direction, value)
             )
         low = int(match.group(1))
@@ -662,6 +662,28 @@ def validate_policy_targeting(fields: Dict[str, Any]) -> str | None:
         if errors:
             return errors[0]
     return None
+
+
+def retire_stale_selectors(stored: Any, update: Any) -> Any:
+    """Mark selectors a partial endpoint update deactivates for removal.
+
+    A partial update that moves ``port_matching_type`` or ``matching_target``
+    away from the value that activates a stored selector (``port``,
+    ``port_group_id``, ``client_macs``) would otherwise deep-merge into a
+    document carrying a selector the controller ignores. The returned copy of
+    ``update`` sets each such selector to ``None``; the manager drops ``None``
+    keys inside an endpoint before the PUT. Selectors the update sets itself
+    are left alone.
+    """
+    if not isinstance(stored, dict) or not isinstance(update, dict):
+        return update
+    retired = dict(update)
+    for selector, activator_key, activator_value in SELECTOR_ACTIVATORS:
+        if activator_key not in update or selector in update:
+            continue
+        if update[activator_key] != activator_value and stored.get(selector) is not None:
+            retired[selector] = None
+    return retired
 
 
 def policy_update_targeting_error(current: Dict[str, Any], updates: Dict[str, Any]) -> str | None:

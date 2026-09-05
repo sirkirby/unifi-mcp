@@ -943,6 +943,31 @@ class TestCreatePortAndClientTargetingValidation:
         assert "predefined" in read_only["error"]
 
     @pytest.mark.asyncio
+    async def test_update_switching_port_matching_to_any_retires_the_stored_port(self):
+        raw = copy.deepcopy(SAMPLE_ZONE_POLICY_RAW)
+        raw["destination"].update({"port_matching_type": "SPECIFIC", "port": "53"})
+        mock_policy = _make_policy(raw)
+        updated = copy.deepcopy(raw)
+        updated["destination"]["port_matching_type"] = "ANY"
+        del updated["destination"]["port"]
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(side_effect=[[mock_policy], [_make_policy(updated)]])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={"destination": {"port_matching_type": "ANY"}},
+                confirm=True,
+            )
+
+        assert result["success"] is True
+        sent = mock_fm.update_firewall_policy.call_args[0][1]
+        assert sent["destination"] == {"port_matching_type": "ANY", "port": None}
+
+    @pytest.mark.asyncio
     async def test_update_merged_document_keeps_existing_port(self):
         """Changing only the port on an existing SPECIFIC match is still valid after the merge."""
         raw = copy.deepcopy(SAMPLE_ZONE_POLICY_RAW)
