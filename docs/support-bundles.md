@@ -137,6 +137,27 @@ A support bundle cannot diagnose a failure that prevents the server from startin
 
 The MCP host, model provider, transcript retention, and any later GitHub publication are outside the server-enforced boundary. The server performs no secondary upload, callback, paste creation, telemetry submission, or issue comment; it returns JSON only through the configured MCP transport.
 
+## Repeatable acceptance checks
+
+From the repository root, run `uv run --all-packages python scripts/live_smoke.py --server all --phase support`.
+Selecting this phase explicitly authorizes the bounded, read-only connectivity probes. It starts real stdio
+servers in lazy, eager, and meta-only modes and checks discovery, summary/connectivity schemas, the 32 KiB
+envelope limit, configured identity/secret canaries (raw, SHA256, base64), cooldown, invalid-input rejection,
+and sanitizer independence from ordinary response redaction. It never runs mutations or collects resource shapes.
+Reports contain only product/mode, pass/fail, and byte counts; bundles and subprocess logs are not saved.
+Failure stops the matrix without retrying authentication.
+
+For installed-wheel verification, use an isolated Python environment with the app wheels installed and invoke
+`uv run --no-project --python /path/to/venv/bin/python scripts/live_smoke.py --server all --phase support`.
+This uses that interpreter's installed app entrypoints, not workspace imports.
+
+After release/version sync, add `--support-plugin-root /path/to/fresh/marketplace-checkout` to validate the
+packaged support skills, both host manifests, and matching package pins, then launch the actual `.mcp.json`
+commands through `uvx` with a fresh temporary cache. The returned bundle version must match the plugin pin.
+This verifies the packaged skill/tool pair; separately check skill discovery in the MCP host after install/upgrade.
+Unit coverage is in `tests/test_live_smoke_harness.py`. The broader readonly/preview/disposable-resource and API
+release matrix remains a separate gate; ordinary `--phase safe` alone does not prove support acceptance.
+
 ## Maintainer request examples
 
 Ask for the smallest probe that can answer the open question:

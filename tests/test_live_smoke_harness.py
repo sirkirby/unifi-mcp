@@ -14,6 +14,246 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 
+@pytest.fixture
+def support_payload():
+    return {
+        "success": True,
+        "data": {
+            "generated_at": "2026-01-01T00:00:00Z",
+            "product": "network",
+            "server": {
+                "package": "unifi-network-mcp",
+                "version": "0.30.0",
+                "tool": "unifi_get_support_bundle",
+                "feature_flags": ["response_redaction_disabled"],
+            },
+            "runtime": {
+                "python_version": "3.13.0",
+                "os_family": "linux",
+                "architecture": "x86_64",
+                "transports": ["stdio"],
+                "registration_mode": "lazy",
+                "content_mode": "dual",
+                "manifest_tool_count": 1,
+                "manifest_generator": "scripts/generate_tool_manifest.py",
+            },
+            "dependencies": [],
+            "controller": {"status": "available", "api_surface": "controller_v2"},
+            "connection": {
+                "initialized": True,
+                "connected": True,
+                "tls_verification_enabled": True,
+                "last_attempt": {"status": "succeeded"},
+                "capabilities": {
+                    "product": "network",
+                    "session_available": True,
+                    "integration_api_key_configured": False,
+                    "controller_type": "proxy",
+                    "reconnect_circuit": "closed",
+                },
+            },
+            "probe": {"probe": "summary", "status": "available"},
+            "sanitization": {
+                "values_suppressed": False,
+                "dynamic_keys_suppressed": False,
+                "errors_normalized": True,
+                "variants_truncated": False,
+                "nodes_truncated": False,
+                "bytes_truncated": False,
+            },
+        },
+    }
+
+
+def test_support_accepts_closed_bundle_and_exact_plugin_version(support_payload):
+    import support_smoke
+
+    assert support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", set(), "0.30.0") > 0
+
+
+@pytest.mark.parametrize(
+    "section,key,value,code",
+    [
+        ("connection", "connected", False, "connected"),
+        ("runtime", "registration_mode", "eager", "registration_mode"),
+        ("server", "version", "0.29.8", "plugin_package_version"),
+        ("server", "feature_flags", [], "redaction_override_exercised"),
+        ("server", "unexpected", "private", "bundle_schema"),
+    ],
+)
+def test_support_rejects_contract_regressions(support_payload, section, key, value, code):
+    import support_smoke
+
+    support_payload["data"][section][key] = value
+    with pytest.raises(support_smoke.SupportSmokeError, match=code):
+        support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", set(), "0.30.0")
+
+
+def test_support_checks_entire_envelope_size_and_canaries(support_payload):
+    import support_smoke
+
+    support_payload["extra"] = "x" * 32768
+    with pytest.raises(support_smoke.SupportSmokeError, match="envelope_size"):
+        support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", set(), None)
+    for canary in support_smoke.private_canaries({"UNIFI_HOST": "private.example", "UNIFI_PASSWORD": "secret-value"}):
+        support_payload["extra"] = canary.decode()
+        with pytest.raises(support_smoke.SupportSmokeError, match="private_canary"):
+            support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", {canary}, None)
+
+
+def test_support_environment_never_mutates_parent_and_overrides_bypass(monkeypatch, tmp_path):
+    import support_smoke
+
+    monkeypatch.setenv("UNIFI_NETWORK_TOOL_PERMISSION_MODE", "bypass")
+    (tmp_path / ".env").write_text("UNIFI_MCP_HTTP_ENABLED=true\nUNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=true\n")
+    env = support_smoke.support_environment(tmp_path, "meta_only")
+    assert env["UNIFI_NETWORK_TOOL_PERMISSION_MODE"] == "confirm"
+    assert env["UNIFI_MCP_HTTP_ENABLED"] == "false"
+    assert env["UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS"] == "false"
+    assert env["UNIFI_TOOL_REGISTRATION_MODE"] == "meta_only"
+    assert support_smoke.os.environ["UNIFI_NETWORK_TOOL_PERMISSION_MODE"] == "bypass"
+
+
+def _support_client(payload):
+    import copy
+
+    connectivity = copy.deepcopy(payload)
+    connectivity["data"]["probe"] = {
+        "probe": "connectivity",
+        "status": "available",
+        "outcome": "success",
+        "duration_bucket": "under_100ms",
+    }
+    outputs = [
+        payload,
+        connectivity,
+        {"success": False, "error": "Failed to generate support bundle: this live probe is in cooldown."},
+        {"success": False, "error": "Failed to generate support bundle: invalid probe."},
+        payload,
+    ]
+
+    def result(item):
+        return SimpleNamespace(
+            is_error=False, content=[SimpleNamespace(text=json.dumps(item))], model_dump_json=lambda: json.dumps(item)
+        )
+
+    tool = SimpleNamespace(
+        name="unifi_get_support_bundle",
+        annotations=SimpleNamespace(read_only_hint=True),
+        input_schema={"properties": {"probe": {"enum": ["summary", "connectivity", "resource_shape"]}}},
+    )
+    client = SimpleNamespace(
+        initialize=AsyncMock(),
+        list_tools=AsyncMock(return_value=SimpleNamespace(tools=[tool])),
+        call_tool=AsyncMock(side_effect=[result(item) for item in outputs]),
+    )
+    return client
+
+
+def test_support_session_exercises_exact_read_only_matrix(support_payload):
+    import support_smoke
+
+    client = _support_client(support_payload)
+    report = asyncio.run(support_smoke.exercise_session(client, "network", "lazy", {}, "0.30.0"))
+    assert report["status"] == "passed"
+    assert [call.args for call in client.call_tool.await_args_list] == [
+        ("unifi_get_support_bundle", {"probe": probe})
+        for probe in ("summary", "connectivity", "connectivity", support_smoke.INVALID_PROBE, "summary")
+    ]
+    assert "0.30.0" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("failure", ["missing_tool", "connectivity", "cooldown", "invalid_echo"])
+def test_support_session_cannot_pass_missing_checks(support_payload, failure):
+    import support_smoke
+
+    client = _support_client(support_payload)
+    if failure == "missing_tool":
+        client.list_tools.return_value.tools = []
+    else:
+        items = list(client.call_tool.side_effect)
+        index = {"connectivity": 1, "cooldown": 2, "invalid_echo": 3}[failure]
+        payload = (
+            {"success": True} if failure != "invalid_echo" else {"success": False, "error": support_smoke.INVALID_PROBE}
+        )
+        items[index] = SimpleNamespace(
+            is_error=False,
+            content=[SimpleNamespace(text=json.dumps(payload))],
+            model_dump_json=lambda: json.dumps(payload),
+        )
+        client.call_tool.side_effect = items
+    with pytest.raises((support_smoke.SupportSmokeError, ValueError)):
+        asyncio.run(support_smoke.exercise_session(client, "network", "lazy", {}, "0.30.0"))
+
+
+def test_support_matrix_stops_on_failure_without_echoing_secrets(monkeypatch, tmp_path, capsys):
+    from contextlib import asynccontextmanager
+
+    import support_smoke
+
+    attempts = []
+
+    @asynccontextmanager
+    async def failed_transport(parameters, **kwargs):
+        attempts.append(parameters)
+        raise RuntimeError("private-password and controller address")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(support_smoke, "stdio_client", failed_transport)
+    report = asyncio.run(support_smoke.run_support_phase("all", tmp_path))
+    assert report == {"success": False, "records": [{"product": "network", "mode": "lazy", "status": "failed"}]}
+    assert len(attempts) == 1
+    assert "private-password" not in capsys.readouterr().out + json.dumps(report)
+
+
+@pytest.mark.parametrize("product", ["network", "protect", "access"])
+def test_support_plugin_launcher_includes_skill_and_matching_pins(product):
+    import support_smoke
+
+    command, arguments, version = support_smoke.plugin_command(Path(__file__).resolve().parents[1], product, {})
+    assert command == "uvx"
+    assert arguments[-1] == f"unifi-{product}-mcp=={version}"
+
+
+@pytest.mark.parametrize("defect", ["missing_skill", "version", "launcher"])
+def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
+    import shutil
+
+    import support_smoke
+
+    source = Path(__file__).resolve().parents[1] / "plugins/unifi-network"
+    target = tmp_path / "plugins/unifi-network"
+    shutil.copytree(source, target)
+    if defect == "missing_skill":
+        (target / "skills/unifi-network-support/SKILL.md").unlink()
+    elif defect == "version":
+        path = target / ".codex-plugin/plugin.json"
+        data = json.loads(path.read_text())
+        data["version"] = "999.0.0"
+        path.write_text(json.dumps(data))
+    else:
+        path = target / ".mcp.json"
+        data = json.loads(path.read_text())
+        data["mcpServers"]["unifi-network"]["command"] = "arbitrary-command"
+        path.write_text(json.dumps(data))
+    with pytest.raises((support_smoke.SupportSmokeError, FileNotFoundError)):
+        support_smoke.plugin_command(tmp_path, "network", {})
+
+
+def test_support_cli_routes_without_generic_lifecycles(monkeypatch, tmp_path):
+    import live_smoke
+    import support_smoke
+
+    monkeypatch.setattr(
+        sys, "argv", ["live_smoke.py", "--server", "all", "--phase", "support", "--report-dir", str(tmp_path)]
+    )
+    run = AsyncMock(return_value={"success": True, "records": []})
+    monkeypatch.setattr(support_smoke, "run_support_phase", run)
+    assert live_smoke.main() == 0
+    run.assert_awaited_once_with("all", live_smoke.REPO_ROOT, None)
+    assert len(list(tmp_path.glob("support-*.json"))) == 1
+
+
 def test_live_smoke_setup_aborts_before_registration_when_authentication_fails(monkeypatch):
     import live_smoke
 
