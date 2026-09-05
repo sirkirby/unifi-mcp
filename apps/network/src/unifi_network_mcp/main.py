@@ -12,7 +12,7 @@ from unifi_network_mcp.bootstrap import (
     UNIFI_TOOL_REGISTRATION_MODE,
     logger,
 )  # ensures logging/env setup early
-from unifi_network_mcp.categories import NETWORK_CATEGORY_MAP, TOOL_MODULE_MAP, setup_lazy_loading
+from unifi_network_mcp.categories import NETWORK_CATEGORY_MAP, TOOL_MODULE_MAP, policy_gates, setup_lazy_loading
 from unifi_network_mcp.jobs import get_job_status, start_async_tool
 
 # Shared singletons
@@ -46,7 +46,7 @@ logger.info("Using global Manager instances.")
 
 async def main_async():
     """Main asynchronous function to setup and run the server."""
-    from unifi_core.policy_gate import check_deprecated_env_vars
+    from unifi_core.policy_gate import check_deprecated_env_vars, check_unknown_policy_env_vars
     from unifi_mcp_shared.bootstrap import assert_credentials_configured
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
     from unifi_mcp_shared.tool_registration import register_tools_for_mode
@@ -55,6 +55,7 @@ async def main_async():
     install_asyncio_exception_handler(logger)
     apply_log_level(config, "unifi-network-mcp")
     check_deprecated_env_vars("network", logger)
+    check_unknown_policy_env_vars("network", logger, policy_gates(), NETWORK_CATEGORY_MAP)
     assert_credentials_configured(config, plugin_name="unifi-network", env_prefix="NETWORK", logger=logger)
 
     # Initialize the global Unifi connection

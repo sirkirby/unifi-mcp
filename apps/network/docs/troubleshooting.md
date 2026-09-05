@@ -82,6 +82,21 @@ denying the call:
 export UNIFI_POLICY_NETWORK_NETWORKS_CREATE=true
 ```
 
+### Policy variable set but the action is still denied
+
+**Cause:** The variable name does not match a gate this server registers, so it
+is never read. Category names in `UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>`
+are the config keys listed in [permissions.md](permissions.md), which differ from
+the `permission_category` shorthand in `tools_manifest.json`.
+
+**Fix:** At startup the server logs every unrecognized `UNIFI_POLICY_*` variable
+with the closest valid names:
+```
+[policy] Unrecognized env var UNIFI_POLICY_NETWORK_CLIENT_GROUP_DELETE: no gate in the network tool manifest matches it. Did you mean UNIFI_POLICY_NETWORK_CLIENT_GROUPS_DELETE, ...?
+```
+Rename the variable to the suggested name and restart the server. The same applies
+in the deny direction: a misnamed variable set to `false` blocks nothing.
+
 ### No tools visible at all
 
 **Check:**

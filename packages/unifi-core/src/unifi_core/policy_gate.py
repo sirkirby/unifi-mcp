@@ -11,12 +11,19 @@ Permission mode controls mutation handling:
     UNIFI_<SERVER>_TOOL_PERMISSION_MODE=confirm|bypass  - per-server
 """
 
+import difflib
 import logging
 import os
+from collections.abc import Iterable
 
 logger = logging.getLogger(__name__)
 
 VALID_PERMISSION_MODES = ("confirm", "bypass")
+_POLICY_PREFIX = "UNIFI_POLICY_"
+# Servers that share the UNIFI_POLICY_ namespace; a variable whose first
+# segment names another one of these is left to that server's own scan.
+_SERVER_PREFIXES = frozenset({"NETWORK", "PROTECT", "ACCESS"})
+_MAX_REPORTED_UNKNOWN = 20
 _TRUTHY = frozenset(("true", "1", "yes", "on"))
 _FALSY = frozenset(("false", "0", "no", "off"))
 
@@ -36,6 +43,16 @@ class PolicyGateChecker:
         """Resolve category shorthand to config key."""
         return self.category_map.get(category, category)
 
+    def env_var_names(self, category: str, action: str) -> list[str]:
+        """Env vars that gate *action* on *category*, most specific first."""
+        config_key = self._resolve_category(category).upper()
+        action_upper = action.upper()
+        return [
+            f"{_POLICY_PREFIX}{self.server_prefix}_{config_key}_{action_upper}",
+            f"{_POLICY_PREFIX}{self.server_prefix}_{action_upper}",
+            f"{_POLICY_PREFIX}{action_upper}",
+        ]
+
     def check(self, category: str, action: str) -> bool:
         """Check if an action is allowed by policy gates.
 
@@ -46,17 +63,7 @@ class PolicyGateChecker:
         if action.lower() == "read":
             return True
 
-        config_key = self._resolve_category(category).upper()
-        action_upper = action.upper()
-
-        # Most specific wins: category > server > global
-        env_vars = [
-            f"UNIFI_POLICY_{self.server_prefix}_{config_key}_{action_upper}",
-            f"UNIFI_POLICY_{self.server_prefix}_{action_upper}",
-            f"UNIFI_POLICY_{action_upper}",
-        ]
-
-        for var in env_vars:
+        for var in self.env_var_names(category, action):
             value = os.environ.get(var)
             if value is not None:
                 normalized = value.strip().lower()
@@ -68,7 +75,7 @@ class PolicyGateChecker:
                 return result
 
         # 4. Backwards compat: old UNIFI_PERMISSIONS_ format
-        old_var = f"UNIFI_PERMISSIONS_{config_key}_{action_upper}"
+        old_var = f"UNIFI_PERMISSIONS_{self._resolve_category(category).upper()}_{action.upper()}"
         old_value = os.environ.get(old_var)
         if old_value is not None:
             normalized = old_value.strip().lower()
@@ -79,9 +86,7 @@ class PolicyGateChecker:
 
     def denial_message(self, category: str, action: str) -> str:
         """Build a user-friendly denial message with enable hint."""
-        config_key = self._resolve_category(category).upper()
-        action_upper = action.upper()
-        enable_var = f"UNIFI_POLICY_{self.server_prefix}_{config_key}_{action_upper}"
+        enable_var = self.env_var_names(category, action)[0]
         return f"{action.capitalize()} is disabled by policy for {category}. Set {enable_var}=true to enable."
 
 
@@ -132,3 +137,62 @@ def check_deprecated_env_vars(server_prefix: str, logger) -> None:
     # Also check UNIFI_AUTO_CONFIRM
     if os.environ.get("UNIFI_AUTO_CONFIRM"):
         logger.warning("[permissions] UNIFI_AUTO_CONFIRM is deprecated. Use UNIFI_TOOL_PERMISSION_MODE=bypass instead.")
+
+
+def check_unknown_policy_env_vars(
+    server_prefix: str,
+    logger,
+    gates: Iterable[tuple[str, str]],
+    category_map: dict[str, str] | None = None,
+) -> list[str]:
+    """Warn at startup about UNIFI_POLICY_* env vars no registered gate matches.
+
+    *gates* are the ``(permission_category, permission_action)`` pairs the
+    server's tools register, as the manifest records them; *category_map* is
+    the server's shorthand-to-config-key map, so valid names are built exactly
+    as :class:`PolicyGateChecker` builds them. Read actions are never gated.
+
+    A variable is reported when it matches no registered gate, unless its first
+    segment names another known server. Variable names are logged, values are
+    not. Warns only; returns the unrecognized names.
+    """
+    checker = PolicyGateChecker(server_prefix, category_map)
+    valid = {
+        name
+        for category, action in gates
+        if action.lower() != "read"
+        for name in checker.env_var_names(category, action)
+    }
+    if not valid:
+        logger.warning("[policy] No policy gates registered for %s; skipping the UNIFI_POLICY_* scan", server_prefix)
+        return []
+    valid_sorted = sorted(valid)
+    other_servers = _SERVER_PREFIXES - {checker.server_prefix}
+
+    unknown: list[str] = []
+    for name in sorted(os.environ):
+        if not name.startswith(_POLICY_PREFIX) or name in valid:
+            continue
+        if name[len(_POLICY_PREFIX) :].split("_", 1)[0] in other_servers:
+            continue
+        unknown.append(name)
+        if len(unknown) > _MAX_REPORTED_UNKNOWN:
+            continue
+        suggestions = difflib.get_close_matches(name, valid_sorted, n=3, cutoff=0.6)
+        hint = (
+            f"Did you mean {', '.join(suggestions)}?"
+            if suggestions
+            else "Valid names are listed in the server's permissions documentation."
+        )
+        logger.warning(
+            "[policy] Unrecognized env var %s: no gate in the %s tool manifest matches it. %s",
+            name.replace("\n", "\\n").replace("\r", "\\r"),
+            server_prefix.lower(),
+            hint,
+        )
+    if len(unknown) > _MAX_REPORTED_UNKNOWN:
+        logger.warning(
+            "[policy] %d more unrecognized UNIFI_POLICY_* variables not listed",
+            len(unknown) - _MAX_REPORTED_UNKNOWN,
+        )
+    return unknown
