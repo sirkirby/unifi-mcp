@@ -4013,6 +4013,18 @@ def test_support_request_rejects_unknown_or_multiple_codes(support_request: obje
         "I am scanning the supplied payload for this reported behavior.",
         "I am studying the attached bundle for this reported behavior.",
         "I am evaluating the supplied output for this reported behavior.",
+        "Could the reporter upload the support bundle for diagnosis?",
+        "Would a user please provide the JSON output for diagnosis?",
+        "Can contributors also attach the logs for diagnosis?",
+        "Should the author generate the support bundle for diagnosis?",
+        "May they share the sanitized output with maintainers?",
+        "Will the maintainer collect the evidence for diagnosis?",
+        "The support bundle is required to be uploaded by the reporter.",
+        "The logs are requested to be attached for diagnosis.",
+        "The output is expected to be provided by the user.",
+        "The evidence was required to be shared for diagnosis.",
+        "The files were requested to be uploaded for diagnosis.",
+        "The support bundle is supposed to be generated for diagnosis.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
@@ -4044,6 +4056,9 @@ def test_agent_free_form_text_cannot_claim_attachment_inspection_or_render_suppo
         "The JSON output should contain the documented field.",
         "The maintainer is reviewing the reproduction steps.",
         "The workflow uploads a file that should contain the documented field.",
+        "Could the reporter describe the reproduction steps?",
+        "The JSON output is required to contain the documented field.",
+        "The logs are expected to contain timestamps for each event.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
