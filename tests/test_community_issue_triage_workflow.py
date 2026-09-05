@@ -4037,6 +4037,16 @@ def test_support_request_rejects_unknown_or_multiple_codes(support_request: obje
         "We reviewed the logs and confirmed this behavior.",
         "The maintainer inspected the evidence and confirmed this behavior.",
         "The linked bundle has already been reviewed for this behavior.",
+        "Ask the reporter to upload the support bundle for diagnosis.",
+        "Tell the user to attach the logs for diagnosis.",
+        "Please request that the reporter provide the JSON output.",
+        "Instruct the author to share the support bundle.",
+        "Ask them to generate the support bundle for diagnosis.",
+        "We should ask the reporter to upload the support bundle.",
+        "Could we ask the reporter to upload the support bundle?",
+        "I have already carefully reviewed the logs for this behavior.",
+        "The reporter personally inspected the evidence for this behavior.",
+        "I've reviewed the JSON output and confirmed this behavior.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
@@ -4077,6 +4087,13 @@ def test_agent_free_form_text_cannot_claim_attachment_inspection_or_render_suppo
         "The parser has read the JSON output incorrectly.",
         "The JSON output is parsed incorrectly by the parser.",
         "The attachment contains malformed JSON in both reports.",
+        "The reporter explains that the parser reads JSON output incorrectly.",
+        "The user reports that the server checks the payload incorrectly.",
+        "We suspect that the client opens files with the wrong encoding.",
+        "The reporter explains that the JSON output is parsed incorrectly.",
+        "Ask the reporter to describe the reproduction steps.",
+        "Could we ask the reporter to describe the reproduction steps?",
+        "The form asks users to upload files during normal operation.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])

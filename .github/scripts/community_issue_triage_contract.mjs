@@ -1966,17 +1966,20 @@ const SUPPORT_REQUEST_MODAL = String.raw`(?:must|should|shall|can|could|may|migh
 const SUPPORT_PASSIVE_OBLIGATION = String.raw`(?:is|are|am|was|were|be|been|being)\s+(?:asked|requested|required|expected|encouraged|supposed) to`;
 const SUPPORT_REQUEST_OBLIGATION = String.raw`(?:${SUPPORT_REQUEST_MODAL}|needs?(?: to)?|ha(?:s|ve) to|ought to|${SUPPORT_PASSIVE_OBLIGATION})`;
 const SUPPORT_SUPPLIED_ARTIFACT = String.raw`\b(?:attachments?\b|(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT})`;
+const SUPPORT_INSPECTION_AUXILIARIES = String.raw`(?:(?:am|is|are|was|were|have|has|had|been|being|already|just|also|now|previously|personally|carefully|thoroughly|recently|actually)\s+){0,6}`;
 const UNSAFE_SUPPORT_REASON_PATTERNS = [
   // Inspection needs claim context: a human actor, supplied evidence, or past
   // passive assessment. Routine descriptions such as "the parser reads JSON"
   // and "JSON is parsed incorrectly" do not claim attachment inspection.
-  new RegExp(String.raw`\b${SUPPORT_REQUEST_ACTOR}\b[^.!?;]{0,60}${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  new RegExp(String.raw`\b${SUPPORT_REQUEST_ACTOR}(?:\s+|['’](?:ve|re|m|d|s)\s+)${SUPPORT_INSPECTION_AUXILIARIES}${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
   new RegExp(`${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_SUPPLIED_ARTIFACT}`, "iu"),
   new RegExp(`${SUPPORT_SUPPLIED_ARTIFACT}[^.!?;]{0,120}${SUPPORT_INSPECTION}`, "iu"),
   new RegExp(String.raw`${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:was|were|ha(?:s|ve|d)\s+(?:already\s+)?been)\b[^.!?;]{0,30}${SUPPORT_INSPECTION}`, "iu"),
   new RegExp(String.raw`\b(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:proves?|confirms?|shows?|demonstrates?|establishes?)\b`, "iu"),
   // Direct requests belong in the fixed support_request renderer, never free text.
   new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\byou\s+(?:${SUPPORT_REQUEST_OBLIGATION}\s+)?)${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  // Delegating a support request is still a request, not a factual rationale.
+  new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\b${SUPPORT_REQUEST_ACTOR}\s+${SUPPORT_REQUEST_OBLIGATION}\s+|\b${SUPPORT_REQUEST_MODAL}\s+(?:(?:the|a|an|our)\s+)?${SUPPORT_REQUEST_ACTOR}\s+)(?:ask|request|tell|instruct|encourage|require)\s+(?:that\s+)?(?:(?:the|a|an|this|that|our)\s+)?(?:${SUPPORT_REQUEST_ACTOR}|me|us|him|her|them)\s+(?:to\s+)?(?:(?:also|now|please|then|first)\s+)?(?:${SUPPORT_REQUEST_OBLIGATION}\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
   // Personal directions are requests too, not factual label rationales.
   new RegExp(String.raw`\b${SUPPORT_REQUEST_ACTOR}\s+${SUPPORT_REQUEST_OBLIGATION}\s+(?:(?:also|now|please|then|first|probably)\s+)?(?:${SUPPORT_PASSIVE_OBLIGATION}\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
   // Questions invert the same modal and actor: "Could the reporter upload ...?".
