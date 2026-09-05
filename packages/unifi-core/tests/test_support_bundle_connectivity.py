@@ -14,6 +14,7 @@ from unifi_core.access.managers.connection_manager import AccessConnectionManage
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.protect.managers.connection_manager import ProtectConnectionManager
 from unifi_core.support_bundle import connectivity_http_outcome, connectivity_probe_result
+from unifi_core.support_transport import no_retry_support_request
 from yarl import URL
 
 
@@ -92,23 +93,27 @@ def test_connectivity_result_uses_only_fixed_status_and_duration_vocabularies() 
 
 
 @pytest.mark.asyncio
-async def test_network_probe_uses_existing_session_once_without_reconnect() -> None:
+@pytest.mark.parametrize("verify_ssl", [False, True])
+@pytest.mark.parametrize("is_unifi_os", [False, True])
+async def test_network_probe_uses_existing_session_once_without_reconnect(verify_ssl: bool, is_unifi_os: bool) -> None:
     context = _ResponseContext(200)
     session = _Session(context)
-    manager = ConnectionManager("controller.example.invalid", "private-user", "private-password")
+    manager = ConnectionManager("controller.example.invalid", "private-user", "private-password", verify_ssl=verify_ssl)
     manager._initialized = True
     manager._aiohttp_session = session
-    manager._unifi_os_override = True
-    manager.controller = SimpleNamespace(connectivity=SimpleNamespace(is_unifi_os=True))
+    manager._unifi_os_override = is_unifi_os
+    manager.controller = SimpleNamespace(connectivity=SimpleNamespace(is_unifi_os=is_unifi_os))
     manager.initialize = AsyncMock()
 
     result = await manager.support_connectivity_probe()
 
     assert result.outcome == "success"
     assert len(session.calls) == 1
-    assert session.calls[0][0][1].endswith("/proxy/network/api/self/sites")
+    path = "/proxy/network/api/self/sites" if is_unifi_os else "/api/self/sites"
+    assert session.calls[0][0][1] == f"{manager.url_base}{path}"
     assert session.calls[0][1]["timeout"].total == 10
     assert session.calls[0][1]["allow_redirects"] is False
+    assert session.calls[0][1]["ssl"] is (None if verify_ssl else False)
     assert context.exited is True
     assert context.body_read is False
     manager.initialize.assert_not_awaited()
@@ -276,3 +281,115 @@ async def test_cancellation_propagates_without_closing_or_replacing_shared_sessi
     assert task.done()
     assert manager._aiohttp_session is session
     assert session.closed is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["network", "protect", "access_developer", "access_proxy"])
+@pytest.mark.parametrize("use_probe_middleware", [False, True])
+async def test_aiohttp_stale_connection_has_one_wire_attempt_for_support_only(
+    product: str, use_probe_middleware: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercise real aiohttp retry logic, not a fake session's request count."""
+    attempts = 0
+    warm_writer: asyncio.StreamWriter | None = None
+    probe_writers: list[asyncio.StreamWriter] = []
+    handlers: set[asyncio.Task[None]] = set()
+
+    async def serve(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        nonlocal attempts, warm_writer
+        task = asyncio.current_task()
+        assert task is not None
+        handlers.add(task)
+        try:
+            while True:
+                headers = await reader.readuntil(b"\r\n\r\n")
+                path = headers.split(b" ", 2)[1]
+                if path == b"/warm":
+                    warm_writer = writer
+                else:
+                    attempts += 1
+                    probe_writers.append(writer)
+                    if attempts == 1:
+                        # Drop the reused connection after receiving the GET.
+                        break
+                writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                await writer.drain()
+        except asyncio.IncompleteReadError:
+            pass
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            handlers.discard(task)
+
+    server = await asyncio.start_server(serve, "127.0.0.1", 0)
+    port = server.sockets[0].getsockname()[1]
+    base = f"http://127.0.0.1:{port}"
+    try:
+        async with server, aiohttp.ClientSession() as session:
+            real_request = session.request
+
+            def local_request(method: str, url: Any, **kwargs: Any) -> Any:
+                # Redirect only the test transport to loopback; retain the actual
+                # manager request options and aiohttp's complete request loop.
+                if not use_probe_middleware:
+                    kwargs.pop("middlewares", None)
+                return real_request(method, f"{base}{URL(url).path}", **kwargs)
+
+            monkeypatch.setattr(session, "request", local_request)
+            if product == "network":
+                manager = ConnectionManager("controller.example.invalid", "user", "password")
+                manager._aiohttp_session = session
+                manager.controller = SimpleNamespace(connectivity=SimpleNamespace(is_unifi_os=False))
+            elif product == "protect":
+                manager = ProtectConnectionManager("controller.example.invalid", "user", "password")
+                manager._client = SimpleNamespace(_session=session, _url=URL(base), headers={})
+            else:
+                manager = AccessConnectionManager("controller.example.invalid", "user", "password")
+                if product == "access_developer":
+                    manager._api_client_available = True
+                    manager._api_client = object()
+                    manager._api_session = session
+                else:
+                    manager._proxy_available = True
+                    manager._proxy_session = session
+            manager._initialized = True
+            warm_ssl = manager._ssl_context if product.startswith("access") else False
+            async with session.get(f"{base}/warm", ssl=warm_ssl) as response:
+                await response.read()
+            result = await manager.support_connectivity_probe()
+
+            assert probe_writers[0] is warm_writer
+            assert attempts == (1 if use_probe_middleware else 2)
+            assert result.outcome == ("connection" if use_probe_middleware else "success")
+            assert not session.closed
+            # The same session remains usable for ordinary controller calls.
+            async with session.get(f"{base}/ordinary") as response:
+                assert response.status == 200
+    finally:
+        server.close()
+        await server.wait_closed()
+        if handlers:
+            await asyncio.gather(*handlers)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_type", [aiohttp.ClientOSError, aiohttp.ServerDisconnectedError])
+async def test_support_transport_reduces_retryable_errors_without_copying_details(error_type: type[Exception]) -> None:
+    handler = AsyncMock(side_effect=error_type("private transport canary"))
+    request = object()
+
+    with pytest.raises(aiohttp.ClientConnectionError) as caught:
+        await no_retry_support_request(request, handler)
+
+    assert type(caught.value) is aiohttp.ClientConnectionError
+    assert str(caught.value) == "Support connectivity transport failed"
+    assert caught.value.__suppress_context__ is True
+    handler.assert_awaited_once_with(request)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [asyncio.CancelledError(), asyncio.TimeoutError()])
+async def test_support_transport_preserves_cancellation_and_timeout(error: BaseException) -> None:
+    with pytest.raises(type(error)) as caught:
+        await no_retry_support_request(object(), AsyncMock(side_effect=error))
+    assert caught.value is error

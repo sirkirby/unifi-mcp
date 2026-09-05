@@ -29,6 +29,7 @@ from unifi_core.support_bundle import (
     connectivity_http_outcome,
     connectivity_probe_result,
 )
+from unifi_core.support_transport import no_retry_support_request
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -428,6 +429,7 @@ class ConnectionManager:
                 timeout=aiohttp.ClientTimeout(total=10),
                 ssl=False if not self.verify_ssl else None,
                 allow_redirects=False,
+                middlewares=(no_retry_support_request,),
             ) as response:
                 outcome = connectivity_http_outcome(response.status)
         except TimeoutError:

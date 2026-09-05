@@ -83,6 +83,7 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 - Product-specific validation models MUST be pydantic BaseModel classes in `packages/unifi-core/src/unifi_core/<server>/models/<domain>.py` — never inline JSON schema dicts in tool functions or app-local schemas modules
 - Cross-product privacy contracts that use one discriminated schema for Network, Protect, and Access MUST remain a single closed model in a dedicated root `unifi-core` domain module (currently `unifi_core/support_bundle.py`); do not duplicate that contract under each server
 - No monkey-patches in production code
+- One-shot support probes MUST use the request-scoped middleware in `unifi_core/support_transport.py` to prevent aiohttp's internal GET retry. Never toggle shared-session retry settings; keep transport behavior out of the pure support-bundle privacy kernel.
 - **Anchor:** `apps/network/src/unifi_network_mcp/config/config.yaml`
 
 ### API Surface Boundaries
