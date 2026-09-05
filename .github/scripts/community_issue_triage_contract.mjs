@@ -97,8 +97,6 @@ const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
   /^["']?(?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|removed|hidden|masked|omitted|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?[.!]?$/iu;
 const SENSITIVE_LABEL_CANDIDATE_PATTERN =
   /(?:^|[^A-Za-z0-9])(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|pin(?:[ _-]?code)?|community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?=$|[^A-Za-z0-9])/iu;
-const BARE_SENSITIVE_MULTILINE_LABEL_PATTERN =
-  /^(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))$/iu;
 const MARKDOWN_TABLE_SEPARATOR_PATTERN =
   /^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/u;
 const SAFE_STRUCTURAL_LABEL_PATTERN =
@@ -660,10 +658,11 @@ function markdownTableEndIndex(lines, firstRowIndex) {
 }
 
 function sensitiveMarkdownTableColumns(cells) {
-  const sensitiveColumns = new Set();
+  const sensitiveColumns = new Map();
   for (let cellIndex = 0; cellIndex < cells.length; cellIndex += 1) {
-    if (isSensitiveMultilineLabel(normalizeMarkdownTableLabel(cells[cellIndex]))) {
-      sensitiveColumns.add(cellIndex);
+    const label = normalizeMarkdownTableLabel(cells[cellIndex]);
+    if (isSensitiveMultilineLabel(label)) {
+      sensitiveColumns.set(cellIndex, label);
     }
   }
   return sensitiveColumns;
@@ -683,14 +682,14 @@ function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referen
     const cells = markdownTableCells(lines[rowIndex]);
     if (!cells) throw new Error("Markdown table boundary invariant failed");
     const nextIsSeparator = rowIndex + 1 < endIndex && isMarkdownTableSeparator(lines[rowIndex + 1]);
-    const candidateSensitiveColumns = nextIsSeparator ? sensitiveMarkdownTableColumns(cells) : new Set();
+    const candidateSensitiveColumns = nextIsSeparator ? sensitiveMarkdownTableColumns(cells) : new Map();
     if (nextIsSeparator && hasSensitiveDiscardedTableLabel(cells)) return true;
     if (isMarkdownTableSeparator(lines[rowIndex])) continue;
-    for (const cellIndex of sensitiveColumns) {
+    for (const [cellIndex, label] of sensitiveColumns) {
       const candidateValue = stripMarkdownWrappers(cells[cellIndex] || "");
       if (
         candidateValue !== "" &&
-        (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(candidateValue) ||
+        (!isBenignValueForSensitiveLabel(candidateValue, label) ||
           isResolvedPlaceholderReference(candidateValue, referenceLabels))
       ) {
         return true;
@@ -703,7 +702,7 @@ function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referen
         isSensitiveMultilineLabel(label) &&
         (hasSensitiveDiscardedLabelMarkup(cells[cellIndex]) ||
           (candidateValue !== "" &&
-            (!BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(candidateValue) ||
+            (!isBenignValueForSensitiveLabel(candidateValue, label) ||
               isResolvedPlaceholderReference(candidateValue, referenceLabels))))
       ) {
         return true;
@@ -842,14 +841,11 @@ function parseSensitiveLabelLine(line) {
   }
   const standaloneLabel = normalizeMarkdownTableLabel(standaloneSource);
   const normalizedMarkup = standaloneLabel !== standaloneSource;
-  if (
-    (normalizedMarkup && isSensitiveMultilineLabel(standaloneLabel)) ||
-    (!normalizedMarkup && BARE_SENSITIVE_MULTILINE_LABEL_PATTERN.test(standaloneLabel))
-  ) {
+  if (isSensitiveMultilineLabel(standaloneLabel)) {
     return {
       label: standaloneLabel,
       inlineValue: hasSensitiveDiscardedLabelMarkup(standaloneSource) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
-      structural: false,
+      structural: normalizedMarkup,
     };
   }
   return null;
@@ -880,8 +876,19 @@ function parseSensitiveLabelAt(lines, index) {
     : null;
 }
 
-function isSensitiveStructuralBoundaryAt(lines, index) {
-  return parseSensitiveLabelAt(lines, index)?.structural === true;
+function isSensitiveStructuralBoundaryAt(lines, index, referenceLabels) {
+  const match = parseSensitiveLabelAt(lines, index);
+  if (!match) return false;
+  if (match.structural) return true;
+  if (match.inlineValue !== "") return false;
+  let valueIndex = match.valueIndex;
+  while (valueIndex < lines.length && lines[valueIndex].trim() === "") valueIndex += 1;
+  if (valueIndex >= lines.length) return false;
+  const candidateValue = stripMarkdownWrappers(normalizeMarkdownContentLine(lines[valueIndex]));
+  return (
+    isBenignValueForSensitiveLabel(candidateValue, match.label) &&
+    !isResolvedPlaceholderReference(candidateValue, referenceLabels)
+  );
 }
 
 function isSafeStructuralBoundary(line) {
@@ -910,7 +917,7 @@ function containsSensitiveMultilineValue(value) {
       for (let continuationIndex = index + 1; continuationIndex < lines.length; continuationIndex += 1) {
         const continuation = lines[continuationIndex];
         if (continuation.trim() === "") continue;
-        if (isSensitiveStructuralBoundaryAt(lines, continuationIndex)) break;
+        if (isSensitiveStructuralBoundaryAt(lines, continuationIndex, referenceLabels)) break;
         if (isSafeStructuralBoundary(continuation)) break;
         if (!isBenignValueForSensitiveLabel(normalizeMarkdownContentLine(continuation), labelMatch.label)) return true;
       }
@@ -942,7 +949,10 @@ function containsSensitiveMultilineValue(value) {
       continue;
     }
 
-    if (isSensitiveStructuralBoundaryAt(lines, valueIndex) || isSafeStructuralBoundary(lines[valueIndex])) continue;
+    if (
+      parseSensitiveLabelAt(lines, valueIndex)?.structural === true ||
+      isSafeStructuralBoundary(lines[valueIndex])
+    ) continue;
     const normalizedFirstValue = normalizeMarkdownContentLine(lines[valueIndex]);
     if (
       !isBenignValueForSensitiveLabel(normalizedFirstValue, labelMatch.label) ||
@@ -951,7 +961,7 @@ function containsSensitiveMultilineValue(value) {
     for (let continuationIndex = valueIndex + 1; continuationIndex < lines.length; continuationIndex += 1) {
       const continuation = lines[continuationIndex];
       if (continuation.trim() === "") continue;
-      if (isSensitiveStructuralBoundaryAt(lines, continuationIndex)) break;
+      if (isSensitiveStructuralBoundaryAt(lines, continuationIndex, referenceLabels)) break;
       if (isSafeStructuralBoundary(continuation)) break;
       if (!isBenignValueForSensitiveLabel(normalizeMarkdownContentLine(continuation), labelMatch.label)) return true;
     }

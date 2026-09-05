@@ -2354,6 +2354,12 @@ def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
         "Password\n========\nhunter2long",
         "Password\nhunter2long",
         "Password\nsecret",
+        "Password\nsecret\n[REDACTED]",
+        "Password\ntoken\nmissing",
+        "Server password\nhunter2long",
+        "Password for controller\nhunter2long",
+        "Value for controller password\nhunter2long",
+        "Controller API token\nabcdefghijklmnop",
         "Testing authenticated session:\nsession-identifier-value",
         "**Password**:\nhunter2long",
         "**Password**\nhunter2long",
@@ -2403,9 +2409,7 @@ def test_oversized_non_label_line_does_not_become_a_sensitive_label():
 @pytest.mark.parametrize("marker", ["[", "*", "_", "~", "`"])
 def test_oversized_malformed_markdown_labels_fail_closed_in_bounded_time(marker: str):
     payload = _snapshot_payload()
-    payload["issues"][str(TARGET_NUMBER)]["body"] = (
-        marker * 50_000 + "Password" + marker * 50_000 + "\nhunter2long"
-    )
+    payload["issues"][str(TARGET_NUMBER)]["body"] = marker * 50_000 + "Password" + marker * 50_000 + "\nhunter2long"
     created = _create_snapshot(payload)
     assert created["bundle"]["status"] == "sensitive_stop"
 
@@ -2463,6 +2467,10 @@ def test_sensitive_table_scanner_checks_data_rows_before_embedded_header_transit
         "password:\n\n[REDACTED]",
         "**Password**\n[REDACTED]",
         "Password\n[REDACTED]",
+        "**Password**\n[REDACTED]\n**Token**\n[REDACTED]",
+        "Password\n[REDACTED]\nToken\n[REDACTED]",
+        "Testing authenticated session | Result\n--- | ---\nThe endpoint returns 200 | passed",
+        "Field | Value\n--- | ---\nTesting authenticated session | The endpoint returns 200",
         "<strong>Password</strong>\nunavailable",
         "Password is:\n[REDACTED]",
         "API token was:\nunavailable",
