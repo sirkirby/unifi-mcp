@@ -149,6 +149,8 @@ Failure stops the matrix without retrying authentication.
 Canary checks also cover stderr emitted after catalog discovery, during support calls and shutdown.
 Ordinary startup diagnostics are outside this support-tool privacy check and may include controller addresses;
 they remain private and must not be posted as support evidence.
+Non-empty configured identity/secret values shorter than four characters stop the phase before server startup,
+because reliable token matching cannot be claimed for those values. They are never silently excluded.
 
 For installed-wheel verification, use an isolated Python environment with the app wheels installed and invoke
 `uv run --no-project --python /path/to/venv/bin/python scripts/live_smoke.py --server all --phase support`.

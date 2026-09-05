@@ -76,6 +76,8 @@ def test_support_accepts_closed_bundle_and_exact_plugin_version(support_payload)
     [
         ("connection", "connected", False, "connected"),
         ("runtime", "registration_mode", "eager", "registration_mode"),
+        ("runtime", "content_mode", "json", "adaptive_content_mode"),
+        ("runtime", "content_mode", "text", "adaptive_content_mode"),
         ("server", "version", "0.29.8", "plugin_package_version"),
         ("server", "feature_flags", [], "redaction_override_exercised"),
         ("server", "unexpected", "private", "bundle_schema"),
@@ -125,6 +127,22 @@ def test_support_canaries_handle_json_escaping_without_public_package_collisions
     support_payload["extra"] = secret
     with pytest.raises(support_smoke.SupportSmokeError, match="private_canary"):
         support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", canaries, None)
+
+
+@pytest.mark.parametrize("secret", ["x", "xy", "xyz"])
+def test_support_short_canaries_fail_closed_before_server_start(monkeypatch, tmp_path, secret):
+    from unittest.mock import Mock
+
+    import support_smoke
+
+    monkeypatch.setenv("UNIFI_USERNAME", secret)
+    start = Mock()
+    monkeypatch.setattr(support_smoke, "stdio_client", start)
+    with pytest.raises(support_smoke.SupportSmokeError, match="short_private_canary"):
+        support_smoke.private_canaries({"UNIFI_USERNAME": secret})
+    assert support_smoke.private_canaries({"UNIFI_USERNAME": ""}) == set()
+    assert asyncio.run(support_smoke.run_support_phase("network", tmp_path))["success"] is False
+    start.assert_not_called()
 
 
 @pytest.mark.parametrize("form", ["raw", "sha256", "base64", "json"])

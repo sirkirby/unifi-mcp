@@ -64,9 +64,10 @@ def support_environment(root: Path, mode: str) -> dict[str, str]:
 def private_canaries(env: dict[str, str]) -> set[bytes]:
     canaries = set()
     for key, value in env.items():
-        if not key.startswith("UNIFI_") or len(value) < 4:
+        if not key.startswith("UNIFI_") or not value:
             continue
         if any(part in key for part in ("HOST", "USERNAME", "PASSWORD", "API_KEY", "TOKEN")):
+            require(len(value) >= 4, "short_private_canary")
             raw = value.encode()
             canaries.update((raw, hashlib.sha256(raw).hexdigest().encode(), base64.b64encode(raw)))
             canaries.update(json.dumps(value, ensure_ascii=ascii_only)[1:-1].encode() for ascii_only in (True, False))
@@ -105,6 +106,7 @@ def validate_bundle(
         raise SupportSmokeError("bundle_schema") from None
     require(bundle.product == product and bundle.probe.probe == probe, "product_probe_identity")
     require(bundle.runtime.registration_mode == mode, "registration_mode")
+    require(bundle.runtime.content_mode == "dual", "adaptive_content_mode")
     require(bundle.connection.connected is True, "connected")
     require(bundle.server.package == f"unifi-{product}-mcp", "package_identity")
     require(version is None or bundle.server.version == version, "plugin_package_version")
@@ -223,6 +225,7 @@ async def run_support_phase(server: str, root: Path, plugin_root: Path | None = 
                     if plugin_root is not None:
                         command, arguments, version = plugin_command(plugin_root, product, env)
                         env["UV_CACHE_DIR"] = cache
+                    private_canaries(env)  # Reject unsupported short canaries before starting a server.
                     parameters = StdioServerParameters(command=command, args=arguments, env=env, cwd=root)
                     with tempfile.TemporaryFile(mode="w+") as stderr:
                         probe_log_start = 0
