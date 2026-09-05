@@ -14,6 +14,7 @@ import os
 import re
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -160,7 +161,12 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
 
 
 async def exercise_session(
-    client: Any, product: str, mode: str, env: dict[str, str], version: str | None
+    client: Any,
+    product: str,
+    mode: str,
+    env: dict[str, str],
+    version: str | None,
+    before_probes: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     prefix = "unifi" if product == "network" else product
     name = f"{prefix}_get_support_bundle"
@@ -175,6 +181,8 @@ async def exercise_session(
         "probe_schema",
     )
     canaries = private_canaries(env)
+    if before_probes is not None:
+        before_probes()
 
     async def call(arguments: dict[str, Any]) -> Any:
         result = await client.call_tool(name, arguments)
@@ -217,15 +225,32 @@ async def run_support_phase(server: str, root: Path, plugin_root: Path | None = 
                         env["UV_CACHE_DIR"] = cache
                     parameters = StdioServerParameters(command=command, args=arguments, env=env, cwd=root)
                     with tempfile.TemporaryFile(mode="w+") as stderr:
+                        probe_log_start = 0
+
+                        def mark_probe_logs() -> None:
+                            nonlocal probe_log_start
+                            stderr.flush()
+                            stderr.seek(0, 2)
+                            probe_log_start = stderr.tell()
+
                         async with asyncio.timeout(180):
                             async with stdio_client(parameters, errlog=stderr) as streams:
                                 async with ClientSession(*streams, read_timeout_seconds=90) as client:
-                                    record = await exercise_session(client, product, mode, env, version)
+                                    record = await exercise_session(
+                                        client, product, mode, env, version, before_probes=mark_probe_logs
+                                    )
                         stderr.seek(0)
                         log = stderr.read(1_048_577)
                         require(len(log) <= 1_048_576, "bounded_process_log")
                         require(INVALID_PROBE not in log, "invalid_input_log_echo")
-                        require(not contains_private_canary(log, private_canaries(env)), "process_log_private_canary")
+                        # Ordinary startup diagnostics are not shareable support
+                        # output. Check all logs after catalog discovery, including
+                        # shutdown, without persisting either part in the report.
+                        stderr.seek(probe_log_start)
+                        require(
+                            not contains_private_canary(stderr.read(), private_canaries(env)),
+                            "probe_log_private_canary",
+                        )
                     records.append(record)
                     print(f"support {product} {mode}: passed", flush=True)
                 except Exception:

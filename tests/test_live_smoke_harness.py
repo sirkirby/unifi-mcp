@@ -161,6 +161,37 @@ def test_support_matrix_rejects_private_stderr_even_after_success(monkeypatch, t
     assert log not in capsys.readouterr().out + json.dumps(report)
 
 
+@pytest.mark.parametrize("probe_leaks", [False, True])
+def test_support_log_boundary_excludes_startup_but_checks_probe_output(monkeypatch, tmp_path, probe_leaks):
+    from contextlib import asynccontextmanager
+
+    import support_smoke
+
+    monkeypatch.setenv("UNIFI_HOST", "private.example")
+    captured = []
+
+    @asynccontextmanager
+    async def transport(parameters, *, errlog):
+        errlog.write("Ordinary startup: private.example\n")
+        captured.append(errlog)
+        yield (None, None)
+
+    @asynccontextmanager
+    async def session(*args, **kwargs):
+        yield None
+
+    async def exercise(*args, before_probes):
+        before_probes()
+        if probe_leaks:
+            captured[-1].write("Support probe: private.example\n")
+        return {"status": "passed"}
+
+    monkeypatch.setattr(support_smoke, "stdio_client", transport)
+    monkeypatch.setattr(support_smoke, "ClientSession", session)
+    monkeypatch.setattr(support_smoke, "exercise_session", exercise)
+    assert asyncio.run(support_smoke.run_support_phase("network", tmp_path))["success"] is not probe_leaks
+
+
 def _support_client(payload, *, structured=False):
     import copy
 
@@ -205,7 +236,13 @@ def test_support_session_exercises_exact_read_only_matrix(support_payload, struc
     import support_smoke
 
     client = _support_client(support_payload, structured=structured)
-    report = asyncio.run(support_smoke.exercise_session(client, "network", "lazy", {}, "0.30.0"))
+
+    def before_probes():
+        client.initialize.assert_awaited_once()
+        client.list_tools.assert_awaited_once()
+        client.call_tool.assert_not_awaited()
+
+    report = asyncio.run(support_smoke.exercise_session(client, "network", "lazy", {}, "0.30.0", before_probes))
     assert report["status"] == "passed"
     assert [call.args for call in client.call_tool.await_args_list] == [
         ("unifi_get_support_bundle", {"probe": probe})

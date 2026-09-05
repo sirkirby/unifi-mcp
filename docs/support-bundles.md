@@ -142,10 +142,13 @@ The MCP host, model provider, transcript retention, and any later GitHub publica
 From the repository root, run `uv run --all-packages python scripts/live_smoke.py --server all --phase support`.
 Selecting this phase explicitly authorizes the bounded, read-only connectivity probes. It starts real stdio
 servers in lazy, eager, and meta-only modes with adaptive responses and checks discovery, summary/connectivity schemas, the 32 KiB
-envelope limit, configured identity/secret canaries (raw, SHA256, base64), cooldown, invalid-input rejection,
+envelope limit, configured identity/secret canaries (raw, SHA256, base64, JSON-escaped), cooldown, invalid-input rejection,
 and sanitizer independence from ordinary response redaction. It never runs mutations or collects resource shapes.
 Reports contain only product/mode, pass/fail, and byte counts; bundles and subprocess logs are not saved.
 Failure stops the matrix without retrying authentication.
+Canary checks also cover stderr emitted after catalog discovery, during support calls and shutdown.
+Ordinary startup diagnostics are outside this support-tool privacy check and may include controller addresses;
+they remain private and must not be posted as support evidence.
 
 For installed-wheel verification, use an isolated Python environment with the app wheels installed and invoke
 `uv run --no-project --python /path/to/venv/bin/python scripts/live_smoke.py --server all --phase support`.
