@@ -141,7 +141,6 @@ const SUPPORT_REQUEST_TEXT = new Map([
   ["network_support_connectivity", `If you agree to one bounded controller request, run \`unifi_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
   ["protect_support_connectivity", `If you agree to one bounded controller request, run \`protect_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
   ["access_support_connectivity", `If you agree to one bounded controller request, run \`access_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
-  ["protect_support_sensor_shape", `If the server reports this probe as supported and you agree to structural collection, run \`protect_get_support_bundle\` with \`probe="resource_shape"\` and \`resource="sensors"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
 ]);
 const REPOSITORY_EVIDENCE_PATHS = [
   /^(?:README|CONTRIBUTING|SECURITY)\.md$/,
@@ -1967,6 +1966,8 @@ const UNSAFE_SUPPORT_REASON_PATTERNS = [
   new RegExp(String.raw`\b(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:proves?|confirms?|shows?|demonstrates?|establishes?)\b`, "iu"),
   // Direct requests belong in the fixed support_request renderer, never free text.
   new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\byou\s+(?:(?:must|should|can|could|need to)\s+)?)(?:attach|upload|provide|paste|submit|send|share|download)\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  // Third-person directions are requests too, not factual label rationales.
+  new RegExp(String.raw`\b(?:reporters?|users?|authors?|contributors?|maintainers?|they)\s+(?:must|should|can|could|may|might|will|would|needs? to|ha(?:s|ve) to|ought to|(?:is|are) (?:asked|requested|required|expected|encouraged) to)\s+(?:(?:also|now|please|then|first|probably)\s+)?(?:attach|upload|provide|paste|submit|send|share|download)\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
 ];
 
 function normalizeReason(value) {

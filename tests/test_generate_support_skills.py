@@ -66,8 +66,12 @@ def test_support_skills_preserve_the_review_before_share_boundary() -> None:
             assert phrase not in text.lower()
 
 
-def test_only_protect_skill_mentions_the_conditional_resource_shape_probe() -> None:
-    assert "resource_shape" in skill_path("protect").read_text()
-    assert "currently returns `unsupported`" in skill_path("protect").read_text()
+def test_protect_skill_explains_unsupported_shape_with_real_tool_and_summary_fallback() -> None:
+    text = skill_path("protect").read_text()
+    assert 'protect_get_support_bundle(probe="resource_shape", resource="sensors")' in text
+    assert '`resource_shape(resource="sensors")`' not in text
+    assert "currently returns `unsupported`" in text
+    assert "use `summary`" in text
+    assert "Do not request or call this probe in the current release" in text
     assert "resource_shape" not in skill_path("network").read_text()
     assert "resource_shape" not in skill_path("access").read_text()

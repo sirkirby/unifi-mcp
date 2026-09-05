@@ -1167,8 +1167,9 @@ Do not perform substitute network research. You have no GitHub MCP or GitHub cre
 8. For a Network, Protect, or Access MCP issue that lacks relevant environment evidence
    and whose server reaches tool registration, request at most one matching support probe
    through the fixed `support_request` code. Prefer `summary`; request `connectivity` only
-   for connection/authentication behavior, and the Protect sensor-shape probe only for a
-   sensor serialization mismatch. Do not request a support bundle for non-MCP components,
+   for connection/authentication behavior. For sensor serialization mismatches, request
+   `summary` when environment evidence is missing; sensor-shape collection is unsupported
+   in this release and must not be requested. Do not request a support bundle for non-MCP components,
    sensitive/security reports, or pre-start/tool-registration failures. A missing bundle
    alone is never enough to add `needs-info` when deterministic form fields are sufficient.
    The trusted target snapshot must already have exactly one matching `network`, `protect`,
@@ -1225,8 +1226,8 @@ For every normal initial or incomplete-continuation proposal:
   `live_controller_evidence`. When a support request is present, `fields` may be empty.
   Support request codes are exactly `network_support_summary`, `protect_support_summary`,
   `access_support_summary`, `network_support_connectivity`,
-  `protect_support_connectivity`, `access_support_connectivity`, or
-  `protect_support_sensor_shape`. Use at most one code and never place a tool name, probe,
+  `protect_support_connectivity`, or `access_support_connectivity`.
+  Use at most one code and never place a tool name, probe,
   URL, or free-form support instructions in the proposal; trusted code renders them.
 - Repository evidence must come from the immutable local source and use `README.md`,
   `CONTRIBUTING.md`, `SECURITY.md`, a Markdown file under `docs/`, or a Python source

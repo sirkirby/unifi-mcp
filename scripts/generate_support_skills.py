@@ -28,10 +28,11 @@ PRODUCTS = (
 
 def render(product: Product) -> str:
     resource_shape = (
-        "\nFor a suspected Protect sensor serialization mismatch, explain that "
-        '`resource_shape(resource="sensors")` is conditional and currently returns '
-        "`unsupported` unless the installed server has a verified safe sensor-shape source. "
-        "Ask before calling it. Do not claim UP-AirQuality or issue #523 coverage when it is unsupported.\n"
+        "\nFor a suspected Protect sensor serialization mismatch, use `summary` for environment evidence. "
+        '`protect_get_support_bundle(probe="resource_shape", resource="sensors")` '
+        "currently returns `unsupported` because no verified safe sensor-shape source is available. "
+        "Do not request or call this probe in the current release. "
+        "Do not claim UP-AirQuality or issue #523 coverage.\n"
         if product.slug == "protect"
         else ""
     )

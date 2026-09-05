@@ -18,7 +18,7 @@ or opens an issue for the user.
   that it makes one bounded read-only request through the existing authenticated session,
   then ask for explicit confirmation before calling it.
 
-For a suspected Protect sensor serialization mismatch, explain that `resource_shape(resource="sensors")` is conditional and currently returns `unsupported` unless the installed server has a verified safe sensor-shape source. Ask before calling it. Do not claim UP-AirQuality or issue #523 coverage when it is unsupported.
+For a suspected Protect sensor serialization mismatch, use `summary` for environment evidence. `protect_get_support_bundle(probe="resource_shape", resource="sensors")` currently returns `unsupported` because no verified safe sensor-shape source is available. Do not request or call this probe in the current release. Do not claim UP-AirQuality or issue #523 coverage.
 
 If the user asks "show me what will be collected first," explain the selected probe and
 the included/excluded data classes before invoking the tool.

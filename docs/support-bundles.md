@@ -42,13 +42,13 @@ access_get_support_bundle(probe="connectivity")
 
 Connectivity performs one bounded read-only request through the product server's existing authenticated session. It has a 10-second request timeout, does not retry, reconnect, reauthenticate, refresh bootstrap state, or start websocket work, and returns only a fixed outcome plus a duration bucket. Only one live probe runs at a time, and the same probe has a 30-second cooldown.
 
-Protect also defines the conditional call:
+Protect also defines this currently unsupported call:
 
 ```text
 protect_get_support_bundle(probe="resource_shape", resource="sensors")
 ```
 
-In the current version this probe returns `unsupported`: the installed Protect client and available reference controller did not expose a verified UP-AirQuality sensor shape. Do not use it to claim issue #523 coverage. Network and Access resource-shape probes are not supported. Ask before running any `connectivity` or `resource_shape` probe.
+This invocation documents the contract, not an available diagnostic: in the current version it returns `unsupported` because the installed Protect client and available reference controller did not expose a verified UP-AirQuality sensor shape. Do not request or call it in this release; use `summary` for environment evidence instead. Do not claim issue #523 coverage. Network and Access resource-shape probes are also unsupported. Ask before running a `connectivity` probe.
 
 Support tools are intentionally unavailable through every cloud relay path. Generate the bundle against the direct Network, Protect, or Access MCP server. Do not route it through `*_execute`, `*_batch`, or a multi-location fan-out.
 

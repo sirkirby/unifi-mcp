@@ -3780,7 +3780,6 @@ SUPPORT_REQUESTS = {
     "network_support_connectivity": ("unifi_get_support_bundle", 'probe="connectivity"'),
     "protect_support_connectivity": ("protect_get_support_bundle", 'probe="connectivity"'),
     "access_support_connectivity": ("access_get_support_bundle", 'probe="connectivity"'),
-    "protect_support_sensor_shape": ("protect_get_support_bundle", 'probe="resource_shape"'),
 }
 
 
@@ -3811,8 +3810,26 @@ def test_trusted_support_request_codes_render_one_fixed_tool_probe_and_guide(
     assert rendered.count(tool) == 1
     assert rendered.count(probe) == 1
     assert rendered.count(SUPPORT_GUIDE_URL) == 1
-    if code == "protect_support_sensor_shape":
-        assert 'resource="sensors"' in rendered
+
+
+def test_unsupported_protect_sensor_shape_request_is_rejected_for_matching_product():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": "protect"}]
+    bundle = _create_snapshot(payload)["bundle"]
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "missing_information", "fields": [], "support_request": "protect_support_sensor_shape"},
+        label_intents=[
+            {
+                "name": "needs-info",
+                "rationale": "The report needs bounded product evidence for diagnosis.",
+                "confidence": "HIGH",
+            }
+        ],
+    )
+    result = _render(bundle, proposal, "missing_information")
+    assert result.returncode != 0
+    assert "support request is invalid" in result.stderr
 
 
 @pytest.mark.parametrize("code", SUPPORT_REQUESTS)
@@ -3960,6 +3977,13 @@ def test_support_request_rejects_unknown_or_multiple_codes(support_request: obje
         "I reviewed the attachment and verified the reported behavior.",
         "Could you provide the support bundle for further diagnosis?",
         "The logs have already been examined for the reported failure.",
+        "The reporter should upload the support bundle.",
+        "A user must provide the JSON output for diagnosis.",
+        "The author could share the sanitized logs with maintainers.",
+        "They need to attach the support bundle for diagnosis.",
+        "Reporters ought to send the evidence for further diagnosis.",
+        "The reporter should also upload the support bundle.",
+        "The user has to submit the output for diagnosis.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
@@ -3983,6 +4007,8 @@ def test_agent_free_form_text_cannot_claim_attachment_inspection_or_render_suppo
         "The JSON output omits a documented field.",
         "Both reports describe the same logs and screenshots symptom.",
         "The maintainer must review the reproduction steps.",
+        "The reporter uploads artifact files in the failing workflow.",
+        "The author should describe the reproduction steps.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
@@ -4051,7 +4077,8 @@ def test_workflow_support_policy_never_inspects_attachments_or_defaults_to_raw_l
     assert "A missing bundle alone is never enough to add `needs-info`" in normalized
     assert "request at most one matching support probe" in source
     assert "network_support_summary" in source
-    assert "protect_support_sensor_shape" in source
+    assert "protect_support_sensor_shape" not in source
+    assert "For sensor serialization mismatches, request `summary`" in normalized
     assert "raw logs" not in source.lower()
 
 
