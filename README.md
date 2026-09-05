@@ -208,6 +208,8 @@ Set these environment variables (or use a `.env` file):
 | `UNIFI_PASSWORD` | Yes | Password for the local account |
 | `UNIFI_API_KEY` | No | UniFi API key for selected capabilities, including firewall policy ordering and some Protect settings updates |
 
+To keep the secret out of the MCP client's environment (and out of every process the client spawns), set `UNIFI_PASSWORD_FILE` to a path or `UNIFI_PASSWORD_COMMAND` to a command whose stdout is the password instead. The same `_FILE` / `_COMMAND` suffixes work on `UNIFI_API_KEY` and on the per-server variables below. Details are in each server's `docs/configuration.md`.
+
 ### Multi-controller setups
 
 Each server supports its own prefixed environment variables that take priority over the shared `UNIFI_*` variables. This lets you point the Network and Protect servers at different controllers (or different credentials) while keeping a single `.env` file:

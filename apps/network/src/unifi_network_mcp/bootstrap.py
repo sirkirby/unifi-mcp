@@ -26,6 +26,12 @@ from unifi_core.config import setup_logging as _shared_setup_logging
 # ---------------------------------------------------------------------------
 # Environment & logging
 # ---------------------------------------------------------------------------
+# Record which variables the process was started with before any .env is read:
+# the UNIFI_*_FILE / _COMMAND credential indirections are honoured only from there,
+# so a .env in an untrusted project directory cannot make the server run a program.
+from unifi_mcp_shared.bootstrap import snapshot_process_env
+
+snapshot_process_env()
 
 load_dotenv()
 # Under an installed package (pip/uvx), find_dotenv() walks up from this file's

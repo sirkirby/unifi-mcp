@@ -105,7 +105,7 @@ UNIFI_TOOL_REGISTRATION_MODE=lazy  # lazy (default), eager, meta_only
 # UniFi controller connection
 UNIFI_HOST=192.168.1.1
 UNIFI_USERNAME=admin
-UNIFI_PASSWORD=your-password
+UNIFI_PASSWORD=your-password   # or UNIFI_PASSWORD_FILE=<path> / UNIFI_PASSWORD_COMMAND=<argv>
 UNIFI_PORT=443
 UNIFI_SITE=default
 
