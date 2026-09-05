@@ -241,3 +241,26 @@ def test_create_backup_returns_dict_passthrough() -> None:
     sample = {"filename": "backup.unf", "url": "/dl/backup/backup.unf"}
     out = s.serialize_action(sample, tool_name="unifi_create_backup")
     assert out["data"]["filename"] == "backup.unf"
+
+
+def test_mgmt_settings_detail_unwraps_redacts_and_never_carries_stored_secrets() -> None:
+    from unifi_api.graphql.types.network.system import MgmtSettings
+
+    sample = [
+        {
+            "x_ssh_enabled": True,
+            "x_ssh_username": "ubnt",
+            "x_ssh_password": "clear",
+            "x_ssh_sha512passwd": "$6$hash",
+            "x_mgmt_key": "0123456789abcdef",
+            "auto_upgrade_hour": 3,
+        }
+    ]
+    out = MgmtSettings.from_manager_output(sample).to_dict()
+    assert out["x_ssh_enabled"] is True
+    assert out["x_ssh_password"] == "***REDACTED***"
+    assert out["ssh_password_hash_set"] is True and out["mgmt_key_set"] is True and out["api_token_set"] is False
+    raw = MgmtSettings.from_manager_output(sample, redact_sensitive=False).to_dict()
+    assert raw["x_ssh_password"] == "clear"
+    assert "$6$hash" not in repr(raw) and "0123456789abcdef" not in repr(raw)
+    assert MgmtSettings.from_manager_output(None).to_dict() == {}

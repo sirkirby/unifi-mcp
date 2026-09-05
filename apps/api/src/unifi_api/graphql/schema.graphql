@@ -1026,6 +1026,27 @@ type LldpRow {
   capabilities: [String!]!
 }
 
+"""
+Device management (mgmt) site settings; stored credentials are reported as present/absent.
+"""
+type MgmtSettings {
+  xSshEnabled: Boolean
+  xSshUsername: String
+  xSshAuthPasswordEnabled: Boolean
+  xSshPassword: String
+  xSshKeys: JSON
+  debugToolsEnabled: Boolean
+  autoUpgrade: Boolean
+  autoUpgradeHour: Int
+  xSshBindWildcard: Boolean
+  advancedFeatureEnabled: Boolean
+  unifiIdpEnabled: Boolean
+  wifimanEnabled: Boolean
+  sshPasswordHashSet: Boolean
+  mgmtKeySet: Boolean
+  apiTokenSet: Boolean
+}
+
 """A UniFi LAN/VLAN network configuration."""
 type Network {
   id: ID
@@ -1353,6 +1374,11 @@ type NetworkQuery {
 
   """Get SNMP settings."""
   snmpSettings(controller: ID!, site: String! = "default"): SnmpSettings
+
+  """
+  Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.
+  """
+  mgmtSettings(controller: ID!, site: String! = "default"): MgmtSettings
 
   """Get gateway (USG) security / NAT / connection-tracking settings."""
   gatewaySettings(controller: ID!, site: String! = "default"): GatewaySettings

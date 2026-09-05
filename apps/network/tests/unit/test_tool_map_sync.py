@@ -118,3 +118,25 @@ class TestToolMapSync:
                     f"Tool '{tool_name}' has invalid module path: {module_path}\n"
                     f"Part '{part}' is not a valid Python identifier"
                 )
+
+
+def test_every_permission_category_resolves_to_its_documented_policy_gate(monkeypatch):
+    """Each gated tool's category must map to the UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>
+    variable permissions.md documents; a category missing from NETWORK_CATEGORY_MAP would
+    silently fall back to its raw name."""
+    from unifi_core.policy_gate import PolicyGateChecker
+    from unifi_network_mcp.categories import NETWORK_CATEGORY_MAP
+
+    manifest = json.loads(Path("apps/network/src/unifi_network_mcp/tools_manifest.json").read_text())
+    gated = {
+        (t["permission_category"], t["permission_action"]) for t in manifest["tools"] if t.get("permission_category")
+    }
+    assert ("mgmt", "update") in gated
+    for category, action in gated:
+        # Some tools already use the resolved name; the checker falls back to identity.
+        resolved = NETWORK_CATEGORY_MAP.get(category, category)
+        env_var = f"UNIFI_POLICY_NETWORK_{resolved.upper()}_{action.upper()}"
+        monkeypatch.setenv(env_var, "false")
+        checker = PolicyGateChecker(server_prefix="network", category_map=NETWORK_CATEGORY_MAP)
+        assert checker.check(category, action) is False, env_var
+        monkeypatch.delenv(env_var)

@@ -504,6 +504,31 @@ async def test_action_endpoint_update_ack_tuple_success(tmp_path, monkeypatch) -
 
 
 @pytest.mark.asyncio
+async def test_action_endpoint_mgmt_update_is_in_the_catalog(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=(True, None)))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post(
+            "/v1/actions/unifi_update_mgmt_settings",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "site": "default",
+                "controller": cid,
+                "args": {"update_data": {"x_ssh_enabled": False}},
+                "confirm": True,
+            },
+        )
+
+    assert r.status_code == 200, r.text
+    assert r.json() == {"success": True}
+
+
+@pytest.mark.asyncio
 async def test_action_endpoint_update_ack_tuple_failure(tmp_path, monkeypatch) -> None:
     """Regression: a FAILED update ack tuple must report success=false with the
     error message — not top-level success=true with the failure stringified into

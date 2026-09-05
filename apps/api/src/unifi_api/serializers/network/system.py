@@ -19,6 +19,7 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
         "unifi_create_backup": {"kind": RenderKind.DETAIL},
         "unifi_delete_backup": {"kind": RenderKind.DETAIL},
         "unifi_update_autobackup_settings": {"kind": RenderKind.DETAIL},
+        "unifi_update_mgmt_settings": {"kind": RenderKind.DETAIL},
     },
 )
 class SystemMutationAckSerializer(Serializer):

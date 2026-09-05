@@ -3,6 +3,7 @@
 # tool: unifi_get_system_info
 # tool: unifi_get_site_settings
 # tool: unifi_get_snmp_settings
+# tool: unifi_get_mgmt_settings
 # tool: unifi_get_autobackup_settings
 # tool: unifi_get_gateway_settings
 # tool: unifi_list_backups
@@ -109,6 +110,63 @@ async def test_snmp_settings(tmp_path, monkeypatch):
     snmp = body["data"]["network"]["snmpSettings"]
     assert snmp["enabled"] is True
     assert snmp["community"] == "***REDACTED***"
+
+
+@pytest.mark.asyncio
+async def test_mgmt_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network")
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "system_manager", "get_settings"): [
+                {"x_ssh_enabled": True, "x_ssh_username": "ubnt", "x_ssh_password": "clear", "x_mgmt_key": "k"},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ mgmtSettings(controller: "{cid}") {{
+            xSshEnabled xSshUsername xSshPassword mgmtKeySet
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    mgmt = body["data"]["network"]["mgmtSettings"]
+    assert mgmt["xSshEnabled"] is True
+    assert mgmt["xSshUsername"] == "ubnt"
+    assert mgmt["xSshPassword"] == "***REDACTED***"
+    assert mgmt["mgmtKeySet"] is True
+
+
+@pytest.mark.asyncio
+async def test_mgmt_settings_policy_disabled_returns_raw_password_but_never_stored_secrets(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network", redact_sensitive_fields=False)
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "system_manager", "get_settings"): [
+                {"x_ssh_enabled": True, "x_ssh_password": "clear", "x_ssh_sha512passwd": "$6$hash", "x_mgmt_key": "k"},
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ mgmtSettings(controller: "{cid}") {{
+            xSshPassword sshPasswordHashSet mgmtKeySet
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    mgmt = body["data"]["network"]["mgmtSettings"]
+    assert mgmt["xSshPassword"] == "clear"
+    assert mgmt["sshPasswordHashSet"] is True
+    assert "$6$hash" not in str(body)
 
 
 @pytest.mark.asyncio

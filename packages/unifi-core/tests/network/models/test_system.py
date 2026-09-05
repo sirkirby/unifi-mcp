@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.network.models.system import (
     ALARM_MUTABLE_FIELDS,
     ALARM_READ_ONLY_FIELDS,
@@ -424,6 +425,123 @@ class TestSiteSettingsFromController:
     def test_non_dict_returns_defaults(self) -> None:
         ss = site_settings_from_controller(None)
         assert ss.site_id is None
+
+
+class TestMgmtSettings:
+    """The ``mgmt`` site setting: device-SSH management plane. Keys verified on
+    Network 10.6.102; the three stored secrets are never carried, only their
+    presence."""
+
+    RECORD = [
+        {
+            "_id": "m1",
+            "key": "mgmt",
+            "site_id": "s1",
+            "x_ssh_enabled": True,
+            "x_ssh_username": "ubnt",
+            "x_ssh_auth_password_enabled": True,
+            "x_ssh_password": "clear",
+            "x_ssh_sha512passwd": "$6$hash",
+            "x_ssh_keys": [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}],
+            "x_ssh_bind_wildcard": False,
+            "debug_tools_enabled": False,
+            "auto_upgrade": True,
+            "auto_upgrade_hour": 3,
+            "advanced_feature_enabled": False,
+            "unifi_idp_enabled": False,
+            "wifiman_enabled": True,
+            "x_api_token": "tok-3f9a",
+            "x_mgmt_key": "0123456789abcdef",
+        }
+    ]
+
+    def test_field_sets(self) -> None:
+        from unifi_core.network.models.system import (
+            MGMTSETTINGS_MUTABLE_FIELDS,
+            MGMTSETTINGS_READ_ONLY_FIELDS,
+            MgmtSettings,
+        )
+
+        assert MGMTSETTINGS_MUTABLE_FIELDS == {
+            "x_ssh_enabled",
+            "x_ssh_username",
+            "x_ssh_auth_password_enabled",
+            "x_ssh_password",
+            "x_ssh_keys",
+            "debug_tools_enabled",
+            "auto_upgrade",
+            "auto_upgrade_hour",
+        }
+        assert {
+            "ssh_password_hash_set",
+            "mgmt_key_set",
+            "api_token_set",
+            "wifiman_enabled",
+        } <= MGMTSETTINGS_READ_ONLY_FIELDS
+        assert not (MGMTSETTINGS_MUTABLE_FIELDS & MGMTSETTINGS_READ_ONLY_FIELDS)
+        assert MGMTSETTINGS_MUTABLE_FIELDS | MGMTSETTINGS_READ_ONLY_FIELDS == frozenset(MgmtSettings.model_fields)
+
+    def test_from_controller_unwraps_and_reports_secret_presence_only(self) -> None:
+        from unifi_core.network.models.system import mgmt_from_controller
+
+        settings = mgmt_from_controller(self.RECORD)
+        assert settings.x_ssh_enabled is True
+        assert settings.x_ssh_username == "ubnt"
+        assert settings.x_ssh_password == "clear"  # mutable secret, redacted at egress
+        assert settings.x_ssh_keys == [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}]
+        assert settings.auto_upgrade_hour == 3
+        assert settings.ssh_password_hash_set is True
+        assert settings.mgmt_key_set is True
+        assert settings.api_token_set is True
+        dumped = repr(settings.model_dump())
+        assert "$6$hash" not in dumped and "0123456789abcdef" not in dumped and "tok-3f9a" not in dumped
+
+    def test_from_controller_missing_secrets_report_false(self) -> None:
+        from unifi_core.network.models.system import mgmt_from_controller
+
+        settings = mgmt_from_controller([{"x_ssh_enabled": False, "x_ssh_sha512passwd": ""}])
+        assert settings.ssh_password_hash_set is False
+        assert settings.mgmt_key_set is False
+        assert settings.api_token_set is False
+
+    def test_to_controller_update_drops_none_and_keeps_false(self) -> None:
+        from unifi_core.network.models.system import mgmt_to_controller_update
+
+        assert mgmt_to_controller_update({"x_ssh_enabled": False, "x_ssh_username": None}) == {"x_ssh_enabled": False}
+
+    @pytest.mark.parametrize("bad", [{"x_mgmt_key": "k"}, {"ssh_password_hash_set": True}, {"x_ssh_userame": "admin"}])
+    def test_to_controller_update_rejects_unknown_and_read_only_keys_by_name(self, bad) -> None:
+        """A typo or a stored-secret key must not be a silent drop beside a valid field."""
+        from unifi_core.network.models.system import mgmt_to_controller_update
+
+        with pytest.raises(ValueError, match=next(iter(bad))):
+            mgmt_to_controller_update({"x_ssh_enabled": True, **bad})
+
+    @pytest.mark.parametrize("bad", [25, -1, "abc", 3.5])
+    def test_auto_upgrade_hour_must_be_an_hour(self, bad) -> None:
+        from unifi_core.network.models.system import mgmt_to_controller_update
+
+        with pytest.raises(ValueError, match="auto_upgrade_hour"):
+            mgmt_to_controller_update({"auto_upgrade_hour": bad})
+        assert mgmt_to_controller_update({"auto_upgrade_hour": 0}) == {"auto_upgrade_hour": 0}
+
+    def test_to_controller_update_sends_coerced_values(self) -> None:
+        """An LLM client sends "true" and "12"; the controller must get the typed values."""
+        from unifi_core.network.models.system import mgmt_to_controller_update
+
+        assert mgmt_to_controller_update({"x_ssh_enabled": "true", "auto_upgrade_hour": "12"}) == {
+            "x_ssh_enabled": True,
+            "auto_upgrade_hour": 12,
+        }
+
+    def test_validation_error_never_quotes_the_value(self) -> None:
+        from unifi_core.network.models.system import mgmt_to_controller_update
+
+        with pytest.raises(ValueError) as excinfo:
+            mgmt_to_controller_update({"x_ssh_password": 12345, "x_ssh_keys": "not-a-list"})
+        message = str(excinfo.value)
+        assert "x_ssh_password" in message and "x_ssh_keys" in message
+        assert "12345" not in message and "not-a-list" not in message
 
 
 class TestEventTypesFromController:

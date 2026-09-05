@@ -27,6 +27,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
+from unifi_core.network.models.system import mgmt_from_controller
 from unifi_core.redaction import redact_value
 
 
@@ -319,6 +320,54 @@ class SnmpSettings:
             version=_get(obj, "version"),
             _had_payload=True,
         )
+
+    def to_dict(self) -> dict:
+        if not self._had_payload:
+            return {}
+        d = asdict(self)
+        d.pop("_had_payload", None)
+        return d
+
+
+@strawberry.type(
+    description="Device management (mgmt) site settings; stored credentials are reported as present/absent."
+)
+class MgmtSettings:
+    x_ssh_enabled: bool | None
+    x_ssh_username: str | None
+    x_ssh_auth_password_enabled: bool | None
+    x_ssh_password: str | None
+    x_ssh_keys: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+    debug_tools_enabled: bool | None
+    auto_upgrade: bool | None
+    auto_upgrade_hour: int | None
+    x_ssh_bind_wildcard: bool | None
+    advanced_feature_enabled: bool | None
+    unifi_idp_enabled: bool | None
+    wifiman_enabled: bool | None
+    ssh_password_hash_set: bool | None
+    mgmt_key_set: bool | None
+    api_token_set: bool | None
+    _had_payload: strawberry.Private[bool] = True
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {"kind": kind}
+
+    @classmethod
+    def from_manager_output(cls, obj: Any, *, redact_sensitive: bool = True) -> "MgmtSettings":
+        if isinstance(obj, list):
+            obj = obj[0] if obj else {}
+        if not isinstance(obj, dict):
+            empty = dict.fromkeys(name for name in cls.__annotations__ if not name.startswith("_"))
+            return cls(**empty, _had_payload=False)
+        # The core converter is the allowlist (stored secrets become booleans);
+        # the one mutable secret is redacted here, at the boundary.
+        core = mgmt_from_controller(obj).model_dump()
+        core["x_ssh_password"] = redact_value(
+            "x_ssh_password", core["x_ssh_password"], redact_sensitive=redact_sensitive
+        )
+        return cls(**core, _had_payload=True)
 
     def to_dict(self) -> dict:
         if not self._had_payload:

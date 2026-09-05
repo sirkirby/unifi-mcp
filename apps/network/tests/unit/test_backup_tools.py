@@ -266,3 +266,221 @@ class TestSnmpTools:
 
         assert result["success"] is True
         assert result["snmp_settings"]["community"] == REDACTED
+
+
+class TestMgmtTools:
+    RECORD = [
+        {
+            "_id": "m1",
+            "key": "mgmt",
+            "x_ssh_enabled": True,
+            "x_ssh_username": "ubnt",
+            "x_ssh_auth_password_enabled": True,
+            "x_ssh_password": "clear",
+            "x_ssh_sha512passwd": "$6$hash",
+            "x_ssh_keys": [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}],
+            "x_ssh_bcrypt_passwd": "$2y$unknown-spelling",
+            "debug_tools_enabled": False,
+            "auto_upgrade": True,
+            "auto_upgrade_hour": 3,
+            "x_api_token": "tok-3f9a",
+            "x_mgmt_key": "0123456789abcdef",
+        }
+    ]
+
+    def _manager(self, monkeypatch, *, update_ok=True):
+        from unifi_network_mcp.tools import system
+
+        mgr = MagicMock()
+        mgr._connection.site = "default"
+        mgr.get_settings = AsyncMock(return_value=self.RECORD)
+        mgr.update_settings = AsyncMock(return_value=update_ok)
+        monkeypatch.setattr(system, "system_manager", mgr)
+        return system, mgr
+
+    @pytest.mark.asyncio
+    async def test_get_redacts_secrets_and_keeps_flags_and_keys(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+
+        result = await system.get_mgmt_settings()
+
+        settings = result["mgmt_settings"]
+        assert result["success"] is True
+        assert settings["x_ssh_enabled"] is True
+        assert settings["x_ssh_auth_password_enabled"] is True
+        assert settings["x_ssh_password"] == REDACTED
+        assert settings["x_ssh_keys"] == [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}]
+        assert settings["ssh_password_hash_set"] is True and settings["mgmt_key_set"] is True
+        for secret in ("$6$hash", "0123456789abcdef", "tok-3f9a", "clear", "$2y$unknown-spelling"):
+            assert secret not in repr(result)
+
+    @pytest.mark.asyncio
+    async def test_get_policy_disabled_still_never_returns_stored_secrets(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+        monkeypatch.setenv("UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS", "false")
+
+        result = await system.get_mgmt_settings()
+
+        assert result["mgmt_settings"]["x_ssh_password"] == "clear"
+        for secret in ("$6$hash", "0123456789abcdef", "tok-3f9a", "$2y$unknown-spelling"):
+            assert secret not in repr(result)
+
+    @pytest.mark.asyncio
+    async def test_preview_uses_live_state_redacts_and_warns_on_ssh_changes(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+
+        result = await system.update_mgmt_settings(
+            update_data={"x_ssh_enabled": False, "x_ssh_password": "new"}, confirm=False
+        )
+
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["current"]["x_ssh_enabled"] is True
+        assert result["preview"]["current"]["x_ssh_password"] == REDACTED
+        assert result["preview"]["proposed"] == {"x_ssh_enabled": False, "x_ssh_password": REDACTED}
+        assert any("every adopted device" in w for w in result["warnings"])
+        assert "new" not in repr(result["preview"]) and "$6$hash" not in repr(result)
+
+    @pytest.mark.asyncio
+    async def test_confirm_sends_only_the_supplied_fields(self, monkeypatch):
+        system, mgr = self._manager(monkeypatch)
+
+        result = await system.update_mgmt_settings(update_data={"auto_upgrade_hour": 4}, confirm=True)
+
+        mgr.update_settings.assert_awaited_once_with("mgmt", {"auto_upgrade_hour": 4})
+        assert result["success"] is True
+        assert result["mgmt_settings"] == {"auto_upgrade_hour": 4}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "update_data,named",
+        [
+            ({}, ""),
+            ({"x_mgmt_key": "k"}, "x_mgmt_key"),
+            ({"unknown": 1}, "unknown"),
+            ({"x_ssh_enabled": True, "x_ssh_userame": "admin"}, "x_ssh_userame"),
+            ({"x_ssh_username": None}, "Updatable keys"),
+        ],
+    )
+    async def test_empty_unknown_or_read_only_updates_are_rejected_by_name(self, monkeypatch, update_data, named):
+        system, mgr = self._manager(monkeypatch)
+
+        result = await system.update_mgmt_settings(update_data=update_data, confirm=True)
+
+        assert result["success"] is False and named in result["error"]
+        mgr.update_settings.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_invalid_hour_is_reported_without_a_write(self, monkeypatch):
+        system, mgr = self._manager(monkeypatch)
+
+        result = await system.update_mgmt_settings(update_data={"auto_upgrade_hour": 25}, confirm=True)
+
+        assert result["success"] is False and "auto_upgrade_hour" in result["error"]
+        mgr.update_settings.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_failures_report_class_or_code_only(self, monkeypatch, caplog):
+        import logging
+
+        system, mgr = self._manager(monkeypatch)
+        mgr.update_settings = AsyncMock(side_effect=RuntimeError("rejected x_ssh_password=hunter2"))
+
+        with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
+            result = await system.update_mgmt_settings(update_data={"x_ssh_password": "hunter2"}, confirm=True)
+
+        assert result["success"] is False and "RuntimeError" in result["error"]
+        assert "hunter2" not in result["error"] and "hunter2" not in caplog.text
+        assert all(r.exc_info is None for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_controller_error_code_is_reported_and_message_shaped_codes_are_not(self, monkeypatch):
+        from aiounifi.errors import AiounifiException
+
+        system, mgr = self._manager(monkeypatch)
+        mgr.update_settings = AsyncMock(
+            side_effect=AiounifiException({"meta": {"rc": "error", "msg": "api.err.InvalidPayload"}, "data": []})
+        )
+        result = await system.update_mgmt_settings(update_data={"x_ssh_password": "hunter2"}, confirm=True)
+        assert result["error"] == "Failed to update management settings: api.err.InvalidPayload"
+
+        mgr.update_settings = AsyncMock(
+            side_effect=AiounifiException({"meta": {"rc": "error", "msg": "api.err.Invalid x_ssh_password=hunter2"}})
+        )
+        result = await system.update_mgmt_settings(update_data={"x_ssh_password": "hunter2"}, confirm=True)
+        assert result["error"] == "Failed to update management settings: AiounifiException"
+
+    @pytest.mark.asyncio
+    async def test_get_and_preview_failures_leak_nothing(self, monkeypatch, caplog):
+        import logging
+
+        system, mgr = self._manager(monkeypatch)
+        mgr.get_settings = AsyncMock(side_effect=RuntimeError("x_ssh_password=hunter2"))
+
+        with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
+            got = await system.get_mgmt_settings()
+            previewed = await system.update_mgmt_settings(update_data={"auto_upgrade": True}, confirm=False)
+
+        for result in (got, previewed):
+            assert result["success"] is False and "RuntimeError" in result["error"]
+            assert "hunter2" not in result["error"]
+        assert "hunter2" not in caplog.text
+        mgr.update_settings.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_controller_rejecting_the_write_is_reported(self, monkeypatch):
+        system, _ = self._manager(monkeypatch, update_ok=False)
+
+        result = await system.update_mgmt_settings(update_data={"auto_upgrade": True}, confirm=True)
+
+        assert result == {"success": False, "error": "Failed to update management settings."}
+
+    @pytest.mark.asyncio
+    async def test_rejected_update_names_the_key_and_the_allowed_ones(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+
+        result = await system.update_mgmt_settings(update_data={"led_enabled": True}, confirm=True)
+
+        assert "led_enabled" in result["error"] and "x_ssh_enabled" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_confirm_echo_excludes_the_ids_the_manager_adds(self, monkeypatch):
+        """The real manager adds _id and key to the dict it is given."""
+        system, mgr = self._manager(monkeypatch)
+
+        async def _mutating_update(section, data):
+            data["_id"], data["key"] = "m1", section
+            return True
+
+        mgr.update_settings = AsyncMock(side_effect=_mutating_update)
+
+        result = await system.update_mgmt_settings(update_data={"auto_upgrade": True}, confirm=True)
+
+        assert result["mgmt_settings"] == {"auto_upgrade": True}
+
+    @pytest.mark.asyncio
+    async def test_ssh_keys_write_is_warned(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+
+        result = await system.update_mgmt_settings(update_data={"x_ssh_keys": []}, confirm=False)
+
+        assert any("authorised-key list" in w for w in result["warnings"])
+
+    @pytest.mark.asyncio
+    async def test_malformed_field_is_named_without_its_value(self, monkeypatch):
+        system, mgr = self._manager(monkeypatch)
+
+        result = await system.update_mgmt_settings(update_data={"x_ssh_keys": "not-a-list"}, confirm=True)
+
+        assert result["success"] is False and "x_ssh_keys" in result["error"] and "not-a-list" not in result["error"]
+        mgr.update_settings.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_ssh_keys_round_trip_unredacted(self, monkeypatch):
+        system, mgr = self._manager(monkeypatch)
+        keys = [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}]
+
+        preview = await system.update_mgmt_settings(update_data={"x_ssh_keys": keys}, confirm=False)
+        await system.update_mgmt_settings(update_data={"x_ssh_keys": keys}, confirm=True)
+
+        assert preview["preview"]["proposed"]["x_ssh_keys"] == keys
+        mgr.update_settings.assert_awaited_once_with("mgmt", {"x_ssh_keys": keys})

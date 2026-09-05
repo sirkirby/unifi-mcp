@@ -1,4 +1,4 @@
-# Network Server Tool Reference (193 tools)
+# Network Server Tool Reference (195 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 
@@ -550,11 +550,12 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## System
 
 <!-- AUTO:tools:system,config -->
-10 tools.
+12 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
 | `unifi_get_autobackup_settings` | Read | Get auto-backup settings (enabled state, schedule, retention count, cloud backup). |
+| `unifi_get_mgmt_settings` | Read | Get the site's device management settings (the mgmt site setting): whether device SSH is enabled, the SSH user name, whether password log... |
 | `unifi_get_network_health` | Read | Returns per-subsystem health status for WAN, LAN, WLAN, and VPN — each with status, number of gateways/switches/APs, and active user counts. |
 | `unifi_get_site_settings` | Read | Get current site settings (e.g., country code, timezone, connectivity monitoring). |
 | `unifi_get_snmp_settings` | Read | Get current SNMP settings for the site (enabled state, community string). |
@@ -563,6 +564,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_create_backup` | Mutate | Create a new backup of the controller configuration. |
 | `unifi_delete_backup` | Mutate | Delete a backup file from the controller. |
 | `unifi_update_autobackup_settings` | Mutate | Update auto-backup settings. |
+| `unifi_update_mgmt_settings` | Mutate | Update the site's device management settings (device SSH, debug tools, automatic upgrades). |
 | `unifi_update_snmp_settings` | Mutate | Update SNMP settings for the site (enable/disable, set community string). |
 <!-- /AUTO:tools:system,config -->
 

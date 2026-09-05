@@ -91,6 +91,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # Gateway/SNMP settings updates pre-fetch current state for previews.
     "unifi_update_gateway_settings": ("gateway_settings_manager", "update_gateway_settings"),
     "unifi_update_snmp_settings": ("system_manager", "update_settings"),
+    "unifi_update_mgmt_settings": ("system_manager", "update_settings"),
     # Firewall: tool layer pre-fetches list to find policy by id.
     "unifi_toggle_firewall_policy": ("firewall_manager", "toggle_firewall_policy"),
     "unifi_get_firewall_policy_details": ("firewall_manager", "get_firewall_policy_by_id"),
@@ -907,6 +908,15 @@ def _translate_wlan_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[
     return (), {"wlan_id": args["wlan_id"], "update_data": validate_update(dict(args.get("update_data") or {}))}
 
 
+def _translate_mgmt_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.system import mgmt_to_controller_update
+
+    settings_data = mgmt_to_controller_update(dict(args.get("update_data") or {}))
+    if not settings_data:
+        raise ValueError("Update data is effectively empty or invalid.")
+    return (), {"section": "mgmt", "settings_data": settings_data}
+
+
 def _translate_snmp_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     from unifi_core.network.models.system import snmp_to_controller_update
 
@@ -1700,6 +1710,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     ),
     "unifi_get_site_dpi_traffic": _spec(_rename_and_drop(rename={"group_by": "by"}), "by"),
     "unifi_get_snmp_settings": _spec(_rename_and_drop(constants={"section": "snmp"}), "section"),
+    "unifi_get_mgmt_settings": _spec(_rename_and_drop(constants={"section": "mgmt"}), "section"),
     "unifi_get_speedtest_results": _spec(lambda args: _translate_duration(args, default_hours=24), "duration_hours"),
     "unifi_get_traffic_flows": _spec(_translate_traffic_flows, "query"),
     "unifi_list_devices": _spec(
@@ -1730,5 +1741,6 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         "cycle_enabled",
     ),
     "unifi_update_snmp_settings": _spec(_translate_snmp_update, "section", "settings_data"),
+    "unifi_update_mgmt_settings": _spec(_translate_mgmt_update, "section", "settings_data"),
     "unifi_update_switch_stp": _spec(_translate_switch_stp, "device_mac", "config_data"),
 }
