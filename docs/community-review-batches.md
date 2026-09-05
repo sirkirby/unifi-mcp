@@ -1,6 +1,7 @@
 # Parallel community PR review — pilot runbook
 
-Status: draft process, ready for a pilot; not an activated skill.
+Status: piloted process; skill entrypoint at
+[community-pr-batch-review](../.agents/skills/community-pr-batch-review/SKILL.md).
 Developed from the September 2026 community intake batch. The worked example is
 a triage snapshot, not a current review or merge-readiness statement.
 
@@ -134,6 +135,13 @@ installed dependency versions and imported module paths. Do not share the root
 `.venv`, regenerate artifacts in another worker's checkout, or concurrently run
 commands that reset shared Git state.
 
+Assign test execution to a named owner; primary and independent reviewers should
+not independently launch the same check. Run package test suites in separate
+processes when their `tests` namespaces collide. Source snapshots may need generated
+build metadata: provide it from the recorded build and verify that implementation
+imports still resolve to the reviewed source. Use unique, exclusively created log
+files; invalidate and rerun checks whose output was overwritten or interleaved.
+
 A worktree is not a security sandbox. Before executing fork code or authorizing
 its CI, inspect changed workflows, install/build hooks and executable code. Use
 a credential-free, restricted execution environment for untrusted tests; explicitly
@@ -235,14 +243,17 @@ diffs, important risks received independent challenge, and time was saved withou
 missing gates. Tighten the process where it failed. Run at least one follow-up wave
 with those corrections, including a complex PR and a controlled stale-head exercise.
 
-Promote the stable orchestration instructions to
-`.agents/skills/community-pr-batch-review/SKILL.md` when those checks are satisfied.
+The pilot produced the orchestration instructions in
+`.agents/skills/community-pr-batch-review/SKILL.md`. Apply the same evidence standard
+when materially revising that skill.
 Keep its core short: triggers, authorization scope, grouping, dispatch, synthesis,
 evidence invalidation and handoff. Put templates and worked examples in references;
 link existing review/live/release skills rather than copying their rules. Validate
 repo skill synchronization and governance compatibility at promotion time, including
 the host's sequential-only compatibility mapping. Keep changing batch results out
-of the skill and leave no old PR status presented as current.
+of the skill and leave no old PR status presented as current. See the
+[pilot lessons](../.agents/skills/community-pr-batch-review/references/pilot-lessons.md)
+for observed execution and review failures that shaped the current instructions.
 
 ## Worked example: September 5 tmowbrey batch
 
