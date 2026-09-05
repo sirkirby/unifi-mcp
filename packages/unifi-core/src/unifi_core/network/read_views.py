@@ -783,6 +783,20 @@ def shape_wlan_list(
     }
 
 
+_FIREWALL_TARGETING_KEYS = (
+    "matching_target_type",
+    "ips",
+    "ip_group_id",
+    "network_ids",
+    "client_macs",
+    "port",
+    "port_group_id",
+    "match_opposite_ips",
+    "match_opposite_networks",
+    "match_opposite_ports",
+)
+
+
 def shape_firewall_policy_list(
     policies: list[Any],
     *,
@@ -819,11 +833,17 @@ def shape_firewall_policy_list(
             "rule_index": shaped.index,
             "description": policy.get("description", policy.get("desc", "")),
         }
+        if shaped.protocol and shaped.protocol != "all":
+            entry["protocol"] = shaped.protocol
         for direction in ("source", "destination"):
             endpoint = getattr(shaped, direction)
             if endpoint and isinstance(endpoint, dict):
                 targeting = {"zone_id": endpoint.get("zone_id"), "matching_target": endpoint.get("matching_target")}
-                for key in ("matching_target_type", "ips", "network_ids", "client_macs"):
+                port_matching_type = endpoint.get("port_matching_type")
+                if port_matching_type and port_matching_type != "ANY":
+                    targeting["port_matching_type"] = port_matching_type
+                # Selectors and inversion flags, in display order; only set (truthy) values are shown.
+                for key in _FIREWALL_TARGETING_KEYS:
                     if endpoint.get(key):
                         targeting[key] = endpoint[key]
                 entry[direction] = targeting

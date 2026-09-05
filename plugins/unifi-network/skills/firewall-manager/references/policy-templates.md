@@ -183,3 +183,62 @@ Rule 2 — Catch-all block:
 - Destination: Internal zone, `matching_target: ANY`
 
 **Important:** Rule order matters. The allow rule must be evaluated before the catch-all block. Confirm rule ordering with `unifi_list_firewall_policies` after creation.
+
+---
+
+## Template 7: DNS Egress Lock (External Resolvers)
+
+**Name:** `dns-egress-lock-external`
+
+**Description:**
+Forces clients in a zone to use approved external DNS resolvers. Allows DNS (53) and DNS-over-TLS (853) to the resolver IPs, then blocks those ports to every other external destination. Run once per zone that carries client networks.
+
+**Parameters required:**
+- `client_zone_id` — Client zone ID
+- `external_zone_id` — External zone ID
+- `resolver_ips` — Approved resolver IPs, IPv4 and IPv6 (e.g., `["9.9.9.9", "2620:fe::fe"]`)
+
+**Tools to call:**
+1. `unifi_list_firewall_zones`
+2. `unifi_create_firewall_policy` (twice — allow first, then block)
+
+**Rule details:**
+
+Rule 1 — Allow approved resolvers:
+- Action: `ALLOW`, protocol `tcp_udp`, `ip_version: BOTH`
+- Source: Client zone, `matching_target: ANY`
+- Destination: External zone, `matching_target: IP`, `matching_target_type: SPECIFIC`, `ips: <resolver_ips>`, `port_matching_type: SPECIFIC`, `port: "53,853"`
+
+Rule 2 — Block other external DNS:
+- Action: `BLOCK`, protocol `tcp_udp`, `ip_version: BOTH`, `connection_state_type: ALL`
+- Source: Client zone, `matching_target: ANY`
+- Destination: External zone, `matching_target: ANY`, `port_matching_type: SPECIFIC`, `port: "53,853"`
+
+**Important:** Create the allow rule first. New custom policies append after existing custom policies and before built-ins, so creation order is evaluation order. DNS-over-HTTPS (443) is not addressable at this layer. When the approved resolver lives on the LAN, use Template 8 instead.
+
+---
+
+## Template 8: DNS Egress Lock (Local Resolver)
+
+**Name:** `dns-egress-lock-local`
+
+**Description:**
+Forces clients to a local resolver such as a Pi-hole by blocking DNS (53) and DNS-over-TLS (853) to the External zone for every source except the resolver itself. Run once per zone that carries client networks, including the resolver's own zone.
+
+**Parameters required:**
+- `client_zone_id` — Client zone ID
+- `external_zone_id` — External zone ID
+- `resolver_group_id` — Address group holding the resolver IP(s) (`unifi_create_firewall_group`, `group_type: address-group`)
+
+**Tools to call:**
+1. `unifi_list_firewall_zones`
+2. `unifi_list_firewall_groups` (or `unifi_create_firewall_group` for the resolver group)
+3. `unifi_create_firewall_policy`
+
+**Rule details:**
+
+- Action: `BLOCK`, protocol `tcp_udp`, `ip_version: BOTH`, `connection_state_type: ALL`
+- Source: Client zone, `matching_target: IP`, `matching_target_type: OBJECT`, `ip_group_id: <resolver_group_id>`, `match_opposite_ips: true`
+- Destination: External zone, `matching_target: ANY`, `port_matching_type: SPECIFIC`, `port: "53,853"`
+
+**Important:** The resolver is exempted on the source side. A destination ALLOW cannot name a LAN resolver from the External zone, and a plain BLOCK would cut the resolver's own upstream queries and take DNS down for every VLAN. An IPv6 resolver needs a separate `ipv6-address-group` and an `ip_version: IPV6` copy of the policy. Safe when the gateway itself is the resolver: its upstream queries originate in the Gateway zone.

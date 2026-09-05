@@ -205,3 +205,99 @@ templates:
       Multi-step template: create rules in order (allow NVR first, then catch-all block).
       Rule order matters — the allow rule must be evaluated before the catch-all block.
       Verify ordering with unifi_list_firewall_policies after creation.
+
+  - name: dns-egress-lock-external
+    description: Force clients to approved external DNS resolvers (allow the resolvers on 53/853, block all other external DNS)
+    params:
+      - name: client_zone_id
+        description: Client zone ID from unifi_list_firewall_zones (repeat the template for every zone that carries client networks)
+        required: true
+      - name: external_zone_id
+        description: External zone ID from unifi_list_firewall_zones
+        required: true
+      - name: resolver_ips
+        description: Approved resolver IPs, IPv4 and IPv6 (e.g. ["9.9.9.9", "2620:fe::fe"])
+        required: true
+    rules:
+      - step: 1
+        name: "Allow approved DNS resolvers"
+        description: Let clients reach the approved resolvers on DNS (53) and DNS-over-TLS (853)
+        tool: unifi_create_firewall_policy
+        payload:
+          name: "EGR-02 Allow approved DNS resolvers"
+          action: ALLOW
+          protocol: tcp_udp
+          ip_version: BOTH
+          enabled: true
+          source:
+            zone_id: "{client_zone_id}"
+            matching_target: ANY
+          destination:
+            zone_id: "{external_zone_id}"
+            matching_target: IP
+            matching_target_type: SPECIFIC
+            ips: "{resolver_ips}"
+            port_matching_type: SPECIFIC
+            port: "53,853"
+      - step: 2
+        name: "Block other external DNS"
+        description: Block DNS and DNS-over-TLS to every other external destination
+        tool: unifi_create_firewall_policy
+        payload:
+          name: "EGR-02 Block other external DNS"
+          action: BLOCK
+          protocol: tcp_udp
+          ip_version: BOTH
+          connection_state_type: ALL
+          enabled: true
+          source:
+            zone_id: "{client_zone_id}"
+            matching_target: ANY
+          destination:
+            zone_id: "{external_zone_id}"
+            matching_target: ANY
+            port_matching_type: SPECIFIC
+            port: "53,853"
+    notes: >
+      Create step 1 before step 2: new custom policies append after existing custom policies and
+      before built-ins, so creation order is evaluation order. Run once per client zone. Use
+      dns-egress-lock-local instead when the approved resolver is on the LAN (Pi-hole style).
+      DNS-over-HTTPS (443) cannot be blocked at this layer. Safe when the gateway itself is the
+      resolver: its upstream queries originate in the Gateway zone.
+
+  - name: dns-egress-lock-local
+    description: Force clients to a local DNS resolver (Pi-hole style) by blocking external DNS for everything except the resolver
+    params:
+      - name: client_zone_id
+        description: Client zone ID from unifi_list_firewall_zones (repeat for every zone that carries client networks, including the resolver's own zone)
+        required: true
+      - name: external_zone_id
+        description: External zone ID from unifi_list_firewall_zones
+        required: true
+      - name: resolver_group_id
+        description: Address group holding the resolver IP(s), from unifi_list_firewall_groups (create one with unifi_create_firewall_group, group_type address-group)
+        required: true
+    tool: unifi_create_firewall_policy
+    payload:
+      name: "EGR-02 Block external DNS except resolver"
+      action: BLOCK
+      protocol: tcp_udp
+      ip_version: BOTH
+      connection_state_type: ALL
+      enabled: true
+      source:
+        zone_id: "{client_zone_id}"
+        matching_target: IP
+        matching_target_type: OBJECT
+        ip_group_id: "{resolver_group_id}"
+        match_opposite_ips: true
+      destination:
+        zone_id: "{external_zone_id}"
+        matching_target: ANY
+        port_matching_type: SPECIFIC
+        port: "53,853"
+    notes: >
+      The resolver is exempted on the source side (match_opposite_ips) because a destination ALLOW
+      cannot name a LAN resolver from the External zone, and a plain BLOCK would cut the resolver's
+      own upstream queries and take DNS down for every VLAN. An IPv6 resolver needs a separate
+      ipv6-address-group and an ip_version IPV6 copy of this policy. Run once per client zone.
