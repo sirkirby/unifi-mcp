@@ -458,7 +458,9 @@ async def update_firewall_policy(
                 "(ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, "
                 "logging, connection_state_type, connection_states, schedule. "
                 "Partial source/destination dicts are merged with the current policy; "
-                "port_matching_type='SPECIFIC' needs port, 'OBJECT' needs port_group_id. "
+                "port_matching_type='SPECIFIC' needs port, 'OBJECT' needs port_group_id, and "
+                "switching to another port_matching_type (or a side off CLIENT) retires the "
+                "stored port/port_group_id/client_macs automatically. "
                 "index is not accepted here; use unifi_reorder_firewall_policies to change order."
             )
         ),

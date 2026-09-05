@@ -95,6 +95,8 @@ Set `protocol` to `tcp`, `udp` or `tcp_udp` on a port-matching policy. The contr
 
 `match_opposite_ports: true` inverts the match (every port except the listed ones); `match_opposite_ips: true` does the same for `ips` / `ip_group_id`.
 
+A selector is only accepted together with the value that activates it: `port` needs `port_matching_type: SPECIFIC`, `port_group_id` needs `OBJECT`, `client_macs` needs `matching_target: CLIENT`. The controller would accept and silently ignore any other combination, so the tools reject it. To turn port matching off on an existing policy, update with `{"destination": {"port_matching_type": "ANY"}}`; the tool retires the stored `port` for you. The same applies when switching between `SPECIFIC` and `OBJECT`, or moving a side off `CLIENT`.
+
 ### Example — any-in-zone to any-in-zone
 
 ```json

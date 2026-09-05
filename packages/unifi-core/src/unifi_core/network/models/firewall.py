@@ -583,7 +583,10 @@ def _port_string_error(direction: str, value: Any) -> str | None:
 
 def _client_macs_error(direction: str, value: Any) -> str | None:
     if not isinstance(value, list) or not value or any(not looks_like_mac(mac) for mac in value):
-        return "%s.client_macs must be a non-empty array of MAC addresses when matching_target is 'CLIENT'." % direction
+        return "%s.client_macs %r must be a non-empty array of MAC addresses when matching_target is 'CLIENT'." % (
+            direction,
+            value,
+        )
     return None
 
 
