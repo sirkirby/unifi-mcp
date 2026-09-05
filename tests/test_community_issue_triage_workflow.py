@@ -4025,6 +4025,18 @@ def test_support_request_rejects_unknown_or_multiple_codes(support_request: obje
         "The evidence was required to be shared for diagnosis.",
         "The files were requested to be uploaded for diagnosis.",
         "The support bundle is supposed to be generated for diagnosis.",
+        "Could I upload the support bundle for diagnosis?",
+        "We should share the logs with maintainers.",
+        "Can we generate the support bundle for diagnosis?",
+        "I must provide the JSON output for diagnosis.",
+        "Could the reporter be asked to upload the support bundle?",
+        "Would the user be requested to share the logs?",
+        "Can we be expected to provide the JSON output?",
+        "The reporter should be asked to upload the support bundle.",
+        "I have read the JSON output and confirmed this behavior.",
+        "We reviewed the logs and confirmed this behavior.",
+        "The maintainer inspected the evidence and confirmed this behavior.",
+        "The linked bundle has already been reviewed for this behavior.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
@@ -4059,6 +4071,12 @@ def test_agent_free_form_text_cannot_claim_attachment_inspection_or_render_suppo
         "Could the reporter describe the reproduction steps?",
         "The JSON output is required to contain the documented field.",
         "The logs are expected to contain timestamps for each event.",
+        "The parser reads JSON output incorrectly.",
+        "The server checks the payload before dispatching the request.",
+        "The client opens files using an incorrect encoding.",
+        "The parser has read the JSON output incorrectly.",
+        "The JSON output is parsed incorrectly by the parser.",
+        "The attachment contains malformed JSON in both reports.",
     ],
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])

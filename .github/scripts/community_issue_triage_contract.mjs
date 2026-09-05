@@ -1961,20 +1961,26 @@ const SUPPORT_ARTIFACT = String.raw`\b(?:attachments?|bundles?|files?|json|links
 // Cover tense/aspect changes so "is reviewing" is not safer than "reviewed".
 const SUPPORT_INSPECTION = String.raw`\b(?:inspect(?:s|ed|ing)?|review(?:s|ed|ing)?|read(?:s|ing)?|download(?:s|ed|ing)?|open(?:s|ed|ing)?|analy[sz](?:e[ds]?|ing)|examin(?:e[ds]?|ing)|check(?:s|ed|ing)?|verif(?:y|ies|ied|ying)|view(?:s|ed|ing)?|see(?:s|ing)?|saw|seen|observ(?:e[ds]?|ing)|look(?:s|ed|ing)? at|pars(?:e[ds]?|ing)|scan(?:s|ned|ning)?|stud(?:y|ies|ied|ying)|evaluat(?:e[ds]?|ing))\b`;
 const SUPPORT_REQUEST_ACTION = String.raw`(?:attach(?:es|ed|ing)?|upload(?:s|ed|ing)?|provid(?:e[ds]?|ing)|past(?:e[ds]?|ing)|submit(?:s|ted|ting)?|send(?:s|ing)?|sent|shar(?:e[ds]?|ing)|download(?:s|ed|ing)?|generat(?:e[ds]?|ing)|run(?:s|ning)?|ran|collect(?:s|ed|ing)?|captur(?:e[ds]?|ing)|execut(?:e[ds]?|ing)|invok(?:e[ds]?|ing)|export(?:s|ed|ing)?|produc(?:e[ds]?|ing)|fetch(?:es|ed|ing)?|retriev(?:e[ds]?|ing)|obtain(?:s|ed|ing)?)`;
-const SUPPORT_REQUEST_ACTOR = String.raw`(?:reporters?|users?|authors?|contributors?|maintainers?|they|you)`;
+const SUPPORT_REQUEST_ACTOR = String.raw`(?:reporters?|users?|authors?|contributors?|maintainers?|I|we|he|she|they|you)`;
 const SUPPORT_REQUEST_MODAL = String.raw`(?:must|should|shall|can|could|may|might|will|would)`;
-const SUPPORT_REQUEST_OBLIGATION = String.raw`(?:${SUPPORT_REQUEST_MODAL}|needs?(?: to)?|ha(?:s|ve) to|ought to|(?:is|are|was|were)\s+(?:asked|requested|required|expected|encouraged|supposed) to)`;
+const SUPPORT_PASSIVE_OBLIGATION = String.raw`(?:is|are|am|was|were|be|been|being)\s+(?:asked|requested|required|expected|encouraged|supposed) to`;
+const SUPPORT_REQUEST_OBLIGATION = String.raw`(?:${SUPPORT_REQUEST_MODAL}|needs?(?: to)?|ha(?:s|ve) to|ought to|${SUPPORT_PASSIVE_OBLIGATION})`;
+const SUPPORT_SUPPLIED_ARTIFACT = String.raw`\b(?:attachments?\b|(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT})`;
 const UNSAFE_SUPPORT_REASON_PATTERNS = [
-  // Claims of inspection, including passive voice. Ordinary artifact nouns are safe.
-  new RegExp(`${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
-  new RegExp(`${SUPPORT_ARTIFACT}[^.!?;]{0,120}${SUPPORT_INSPECTION}`, "iu"),
+  // Inspection needs claim context: a human actor, supplied evidence, or past
+  // passive assessment. Routine descriptions such as "the parser reads JSON"
+  // and "JSON is parsed incorrectly" do not claim attachment inspection.
+  new RegExp(String.raw`\b${SUPPORT_REQUEST_ACTOR}\b[^.!?;]{0,60}${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  new RegExp(`${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_SUPPLIED_ARTIFACT}`, "iu"),
+  new RegExp(`${SUPPORT_SUPPLIED_ARTIFACT}[^.!?;]{0,120}${SUPPORT_INSPECTION}`, "iu"),
+  new RegExp(String.raw`${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:was|were|ha(?:s|ve|d)\s+(?:already\s+)?been)\b[^.!?;]{0,30}${SUPPORT_INSPECTION}`, "iu"),
   new RegExp(String.raw`\b(?:attached|linked|supplied|uploaded|provided|pasted)\b[^.!?;]{0,60}${SUPPORT_ARTIFACT}[^.!?;]{0,60}\b(?:proves?|confirms?|shows?|demonstrates?|establishes?)\b`, "iu"),
   // Direct requests belong in the fixed support_request renderer, never free text.
   new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\byou\s+(?:${SUPPORT_REQUEST_OBLIGATION}\s+)?)${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
-  // Third-person directions are requests too, not factual label rationales.
-  new RegExp(String.raw`\b${SUPPORT_REQUEST_ACTOR}\s+${SUPPORT_REQUEST_OBLIGATION}\s+(?:(?:also|now|please|then|first|probably)\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  // Personal directions are requests too, not factual label rationales.
+  new RegExp(String.raw`\b${SUPPORT_REQUEST_ACTOR}\s+${SUPPORT_REQUEST_OBLIGATION}\s+(?:(?:also|now|please|then|first|probably)\s+)?(?:${SUPPORT_PASSIVE_OBLIGATION}\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
   // Questions invert the same modal and actor: "Could the reporter upload ...?".
-  new RegExp(String.raw`\b${SUPPORT_REQUEST_MODAL}\s+(?:(?:the|a|an|this|that|these|those|our)\s+)?${SUPPORT_REQUEST_ACTOR}\s+(?:(?:also|now|please|then|first|probably)\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  new RegExp(String.raw`\b${SUPPORT_REQUEST_MODAL}\s+(?:(?:the|a|an|this|that|these|those|our)\s+)?${SUPPORT_REQUEST_ACTOR}\s+(?:(?:also|now|please|then|first|probably)\s+)?(?:${SUPPORT_PASSIVE_OBLIGATION}\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
   // Artifact-first directions include "should be uploaded" and "needs uploading".
   new RegExp(String.raw`${SUPPORT_ARTIFACT}[^.!?;]{0,120}\b${SUPPORT_REQUEST_OBLIGATION}\b[^.!?;]{0,60}\b${SUPPORT_REQUEST_ACTION}\b`, "iu"),
 ];
