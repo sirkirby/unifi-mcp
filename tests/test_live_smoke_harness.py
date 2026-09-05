@@ -16,7 +16,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 @pytest.fixture
 def support_payload():
-    return {
+    from unifi_core.support_bundle import SupportBundle
+
+    payload = {
         "success": True,
         "data": {
             "generated_at": "2026-01-01T00:00:00Z",
@@ -63,12 +65,47 @@ def support_payload():
             },
         },
     }
+    payload["data"] = SupportBundle.model_validate(payload["data"]).model_dump(mode="json")
+    return payload
 
 
 def test_support_accepts_closed_bundle_and_exact_plugin_version(support_payload):
     import support_smoke
 
     assert support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", set(), "0.30.0") > 0
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("schema_version",),
+        ("sharing_notice",),
+        ("server", "schema_version"),
+        ("sanitization", "policy"),
+        ("sanitization", "version"),
+        ("sanitization", "bounds"),
+        ("sanitization", "ordinary_response_redaction_ignored"),
+        ("sanitization", "raw_resource_values_included"),
+        ("connection", "last_attempt", "error_category"),
+    ],
+)
+def test_support_rejects_missing_defaulted_wire_metadata(support_payload, path):
+    import support_smoke
+
+    section = support_payload["data"]
+    for key in path[:-1]:
+        section = section[key]
+    del section[path[-1]]
+    with pytest.raises(support_smoke.SupportSmokeError, match="complete_wire_schema"):
+        support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", set(), "0.30.0")
+
+
+def test_support_rejects_coerced_wire_scalar_types(support_payload):
+    import support_smoke
+
+    support_payload["data"]["runtime"]["manifest_tool_count"] = True
+    with pytest.raises(support_smoke.SupportSmokeError, match="complete_wire_schema"):
+        support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", set(), "0.30.0")
 
 
 @pytest.mark.parametrize(
@@ -264,6 +301,8 @@ def test_support_log_boundary_excludes_startup_but_checks_probe_output(monkeypat
 def _support_client(payload, *, structured=False):
     import copy
 
+    from unifi_core.support_bundle import SupportBundle
+
     connectivity = copy.deepcopy(payload)
     connectivity["data"]["probe"] = {
         "probe": "connectivity",
@@ -271,6 +310,7 @@ def _support_client(payload, *, structured=False):
         "outcome": "success",
         "duration_bucket": "under_100ms",
     }
+    connectivity["data"] = SupportBundle.model_validate(connectivity["data"]).model_dump(mode="json")
     outputs = [
         payload,
         connectivity,

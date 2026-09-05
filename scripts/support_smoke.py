@@ -112,6 +112,10 @@ def validate_bundle(
         bundle = SupportBundle.model_validate(payload.get("data"))
     except ValueError:
         raise SupportSmokeError("bundle_schema") from None
+    require(
+        json.dumps(payload["data"], sort_keys=True) == json.dumps(bundle.model_dump(mode="json"), sort_keys=True),
+        "complete_wire_schema",
+    )
     require(bundle.product == product and bundle.probe.probe == probe, "product_probe_identity")
     require(bundle.runtime.registration_mode == mode, "registration_mode")
     require(bundle.runtime.content_mode == "dual", "adaptive_content_mode")
