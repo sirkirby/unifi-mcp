@@ -1958,8 +1958,9 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
 }
 
 const SUPPORT_ARTIFACT = String.raw`\b(?:attachments?|bundles?|files?|json|links?|logs?|outputs?|payloads?|screenshots?|evidence)\b`;
-const SUPPORT_INSPECTION = String.raw`\b(?:inspected|reviewed|read|downloaded|opened|analyzed|examined|checked|verified|viewed|saw|seen|observed|looked at|parsed|scanned|studied|evaluated)\b`;
-const SUPPORT_REQUEST_ACTION = String.raw`(?:attach|upload|provide|paste|submit|send|share|download|generate|run|collect|capture|execute|invoke|export|produce|fetch|retrieve|obtain)`;
+// Cover tense/aspect changes so "is reviewing" is not safer than "reviewed".
+const SUPPORT_INSPECTION = String.raw`\b(?:inspect(?:s|ed|ing)?|review(?:s|ed|ing)?|read(?:s|ing)?|download(?:s|ed|ing)?|open(?:s|ed|ing)?|analy[sz](?:e[ds]?|ing)|examin(?:e[ds]?|ing)|check(?:s|ed|ing)?|verif(?:y|ies|ied|ying)|view(?:s|ed|ing)?|see(?:s|ing)?|saw|seen|observ(?:e[ds]?|ing)|look(?:s|ed|ing)? at|pars(?:e[ds]?|ing)|scan(?:s|ned|ning)?|stud(?:y|ies|ied|ying)|evaluat(?:e[ds]?|ing))\b`;
+const SUPPORT_REQUEST_ACTION = String.raw`(?:attach(?:es|ed|ing)?|upload(?:s|ed|ing)?|provid(?:e[ds]?|ing)|past(?:e[ds]?|ing)|submit(?:s|ted|ting)?|send(?:s|ing)?|sent|shar(?:e[ds]?|ing)|download(?:s|ed|ing)?|generat(?:e[ds]?|ing)|run(?:s|ning)?|ran|collect(?:s|ed|ing)?|captur(?:e[ds]?|ing)|execut(?:e[ds]?|ing)|invok(?:e[ds]?|ing)|export(?:s|ed|ing)?|produc(?:e[ds]?|ing)|fetch(?:es|ed|ing)?|retriev(?:e[ds]?|ing)|obtain(?:s|ed|ing)?)`;
 const UNSAFE_SUPPORT_REASON_PATTERNS = [
   // Claims of inspection, including passive voice. Ordinary artifact nouns are safe.
   new RegExp(`${SUPPORT_INSPECTION}[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
@@ -1969,6 +1970,8 @@ const UNSAFE_SUPPORT_REASON_PATTERNS = [
   new RegExp(String.raw`(?:^|[.!?;]\s*|\bplease\s+|\byou\s+(?:(?:must|should|can|could|need to)\s+)?)${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
   // Third-person directions are requests too, not factual label rationales.
   new RegExp(String.raw`\b(?:reporters?|users?|authors?|contributors?|maintainers?|they)\s+(?:must|should|can|could|may|might|will|would|needs? to|ha(?:s|ve) to|ought to|(?:is|are) (?:asked|requested|required|expected|encouraged) to)\s+(?:(?:also|now|please|then|first|probably)\s+)?${SUPPORT_REQUEST_ACTION}\b[^.!?;]{0,120}${SUPPORT_ARTIFACT}`, "iu"),
+  // Artifact-first directions include "should be uploaded" and "needs uploading".
+  new RegExp(String.raw`${SUPPORT_ARTIFACT}[^.!?;]{0,120}\b(?:must|should|can|could|may|might|will|would|needs?|ha(?:s|ve) to|ought to)\b[^.!?;]{0,60}\b${SUPPORT_REQUEST_ACTION}\b`, "iu"),
 ];
 
 function normalizeReason(value) {
