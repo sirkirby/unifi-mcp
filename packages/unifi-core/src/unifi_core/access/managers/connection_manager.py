@@ -21,6 +21,7 @@ import asyncio
 import functools
 import logging
 import ssl
+import time
 from typing import Any, Dict
 
 import aiohttp
@@ -28,12 +29,16 @@ import aiohttp
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
+    ConnectivityProbe,
     SafeConnectionAttempt,
     connection_attempt_failed,
     connection_attempt_not_configured,
     connection_attempt_started,
     connection_attempt_succeeded,
+    connectivity_http_outcome,
+    connectivity_probe_result,
 )
+from unifi_core.support_transport import no_retry_support_request
 
 logger = logging.getLogger(__name__)
 
@@ -568,6 +573,59 @@ class AccessConnectionManager:
             "developer_api_attempt": dict(self._api_support_attempt),
             "proxy_session_attempt": dict(self._proxy_support_attempt),
         }
+
+    async def support_connectivity_probe(self) -> ConnectivityProbe:
+        """Perform one bounded request through one existing authenticated session."""
+        request: tuple[aiohttp.ClientSession, str, dict[str, str]] | None = None
+        if self.has_api_client and self._api_session is not None and not self._api_session.closed:
+            # The emergency-status endpoint returns one fixed-size state object,
+            # avoiding collection materialization for this connectivity check.
+            request = (
+                self._api_session,
+                f"https://{self.host}:{self._api_port}/api/v1/developer/doors/settings/emergency",
+                {"Authorization": f"Bearer {self._api_key}", "Accept": "application/json"},
+            )
+        elif self.has_proxy and self._proxy_session is not None and not self._proxy_session.closed:
+            request = (
+                self._proxy_session,
+                f"https://{self.host}:{self.port}/proxy/access/api/v2/access/info",
+                {"X-CSRF-Token": self._csrf_token},
+            )
+        if request is None:
+            result = connectivity_probe_result("connection", None)
+            logger.info(
+                "Support connectivity audit product=access outcome=%s duration=%s",
+                result.outcome,
+                result.duration_bucket,
+            )
+            return result
+
+        session, url, headers = request
+        started = time.perf_counter()
+        try:
+            async with session.request(
+                "GET",
+                url,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+                ssl=self._ssl_context,
+                allow_redirects=False,
+                middlewares=(no_retry_support_request,),
+            ) as response:
+                outcome = connectivity_http_outcome(response.status)
+        except TimeoutError:
+            outcome = "timeout"
+        except (aiohttp.ClientError, OSError):
+            outcome = "connection"
+        except Exception:
+            outcome = "unknown"
+        result = connectivity_probe_result(outcome, (time.perf_counter() - started) * 1000)
+        logger.info(
+            "Support connectivity audit product=access outcome=%s duration=%s",
+            result.outcome,
+            result.duration_bucket,
+        )
+        return result
 
     # ------------------------------------------------------------------
     # Websocket

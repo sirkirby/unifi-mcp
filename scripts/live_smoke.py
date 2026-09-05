@@ -224,6 +224,7 @@ def parse_args() -> argparse.Namespace:
             "lifecycle",
             "approved",
             "safe",
+            "support",
             "api-actions",
             "api-resources",
             "api-streams",
@@ -231,6 +232,8 @@ def parse_args() -> argparse.Namespace:
         default="safe",
         help=(
             "'safe' runs readonly, preview, and named safe lifecycles. "
+            "'support' explicitly authorizes read-only support connectivity probes over stdio "
+            "in all registration modes. "
             "'approved' runs explicitly approved mutations. "
             "'api-actions' is a manual-only phase: spins up unifi-api-server locally, "
             "registers the .env-configured controllers, exercises read-only tools "
@@ -249,7 +252,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tool", action="append", default=[], help="Restrict to one or more tool names.")
     parser.add_argument("--include-heavy-reads", action="store_true")
     parser.add_argument("--interactive-risky", action="store_true")
+    parser.add_argument(
+        "--support-plugin-root",
+        type=Path,
+        help="For support only: marketplace checkout root; launch its pinned plugin commands.",
+    )
     args = parser.parse_args()
+    if args.support_plugin_root and args.phase != "support":
+        parser.error("--support-plugin-root requires --phase support")
+    if args.phase == "support" and (args.tool or args.include_heavy_reads or args.interactive_risky):
+        parser.error("support runs its complete fixed read-only matrix; tool/risky/heavy filters are not supported")
     if args.phase not in {"api-actions", "api-resources", "api-streams"} and not args.server:
         parser.error(
             "--server is required unless --phase api-actions, --phase api-resources, or --phase api-streams is used"
@@ -3680,6 +3692,13 @@ def run_api_streams_phase(args: argparse.Namespace) -> int:
 
 def main() -> int:
     args = parse_args()
+    if args.phase == "support":
+        from support_smoke import run_support_phase
+
+        report = asyncio.run(run_support_phase(args.server, REPO_ROOT, args.support_plugin_root))
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        write_json(REPO_ROOT / args.report_dir / f"support-{stamp}.json", report)
+        return 0 if report["success"] else 1
     if args.phase == "api-actions":
         return run_api_actions_phase(args)
     if args.phase == "api-resources":
