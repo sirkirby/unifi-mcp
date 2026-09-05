@@ -175,7 +175,7 @@ No additional configuration is required — if both plugins are active, the skil
 - [Permissions](docs/permissions.md) -- Permission system, category defaults, how to enable mutations
 - [Tool Catalog](docs/tools.md) -- All 37 tools organized by category
 - [Event Streaming](docs/events.md) -- Real-time event architecture, WebSocket buffer, polling
-- [Troubleshooting](docs/troubleshooting.md) -- Connection issues, dual auth debugging, missing tools
+- [Troubleshooting and support bundles](docs/troubleshooting.md) -- Reviewed support evidence, dual auth debugging, missing tools
 
 ## Development
 
