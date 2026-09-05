@@ -12,28 +12,8 @@ from mcp.server.mcpserver.exceptions import ToolError
 from unifi_core.redaction import REDACTED
 from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP, _load_allowed_kwargs
 
-
-def _write_manifest(tmp_path: pathlib.Path, tools: list[dict]) -> pathlib.Path:
-    """Write a tools_manifest.json with the given tool entries and return its path."""
-    path = tmp_path / "tools_manifest.json"
-    path.write_text(json.dumps({"count": len(tools), "tools": tools}), encoding="utf-8")
-    return path
-
-
-def _make_tool(name: str, properties: dict[str, dict] | None) -> dict:
-    """Build a manifest tool entry. Pass ``properties=None`` to omit the input schema."""
-    if properties is None:
-        return {"name": name, "schema": {}}
-    return {
-        "name": name,
-        "schema": {
-            "input": {
-                "type": "object",
-                "properties": properties,
-                "required": [],
-            }
-        },
-    }
+from .manifest_fixtures import make_tool as _make_tool
+from .manifest_fixtures import write_manifest as _write_manifest
 
 
 @pytest.fixture

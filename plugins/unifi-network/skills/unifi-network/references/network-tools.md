@@ -50,14 +50,14 @@ Always available, regardless of registration mode.
 | `unifi_list_blocked_clients` | Read | Lists clients/devices currently blocked from the network. |
 | `unifi_list_clients` | Read | Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clien... |
 | `unifi_lookup_by_ip` | Read | Quick IP-to-client lookup. |
-| `unifi_authorize_guest` | Mutate | Authorize a guest client to access the guest network by MAC address |
-| `unifi_block_client` | Mutate | Block a client/device from the network by MAC address |
-| `unifi_force_reconnect_client` | Mutate | Force a client to reconnect to the network (kick) by MAC address |
+| `unifi_authorize_guest` | Mutate | Authorize a guest client to access the guest network by MAC address. |
+| `unifi_block_client` | Mutate | Block a client/device from the network by MAC address. |
+| `unifi_force_reconnect_client` | Mutate | Force a client to reconnect to the network (kick) by MAC address. |
 | `unifi_forget_client` | Mutate | Remove/forget a client from the controller's known client history by MAC address. |
-| `unifi_rename_client` | Mutate | Rename a client/device in the Unifi Network controller by MAC address |
+| `unifi_rename_client` | Mutate | Rename a client/device in the Unifi Network controller by MAC address. |
 | `unifi_set_client_ip_settings` | Mutate | Set fixed IP address and/or local DNS record for a client device. |
-| `unifi_unauthorize_guest` | Mutate | Revoke authorization for a guest client by MAC address |
-| `unifi_unblock_client` | Mutate | Unblock a previously blocked client/device by MAC address |
+| `unifi_unauthorize_guest` | Mutate | Revoke authorization for a guest client by MAC address. |
+| `unifi_unblock_client` | Mutate | Unblock a previously blocked client/device by MAC address. |
 <!-- /AUTO:tools:clients -->
 
 **Tips:**
@@ -82,11 +82,11 @@ Always available, regardless of registration mode.
 | `unifi_list_available_channels` | Read | List allowed RF channels for the site's regulatory domain. |
 | `unifi_list_devices` | Read | Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_categ... |
 | `unifi_list_rogue_aps` | Read | List neighboring/rogue APs detected by your access points. |
-| `unifi_adopt_device` | Mutate | Adopt a pending device into the Unifi Network by MAC address |
+| `unifi_adopt_device` | Mutate | Adopt a pending device into the Unifi Network by MAC address. |
 | `unifi_force_provision_device` | Mutate | Force re-provision a device, pushing the current configuration from the controller to the device. |
 | `unifi_locate_device` | Mutate | Toggle device locate mode (LED blinking) to physically identify a device. |
-| `unifi_reboot_device` | Mutate | Reboot a specific device by MAC address |
-| `unifi_rename_device` | Mutate | Rename a device in the Unifi Network controller by MAC address |
+| `unifi_reboot_device` | Mutate | Reboot a specific device by MAC address. |
+| `unifi_rename_device` | Mutate | Rename a device in the Unifi Network controller by MAC address. |
 | `unifi_set_device_led` | Mutate | Set the LED override state on a specific device. |
 | `unifi_set_outlet_state` | Mutate | Set per-outlet relay state (on/off) and optionally cycle_enabled on a UniFi Smart Power PDU (UP6 / USP-Strip). |
 | `unifi_set_site_leds` | Mutate | Toggle all device LEDs site-wide on or off. |
@@ -94,7 +94,7 @@ Always available, regardless of registration mode.
 | `unifi_trigger_rf_scan` | Mutate | Trigger an RF spectrum scan on an access point. |
 | `unifi_trigger_speedtest` | Mutate | Trigger a speedtest on the gateway device. |
 | `unifi_update_device_radio` | Mutate | Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). |
-| `unifi_upgrade_device` | Mutate | Initiate a firmware upgrade for a device by MAC address (uses cached firmware by default) |
+| `unifi_upgrade_device` | Mutate | Initiate a firmware upgrade for a device by MAC address (uses cached firmware by default). |
 <!-- /AUTO:tools:devices -->
 
 **Tips:**
