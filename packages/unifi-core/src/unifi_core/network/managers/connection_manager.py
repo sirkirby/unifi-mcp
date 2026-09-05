@@ -21,11 +21,15 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
 from unifi_core.support_bundle import (
+    ConnectivityProbe,
     SafeConnectionAttempt,
     connection_attempt_failed,
     connection_attempt_started,
     connection_attempt_succeeded,
+    connectivity_http_outcome,
+    connectivity_probe_result,
 )
+from unifi_core.support_transport import no_retry_support_request
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -399,6 +403,48 @@ class ConnectionManager:
             "controller_type": controller_type,
             "reconnect_circuit": "open" if self.reconnect_blocked else "closed",
         }
+
+    async def support_connectivity_probe(self) -> ConnectivityProbe:
+        """Perform one bounded request through the existing authenticated session."""
+        session = self._aiohttp_session
+        controller = self.controller
+        if not self._initialized or controller is None or session is None or session.closed:
+            result = connectivity_probe_result("connection", None)
+            logger.info(
+                "Support connectivity audit product=network outcome=%s duration=%s",
+                result.outcome,
+                result.duration_bucket,
+            )
+            return result
+
+        is_unifi_os = self._unifi_os_override
+        if is_unifi_os is None:
+            is_unifi_os = bool(getattr(controller.connectivity, "is_unifi_os", False))
+        path = "/proxy/network/api/self/sites" if is_unifi_os else "/api/self/sites"
+        started = _time.perf_counter()
+        try:
+            async with session.request(
+                "GET",
+                f"{self.url_base}{path}",
+                timeout=aiohttp.ClientTimeout(total=10),
+                ssl=False if not self.verify_ssl else None,
+                allow_redirects=False,
+                middlewares=(no_retry_support_request,),
+            ) as response:
+                outcome = connectivity_http_outcome(response.status)
+        except TimeoutError:
+            outcome = "timeout"
+        except (aiohttp.ClientError, OSError):
+            outcome = "connection"
+        except Exception:
+            outcome = "unknown"
+        result = connectivity_probe_result(outcome, (_time.perf_counter() - started) * 1000)
+        logger.info(
+            "Support connectivity audit product=network outcome=%s duration=%s",
+            result.outcome,
+            result.duration_bucket,
+        )
+        return result
 
     async def _discard_connection(self) -> None:
         if self._aiohttp_session and not self._aiohttp_session.closed:
