@@ -182,6 +182,23 @@ class TestGetToolIndex:
         tool = index["tools"][0]
         assert tool["annotations"] == {"readOnlyHint": True, "openWorldHint": False}
 
+    def test_eager_index_carries_permissions_and_aliases_like_the_manifest(self):
+        register_tool(
+            name="my_tool",
+            description="test",
+            input_schema={"type": "object", "properties": {"mac_address": {"type": "string"}}},
+            permission_category="clients",
+            permission_action="read",
+            argument_aliases={"device_mac": "mac_address"},
+        )
+        detailed = get_tool_index(registration_mode="eager", include_schemas=True)["tools"][0]
+        assert detailed["permission_category"] == "clients"
+        assert detailed["permission_action"] == "read"
+        assert detailed["argument_aliases"] == {"device_mac": "mac_address"}
+        compact = get_tool_index(registration_mode="eager", include_schemas=False)["tools"][0]
+        assert "argument_aliases" not in compact
+        assert "schema" not in compact
+
     def test_tool_index_annotations_absent_when_not_set(self):
         """get_tool_index should omit annotations key when not provided (consistent with manifest)."""
         register_tool(name="my_tool", description="test")

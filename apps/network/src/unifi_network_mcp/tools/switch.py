@@ -35,6 +35,7 @@ from unifi_core.network.models.switch import (
     to_controller_update as pp_to_update,
 )
 from unifi_core.write_verification import format_tool_payload
+from unifi_mcp_shared.argument_aliases import mac_aliases
 from unifi_network_mcp.runtime import server, switch_manager
 
 logger = logging.getLogger(__name__)
@@ -361,6 +362,7 @@ async def delete_port_profile(
 
 @server.tool(
     name="unifi_get_switch_ports",
+    argument_aliases=mac_aliases("device_mac"),
     description="Get port assignments for a specific switch. Shows which port profile is assigned "
     "to each port, port names, and PoE mode. Use unifi_list_devices to find switch MAC addresses.",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
@@ -389,6 +391,7 @@ async def get_switch_ports(
 
 @server.tool(
     name="unifi_get_port_stats",
+    argument_aliases=mac_aliases("device_mac"),
     description="Get live port statistics for a switch. Returns per-port data including "
     "link speed, duplex, PoE draw (voltage/current/power), error counters, MAC table count, "
     "bytes per second, and enabled state. Use unifi_list_devices to find switch MAC addresses.",
@@ -418,6 +421,7 @@ async def get_port_stats(
 
 @server.tool(
     name="unifi_get_lldp_neighbors",
+    argument_aliases=mac_aliases("device_mac"),
     description="Get LLDP neighbor discovery table for a switch. Shows what devices are "
     "connected to each port by their LLDP-advertised chassis ID and descriptions. "
     "Use unifi_list_devices to find switch MAC addresses.",
@@ -447,6 +451,7 @@ async def get_lldp_neighbors(
 
 @server.tool(
     name="unifi_get_switch_capabilities",
+    argument_aliases=mac_aliases("device_mac"),
     description="Get switch hardware capabilities including max ACL rules, max VLANs, "
     "max aggregation sessions, max mirror sessions, STP config, and jumbo frame status. "
     "Use unifi_list_devices to find switch MAC addresses.",
@@ -479,6 +484,7 @@ async def get_switch_capabilities(
 
 @server.tool(
     name="unifi_set_switch_port_profile",
+    argument_aliases=mac_aliases("device_mac"),
     description="Assign a port profile to a specific switch port. "
     "IMPORTANT: This sends ALL port overrides as a full replacement. Fetch current overrides "
     "with unifi_get_switch_ports first, modify the target port, and send the complete array. "
@@ -527,6 +533,7 @@ async def set_switch_port_profile(
 
 @server.tool(
     name="unifi_power_cycle_port",
+    argument_aliases=mac_aliases("device_mac"),
     description="Power cycle PoE on a specific switch port. This briefly cuts power to the "
     "connected PoE device, causing it to reboot. Requires confirmation.",
     permission_category="switch",
@@ -565,6 +572,7 @@ async def power_cycle_port(
 
 @server.tool(
     name="unifi_configure_port_mirror",
+    argument_aliases=mac_aliases("device_mac"),
     description="Configure port mirroring on a switch. Mirrors traffic from one port to a "
     "destination port for packet capture/analysis. Most switches support only 1 mirror session. "
     "Fetch current overrides with unifi_get_switch_ports, set op_mode='mirror' and mirror_port_idx "
@@ -612,6 +620,7 @@ async def configure_port_mirror(
 
 @server.tool(
     name="unifi_configure_port_aggregation",
+    argument_aliases=mac_aliases("device_mac"),
     description="Configure link aggregation (LACP/LAG) on a switch. Bonds consecutive ports "
     "for increased bandwidth. Most switches support up to 8 aggregate sessions. "
     "Ports must be sequential and same speed. "
@@ -662,6 +671,7 @@ async def configure_port_aggregation(
 
 @server.tool(
     name="unifi_update_switch_stp",
+    argument_aliases=mac_aliases("device_mac"),
     description="Update STP (Spanning Tree Protocol) configuration for a switch. "
     "stp_priority valid values: 4096, 8192, 12288, ..., 61440 (default: 32768). "
     "stp_version: 'stp' or 'rstp' (default). Requires confirmation.",
@@ -706,6 +716,7 @@ async def update_switch_stp(
 
 @server.tool(
     name="unifi_set_jumbo_frames",
+    argument_aliases=mac_aliases("device_mac"),
     description="Enable or disable jumbo frames on a switch. "
     "Note: the UniFi controller requires jumbo frames to be enabled via the UI at least once "
     "before the API can toggle it. If you get JumboFrameChangeNotAllowed, enable it in the UI first. "

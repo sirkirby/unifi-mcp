@@ -26,16 +26,23 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from unifi_core.redaction import redaction_marker_paths
 
+from unifi_mcp_shared.argument_aliases import ArgumentAliasMixin, argument_aliases_from_manifest
+
 logger = logging.getLogger(__name__)
 
 
-class StrictKwargFastMCP(MCPServer):
+class StrictKwargFastMCP(ArgumentAliasMixin, MCPServer):
     """FastMCP subclass that rejects unknown top-level kwargs at dispatch time.
 
     Reads ``tools_manifest.json`` once at construction and caches the allowed
     top-level argument names per tool. Unknown keys at ``call_tool`` time
     raise :class:`mcp.server.mcpserver.exceptions.ToolError` with a structured,
     human-readable message.
+
+    Declared argument aliases (:mod:`unifi_mcp_shared.argument_aliases`) are
+    rewritten to their canonical names first, so an accepted alias is never
+    reported as unknown. The alias state lives in a separate mixin because this
+    guard retires when FastMCP forbids extra kwargs and the aliases do not.
 
     Note: only top-level kwargs are checked. Inner dict shapes (e.g. a
     ``policy_data`` blob) are the responsibility of the schema layer (#206).
@@ -50,7 +57,10 @@ class StrictKwargFastMCP(MCPServer):
         super().__init__(*args, **kwargs)
         self._allowed_kwargs: dict[str, frozenset[str]] = {}
         if tools_manifest_path is not None:
-            self._allowed_kwargs = _load_allowed_kwargs(pathlib.Path(tools_manifest_path))
+            path = pathlib.Path(tools_manifest_path)
+            manifest = _read_manifest(path)
+            self._allowed_kwargs = _allowed_kwargs_from_manifest(manifest, path)
+            self._argument_aliases = argument_aliases_from_manifest(manifest)
 
     async def call_tool(
         self,
@@ -60,6 +70,8 @@ class StrictKwargFastMCP(MCPServer):
     ) -> Any:
         """Dispatch a tool call after validating top-level kwargs.
 
+        - Declared aliases are rewritten to canonical names before anything
+          else looks at the keys (``ArgumentAliasMixin.apply_argument_aliases``).
         - Tools not present in the manifest cache (stale manifest, dynamically
           registered, or empty cache) pass through to FastMCP unchanged so
           its own "Unknown tool" path still works.
@@ -76,6 +88,7 @@ class StrictKwargFastMCP(MCPServer):
         mutation tools need no per-field check. Mirrors the API-side guard in
         ``unifi_api.services.actions.dispatch_action``.
         """
+        arguments = self.apply_argument_aliases(name, arguments)
         if name in self._allowed_kwargs:
             allowed = self._allowed_kwargs[name]
             unknown = set(arguments.keys()) - allowed
@@ -101,6 +114,11 @@ def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str
     Returns an empty dict (graceful fallback) if the file is missing or its
     structure is unexpected; logs a warning so operators can notice.
     """
+    return _allowed_kwargs_from_manifest(_read_manifest(manifest_path), manifest_path)
+
+
+def _read_manifest(manifest_path: pathlib.Path) -> Any:
+    """Parse tools_manifest.json once; ``None`` (with a warning) when unreadable or invalid."""
     try:
         raw = manifest_path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -109,25 +127,30 @@ def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str
             "kwarg validation disabled (every tool falls through to super)",
             manifest_path,
         )
-        return {}
+        return None
     except OSError as exc:
         logger.warning(
             "[strict_dispatch] failed to read tools_manifest.json at %s: %s; kwarg validation disabled",
             manifest_path,
             exc,
         )
-        return {}
+        return None
 
     try:
-        data = json.loads(raw)
+        return json.loads(raw)
     except json.JSONDecodeError as exc:
         logger.warning(
             "[strict_dispatch] tools_manifest.json at %s is not valid JSON: %s; kwarg validation disabled",
             manifest_path,
             exc,
         )
-        return {}
+        return None
 
+
+def _allowed_kwargs_from_manifest(data: Any, manifest_path: pathlib.Path) -> dict[str, frozenset[str]]:
+    """Build the per-tool allowed-kwargs cache from a parsed manifest (``None`` -> empty)."""
+    if data is None:
+        return {}
     tools = data.get("tools") if isinstance(data, dict) else None
     if not isinstance(tools, list):
         logger.warning(
@@ -144,9 +167,9 @@ def _load_allowed_kwargs(manifest_path: pathlib.Path) -> dict[str, frozenset[str
         name = tool.get("name")
         if not isinstance(name, str):
             continue
-        properties = (
-            tool.get("schema", {}).get("input", {}).get("properties") if isinstance(tool.get("schema"), dict) else None
-        )
+        schema = tool.get("schema")
+        input_schema = schema.get("input") if isinstance(schema, dict) else None
+        properties = input_schema.get("properties") if isinstance(input_schema, dict) else None
         if not isinstance(properties, dict):
             skipped.append(name)
             # Tool with no declared input schema is treated as "no kwargs allowed".

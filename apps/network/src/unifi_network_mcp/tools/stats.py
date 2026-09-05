@@ -17,6 +17,7 @@ from unifi_core.network.models.sessions import (
 from unifi_core.network.models.stats import dpi_stats_from_controller
 from unifi_core.network.models.system import speedtest_result_from_controller, top_client_from_controller
 from unifi_core.network.read_views import shape_alerts, shape_dashboard
+from unifi_mcp_shared.argument_aliases import mac_aliases
 from unifi_network_mcp.runtime import client_manager, device_manager, server, stats_manager
 
 logger = logging.getLogger(__name__)
@@ -419,6 +420,7 @@ async def get_site_dpi_traffic(
 
 @server.tool(
     name="unifi_get_client_dpi_traffic",
+    argument_aliases=mac_aliases("client_mac"),
     description=(
         "Get per-client DPI traffic data by application or category. "
         "Note: requires Traffic Identification to be enabled on the controller, "
@@ -483,6 +485,7 @@ async def get_ips_events(
 
 @server.tool(
     name="unifi_get_client_sessions",
+    argument_aliases=mac_aliases("client_mac"),
     description=(
         "Get client session history. Note: this endpoint tracks hotspot/captive portal "
         "authorization sessions, not general WiFi connect/disconnect events. "
@@ -586,6 +589,7 @@ async def get_anomalies(
 
 @server.tool(
     name="unifi_get_client_wifi_details",
+    argument_aliases=mac_aliases("client_mac"),
     description=(
         "Get detailed WiFi statistics for a single wireless client including signal, noise, "
         "satisfaction, tx/rx rates, retries, roam count, channel, radio, ESSID, and more."

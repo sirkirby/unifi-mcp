@@ -25,6 +25,7 @@ from unifi_core.network.models.clients import blocked_client_from_controller, cl
 from unifi_core.network.read_views import shape_client_details, shape_client_list
 
 # Import the global FastMCP server instance, config, and managers
+from unifi_mcp_shared.argument_aliases import mac_aliases
 from unifi_network_mcp.runtime import client_manager, server
 
 logger = logging.getLogger(__name__)
@@ -118,6 +119,7 @@ async def list_clients(
 
 @server.tool(
     name="unifi_get_client_details",
+    argument_aliases=mac_aliases("mac_address"),
     description=(
         "Returns client data for one client by MAC address. By default (summary=false) "
         "returns the full raw client object — all controller-reported fields, with the "
@@ -194,6 +196,7 @@ async def list_blocked_clients() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_block_client",
+    argument_aliases=mac_aliases("mac_address"),
     description="Block a client/device from the network by MAC address",
     permission_category="clients",
     permission_action="update",
@@ -256,6 +259,7 @@ async def block_client(
 
 @server.tool(
     name="unifi_unblock_client",
+    argument_aliases=mac_aliases("mac_address"),
     description="Unblock a previously blocked client/device by MAC address",
     permission_category="clients",
     permission_action="update",
@@ -320,6 +324,7 @@ async def unblock_client(
 
 @server.tool(
     name="unifi_rename_client",
+    argument_aliases=mac_aliases("mac_address"),
     description="Rename a client/device in the Unifi Network controller by MAC address",
     permission_category="clients",
     permission_action="update",
@@ -378,6 +383,7 @@ async def rename_client(
 
 @server.tool(
     name="unifi_force_reconnect_client",
+    argument_aliases=mac_aliases("mac_address"),
     description="Force a client to reconnect to the network (kick) by MAC address",
     permission_category="clients",
     permission_action="update",
@@ -452,6 +458,7 @@ async def force_reconnect_client(
 
 @server.tool(
     name="unifi_forget_client",
+    argument_aliases=mac_aliases("mac_address"),
     description="Remove/forget a client from the controller's known client history by MAC address. This permanently deletes the client record including its name, notes, fixed IP settings, and historical stats. The client will reappear as a new unknown device if it reconnects.",
     permission_category="clients",
     permission_action="update",
@@ -519,6 +526,7 @@ async def forget_client(
 
 @server.tool(
     name="unifi_authorize_guest",
+    argument_aliases=mac_aliases("mac_address"),
     description="Authorize a guest client to access the guest network by MAC address",
     permission_category="clients",
     permission_action="update",
@@ -614,6 +622,7 @@ async def authorize_guest(
 
 @server.tool(
     name="unifi_unauthorize_guest",
+    argument_aliases=mac_aliases("mac_address"),
     description="Revoke authorization for a guest client by MAC address",
     permission_category="clients",
     permission_action="update",
@@ -685,6 +694,7 @@ async def unauthorize_guest(
 
 @server.tool(
     name="unifi_set_client_ip_settings",
+    argument_aliases=mac_aliases("mac_address"),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
     description="""Set fixed IP address and/or local DNS record for a client device.
 
