@@ -193,13 +193,15 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_unauthorize_guest` — Revoke guest authorization
 - `unifi_set_client_ip_settings` — Set fixed IP / local DNS record
 
-## Events & Alarms (5 tools)
+## Events & Alarms (7 tools)
 
 - `unifi_list_events` — List timestamped event log entries
 - `unifi_list_alarms` — List active alarms
 - `unifi_archive_alarm` — Archive a specific alarm
 - `unifi_archive_all_alarms` — Archive all active alarms
 - `unifi_get_event_types` — Get exact event keys observed in the 1,000 most recent events within the last 7 days
+- `unifi_recent_events` — Events from the in-memory websocket buffer, with listener state (`listening`, `attached`, `buffer_capacity`)
+- `unifi_subscribe_events` — Handle for the live event resource plus listener state
 
 ## Routing (5 tools)
 

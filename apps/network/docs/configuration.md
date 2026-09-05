@@ -19,6 +19,9 @@ The Network server supports server-specific environment variables with the `UNIF
 | `UNIFI_NETWORK_PORT` | `UNIFI_PORT` | No | `443` | Controller HTTPS port |
 | `UNIFI_NETWORK_SITE` | `UNIFI_SITE` | No | `default` | UniFi site name |
 | `UNIFI_NETWORK_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | SSL certificate verification |
+| `UNIFI_NETWORK_WEBSOCKET_ENABLED` | -- | No | `true` | Start the real-time event listener that feeds `unifi_recent_events` |
+| `UNIFI_NETWORK_EVENT_BUFFER_SIZE` | -- | No | `100` | Max events held in the websocket ring buffer |
+| `UNIFI_NETWORK_EVENT_BUFFER_TTL` | -- | No | `300` | Seconds before buffered events expire (lazy eviction) |
 
 **Resolution order:** `UNIFI_NETWORK_*` > `UNIFI_*` > YAML config > hardcoded default.
 

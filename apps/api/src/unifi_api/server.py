@@ -283,16 +283,16 @@ def create_app(config: ApiConfig) -> FastAPI:
                             "event_manager",
                         )
                     if hasattr(mgr, "start_listening"):
-                        # Background-launch: aiounifi's start_websocket awaits
-                        # its own message loop, so awaiting here blocks the
-                        # whole lifespan. The WS subscription is best-effort
-                        # warm-up for SSE consumers; failing it must not
-                        # delay HTTP readiness.
+                        # Background-launch: some product listeners block until
+                        # the socket closes, and the subscription is best-effort
+                        # warm-up for SSE consumers; failing it must not delay
+                        # HTTP readiness. A returning start_listening only means
+                        # the listener was started, not that it attached.
                         async def _bg_start(c_id: str, p: str, m=mgr) -> None:
                             try:
                                 await m.start_listening()
                                 _streams_log.info(
-                                    "[streams] start_listening ok for %s/%s",
+                                    "[streams] start_listening started for %s/%s",
                                     c_id,
                                     p,
                                 )

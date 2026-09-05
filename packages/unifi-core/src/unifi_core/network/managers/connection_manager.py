@@ -590,6 +590,15 @@ class ConnectionManager:
 
         return True
 
+    async def reauthenticate(self) -> bool:
+        """Refresh the controller login for the current session generation.
+
+        For callers outside ``request()`` that learn the session is stale on
+        their own, such as the event websocket after a rejected handshake.
+        Honours the reconnect circuit like every other login path.
+        """
+        return await self._reauthenticate(self._auth_generation)
+
     async def _reauthenticate(self, expected_generation: int) -> bool:
         """Refresh an expired controller login once, deduplicating concurrent attempts."""
         if self._reconnect_block_active():
