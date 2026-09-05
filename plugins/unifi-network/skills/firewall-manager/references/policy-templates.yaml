@@ -259,8 +259,12 @@ templates:
             port_matching_type: SPECIFIC
             port: "53,853"
     notes: >
-      Create step 1 before step 2: new custom policies append after existing custom policies and
-      before built-ins, so creation order is evaluation order. Run once per client zone. Use
+      Before creating anything, list the existing policies for this zone pair by ascending index
+      (unifi_list_firewall_policies, summary false): new custom policies append after existing
+      custom policies and before built-ins, so an existing ALLOW to External that covers port 53
+      (including a port_matching_type ANY allow) would be evaluated first and leave the new BLOCK
+      inert. Move or narrow such a policy first (unifi_reorder_firewall_policies needs
+      UNIFI_API_KEY). Then create step 1 before step 2. Run once per client zone. Use
       dns-egress-lock-local instead when the approved resolver is on the LAN (Pi-hole style).
       DNS-over-HTTPS (443) cannot be blocked at this layer. Safe when the gateway itself is the
       resolver: its upstream queries originate in the Gateway zone.
@@ -279,10 +283,10 @@ templates:
         required: true
     tool: unifi_create_firewall_policy
     payload:
-      name: "EGR-02 Block external DNS except resolver"
+      name: "EGR-02 Block external DNS except resolver (IPv4)"
       action: BLOCK
       protocol: tcp_udp
-      ip_version: BOTH
+      ip_version: IPV4
       connection_state_type: ALL
       enabled: true
       source:
@@ -299,5 +303,11 @@ templates:
     notes: >
       The resolver is exempted on the source side (match_opposite_ips) because a destination ALLOW
       cannot name a LAN resolver from the External zone, and a plain BLOCK would cut the resolver's
-      own upstream queries and take DNS down for every VLAN. An IPv6 resolver needs a separate
-      ipv6-address-group and an ip_version IPV6 copy of this policy. Run once per client zone.
+      own upstream queries and take DNS down for every VLAN. This policy is IPv4 only on purpose:
+      an address-group cannot hold an IPv6 address, so an ip_version BOTH policy could not exempt
+      the resolver on its IPv6 leg and would block the resolver's own IPv6 upstream. On a
+      dual-stack network add a second policy with ip_version IPV6 whose ip_group_id is an
+      ipv6-address-group holding the resolver's IPv6 address; on an IPv4-only network that is the
+      whole recipe. Before creating, list the existing policies for this zone pair by ascending
+      index: an existing ALLOW to External covering port 53 would be evaluated first and leave this
+      BLOCK inert. Run once per client zone, including the resolver's own zone.

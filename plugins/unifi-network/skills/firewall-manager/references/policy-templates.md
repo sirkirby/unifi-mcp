@@ -214,7 +214,7 @@ Rule 2 — Block other external DNS:
 - Source: Client zone, `matching_target: ANY`
 - Destination: External zone, `matching_target: ANY`, `port_matching_type: SPECIFIC`, `port: "53,853"`
 
-**Important:** Create the allow rule first. New custom policies append after existing custom policies and before built-ins, so creation order is evaluation order. DNS-over-HTTPS (443) is not addressable at this layer. When the approved resolver lives on the LAN, use Template 8 instead.
+**Important:** First list the existing policies for this zone pair by ascending index. New custom policies append after existing custom policies and before built-ins, so an existing ALLOW to External that covers port 53 (a `port_matching_type: ANY` allow counts) is evaluated first and leaves the new BLOCK inert; narrow or move it before creating (`unifi_reorder_firewall_policies` needs `UNIFI_API_KEY`). Then create the allow rule before the block. DNS-over-HTTPS (443) is not addressable at this layer. When the approved resolver lives on the LAN, use Template 8 instead.
 
 ---
 
@@ -237,8 +237,8 @@ Forces clients to a local resolver such as a Pi-hole by blocking DNS (53) and DN
 
 **Rule details:**
 
-- Action: `BLOCK`, protocol `tcp_udp`, `ip_version: BOTH`, `connection_state_type: ALL`
+- Action: `BLOCK`, protocol `tcp_udp`, `ip_version: IPV4`, `connection_state_type: ALL`
 - Source: Client zone, `matching_target: IP`, `matching_target_type: OBJECT`, `ip_group_id: <resolver_group_id>`, `match_opposite_ips: true`
 - Destination: External zone, `matching_target: ANY`, `port_matching_type: SPECIFIC`, `port: "53,853"`
 
-**Important:** The resolver is exempted on the source side. A destination ALLOW cannot name a LAN resolver from the External zone, and a plain BLOCK would cut the resolver's own upstream queries and take DNS down for every VLAN. An IPv6 resolver needs a separate `ipv6-address-group` and an `ip_version: IPV6` copy of the policy. Safe when the gateway itself is the resolver: its upstream queries originate in the Gateway zone.
+**Important:** The resolver is exempted on the source side. A destination ALLOW cannot name a LAN resolver from the External zone, and a plain BLOCK would cut the resolver's own upstream queries and take DNS down for every VLAN. The policy is IPv4-only on purpose: an `address-group` cannot hold an IPv6 address, so an `ip_version: BOTH` policy could not exempt the resolver on IPv6 and would block the resolver's own IPv6 upstream. On a dual-stack network add a second policy with `ip_version: IPV6` and an `ipv6-address-group` holding the resolver's IPv6 address. List the existing zone-pair policies first: an existing ALLOW to External covering port 53 is evaluated before the new BLOCK. Safe when the gateway itself is the resolver: its upstream queries originate in the Gateway zone.

@@ -11867,7 +11867,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List firewall policies configured on the Unifi Network controller. Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, IPs, network IDs).\n\nFilters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, limit (default 50), include_predefined. By default (summary=true) returns a curated entry per policy (id, name, enabled, action, rule_index, description + source/destination targeting). Set summary=false for the full fw_from_controller().model_dump() shape including protocol, schedule, logging, ip_version, index, etc.",
+      "description": "List firewall policies configured on the Unifi Network controller. Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, IPs, network IDs, client MACs, IP/port groups, port matching).\n\nFilters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, limit (default 50), include_predefined. By default (summary=true) returns a curated entry per policy (id, name, enabled, action, rule_index, description + source/destination targeting incl. port_matching_type/port/port_group_id when set, and protocol). Set summary=false for the full fw_from_controller().model_dump() shape including protocol, schedule, logging, ip_version, connection_state_type, index, etc.",
       "name": "unifi_list_firewall_policies",
       "schema": {
         "input": {

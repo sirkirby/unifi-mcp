@@ -33,7 +33,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from unifi_core.mac import normalize_mac_list
+from unifi_core.mac import looks_like_mac, normalize_mac_list
+from unifi_core.merge import deep_merge
 
 # ---------------------------------------------------------------------------
 # FirewallRule pydantic model
@@ -536,7 +537,9 @@ def _normalize_endpoint_enums(endpoint: Any) -> Any:
     """Upper-case the enum-valued keys inside a source/destination endpoint dict."""
     if not isinstance(endpoint, dict):
         return endpoint
-    return {k: (v.upper() if k in _ENDPOINT_ENUM_KEYS and isinstance(v, str) else v) for k, v in endpoint.items()}
+    return {
+        k: (v.strip().upper() if k in _ENDPOINT_ENUM_KEYS and isinstance(v, str) else v) for k, v in endpoint.items()
+    }
 
 
 def normalize_policy_enums(fields: Dict[str, Any]) -> Dict[str, Any]:
@@ -565,9 +568,12 @@ def _port_string_error(direction: str, value: Any) -> str | None:
     if not isinstance(value, str) or not value:
         return "%s.port must be a non-empty string when port_matching_type is 'SPECIFIC'." % direction
     for token in value.split(","):
-        match = _PORT_TOKEN.match(token)
+        match = _PORT_TOKEN.fullmatch(token)
         if not match:
-            return "%s.port '%s' is not a comma-separated list of ports or low-high ranges." % (direction, value)
+            return (
+                "%s.port '%s' must be a comma-separated list of ports or low-high ranges "
+                "with no spaces, e.g. '53,853' or '1000-2000'." % (direction, value)
+            )
         low = int(match.group(1))
         high = int(match.group(2)) if match.group(2) else low
         if not (1 <= low <= 65535 and 1 <= high <= 65535) or low > high:
@@ -575,47 +581,109 @@ def _port_string_error(direction: str, value: Any) -> str | None:
     return None
 
 
+def _client_macs_error(direction: str, value: Any) -> str | None:
+    if not isinstance(value, list) or not value or any(not looks_like_mac(mac) for mac in value):
+        return "%s.client_macs must be a non-empty array of MAC addresses when matching_target is 'CLIENT'." % direction
+    return None
+
+
+def _port_group_error(direction: str, value: Any) -> str | None:
+    if not value:
+        return "%s.port_group_id is required when port_matching_type is 'OBJECT'." % direction
+    return None
+
+
+# (selector key, the enum key that activates it, the activating value). A selector present
+# under any other enum value is ignored by the controller, so it is rejected on write and
+# hidden in list summaries.
+SELECTOR_ACTIVATORS: tuple[tuple[str, str, str], ...] = (
+    ("client_macs", "matching_target", "CLIENT"),
+    ("port", "port_matching_type", "SPECIFIC"),
+    ("port_group_id", "port_matching_type", "OBJECT"),
+)
+_SELECTOR_VALIDATORS = {
+    "client_macs": _client_macs_error,
+    "port": _port_string_error,
+    "port_group_id": _port_group_error,
+}
+
+
+def _endpoint_targeting_errors(direction: str, ep: Any) -> List[str]:
+    """Every targeting problem on one source/destination endpoint, in check order."""
+    if ep is None:
+        return []
+    if not isinstance(ep, dict):
+        return ["%s must be an object with zone_id and matching_target." % direction]
+    errors: List[str] = []
+    target = ep.get("matching_target")
+    if target in ("IP", "NETWORK") and not ep.get("matching_target_type"):
+        expected = "'SPECIFIC' or 'OBJECT'" if target == "IP" else "'OBJECT'"
+        errors.append(
+            "%s.matching_target_type is required when matching_target is '%s'. Use %s." % (direction, target, expected)
+        )
+    if target == "IP":
+        target_type = ep.get("matching_target_type")
+        if target_type == "OBJECT" and not ep.get("ip_group_id"):
+            errors.append(
+                "%s.ip_group_id is required when matching_target is 'IP' with matching_target_type 'OBJECT'."
+                % direction
+            )
+        if target_type != "OBJECT" and not ep.get("ips"):
+            errors.append("%s.ips array is required when matching_target is 'IP'." % direction)
+    if target == "NETWORK" and not ep.get("network_ids"):
+        errors.append("%s.network_ids array is required when matching_target is 'NETWORK'." % direction)
+    for selector, activator_key, activator_value in SELECTOR_ACTIVATORS:
+        value = ep.get(selector)
+        if ep.get(activator_key) == activator_value:
+            error = _SELECTOR_VALIDATORS[selector](direction, value)
+            if error:
+                errors.append(error)
+        elif value:
+            # The controller stores and enforces a selector only under its activating enum;
+            # anything else would be accepted and silently ignored.
+            errors.append(
+                "%s.%s must be '%s' when %s.%s is set."
+                % (direction, activator_key, activator_value, direction, selector)
+            )
+    return errors
+
+
 def validate_policy_targeting(fields: Dict[str, Any]) -> str | None:
     """Validate V2 zone-based source/destination targeting.
 
-    Returns an error message or ``None``. Enforces the requirements of the
-    matching targets and port matching types this project has observed on
+    Returns the first error message or ``None``. Enforces the requirements of
+    the matching targets and port matching types this project has observed on
     live controllers (ANY / IP / NETWORK / CLIENT; ANY / SPECIFIC / OBJECT).
     Other values pass through untouched so newer controller targets (App,
     Web, Region, ...) keep working through update calls.
     """
     for direction in ("source", "destination"):
-        ep = fields.get(direction, {})
-        if not isinstance(ep, dict):
+        errors = _endpoint_targeting_errors(direction, fields.get(direction))
+        if errors:
+            return errors[0]
+    return None
+
+
+def policy_update_targeting_error(current: Dict[str, Any], updates: Dict[str, Any]) -> str | None:
+    """Return the first targeting error a partial update would introduce.
+
+    The manager deep-merges ``source``/``destination`` with the stored policy,
+    so each updated side is validated as merged. Sides the update does not
+    touch are left alone, and errors the stored side already has (state this
+    project did not author) are not held against an update that leaves them
+    in place.
+    """
+    for side in ("source", "destination"):
+        if side not in updates:
             continue
-        target = ep.get("matching_target")
-        if target in ("IP", "NETWORK") and not ep.get("matching_target_type"):
-            expected = "'SPECIFIC' or 'OBJECT'" if target == "IP" else "'OBJECT'"
-            return "%s.matching_target_type is required when matching_target is '%s'. Use %s." % (
-                direction,
-                target,
-                expected,
-            )
-        if target == "IP":
-            target_type = ep.get("matching_target_type")
-            if target_type == "OBJECT" and not ep.get("ip_group_id"):
-                return (
-                    "%s.ip_group_id is required when matching_target is 'IP' with matching_target_type 'OBJECT'."
-                    % direction
-                )
-            if target_type != "OBJECT" and not ep.get("ips"):
-                return "%s.ips array is required when matching_target is 'IP'." % direction
-        if target == "NETWORK" and not ep.get("network_ids"):
-            return "%s.network_ids array is required when matching_target is 'NETWORK'." % direction
-        if target == "CLIENT" and not ep.get("client_macs"):
-            return "%s.client_macs array is required when matching_target is 'CLIENT'." % direction
-        port_type = ep.get("port_matching_type")
-        if port_type == "SPECIFIC":
-            port_error = _port_string_error(direction, ep.get("port"))
-            if port_error:
-                return port_error
-        elif port_type == "OBJECT" and not ep.get("port_group_id"):
-            return "%s.port_group_id is required when port_matching_type is 'OBJECT'." % direction
+        stored = current.get(side)
+        stored = stored if isinstance(stored, dict) else {}
+        update = updates[side]
+        merged = deep_merge(stored, update) if isinstance(update, dict) else update
+        preexisting = set(_endpoint_targeting_errors(side, stored))
+        for error in _endpoint_targeting_errors(side, merged):
+            if error not in preexisting:
+                return error
     return None
 
 

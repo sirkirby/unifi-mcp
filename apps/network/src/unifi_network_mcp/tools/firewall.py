@@ -11,7 +11,6 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, delete_preview, toggle_preview, update_preview
-from unifi_core.merge import deep_merge
 from unifi_core.network.models.firewall import (
     MUTABLE_FIELDS,
     firewall_group_from_controller,
@@ -20,6 +19,7 @@ from unifi_core.network.models.firewall import (
     legacy_policy_error,
     normalize_policy_enums,
     normalize_policy_update,
+    policy_update_targeting_error,
     validate_policy_targeting,
 )
 from unifi_core.network.read_views import LEGACY_ENGINE_HINT, shape_firewall_policy_list
@@ -34,12 +34,12 @@ logger = logging.getLogger(__name__)
     description=(
         "List firewall policies configured on the Unifi Network controller. "
         "Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, "
-        "IPs, network IDs).\n\n"
+        "IPs, network IDs, client MACs, IP/port groups, port matching).\n\n"
         "Filters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, "
         "limit (default 50), include_predefined. By default (summary=true) returns a curated "
         "entry per policy (id, name, enabled, action, rule_index, description + source/destination "
-        "targeting). Set summary=false for the full fw_from_controller().model_dump() shape "
-        "including protocol, schedule, logging, ip_version, index, etc."
+        "targeting incl. port_matching_type/port/port_group_id when set, and protocol). Set summary=false for the full fw_from_controller().model_dump() shape "
+        "including protocol, schedule, logging, ip_version, connection_state_type, index, etc."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -491,13 +491,10 @@ async def update_firewall_policy(
 
         # Validate each updated endpoint as the controller will store it: the
         # manager deep-merges, so a partial source/destination is legitimately
-        # incomplete on its own. Untouched endpoints are not re-validated.
-        merged_endpoints = {
-            side: deep_merge(current.get(side) or {}, validated_data[side])
-            for side in ("source", "destination")
-            if isinstance(validated_data.get(side), dict)
-        }
-        targeting_error = validate_policy_targeting(merged_endpoints)
+        # incomplete on its own. Untouched endpoints are not re-validated, and an
+        # error the stored endpoint already has (state this tool did not author)
+        # is not held against an update that leaves it unchanged.
+        targeting_error = policy_update_targeting_error(current, validated_data)
         if targeting_error:
             return {"success": False, "error": targeting_error}
 

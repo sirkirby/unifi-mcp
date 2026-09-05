@@ -287,7 +287,9 @@ Force every client to use the approved DNS resolvers by blocking direct DNS (53)
 
 The shape depends on where the approved resolvers live.
 
-**Approved resolvers are external** (e.g. a public resolver): allow the resolver IPs first, then block the rest. Create the ALLOW before the BLOCK; new custom policies append after existing custom policies and before the controller's built-ins, so creation order is evaluation order.
+Before creating anything, list the existing policies for the zone pair by ascending `index` (`unifi_list_firewall_policies`, `summary: false`). New custom policies append after existing custom policies and before the controller's built-ins, so an existing ALLOW to External that covers port 53 (a `port_matching_type: ANY` allow counts) is evaluated first and leaves the new BLOCK inert. Narrow or move such a policy before creating.
+
+**Approved resolvers are external** (e.g. a public resolver): allow the resolver IPs first, then block the rest. Create the ALLOW before the BLOCK, since creation order is evaluation order among custom policies.
 
 ```json
 {
@@ -328,10 +330,10 @@ The shape depends on where the approved resolvers live.
 
 ```json
 {
-  "name": "EGR-02 Block external DNS except resolver",
+  "name": "EGR-02 Block external DNS except resolver (IPv4)",
   "action": "BLOCK",
   "protocol": "tcp_udp",
-  "ip_version": "BOTH",
+  "ip_version": "IPV4",
   "connection_state_type": "ALL",
   "source": {
     "zone_id": "<client_zone_id>",
@@ -349,7 +351,7 @@ The shape depends on where the approved resolvers live.
 }
 ```
 
-Create the resolver address group with `unifi_create_firewall_group` (`group_type: address-group` for IPv4; an IPv6 resolver needs a separate `ipv6-address-group` and a matching `ip_version: IPV6` policy). Repeat the BLOCK for each client zone; the resolver's own zone needs it too.
+Create the resolver address group with `unifi_create_firewall_group` (`group_type: address-group`). This policy is IPv4-only on purpose: an `address-group` cannot hold an IPv6 address, so an `ip_version: BOTH` policy could not exempt the resolver on its IPv6 leg and would block the resolver's own IPv6 upstream. On a dual-stack network add a second policy with `ip_version: IPV6` whose `ip_group_id` is an `ipv6-address-group` holding the resolver's IPv6 address. Repeat for each client zone; the resolver's own zone needs it too.
 
 **The gateway is the resolver** (clients use the UniFi gateway's own DNS): either recipe is safe. The gateway's upstream queries originate in the Gateway zone, which `<client zone>` → External policies never see.
 

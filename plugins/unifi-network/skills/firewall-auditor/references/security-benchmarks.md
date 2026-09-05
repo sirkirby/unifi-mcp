@@ -154,7 +154,7 @@ unifi_create_firewall_policy:
     network_ids: [<management network ID>]
 ```
 
-**MAC-based admin allow list:** If the admin sources are identified by client MAC rather than IP, V2 firewall policies cannot match by client MAC — use `unifi_create_acl_rule` instead. The example below restricts management-VLAN access to a specific set of admin workstations by MAC:
+**MAC-based admin allow list:** If the admin sources are identified by client MAC rather than IP, a V2 firewall policy can match them directly with `source.matching_target: CLIENT` and `source.client_macs: [...]` (see the firewall-manager schema reference). Use `unifi_create_acl_rule` instead when the enforcement must happen on the switch (L2, without passing through the gateway). The example below restricts management-VLAN access to a specific set of admin workstations by MAC at the switch:
 
 ```yaml
 # Security intent: only the listed admin MACs may originate traffic on the management VLAN.
@@ -281,7 +281,7 @@ unifi_create_firewall_policy:
 
 **Severity:** warning
 
-**How to fix:** Create one BLOCK per client zone → External on ports 53 and 853, with the resolver exempted on the side that matches its location. Create the ALLOW before the BLOCK; new custom policies append after existing custom policies and before built-ins, so creation order is evaluation order.
+**How to fix:** First list the existing policies for each client zone → External pair by ascending `index`. New custom policies append after existing custom policies and before built-ins, so an existing ALLOW to External that covers port 53 (a `port_matching_type: ANY` allow counts) is evaluated first and leaves a new BLOCK inert; narrow or move it before creating (`unifi_reorder_firewall_policies` needs `UNIFI_API_KEY`). Then create one BLOCK per client zone → External on ports 53 and 853, with the resolver exempted on the side that matches its location, creating any ALLOW before its BLOCK.
 
 ```yaml
 # Security intent, external resolvers: approved resolver IPs are reachable, all other external DNS is blocked.
@@ -324,11 +324,11 @@ unifi_create_firewall_policy:
 # A destination ALLOW cannot express this (the resolver is not in the External zone), and a plain
 # BLOCK would cut the resolver's own upstream queries and take DNS down for every VLAN.
 unifi_create_firewall_policy:
-  name: "EGR-02 Block external DNS except resolver"
+  name: "EGR-02 Block external DNS except resolver (IPv4)"
   action: BLOCK
   enabled: true
   protocol: tcp_udp
-  ip_version: BOTH
+  ip_version: IPV4            # an address-group cannot hold IPv6; add an IPV6 copy with an ipv6-address-group on dual-stack networks
   connection_state_type: ALL
   source:
     zone_id: <client zone ID>
