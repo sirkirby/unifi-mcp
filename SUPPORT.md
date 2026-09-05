@@ -10,7 +10,7 @@ Use the channel that matches what you need:
 | Need | Where to go |
 |------|-------------|
 | Setup help, configuration questions, or troubleshooting | [GitHub Discussions](https://github.com/sirkirby/unifi-mcp/discussions) |
-| Reproducible bugs | [Open a bug report](https://github.com/sirkirby/unifi-mcp/issues/new/choose) |
+| Reproducible bugs (MCP servers, Relay, Worker/CLI, API, or plugins) | [Open a bug report](https://github.com/sirkirby/unifi-mcp/issues/new/choose). For Network, Protect, or Access servers that can start and register tools, include a reviewed [sanitized support bundle](docs/support-bundles.md); otherwise use the manual form fields. |
 | Feature requests or design discussion | [Open a feature request](https://github.com/sirkirby/unifi-mcp/issues/new/choose) or start a discussion |
 | Security vulnerabilities | [Report privately through GitHub Security Advisories](https://github.com/sirkirby/unifi-mcp/security/advisories) |
 
@@ -22,14 +22,16 @@ other private deployment details in public issues or discussions.
 Please check these resources first:
 
 - [README.md](README.md) for installation and quick-start guidance
+- [Support bundle guide](docs/support-bundles.md) for privacy-bounded Network, Protect, and Access troubleshooting evidence
 - [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and test commands
 - [SECURITY.md](SECURITY.md) for the security model and vulnerability reporting
 - Existing [issues](https://github.com/sirkirby/unifi-mcp/issues) and
   [discussions](https://github.com/sirkirby/unifi-mcp/discussions)
 
 When asking for help, include the component you are using, package version or git
-SHA, install method, MCP client, operating system, and sanitized logs or command
-output.
+SHA, install method, MCP client, operating system, and a reviewed support bundle
+when the server can start. Ordinary diagnostic logs are not automatically safe to
+post publicly; provide manually sanitized logs only when a maintainer asks for them.
 
 ## Scope
 

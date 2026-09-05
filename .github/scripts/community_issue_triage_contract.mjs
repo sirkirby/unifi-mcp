@@ -77,6 +77,30 @@ const SENSITIVE_PATTERNS = [
   /\b(?:auth(?:entication|orization)?)[^\r\n]{0,40}\bbypass\p{L}*\b/iu,
   /\bbypass\p{L}*\b[^\r\n]{0,40}\b(?:auth(?:entication|orization)?)\b/iu,
 ];
+const SENSITIVE_MULTILINE_LABEL_PATTERN =
+  /^(?:(.*?)[ _-]+)?(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|tokens?)|tokens?|secrets?|passwords?|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?:[ _-]+(.*))?$/iu;
+const UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN = /&[A-Za-z][A-Za-z0-9]+;/u;
+const SENSITIVE_LABEL_PROSE_WORD_PATTERN =
+  /^(?:and|are|as|at|by|for|from|in|is|of|on|or|that|to|using|was|were|when|where|which|while|with)$/iu;
+const SENSITIVE_LABEL_RELATIONAL_PREFIX_PATTERN =
+  /^(?:current[ _-]+)?value(?:[ _-]+(?:for|of)(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2})?$/iu;
+const SENSITIVE_LABEL_SUFFIX_PATTERN =
+  /^(?:value|is|was|are|were|(?:for|of|in|from|on|at|to)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2}|(?:value[ _-]+)?used[ _-]+(?:by|with|for|in)[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*(?:[ _-]+[\p{L}\p{N}][\p{L}\p{N}.'-]*){0,2})$/iu;
+const MAX_MARKDOWN_LABEL_NORMALIZATION_PASSES = 32;
+const MAX_MARKDOWN_LABEL_LENGTH = 1_024;
+const UNSTABLE_MARKDOWN_LABEL_SENTINEL = "&UnstableMarkdownLabel;";
+const SAFE_INLINE_LABEL_TAGS = new Set(["b", "code", "del", "em", "i", "kbd", "s", "span", "strong", "sub", "sup", "u"]);
+const BENIGN_SESSION_PROSE_LABEL_PATTERN =
+  /^(?:debugging|observed|testing)[ _-]+authenticated[ _-]+session$/iu;
+const BENIGN_SESSION_PROSE_VALUE_PATTERN = /^(?:the[ _-]+)?endpoint[ _-]+returns[ _-]+\d{3}[.!]?$/iu;
+const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
+  /^["']?(?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|removed|hidden|masked|omitted|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?[.!]?$/iu;
+const SENSITIVE_LABEL_CANDIDATE_PATTERN =
+  /(?:^|[^A-Za-z0-9])(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|tokens?)|tokens?|secrets?|passwords?|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|pin(?:[ _-]?code)?|community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?=$|[^A-Za-z0-9])/iu;
+const MARKDOWN_TABLE_SEPARATOR_PATTERN =
+  /^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/u;
+const SAFE_STRUCTURAL_LABEL_PATTERN =
+  /^(?:actual behavior|additional context|environment|expected behavior|installation(?: method)?|logs?|steps(?: to reproduce)?|transport|version)$/iu;
 const BENIGN_SECURITY_CONTEXT_PATTERNS = [
   /^\s*unauthenticated (?:users|requests) (?:correctly )?(?:receive|return) 401(?: unauthorized)?(?: as expected)?[.!]?\s*$/iu,
   /^\s*(?:the )?api denies unauthenticated requests[.!]?\s*$/iu,
@@ -108,9 +132,20 @@ const MISSING_INFORMATION_TEXT = new Map([
   ["expected_actual", "The expected behavior and the actual behavior observed."],
   ["live_controller_evidence", "Sanitized live-controller evidence showing the result."],
 ]);
+const SUPPORT_BUNDLE_GUIDE_URL =
+  "https://github.com/sirkirby/unifi-mcp/blob/main/docs/support-bundles.md";
+const SUPPORT_REQUEST_TEXT = new Map([
+  ["network_support_summary", `Run \`unifi_get_support_bundle\` with \`probe="summary"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["protect_support_summary", `Run \`protect_get_support_bundle\` with \`probe="summary"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["access_support_summary", `Run \`access_get_support_bundle\` with \`probe="summary"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["network_support_connectivity", `If you agree to one bounded controller request, run \`unifi_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["protect_support_connectivity", `If you agree to one bounded controller request, run \`protect_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+  ["access_support_connectivity", `If you agree to one bounded controller request, run \`access_get_support_bundle\` with \`probe="connectivity"\`, review the JSON locally, and provide the reviewed result. Guide: ${SUPPORT_BUNDLE_GUIDE_URL}`],
+]);
 const REPOSITORY_EVIDENCE_PATHS = [
   /^(?:README|CONTRIBUTING|SECURITY)\.md$/,
-  /^(?:docs|apps|packages)\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
+  /^docs\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
+  /^(?:apps|packages)\/[A-Za-z0-9][A-Za-z0-9._-]*\/src\/[A-Za-z0-9_][A-Za-z0-9_-]*(?:\/[A-Za-z0-9_][A-Za-z0-9_-]*)*\.py$/,
 ];
 const COMMENT_FOOTER =
   "This is an automated first-pass triage; a maintainer will make final decisions.";
@@ -128,6 +163,18 @@ function exactKeys(value, expected) {
 function assertSafePositiveInteger(value, name) {
   if (!Number.isSafeInteger(value) || value < 1) fail(`${name} must be a positive safe integer`);
   return value;
+}
+
+function validateRelevantTimelineIdentifier(value) {
+  if (typeof value !== "string" && typeof value !== "number") {
+    fail("relevant timeline event id must be a positive decimal identifier");
+  }
+  if (typeof value === "number" && (!Number.isInteger(value) || value < 1)) {
+    fail("relevant timeline event id must be a positive decimal identifier");
+  }
+  if (!POSITIVE_INTEGER_STRING_PATTERN.test(String(value))) {
+    fail("relevant timeline event id must be a positive decimal identifier");
+  }
 }
 
 function normalizeRunId(value) {
@@ -329,15 +376,818 @@ function containsControllerAddress(value) {
   return false;
 }
 
-function containsSensitiveContent(value) {
-  const normalized = value
-    .normalize("NFKC")
-    .replace(/\p{Default_Ignorable_Code_Point}/gu, "");
-  if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
+function markdownTableCells(line) {
+  const trimmed = line.trim().replace(/^(?:>[ \t]*)+/u, "");
+  const cells = [];
+  let cell = "";
+  let backslashRun = 0;
+  let sawDelimiter = false;
+  for (const character of trimmed) {
+    if (character === "|" && backslashRun % 2 === 0) {
+      cells.push(cell.trim());
+      cell = "";
+      backslashRun = 0;
+      sawDelimiter = true;
+      continue;
+    }
+    cell += character;
+    backslashRun = character === "\\" ? backslashRun + 1 : 0;
+  }
+  if (!sawDelimiter) return null;
+  cells.push(cell.trim());
+  if (cells[0] === "") cells.shift();
+  if (cells.at(-1) === "") cells.pop();
+  return cells;
+}
+
+function isMarkdownTableSeparator(line) {
+  return MARKDOWN_TABLE_SEPARATOR_PATTERN.test(line.trim().replace(/^(?:>[ \t]*)+/u, ""));
+}
+
+function stripMarkdownWrappers(value) {
+  return value.replace(/^[`*_~]+|[`*_~]+$/gu, "").trim();
+}
+
+function decodeHtmlCharacterReferences(value) {
+  const named = new Map([
+    ["af", "\u2061"],
+    ["amp", "&"],
+    ["applyfunction", "\u2061"],
+    ["apos", "'"],
+    ["colon", ":"],
+    ["equals", "="],
+    ["gt", ">"],
+    ["hyphen", "-"],
+    ["ic", "\u2063"],
+    ["invisiblecomma", "\u2063"],
+    ["invisibletimes", "\u2062"],
+    ["it", "\u2062"],
+    ["lowbar", "_"],
+    ["lt", "<"],
+    ["lrm", "\u200e"],
+    ["negativemediumspace", "\u200b"],
+    ["negativethickspace", "\u200b"],
+    ["negativethinspace", "\u200b"],
+    ["negativeverythinspace", "\u200b"],
+    ["nbsp", " "],
+    ["nobreak", "\u2060"],
+    ["quot", '"'],
+    ["rlm", "\u200f"],
+    ["shy", "\u00ad"],
+    ["zerowidthspace", "\u200b"],
+    ["zwnj", "\u200c"],
+    ["zwj", "\u200d"],
+  ]);
+  const namedPattern = new RegExp(
+    `&(${[...named.keys()].sort((left, right) => right.length - left.length).join("|")});?`,
+    "giu",
+  );
+  return value
+    .replace(/&#(?:x(0*[0-9a-f]{1,6})(?![0-9a-f])|(0*[0-9]{1,7})(?![0-9]));?/giu, (match, hex, decimal) => {
+      const codePoint = Number.parseInt(hex || decimal, hex ? 16 : 10);
+      return Number.isSafeInteger(codePoint) && codePoint > 0 && codePoint <= 0x10ffff &&
+        !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ? String.fromCodePoint(codePoint)
+        : match;
+    })
+    .replace(namedPattern, (match, name) => named.get(name.toLocaleLowerCase("en-US")) || match);
+}
+
+function stripInlineHtmlMarkup(value, discardedValues = null) {
+  let result = "";
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.startsWith("<!--", index)) {
+      const commentEnd = value.indexOf("-->", index + 4);
+      if (commentEnd !== -1) {
+        discardedValues?.push(value.slice(index + 4, commentEnd));
+        index = commentEnd + 2;
+        continue;
+      }
+    }
+    if (value.startsWith("<?", index)) {
+      const instructionEnd = value.indexOf("?>", index + 2);
+      if (instructionEnd !== -1) {
+        discardedValues?.push(value.slice(index + 2, instructionEnd));
+        index = instructionEnd + 1;
+        continue;
+      }
+      result += value.slice(index);
+      break;
+    }
+    if (value.startsWith("<![CDATA[", index)) {
+      const cdataEnd = value.indexOf("]]>", index + 9);
+      if (cdataEnd !== -1) {
+        discardedValues?.push(value.slice(index + 9, cdataEnd));
+        index = cdataEnd + 2;
+        continue;
+      }
+      result += value.slice(index);
+      break;
+    }
+    if (value[index] === "<" && value[index + 1] === "!" && /[A-Z]/u.test(value[index + 2] || "")) {
+      const declarationEnd = value.indexOf(">", index + 2);
+      if (declarationEnd !== -1) {
+        discardedValues?.push(value.slice(index + 2, declarationEnd));
+        index = declarationEnd;
+        continue;
+      }
+      result += value.slice(index);
+      break;
+    }
+    const tagNameStart = value[index + 1] === "/" ? index + 2 : index + 1;
+    if (value[index] === "<" && /[A-Za-z]/u.test(value[tagNameStart] || "")) {
+      let quote = null;
+      let tagEnd = -1;
+      for (let candidate = index + 1; candidate < value.length; candidate += 1) {
+        const character = value[candidate];
+        if (quote !== null) {
+          if (character === quote) quote = null;
+        } else if (character === '"' || character === "'") {
+          quote = character;
+        } else if (character === ">") {
+          tagEnd = candidate;
+          break;
+        }
+      }
+      if (tagEnd !== -1) {
+        const tag = value.slice(index + 1, tagEnd);
+        const tagName = tag.match(/^\/?([A-Za-z][^\s/>]*)/u)?.[1] || "";
+        const attributes = tag.replace(/^\/?[A-Za-z][^\s/>]*/u, "").replace(/\/?\s*$/u, "").trim();
+        if (!SAFE_INLINE_LABEL_TAGS.has(tagName.toLocaleLowerCase("en-US"))) discardedValues?.push(tagName);
+        if (attributes !== "") discardedValues?.push(attributes);
+        index = tagEnd;
+        continue;
+      }
+      result += value.slice(index);
+      break;
+    }
+    result += value[index];
+  }
+  return result;
+}
+
+function hasSensitiveDiscardedLabelMarkup(value) {
+  const discardedValues = [];
+  stripInlineHtmlMarkup(value, discardedValues);
+  if (discardedValues.some((discarded) => {
+    const normalized = stripMarkdownWrappers(
+      decodeHtmlCharacterReferences(discarded)
+        .normalize("NFKC")
+        .replace(/\p{Default_Ignorable_Code_Point}/gu, ""),
+    );
+    return normalized !== "" && !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(normalized);
+  })) return true;
+
+  const discardedDestinations = [];
+  stripMarkdownInlineLinkDestinations(value, discardedDestinations);
+  if (discardedDestinations.length > 0) return true;
+  const rendered = value.replace(/[`*_~]+/gu, "");
+  const sensitiveCandidate =
+    SENSITIVE_LABEL_CANDIDATE_PATTERN.test(rendered) || UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN.test(rendered);
+  return sensitiveCandidate && hasClosedMarkdownLabel(rendered);
+}
+
+function hasClosedMarkdownLabel(value) {
+  let open = false;
+  let escaped = false;
+  for (const character of value) {
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+    } else if (character === "[") {
+      open = true;
+    } else if (character === "]" && open) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function recoverMalformedSensitiveField(line) {
+  const rendered = line.replace(/[`*_~]+/gu, "");
+  for (let index = 0; index < rendered.length; index += 1) {
+    if (rendered[index] !== ":" && rendered[index] !== "=") continue;
+    const prefix = rendered.slice(0, index);
+    const candidate = prefix.match(SENSITIVE_LABEL_CANDIDATE_PATTERN);
+    if (!candidate || candidate.index === undefined) continue;
+    const candidateStart = candidate.index + (/^[^A-Za-z0-9]/u.test(candidate[0]) ? 1 : 0);
+    return {
+      label: UNSTABLE_MARKDOWN_LABEL_SENTINEL,
+      value: rendered.slice(index + 1).trim(),
+      discardedPrefix: prefix.slice(0, candidateStart).trim(),
+    };
+  }
+  return null;
+}
+
+function hasUnsafeMalformedSensitivePrefix(prefix) {
+  if (prefix === "") return false;
+  if (prefix === "<!--" || prefix === "<?xml" || prefix === "<![CDATA[" || prefix === "<!DOCTYPE") return false;
+  const tag = prefix.match(/^<\/?([A-Za-z][A-Za-z0-9:._-]*)$/u);
+  return !tag || !SAFE_INLINE_LABEL_TAGS.has(tag[1].toLocaleLowerCase("en-US"));
+}
+
+function exposeSensitiveMalformedFields(value) {
+  return value
+    .split(/\r?\n|\r/u)
+    .map((line) => {
+      const recovered = recoverMalformedSensitiveField(line);
+      if (!recovered) return line;
+      const recoveredValue = hasUnsafeMalformedSensitivePrefix(recovered.discardedPrefix)
+        ? UNSTABLE_MARKDOWN_LABEL_SENTINEL
+        : recovered.value;
+      return `${recovered.label}: ${recoveredValue}`;
+    })
+    .join("\n");
+}
+
+function collapseRawHtmlMarkupNewlines(value) {
+  let result = "";
+  let mode = null;
+  let terminator = null;
+  let quote = null;
+  let markupStart = -1;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (mode === null && character === "<") {
+      if (value.startsWith("<!--", index)) {
+        mode = "terminated";
+        terminator = "-->";
+        markupStart = index;
+      } else if (value.startsWith("<?", index)) {
+        mode = "terminated";
+        terminator = "?>";
+        markupStart = index;
+      } else if (value.startsWith("<![CDATA[", index)) {
+        mode = "terminated";
+        terminator = "]]>";
+        markupStart = index;
+      } else if (value[index + 1] === "!" && /[A-Z]/u.test(value[index + 2] || "")) {
+        mode = "terminated";
+        terminator = ">";
+        markupStart = index;
+      } else {
+        const nameIndex = value[index + 1] === "/" ? index + 2 : index + 1;
+        if (/[A-Za-z]/u.test(value[nameIndex] || "")) {
+          mode = "tag";
+          markupStart = index;
+        }
+      }
+    }
+
+    if (mode !== null && character === "\r" && value[index + 1] === "\n") {
+      result += " ";
+      index += 1;
+      continue;
+    }
+    if (mode !== null && character === "\n") {
+      result += " ";
+      continue;
+    }
+
+    result += character;
+    if (mode === "tag") {
+      if (quote !== null) {
+        if (character === quote) quote = null;
+      } else if (character === '"' || character === "'") {
+        quote = character;
+      } else if (character === ">") {
+        mode = null;
+        markupStart = -1;
+      }
+    } else if (mode === "terminated" && value.startsWith(terminator, index)) {
+      result += terminator.slice(1);
+      index += terminator.length - 1;
+      mode = null;
+      terminator = null;
+      markupStart = -1;
+    }
+  }
+  if (mode === null || markupStart === -1) return {value: result, sensitiveUnterminated: false};
+  const unterminated = value.slice(markupStart);
+  const newlineIndex = unterminated.search(/[\r\n]/u);
+  if (newlineIndex === -1) return {value: result, sensitiveUnterminated: false};
+  const exposed = exposeSensitiveMalformedFields(unterminated);
+  return {
+    value: result,
+    sensitiveUnterminated: containsSensitiveTable(exposed) || containsSensitiveMultilineValue(exposed),
+  };
+}
+
+function stripMarkdownInlineLinkDestinations(value, discardedDestinations) {
+  let result = "";
+  for (let index = 0; index < value.length; ) {
+    const labelStart = value[index] === "!" && value[index + 1] === "[" ? index + 1 : index;
+    if (value[labelStart] !== "[") {
+      result += value[index];
+      index += 1;
+      continue;
+    }
+
+    let labelEnd = -1;
+    let escaped = false;
+    for (let cursor = labelStart + 1; cursor < value.length; cursor += 1) {
+      const character = value[cursor];
+      if (character === "\r" || character === "\n") break;
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === "]") {
+        labelEnd = cursor;
+        break;
+      }
+    }
+    if (labelEnd === -1) {
+      result += value.slice(index);
+      break;
+    }
+    if (value[labelEnd + 1] !== "(") {
+      result += value.slice(index, labelEnd + 1);
+      index = labelEnd + 1;
+      continue;
+    }
+
+    let destinationEnd = -1;
+    let depth = 0;
+    let titleQuote = null;
+    escaped = false;
+    for (let cursor = labelEnd + 1; cursor < value.length; cursor += 1) {
+      const character = value[cursor];
+      if (character === "\r" || character === "\n") break;
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (titleQuote !== null) {
+        if (character === titleQuote) titleQuote = null;
+      } else if (
+        depth === 1 &&
+        (character === '"' || character === "'") &&
+        /[ \t]/u.test(value[cursor - 1] || "")
+      ) {
+        titleQuote = character;
+      } else if (character === "(") {
+        depth += 1;
+      } else if (character === ")") {
+        depth -= 1;
+        if (depth === 0) {
+          destinationEnd = cursor;
+          break;
+        }
+      }
+    }
+    if (destinationEnd === -1) {
+      const visibleLabel = value.slice(labelStart + 1, labelEnd);
+      const remainder = value.slice(labelEnd + 2).trim();
+      const candidateLabel = visibleLabel.replace(/[`*_~]+/gu, "");
+      if (
+        remainder !== "" &&
+        !BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(stripMarkdownWrappers(remainder)) &&
+        SENSITIVE_LABEL_CANDIDATE_PATTERN.test(stripMarkdownWrappers(candidateLabel))
+      ) {
+        return UNSTABLE_MARKDOWN_LABEL_SENTINEL;
+      }
+      result += visibleLabel;
+      break;
+    }
+
+    discardedDestinations?.push(value.slice(labelEnd + 2, destinationEnd));
+    result += value.slice(labelStart + 1, labelEnd);
+    index = destinationEnd + 1;
+  }
+  return result;
+}
+
+function normalizeMarkdownTableLabel(cell) {
+  if (cell.length > MAX_MARKDOWN_LABEL_LENGTH) return UNSTABLE_MARKDOWN_LABEL_SENTINEL;
+  let label = stripInlineHtmlMarkup(decodeHtmlCharacterReferences(cell)).trim();
+  for (let pass = 0; pass < MAX_MARKDOWN_LABEL_NORMALIZATION_PASSES; pass += 1) {
+    const normalized = stripMarkdownInlineLinkDestinations(label)
+      .replace(/!?\[([^\]\r\n]+)\]\[[^\]\r\n]*\]/gu, "$1")
+      .replace(/!?\[([^\]\r\n]+)\]/gu, "$1")
+      .replace(/(\*{1,3}|_{1,3}|~{2}|`+)(.+?)\1/gu, "$2");
+    if (normalized === label) return stripMarkdownWrappers(label);
+    label = normalized;
+  }
+  return UNSTABLE_MARKDOWN_LABEL_SENTINEL;
+}
+
+function isSensitiveMultilineLabel(label) {
+  const normalizedLabel = normalizeMarkdownTableLabel(label);
+  // A complete HTML5 named-reference table would add thousands of security-critical
+  // aliases. Fail closed when a candidate label still contains one we did not decode.
+  if (UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN.test(normalizedLabel)) return true;
+  const match = normalizedLabel.match(SENSITIVE_MULTILINE_LABEL_PATTERN);
+  if (!match) return false;
+  const prefix = (match[1] || "").trim();
+  const suffix = (match[2] || "").trim();
+  const isShortLabelFragment = (fragment, prosePattern) => {
+    if (fragment === "") return true;
+    const words = fragment.split(/[ _-]+/u).filter(Boolean);
+    return (
+      words.length <= 4 &&
+      words.every(
+        (word) => /^[\p{L}\p{N}][\p{L}\p{N}.'-]*$/u.test(word) && !prosePattern.test(word),
+      )
+    );
+  };
+  const validPrefix =
+    isShortLabelFragment(prefix, SENSITIVE_LABEL_PROSE_WORD_PATTERN) ||
+    SENSITIVE_LABEL_RELATIONAL_PREFIX_PATTERN.test(prefix);
+  if (!validPrefix) return false;
+  return suffix === "" || SENSITIVE_LABEL_SUFFIX_PATTERN.test(suffix);
+}
+
+function markdownReferenceDefinitionLabels(lines) {
+  const labels = new Set();
+  for (const line of lines) {
+    const normalized = line.trim().replace(/^(?:>[ \t]*)+/u, "");
+    const match = normalized.match(/^\[([^\]\r\n]+)\]:/u);
+    if (match) labels.add(match[1].trim().toLocaleLowerCase("en-US"));
+  }
+  return labels;
+}
+
+function isResolvedPlaceholderReference(candidate, referenceLabels) {
+  let normalized = candidate.trim();
+  if (
+    normalized.length >= 2 &&
+    ((normalized.startsWith('"') && normalized.endsWith('"')) ||
+      (normalized.startsWith("'") && normalized.endsWith("'")))
+  ) {
+    normalized = normalized.slice(1, -1).trim();
+  }
+  normalized = stripMarkdownWrappers(normalized);
+  const match = normalized.match(/^\[([^\]\r\n]+)\]$/u);
+  return Boolean(match && referenceLabels.has(match[1].trim().toLocaleLowerCase("en-US")));
+}
+
+function markdownTableEndIndex(lines, firstRowIndex) {
+  let endIndex = firstRowIndex;
+  while (endIndex < lines.length && markdownTableCells(lines[endIndex]) !== null) {
+    endIndex += 1;
+  }
+  return endIndex;
+}
+
+function sensitiveMarkdownTableColumns(cells) {
+  const sensitiveColumns = new Map();
+  for (let cellIndex = 0; cellIndex < cells.length; cellIndex += 1) {
+    const label = normalizeMarkdownTableLabel(cells[cellIndex]);
+    if (isSensitiveMultilineLabel(label)) {
+      sensitiveColumns.set(cellIndex, label);
+    }
+  }
+  return sensitiveColumns;
+}
+
+function hasSensitiveDiscardedTableLabel(cells) {
+  return cells.some((cell) => {
+    const label = normalizeMarkdownTableLabel(cell);
+    return label === UNSTABLE_MARKDOWN_LABEL_SENTINEL ||
+      (isSensitiveMultilineLabel(label) && hasSensitiveDiscardedLabelMarkup(cell));
+  });
+}
+
+function containsSensitiveTableValue(lines, headerIndex, separatorIndex, referenceLabels, endIndex) {
+  const headerCells = markdownTableCells(lines[headerIndex]) || [];
+  if (hasSensitiveDiscardedTableLabel(headerCells)) return true;
+  let sensitiveColumns = sensitiveMarkdownTableColumns(headerCells);
+  for (let rowIndex = separatorIndex + 1; rowIndex < endIndex; rowIndex += 1) {
+    const cells = markdownTableCells(lines[rowIndex]);
+    if (!cells) throw new Error("Markdown table boundary invariant failed");
+    const nextIsSeparator = rowIndex + 1 < endIndex && isMarkdownTableSeparator(lines[rowIndex + 1]);
+    const candidateSensitiveColumns = nextIsSeparator ? sensitiveMarkdownTableColumns(cells) : new Map();
+    if (nextIsSeparator && hasSensitiveDiscardedTableLabel(cells)) return true;
+    if (isMarkdownTableSeparator(lines[rowIndex])) continue;
+    for (const [cellIndex, label] of sensitiveColumns) {
+      const candidateValue = stripMarkdownWrappers(cells[cellIndex] || "");
+      if (
+        candidateValue !== "" &&
+        (!isBenignValueForSensitiveLabel(candidateValue, label) ||
+          isResolvedPlaceholderReference(candidateValue, referenceLabels))
+      ) {
+        return true;
+      }
+    }
+    for (let cellIndex = 0; cellIndex + 1 < cells.length; cellIndex += 1) {
+      const label = normalizeMarkdownTableLabel(cells[cellIndex]);
+      const candidateValue = stripMarkdownWrappers(cells[cellIndex + 1]);
+      if (
+        isSensitiveMultilineLabel(label) &&
+        (hasSensitiveDiscardedLabelMarkup(cells[cellIndex]) ||
+          (candidateValue !== "" &&
+            (!isBenignValueForSensitiveLabel(candidateValue, label) ||
+              isResolvedPlaceholderReference(candidateValue, referenceLabels))))
+      ) {
+        return true;
+      }
+    }
+    if (nextIsSeparator) {
+      sensitiveColumns = candidateSensitiveColumns;
+      rowIndex += 1;
+    }
+  }
+  return false;
+}
+
+function containsSensitiveTable(value) {
+  const lines = value.split(/\r?\n/);
+  const referenceLabels = markdownReferenceDefinitionLabels(lines);
+  for (let headerIndex = 0; headerIndex + 1 < lines.length; headerIndex += 1) {
+    if (markdownTableCells(lines[headerIndex]) === null || !isMarkdownTableSeparator(lines[headerIndex + 1])) continue;
+    const endIndex = markdownTableEndIndex(lines, headerIndex + 2);
+    if (containsSensitiveTableValue(lines, headerIndex, headerIndex + 1, referenceLabels, endIndex)) return true;
+    headerIndex = endIndex - 1;
+  }
+  return false;
+}
+
+function normalizeMarkdownContentLine(line) {
+  return line
+    .trim()
+    .replace(/^(?:>[ \t]*)+/u, "")
+    .replace(/^(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/u, "");
+}
+
+function splitMarkdownField(line) {
+  let bracketDepth = 0;
+  let parenthesisDepth = 0;
+  let unmatchedClosingMarkdown = false;
+  let escaped = false;
+  let htmlTag = false;
+  let htmlQuote = null;
+  let htmlComment = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (htmlComment) {
+      if (line.startsWith("-->", index)) {
+        htmlComment = false;
+        index += 2;
+      }
+      continue;
+    }
+    if (htmlTag) {
+      if (htmlQuote !== null) {
+        if (character === htmlQuote) htmlQuote = null;
+      } else if (character === '"' || character === "'") {
+        htmlQuote = character;
+      } else if (character === ">") {
+        htmlTag = false;
+      }
+      continue;
+    }
+    if (escaped) {
+      if (character === "]" || character === ")") unmatchedClosingMarkdown = true;
+      escaped = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (line.startsWith("<!--", index)) {
+      htmlComment = true;
+      index += 3;
+      continue;
+    }
+    if (line.startsWith("<?", index)) {
+      const instructionEnd = line.indexOf("?>", index + 2);
+      if (instructionEnd === -1) return null;
+      index = instructionEnd + 1;
+      continue;
+    }
+    if (line.startsWith("<![CDATA[", index)) {
+      const cdataEnd = line.indexOf("]]>", index + 9);
+      if (cdataEnd === -1) return null;
+      index = cdataEnd + 2;
+      continue;
+    }
+    if (character === "<" && line[index + 1] === "!" && /[A-Z]/u.test(line[index + 2] || "")) {
+      const declarationEnd = line.indexOf(">", index + 2);
+      if (declarationEnd === -1) return null;
+      index = declarationEnd;
+      continue;
+    }
+    const tagNameStart = line[index + 1] === "/" ? index + 2 : index + 1;
+    if (character === "<" && /[A-Za-z]/u.test(line[tagNameStart] || "")) {
+      htmlTag = true;
+      continue;
+    }
+    if (character === "[") bracketDepth += 1;
+    else if (character === "]" && bracketDepth > 0) bracketDepth -= 1;
+    else if (character === "]") unmatchedClosingMarkdown = true;
+    else if (character === "(" && bracketDepth === 0) parenthesisDepth += 1;
+    else if (character === ")" && bracketDepth === 0 && parenthesisDepth > 0) parenthesisDepth -= 1;
+    else if (character === ")" && bracketDepth === 0) unmatchedClosingMarkdown = true;
+    else if ((character === ":" || character === "=") && bracketDepth === 0 && parenthesisDepth === 0) {
+      if (unmatchedClosingMarkdown) {
+        const recovered = recoverMalformedSensitiveField(line);
+        if (recovered) return [recovered.label, recovered.value];
+      }
+      return [line.slice(0, index).trim(), line.slice(index + 1).trim()];
+    }
+  }
+  if (bracketDepth > 0 || parenthesisDepth > 0) {
+    const recovered = recoverMalformedSensitiveField(line);
+    if (recovered) return [recovered.label, recovered.value];
+  }
+  return null;
+}
+
+function parseSensitiveLabelLine(line) {
+  const normalized = normalizeMarkdownContentLine(line);
+  const field = splitMarkdownField(normalized);
+  const fieldLabel = field ? normalizeMarkdownTableLabel(field[0].replace(/^["']|["']$/gu, "")) : "";
+  if (field && isSensitiveMultilineLabel(fieldLabel)) {
+    const inlineValue = hasSensitiveDiscardedLabelMarkup(field[0])
+      ? UNSTABLE_MARKDOWN_LABEL_SENTINEL
+      : /^[>|](?:[+-]?[1-9]?|[1-9]?[+-]?)$/u.test(field[1])
+        ? ""
+        : field[1];
+    return { label: fieldLabel, inlineValue, structural: true };
+  }
+  const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
+  const headingLabel = heading ? normalizeMarkdownTableLabel(heading[1]) : "";
+  if (heading && isSensitiveMultilineLabel(headingLabel)) {
+    return {
+      label: headingLabel,
+      inlineValue:
+        headingLabel === UNSTABLE_MARKDOWN_LABEL_SENTINEL || hasSensitiveDiscardedLabelMarkup(heading[1])
+          ? UNSTABLE_MARKDOWN_LABEL_SENTINEL
+          : "",
+      structural: true,
+    };
+  }
+  const standaloneSource = normalized.replace(/^['"]|['"]$/gu, "").trim();
+  if (standaloneSource.length > MAX_MARKDOWN_LABEL_LENGTH) {
+    const isCandidate =
+      SENSITIVE_LABEL_CANDIDATE_PATTERN.test(standaloneSource) ||
+      UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN.test(standaloneSource) ||
+      hasSensitiveDiscardedLabelMarkup(standaloneSource);
+    return isCandidate
+      ? { label: UNSTABLE_MARKDOWN_LABEL_SENTINEL, inlineValue: "", structural: false }
+      : null;
+  }
+  const standaloneLabel = normalizeMarkdownTableLabel(standaloneSource);
+  const normalizedMarkup = standaloneLabel !== standaloneSource;
+  if (isSensitiveMultilineLabel(standaloneLabel)) {
+    return {
+      label: standaloneLabel,
+      inlineValue:
+        standaloneLabel === UNSTABLE_MARKDOWN_LABEL_SENTINEL || hasSensitiveDiscardedLabelMarkup(standaloneSource)
+          ? UNSTABLE_MARKDOWN_LABEL_SENTINEL
+          : "",
+      structural: normalizedMarkup,
+    };
+  }
+  return null;
+}
+
+function isBenignValueForSensitiveLabel(value, label) {
   return (
+    BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN.test(value) ||
+    (BENIGN_SESSION_PROSE_LABEL_PATTERN.test(label) && BENIGN_SESSION_PROSE_VALUE_PATTERN.test(value))
+  );
+}
+
+function parseSensitiveLabelAt(lines, index) {
+  const direct = parseSensitiveLabelLine(lines[index]);
+  if (direct) return { ...direct, valueIndex: index + 1 };
+  if (index + 1 >= lines.length) return null;
+  const underline = normalizeMarkdownContentLine(lines[index + 1]);
+  if (!/^(?:={3,}|-{3,})$/u.test(underline)) return null;
+  const labelSource = normalizeMarkdownContentLine(lines[index]);
+  const label = normalizeMarkdownTableLabel(labelSource);
+  return isSensitiveMultilineLabel(label)
+    ? {
+        label,
+        inlineValue: hasSensitiveDiscardedLabelMarkup(labelSource) ? UNSTABLE_MARKDOWN_LABEL_SENTINEL : "",
+        structural: true,
+        valueIndex: index + 2,
+      }
+    : null;
+}
+
+function isSensitiveStructuralBoundaryAt(lines, index, referenceLabels) {
+  const match = parseSensitiveLabelAt(lines, index);
+  if (!match) return false;
+  if (match.structural) return true;
+  if (match.inlineValue !== "") return false;
+  let valueIndex = match.valueIndex;
+  while (valueIndex < lines.length && lines[valueIndex].trim() === "") valueIndex += 1;
+  if (valueIndex >= lines.length) return false;
+  const candidateValue = stripMarkdownWrappers(normalizeMarkdownContentLine(lines[valueIndex]));
+  return (
+    isBenignValueForSensitiveLabel(candidateValue, match.label) &&
+    !isResolvedPlaceholderReference(candidateValue, referenceLabels)
+  );
+}
+
+function isSafeStructuralBoundary(line) {
+  const normalized = normalizeMarkdownContentLine(line);
+  const heading = normalized.match(/^#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/u);
+  if (heading) return SAFE_STRUCTURAL_LABEL_PATTERN.test(normalizeMarkdownTableLabel(heading[1]));
+  const field = splitMarkdownField(normalized);
+  const fieldLabel = field ? normalizeMarkdownTableLabel(field[0].replace(/^["']|["']$/gu, "")) : "";
+  return Boolean(field && SAFE_STRUCTURAL_LABEL_PATTERN.test(fieldLabel));
+}
+
+function containsSensitiveMultilineValue(value) {
+  const lines = value.split(/\r?\n/);
+  const referenceLabels = markdownReferenceDefinitionLabels(lines);
+  for (let index = 0; index < lines.length; index += 1) {
+    const labelMatch = parseSensitiveLabelAt(lines, index);
+    if (!labelMatch) continue;
+
+    const inlineValue = labelMatch.inlineValue;
+    if (inlineValue !== "") {
+      const normalizedInlineValue = stripMarkdownWrappers(inlineValue);
+      if (
+        !isBenignValueForSensitiveLabel(normalizedInlineValue, labelMatch.label) ||
+        isResolvedPlaceholderReference(normalizedInlineValue, referenceLabels)
+      ) return true;
+      for (let continuationIndex = index + 1; continuationIndex < lines.length; continuationIndex += 1) {
+        const continuation = lines[continuationIndex];
+        if (continuation.trim() === "") continue;
+        if (isSensitiveStructuralBoundaryAt(lines, continuationIndex, referenceLabels)) break;
+        if (isSafeStructuralBoundary(continuation)) break;
+        if (!isBenignValueForSensitiveLabel(normalizeMarkdownContentLine(continuation), labelMatch.label)) return true;
+      }
+      continue;
+    }
+
+    let valueIndex = labelMatch.valueIndex;
+    while (valueIndex < lines.length && lines[valueIndex].trim() === "") valueIndex += 1;
+    if (valueIndex >= lines.length) continue;
+
+    let nextContentIndex = valueIndex + 1;
+    while (nextContentIndex < lines.length && lines[nextContentIndex].trim() === "") {
+      nextContentIndex += 1;
+    }
+    if (
+      markdownTableCells(lines[valueIndex]) !== null &&
+      nextContentIndex < lines.length &&
+      isMarkdownTableSeparator(lines[nextContentIndex])
+    ) {
+      if (
+        containsSensitiveTableValue(
+          lines,
+          valueIndex,
+          nextContentIndex,
+          referenceLabels,
+          markdownTableEndIndex(lines, nextContentIndex + 1),
+        )
+      ) return true;
+      continue;
+    }
+
+    if (
+      parseSensitiveLabelAt(lines, valueIndex)?.structural === true ||
+      isSafeStructuralBoundary(lines[valueIndex])
+    ) continue;
+    const normalizedFirstValue = normalizeMarkdownContentLine(lines[valueIndex]);
+    if (
+      !isBenignValueForSensitiveLabel(normalizedFirstValue, labelMatch.label) ||
+      isResolvedPlaceholderReference(normalizedFirstValue, referenceLabels)
+    ) return true;
+    for (let continuationIndex = valueIndex + 1; continuationIndex < lines.length; continuationIndex += 1) {
+      const continuation = lines[continuationIndex];
+      if (continuation.trim() === "") continue;
+      if (isSensitiveStructuralBoundaryAt(lines, continuationIndex, referenceLabels)) break;
+      if (isSafeStructuralBoundary(continuation)) break;
+      if (!isBenignValueForSensitiveLabel(normalizeMarkdownContentLine(continuation), labelMatch.label)) return true;
+    }
+  }
+  return false;
+}
+
+function containsSensitiveContent(value) {
+  const normalized = decodeHtmlCharacterReferences(value.replace(/\r\n?/gu, "\n"))
+    .normalize("NFKC")
+    .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
+    .replace(/\\+([:=])/gu, "$1");
+  if (BENIGN_SECURITY_CONTEXT_PATTERNS.some((pattern) => pattern.test(normalized))) return false;
+  const markdown = collapseRawHtmlMarkupNewlines(normalized);
+  const markdownPatternInput = markdown.value;
+  // Inline key/value detectors may intentionally span horizontal whitespace, but a
+  // Markdown line or paragraph break after prose such as "authenticated session:" is
+  // not a credential assignment. Preserve deliberate indented config values while
+  // preventing inline detectors from consuming an unindented following line.
+  const inlinePatternInput = normalized
+    .replace(/(:[ \t]*)[>|](?:[+-]?[1-9]?|[1-9]?[+-]?)[ \t]*(?=\r?\n)/gu, "$1")
+    .replace(/\r?\n(?![ \t])/g, "\n,\n");
+  return (
+    markdown.sensitiveUnterminated ||
     containsControllerAddress(normalized) ||
     containsSensitiveConfigurationBlob(normalized) ||
-    SENSITIVE_PATTERNS.some((pattern) => pattern.test(normalized))
+    containsSensitiveTable(markdownPatternInput) ||
+    containsSensitiveMultilineValue(markdownPatternInput) ||
+    SENSITIVE_PATTERNS.some((pattern) => pattern.test(inlinePatternInput))
   );
 }
 
@@ -345,6 +1195,14 @@ function normalizeAuthor(value) {
   if (typeof value === "string") return value;
   const login = value?.login;
   return typeof login === "string" ? login : null;
+}
+
+function isValidGitHubActorLogin(value) {
+  return (
+    typeof value === "string" &&
+    value.length <= 100 &&
+    /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\[bot\])?$/u.test(value)
+  );
 }
 
 function normalizeLabels(labels) {
@@ -389,17 +1247,27 @@ export function normalizeComment(raw) {
 
 export function normalizeTimelineEvent(raw) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("GitHub returned an invalid issue timeline event");
-  const id = assertSafePositiveInteger(raw.id, "timeline event id");
   const event = normalizeNullableText(raw.event).toLowerCase();
   if (event === "") fail("timeline event type is invalid");
+  const label = raw.label === null || raw.label === undefined
+    ? null
+    : normalizeNullableText(typeof raw.label === "string" ? raw.label : raw.label?.name);
+  const actor = normalizeAuthor(raw.actor);
+  // GitHub returns null IDs for some cross-reference events and may return numeric
+  // IDs beyond JavaScript's safe-integer range. Only trusted bot needs-info removals
+  // affect the continuation count, so validate their IDs as opaque decimals.
+  const candidateNeedsInfoRemoval = event === "unlabeled" && label === "needs-info";
+  if (candidateNeedsInfoRemoval && !isValidGitHubActorLogin(actor)) {
+    fail("needs-info removal timeline event actor is invalid");
+  }
+  const relevantNeedsInfoRemoval = candidateNeedsInfoRemoval && actor === ACTIONS_BOT;
+  if (relevantNeedsInfoRemoval) validateRelevantTimelineIdentifier(raw.id);
   return {
-    id,
+    id: relevantNeedsInfoRemoval ? String(raw.id) : null,
     event,
     created_at: normalizeNullableText(raw.created_at),
-    actor: normalizeAuthor(raw.actor),
-    label: raw.label === null || raw.label === undefined
-      ? null
-      : normalizeNullableText(typeof raw.label === "string" ? raw.label : raw.label?.name),
+    actor,
+    label,
   };
 }
 
@@ -428,7 +1296,9 @@ export function evaluateIntakeEligibility({
   if (!Array.isArray(comments) || comments.length > MAX_TARGET_COMMENTS) fail("eligibility comments exceed the trusted bound");
   if (!Array.isArray(timelineEvents) || timelineEvents.length > MAX_TIMELINE_EVENTS) fail("eligibility timeline events exceed the trusted bound");
   const normalizedComments = comments.map(normalizeComment).sort((left, right) => left.id - right.id);
-  const normalizedTimelineEvents = timelineEvents.map(normalizeTimelineEvent).sort((left, right) => left.id - right.id);
+  // Timeline IDs are opaque and may be null or exceed JavaScript's safe-integer
+  // range. Eligibility depends only on trusted event type, actor, label, and time.
+  const normalizedTimelineEvents = timelineEvents.map(normalizeTimelineEvent);
   const triggerComment = eventComment === null ? null : normalizeComment(eventComment);
   const initialMarkerComments = normalizedComments.filter(
     (comment) => comment.author === ACTIONS_BOT && comment.body.includes(INITIAL_MARKER),
@@ -597,7 +1467,7 @@ async function fetchBoundedTimelineEvents(github, owner, repo, issueNumber) {
     if (!Array.isArray(overflow?.data)) fail("GitHub returned an invalid issue timeline event overflow response");
     if (overflow.data.length > 0) fail("target timeline event count exceeds the trusted bound");
   }
-  return events.sort((left, right) => left.id - right.id);
+  return events;
 }
 
 async function scanCandidates(github, owner, repo, target) {
@@ -1087,6 +1957,11 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
   return createMetadataEnvelope(bundle);
 }
 
+const PUBLIC_LABEL_RATIONALE =
+  "Automated label suggestion; a maintainer must verify this classification.";
+const PUBLIC_RELATIONSHIP_REASON =
+  "Automated relationship assessment; a maintainer must verify this result.";
+
 function normalizeReason(value) {
   if (typeof value !== "string") fail("relationship reason must be a string");
   const normalized = value
@@ -1098,7 +1973,11 @@ function normalizeReason(value) {
   if (normalized !== value) fail("relationship reason must already be normalized");
   const length = [...normalized].length;
   if (length < 20 || length > 240 || !/[\p{L}\p{N}]/u.test(normalized)) fail("relationship reason must contain 20 to 240 safe visible characters");
-  if (/[<>@#]/u.test(normalized) || /https?:\/\//iu.test(normalized) || containsSensitiveContent(normalized)) fail("relationship reason contains unsafe syntax");
+  if (
+    /[<>@#]/u.test(normalized) ||
+    /https?:\/\//iu.test(normalized) ||
+    containsSensitiveContent(normalized)
+  ) fail("relationship reason contains unsafe syntax");
   return normalized;
 }
 
@@ -1113,13 +1992,25 @@ function validateRelationships(value, bundle) {
   });
 }
 
-function validateDecision(decision, expectedKind) {
+function validateDecision(decision, expectedKind, bundle) {
   if (!decision || typeof decision !== "object" || Array.isArray(decision) || typeof decision.kind !== "string") fail("proposal decision is invalid");
   if (expectedKind && decision.kind !== expectedKind) fail(`proposal carrier requires a ${expectedKind} decision`);
   if (decision.kind === "missing_information") {
-    if (!exactKeys(decision, ["kind", "fields"])) fail(`${decision.kind} decision contains unexpected fields`);
-    if (!Array.isArray(decision.fields) || decision.fields.length < 1 || decision.fields.length > 3 || new Set(decision.fields).size !== decision.fields.length || !decision.fields.every((field) => MISSING_INFORMATION_FIELDS.has(field))) {
-      fail(`${decision.kind} decision requires 1 to 3 unique allowlisted fields`);
+    const hasSupportRequest = Object.hasOwn(decision, "support_request");
+    const expectedKeys = hasSupportRequest ? ["kind", "fields", "support_request"] : ["kind", "fields"];
+    if (!exactKeys(decision, expectedKeys)) fail(`${decision.kind} decision contains unexpected fields`);
+    const minimumFields = hasSupportRequest ? 0 : 1;
+    if (!Array.isArray(decision.fields) || decision.fields.length < minimumFields || decision.fields.length > 3 || new Set(decision.fields).size !== decision.fields.length || !decision.fields.every((field) => MISSING_INFORMATION_FIELDS.has(field))) {
+      fail(`${decision.kind} decision requires up to 3 unique allowlisted fields and cannot be empty without one support request`);
+    }
+    if (hasSupportRequest && !SUPPORT_REQUEST_TEXT.has(decision.support_request)) fail("missing_information support request is invalid");
+    if (hasSupportRequest) {
+      // Use existing receipt-bound labels, never agent-proposed labels or prose.
+      const labels = bundle.target.data.labels;
+      const products = labels.filter((label) => ["network", "protect", "access"].includes(label));
+      if (labels.includes("security") || labels.includes("api") || products.length !== 1 || products[0] !== decision.support_request.split("_", 1)[0]) {
+        fail("missing_information support request product must match one existing MCP component label on a non-security, non-API report");
+      }
     }
     return decision;
   }
@@ -1150,14 +2041,16 @@ function validateDecision(decision, expectedKind) {
 
 function relationshipText(relationships) {
   return relationships.slice(0, 1).map(
-    (relationship) => `Candidate #${relationship.candidate_number}: ${relationship.verdict} — ${relationship.reason}`,
+    (relationship) => `Candidate #${relationship.candidate_number}: ${relationship.verdict}`,
   );
 }
 
 function renderDecision(decision, relationships, runKind = "initial") {
   let body;
   if (decision.kind === "missing_information") {
-    body = "To make this report actionable, please provide:\n\n" + decision.fields.map((field) => `- ${MISSING_INFORMATION_TEXT.get(field)}`).join("\n");
+    const requests = decision.fields.map((field) => MISSING_INFORMATION_TEXT.get(field));
+    if (decision.support_request) requests.push(SUPPORT_REQUEST_TEXT.get(decision.support_request));
+    body = "To make this report actionable, please provide:\n\n" + requests.map((request) => `- ${request}`).join("\n");
   } else if (decision.kind === "repository_evidence") {
     body = `Repository evidence (${decision.path}):\n\n> ${decision.quote}`;
   } else if (decision.kind === "ready_for_maintainer") {
@@ -1219,7 +2112,9 @@ export function validateSensitiveProposal({carrier, bundle}) {
   return {proposal, rendered: "Sensitive intake stop: Maintainer attention is required.", relationships: []};
 }
 
-/** Validate the sole canonical carrier and return text rendered entirely by trusted code. */
+/** Validate the carrier; proposal reasons remain untrusted internal input here.
+ * Publication must use validateAndRewriteAgentOutput, which replaces all reasons.
+ */
 export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind}) {
   validateBundle(bundle);
   if (bundle.status === "sensitive_stop") return validateSensitiveProposal({carrier, bundle});
@@ -1228,7 +2123,7 @@ export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind
   if (proposal.version !== CONTRACT_VERSION || proposal.kind !== "triage_proposal") fail("normal proposal version or kind is invalid");
   if (proposal.target_receipt !== bundle.target.receipt || proposal.comments_receipt !== bundle.comments.receipt || proposal.trigger_receipt !== bundle.trigger_receipt || proposal.run_kind !== bundle.run_kind) fail("normal proposal intake binding mismatch");
   const relationships = validateRelationships(proposal.relationships, bundle);
-  const decision = validateDecision(proposal.decision, expectedDecisionKind);
+  const decision = validateDecision(proposal.decision, expectedDecisionKind, bundle);
   const labelIntents = validateLabelIntents(proposal.label_intents, true);
   if (bundle.run_kind === "initial" && !new Set(["ready_for_maintainer", "missing_information", "repository_evidence"]).has(decision.kind)) fail("initial decision is not allowlisted");
   if (bundle.run_kind === "continuation" && decision.kind !== "missing_information") fail("incomplete continuation must request missing information");
@@ -1371,7 +2266,7 @@ async function renderRepositoryEvidence(decision, bundle, fetchRepositoryFile) {
   const path = decision.path.split("/").map(encodeURIComponent).join("/");
   const sourceUrl = `https://github.com/${bundle.repository}/blob/${bundle.workflow_sha}/${path}#L${startLine}-L${endLine}`;
   return (
-    "The repository documentation currently states:\n\n" +
+    "The repository source currently states:\n\n" +
     decision.quote.split("\n").map((line) => `> ${line}`).join("\n") +
     `\n\nSource: ${sourceUrl}`
   );
@@ -1526,8 +2421,24 @@ export async function validateAndRewriteAgentOutput({
 
   if (labelsItem) {
     labelsItem.item_number = targetNumber;
-    for (const label of labelsItem.labels) label.suggest = true;
+    for (const label of labelsItem.labels) {
+      label.rationale = PUBLIC_LABEL_RATIONALE;
+      label.suggest = true;
+    }
   }
+
+  // Preserve exact input comparison above, then replace every rationale before
+  // returning anything that can reach safe outputs, summaries, or caller logs.
+  const publicRelationships = validated.relationships.map((relationship) => ({
+    ...relationship, reason: PUBLIC_RELATIONSHIP_REASON,
+  }));
+  const publicProposal = {...validated.proposal};
+  if (Array.isArray(publicProposal.label_intents)) {
+    publicProposal.label_intents = publicProposal.label_intents.map((intent) => ({
+      ...intent, rationale: PUBLIC_LABEL_RATIONALE,
+    }));
+  }
+  if (Array.isArray(publicProposal.relationships)) publicProposal.relationships = publicRelationships;
 
   const renderedStrings = [];
   for (const item of trustedOutput.items) {
@@ -1540,11 +2451,11 @@ export async function validateAndRewriteAgentOutput({
   return {
     output: trustedOutput,
     carrier: carrier.type,
-    proposal: validated.proposal,
+    proposal: publicProposal,
     summary: {
       heading_html: "Trusted rendered proposal",
       rendered_html: escapedRendered,
-      relationships: validated.relationships.map(({candidate_number, verdict, reason}) => ({
+      relationships: publicRelationships.map(({candidate_number, verdict, reason}) => ({
         candidate_number,
         verdict_html: escapeHtml(verdict),
         reason_html: escapeHtml(reason),

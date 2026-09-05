@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Generate a sanitized support bundle
+    url: https://github.com/sirkirby/unifi-mcp/blob/main/docs/support-bundles.md
+    about: Review the privacy-bounded Network, Protect, or Access troubleshooting workflow before opening a bug report.
   - name: Security vulnerability
     url: https://github.com/sirkirby/unifi-mcp/security/advisories
     about: Please report suspected vulnerabilities privately through GitHub Security Advisories.
