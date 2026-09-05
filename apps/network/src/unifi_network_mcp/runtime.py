@@ -264,7 +264,13 @@ def get_gateway_settings_manager() -> GatewaySettingsManager:
 
 @lru_cache
 def get_event_manager() -> EventManager:
-    return EventManager(get_connection_manager())
+    cfg = get_config()
+    events_cfg: dict = {}
+    try:
+        events_cfg = dict(cfg.network.events) if hasattr(cfg, "network") and hasattr(cfg.network, "events") else {}
+    except Exception as exc:
+        logger.warning("Ignoring unreadable network.events config (%s); using defaults", type(exc).__name__)
+    return EventManager(get_connection_manager(), config=events_cfg)
 
 
 @lru_cache

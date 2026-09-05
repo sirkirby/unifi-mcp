@@ -65,6 +65,12 @@ server:
     log_tool_result: ${oc.env:UNIFI_MCP_DIAG_LOG_TOOL_RESULT,true}
     max_payload_chars: ${oc.env:UNIFI_MCP_DIAG_MAX_PAYLOAD,2000}
 
+network:
+  events:
+    buffer_size: ${oc.env:UNIFI_NETWORK_EVENT_BUFFER_SIZE,100}
+    buffer_ttl_seconds: ${oc.env:UNIFI_NETWORK_EVENT_BUFFER_TTL,300}
+    websocket_enabled: ${oc.env:UNIFI_NETWORK_WEBSOCKET_ENABLED,true}
+
 policy:
   response:
     redact_sensitive_fields: ${oc.env:UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS,true}

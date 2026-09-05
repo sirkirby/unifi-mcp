@@ -20,6 +20,7 @@ their cache identity remains controller + product.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import logging
 import time
@@ -204,6 +205,25 @@ class ManagerFactory:
         if product == "network":
             return site or "default"
         return None
+
+    @staticmethod
+    async def _stop_domain_managers(managers: list[Any]) -> None:
+        """Stop any dropped domain manager that owns a background task.
+
+        The Network EventManager runs a reconnecting websocket task; left
+        running after its connection manager is discarded it would keep
+        logging in with the old credentials.
+        """
+        for manager in managers:
+            stop = getattr(manager, "stop_listening", None)
+            if stop is None:
+                continue
+            try:
+                result = stop()
+                if inspect.isawaitable(result):
+                    await result
+            except Exception as exc:
+                logger.warning("Failed to stop %s listener: %s", type(manager).__name__, exc)
 
     @staticmethod
     async def _close_connection_manager(cm: Any) -> None:
@@ -507,9 +527,9 @@ class ManagerFactory:
             # them synchronously with the pops (same invariant as
             # invalidate_controller). Survivors rebuild from cached healthy
             # connections on next use.
-            for k in [k for k in self._domain_cache if k[0] == controller_id]:
-                self._domain_cache.pop(k, None)
+            dropped = [self._domain_cache.pop(k) for k in [k for k in self._domain_cache if k[0] == controller_id]]
             removed = [self._connection_cache.pop(k) for k in healable]
+            await self._stop_domain_managers(dropped)
             logger.info(
                 "Probe succeeded; dropping %d auth-blocked cached connection(s) for controller %s",
                 len(removed),
@@ -529,11 +549,11 @@ class ManagerFactory:
             # state: a domain-cache miss followed by a connection-cache hit on
             # an entry still awaiting close would rebuild a domain manager
             # around a disposed session and its pre-rotation credentials.
-            for k in [k for k in self._domain_cache if k[0] == controller_id]:
-                self._domain_cache.pop(k, None)
+            dropped = [self._domain_cache.pop(k) for k in [k for k in self._domain_cache if k[0] == controller_id]]
             removed = [
                 self._connection_cache.pop(k) for k in [k for k in self._connection_cache if k[0] == controller_id]
             ]
+            await self._stop_domain_managers(dropped)
             for cm in removed:
                 try:
                     await self._close_connection_manager(cm)

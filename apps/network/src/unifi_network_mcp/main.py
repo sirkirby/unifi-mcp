@@ -19,6 +19,7 @@ from unifi_network_mcp.jobs import get_job_status, start_async_tool
 from unifi_network_mcp.runtime import (
     config,
     connection_manager,
+    event_manager,
     server,
     support_bundle_service,
 )
@@ -46,6 +47,7 @@ logger.info("Using global Manager instances.")
 
 async def main_async():
     """Main asynchronous function to setup and run the server."""
+    from unifi_core.config_helpers import parse_config_bool
     from unifi_core.policy_gate import check_deprecated_env_vars
     from unifi_mcp_shared.bootstrap import assert_credentials_configured
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
@@ -63,6 +65,21 @@ async def main_async():
         logger.error("Failed to connect to Unifi Controller from main_async. Tool functionality may be impaired.")
     else:
         logger.info("Global Unifi connection initialized successfully from main_async.")
+
+        # Start the websocket event listener if enabled and the connection succeeded.
+        # It feeds unifi_recent_events; without it that buffer can never fill.
+        ws_enabled_raw = config.network.events.get("websocket_enabled", True) if hasattr(config, "network") else True
+        if parse_config_bool(ws_enabled_raw, default=True):
+            try:
+                await event_manager.start_listening()
+            except Exception as ws_exc:
+                logger.error(
+                    "Failed to start event websocket listener: %s. "
+                    "Real-time events will be unavailable; unifi_list_events still works.",
+                    type(ws_exc).__name__,
+                )
+        else:
+            logger.info("Network event websocket disabled via config.")
 
     # ---- Register tools ----
     await register_tools_for_mode(
@@ -83,14 +100,18 @@ async def main_async():
 
     # ---- Start transports ----
     http_enabled, http_transport, host, port = resolve_http_config(config.server, default_port=3000, logger=logger)
-    await run_transports(
-        server=server,
-        http_enabled=http_enabled,
-        host=host,
-        port=port,
-        http_transport=http_transport,
-        logger=logger,
-    )
+    try:
+        await run_transports(
+            server=server,
+            http_enabled=http_enabled,
+            host=host,
+            port=port,
+            http_transport=http_transport,
+            logger=logger,
+        )
+    finally:
+        # The listener owns a background task; it must not outlive the server.
+        await event_manager.stop_listening()
 
 
 def main():
