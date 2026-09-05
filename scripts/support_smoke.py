@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 
 from dotenv import dotenv_values
+from generate_support_skills import PRODUCTS as SKILL_PRODUCTS
+from generate_support_skills import render as render_support_skill
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from unifi_core.support_bundle import SupportBundle
@@ -127,32 +129,33 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
     skill_root = (folder / codex["skills"]).resolve()
     require(skill_root.is_relative_to(folder.resolve()), "plugin_skill_root")
     skill = (skill_root / f"unifi-{product}-support/SKILL.md").read_text()
-    prefix = "unifi" if product == "network" else product
-    require(
-        f"name: unifi-{product}-support" in skill and f"{prefix}_get_support_bundle" in skill, "plugin_support_skill"
-    )
+    definition = next(item for item in SKILL_PRODUCTS if item.slug == product)
+    require(skill == render_support_skill(definition), "plugin_support_skill")
     require(codex["mcpServers"] == "./.mcp.json", "plugin_mcp_path")
     name = f"unifi-{product}"
-    launcher = json.loads((folder / ".mcp.json").read_text())["mcpServers"][name]
+    mcp_manifest = json.loads((folder / ".mcp.json").read_text())
+    launcher = mcp_manifest["mcpServers"][name]
     expected_args = ["--python-preference", "system", f"unifi-{product}-mcp=={version}"]
     for config in (launcher, claude["mcpServers"][name]):
         require(config["command"] == "uvx" and config["args"] == expected_args, "plugin_launcher_alignment")
-    # Only the documented product bindings are executable configuration. Never
-    # import PATH, PYTHONPATH, package-index settings, or safety overrides.
-    defaults = {"HOST": "", "USERNAME": "", "PASSWORD": "", "PORT": "443", "VERIFY_SSL": "false"}
-    if product == "network":
-        defaults["SITE"] = "default"
+    # The repository artifacts are trusted, unlike --support-plugin-root. Allow
+    # release-version changes only; reject extra servers, transports, hooks, and
+    # every other host behavior that our manual stdio launch would not exercise.
+    trusted_folder = Path(__file__).resolve().parents[1] / "plugins" / name
     expected_env = {}
-    for suffix, default in defaults.items():
-        source = f"UNIFI_{product.upper()}_{suffix}"
-        expected_env[f"UNIFI_{suffix}"] = expected_env[source] = f"${{{source}:-{default}}}"
-    if product == "access":
-        expected_env.update(
-            UNIFI_ACCESS_API_KEY="${UNIFI_ACCESS_API_KEY:-}", UNIFI_ACCESS_API_PORT="${UNIFI_ACCESS_API_PORT:-12445}"
-        )
-    expected_env["UNIFI_TOOL_REGISTRATION_MODE"] = "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}"
-    for config in (launcher, claude["mcpServers"][name]):
-        require(config.get("env") == expected_env, "plugin_env_alignment")
+    for filename, supplied in (
+        (".codex-plugin/plugin.json", codex),
+        (".claude-plugin/plugin.json", claude),
+        (".mcp.json", mcp_manifest),
+    ):
+        expected = json.loads((trusted_folder / filename).read_text())
+        if "version" in expected:
+            expected["version"] = version
+        if filename != ".codex-plugin/plugin.json":
+            expected["mcpServers"][name]["args"] = expected_args
+            expected_env = expected["mcpServers"][name]["env"]
+            require(supplied["mcpServers"][name].get("env") == expected_env, "plugin_env_alignment")
+        require(supplied == expected, "plugin_manifest_alignment")
     # Resolve the checked-in plugin environment exactly as a host would.
     inherited = dict(env)
     for key, expression in expected_env.items():

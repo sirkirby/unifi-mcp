@@ -157,7 +157,8 @@ For installed-wheel verification, use an isolated Python environment with the ap
 This uses that interpreter's installed app entrypoints, not workspace imports.
 
 After release/version sync, add `--support-plugin-root /path/to/fresh/marketplace-checkout` to validate the
-packaged support skills, both host manifests, and matching package pins, then launch the actual `.mcp.json`
+complete packaged support skills and both host manifests against the repository's canonical artifacts
+(allowing release-version/pin changes only), then launch the actual `.mcp.json`
 commands through `uvx` with a fresh temporary cache. The returned bundle version must match the plugin pin.
 This verifies the packaged skill/tool pair; separately check skill discovery in the MCP host after install/upgrade.
 Unit coverage is in `tests/test_live_smoke_harness.py`. The broader readonly/preview/disposable-resource and API
