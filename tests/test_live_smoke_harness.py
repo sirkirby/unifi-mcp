@@ -114,6 +114,53 @@ def test_support_environment_never_mutates_parent_and_overrides_bypass(monkeypat
     assert support_smoke.os.environ["UNIFI_NETWORK_TOOL_PERMISSION_MODE"] == "bypass"
 
 
+@pytest.mark.parametrize("secret", ['quoted"password', r"back\slash", "café-秘密", "unifi"])
+def test_support_canaries_handle_json_escaping_without_public_package_collisions(support_payload, secret):
+    import support_smoke
+
+    canaries = support_smoke.private_canaries({"UNIFI_PASSWORD": secret})
+    assert support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", canaries, "0.30.0") > 0
+    for encoded in (secret, json.dumps(secret), json.dumps({"content": [{"text": json.dumps({"leak": secret})}]})):
+        assert support_smoke.contains_private_canary(encoded, canaries)
+    support_payload["extra"] = secret
+    with pytest.raises(support_smoke.SupportSmokeError, match="private_canary"):
+        support_smoke.validate_bundle(support_payload, "network", "lazy", "summary", canaries, None)
+
+
+@pytest.mark.parametrize("form", ["raw", "sha256", "base64", "json"])
+def test_support_matrix_rejects_private_stderr_even_after_success(monkeypatch, tmp_path, capsys, form):
+    import base64
+    import hashlib
+    from contextlib import asynccontextmanager
+
+    import support_smoke
+
+    secret = 'private"password'
+    monkeypatch.setenv("UNIFI_PASSWORD", secret)
+    log = {
+        "raw": secret,
+        "sha256": hashlib.sha256(secret.encode()).hexdigest(),
+        "base64": base64.b64encode(secret.encode()).decode(),
+        "json": json.dumps({"password": secret}),
+    }[form]
+
+    @asynccontextmanager
+    async def transport(parameters, *, errlog):
+        errlog.write(log)
+        yield (None, None)
+
+    @asynccontextmanager
+    async def session(*args, **kwargs):
+        yield None
+
+    monkeypatch.setattr(support_smoke, "stdio_client", transport)
+    monkeypatch.setattr(support_smoke, "ClientSession", session)
+    monkeypatch.setattr(support_smoke, "exercise_session", AsyncMock(return_value={"status": "passed"}))
+    report = asyncio.run(support_smoke.run_support_phase("all", tmp_path))
+    assert report == {"success": False, "records": [{"product": "network", "mode": "lazy", "status": "failed"}]}
+    assert log not in capsys.readouterr().out + json.dumps(report)
+
+
 def _support_client(payload, *, structured=False):
     import copy
 
@@ -242,6 +289,27 @@ def test_support_plugin_rejects_broken_distribution(tmp_path, defect):
         path.write_text(json.dumps(data))
     with pytest.raises((support_smoke.SupportSmokeError, FileNotFoundError)):
         support_smoke.plugin_command(tmp_path, "network", {})
+
+
+@pytest.mark.parametrize("key", ["PATH", "PYTHONPATH", "UV_INDEX_URL", "UNIFI_TOOL_PERMISSION_MODE", "UNIFI_HOST"])
+@pytest.mark.parametrize("manifest", [".mcp.json", ".claude-plugin/plugin.json", "both"])
+def test_support_plugin_rejects_untrusted_environment_before_applying_it(tmp_path, key, manifest):
+    import shutil
+
+    import support_smoke
+
+    target = tmp_path / "plugins/unifi-network"
+    shutil.copytree(Path(__file__).resolve().parents[1] / "plugins/unifi-network", target)
+    for filename in [".mcp.json", ".claude-plugin/plugin.json"] if manifest == "both" else [manifest]:
+        path = target / filename
+        data = json.loads(path.read_text())
+        data["mcpServers"]["unifi-network"]["env"][key] = "${ATTACKER_CONTROLLED:-evil}"
+        path.write_text(json.dumps(data))
+    env = {"UNIFI_TOOL_PERMISSION_MODE": "confirm", "UNIFI_TOOL_REGISTRATION_MODE": "eager"}
+    before = dict(env)
+    with pytest.raises(support_smoke.SupportSmokeError, match="plugin_env_alignment"):
+        support_smoke.plugin_command(tmp_path, "network", env)
+    assert env == before
 
 
 def test_support_cli_routes_without_generic_lifecycles(monkeypatch, tmp_path):

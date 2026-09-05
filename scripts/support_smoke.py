@@ -68,7 +68,26 @@ def private_canaries(env: dict[str, str]) -> set[bytes]:
         if any(part in key for part in ("HOST", "USERNAME", "PASSWORD", "API_KEY", "TOKEN")):
             raw = value.encode()
             canaries.update((raw, hashlib.sha256(raw).hexdigest().encode(), base64.b64encode(raw)))
+            canaries.update(json.dumps(value, ensure_ascii=ascii_only)[1:-1].encode() for ascii_only in (True, False))
     return canaries
+
+
+def contains_private_canary(value: Any, canaries: set[bytes]) -> bool:
+    """Inspect decoded values, framing tokens to avoid public-name collisions."""
+    if isinstance(value, dict):
+        return any(contains_private_canary(item, canaries) for pair in value.items() for item in pair)
+    if isinstance(value, list):
+        return any(contains_private_canary(item, canaries) for item in value)
+    if not isinstance(value, str):
+        return False
+    # MCP text content can itself contain JSON, including escaped credentials.
+    try:
+        decoded = json.loads(value)
+    except (ValueError, RecursionError):
+        decoded = None
+    if decoded is not None and contains_private_canary(decoded, canaries):
+        return True
+    return any(re.search(r"(?<![\w.-])" + re.escape(canary.decode()) + r"(?![\w.-])", value) for canary in canaries)
 
 
 def validate_bundle(
@@ -77,7 +96,7 @@ def validate_bundle(
     require(isinstance(payload, dict) and payload.get("success") is True, "bundle_success")
     raw = json.dumps(payload, sort_keys=True).encode()
     require(len(raw) <= 32768, "envelope_size")
-    require(not any(canary in raw for canary in canaries), "private_canary")
+    require(not contains_private_canary(payload, canaries), "private_canary")
     require(set(payload) == {"success", "data"}, "envelope_schema")
     try:
         bundle = SupportBundle.model_validate(payload.get("data"))
@@ -115,11 +134,28 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
     expected_args = ["--python-preference", "system", f"unifi-{product}-mcp=={version}"]
     for config in (launcher, claude["mcpServers"][name]):
         require(config["command"] == "uvx" and config["args"] == expected_args, "plugin_launcher_alignment")
+    # Only the documented product bindings are executable configuration. Never
+    # import PATH, PYTHONPATH, package-index settings, or safety overrides.
+    defaults = {"HOST": "", "USERNAME": "", "PASSWORD": "", "PORT": "443", "VERIFY_SSL": "false"}
+    if product == "network":
+        defaults["SITE"] = "default"
+    expected_env = {}
+    for suffix, default in defaults.items():
+        source = f"UNIFI_{product.upper()}_{suffix}"
+        expected_env[f"UNIFI_{suffix}"] = expected_env[source] = f"${{{source}:-{default}}}"
+    if product == "access":
+        expected_env.update(
+            UNIFI_ACCESS_API_KEY="${UNIFI_ACCESS_API_KEY:-}", UNIFI_ACCESS_API_PORT="${UNIFI_ACCESS_API_PORT:-12445}"
+        )
+    expected_env["UNIFI_TOOL_REGISTRATION_MODE"] = "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}"
+    for config in (launcher, claude["mcpServers"][name]):
+        require(config.get("env") == expected_env, "plugin_env_alignment")
     # Resolve the checked-in plugin environment exactly as a host would.
-    for key, expression in launcher.get("env", {}).items():
+    inherited = dict(env)
+    for key, expression in expected_env.items():
         match = re.fullmatch(r"\$\{([A-Z_]+):-([^}]*)\}", expression)
         require(match is not None, "plugin_env_expression")
-        env[key] = env.get(match[1]) or match[2]
+        env[key] = inherited.get(match[1]) or match[2]
     return "uvx", expected_args, version
 
 
@@ -143,7 +179,7 @@ async def exercise_session(
     async def call(arguments: dict[str, Any]) -> Any:
         result = await client.call_tool(name, arguments)
         require(INVALID_PROBE not in result.model_dump_json(), "invalid_input_echo")
-        require(not any(canary in result.model_dump_json().encode() for canary in canaries), "mcp_private_canary")
+        require(not contains_private_canary(json.loads(result.model_dump_json()), canaries), "mcp_private_canary")
         require(not result.is_error, "mcp_result")
         if isinstance(getattr(result, "structured_content", None), dict):
             return result.structured_content
@@ -189,6 +225,7 @@ async def run_support_phase(server: str, root: Path, plugin_root: Path | None = 
                         log = stderr.read(1_048_577)
                         require(len(log) <= 1_048_576, "bounded_process_log")
                         require(INVALID_PROBE not in log, "invalid_input_log_echo")
+                        require(not contains_private_canary(log, private_canaries(env)), "process_log_private_canary")
                     records.append(record)
                     print(f"support {product} {mode}: passed", flush=True)
                 except Exception:
