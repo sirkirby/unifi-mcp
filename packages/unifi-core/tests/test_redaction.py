@@ -422,3 +422,44 @@ def test_snmp_v3_secret_is_redacted_and_its_siblings_stay_visible() -> None:
     assert is_sensitive_key("username") is False
     assert is_sensitive_key("enabledV3") is False
     assert is_sensitive_key("enabled_v3") is False
+
+
+def test_redacts_device_ssh_and_management_credentials() -> None:
+    """The mgmt site setting carries the device-SSH password hash and the
+    management key; ``passwd`` is a spelling the vocabulary did not know."""
+    payload = {
+        "x_ssh_sha512passwd": "$6$hash",
+        "x_ssh_md5passwd": "$1$hash",
+        "x_ssh_password": "clear",
+        "x_mgmt_key": "0123456789abcdef",
+        "x_api_token": "tok",
+    }
+    redacted = redact_sensitive_fields(payload)
+    assert all(value == REDACTED for value in redacted.values()), redacted
+    assert is_sensitive_key("x_ssh_bcrypt_passwd") and is_sensitive_key("xSshSha512Passwd")
+    assert is_sensitive_key("xMgmtKey")
+
+
+def test_boolean_flags_named_after_a_secret_stay_visible() -> None:
+    """``x_ssh_auth_password_enabled`` is state an operator needs; a string
+    under a secret-looking name is still hidden, and the key itself stays
+    sensitive so the write-back guard is unchanged."""
+    redacted = redact_sensitive_fields(
+        {"x_ssh_auth_password_enabled": True, "x_ssh_password": "clear", "x_secret_enabled": "s3cr3t"}
+    )
+    assert redacted["x_ssh_auth_password_enabled"] is True
+    assert redacted["x_ssh_password"] == REDACTED
+    assert redacted["x_secret_enabled"] == REDACTED
+    assert is_sensitive_key("x_ssh_auth_password_enabled") is True
+    assert redact_value("x_ssh_auth_password_enabled", False) is False
+    # A bool is never the marker, so the write-back guard sees the same paths as before.
+    assert redaction_marker_paths({"x_ssh_auth_password_enabled": True, "x_ssh_password": REDACTED}) == [
+        "x_ssh_password"
+    ]
+
+
+def test_ssh_public_keys_stay_visible() -> None:
+    assert is_sensitive_key("x_ssh_keys") is False
+    assert redact_sensitive_fields({"x_ssh_keys": [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}]}) == {
+        "x_ssh_keys": [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}]
+    }
