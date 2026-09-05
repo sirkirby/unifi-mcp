@@ -89,7 +89,8 @@ async def get_network_health() -> Dict[str, Any]:
 
 @server.tool(
     name="unifi_get_site_settings",
-    description="Get current site settings (e.g., country code, timezone, connectivity monitoring).",
+    description="Get current site settings: site identity, regulatory country code, timezone, "
+    "connectivity monitor (enabled, uplink type) and NTP servers.",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_site_settings() -> Dict[str, Any]:
@@ -98,11 +99,10 @@ async def get_site_settings() -> Dict[str, Any]:
     try:
         settings = await system_manager.get_site_settings()
         shaped = site_settings_from_controller(settings).model_dump(exclude_none=False)
-        return {
-            "success": True,
-            "site": system_manager._connection.site,
-            "site_settings": shaped,
-        }
+        return redact_sensitive_fields(
+            {"success": True, "site": system_manager._connection.site, "site_settings": shaped},
+            redact_sensitive=should_redact_sensitive_fields(),
+        )
     except Exception as e:
         logger.error("Error getting site settings: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to get site settings: {e}"}
