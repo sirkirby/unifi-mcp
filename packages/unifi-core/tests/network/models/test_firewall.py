@@ -357,6 +357,11 @@ class TestPolicyUpdateTargetingError:
         error = policy_update_targeting_error(current, {"destination": {"port": "53"}})
         assert error is not None and "port_matching_type" in error
 
+    def test_replacing_an_invalid_selector_with_another_invalid_value_is_still_reported(self) -> None:
+        current = {"source": {"zone_id": "z", "matching_target": "CLIENT", "client_macs": []}}
+        error = policy_update_targeting_error(current, {"source": {"client_macs": ["zz"]}})
+        assert error is not None and "zz" in error
+
     def test_missing_or_non_dict_stored_side_validates_the_update_alone(self) -> None:
         assert (
             policy_update_targeting_error(
