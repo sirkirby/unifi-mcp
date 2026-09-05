@@ -141,7 +141,7 @@ The MCP host, model provider, transcript retention, and any later GitHub publica
 
 From the repository root, run `uv run --all-packages python scripts/live_smoke.py --server all --phase support`.
 Selecting this phase explicitly authorizes the bounded, read-only connectivity probes. It starts real stdio
-servers in lazy, eager, and meta-only modes and checks discovery, summary/connectivity schemas, the 32 KiB
+servers in lazy, eager, and meta-only modes with adaptive responses and checks discovery, summary/connectivity schemas, the 32 KiB
 envelope limit, configured identity/secret canaries (raw, SHA256, base64), cooldown, invalid-input rejection,
 and sanitizer independence from ordinary response redaction. It never runs mutations or collects resource shapes.
 Reports contain only product/mode, pass/fail, and byte counts; bundles and subprocess logs are not saved.

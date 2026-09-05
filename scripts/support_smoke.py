@@ -56,6 +56,7 @@ def support_environment(root: Path, mode: str) -> dict[str, str]:
         env[f"UNIFI_{product.upper()}_TOOL_REGISTRATION_MODE"] = mode
         env[f"UNIFI_{product.upper()}_TOOL_PERMISSION_MODE"] = "confirm"
         env[f"UNIFI_{product.upper()}_REDACT_SENSITIVE_FIELDS"] = "false"
+        env[f"UNIFI_{product.upper()}_MCP_CONTENT_MODE"] = "adaptive"
     return env
 
 
@@ -144,6 +145,8 @@ async def exercise_session(
         require(INVALID_PROBE not in result.model_dump_json(), "invalid_input_echo")
         require(not any(canary in result.model_dump_json().encode() for canary in canaries), "mcp_private_canary")
         require(not result.is_error, "mcp_result")
+        if isinstance(getattr(result, "structured_content", None), dict):
+            return result.structured_content
         return json.loads(result.content[0].text)
 
     sizes = {}

@@ -114,7 +114,7 @@ def test_support_environment_never_mutates_parent_and_overrides_bypass(monkeypat
     assert support_smoke.os.environ["UNIFI_NETWORK_TOOL_PERMISSION_MODE"] == "bypass"
 
 
-def _support_client(payload):
+def _support_client(payload, *, structured=False):
     import copy
 
     connectivity = copy.deepcopy(payload)
@@ -134,7 +134,10 @@ def _support_client(payload):
 
     def result(item):
         return SimpleNamespace(
-            is_error=False, content=[SimpleNamespace(text=json.dumps(item))], model_dump_json=lambda: json.dumps(item)
+            is_error=False,
+            content=[SimpleNamespace(text="Human-readable compact summary" if structured else json.dumps(item))],
+            structured_content=item if structured else None,
+            model_dump_json=lambda: json.dumps(item),
         )
 
     tool = SimpleNamespace(
@@ -150,10 +153,11 @@ def _support_client(payload):
     return client
 
 
-def test_support_session_exercises_exact_read_only_matrix(support_payload):
+@pytest.mark.parametrize("structured", [False, True])
+def test_support_session_exercises_exact_read_only_matrix(support_payload, structured):
     import support_smoke
 
-    client = _support_client(support_payload)
+    client = _support_client(support_payload, structured=structured)
     report = asyncio.run(support_smoke.exercise_session(client, "network", "lazy", {}, "0.30.0"))
     assert report["status"] == "passed"
     assert [call.args for call in client.call_tool.await_args_list] == [
