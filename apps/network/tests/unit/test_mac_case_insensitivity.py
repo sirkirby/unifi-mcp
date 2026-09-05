@@ -44,7 +44,8 @@ def mock_connection():
         return await getattr(_c.controller, name).update()
 
     conn.refresh_handler = _refresh_handler
-    conn.request = AsyncMock(return_value=None)
+    # An empty list answers the per-MAC /stat/user fallback as a soft miss.
+    conn.request = AsyncMock(return_value=[])
     return conn
 
 

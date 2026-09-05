@@ -3,11 +3,13 @@ import logging
 import re
 import time
 import time as _time
+import traceback
 from typing import Any, Dict, Optional
 
 import aiohttp
 from aiounifi.controller import Controller
 from aiounifi.errors import (
+    AiounifiException,
     AuthenticationRateLimitError,
     Forbidden,
     LoginRequired,
@@ -20,6 +22,7 @@ from aiounifi.errors import (
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
+from unifi_core.mac import mask_macs
 from unifi_core.support_bundle import (
     SafeConnectionAttempt,
     connection_attempt_failed,
@@ -39,8 +42,31 @@ _RECONNECT_BLOCK_MAX_SECONDS = 900.0
 # aiounifi v92 logs the complete login JSON (including password) at DEBUG.
 # Keep that dependency logger at INFO even when application diagnostics use DEBUG.
 _aiounifi_connectivity_logger = logging.getLogger("aiounifi.interfaces.connectivity")
+
+
 if _aiounifi_connectivity_logger.level == logging.NOTSET or _aiounifi_connectivity_logger.level < logging.INFO:
     _aiounifi_connectivity_logger.setLevel(logging.INFO)
+
+
+def controller_error_code(exc: BaseException) -> Optional[str]:
+    """Return the ``api.err.*`` code of a controller-reported error, else ``None``.
+
+    aiounifi raises a bare :class:`AiounifiException` carrying the decoded body
+    for any ``meta.rc == "error"`` it has no specific class for, e.g.
+    ``{"meta": {"rc": "error", "mac": <input>, "msg": "api.err.UnknownUser"}, "data": []}``.
+    Only a bare instance qualifies (the mapped auth errors are subclasses and
+    keep their ERROR logging) and only a value shaped like a code is returned:
+    the body can echo request values such as a MAC, so callers log the code,
+    never ``str(exc)``.
+    """
+    if type(exc) is not AiounifiException or not exc.args:
+        return None
+    body = exc.args[0]
+    meta = body.get("meta") if isinstance(body, dict) else None
+    msg = meta.get("msg") if isinstance(meta, dict) else None
+    if not isinstance(msg, str) or not msg.startswith("api.err.") or not msg.replace(".", "").isalnum():
+        return None
+    return msg
 
 
 async def detect_unifi_os_pre_login(
@@ -292,8 +318,8 @@ class ConnectionManager:
         return f"{proto}://{self.host}:{self.port}"
 
     def _sanitize_connection_error(self, error: BaseException) -> str:
-        """Return a user-facing connection error without configured secrets."""
-        message = str(error) or type(error).__name__
+        """Return a user-facing connection error without configured secrets or addresses."""
+        message = mask_macs(str(error) or type(error).__name__)
         for secret in (self.password, self.username):
             if secret:
                 pattern = rf"(?<![A-Za-z0-9_-]){re.escape(secret)}(?![A-Za-z0-9_-])"
@@ -686,6 +712,11 @@ class ConnectionManager:
                 await self._discard_connection()
                 raise
 
+    @staticmethod
+    def _safe_path(api_request: ApiRequest | ApiRequestV2) -> str:
+        """The request path for a log line: /stat/user/<mac> carries an address."""
+        return mask_macs(api_request.path)
+
     async def request(self, api_request: ApiRequest | ApiRequestV2, return_raw: bool = False) -> Any:
         """Make a request to the controller API, handling raw responses."""
         if not await self.ensure_connected() or not self.controller:
@@ -761,8 +792,8 @@ class ConnectionManager:
                     logger.error(
                         "API request failed even after re-authentication: %s %s - %s",
                         api_request.method.upper(),
-                        api_request.path,
-                        retry_error,
+                        self._safe_path(api_request),
+                        mask_macs(retry_error),
                     )
                     # A second LoginRequired means the refreshed session was not
                     # accepted. Treat it as terminal so later tool calls cannot
@@ -775,7 +806,12 @@ class ConnectionManager:
             else:
                 raise self._not_connected_error()
         except (RequestError, ResponseError, aiohttp.ClientError) as e:
-            logger.error("API request error: %s %s - %s", api_request.method.upper(), api_request.path, e)
+            logger.error(
+                "API request error: %s %s - %s",
+                api_request.method.upper(),
+                self._safe_path(api_request),
+                mask_macs(str(e)),
+            )
             try:
                 from unifi_core.diagnostics import diagnostics_enabled, log_api_request
 
@@ -793,13 +829,29 @@ class ConnectionManager:
                 pass
             raise
         except Exception as e:
-            logger.error(
-                "Unexpected error during API request: %s %s - %s",
-                api_request.method.upper(),
-                api_request.path,
-                e,
-                exc_info=True,
-            )
+            code = controller_error_code(e)
+            if code is not None:
+                # A controller-reported api.err.* is a negative reply, not an
+                # operator event: routine on a read (an unknown MAC on a
+                # per-MAC lookup), worth a warning on a write. The body can
+                # echo request values, so only the code is logged.
+                logger.log(
+                    logging.INFO if api_request.method.lower() == "get" else logging.WARNING,
+                    "Controller rejected request: %s %s - %s",
+                    api_request.method.upper(),
+                    self._safe_path(api_request),
+                    mask_macs(code),
+                )
+            else:
+                # The traceback is rendered here so it passes the mask too;
+                # exc_info=True would append the exception text unmasked.
+                logger.error(
+                    "Unexpected error during API request: %s %s - %s\n%s",
+                    api_request.method.upper(),
+                    self._safe_path(api_request),
+                    mask_macs(str(e)),
+                    mask_macs(traceback.format_exc()),
+                )
             try:
                 from unifi_core.diagnostics import diagnostics_enabled, log_api_request
 
