@@ -110,14 +110,18 @@ async def test_network_probe_uses_existing_session_once_without_reconnect() -> N
     assert session.calls[0][1]["timeout"].total == 10
     assert session.calls[0][1]["allow_redirects"] is False
     assert context.exited is True
+    assert context.body_read is False
     manager.initialize.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_protect_probe_uses_existing_private_session_without_sdk_retry() -> None:
+@pytest.mark.parametrize("verify_ssl", [False, True])
+async def test_protect_probe_uses_existing_private_session_without_sdk_retry(verify_ssl: bool) -> None:
     context = _ResponseContext(403)
     session = _Session(context)
-    manager = ProtectConnectionManager("controller.example.invalid", "private-user", "private-password")
+    manager = ProtectConnectionManager(
+        "controller.example.invalid", "private-user", "private-password", verify_ssl=verify_ssl
+    )
     manager._initialized = True
     manager._client = SimpleNamespace(
         _session=session,
@@ -132,6 +136,11 @@ async def test_protect_probe_uses_existing_private_session_without_sdk_retry() -
     assert len(session.calls) == 1
     assert str(session.calls[0][0][1]).endswith("/proxy/protect/api/nvr")
     assert session.calls[0][1]["timeout"].total == 10
+    assert session.calls[0][1]["headers"] == {"X-CSRF-Token": "private-token"}
+    assert session.calls[0][1]["allow_redirects"] is False
+    assert session.calls[0][1]["ssl"] is (None if verify_ssl else False)
+    assert context.body_read is False
+    assert context.exited is True
     manager.initialize.assert_not_awaited()
 
 
@@ -160,7 +169,12 @@ async def test_access_probe_prefers_existing_developer_session_and_never_reauthe
     assert len(session.calls) == 1
     assert session.calls[0][0][1].endswith("/api/v1/developer/doors/settings/emergency")
     assert session.calls[0][1]["timeout"].total == 10
+    assert session.calls[0][1]["headers"] == {"Authorization": "Bearer private-token", "Accept": "application/json"}
+    assert session.calls[0][1]["allow_redirects"] is False
+    assert session.calls[0][1]["ssl"] is manager._ssl_context
+    assert manager._proxy_session.calls == []
     assert context.body_read is False
+    assert context.exited is True
     manager._proxy_login.assert_not_awaited()
     manager.initialize.assert_not_awaited()
 
