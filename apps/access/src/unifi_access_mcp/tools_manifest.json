@@ -1,5 +1,5 @@
 {
-  "count": 36,
+  "count": 37,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "access_create_credential": "unifi_access_mcp.tools.credentials",
@@ -1380,6 +1380,57 @@
         }
       },
       "title": "Get Policy"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Generate sanitized UniFi Access support evidence for user review. Summary is local/cache-only; live probes are bounded and explicitly allowlisted.",
+      "name": "access_get_support_bundle",
+      "schema": {
+        "input": {
+          "properties": {
+            "probe": {
+              "default": "summary",
+              "enum": [
+                "summary",
+                "connectivity",
+                "resource_shape"
+              ],
+              "type": "string"
+            },
+            "resource": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "data": {
+              "type": "object"
+            },
+            "error": {
+              "type": "string"
+            },
+            "success": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "success"
+          ],
+          "type": "object"
+        }
+      },
+      "title": "UniFi Access Support Bundle"
     },
     {
       "annotations": {

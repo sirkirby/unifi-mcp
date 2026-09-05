@@ -29,7 +29,14 @@ from unifi_core.auth import UniFiAuth
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, configure_mcp_server_metadata
 from unifi_mcp_shared.response_policy import resolve_mcp_content_mode, should_redact_response_sensitive_fields
 from unifi_mcp_shared.server import UniFiMCPServer
-from unifi_protect_mcp.bootstrap import load_config, logger
+from unifi_mcp_shared.support_bundle import (
+    SupportBundleService,
+    configured_filter,
+    configured_transports,
+    fixed_manifest_reader,
+)
+from unifi_protect_mcp.bootstrap import UNIFI_TOOL_REGISTRATION_MODE, load_config, logger
+from unifi_protect_mcp.support import ProtectSupportBundleAdapter
 
 _TOOLS_MANIFEST_PATH = Path(__file__).resolve().parent / "tools_manifest.json"
 from unifi_core.protect.managers.alarm_facade import AlarmRulesFacade
@@ -229,6 +236,29 @@ def get_tool_registry() -> dict[str, Any]:
     return TOOL_REGISTRY
 
 
+@lru_cache
+def get_support_bundle_adapter() -> ProtectSupportBundleAdapter:
+    """Create the Protect adapter over existing safe runtime singletons."""
+    return ProtectSupportBundleAdapter(get_connection_manager())
+
+
+@lru_cache
+def get_support_bundle_service() -> SupportBundleService:
+    """Create the process-wide Protect support-bundle service."""
+    cfg = get_config()
+    return SupportBundleService(
+        adapter=get_support_bundle_adapter(),
+        registration_mode=UNIFI_TOOL_REGISTRATION_MODE,
+        content_mode=resolve_mcp_content_mode("protect", config=cfg),
+        transports=configured_transports(cfg.server),
+        diagnostics_enabled=str(cfg.server.diagnostics.get("enabled", False)).lower() in {"true", "1", "yes"},
+        response_redaction_enabled=should_redact_response_sensitive_fields("protect", cfg),
+        manifest_reader=fixed_manifest_reader(_TOOLS_MANIFEST_PATH),
+        enabled_categories=configured_filter(cfg.server.get("enabled_categories")),
+        enabled_tools=configured_filter(cfg.server.get("enabled_tools")),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Shorthand aliases (import-time singletons) --------------------------------
 # ---------------------------------------------------------------------------
@@ -252,6 +282,8 @@ system_manager = get_system_manager()
 alarm_manager = get_alarm_manager()
 alarm_facade = get_alarm_facade()
 tool_registry = get_tool_registry()
+support_bundle_adapter = get_support_bundle_adapter()
+support_bundle_service = get_support_bundle_service()
 
 
 def should_redact_sensitive_fields() -> bool:

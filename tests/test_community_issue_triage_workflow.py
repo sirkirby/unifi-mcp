@@ -76,7 +76,7 @@ def _bot_comment(comment_id: int, marker: str) -> dict[str, object]:
     return comment
 
 
-def _bot_needs_info_removal(event_id: int) -> dict[str, object]:
+def _bot_needs_info_removal(event_id: int | str) -> dict[str, object]:
     return {
         "id": event_id,
         "event": "unlabeled",
@@ -305,8 +305,17 @@ const github = {rest: {actions: {
   listArtifactsForRepo: async (request) => {
     calls.push({operation: "listArtifactsForRepo", request});
     fail("listArtifactsForRepo");
-    const artifacts = payload.repoArtifacts === "INVALID" ? {invalid: true} : (payload.repoArtifacts || []);
-    return {data: {total_count: payload.repoArtifactTotal ?? artifacts.length, artifacts}};
+    const configured = payload.repoArtifactsByName
+      ? payload.repoArtifactsByName[request.name] ?? []
+      : request.name === process.env.RESERVATION_NAME
+        ? payload.repoArtifacts || []
+        : [];
+    const artifacts = configured === "INVALID" ? {invalid: true} : configured;
+    const configuredTotal = payload.repoArtifactTotalsByName?.[request.name];
+    const totalCount = configuredTotal ?? (
+      request.name === process.env.RESERVATION_NAME ? payload.repoArtifactTotal : undefined
+    );
+    return {data: {total_count: totalCount ?? artifacts.length, artifacts}};
   },
 }, issues: {
   removeLabel: async (request) => {
@@ -376,8 +385,11 @@ def _run_github_script(
     env.setdefault("GITHUB_ACTOR_ID", "1234")
     env.setdefault("RUNNER_TEMP", str(tmp_path))
     env.setdefault("GH_AW_SAFE_OUTPUTS", str(safe_outputs))
-    env.setdefault("RESERVATION_NAME", "community-issue-triage-aic-reservation")
-    env.setdefault("MAX_AI_CREDITS", "75")
+    env.setdefault("RESERVATION_NAME", "community-issue-triage-aic-reservation-v2")
+    env.setdefault("LEGACY_RESERVATION_NAME", "community-issue-triage-aic-reservation")
+    env.setdefault("RESERVED_AI_CREDITS", "25")
+    env.setdefault("LEGACY_RESERVED_AI_CREDITS", "75")
+    env.setdefault("MAX_AI_CREDITS", "25")
     env.setdefault("MAX_DAILY_AI_CREDITS", "150")
     script = INLINE_GITHUB_SCRIPT_HARNESS.replace(
         "__SCRIPT__", "\n".join(f"    {line}" for line in _extract_github_script(step_name).splitlines())
@@ -530,7 +542,7 @@ def test_source_and_compiled_workflow_activate_only_the_bounded_issue_events():
         "reaction: none",
         "status-comment: false",
         "stale-check: full",
-        "max-ai-credits: 75",
+        "max-ai-credits: 25",
         "max-daily-ai-credits: 150",
         "group: community-issue-triage-agent",
         "queue: max",
@@ -618,6 +630,7 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     rate_gate = source.split("  qualifying_rate_gate:\n", 1)[1].split("\n  trusted_issue_snapshot:\n", 1)[0]
     assert "needs: [intake_gate]" in rate_gate
     assert "listWorkflowRuns" in rate_gate
+    assert "run.actor?.login" in rate_gate
     assert "listWorkflowRunArtifacts" in rate_gate
     assert "180 * 60 * 1000" in rate_gate
     assert 'Date.parse(current.data?.created_at || "")' in rate_gate
@@ -690,7 +703,13 @@ def test_reporter_window_executes_delayed_prior_receipt_check(tmp_path: Path):
         "Enforce one qualifying intake per reporter every three hours",
         {
             "workflowRunPages": {
-                "1": [{"id": 90, "created_at": "2027-01-15T07:59:00.000Z"}],
+                "1": [
+                    {
+                        "id": 90,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "community-member"},
+                    }
+                ],
             },
             "artifactsByRun": {
                 "90": [{"name": "qualifying-intake-90", "expired": False}],
@@ -703,29 +722,177 @@ def test_reporter_window_executes_delayed_prior_receipt_check(tmp_path: Path):
     assert any("already used" in notice for notice in observed["notices"])
 
 
+def test_reporter_window_ignores_receipts_from_other_actors_when_api_filter_is_ignored(tmp_path: Path):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "workflowRunPages": {
+                "1": [
+                    {
+                        "id": 90,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "another-reporter"},
+                    }
+                ],
+            },
+            "artifactsByRun": {
+                "90": [{"name": "qualifying-intake-90", "expired": False}],
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == "true"
+    assert not any(call["operation"] == "listWorkflowRunArtifacts" for call in observed["calls"])
+
+
+def test_reporter_window_paginates_past_mixed_actor_runs_when_api_filter_is_ignored(tmp_path: Path):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "workflowRunPages": {
+                "1": [
+                    {
+                        "id": index,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "another-reporter"},
+                    }
+                    for index in range(1, 101)
+                ],
+                "2": [
+                    {
+                        "id": 101,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "community-member"},
+                    }
+                ],
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == "true"
+    assert [call["request"]["page"] for call in observed["calls"] if call["operation"] == "listWorkflowRuns"] == [1, 2]
+
+
+@pytest.mark.parametrize(
+    "run_actor",
+    [None, {}, {"login": ""}, {"login": "   "}, {"login": "not a valid login!"}],
+)
+def test_reporter_window_fails_closed_on_malformed_historical_actor(
+    tmp_path: Path,
+    run_actor: object,
+):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "workflowRunPages": {
+                "1": [
+                    {
+                        "id": 90,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": run_actor,
+                    }
+                ],
+            },
+        },
+        tmp_path,
+    )
+    assert observed["outputs"]["allowed"] == "false"
+    assert "invalid workflow run actor" in observed["thrown"]
+
+
+def test_reporter_window_compares_github_logins_case_insensitively(tmp_path: Path):
+    _, observed = _run_github_script(
+        "Enforce one qualifying intake per reporter every three hours",
+        {
+            "workflowRunPages": {
+                "1": [
+                    {
+                        "id": 90,
+                        "created_at": "2027-01-15T07:59:00.000Z",
+                        "actor": {"login": "Community-Member"},
+                    }
+                ],
+            },
+            "artifactsByRun": {
+                "90": [{"name": "qualifying-intake-90", "expired": False}],
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == "false"
+
+
 @pytest.mark.parametrize(
     ("payload", "message"),
     [
         (
             {
                 "workflowRunPages": {
-                    "1": [{"id": index, "created_at": "2027-01-15T07:59:00.000Z"} for index in range(1, 101)],
-                    "2": [{"id": 101, "created_at": "2027-01-15T07:59:00.000Z"}],
+                    "1": [
+                        {
+                            "id": index,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "community-member"},
+                        }
+                        for index in range(1, 101)
+                    ],
+                    "2": [
+                        {
+                            "id": 101,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "community-member"},
+                        }
+                    ],
                 },
             },
             "history exceeds",
         ),
+        (
+            {
+                "workflowRunPages": {
+                    str(page): [
+                        {
+                            "id": page * 100 + index,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "another-reporter"},
+                        }
+                        for index in range(100)
+                    ]
+                    for page in range(1, 11)
+                },
+            },
+            "mixed-actor workflow run pagination exceeds",
+        ),
         ({"failOperations": ["listWorkflowRuns"]}, "simulated listWorkflowRuns failure"),
         (
             {
-                "workflowRunPages": {"1": [{"id": 90, "created_at": "2027-01-15T07:59:00.000Z"}]},
+                "workflowRunPages": {
+                    "1": [
+                        {
+                            "id": 90,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "community-member"},
+                        }
+                    ]
+                },
                 "artifactsByRun": {"90": "INVALID"},
             },
             "artifact history exceeds",
         ),
         (
             {
-                "workflowRunPages": {"1": [{"id": 90, "created_at": "2027-01-15T07:59:00.000Z"}]},
+                "workflowRunPages": {
+                    "1": [
+                        {
+                            "id": 90,
+                            "created_at": "2027-01-15T07:59:00.000Z",
+                            "actor": {"login": "community-member"},
+                        }
+                    ]
+                },
                 "artifactsByRun": {
                     "90": [
                         {"name": "qualifying-intake-90", "expired": False},
@@ -1054,6 +1221,7 @@ def test_source_removes_agent_github_tools_and_uses_sealed_credential_free_sourc
     assert "issue_read" not in source
     assert "search_code" not in source
     assert "get_file_contents" not in source
+    assert "excluded-env:\n  - GH_AW_OTLP_ENDPOINTS\n  - OTEL_EXPORTER_OTLP_HEADERS\n" in source
 
     compiled = LOCK.read_text()
     agent = compiled.split("\n  agent:\n", 1)[1].split("\n  conclusion:\n", 1)[0]
@@ -1073,6 +1241,7 @@ def test_source_removes_agent_github_tools_and_uses_sealed_credential_free_sourc
 def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
     source = WORKFLOW.read_text()
     compiled = LOCK.read_text()
+    agent = compiled.split("\n  agent:\n", 1)[1].split("\n  conclusion:\n", 1)[0]
     assert source.count("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a") == 4
     assert source.count("actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c") == 3
     assert source.count("artifact-ids: ${{ needs.trusted_issue_snapshot.outputs.artifact_id }}") == 2
@@ -1092,6 +1261,9 @@ def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
     assert "--mount /opt/gh-aw-trusted-intake:/opt/gh-aw-trusted-intake:rw" not in compiled
     assert "--mount /opt/gh-aw-repository:/opt/gh-aw-repository:ro" in compiled
     assert "--mount /opt/gh-aw-repository:/opt/gh-aw-repository:rw" not in compiled
+    assert "GH_AW_OTLP_ENDPOINTS: '[]'" in agent
+    assert "OTEL_EXPORTER_OTLP_HEADERS: x-redacted=1" in agent
+    assert "secrets.GH_AW_DEFAULT_OTLP_HEADERS" not in agent
     assert "/tmp/gh-aw/trusted-intake-context" not in source
     assert "retention-days: 1" in source
     assert "overwrite: false" in source
@@ -1101,9 +1273,13 @@ def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
 
 def test_daily_budget_is_reserved_before_inference_and_usage_is_uploaded_before_releasing_agent_queue():
     source = WORKFLOW.read_text()
+    assert "max-ai-credits: 25" in source
+    assert 'RESERVED_AI_CREDITS: "25"' in source
+    assert 'MAX_AI_CREDITS: "25"' in source
+    assert "maxPerRun !== reservedPerRun" in source
     pre_agent = source.split("pre-agent-steps:\n", 1)[1].split("\npost-steps:\n", 1)[0]
     assert "community-issue-triage-aic-reservation" in pre_agent
-    assert "reserved + perRun > daily" in pre_agent
+    assert "reserved + reservedPerRun > daily" in pre_agent
     assert "listArtifactsForRepo" in pre_agent
     assert "getWorkflowRun" in pre_agent
     assert 'core.setOutput("allowed", "false")' in pre_agent
@@ -1126,9 +1302,44 @@ def test_daily_budget_is_reserved_before_inference_and_usage_is_uploaded_before_
     assert "usage_accounting" not in source
 
 
-def _aic_artifact(run_id: int, created_at: str, *, expired: bool = False) -> dict[str, object]:
+def test_privacy_safe_observation_job_records_durable_outcomes_without_write_permissions():
+    source = WORKFLOW.read_text()
+    compiled = LOCK.read_text()
+    for workflow in (source, compiled):
+        matched = re.search(
+            r"(?ms)^  observation:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+            workflow,
+        )
+        assert matched is not None
+        observation = matched.group("body")
+        assert "permissions: {}" in observation
+        assert "always()" in observation
+        assert "needs.intake_gate.result != 'skipped'" in observation
+        assert "needs.agent.outputs.aic" in observation
+        assert "needs.agent.result" in observation
+        assert "needs.safe_outputs.result" in observation
+        assert "GITHUB_STEP_SUMMARY" in observation
+        for forbidden in (
+            "github-token",
+            "issues: write",
+            "TARGET_TITLE",
+            "TARGET_BODY",
+            "TARGET_COMMENTS",
+            "TRIGGER_JSON",
+            "receipt",
+        ):
+            assert forbidden not in observation
+
+
+def _aic_artifact(
+    run_id: int,
+    created_at: str,
+    *,
+    expired: bool = False,
+    name: str = "community-issue-triage-aic-reservation-v2",
+) -> dict[str, object]:
     return {
-        "name": "community-issue-triage-aic-reservation",
+        "name": name,
         "created_at": created_at,
         "expired": expired,
         "workflow_run": {"id": run_id},
@@ -1146,16 +1357,16 @@ def _aic_artifact(run_id: int, created_at: str, *, expired: bool = False) -> dic
             1,
         ),
         (
-            [
-                _aic_artifact(90, "2027-01-15T07:00:00.000Z"),
-                _aic_artifact(91, "2027-01-15T06:00:00.000Z"),
-            ],
-            {
-                "90": {"id": 90, "workflow_id": 55},
-                "91": {"id": 91, "workflow_id": 55},
-            },
+            [_aic_artifact(run_id, "2027-01-15T07:00:00.000Z") for run_id in range(90, 95)],
+            {str(run_id): {"id": run_id, "workflow_id": 55} for run_id in range(90, 95)},
+            "true",
+            5,
+        ),
+        (
+            [_aic_artifact(run_id, "2027-01-15T07:00:00.000Z") for run_id in range(90, 96)],
+            {str(run_id): {"id": run_id, "workflow_id": 55} for run_id in range(90, 96)},
             "false",
-            2,
+            6,
         ),
         (
             [_aic_artifact(90, "2027-01-14T08:00:00.000Z")],
@@ -1195,8 +1406,10 @@ def test_daily_budget_executes_reservation_totals_cutoff_and_workflow_scope(
         assert observed["failures"] == []
         assert observed["reservation"] == {
             "actor": "community-member",
-            "credits": 75,
+            "credits": 25,
+            "max_ai_credits": 25,
             "run_id": "100",
+            "version": 2,
             "workflow_id": "55",
         }
         prior_calls = [call for call in observed["calls"] if call["operation"] == "getWorkflowRun"]
@@ -1212,6 +1425,19 @@ def test_daily_budget_executes_reservation_totals_cutoff_and_workflow_scope(
                 "message": "The conservative daily AI credit budget is exhausted; no public action was taken.",
             }
         ]
+
+
+def test_daily_budget_rejects_a_reservation_below_the_per_run_hard_cap(tmp_path: Path):
+    _, observed = _run_github_script(
+        "Reserve the conservative daily AI credit budget",
+        {"env": {"RESERVED_AI_CREDITS": "25", "MAX_AI_CREDITS": "75"}},
+        tmp_path,
+    )
+    assert observed["outputs"]["allowed"] == "false"
+    assert observed["reservation"] is None
+    assert observed["failures"] == [
+        "The daily AI credit reservation configuration is invalid; no public action was taken."
+    ]
 
 
 @pytest.mark.parametrize(
@@ -1233,6 +1459,14 @@ def test_daily_budget_executes_reservation_totals_cutoff_and_workflow_scope(
         {
             "repoArtifacts": [_aic_artifact(90, "2027-01-15T07:00:00.000Z")],
             "failOperations": ["getWorkflowRun"],
+        },
+        {
+            "repoArtifacts": [_aic_artifact(90, "2027-01-15T07:00:00.000Z")],
+            "workflowRunsById": {"90": {"id": 90}},
+        },
+        {
+            "repoArtifacts": [_aic_artifact(90, "2027-01-15T07:00:00.000Z")],
+            "workflowRunsById": {"90": {"id": 90, "workflow_id": "not-a-number"}},
         },
     ],
 )
@@ -1257,6 +1491,28 @@ def test_daily_budget_executes_duplicate_expired_overflow_malformed_and_api_fail
         }
     ]
     assert observed["warnings"]
+
+
+def test_daily_budget_counts_live_legacy_reservations_at_their_original_75_credits(tmp_path: Path):
+    legacy_name = "community-issue-triage-aic-reservation"
+    artifacts = [
+        _aic_artifact(90, "2027-01-15T07:00:00.000Z", name=legacy_name),
+        _aic_artifact(91, "2027-01-15T06:00:00.000Z", name=legacy_name),
+    ]
+    _, observed = _run_github_script(
+        "Reserve the conservative daily AI credit budget",
+        {
+            "repoArtifactsByName": {legacy_name: artifacts},
+            "workflowRunsById": {
+                "90": {"id": 90, "workflow_id": 55},
+                "91": {"id": 91, "workflow_id": 55},
+            },
+        },
+        tmp_path,
+    )
+    assert observed["thrown"] is None
+    assert observed["outputs"]["allowed"] == "false"
+    assert any("blocked at 150/150" in notice for notice in observed["notices"])
 
 
 def test_snapshot_job_outputs_only_artifact_id_and_digests():
@@ -1464,6 +1720,79 @@ def test_timeline_pagination_proves_the_100_event_bound():
     assert "timeline event count exceeds" in overflow.stderr
 
 
+def test_timeline_event_ids_are_opaque_decimal_identifiers_not_javascript_safe_integers():
+    issue = _issue(TARGET_NUMBER)
+    issue["labels"] = [{"name": "needs-info"}]
+    comments = [_bot_comment(1, INITIAL_MARKER)]
+    payload = _snapshot_payload(comments=comments)
+    payload["issues"][str(TARGET_NUMBER)] = issue
+    payload["timelinePages"]["1"] = [
+        {
+            "id": None,
+            "event": "cross-referenced",
+            "created_at": "2026-05-10T15:15:00Z",
+            "actor": {"login": "community-member", "type": "User"},
+            "label": None,
+        },
+        _bot_needs_info_removal("18446744073709551615"),
+        _bot_needs_info_removal(2**53),
+    ]
+    result = _eligibility(
+        action="edited",
+        issue=issue,
+        comments=comments,
+        timeline_events=payload["timelinePages"]["1"],
+    )
+    assert result["continuation_count"] == 2
+    assert result["eligible"] is False
+    assert result["reason"] == "continuation limit reached"
+
+
+@pytest.mark.parametrize("event_id", [None, 0, -1, 1.5, "1e6", "not-an-id"])
+def test_relevant_needs_info_removal_requires_a_positive_decimal_identifier(event_id: object):
+    result = _run_contract(
+        {
+            "op": "eligibility",
+            "args": {
+                "eventName": "issues",
+                "action": "edited",
+                "actor": "community-member",
+                "issue": _issue(TARGET_NUMBER),
+                "eventComment": None,
+                "comments": [],
+                "timelineEvents": [_bot_needs_info_removal(event_id)],
+            },
+        }
+    )
+    assert result.returncode != 0
+    assert "relevant timeline event id" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "actor",
+    [None, {}, {"login": ""}, {"login": "   "}, "   ", {"login": "not a valid login!"}],
+)
+def test_needs_info_removal_requires_a_nonempty_actor(actor: object):
+    event = _bot_needs_info_removal(1)
+    event["actor"] = actor
+    result = _run_contract(
+        {
+            "op": "eligibility",
+            "args": {
+                "eventName": "issues",
+                "action": "edited",
+                "actor": "community-member",
+                "issue": _issue(TARGET_NUMBER),
+                "eventComment": None,
+                "comments": [],
+                "timelineEvents": [event],
+            },
+        }
+    )
+    assert result.returncode != 0
+    assert "timeline event actor is invalid" in result.stderr
+
+
 def test_invalid_comment_page_and_graphql_page_fail_closed():
     invalid_comments = _snapshot_payload()
     invalid_comments["commentPages"] = {"1": "INVALID"}
@@ -1533,6 +1862,13 @@ def test_snapshot_caps_retained_candidates_at_five():
         pytest.param("password=abc123", "sensitive_stop", id="short-explicit-password"),
         pytest.param("password=admin", "sensitive_stop", id="five-character-password"),
         pytest.param("password: abc123", "sensitive_stop", id="short-colon-password"),
+        pytest.param(r"password\: hunter22", "sensitive_stop", id="markdown-escaped-colon-password"),
+        pytest.param(r"password\\: hunter22", "sensitive_stop", id="double-backslash-colon-password"),
+        pytest.param(r"password\\\: hunter22", "sensitive_stop", id="triple-backslash-colon-password"),
+        pytest.param(r"password\=hunter22", "sensitive_stop", id="markdown-escaped-equals-password"),
+        pytest.param(r"password\\=hunter22", "sensitive_stop", id="double-backslash-equals-password"),
+        pytest.param("password&colon; hunter22", "sensitive_stop", id="html-named-colon-password"),
+        pytest.param("password&equals;hunter22", "sensitive_stop", id="html-named-equals-password"),
         pytest.param("password: admin", "sensitive_stop", id="five-character-colon-password"),
         pytest.param("password: disabled", "sensitive_stop", id="status-word-colon-password"),
         pytest.param("unifiPassword=P@ssw0rd!", "sensitive_stop", id="camel-case-password"),
@@ -1833,9 +2169,454 @@ def test_target_size_and_sensitive_content_are_handled_before_later_fetches(body
         "openvpn_configuration: |\n  ***REDACTED***",
         "openvpn_configuration: >\n  [REDACTED]",
         "openvpn_configuration:\nstatus: unavailable",
+        "Testing endpoints with an authenticated session:\n\n| Endpoint | Result |\n| --- | --- |",
+        "Testing endpoints with an authenticated session:\n\nEndpoint | Result\n--- | ---",
+        "Testing with an authenticated session:\nThe endpoint returns 200",
+        "Testing authenticated session:\nThe endpoint returns 200",
+        "Debugging authenticated session:\nThe endpoint returns 200",
+        "Observed authenticated session:\nThe endpoint returns 200",
+        "Session timeout:\n30 minutes",
+        "Authenticated session behavior:\nThe endpoint returns 200",
+        "Session <strong>timeout</strong>:\n30 minutes",
     ],
 )
 def test_sensitive_classifier_preserves_benign_technical_reports(body: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = body
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "password:\n  actual-secret",
+        "token: |\n  abcdefghijklmnop",
+        "password:\nactual-secret",
+        "password=\nhunter2long",
+        "password\\:\nhunter2long",
+        "password\\=\nhunter2long",
+        r"password\\:" + "\nhunter2long",
+        r"password\\=" + "\nhunter2long",
+        "token:\nabcdefghijklmnop",
+        "api key:\nmy-real-secret-123",
+        "cookie:\nsession-cookie-value",
+        "session:\nsession-identifier-value",
+        "authorization:\nBearer abcdefghijklmnop",
+        "password:\n\nactual-secret",
+        "token:\n\nabcdefghijklmnop",
+        "api key:\n\nmy-real-secret-123",
+        "cookie:\n\nsession-cookie-value",
+        "session:\n\nsession-identifier-value",
+        "authorization:\n\nBearer abcdefghijklmnop",
+        "controller password:\nactual-secret",
+        "admin password:\nactual-secret",
+        "GitHub token:\nabcdefghijklmnop",
+        "SNMP community:\nprivate123",
+        "client secret:\nmy-secret-value",
+        "my password:\nhunter2long",
+        "root password:\nhunter2long",
+        "proxy password:\nhunter2long",
+        "server password:\nhunter2long",
+        "console password:\nhunter2long",
+        "SSH password:\nhunter2long",
+        "Cloud API token:\nabcdefghijklmnop",
+        "MCP API token:\nabcdefghijklmnop",
+        "Password for controller:\nhunter2long",
+        "Password for the controller:\nhunter2long",
+        "API token used by MCP:\nabcdefghijklmnop",
+        "Current token value:\nabcdefghijklmnop",
+        "Password used with controller:\nhunter2long",
+        "Password is:\nhunter2long",
+        "API token was:\nabcdefghijklmnop",
+        "Value for API token:\nabcdefghijklmnop",
+        "Value of controller password:\nhunter2long",
+        "Current value for password:\nhunter2long",
+        "**Server** password:\nhunter2long",
+        "Server **password**:\nhunter2long",
+        "[Server](https://example.com) password:\nhunter2long",
+        "Server [password](https://example.com):\nhunter2long",
+        "Pass&#x77;ord:\nhunter2long",
+        "Pass&#x00000077;ord:\nhunter2long",
+        "Pass&#0000000119;ord:\nhunter2long",
+        "Pass&#8203;word=\nhunter2long",
+        "Pass&ZeroWidthSpace;word=\nhunter2long",
+        "Pass&NoBreak;word=\nhunter2long",
+        "Pass&NegativeThinSpace;word=\nhunter2long",
+        "Pass&InvisibleTimes;word=\nhunter2long",
+        "Pass&shyword=\nhunter2long",
+        "### Pass&shyword\nhunter2long",
+        "Username | Pass&shyword\n--- | ---\nadmin | hunter2long",
+        "API&nbspkey:\nmy-real-secret-123",
+        "API&ThinSpace;key:\nmy-real-secret-123",
+        "API&NonBreakingSpace;key:\nmy-real-secret-123",
+        "API&emsp13;key:\nmy-real-secret-123",
+        "&Pfr;assword:\nhunter2long",
+        "### Pass&#119;ord\nhunter2long",
+        "Username | Pass&#x77;ord\n--- | ---\nadmin | hunter2long",
+        "<strong>Password</strong>:\nhunter2long",
+        "<strong class=x>Password</strong>:\nhunter2long",
+        "<strong class=x>Password</strong>=\nhunter2long",
+        '<strong title=">">Password</strong>:\nhunter2long',
+        "Server <strong>password</strong>:\nhunter2long",
+        "<strong>Pass</strong>word:\nhunter2long",
+        "Pass<!-- hidden -->word:\nhunter2long",
+        "password: [REDACTED] <!-- hunter2long -->",
+        'password: [REDACTED] <span title="hunter2long"></span>',
+        "pass<!-- hunter2long -->word: [REDACTED]",
+        "Pass<?hunter2long?>word: [REDACTED]",
+        "Pass<!HUNTER2LONG>word: [REDACTED]",
+        "Pass<![CDATA[hunter2long]]>word: [REDACTED]",
+        "Pass<!--\nhunter2long-->word: [REDACTED]",
+        '<span title="hunter2long">Password</span>: [REDACTED]',
+        "<span hunter2long>Password</span>: [REDACTED]",
+        "<span data-hunter2long>Password</span>: [REDACTED]",
+        "<hunter2long>Password</hunter2long>: [REDACTED]",
+        "<hunter2long-x>Password</hunter2long-x>: [REDACTED]",
+        '### <span title="hunter2long">Password</span>\n[REDACTED]',
+        "### <span hunter2long>Password</span>\n[REDACTED]",
+        '<strong>Password</strong><span title="hunter2long"></span>\n[REDACTED]',
+        "<strong>Password</strong><span data-hunter2long></span>\n[REDACTED]",
+        "### Pass<?hunter2long?>word\n[REDACTED]",
+        "Pass<![CDATA[hunter2long]]>word\n---\n[REDACTED]",
+        '<strong\ntitle="hunter2long">Password</strong>: [REDACTED]',
+        "<span\ndata-hunter2long>Password</span>: [REDACTED]",
+        '### <strong\ntitle="hunter2long">Password</strong>\n[REDACTED]',
+        "<span\ndata-hunter2long>Password</span>\n[REDACTED]",
+        'Username | <span title="hunter2long">Password</span>\n--- | ---\nadmin | [REDACTED]',
+        "Username | <hunter2long>Password</hunter2long>\n--- | ---\nadmin | [REDACTED]",
+        "Username | Pass<?hunter2long?>word\n--- | ---\nadmin | [REDACTED]",
+        'Username | <strong\ntitle="hunter2long">Password</strong>\n--- | ---\nadmin | [REDACTED]',
+        "Authenticated session:\nsession-identifier-value",
+        "Staging session:\nsession-identifier-value",
+        "the password:\nhunter2long",
+        "password:\n  [REDACTED]\n  actual-secret",
+        "authorization:\n  disabled\n  Bearer abcdefghijklmnop",
+        "token:\n  unavailable\n  abcdefghijklmnop",
+        "cookie:\n  missing\n  session-cookie-value",
+        "session:\n  unset\n  session-identifier-value",
+        "password:\n[REDACTED]\nactual-secret",
+        "token:\nunavailable\nabcdefghijklmnop",
+        "authorization:\ndisabled\nBearer abcdefghijklmnop",
+        "password:\n[REDACTED]\n\nactual-secret",
+        "password:\n\n| Field | Value |\n| --- | --- |\n| Password | actual-secret |",
+        "password:\n\nField | Value\n--- | ---\nPassword | actual-secret",
+        "password:\n\n| Username | Password |\n| --- | --- |\n| admin | actual-secret |",
+        "password:\n\nUsername | Password\n--- | ---\nadmin | actual-secret",
+        "Credentials:\n\n| Username | Password |\n| --- | --- |\n| admin | actual-secret |",
+        "Credentials:\n\nField | Value\n--- | ---\nPassword | actual-secret",
+        "| Username | Password |\n| --- | --- |\n| admin | actual-secret |",
+        "Username | Password\n--- | ---\nadmin | actual-secret",
+        "Password | Notes\n--- | ---\nhunter2long | Token\n--- | ---\nfoo | [REDACTED]",
+        "Configuration:\n\n| Username | Password |\n| --- | --- |\n| admin | actual-secret |",
+        "| Username | [Password](https://example.com) |\n| --- | --- |\n| admin | actual-secret |",
+        "| Username | **[Password](https://example.com/docs_(old))** |\n| --- | --- |\n| admin | actual-secret |",
+        "> | Username | Password |\n> | --- | --- |\n> | admin | actual-secret |",
+        "| Username | [Password][pwd] |\n| --- | --- |\n| admin | actual-secret |",
+        "| Username | ![Password](https://example.com/icon.png) |\n| --- | --- |\n| admin | actual-secret |",
+        "| Password |\n| --- |\n| hunter2long |",
+        "Username | [Password]\n--- | ---\nadmin | hunter2long\n\n[Password]: https://example.com",
+        "Username | ![Password]\n--- | ---\nadmin | hunter2long\n\n[Password]: https://example.com/icon.png",
+        "| Password |\n| --- |\n| [REDACTED](hunter2long) |",
+        "| Password |\n| --- |\n| ![REDACTED](hunter2long) |",
+        "Field | Value\n--- | ---\nPassword | [REDACTED](hunter2long)",
+        "| Password |\n| --- |\n| [REDACTED][secret] |\n\n[secret]: hunter2long",
+        "| Password |\n| --- |\n| [REDACTED] |\n\n[REDACTED]: hunter2long",
+        "| Password |\n| --- |\n| [REDACTED] |\n\n[REDACTED]:\n  hunter2long",
+        "> | Password |\n> | --- |\n> | [REDACTED] |\n>\n> [REDACTED]:\n>   hunter2long",
+        'Field | Value\n--- | ---\nPassword | [REDACTED]\n\n[REDACTED]: https://example.com "hunter2long"',
+        'Field | Value\n--- | ---\nPassword | [REDACTED]\n\n[REDACTED]:\n  https://example.com "hunter2long"',
+        "Username | [Password](https://example.com/a\\|b)\n--- | ---\nadmin | hunter2long",
+        "Username | [Password](a(b(c)))\n--- | ---\nadmin | hunter2long",
+        'Username | [Password](https://example.test "documentation)")\n--- | ---\nadmin | hunter2long',
+        "Username | [Password](destination\n--- | ---\nadmin | hunter2long",
+        "Username | [Password](hunter2long\n--- | ---\nadmin | [REDACTED]",
+        "Username | ![Password](https://example.com/a\\|b)\n--- | ---\nadmin | hunter2long",
+        "Username | [Password][pwd\\|ref]\n--- | ---\nadmin | hunter2long\n\n[pwd|ref]: https://example.com",
+        "password: [REDACTED]\nactual-secret",
+        "password: [REDACTED]\n\nactual-secret",
+        "password: [REDACTED]\n\nTransport: stdio\n\n[REDACTED]: hunter2long",
+        'password: "[REDACTED]"\n\nTransport: stdio\n\n[REDACTED]: hunter2long',
+        "password: '[REDACTED]'\n\nTransport: stdio\n\n[REDACTED]: hunter2long",
+        "password:\n[REDACTED]\n\n[REDACTED]:\n  hunter2long",
+        'password:\n"[REDACTED]"\n\nTransport: stdio\n\n[REDACTED]: hunter2long',
+        'Field | Value\n--- | ---\nPassword | "[REDACTED]"\n\n[REDACTED]: hunter2long',
+        "- [ ] password: [REDACTED]\n  actual-secret",
+        "- [x] password: [REDACTED]\n  actual-secret",
+        "1. password: [REDACTED]\n   actual-secret",
+        "- password: [REDACTED]\n  actual-secret",
+        "password:\n[REDACTED]\nvalue: actual-secret",
+        "password:\n[REDACTED]\n\nactual value: actual-secret",
+        "password:\n[REDACTED]\n  value: actual-secret",
+        "password:\n[REDACTED]\nvalue:\nhunter2long",
+        "password:\n[REDACTED]\n  value:\n  hunter2long",
+        "password: [REDACTED]\nvalue:\nhunter2long",
+        "### Password\nhunter2long",
+        "### **Password**\nhunter2long",
+        "### [Password](https://example.com)\nhunter2long",
+        "Password\n--------\nhunter2long",
+        "Password\n========\nhunter2long",
+        "Password\nhunter2long",
+        "Password\nsecret",
+        "Password\nsecret\n[REDACTED]",
+        "Password\ntoken\nmissing",
+        "Server password\nhunter2long",
+        "Password for controller\nhunter2long",
+        "Value for controller password\nhunter2long",
+        "Controller API token\nabcdefghijklmnop",
+        "API tokens:\nabcdefghijklmnop",
+        "### Secrets\nhunter2long",
+        "Passwords | Notes\n--- | ---\nhunter2long | reproduced locally",
+        "Password\rhunter2long",
+        "Testing authenticated session:\nsession-identifier-value",
+        "**Password**:\nhunter2long",
+        "**Password**\nhunter2long",
+        "[Password](https://example.com)\nhunter2long",
+        "[Password](a(b(c)))\nhunter2long",
+        '[Password](https://example.test "documentation)")\nhunter2long',
+        "[Password](destination\nhunter2long",
+        "[Password](hunter2long",
+        "[Password](hunter2long\n[REDACTED]",
+        "[Pass**word**](hunter2long",
+        "[Se**cret**](hunter2long",
+        "[To**ken**](abcdefghijklmnop",
+        "[Server pass**word**](hunter2long\n[REDACTED]",
+        "[Password:\nhunter2long",
+        "(Password:\nhunter2long",
+        "<span Password:\nhunter2long",
+        "<span\nPassword:\nhunter2long",
+        "<span class=x\nPassword:\nhunter2long",
+        "<!--\nPassword:\nhunter2long",
+        "<?xml\nToken:\nabcdefghijklmnop",
+        "<![CDATA[\nPassword:\nhunter2long",
+        "<span\n<strong Password:\nhunter2long",
+        "<!--\n<span Password:\nhunter2long",
+        "<?xml\n<span Token:\nabcdefghijklmnop",
+        "<![CDATA[\n<div Password:\nhunter2long",
+        "[note: Password:\nhunter2long",
+        "(note: Password:\nhunter2long",
+        "<span\nnote: Password:\nhunter2long",
+        '<span\ntitle="Password:\nhunter2long',
+        "<span\ntoken note: Password:\nhunter2long",
+        "<!--\nsecret note: Password:\nhunter2long",
+        "<?xml\nsession note: Token:\nabcdefghijklmnop",
+        "<![CDATA[\npassword note: API token:\nabcdefghijklmnop",
+        "[Password note: current:\nhunter2long",
+        "[Password (current): hunter2long=[REDACTED]",
+        "[Password (current): abcdefghijklmnop==",
+        "[Pass**word: abcdefghijklmnop==",
+        "[Pass**word: hunter2long: [REDACTED]",
+        "[note: Pass**word: correct horse password: [REDACTED]",
+        "[note: Pass**word: correct horse password:\n[REDACTED]",
+        "[Password note: current:\n[REDACTED]",
+        "Password]: hunter2long",
+        "Password): hunter2long",
+        "Password]:\nhunter2long",
+        "Password\\]: hunter2long",
+        "Pass**word\\]: hunter2long",
+        "<span\nPassword (current): hunter2long=[REDACTED]",
+        "<span\nPass**word: hunter2long:\n[REDACTED]",
+        "<span\nnote: Pass**word: correct horse password: [REDACTED]",
+        "<span\nnote: Pass**word: correct horse password:\n[REDACTED]",
+        '<span title="hunter2long" Password:\n[REDACTED]',
+        '<span data-value="abcdefghijklmnop" Token:\nmissing',
+        "<!-- hunter2long Password:\n[REDACTED]",
+        '<?xml value="hunter2long" Password:\n[REDACTED]',
+        "<![CDATA[hunter2long Password:\n[REDACTED]",
+        "<hunter2long Password:\n[REDACTED]",
+        "<abcdefghijklmnop Token:\nmissing",
+        "</hunter2long Password:\n[REDACTED]",
+        "<?hunter2long Password:\n[REDACTED]",
+        "<!HUNTER2LONG Password:\n[REDACTED]",
+        "[Password](hunter2long): [REDACTED]",
+        "### [Password](hunter2long)\n[REDACTED]",
+        "[Password](https://example.com): [REDACTED]",
+        "[Password](/): [REDACTED]",
+        "[Password](./): [REDACTED]",
+        "[Password](../): [REDACTED]",
+        "[Password](#): [REDACTED]",
+        "[Password]([REDACTED]",
+        "[Password][docs]: [REDACTED]\n\n[docs]: https://example.com/hunter2long",
+        "[Pass&ThinSpace;word][docs]: [REDACTED]\nTransport: stdio\n[docs]: https://example.com/hunter2long",
+        "[&Pfr;assword][docs]: [REDACTED]\nTransport: stdio\n[docs]: https://example.com",
+        "[Pass&Unknown;word][docs]: [REDACTED]\nTransport: stdio\n[docs]: https://example.com",
+        "Username | [Password][pwd]\n--- | ---\nadmin | [REDACTED]",
+        '[Password](https://example.com "hunter2long"): [REDACTED]',
+        "[Password](https://example.com 'hunter2long'): [REDACTED]",
+        "[Password](https://example.com (hunter2long)): [REDACTED]",
+        '### [Password](https://example.com "hunter2long")\n[REDACTED]',
+        'Password | Notes\n--- | ---\n[Password](https://example.com "hunter2long") | [REDACTED]',
+        '[Password](https://example.test "documentation)")\n[REDACTED]',
+        "Password | Notes\n--- | ---\n[Password](hunter2long) | [REDACTED]",
+        "<?xml\nSecret note: current: abcdefghijklmnop=missing",
+        "<![CDATA[\nPassword note: current: hunter2long:unset",
+        '### [Password](https://example.test "documentation(")\nhunter2long',
+        "<strong>Password</strong>\nhunter2long",
+        "[Password](https://example.com):\nhunter2long",
+        "![Password](https://example.com/icon.png):\nhunter2long",
+        "[Password][credential]:\nhunter2long\n\n[credential]: https://example.com",
+        "**[Password](https://example.com)**:\nhunter2long",
+        "[" * 64 + "Password" + "]" * 64 + ":\nhunter2long",
+        "password:\n[REDACTED]\n\n### Actual password\nhunter2long",
+        "> password: [REDACTED]\n> actual-secret",
+    ],
+)
+def test_multiline_credentials_still_fail_closed(body: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = body
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
+
+
+def test_sensitive_table_scanner_handles_many_header_like_rows_as_one_block():
+    rows = ["Field | Value", "--- | ---"]
+    for _ in range(2_000):
+        rows.extend(("Other | unavailable", "--- | ---"))
+    rows.append("Password | hunter2long")
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "\n".join(rows)
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
+
+
+def test_unterminated_inline_html_scan_is_bounded():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "<a" * 100_000
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
+
+
+def test_oversized_non_label_line_does_not_become_a_sensitive_label():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "<a" * 100_000 + "\nordinary follow-up"
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
+
+
+def test_oversized_non_sensitive_unmatched_markdown_is_bounded():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "[" * 100_000 + "ordinary follow-up"
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
+
+
+def test_oversized_non_link_brackets_with_one_closer_are_bounded():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "[" * 100_000 + "] ordinary follow-up"
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "complete"
+
+
+@pytest.mark.parametrize("marker", ["[", "*", "_", "~", "`"])
+def test_oversized_malformed_markdown_labels_fail_closed_in_bounded_time(marker: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = marker * 50_000 + "Password" + marker * 50_000 + "\nhunter2long"
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Field | Value\n--- | ---\nOther | unavailable\nUsername | Password\n--- | ---\nadmin | hunter2long",
+        (
+            "Field | Value | Notes\n--- | --- | ---\nOther | unavailable | none\n"
+            "Name | API Token | Result\n--- | --- | ---\nMCP | abcdefghijklmnop | failed"
+        ),
+        "| Field |\n| --- |\n| Other |\n| Password |\n| --- |\n| hunter2long |",
+        (
+            "> Field | Value\n> --- | ---\n> Other | unavailable\n"
+            "> Username | Password\n> --- | ---\n> admin | hunter2long"
+        ),
+        (
+            "Field | Value\n--- | ---\nOther | unavailable\n"
+            "Username | [Password](https://example.com)\n--- | ---\nadmin | hunter2long"
+        ),
+    ],
+)
+def test_sensitive_table_scanner_recognizes_later_headers_in_contiguous_pipe_blocks(body: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = body
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Password | Notes\n--- | ---\nhunter2long | failed\n--- | ---",
+        "| Password |\n| --- |\n| hunter2long |\n| --- |",
+        "> Password | Notes\n> --- | ---\n> hunter2long | failed\n> --- | ---",
+        "[Password](https://example.com) | Notes\n--- | ---\nhunter2long | failed\n--- | ---",
+    ],
+)
+def test_sensitive_table_scanner_checks_data_rows_before_embedded_header_transitions(body: str):
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["body"] = body
+    created = _create_snapshot(payload)
+    assert created["bundle"]["status"] == "sensitive_stop"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "token:\nunavailable",
+        "password:\n***REDACTED***",
+        "session:\nmissing",
+        "authorization:\ndisabled",
+        "token:\n\nunavailable",
+        "password:\n\n[REDACTED]",
+        "**Password**\n[REDACTED]",
+        "Password\n[REDACTED]",
+        "[Password:\n[REDACTED]",
+        "<span Password:\n[REDACTED]",
+        "<span\nPassword:\n[REDACTED]",
+        "<span\n<strong Password:\n[REDACTED]",
+        "[note: Password:\n[REDACTED]",
+        "Password]: [REDACTED]",
+        "Password):\n[REDACTED]",
+        "**Password**\n[REDACTED]\n**Token**\n[REDACTED]",
+        "Password\n[REDACTED]\nToken\n[REDACTED]",
+        "Testing authenticated session | Result\n--- | ---\nThe endpoint returns 200 | passed",
+        "Field | Value\n--- | ---\nTesting authenticated session | The endpoint returns 200",
+        "<strong>Password</strong>\nunavailable",
+        "Password is:\n[REDACTED]",
+        "API token was:\nunavailable",
+        "Pass&ZeroWidthSpace;word=\n[REDACTED]",
+        "Pass<!-- hidden -->word: [REDACTED]",
+        "Pass<?redacted?>word: [REDACTED]",
+        "<strong\n>Password</strong>: [REDACTED]",
+        "Pass&NoBreak;word=\n[REDACTED]",
+        "Pass&shyword=\n[REDACTED]",
+        "API&nbspkey:\nunavailable",
+        "API&ThinSpace;key:\n[REDACTED]",
+        "API&emsp13;key:\n[REDACTED]",
+        "&Pfr;assword:\n[REDACTED]",
+        "> password:\n> [REDACTED]",
+        "password: |\n  [REDACTED]",
+        "password: >-\n  [REDACTED]",
+        "password:\nTransport: stdio",
+        "password: [REDACTED]\ntoken: [REDACTED]",
+        "password:\n[REDACTED]\ntoken: [REDACTED]",
+        "password: [REDACTED]\n### **Steps to reproduce**\n1. Start",
+        "password: [REDACTED]\n[Transport](https://example.com): stdio",
+        "session:\n\nnull",
+        "authorization:\n\nunset",
+        "password:\n\nField | Value\n--- | ---\nPassword | [REDACTED]",
+        "Credentials:\n\nUsername | Password\n--- | ---\nadmin | [REDACTED]",
+        "Username | Password\n--- | ---\nadmin | [REDACTED]",
+        "Password | Notes\n--- | ---\nunavailable | Token\n--- | ---\nfoo | [REDACTED]",
+        "> Username | Password\n> --- | ---\n> admin | [REDACTED]",
+        "| Password |\n| --- |\n| [REDACTED] |",
+        "Field | Value\n--- | ---\nPassword | `[REDACTED]`",
+        "Field | Value\n--- | ---\nPassword | **[REDACTED]**",
+        "Credentials:\n[REDACTED]\n\nTransport:\nstdio",
+        "password:\n[REDACTED]\n\nSteps to reproduce:\n1. Start",
+        "password: [REDACTED]\n\nTransport: stdio",
+        "password:\n[REDACTED]\n\nTransport: stdio",
+    ],
+)
+def test_multiline_redacted_and_status_values_remain_non_sensitive(body: str):
     payload = _snapshot_payload()
     payload["issues"][str(TARGET_NUMBER)]["body"] = body
     created = _create_snapshot(payload)
@@ -2719,12 +3500,43 @@ def test_repository_evidence_is_verified_from_one_unique_immutable_file_match():
     assert accepted.returncode == 0, accepted.stderr
     rendered = json.loads(accepted.stdout)["output"]["items"][0]["body"]
     assert quote in rendered
+    assert "The repository source currently states:" in rendered
+    assert "repository documentation currently states" not in rendered
     assert "triage_proposal" not in rendered
 
     payload["repositoryFiles"]["docs/permissions.md"] = f"{quote}\n{quote}"
     duplicate = _run_contract(payload)
     assert duplicate.returncode != 0
     assert "unique" in duplicate.stderr
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "packages/unifi-mcp-shared/src/unifi_mcp_shared/meta_tools.py",
+        "packages/unifi-core/src/unifi_core/network/models/_validators.py",
+        "apps/network/src/unifi_network_mcp/__init__.py",
+    ],
+)
+def test_repository_evidence_accepts_bounded_immutable_python_source(path: str):
+    bundle = _create_snapshot()["bundle"]
+    quote = "The tool delegates controller access through the shared manager boundary."
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "repository_evidence", "path": path, "quote": quote},
+        label_intents=[],
+    )
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {"items": [{"type": "add_comment", "body": proposal}]},
+            "repositoryFiles": {path: quote},
+        }
+    )
+    assert result.returncode == 0, result.stderr
+    rendered = json.loads(result.stdout)["output"]["items"][0]["body"]
+    assert "The repository source currently states:" in rendered
 
 
 def test_candidate_summary_distinguishes_skipped_search_from_zero_results():
@@ -2816,6 +3628,21 @@ def test_repository_evidence_path_quote_and_secret_defenses_remain_strict():
             "kind": "repository_evidence",
             "path": "docs/permissions.md",
             "quote": "Contact reporter@\u200bexample.com for the private deployment details.",
+        },
+        {
+            "kind": "repository_evidence",
+            "path": ".github/scripts/community_issue_triage_contract.mjs",
+            "quote": "This hidden workflow path remains outside the public evidence allowlist.",
+        },
+        {
+            "kind": "repository_evidence",
+            "path": "packages/unifi-mcp-shared/tests/test_meta_tools.py",
+            "quote": "Test-only source is not an allowlisted public repository evidence path.",
+        },
+        {
+            "kind": "repository_evidence",
+            "path": "packages/unifi-mcp-shared/src/unifi_mcp_shared/tools_manifest.json",
+            "quote": "Generated artifacts are not accepted as public repository evidence.",
         },
     )
     for decision in invalid:

@@ -1,5 +1,5 @@
 {
-  "count": 192,
+  "count": 193,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -9117,6 +9117,57 @@
         }
       },
       "title": "Get Speedtest Status"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Generate sanitized UniFi Network support evidence for user review. Summary is local/cache-only; live probes are bounded and explicitly allowlisted.",
+      "name": "unifi_get_support_bundle",
+      "schema": {
+        "input": {
+          "properties": {
+            "probe": {
+              "default": "summary",
+              "enum": [
+                "summary",
+                "connectivity",
+                "resource_shape"
+              ],
+              "type": "string"
+            },
+            "resource": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "data": {
+              "type": "object"
+            },
+            "error": {
+              "type": "string"
+            },
+            "success": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "success"
+          ],
+          "type": "object"
+        }
+      },
+      "title": "UniFi Network Support Bundle"
     },
     {
       "annotations": {

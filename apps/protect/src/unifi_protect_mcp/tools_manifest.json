@@ -1,5 +1,5 @@
 {
-  "count": 61,
+  "count": 62,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "protect_acknowledge_event": "unifi_protect_mcp.tools.events",
@@ -2696,6 +2696,57 @@
         }
       },
       "title": "Get Snapshot"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Generate sanitized UniFi Protect support evidence for user review. Summary is local/cache-only; live probes are bounded and explicitly allowlisted.",
+      "name": "protect_get_support_bundle",
+      "schema": {
+        "input": {
+          "properties": {
+            "probe": {
+              "default": "summary",
+              "enum": [
+                "summary",
+                "connectivity",
+                "resource_shape"
+              ],
+              "type": "string"
+            },
+            "resource": {
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "properties": {
+            "data": {
+              "type": "object"
+            },
+            "error": {
+              "type": "string"
+            },
+            "success": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "success"
+          ],
+          "type": "object"
+        }
+      },
+      "title": "UniFi Protect Support Bundle"
     },
     {
       "annotations": {

@@ -20,6 +20,7 @@ from unifi_access_mcp.runtime import (
     connection_manager,
     event_manager,
     server,
+    support_bundle_service,
 )
 from unifi_access_mcp.tool_index import register_tool, tool_index_handler
 from unifi_access_mcp.utils.config_helpers import parse_config_bool
@@ -107,6 +108,7 @@ async def main_async():
         base_package="unifi_access_mcp.tools",
         config=config,
         logger=logger,
+        support_bundle_handler=support_bundle_service.generate,
         prefix="access",
         server_label="UniFi Access",
     )

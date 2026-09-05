@@ -25,6 +25,7 @@ def _deps():
         "start_async_tool": Mock(),
         "get_job_status": Mock(),
         "register_tool": Mock(),
+        "support_bundle_handler": AsyncMock(return_value={"success": True, "data": {}}),
         "tool_module_map": {"unifi_list_clients": "unifi_network_mcp.tools.clients"},
         "setup_lazy_loading": Mock(return_value="lazy-loader"),
         "register_meta_tools": Mock(),
@@ -35,6 +36,22 @@ def _deps():
 
 class TestRegisterToolsForMode:
     """Tests for the tool visibility surfaces in each registration mode."""
+
+    @pytest.mark.parametrize("mode", ["lazy", "meta_only", "eager"])
+    async def test_legacy_apps_can_omit_support_handler(self, mode, caplog):
+        deps = _deps()
+        deps.pop("support_bundle_handler")
+        with caplog.at_level("INFO"):
+            await register_tools_for_mode(
+                mode=mode,
+                server=_server(),
+                base_package="unifi_network_mcp.tools",
+                config=_config(),
+                logger=logging.getLogger("test"),
+                **deps,
+            )
+        assert "support_bundle_handler" not in deps["register_meta_tools"].call_args.kwargs
+        assert "get_support_bundle" not in caplog.text
 
     @pytest.mark.asyncio
     async def test_lazy_mode_registers_meta_tools_load_tools_and_lazy_loader(self):
@@ -51,6 +68,7 @@ class TestRegisterToolsForMode:
         )
 
         deps["register_meta_tools"].assert_called_once()
+        assert deps["register_meta_tools"].call_args.kwargs["support_bundle_handler"] is deps["support_bundle_handler"]
         deps["setup_lazy_loading"].assert_called_once_with(server, deps["original_tool_decorator"])
         deps["register_load_tools"].assert_called_once()
         assert deps["register_load_tools"].call_args.kwargs["lazy_loader"] == "lazy-loader"
@@ -72,6 +90,7 @@ class TestRegisterToolsForMode:
         )
 
         deps["register_meta_tools"].assert_called_once()
+        assert deps["register_meta_tools"].call_args.kwargs["support_bundle_handler"] is deps["support_bundle_handler"]
         deps["setup_lazy_loading"].assert_called_once_with(server, deps["original_tool_decorator"])
         deps["register_load_tools"].assert_not_called()
         deps["auto_load_tools"].assert_not_called()
@@ -92,6 +111,7 @@ class TestRegisterToolsForMode:
         )
 
         deps["register_meta_tools"].assert_called_once()
+        assert deps["register_meta_tools"].call_args.kwargs["support_bundle_handler"] is deps["support_bundle_handler"]
         deps["setup_lazy_loading"].assert_not_called()
         deps["register_load_tools"].assert_not_called()
         deps["auto_load_tools"].assert_called_once_with(

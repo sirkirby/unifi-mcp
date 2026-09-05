@@ -32,6 +32,7 @@ META_TOOL_SUFFIXES: tuple[str, ...] = (
     "_batch",
     "_batch_status",
     "_load_tools",
+    "_get_support_bundle",
 )
 
 

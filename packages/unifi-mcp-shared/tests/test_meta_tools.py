@@ -18,7 +18,7 @@ from mcp.types import (
 )
 from pydantic import BaseModel
 from unifi_core.jobs import JobStore
-from unifi_mcp_shared.meta_tools import register_load_tools, register_meta_tools
+from unifi_mcp_shared.meta_tools import is_meta_tool, register_load_tools, register_meta_tools
 from unifi_mcp_shared.tool_index import TOOL_REGISTRY, get_tool_index, register_tool
 
 
@@ -55,6 +55,7 @@ def _register_test_meta_tools(*, server, prefix, start_async_tool=None, get_job_
         start_async_tool=start_async_tool or AsyncMock(),
         get_job_status=get_job_status or AsyncMock(),
         register_tool=Mock(),
+        support_bundle_handler=AsyncMock(return_value={"success": True, "data": {}}),
         prefix=prefix,
     )
     return registered
@@ -69,6 +70,7 @@ def test_tool_index_schema_describes_ranked_token_search():
         start_async_tool=AsyncMock(),
         get_job_status=AsyncMock(),
         register_tool=register_tool,
+        support_bundle_handler=AsyncMock(return_value={"success": True, "data": {}}),
         prefix="unifi",
     )
 
@@ -92,6 +94,7 @@ def test_execute_tool_index_schema_accepts_null_arguments():
         start_async_tool=AsyncMock(),
         get_job_status=AsyncMock(),
         register_tool=register_tool,
+        support_bundle_handler=AsyncMock(return_value={"success": True, "data": {}}),
         prefix="unifi",
     )
 
@@ -109,6 +112,7 @@ def test_batch_schema_explains_tool_discovery_by_registration_mode():
         start_async_tool=AsyncMock(),
         get_job_status=AsyncMock(),
         register_tool=register_tool,
+        support_bundle_handler=AsyncMock(return_value={"success": True, "data": {}}),
         prefix="unifi",
     )
 
@@ -132,6 +136,7 @@ def test_meta_tool_index_objects_contain_declared_annotations():
             start_async_tool=AsyncMock(),
             get_job_status=AsyncMock(),
             register_tool=register_tool,
+            support_bundle_handler=AsyncMock(return_value={"success": True, "data": {}}),
             prefix="unifi",
         )
         register_load_tools(
@@ -152,16 +157,104 @@ def test_meta_tool_index_objects_contain_declared_annotations():
             "unifi_batch": False,
             "unifi_batch_status": True,
             "unifi_load_tools": False,
+            "unifi_get_support_bundle": True,
         }
         for name, read_only in expected.items():
             assert tools[name]["annotations"] == {
                 "readOnlyHint": read_only,
                 "destructiveHint": False,
-                "idempotentHint": name in {"unifi_tool_index", "unifi_batch_status", "unifi_load_tools"},
+                "idempotentHint": name
+                in {"unifi_tool_index", "unifi_batch_status", "unifi_load_tools", "unifi_get_support_bundle"},
                 "openWorldHint": False,
             }
     finally:
         TOOL_REGISTRY.clear()
+
+
+@pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
+async def test_legacy_positional_meta_registration_does_not_advertise_support(prefix, caplog):
+    server = FastMCP("legacy-app")
+    registered = Mock()
+    with caplog.at_level("INFO"):
+        register_meta_tools(
+            server,
+            server.tool,
+            AsyncMock(),
+            AsyncMock(),
+            AsyncMock(),
+            registered,
+            prefix,
+            "Legacy app",
+            "legacy domain",
+        )
+    names = {tool.name for tool in await server.list_tools()}
+    assert names == {f"{prefix}_{suffix}" for suffix in ("tool_index", "execute", "batch", "batch_status")}
+    assert {call.kwargs["name"] for call in registered.call_args_list} == names
+    assert "get_support_bundle" not in caplog.text
+
+
+@pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
+async def test_support_bundle_schema_annotations_and_behavior(prefix):
+    handler = AsyncMock(return_value={"success": True, "data": {"schema_version": 1}})
+    registered, tool_decorator = _capture_tools()
+    register_tool_mock = Mock()
+    register_meta_tools(
+        server=SimpleNamespace(),
+        tool_decorator=tool_decorator,
+        tool_index_handler=AsyncMock(return_value={}),
+        start_async_tool=AsyncMock(),
+        get_job_status=AsyncMock(),
+        register_tool=register_tool_mock,
+        support_bundle_handler=handler,
+        prefix=prefix,
+    )
+
+    name = f"{prefix}_get_support_bundle"
+    tool = registered[name]
+    assert tool["annotations"].read_only_hint is True
+    assert tool["annotations"].destructive_hint is False
+    assert tool["annotations"].idempotent_hint is True
+    assert tool["annotations"].open_world_hint is False
+    assert is_meta_tool(name) is True
+
+    result = await tool["handler"]("summary", None)
+    assert result == {"success": True, "data": {"schema_version": 1}}
+    handler.assert_awaited_once_with(probe="summary", resource=None)
+
+    registered_meta = next(call for call in register_tool_mock.call_args_list if call.kwargs["name"] == name)
+    assert registered_meta.kwargs["input_schema"]["properties"]["probe"]["enum"] == [
+        "summary",
+        "connectivity",
+        "resource_shape",
+    ]
+    assert registered_meta.kwargs["annotations"] == {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": False,
+    }
+
+
+async def test_support_bundle_wrapper_never_logs_raw_failures_or_payloads(caplog):
+    canary = "token-DO-NOT-LOG"
+    handler = AsyncMock(side_effect=RuntimeError(canary))
+    registered, tool_decorator = _capture_tools()
+    register_meta_tools(
+        server=SimpleNamespace(),
+        tool_decorator=tool_decorator,
+        tool_index_handler=AsyncMock(return_value={}),
+        start_async_tool=AsyncMock(),
+        get_job_status=AsyncMock(),
+        register_tool=Mock(),
+        support_bundle_handler=handler,
+        prefix="unifi",
+    )
+
+    result = await registered["unifi_get_support_bundle"]["handler"]("summary", None)
+
+    assert result == {"success": False, "error": "Failed to generate support bundle."}
+    assert canary not in caplog.text
+    assert "traceback" not in caplog.text.lower()
 
 
 @pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
@@ -288,6 +381,7 @@ async def test_fastmcp_execute_and_batch_expose_domain_payload(prefix):
         start_async_tool=start_async_tool,
         get_job_status=store.status,
         register_tool=Mock(),
+        support_bundle_handler=AsyncMock(return_value={"success": True, "data": {}}),
         prefix=prefix,
     )
 
@@ -330,6 +424,7 @@ async def test_fastmcp_execute_accepts_null_arguments(prefix):
         start_async_tool=AsyncMock(),
         get_job_status=AsyncMock(),
         register_tool=Mock(),
+        support_bundle_handler=AsyncMock(return_value={"success": True, "data": {}}),
         prefix=prefix,
     )
 

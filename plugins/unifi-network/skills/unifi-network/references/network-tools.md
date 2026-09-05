@@ -1,4 +1,4 @@
-# Network Server Tool Reference (192 tools)
+# Network Server Tool Reference (193 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
 

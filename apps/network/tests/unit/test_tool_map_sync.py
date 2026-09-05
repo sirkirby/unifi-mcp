@@ -30,15 +30,11 @@ class TestToolMapSync:
         return TOOL_MODULE_MAP
 
     @pytest.fixture
-    def meta_tools(self) -> set[str]:
+    def meta_tools(self, manifest_tools: set[str]) -> set[str]:
         """Meta-tools that are registered separately, not via TOOL_MODULE_MAP."""
-        return {
-            "unifi_tool_index",
-            "unifi_execute",
-            "unifi_batch",
-            "unifi_batch_status",
-            "unifi_load_tools",
-        }
+        from unifi_mcp_shared.meta_tools import is_meta_tool
+
+        return {name for name in manifest_tools if is_meta_tool(name)}
 
     def test_all_manifest_tools_in_map(
         self, manifest_tools: set[str], tool_module_map: dict[str, str], meta_tools: set[str]
