@@ -14,6 +14,7 @@ from typing import Any
 
 from unifi_core.network.models.clients import _is_online, client_from_controller
 from unifi_core.network.models.devices import normalize_radio_channel
+from unifi_core.network.models.firewall import SELECTOR_ACTIVATORS
 from unifi_core.network.models.firewall import from_controller as firewall_policy_from_controller
 from unifi_core.network.models.networks import from_controller as network_from_controller
 
@@ -783,6 +784,8 @@ def shape_wlan_list(
     }
 
 
+# selector -> (activating enum key, value); a selector under any other value is not shown.
+_SELECTOR_ACTIVATION = {selector: (key, value) for selector, key, value in SELECTOR_ACTIVATORS}
 _FIREWALL_TARGETING_KEYS = (
     "matching_target_type",
     "ips",
@@ -833,7 +836,7 @@ def shape_firewall_policy_list(
             "rule_index": shaped.index,
             "description": policy.get("description", policy.get("desc", "")),
         }
-        if shaped.protocol and shaped.protocol != "all":
+        if shaped.protocol:
             entry["protocol"] = shaped.protocol
         for direction in ("source", "destination"):
             endpoint = getattr(shaped, direction)
@@ -842,8 +845,12 @@ def shape_firewall_policy_list(
                 port_matching_type = endpoint.get("port_matching_type")
                 if port_matching_type and port_matching_type != "ANY":
                     targeting["port_matching_type"] = port_matching_type
-                # Selectors and inversion flags, in display order; only set (truthy) values are shown.
+                # Selectors and inversion flags, in display order; only set (truthy) values are shown,
+                # and a port selector only under the port_matching_type that activates it.
                 for key in _FIREWALL_TARGETING_KEYS:
+                    activator = _SELECTOR_ACTIVATION.get(key)
+                    if activator and endpoint.get(activator[0]) != activator[1]:
+                        continue
                     if endpoint.get(key):
                         targeting[key] = endpoint[key]
                 entry[direction] = targeting

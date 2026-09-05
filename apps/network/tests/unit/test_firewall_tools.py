@@ -228,7 +228,8 @@ class TestListFirewallPolicies:
     @pytest.mark.asyncio
     async def test_summary_false_returns_full_model_dump(self):
         """summary=False returns the legacy fw_from_controller().model_dump() shape —
-        protocol/ip_version/logging/index present, not narrowed to the curated 6 keys."""
+        ip_version/logging/index present, not narrowed to the curated summary keys
+        (protocol is part of the summary as well)."""
         mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
         mock_conn = MagicMock()
         mock_conn.site = "default"
@@ -244,7 +245,7 @@ class TestListFirewallPolicies:
 
         # curated path: narrowed 6-key entry + targeting; protocol/logging absent
         cp = curated["policies"][0]
-        assert "protocol" not in cp and "logging" not in cp and "ip_version" not in cp
+        assert "logging" not in cp and "ip_version" not in cp
         # raw path: full model dump fields present
         rp = raw["policies"][0]
         assert rp.get("protocol") == "all"
@@ -786,6 +787,160 @@ class TestCreatePortAndClientTargetingValidation:
         assert result["success"] is False
         assert "port_group_id" in result["error"]
         mock_fm.update_firewall_policy.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_port_without_specific_matching_is_rejected(self):
+        """A port sent to a policy whose stored port_matching_type is ANY would be ignored by the controller."""
+        mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={"destination": {"port": "53,853"}},
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "port_matching_type" in result["error"]
+        mock_fm.update_firewall_policy.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_rejects_non_dict_endpoint(self):
+        mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(policy_id="pol_zone_001", update_data={"source": "ANY"}, confirm=True)
+
+        assert result["success"] is False
+        assert "source" in result["error"]
+        mock_fm.update_firewall_policy.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_lowercase_enum_still_fails_validation_on_create(self):
+        """Normalization must run before validation, or a lower-case enum would skip the port check."""
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        result = await create_firewall_policy(policy_data=self._policy(port_matching_type="specific"), confirm=True)
+
+        assert result["success"] is False
+        assert "destination.port" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_lowercase_enum_still_fails_validation_on_update(self):
+        mock_policy = _make_policy(SAMPLE_ZONE_POLICY_RAW)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={"destination": {"port_matching_type": "specific"}},
+                confirm=True,
+            )
+
+        assert result["success"] is False
+        assert "port" in result["error"]
+        mock_fm.update_firewall_policy.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_does_not_revalidate_untouched_side(self):
+        """An invalid stored source must not block an update that only touches destination."""
+        raw = copy.deepcopy(SAMPLE_ZONE_POLICY_RAW)
+        raw["source"] = {"zone_id": "x", "matching_target": "IP"}
+        mock_policy = _make_policy(raw)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={"destination": {"port_matching_type": "SPECIFIC", "port": "53"}},
+                confirm=False,
+            )
+
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_update_does_not_reject_preexisting_targeting_gaps(self):
+        """A controller-stored NETWORK match without matching_target_type must still accept a port change."""
+        raw = copy.deepcopy(SAMPLE_ZONE_POLICY_RAW)
+        raw["destination"] = {
+            "zone_id": "z2",
+            "matching_target": "NETWORK",
+            "network_ids": ["n1"],
+            "port_matching_type": "ANY",
+        }
+        mock_policy = _make_policy(raw)
+        updated = copy.deepcopy(raw)
+        updated["destination"].update({"port_matching_type": "SPECIFIC", "port": "53"})
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(side_effect=[[mock_policy], [_make_policy(updated)]])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={"destination": {"port_matching_type": "SPECIFIC", "port": "53"}},
+                confirm=True,
+            )
+
+        assert result["success"] is True
+        mock_fm.update_firewall_policy.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_with_missing_stored_endpoint_validates_the_update_alone(self):
+        raw = copy.deepcopy(SAMPLE_ZONE_POLICY_RAW)
+        raw["destination"] = None
+        mock_policy = _make_policy(raw)
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[mock_policy])
+
+            from unifi_network_mcp.tools.firewall import update_firewall_policy
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={
+                    "destination": {
+                        "zone_id": "z2",
+                        "matching_target": "ANY",
+                        "port_matching_type": "SPECIFIC",
+                        "port": "53",
+                    }
+                },
+                confirm=False,
+            )
+
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_create_accepts_description_and_rejects_read_only_field(self):
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        ok = await create_firewall_policy(policy_data={**self._policy(), "description": "x"}, confirm=False)
+        assert ok["success"] is True
+        assert ok["preview"]["will_create"]["description"] == "x"
+
+        read_only = await create_firewall_policy(policy_data={**self._policy(), "predefined": True}, confirm=True)
+        assert read_only["success"] is False
+        assert "predefined" in read_only["error"]
 
     @pytest.mark.asyncio
     async def test_update_merged_document_keeps_existing_port(self):
