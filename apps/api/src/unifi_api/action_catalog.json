@@ -6243,7 +6243,7 @@
             "type": "string"
           },
           "update_data": {
-            "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule.",
+            "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. index is not accepted here; use unifi_reorder_firewall_policies to change order.",
             "type": "object"
           }
         },
