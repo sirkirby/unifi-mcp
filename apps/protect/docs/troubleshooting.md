@@ -75,6 +75,21 @@ current policy variable named in the error, and restart the server.
 export UNIFI_POLICY_PROTECT_CAMERAS_UPDATE=true
 ```
 
+### Policy variable set but the action is still denied
+
+**Cause:** The variable name does not match a gate this server registers, so it
+is never read. Category names in `UNIFI_POLICY_PROTECT_<CATEGORY>_<ACTION>`
+are the config keys listed in [permissions.md](permissions.md), which differ from
+the `permission_category` shorthand in `tools_manifest.json`.
+
+**Fix:** At startup the server logs every unrecognized `UNIFI_POLICY_*` variable
+with the closest valid names:
+```
+[policy] Unrecognized env var UNIFI_POLICY_PROTECT_CAMERA_UPDATE: no gate in the protect tool manifest matches it. Did you mean UNIFI_POLICY_PROTECT_CAMERAS_UPDATE, ...?
+```
+Rename the variable to the suggested name and restart the server. The same applies
+in the deny direction: a misnamed variable set to `false` blocks nothing.
+
 ### No tools visible at all
 
 **Check:**

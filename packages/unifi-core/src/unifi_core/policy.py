@@ -10,6 +10,7 @@ from unifi_core.policy_gate import (
     _TRUTHY,
     PolicyGateChecker,
     check_deprecated_env_vars,
+    check_unknown_policy_env_vars,
     resolve_permission_mode,
 )
 
@@ -82,6 +83,7 @@ def _get_nested_config_value(config: Any | None, path: tuple[str, ...]) -> Any |
 __all__ = [
     "PolicyGateChecker",
     "check_deprecated_env_vars",
+    "check_unknown_policy_env_vars",
     "resolve_permission_mode",
     "should_redact_sensitive_fields",
 ]

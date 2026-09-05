@@ -232,6 +232,13 @@ repository root, run `make -C apps/network manifest`,
 `make -C apps/protect manifest`, or `make -C apps/access manifest` for the
 affected server.
 
+### A `UNIFI_POLICY_` variable not taking effect
+At startup each server compares every `UNIFI_POLICY_*` variable with the gates its tools
+register and logs a warning naming each variable no gate matches, with the closest valid
+names. Check stderr for `[policy] Unrecognized env var`. The `<CATEGORY>` segment is the
+server's config key from its `permissions.md` (`CAMERAS`, `CLIENT_GROUPS`), not the
+`permission_category` shorthand in `tools_manifest.json` (`camera`, `client_group`).
+
 ### Legacy variables not taking effect
 Ensure the variable name matches the old format exactly (`UNIFI_PERMISSIONS_<CAT>_<ACTION>`). Check stderr logs for the deprecation warning confirming the variable was detected. If the new `UNIFI_POLICY_` variable is also set, the new one takes precedence.
 

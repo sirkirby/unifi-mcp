@@ -8,6 +8,7 @@ Also provides:
 - ``TOOL_MODULE_MAP`` for lazy/on-demand tool loading
 """
 
+from functools import cache
 from pathlib import Path
 from typing import Callable, Dict
 
@@ -18,6 +19,7 @@ from unifi_mcp_shared.lazy_tools import (
 from unifi_mcp_shared.lazy_tools import (
     setup_lazy_loading as _shared_setup_lazy_loading,
 )
+from unifi_mcp_shared.tool_index import policy_gates_from_manifest
 
 # ---------------------------------------------------------------------------
 # Permission category mapping
@@ -67,14 +69,24 @@ _MANIFEST_PATH = Path(__file__).parent / "tools_manifest.json"
 _MANIFEST_FALLBACK = Path("apps/network/src/unifi_network_mcp/tools_manifest.json")
 
 
+def _manifest_path() -> Path:
+    return _MANIFEST_PATH if _MANIFEST_PATH.exists() else _MANIFEST_FALLBACK
+
+
 def _build_tool_module_map() -> Dict[str, str]:
     """Build tool-to-module mapping for the network app."""
-    manifest = _MANIFEST_PATH if _MANIFEST_PATH.exists() else _MANIFEST_FALLBACK
+    manifest = _manifest_path()
     return build_tool_module_map("unifi_network_mcp.tools", manifest_path=str(manifest))
 
 
 # Build the tool map at module load time
 TOOL_MODULE_MAP: Dict[str, str] = _build_tool_module_map()
+
+
+@cache
+def policy_gates() -> frozenset[tuple[str, str]]:
+    """(permission_category, permission_action) pairs the manifest's tools gate on."""
+    return policy_gates_from_manifest(_manifest_path())
 
 
 def setup_lazy_loading(server, tool_decorator: Callable) -> LazyToolLoader:
