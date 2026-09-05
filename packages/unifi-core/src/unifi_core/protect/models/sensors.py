@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Annotated, Any, Dict, Optional
 
 from pydantic import (
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     StrictBool,
@@ -17,27 +18,73 @@ from pydantic import (
 )
 
 
-class Sensor(BaseModel):
-    """Canonical Protect sensor model (read-only)."""
+def _read_only(description: str) -> Any:
+    return Field(default=None, description=description, json_schema_extra={"mutable": False})
 
-    id: Optional[str] = Field(default=None, description="Sensor UUID", json_schema_extra={"mutable": False})
-    mac: Optional[str] = Field(default=None, description="MAC address", json_schema_extra={"mutable": False})
+
+def _stringify_dt(value: Any) -> Optional[str]:
+    """Coerce a datetime-ish value to ISO 8601 string for serialization."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    iso = getattr(value, "isoformat", None)
+    if callable(iso):
+        try:
+            return iso()
+        except Exception:
+            return None
+    return str(value)
+
+
+IsoTimestamp = Annotated[Optional[str], BeforeValidator(_stringify_dt)]
+
+
+class SensorBattery(BaseModel):
+    percentage: Optional[int] = Field(default=None, description="Battery charge percentage")
+    is_low: Optional[bool] = Field(default=None, description="Whether the controller flags the battery as low")
+
+
+class SensorStatReading(BaseModel):
+    value: Optional[float] = Field(default=None, description="Current reading value")
+    status: Optional[str] = Field(default=None, description="Controller status for the reading (safe, low, high, ...)")
+
+
+class SensorStats(BaseModel):
+    light: Optional[SensorStatReading] = Field(default=None, description="Ambient light reading")
+    humidity: Optional[SensorStatReading] = Field(default=None, description="Humidity reading")
+    temperature: Optional[SensorStatReading] = Field(default=None, description="Temperature reading")
+
+
+class Sensor(BaseModel):
+    """Canonical Protect sensor model (read-only).
+
+    Field names and nested shapes match ``SensorManager._format_sensor_summary``
+    so ``protect_list_sensors`` preserves every field the manager emits. ``mac``
+    is not emitted by the manager; it stays so update requests naming it get the
+    read-only rejection.
+    """
+
+    id: Optional[str] = _read_only("Sensor UUID")
+    mac: Optional[str] = _read_only("MAC address")
     name: Optional[str] = Field(default=None, description="Display name")
-    type: Optional[str] = Field(
-        default=None, description="Sensor type (motion, leak, temperature, etc.)", json_schema_extra={"mutable": False}
-    )
-    battery_status: Optional[str] = Field(
-        default=None, description="Battery state summary", json_schema_extra={"mutable": False}
-    )
-    humidity_status: Optional[str] = Field(
-        default=None, description="Humidity reading summary", json_schema_extra={"mutable": False}
-    )
-    light_status: Optional[str] = Field(
-        default=None, description="Ambient light reading summary", json_schema_extra={"mutable": False}
-    )
-    motion_detected_at: Optional[str] = Field(
-        default=None, description="ISO timestamp of last motion event", json_schema_extra={"mutable": False}
-    )
+    type: Optional[str] = _read_only("Sensor type (motion, leak, temperature, etc.)")
+    model: Optional[str] = _read_only("Sensor model / market name")
+    state: Optional[str] = _read_only("Connection state")
+    is_connected: Optional[bool] = _read_only("Whether the sensor is currently connected")
+    firmware_version: Optional[str] = _read_only("Firmware version")
+    last_seen: IsoTimestamp = _read_only("ISO timestamp of last contact")
+    mount_type: Optional[str] = _read_only("Mount type (door, window, garage, leak, none)")
+    is_motion_detected: Optional[bool] = _read_only("Whether motion is detected now")
+    is_opened: Optional[bool] = _read_only("Whether the contact sensor is open")
+    motion_detected_at: IsoTimestamp = _read_only("ISO timestamp of last motion event")
+    open_status_changed_at: IsoTimestamp = _read_only("ISO timestamp of last open/close change")
+    alarm_triggered_at: IsoTimestamp = _read_only("ISO timestamp of last alarm trigger")
+    leak_detected_at: IsoTimestamp = _read_only("ISO timestamp of last leak detection")
+    tampering_detected_at: IsoTimestamp = _read_only("ISO timestamp of last tamper detection")
+    battery: Optional[SensorBattery] = _read_only("Battery percentage and low flag")
+    stats: Optional[SensorStats] = _read_only("Light, humidity and temperature readings")
+    camera_id: Optional[str] = _read_only("Paired camera UUID")
 
 
 MUTABLE_FIELDS = frozenset(
@@ -187,33 +234,9 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
-def _stringify_dt(value: Any) -> Optional[str]:
-    """Coerce a datetime-ish value to ISO 8601 string for serialization."""
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value
-    iso = getattr(value, "isoformat", None)
-    if callable(iso):
-        try:
-            return iso()
-        except Exception:
-            return None
-    return str(value)
-
-
 def from_controller(raw: Any) -> Sensor:
-    """Build a Sensor from a uiprotect / manager dict or object."""
-    return Sensor(
-        id=_get(raw, "id"),
-        mac=_get(raw, "mac"),
-        name=_get(raw, "name"),
-        type=_get(raw, "type"),
-        battery_status=_get(raw, "battery_status"),
-        humidity_status=_get(raw, "humidity_status"),
-        light_status=_get(raw, "light_status"),
-        motion_detected_at=_stringify_dt(_get(raw, "motion_detected_at")),
-    )
+    """Build a Sensor from a ``SensorManager._format_sensor_summary`` dict."""
+    return Sensor(**{name: _get(raw, name) for name in Sensor.model_fields})
 
 
 def to_public_update(fields: Dict[str, Any]) -> Dict[str, Any]:
