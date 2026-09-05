@@ -34,6 +34,12 @@ Accepted values: `true`, `1`, `yes`, `on` (case-insensitive). Unset means the ne
 
 Protect defaults all mutations to denied because operations directly affect physical security hardware.
 
+The `<CATEGORY>` segment is the config key in the left column. `tools_manifest.json`
+records a singular shorthand per tool (`camera`, `light`, `chime`) that the server maps
+to these keys in `unifi_protect_mcp/categories.py`; a variable built from the shorthand,
+such as `UNIFI_POLICY_PROTECT_CAMERA_UPDATE`, is never read. A denied tool's error names
+the exact variable to set.
+
 | Category | Create | Update | Delete | Notes |
 |----------|--------|--------|--------|-------|
 | `alarm` | `UNIFI_POLICY_PROTECT_ALARM_CREATE` | `UNIFI_POLICY_PROTECT_ALARM_UPDATE` | `UNIFI_POLICY_PROTECT_ALARM_DELETE` | Arm/disarm profiles and create/update/delete alarm rules |

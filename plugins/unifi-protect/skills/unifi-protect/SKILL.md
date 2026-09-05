@@ -34,6 +34,8 @@ The server uses **lazy loading** by default — only meta-tools are registered i
 - `UNIFI_POLICY_PROTECT_RECOGNITION_UPDATE=true` — Known Face rename/merge
 - `UNIFI_POLICY_PROTECT_RECOGNITION_DELETE=true` — Known Face deletion
 
+The category segment is the server's config key (`CAMERAS`, `LIGHTS`, `CHIMES`, `SENSORS`), not the singular `permission_category` shorthand in `tools_manifest.json` (`camera`, `light`, `chime`). `UNIFI_POLICY_PROTECT_CAMERA_UPDATE` is never read. A denied tool's error names the exact variable to set.
+
 **Confirmation flow** — every mutation uses preview-then-confirm:
 1. Default call → returns preview of what would change
 2. Call with `confirm=true` → executes the mutation
