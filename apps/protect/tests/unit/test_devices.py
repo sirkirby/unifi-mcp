@@ -967,12 +967,21 @@ class TestProtectUpdateLightTool:
 class TestProtectListSensorsTool:
     @pytest.mark.asyncio
     async def test_success(self, mock_sensor_manager):
+        from unifi_core.protect.managers.sensor_manager import SensorManager
         from unifi_protect_mcp.tools.devices import protect_list_sensors
 
-        mock_sensor_manager.list_sensors = AsyncMock(return_value=[{"id": "sensor-001", "name": "Front Door"}])
+        cm = MagicMock()
+        sensor = _make_sensor(
+            motion_detected_at=datetime(2026, 3, 16, 11, 58, tzinfo=timezone.utc), camera_id="cam-001"
+        )
+        cm.client.bootstrap = _make_bootstrap(sensors={"sensor-001": sensor})
+        summary = (await SensorManager(cm).list_sensors())[0]
+        mock_sensor_manager.list_sensors = AsyncMock(return_value=[summary])
         result = await protect_list_sensors()
         assert result["success"] is True
         assert result["data"]["count"] == 1
+        # Every field the manager emits must survive the tool projection (#621).
+        assert result["data"]["sensors"][0] == {k: v for k, v in summary.items() if v is not None}
 
     @pytest.mark.asyncio
     async def test_error(self, mock_sensor_manager):
