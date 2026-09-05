@@ -557,13 +557,13 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_autobackup_settings` | Read | Get auto-backup settings (enabled state, schedule, retention count, cloud backup). |
 | `unifi_get_network_health` | Read | Returns per-subsystem health status for WAN, LAN, WLAN, and VPN — each with status, number of gateways/switches/APs, and active user counts. |
 | `unifi_get_site_settings` | Read | Get current site settings (e.g., country code, timezone, connectivity monitoring). |
-| `unifi_get_snmp_settings` | Read | Get current SNMP settings for the site (enabled state, community string). |
+| `unifi_get_snmp_settings` | Read | Get current SNMP settings for the site: v1/v2c enabled state and community string, SNMPv3 enabled state and user name. |
 | `unifi_get_system_info` | Read | Returns controller version, uptime, hostname, memory/CPU usage, and update availability. |
 | `unifi_list_backups` | Read | List available backups on the controller. |
 | `unifi_create_backup` | Mutate | Create a new backup of the controller configuration. |
 | `unifi_delete_backup` | Mutate | Delete a backup file from the controller. |
 | `unifi_update_autobackup_settings` | Mutate | Update auto-backup settings. |
-| `unifi_update_snmp_settings` | Mutate | Update SNMP settings for the site (enable/disable, set community string). |
+| `unifi_update_snmp_settings` | Mutate | Update SNMP settings for the site: v1/v2c (enabled, community) and SNMPv3 (enabled_v3, username, x_password). |
 <!-- /AUTO:tools:system,config -->
 
 **Tips:**

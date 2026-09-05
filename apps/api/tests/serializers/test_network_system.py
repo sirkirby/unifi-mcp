@@ -241,3 +241,13 @@ def test_create_backup_returns_dict_passthrough() -> None:
     sample = {"filename": "backup.unf", "url": "/dl/backup/backup.unf"}
     out = s.serialize_action(sample, tool_name="unifi_create_backup")
     assert out["data"]["filename"] == "backup.unf"
+
+
+def test_snmp_settings_detail_exposes_v3_fields_and_redacts_the_password() -> None:
+    sample = [{"enabled": False, "community": "public", "enabledV3": True, "username": "monitor", "x_password": "p"}]
+    out = SnmpSettings.from_manager_output(sample).to_dict()
+    assert out["enabled_v3"] is True
+    assert out["username"] == "monitor"
+    assert out["x_password"] == "***REDACTED***"
+    raw = SnmpSettings.from_manager_output(sample, redact_sensitive=False).to_dict()
+    assert raw["x_password"] == "p"

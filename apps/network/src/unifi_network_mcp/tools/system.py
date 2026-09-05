@@ -108,9 +108,26 @@ async def get_site_settings() -> Dict[str, Any]:
         return {"success": False, "error": f"Failed to get site settings: {e}"}
 
 
+def _error_detail(exc: BaseException) -> str:
+    """What to tell the caller about a failed settings call: the controller's
+    ``api.err.*`` code when it sent one, else the exception class.
+
+    Never the message: the settings document carries secrets (the SNMPv3 and
+    device-SSH passwords) and a controller validation error can quote it.
+    """
+    body = exc.args[0] if exc.args else None
+    meta = body.get("meta") if isinstance(body, dict) else None
+    msg = meta.get("msg") if isinstance(meta, dict) else None
+    if isinstance(msg, str) and msg.startswith("api.err.") and msg.replace(".", "").isalnum():
+        return msg
+    return type(exc).__name__
+
+
 @server.tool(
     name="unifi_get_snmp_settings",
-    description="Get current SNMP settings for the site (enabled state, community string).",
+    description="Get current SNMP settings for the site: v1/v2c enabled state and community string, "
+    "SNMPv3 enabled state and user name. The two services are independent flags on one record. "
+    "The community string and the v3 password are returned by the controller and always shown redacted by this tool.",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_snmp_settings() -> Dict[str, Any]:
@@ -129,22 +146,41 @@ async def get_snmp_settings() -> Dict[str, Any]:
             redact_sensitive=redact_sensitive,
         )
     except Exception as e:
-        logger.error("Error getting SNMP settings: %s", e, exc_info=True)
-        return {"success": False, "error": f"Failed to get SNMP settings: {e}"}
+        # The record carries the v3 password; a parse error quotes the input.
+        logger.error("Error getting SNMP settings: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get SNMP settings: {_error_detail(e)}"}
 
 
 @server.tool(
     name="unifi_update_snmp_settings",
-    description="Update SNMP settings for the site (enable/disable, set community string). Requires confirm=true to apply changes.",
+    description="Update SNMP settings for the site: v1/v2c (enabled, community) and SNMPv3 (enabled_v3, username, "
+    "x_password). The two services are independent; disabling one leaves the other listening. "
+    "Pass only the fields you want to change — current values are automatically preserved. "
+    "Requires confirm=true to apply changes.",
     permission_category="snmp",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def update_snmp_settings(
-    enabled: Annotated[bool, Field(description="Set to true to enable SNMP on the site, false to disable it")],
+    enabled: Annotated[
+        Optional[bool],
+        Field(description="Enable (true) or disable (false) SNMP v1/v2c. Omit to keep the current value"),
+    ] = None,
     community: Annotated[
         Optional[str],
-        Field(description="SNMP community string (e.g., 'public'). Omit to keep the current value"),
+        Field(description="SNMP v1/v2c community string (e.g., 'public'). Omit to keep the current value"),
+    ] = None,
+    enabled_v3: Annotated[
+        Optional[bool],
+        Field(description="Enable (true) or disable (false) SNMPv3. Omit to keep the current value"),
+    ] = None,
+    username: Annotated[
+        Optional[str],
+        Field(description="SNMPv3 user name. Omit to keep the current value"),
+    ] = None,
+    x_password: Annotated[
+        Optional[str],
+        Field(description="SNMPv3 password. Omit to keep the current value; shown redacted in previews and results"),
     ] = None,
     confirm: Annotated[
         bool,
@@ -153,19 +189,24 @@ async def update_snmp_settings(
 ) -> Dict[str, Any]:
     """Implementation for updating SNMP settings.
 
-    Args:
-        enabled: Whether SNMP should be enabled on the site.
-        community: SNMP community string (optional, keeps current value if not provided).
-        confirm: Must be true to apply changes. When false, returns a preview of proposed changes.
+    Only the fields passed are sent; the controller keeps the rest of the
+    record. Errors are reported by controller error code or exception class,
+    never by message, because the request body carries a secret that a
+    controller validation error can quote.
     """
-    logger.info("unifi_update_snmp_settings tool called (enabled=%s, confirm=%s)", enabled, confirm)
+    logger.info("unifi_update_snmp_settings tool called (confirm=%s)", confirm)
     redact_sensitive = should_redact_sensitive_fields()
 
     # Redaction-marker write-back (e.g. community="***REDACTED***") is rejected
     # centrally at the MCP dispatch boundary (StrictKwargFastMCP.call_tool).
-    updates: Dict[str, Any] = {"enabled": enabled}
-    if community is not None:
-        updates["community"] = community
+    field_values = {
+        "enabled": enabled,
+        "community": community,
+        "enabled_v3": enabled_v3,
+        "username": username,
+        "x_password": x_password,
+    }
+    updates: Dict[str, Any] = {key: value for key, value in field_values.items() if value is not None}
 
     validated_data = snmp_to_controller_update(updates)
     if not validated_data:
@@ -181,32 +222,25 @@ async def update_snmp_settings(
                     resource_id="snmp",
                     resource_name="SNMP Settings",
                     current_state=current,
-                    updates=validated_data,
+                    updates=updates,
                 ),
                 redact_sensitive=redact_sensitive,
             )
         except Exception as e:
-            logger.error("Error preparing SNMP settings preview: %s", e, exc_info=True)
-            return {"success": False, "error": f"Failed to prepare SNMP settings preview: {e}"}
+            logger.error("Error preparing SNMP settings preview: %s", type(e).__name__)
+            return {"success": False, "error": f"Failed to prepare SNMP settings preview: {_error_detail(e)}"}
 
     try:
         success = await system_manager.update_settings("snmp", validated_data)
         if success:
             return redact_sensitive_fields(
-                {
-                    "success": True,
-                    "site": system_manager._connection.site,
-                    "snmp_settings": {
-                        "enabled": validated_data.get("enabled", enabled),
-                        "community": validated_data.get("community", community or ""),
-                    },
-                },
+                {"success": True, "site": system_manager._connection.site, "snmp_settings": updates},
                 redact_sensitive=redact_sensitive,
             )
         return {"success": False, "error": "Failed to update SNMP settings."}
     except Exception as e:
-        logger.error("Error updating SNMP settings: %s", e, exc_info=True)
-        return {"success": False, "error": f"Failed to update SNMP settings: {e}"}
+        logger.error("Error updating SNMP settings: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to update SNMP settings: {_error_detail(e)}"}
 
 
 # ---- Backup Management ----
