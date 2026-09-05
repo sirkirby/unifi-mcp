@@ -8858,7 +8858,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get current SNMP settings for the site (enabled state, community string).",
+      "description": "Get current SNMP settings for the site: v1/v2c enabled state and community string, SNMPv3 enabled state and user name. The two services are independent flags on one record. The community string and the v3 password are returned by the controller and always shown redacted by this tool.",
       "name": "unifi_get_snmp_settings",
       "schema": {
         "input": {
@@ -18099,7 +18099,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update SNMP settings for the site (enable/disable, set community string). Requires confirm=true to apply changes.",
+      "description": "Update SNMP settings for the site: v1/v2c (enabled, community) and SNMPv3 (enabled_v3, username, x_password). The two services are independent; disabling one leaves the other listening. Pass only the fields you want to change \u2014 current values are automatically preserved. Requires confirm=true to apply changes.",
       "name": "unifi_update_snmp_settings",
       "permission_action": "update",
       "permission_category": "snmp",
@@ -18107,7 +18107,7 @@
         "input": {
           "properties": {
             "community": {
-              "description": "SNMP community string (e.g., 'public'). Omit to keep the current value",
+              "description": "SNMP v1/v2c community string (e.g., 'public'). Omit to keep the current value",
               "type": "string"
             },
             "confirm": {
@@ -18115,13 +18115,22 @@
               "type": "boolean"
             },
             "enabled": {
-              "description": "Set to true to enable SNMP on the site, false to disable it",
+              "description": "Enable (true) or disable (false) SNMP v1/v2c. Omit to keep the current value",
               "type": "boolean"
+            },
+            "enabled_v3": {
+              "description": "Enable (true) or disable (false) SNMPv3. Omit to keep the current value",
+              "type": "boolean"
+            },
+            "username": {
+              "description": "SNMPv3 user name. Omit to keep the current value",
+              "type": "string"
+            },
+            "x_password": {
+              "description": "SNMPv3 password. Omit to keep the current value; shown redacted in previews and results",
+              "type": "string"
             }
           },
-          "required": [
-            "enabled"
-          ],
           "type": "object"
         },
         "output": {

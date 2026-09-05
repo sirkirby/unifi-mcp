@@ -908,12 +908,13 @@ def _translate_wlan_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[
 
 
 def _translate_snmp_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    from unifi_core.network.models.system import snmp_to_controller_update
+    from unifi_core.network.models.system import SNMPSETTINGS_MUTABLE_FIELDS, snmp_to_controller_update
 
-    updates = {"enabled": args["enabled"]}
-    if args.get("community") is not None:
-        updates["community"] = args["community"]
-    return (), {"section": "snmp", "settings_data": snmp_to_controller_update(updates)}
+    updates = {key: args[key] for key in SNMPSETTINGS_MUTABLE_FIELDS if args.get(key) is not None}
+    settings_data = snmp_to_controller_update(updates)
+    if not settings_data:
+        raise ValueError("Update data is effectively empty or invalid.")
+    return (), {"section": "snmp", "settings_data": settings_data}
 
 
 def _translate_switch_stp(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:

@@ -160,3 +160,12 @@ def test_redaction_marker_paths_reports_only_sensitive_marker_values() -> None:
     }
 
     assert redaction_marker_paths(payload) == ["update_data.x_passphrase", "update_data.nested[0].community"]
+
+
+def test_snmp_v3_secret_is_redacted_and_its_siblings_stay_visible() -> None:
+    """The v3 password key is x_password; the user name and the two enable
+    flags are plain state an operator needs to see."""
+    assert is_sensitive_key("x_password") is True
+    assert is_sensitive_key("username") is False
+    assert is_sensitive_key("enabledV3") is False
+    assert is_sensitive_key("enabled_v3") is False

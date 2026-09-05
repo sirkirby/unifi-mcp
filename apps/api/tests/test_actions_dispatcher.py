@@ -3640,3 +3640,27 @@ def test_create_port_profile_translator_requires_name_and_forward() -> None:
 
     with pytest.raises(ValueError):
         translator({"name": "Access"})
+
+
+def test_snmp_update_translator_forwards_v3_fields_with_controller_keys() -> None:
+    positional, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_update_snmp_settings"](
+        {"enabled_v3": True, "username": "monitor", "x_password": "p"}
+    )
+    assert positional == ()
+    assert kwargs == {"section": "snmp", "settings_data": {"enabledV3": True, "username": "monitor", "x_password": "p"}}
+
+
+def test_snmp_update_translator_does_not_require_enabled() -> None:
+    _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_update_snmp_settings"]({"community": "public"})
+    assert kwargs["settings_data"] == {"community": "public"}
+
+
+def test_snmp_update_translator_keeps_false_flags() -> None:
+    _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_update_snmp_settings"]({"enabled": False, "enabled_v3": False})
+    assert kwargs["settings_data"] == {"enabled": False, "enabledV3": False}
+
+
+def test_snmp_update_translator_rejects_an_empty_update() -> None:
+    """Now that no field is required, an all-omitted call must not PUT an empty document."""
+    with pytest.raises(ValueError, match="empty"):
+        DISPATCH_ARG_TRANSLATORS["unifi_update_snmp_settings"]({})

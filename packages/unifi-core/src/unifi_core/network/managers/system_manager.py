@@ -324,11 +324,16 @@ class SystemManager:
             if success:
                 logger.info("%s settings updated successfully", section)
             else:
-                logger.error("Error updating %s settings: %s", section, response)
+                # The settings document can carry secrets (SNMPv3 password,
+                # device-SSH password) and a rejection can echo it: log the
+                # controller's code, never the body.
+                meta = response.get("meta") if isinstance(response, dict) else None
+                code = meta.get("msg") if isinstance(meta, dict) else type(response).__name__
+                logger.error("Error updating %s settings: controller reported %s", section, code)
 
             return success
         except Exception as e:
-            logger.error("Error updating %s settings: %s", section, e)
+            logger.error("Error updating %s settings: %s", section, type(e).__name__)
             raise
 
     async def get_network_health(self) -> List[Dict[str, Any]]:

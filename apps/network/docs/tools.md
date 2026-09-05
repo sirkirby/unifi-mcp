@@ -245,8 +245,8 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_get_system_info` — Controller version, uptime, resource usage
 - `unifi_get_network_health` — Per-subsystem health (WAN, LAN, WLAN, VPN)
 - `unifi_get_site_settings` — Current site settings
-- `unifi_get_snmp_settings` — SNMP configuration
-- `unifi_update_snmp_settings` — Update SNMP settings
+- `unifi_get_snmp_settings` — SNMP v1/v2c and SNMPv3 state (secrets redacted)
+- `unifi_update_snmp_settings` — Update SNMP v1/v2c (enabled, community) and SNMPv3 (enabled_v3, username, x_password)
 - `unifi_list_backups` — List available backups on the controller
 - `unifi_create_backup` — Create a new backup of the controller configuration
 - `unifi_delete_backup` — Delete a backup file from the controller
