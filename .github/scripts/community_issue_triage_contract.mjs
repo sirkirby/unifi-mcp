@@ -78,7 +78,7 @@ const SENSITIVE_PATTERNS = [
   /\bbypass\p{L}*\b[^\r\n]{0,40}\b(?:auth(?:entication|orization)?)\b/iu,
 ];
 const SENSITIVE_MULTILINE_LABEL_PATTERN =
-  /^(?:(.*?)[ _-]+)?(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?:[ _-]+(.*))?$/iu;
+  /^(?:(.*?)[ _-]+)?(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|tokens?)|tokens?|secrets?|passwords?|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|(?:access[ \t]+)?pin(?:[ _-]?code)?|snmp[ _-]?community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?:[ _-]+(.*))?$/iu;
 const UNRESOLVED_HTML_NAMED_REFERENCE_PATTERN = /&[A-Za-z][A-Za-z0-9]+;/u;
 const SENSITIVE_LABEL_PROSE_WORD_PATTERN =
   /^(?:and|are|as|at|by|for|from|in|is|of|on|or|that|to|using|was|were|when|where|which|while|with)$/iu;
@@ -96,7 +96,7 @@ const BENIGN_SESSION_PROSE_VALUE_PATTERN = /^(?:the[ _-]+)?endpoint[ _-]+returns
 const BENIGN_MULTILINE_SENSITIVE_VALUE_PATTERN =
   /^["']?(?:configured(?:\s+correctly)?|enabled|disabled|missing|unavailable|unknown|unset|none|null|removed|hidden|masked|omitted|(?:\*{2,})?redacted(?:\*{2,})?|\[redacted\]|<redacted>)["']?[.!]?$/iu;
 const SENSITIVE_LABEL_CANDIDATE_PATTERN =
-  /(?:^|[^A-Za-z0-9])(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|token)|token|secret|password|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|pin(?:[ _-]?code)?|community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?=$|[^A-Za-z0-9])/iu;
+  /(?:^|[^A-Za-z0-9])(?:authorization|auth(?:[ _-]?key)?|api[ _-]?(?:key|tokens?)|tokens?|secrets?|passwords?|passwd|passphrase|credentials?|cookie|session(?:[ _-]?id)?|p(?:re)?[ _-]?shared(?:[ _-]?key)?|psk|pin(?:[ _-]?code)?|community|private[ _-]?key|tls[ _-]?(?:auth|crypt)|rtsp[s]?[ _-]?(?:alias|url|streams?))(?=$|[^A-Za-z0-9])/iu;
 const MARKDOWN_TABLE_SEPARATOR_PATTERN =
   /^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/u;
 const SAFE_STRUCTURAL_LABEL_PATTERN =
@@ -970,7 +970,7 @@ function containsSensitiveMultilineValue(value) {
 }
 
 function containsSensitiveContent(value) {
-  const normalized = decodeHtmlCharacterReferences(value)
+  const normalized = decodeHtmlCharacterReferences(value.replace(/\r\n?/gu, "\n"))
     .normalize("NFKC")
     .replace(/\p{Default_Ignorable_Code_Point}/gu, "")
     .replace(/\\+([:=])/gu, "$1");
