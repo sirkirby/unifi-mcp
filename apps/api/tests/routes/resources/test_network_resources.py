@@ -142,6 +142,39 @@ async def test_list_clients_capability_mismatch(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_client_detail_maps_manager_errors(tmp_path, monkeypatch) -> None:
+    """Not-found is 404; an undetermined lookup (the per-MAC endpoint failed)
+    is a 502, never a 404 and never an unhandled 500."""
+    from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
+    from unifi_core.network.managers.client_manager import ClientManager
+
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    async def fake_details(self, mac):
+        if mac == "aa:bb:cc:dd:ee:01":
+            raise UniFiNotFoundError("client", mac)
+        raise UniFiOperationError("existence could not be determined")
+
+    monkeypatch.setattr(ClientManager, "get_client_details", fake_details)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        missing = await c.get(
+            f"/v1/sites/default/clients/aa:bb:cc:dd:ee:01?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+        undetermined = await c.get(
+            f"/v1/sites/default/clients/aa:bb:cc:dd:ee:02?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert missing.status_code == 404
+    assert undetermined.status_code == 502
+    assert "could not be determined" in undetermined.json()["detail"]
+
+
+@pytest.mark.asyncio
 async def test_get_client_detail_happy_and_404(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
