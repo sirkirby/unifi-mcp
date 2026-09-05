@@ -303,7 +303,8 @@ def _validate_zone_targeting(validated_data: Dict[str, Any]) -> str | None:
                 "%s.ports is not a valid field; the controller expects %s.port as a single "
                 "string (e.g. '445'), not a plural 'ports' array." % (direction, direction)
             )
-        if ep.get("port_matching_type") == "SPECIFIC" and not ep.get("port"):
+        port = ep.get("port")
+        if ep.get("port_matching_type") == "SPECIFIC" and not (isinstance(port, str) and port):
             return "%s.port is required when port_matching_type is 'SPECIFIC'." % direction
     return None
 

@@ -684,6 +684,35 @@ class TestCreateZoneTargetingValidation:
         assert "port" in result["error"]
 
     @pytest.mark.asyncio
+    async def test_non_string_port_for_specific_port_matching_type_fails(self):
+        """A truthy but non-string port ([\"445\"] or the int 445) must fail the
+        same as a missing one, since the controller only accepts a single string
+        (#608 review: a truthiness check alone lets these through)."""
+        for bad_port in (["445"], 445):
+            zone_data = {
+                "name": "Malformed port",
+                "action": "ALLOW",
+                "protocol": "tcp",
+                "source": {"zone_id": "untrusted", "matching_target": "ANY"},
+                "destination": {
+                    "zone_id": "internal",
+                    "matching_target": "IP",
+                    "matching_target_type": "SPECIFIC",
+                    "ips": ["10.0.15.10"],
+                    "port_matching_type": "SPECIFIC",
+                    "port": bad_port,
+                },
+            }
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+            assert result["success"] is False
+            assert "port" in result["error"]
+            assert "SPECIFIC" in result["error"]
+
+    @pytest.mark.asyncio
     async def test_missing_port_for_specific_port_matching_type_fails(self):
         """port_matching_type='SPECIFIC' without a port string should fail validation."""
         zone_data = {
