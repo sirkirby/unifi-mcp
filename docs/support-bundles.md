@@ -137,6 +137,37 @@ A support bundle cannot diagnose a failure that prevents the server from startin
 
 The MCP host, model provider, transcript retention, and any later GitHub publication are outside the server-enforced boundary. The server performs no secondary upload, callback, paste creation, telemetry submission, or issue comment; it returns JSON only through the configured MCP transport.
 
+## Repeatable acceptance checks
+
+From the repository root, run `uv run --all-packages python scripts/live_smoke.py --server all --phase support`.
+Selecting this phase explicitly authorizes the bounded, read-only connectivity probes. It starts real stdio
+servers in lazy, eager, and meta-only modes with adaptive responses and checks discovery, summary/connectivity schemas, the 32 KiB
+envelope limit, configured identity/secret canaries (raw, SHA256, base64, JSON-escaped), cooldown, invalid-input rejection,
+and sanitizer independence from ordinary response redaction. It never runs mutations or collects resource shapes.
+Reports contain only product/mode, pass/fail, and byte counts; bundles and subprocess logs are not saved.
+Failure stops the matrix without retrying authentication.
+Canary checks also cover stderr emitted after catalog discovery, during support calls and shutdown.
+Ordinary startup diagnostics are outside this support-tool privacy check and may include controller addresses;
+they remain private and must not be posted as support evidence.
+Non-empty configured identity/secret values shorter than four characters stop the phase before server startup,
+because reliable token matching cannot be claimed for those values. They are never silently excluded.
+This phase accepts credentials from the process environment or the repository `.env` only. `CONFIG_PATH`
+and a repository-local `config/config.yaml` are rejected before launch, since literal YAML credentials are
+not covered by its environment canaries. Child servers start in an empty directory with automatic dotenv
+loading and Python path/home/user-site overrides disabled, preserving installed-package isolation.
+
+For installed-wheel verification, use an isolated Python environment with the app wheels installed and invoke
+`uv run --no-project --python /path/to/venv/bin/python scripts/live_smoke.py --server all --phase support`.
+This uses that interpreter's installed app entrypoints, not workspace imports.
+
+After release/version sync, add `--support-plugin-root /path/to/fresh/marketplace-checkout` to validate the
+complete packaged support skills and both host manifests against the repository's canonical artifacts
+(allowing release-version/pin changes only), then launch the actual `.mcp.json`
+commands through `uvx` with a fresh temporary cache. The returned bundle version must match the plugin pin.
+This verifies the packaged skill/tool pair; separately check skill discovery in the MCP host after install/upgrade.
+Unit coverage is in `tests/test_live_smoke_harness.py`. The broader readonly/preview/disposable-resource and API
+release matrix remains a separate gate; ordinary `--phase safe` alone does not prove support acceptance.
+
 ## Maintainer request examples
 
 Ask for the smallest probe that can answer the open question:
