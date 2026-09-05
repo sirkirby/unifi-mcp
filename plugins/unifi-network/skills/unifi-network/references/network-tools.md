@@ -1,6 +1,6 @@
 # Network Server Tool Reference (193 tools)
 
-Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details).
+Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
 ## Table of Contents
 - [Meta-Tools](#meta-tools)

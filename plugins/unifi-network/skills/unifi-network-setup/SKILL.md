@@ -96,7 +96,7 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_NETWORK_USERNAME=<username> \
   UNIFI_NETWORK_PASSWORD=<password> \
   UNIFI_NETWORK_API_KEY=<api-key> \
-  UNIFI_POLICY_NETWORK_FIREWALL_UPDATE=true
+  UNIFI_POLICY_NETWORK_FIREWALL_POLICIES_UPDATE=true
 ```
 
 The script handles the client-specific write:

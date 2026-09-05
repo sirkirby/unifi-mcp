@@ -41,7 +41,7 @@ Access defaults all mutations to denied. Operations control physical security ha
 | `doors` | — | `UNIFI_POLICY_ACCESS_DOORS_UPDATE` | — | Lock/unlock physical doors |
 | `events` | — | — | — | System-generated, read-only |
 | `policies` | — | `UNIFI_POLICY_ACCESS_POLICIES_UPDATE` | — | Access policy assignment |
-| `schedules` | `UNIFI_POLICY_ACCESS_SCHEDULES_CREATE` | `UNIFI_POLICY_ACCESS_SCHEDULES_UPDATE` | `UNIFI_POLICY_ACCESS_SCHEDULES_DELETE` | Time-based access schedules |
+| `schedules` | — | — | — | Time-based access schedules, read-only |
 | `system` | — | — | — | System info, read-only |
 | `visitors` | `UNIFI_POLICY_ACCESS_VISITORS_CREATE` | — | `UNIFI_POLICY_ACCESS_VISITORS_DELETE` | Time-bounded visitor passes |
 

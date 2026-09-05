@@ -31,7 +31,7 @@ The server is "secure by default" because it controls real network infrastructur
 - **Disabled by default (high-risk):** networks, WLANs, devices, clients, routes, VPN servers
 - **Delete operations** — always disabled by default
 
-If a mutation fails with a permission error, tell the user the env var to set: `UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>=true`
+If a mutation fails with a permission error, tell the user the env var to set: `UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>=true`. Use the exact variable named in the error: `<CATEGORY>` is the server's config key (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`), and a variable built from the shorthand is never read.
 
 **Confirmation flow** — every mutation uses preview-then-confirm:
 1. Default call → returns preview of what would change
