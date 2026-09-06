@@ -190,6 +190,8 @@ class TestNormalizePolicyUpdate:
             ({"action": "accept"}, "Legacy V1 firewall fields"),
             ({"action": "invalid"}, "Invalid action"),
             ({"id": "read-only"}, "effectively empty"),
+            ({"index": 2000, "enabled": True}, "unifi_reorder_firewall_policies"),
+            ({"index": 2000}, "unifi_reorder_firewall_policies"),
         ],
     )
     def test_rejects_legacy_invalid_or_empty_updates(self, fields: dict, message: str) -> None:
