@@ -128,6 +128,11 @@ class EventManager:
         self._last_error: str | None = None
         self._attach_failures = 0
         self._clock = time.monotonic  # injectable for tests; the loop's clock is untouched
+        # The socket currently being attached: aiounifi's connectivity object
+        # (it stamps ws_message_received on every frame) and the stamp it held
+        # when this attempt began. None outside an attempt (backoff, stopped).
+        self._ws_connectivity: Any = None
+        self._ws_frame_baseline: Any = None
 
     # ------------------------------------------------------------------
     # Websocket lifecycle
@@ -147,13 +152,20 @@ class EventManager:
 
     @property
     def attached(self) -> bool:
-        """True when the task is alive and its current attach is in progress or open.
+        """True only while a frame has been received on the socket now open.
 
-        A running task is not an open socket: a controller that rejects the
-        handshake forever, or accepts and closes at once, keeps the task alive
-        and the buffer empty; both leave ``last_error`` set.
+        A running task is not an open socket: a controller that holds the
+        handshake, rejects it, or accepts and closes at once keeps the task
+        alive and the buffer empty. aiounifi exposes no open/close callback,
+        but it stamps ``ws_message_received`` on every frame, and the
+        controller sends sync frames continuously, so a stamp that changed
+        since the current attempt began is the confirmation (a stamp left by
+        an earlier socket does not count). Cleared the moment
+        ``start_websocket`` returns or raises, for the whole backoff.
         """
-        return self.is_listening and self._last_error is None
+        if not self.is_listening or self._ws_connectivity is None:
+            return False
+        return getattr(self._ws_connectivity, "ws_message_received", None) != self._ws_frame_baseline
 
     @property
     def last_error(self) -> str | None:
@@ -185,28 +197,41 @@ class EventManager:
         logger.info("[network-event-mgr] websocket listener started")
 
     async def stop_listening(self) -> None:
-        """Stop the background websocket task and drop the subscription."""
+        """Stop the background websocket task and drop the subscription.
+
+        The subscription is released in ``finally``: a cancellation aimed at
+        the stopping caller (a second interrupt at shutdown) still propagates,
+        but never leaves the controller holding our callback.
+        """
         self._stopping = True
         self._closed = True
         task, self._ws_task = self._ws_task, None
-        if task is not None and not task.done():
-            current = asyncio.current_task()
-            cancelling_before = current.cancelling() if current is not None else 0
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                # Re-raise when the cancellation was aimed at the caller, not
-                # at the task we just cancelled (a second interrupt at shutdown).
-                if current is not None and current.cancelling() > cancelling_before:
-                    raise
-            except Exception as exc:
-                logger.error("[network-event-mgr] websocket loop ended with %s", type(exc).__name__)
-                logger.debug("[network-event-mgr] websocket loop failure", exc_info=exc)
-        self._unsubscribe()
-        self._last_error = None
-        if task is not None:
-            logger.info("[network-event-mgr] websocket listener stopped")
+        try:
+            if task is not None and not task.done():
+                current = asyncio.current_task()
+                cancelling_before = current.cancelling() if current is not None else 0
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    # Re-raise when the cancellation was aimed at the caller,
+                    # not at the task we just cancelled.
+                    if current is not None and current.cancelling() > cancelling_before:
+                        raise
+                except Exception as exc:
+                    logger.error("[network-event-mgr] websocket loop ended with %s", type(exc).__name__)
+                    logger.debug("[network-event-mgr] websocket loop failure", exc_info=exc)
+        finally:
+            self._unsubscribe()
+            self._socket_closed()
+            self._last_error = None
+            if task is not None:
+                logger.info("[network-event-mgr] websocket listener stopped")
+
+    def _socket_closed(self) -> None:
+        """Forget the current attempt: nothing is attached until the next frame."""
+        self._ws_connectivity = None
+        self._ws_frame_baseline = None
 
     @staticmethod
     def _on_task_done(task: "asyncio.Task[None]") -> None:
@@ -265,7 +290,10 @@ class EventManager:
         while not self._stopping:
             needs_reauth = False
             try:
-                if self._cm.reconnect_blocked:
+                # The circuit half-opens on a timer; ``reconnect_blocked``
+                # stays latched until a login succeeds, so it must not gate
+                # the retry or an expired cool-down would never be tried.
+                if self._cm.reconnect_cooldown_active:
                     raise ConnectionError("reconnect circuit open")
                 if not await self._cm.ensure_connected():
                     raise ConnectionError("controller not connected")
@@ -275,7 +303,14 @@ class EventManager:
                 self._subscribe(controller)
                 self._last_error = None
                 attached_at = self._clock()
-                await controller.start_websocket()
+                self._ws_connectivity = getattr(controller, "connectivity", None)
+                self._ws_frame_baseline = getattr(self._ws_connectivity, "ws_message_received", None)
+                try:
+                    await controller.start_websocket()
+                finally:
+                    # Returned or raised: the socket is closed either way, and
+                    # nothing is attached until the next attempt's first frame.
+                    self._socket_closed()
                 # Closed by the peer without an error. Only a socket that
                 # stayed up counts as a success; an accept-then-close is a
                 # failed attach and backs off like one.

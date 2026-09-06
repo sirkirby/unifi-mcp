@@ -381,21 +381,34 @@ class TestWebsocketLifecycle:
         controller.block = asyncio.Event()
         calls = {"n": 0}
 
+        controller.closed = asyncio.Event()
+
         async def _ws():
             calls["n"] += 1
             if fail_first is not None and calls["n"] == 1:
                 raise fail_first
             controller.started.set()
             await controller.block.wait()
+            controller.closed.set()
 
         controller.start_websocket = AsyncMock(side_effect=_ws)
         controller.messages.subscribe = MagicMock(return_value=MagicMock(name="unsub"))
+        # aiounifi stamps this on every frame it receives; None until the first one.
+        controller.connectivity.ws_message_received = None
         return controller
+
+    @staticmethod
+    def _frame_received(controller):
+        """The peer sent a frame on the open socket (what aiounifi records)."""
+        import datetime
+
+        controller.connectivity.ws_message_received = datetime.datetime.now(datetime.UTC)
 
     @pytest.fixture
     def cm(self):
         cm = MagicMock()
         cm.reconnect_blocked = False
+        cm.reconnect_cooldown_active = False
         cm.ensure_connected = AsyncMock(return_value=True)
         cm.reauthenticate = AsyncMock(return_value=True)
         cm.controller = self._controller()
@@ -515,7 +528,7 @@ class TestWebsocketLifecycle:
     async def test_loop_waits_out_the_auth_cooldown_without_touching_the_controller(self, cm, sleeps):
         from unifi_core.network.managers.event_manager import EventManager
 
-        cm.reconnect_blocked = True
+        cm.reconnect_cooldown_active = True
         sleeps.until = 3
         mgr = EventManager(cm)
         await mgr.start_listening()
@@ -580,16 +593,106 @@ class TestWebsocketHealth(TestWebsocketLifecycle):
         mgr = EventManager(cm)
         await mgr.start_listening()
         await self._wait(cm.controller.started)
+        self._frame_received(cm.controller)
 
         assert mgr.attached is True
         assert mgr.last_error is None
         await mgr.stop_listening()
 
     @pytest.mark.asyncio
+    async def test_attached_needs_a_confirmed_open_socket(self, cm):
+        """Maintainer probe 1: with the handshake held, the task is alive but no
+        socket is open, so ``attached`` must be false; a received frame is the
+        confirmation; a closure clears it again for the whole backoff."""
+        from unifi_core.network.managers.event_manager import EventManager
+
+        mgr = EventManager(cm)
+        await mgr.start_listening()
+        await self._wait(cm.controller.started)  # inside start_websocket, handshake never completed
+
+        assert mgr.is_listening is True
+        assert mgr.attached is False
+        assert mgr.last_error is None
+
+        self._frame_received(cm.controller)
+        assert mgr.attached is True
+
+        cm.controller.block.set()  # normal closure by the peer
+        await self._wait(cm.controller.closed)
+        assert mgr.attached is False
+        await mgr.stop_listening()
+
+    @pytest.mark.asyncio
+    async def test_a_frame_from_a_previous_socket_does_not_count(self, cm):
+        """A stale timestamp from before this attach is not a confirmation."""
+        import datetime
+
+        from unifi_core.network.managers.event_manager import EventManager
+
+        cm.controller.connectivity.ws_message_received = datetime.datetime.now(datetime.UTC) - datetime.timedelta(
+            hours=1
+        )
+        mgr = EventManager(cm)
+        await mgr.start_listening()
+        await self._wait(cm.controller.started)
+
+        assert mgr.attached is False
+        await mgr.stop_listening()
+
+    @pytest.mark.asyncio
+    async def test_loop_retries_once_the_auth_cooldown_has_expired(self, cm, sleeps):
+        """Maintainer probe 2: ``reconnect_blocked`` stays latched until a login
+        succeeds, but the circuit half-opens on a timer; the listener must let
+        the ConnectionManager's time-aware check decide, so one login attempt
+        happens after expiry."""
+        from unifi_core.network.managers.event_manager import EventManager
+
+        cm.reconnect_blocked = True  # latched from an earlier terminal auth error
+        cm.reconnect_cooldown_active = False  # ...but the cool-down has expired
+        cm.ensure_connected = AsyncMock(return_value=False)  # the half-open attempt fails
+        sleeps.until = 1
+        mgr = EventManager(cm)
+        await mgr.start_listening()
+        await self._wait(sleeps.reached)
+
+        cm.ensure_connected.assert_awaited()
+        await mgr.stop_listening()
+
+    @pytest.mark.asyncio
+    async def test_stop_unsubscribes_even_when_the_caller_is_cancelled(self, cm):
+        """Maintainer probe 3: a cancellation aimed at the stopping caller must
+        propagate AND the subscription must still be released."""
+        import asyncio
+
+        from unifi_core.network.managers.event_manager import EventManager
+
+        unsub = MagicMock(name="unsub")
+        cm.controller.messages.subscribe = MagicMock(return_value=unsub)
+        mgr = EventManager(cm)
+        await mgr.start_listening()
+        await self._wait(cm.controller.started)
+        entered = asyncio.Event()
+
+        async def _shutdown():
+            entered.set()
+            await mgr.stop_listening()
+
+        outer = asyncio.create_task(_shutdown())
+        await self._wait(entered)
+        outer.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await outer
+
+        assert outer.cancelled()
+        unsub.assert_called_once()
+        assert mgr.is_listening is False
+        assert mgr.attached is False
+
+    @pytest.mark.asyncio
     async def test_open_reconnect_circuit_is_reported_as_not_attached(self, cm, sleeps):
         from unifi_core.network.managers.event_manager import EventManager
 
-        cm.reconnect_blocked = True
+        cm.reconnect_cooldown_active = True
         sleeps.until = 1
         mgr = EventManager(cm)
         await mgr.start_listening()

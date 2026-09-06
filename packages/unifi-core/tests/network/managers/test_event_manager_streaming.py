@@ -9,6 +9,7 @@ from unifi_core.network.managers.event_manager import EventManager
 def _make_manager_with_mock_cm() -> EventManager:
     cm = MagicMock()
     cm.reconnect_blocked = False
+    cm.reconnect_cooldown_active = False
     cm.ensure_connected = AsyncMock(return_value=True)
     cm.controller = MagicMock()
     cm.controller.start_websocket = AsyncMock()

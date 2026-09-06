@@ -382,6 +382,17 @@ class ConnectionManager:
         self._reconnect_block_count = 0
 
     @property
+    def reconnect_cooldown_active(self) -> bool:
+        """True while the auth circuit's cool-down is running.
+
+        Unlike :attr:`reconnect_blocked`, which stays latched until a login
+        succeeds, this half-opens on the timer: a caller that retries on its
+        own (the event websocket) consults this and gets one attempt after
+        expiry instead of waiting for a process restart.
+        """
+        return self._reconnect_block_active() is not None
+
+    @property
     def reconnect_blocked(self) -> bool:
         """Whether the last authentication attempt failed terminally with no success since."""
         return self._reconnect_block_error is not None
