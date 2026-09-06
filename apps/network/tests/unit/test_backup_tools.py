@@ -491,3 +491,71 @@ class TestSnmpV3Tools:
         result = await system.update_snmp_settings(enabled_v3=True, confirm=True)
 
         assert result == {"success": False, "error": "Failed to update SNMP settings."}
+
+
+class TestMgmtTools:
+    RECORD = [
+        {
+            "_id": "m1",
+            "key": "mgmt",
+            "x_ssh_enabled": True,
+            "x_ssh_username": "ubnt",
+            "x_ssh_auth_password_enabled": True,
+            "x_ssh_password": "clear",
+            "x_ssh_sha512passwd": "$6$hash",
+            "x_ssh_keys": [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}],
+            "x_ssh_bcrypt_passwd": "$2y$unknown-spelling",
+            "debug_tools_enabled": False,
+            "auto_upgrade": True,
+            "auto_upgrade_hour": 3,
+            "x_api_token": "tok-3f9a",
+            "x_mgmt_key": "0123456789abcdef",
+        }
+    ]
+    SECRETS = ("$6$hash", "0123456789abcdef", "tok-3f9a", "clear", "$2y$unknown-spelling", "AAAA", "laptop")
+
+    def _manager(self, monkeypatch, *, record=None, error=None):
+        from unifi_network_mcp.tools import system
+
+        mgr = MagicMock()
+        mgr._connection.site = "default"
+        mgr.get_settings = AsyncMock(return_value=self.RECORD if record is None else record, side_effect=error)
+        monkeypatch.setattr(system, "system_manager", mgr)
+        return system, mgr
+
+    @pytest.mark.asyncio
+    async def test_get_reports_posture_and_presence_only(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+
+        result = await system.get_mgmt_settings()
+
+        settings = result["mgmt_settings"]
+        assert result["success"] is True
+        assert settings["x_ssh_enabled"] is True
+        assert settings["x_ssh_username"] == "ubnt"
+        assert settings["x_ssh_auth_password_enabled"] is True
+        assert settings["ssh_keys_present"] is True and settings["ssh_keys_count"] == 1
+        assert settings["ssh_password_set"] is True and settings["ssh_password_hash_set"] is True
+        assert settings["mgmt_key_set"] is True and settings["api_token_set"] is True
+        assert settings["auto_upgrade_hour"] == 3
+        for secret in self.SECRETS:
+            assert secret not in repr(result)
+
+    @pytest.mark.asyncio
+    async def test_get_without_keys_reports_absent_and_zero(self, monkeypatch):
+        record = [{"_id": "m1", "key": "mgmt", "x_ssh_enabled": False, "x_ssh_keys": []}]
+        system, _ = self._manager(monkeypatch, record=record)
+
+        settings = (await system.get_mgmt_settings())["mgmt_settings"]
+
+        assert settings["ssh_keys_present"] is False and settings["ssh_keys_count"] == 0
+        assert settings["ssh_password_set"] is False and settings["mgmt_key_set"] is False
+
+    @pytest.mark.asyncio
+    async def test_get_failure_is_reported(self, monkeypatch):
+        system, _ = self._manager(monkeypatch, error=RuntimeError("controller unreachable"))
+
+        result = await system.get_mgmt_settings()
+
+        assert result["success"] is False
+        assert result["error"] == "Failed to get management settings: controller unreachable"

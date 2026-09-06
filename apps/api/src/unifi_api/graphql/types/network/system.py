@@ -27,7 +27,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
-from unifi_core.network.models.system import snmp_from_controller
+from unifi_core.network.models.system import mgmt_from_controller, snmp_from_controller
 from unifi_core.redaction import redact_value
 
 
@@ -332,6 +332,51 @@ class SnmpSettings:
             version=core.version,
             _had_payload=True,
         )
+
+    def to_dict(self) -> dict:
+        if not self._had_payload:
+            return {}
+        d = asdict(self)
+        d.pop("_had_payload", None)
+        return d
+
+
+@strawberry.type(
+    description="Read-only device management (mgmt) posture: device SSH state, key and credential presence. "
+    "No credential, hash or key material is ever returned."
+)
+class MgmtSettings:
+    x_ssh_enabled: bool | None
+    x_ssh_username: str | None
+    x_ssh_auth_password_enabled: bool | None
+    x_ssh_bind_wildcard: bool | None
+    ssh_keys_present: bool | None
+    ssh_keys_count: int | None
+    ssh_password_set: bool | None
+    ssh_password_hash_set: bool | None
+    mgmt_key_set: bool | None
+    api_token_set: bool | None
+    debug_tools_enabled: bool | None
+    auto_upgrade: bool | None
+    auto_upgrade_hour: int | None
+    advanced_feature_enabled: bool | None
+    unifi_idp_enabled: bool | None
+    wifiman_enabled: bool | None
+    _had_payload: strawberry.Private[bool] = True
+
+    @classmethod
+    def render_hint(cls, kind: str) -> dict:
+        return {"kind": kind}
+
+    @classmethod
+    def from_manager_output(cls, obj: Any, *, redact_sensitive: bool = True) -> "MgmtSettings":
+        """The core converter is the allowlist: every credential and the key list
+        become presence flags, so ``redact_sensitive`` has nothing to hide. It is
+        accepted because the presence flags carry secret-shaped names and the
+        typed-projection contract (test_redaction_contract) requires the flag on
+        such types; the policy-gated action path passes it by reflection."""
+        had_payload = isinstance(obj, dict) or (isinstance(obj, list) and bool(obj) and isinstance(obj[0], dict))
+        return cls(**mgmt_from_controller(obj).model_dump(), _had_payload=had_payload)
 
     def to_dict(self) -> dict:
         if not self._had_payload:

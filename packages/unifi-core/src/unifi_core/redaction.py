@@ -13,6 +13,7 @@ REDACTED = "***REDACTED***"
 _SENSITIVE_SEGMENTS = frozenset(
     {
         "password",
+        "passwd",
         "passphrase",
         "psk",
         "secret",
@@ -40,6 +41,7 @@ _SENSITIVE_EXACT = frozenset(
         "auth_key",
         "authkey",
         "x_iapp_key",
+        "x_mgmt_key",
         "xiappkey",
         "community",
         "snmp_community",
@@ -81,6 +83,7 @@ _SENSITIVE_COMPOUNDS = frozenset(
         "presharedkey",
         "authkey",
         "xiappkey",
+        "xmgmtkey",
         "snmpcommunity",
         "tlsauth",
         "tlscrypt",
@@ -98,6 +101,19 @@ def _segments(key: str) -> list[str]:
     return [part for part in re.split(r"[^A-Za-z0-9]+", camel_split.lower()) if part]
 
 
+def _is_secret_entry(key: Any, value: Any) -> bool:
+    """Whether a mapping entry carries secret material to hide.
+
+    A boolean is state, never secret material: ``x_ssh_auth_password_enabled``
+    says whether password login is on and ``ssh_password_hash_set`` whether a
+    hash is stored; the secrets live in other keys. Only the value decision is
+    relaxed: the key stays sensitive for :func:`is_sensitive_key`, so the
+    write-back guard is unchanged, and a string under such a key is still
+    hidden. ``None`` is left alone so an absent field stays visibly absent.
+    """
+    return value is not None and not isinstance(value, bool) and is_sensitive_key(key)
+
+
 def is_sensitive_key(key: Any) -> bool:
     """Return true when a mapping key conventionally carries secret material."""
     if not isinstance(key, str) or not key:
@@ -112,6 +128,9 @@ def is_sensitive_key(key: Any) -> bool:
     if compound in _SENSITIVE_COMPOUNDS:
         return True
     for index, part in enumerate(parts):
+        if part.endswith("passwd") and part != "passwd":
+            # Hash-prefixed spellings: sha512passwd, md5passwd, bcryptpasswd.
+            return True
         if part not in _SENSITIVE_SEGMENTS:
             continue
         if part == "token" and index + 1 < len(parts) and parts[index + 1] in {"count", "counts"}:
@@ -143,9 +162,9 @@ def redact_value(
     decision stays routed through :func:`is_sensitive_key` rather than a
     local hard-coded field list.
     """
-    if not redact_sensitive or value is None:
+    if not redact_sensitive:
         return value
-    return marker if is_sensitive_key(key) else value
+    return marker if _is_secret_entry(key, value) else value
 
 
 def redact_sensitive_fields(
@@ -160,7 +179,7 @@ def redact_sensitive_fields(
     if isinstance(obj, Mapping):
         return {
             key: marker
-            if value is not None and is_sensitive_key(key)
+            if _is_secret_entry(key, value)
             else redact_sensitive_fields(value, redact_sensitive=redact_sensitive, marker=marker)
             for key, value in obj.items()
         }
@@ -332,7 +351,7 @@ def _scrub_any(value: Any, ordered: list[tuple[str, bool]], marker: str) -> Any:
         return _scrub_text(value, ordered, marker)
     if isinstance(value, Mapping):
         scrubbed = {
-            key: REDACTED if item is not None and is_sensitive_key(key) else _scrub_any(item, ordered, marker)
+            key: REDACTED if _is_secret_entry(key, item) else _scrub_any(item, ordered, marker)
             for key, item in value.items()
         }
         # Keep the mapping type: aiohttp's headers are a case-insensitive

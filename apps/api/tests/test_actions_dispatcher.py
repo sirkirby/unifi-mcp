@@ -3781,3 +3781,8 @@ def test_snmp_update_translator_rejects_an_empty_update() -> None:
     """Now that no field is required, an all-omitted call must not PUT an empty document."""
     with pytest.raises(ValueError, match="empty"):
         DISPATCH_ARG_TRANSLATORS["unifi_update_snmp_settings"]({})
+
+
+def test_mgmt_get_translator_targets_the_mgmt_section() -> None:
+    _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_get_mgmt_settings"]({})
+    assert kwargs == {"section": "mgmt"}

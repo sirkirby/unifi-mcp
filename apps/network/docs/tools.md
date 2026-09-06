@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 193 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 195 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -240,11 +240,12 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_update_dns_record` — Update a record (partial updates preserved)
 - `unifi_delete_dns_record` — Delete a record
 
-## System (10 tools)
+## System (12 tools)
 
 - `unifi_get_system_info` — Controller version, uptime, resource usage
 - `unifi_get_network_health` — Per-subsystem health (WAN, LAN, WLAN, VPN)
 - `unifi_get_site_settings` — Site identity, country, timezone, connectivity monitor and NTP servers
+- `unifi_get_mgmt_settings` — Device management settings (device SSH, debug tools, auto-upgrade); stored credentials reported as present/absent
 - `unifi_get_snmp_settings` — SNMP v1/v2c and SNMPv3 state (secrets redacted)
 - `unifi_update_snmp_settings` — Update SNMP v1/v2c (enabled, community) and SNMPv3 (enabled_v3, username, x_password)
 - `unifi_list_backups` — List available backups on the controller

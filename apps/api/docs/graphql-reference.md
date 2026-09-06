@@ -1037,6 +1037,28 @@ type LldpRow {
   capabilities: [String!]!
 }
 
+"""
+Read-only device management (mgmt) posture: device SSH state, key and credential presence. No credential, hash or key material is ever returned.
+"""
+type MgmtSettings {
+  xSshEnabled: Boolean
+  xSshUsername: String
+  xSshAuthPasswordEnabled: Boolean
+  xSshBindWildcard: Boolean
+  sshKeysPresent: Boolean
+  sshKeysCount: Int
+  sshPasswordSet: Boolean
+  sshPasswordHashSet: Boolean
+  mgmtKeySet: Boolean
+  apiTokenSet: Boolean
+  debugToolsEnabled: Boolean
+  autoUpgrade: Boolean
+  autoUpgradeHour: Int
+  advancedFeatureEnabled: Boolean
+  unifiIdpEnabled: Boolean
+  wifimanEnabled: Boolean
+}
+
 """A UniFi LAN/VLAN network configuration."""
 type Network {
   id: ID
@@ -1364,6 +1386,11 @@ type NetworkQuery {
 
   """Get SNMP settings."""
   snmpSettings(controller: ID!, site: String! = "default"): SnmpSettings
+
+  """
+  Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.
+  """
+  mgmtSettings(controller: ID!, site: String! = "default"): MgmtSettings
 
   """Get gateway (USG) security / NAT / connection-tracking settings."""
   gatewaySettings(controller: ID!, site: String! = "default"): GatewaySettings
@@ -2367,6 +2394,7 @@ Read-only access to UniFi Network resources.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).
 - `legacyFirewallRules: [LegacyFirewallRule!]!`  — List legacy (pre-zone-based) firewall rules. Sites still running the legacy engine return no zone-based policies or zones, so an empty firewallPolicies result does not mean no firewall rules are configured — check here as well.
 - `lldpNeighbors: LldpNeighbors`  — Get LLDP neighbors reported by a switch.
+- `mgmtSettings: MgmtSettings`  — Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.
 - `networkDetail: Network`  — Look up a single LAN/VLAN network by id. (Named ``networkDetail`` because ``network`` is reserved for the namespace.)
 - `networkHealth: [NetworkHealth!]!`  — Get the controller's network-health subsystems list.
 - `networkStats: [StatPoint!]!`  — Network-wide stats timeseries.

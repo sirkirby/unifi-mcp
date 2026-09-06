@@ -1,5 +1,5 @@
 {
-  "count": 193,
+  "count": 194,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -75,6 +75,7 @@
     "unifi_get_gateway_stats": "unifi_network_mcp.tools.stats",
     "unifi_get_ips_events": "unifi_network_mcp.tools.stats",
     "unifi_get_lldp_neighbors": "unifi_network_mcp.tools.switch",
+    "unifi_get_mgmt_settings": "unifi_network_mcp.tools.system",
     "unifi_get_network_details": "unifi_network_mcp.tools.network",
     "unifi_get_network_health": "unifi_network_mcp.tools.system",
     "unifi_get_network_stats": "unifi_network_mcp.tools.stats",
@@ -7666,6 +7667,90 @@
         }
       },
       "title": "Get Lldp Neighbors"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "Get the site's device management (mgmt) settings, read-only: device SSH state and user name, password-auth flag, authorised-key count, whether an SSH password, password hash, management key and API token are stored (presence only; values never returned), debug tools, auto-upgrade and its hour.",
+      "name": "unifi_get_mgmt_settings",
+      "schema": {
+        "input": {
+          "properties": {},
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Mgmt Settings"
     },
     {
       "annotations": {

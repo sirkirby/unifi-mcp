@@ -3,6 +3,7 @@
 # tool: unifi_get_system_info
 # tool: unifi_get_site_settings
 # tool: unifi_get_snmp_settings
+# tool: unifi_get_mgmt_settings
 # tool: unifi_get_autobackup_settings
 # tool: unifi_get_gateway_settings
 # tool: unifi_list_backups
@@ -366,3 +367,40 @@ async def test_voucher_detail(tmp_path, monkeypatch):
     assert body.get("errors") is None, body
     v = body["data"]["network"]["voucher"]
     assert v["code"] == "ABC-123"
+
+
+@pytest.mark.asyncio
+async def test_mgmt_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await bootstrap(tmp_path, product="network")
+    stub_managers(
+        monkeypatch,
+        {
+            ("network", "system_manager", "get_settings"): [
+                {
+                    "x_ssh_enabled": True,
+                    "x_ssh_username": "ubnt",
+                    "x_ssh_password": "clear",
+                    "x_mgmt_key": "k",
+                    "x_ssh_keys": [{"name": "laptop", "key": "AAAA"}],
+                },
+            ],
+        },
+    )
+    body = await graphql_query(
+        app,
+        key,
+        f'''{{
+        network {{ mgmtSettings(controller: "{cid}") {{
+            xSshEnabled xSshUsername sshPasswordSet mgmtKeySet sshKeysPresent sshKeysCount apiTokenSet
+        }} }}
+    }}''',
+    )
+    assert body.get("errors") is None, body
+    mgmt = body["data"]["network"]["mgmtSettings"]
+    assert mgmt["xSshEnabled"] is True
+    assert mgmt["xSshUsername"] == "ubnt"
+    assert mgmt["sshPasswordSet"] is True and mgmt["mgmtKeySet"] is True and mgmt["apiTokenSet"] is False
+    assert mgmt["sshKeysPresent"] is True and mgmt["sshKeysCount"] == 1
+    for secret in ("clear", "AAAA", "laptop"):
+        assert secret not in str(body)

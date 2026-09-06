@@ -251,3 +251,28 @@ def test_snmp_settings_detail_exposes_v3_fields_and_redacts_the_password() -> No
     assert out["x_password"] == "***REDACTED***"
     raw = SnmpSettings.from_manager_output(sample, redact_sensitive=False).to_dict()
     assert raw["x_password"] == "p"
+
+
+def test_mgmt_settings_detail_unwraps_and_never_carries_credentials_or_keys() -> None:
+    from unifi_api.graphql.types.network.system import MgmtSettings
+
+    sample = [
+        {
+            "x_ssh_enabled": True,
+            "x_ssh_username": "ubnt",
+            "x_ssh_password": "clear",
+            "x_ssh_sha512passwd": "$6$hash",
+            "x_mgmt_key": "0123456789abcdef",
+            "x_ssh_keys": [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}],
+            "auto_upgrade_hour": 3,
+        }
+    ]
+    out = MgmtSettings.from_manager_output(sample).to_dict()
+    assert out["x_ssh_enabled"] is True and out["x_ssh_username"] == "ubnt"
+    assert out["ssh_password_set"] is True and out["ssh_password_hash_set"] is True
+    assert out["mgmt_key_set"] is True and out["api_token_set"] is False
+    assert out["ssh_keys_present"] is True and out["ssh_keys_count"] == 1
+    for secret in ("clear", "$6$hash", "0123456789abcdef", "AAAA", "laptop"):
+        assert secret not in repr(out)
+    assert MgmtSettings.from_manager_output(None).to_dict() == {}
+    assert MgmtSettings.from_manager_output([]).to_dict() == {}
