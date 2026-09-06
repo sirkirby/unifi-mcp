@@ -504,6 +504,32 @@ async def test_action_endpoint_update_ack_tuple_success(tmp_path, monkeypatch) -
 
 
 @pytest.mark.asyncio
+async def test_action_endpoint_snmp_update_accepts_v3_fields_without_enabled(tmp_path, monkeypatch) -> None:
+    """The regenerated catalog no longer requires ``enabled`` and knows the v3 fields."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+
+    from unifi_api.services import actions as actions_svc
+
+    monkeypatch.setattr(actions_svc, "dispatch_action", AsyncMock(return_value=(True, None)))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post(
+            "/v1/actions/unifi_update_snmp_settings",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "site": "default",
+                "controller": cid,
+                "args": {"enabled_v3": True, "username": "monitor", "x_password": "p"},
+                "confirm": True,
+            },
+        )
+
+    assert r.status_code == 200, r.text
+    assert r.json() == {"success": True}
+
+
+@pytest.mark.asyncio
 async def test_action_endpoint_update_ack_tuple_failure(tmp_path, monkeypatch) -> None:
     """Regression: a FAILED update ack tuple must report success=false with the
     error message — not top-level success=true with the failure stringified into

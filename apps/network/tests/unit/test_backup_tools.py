@@ -301,3 +301,193 @@ class TestSnmpTools:
 
         assert result["success"] is True
         assert result["snmp_settings"]["community"] == REDACTED
+
+
+class TestSnmpV3Tools:
+    """SNMPv3 is a second service on the same record; the tools must show it
+    and set it, and the v3 password must never come back in clear."""
+
+    RECORD = [
+        {"enabled": True, "community": "public", "enabledV3": True, "username": "monitor", "x_password": "v3-secret"}
+    ]
+
+    def _manager(self, monkeypatch, *, update_ok=True):
+        from unifi_network_mcp.tools import system
+
+        mgr = MagicMock()
+        mgr._connection.site = "default"
+        mgr.get_settings = AsyncMock(return_value=self.RECORD)
+        mgr.update_settings = AsyncMock(return_value=update_ok)
+        monkeypatch.setattr(system, "system_manager", mgr)
+        return system, mgr
+
+    @pytest.mark.asyncio
+    async def test_get_surfaces_v3_and_redacts_the_password(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+
+        result = await system.get_snmp_settings()
+
+        settings = result["snmp_settings"]
+        assert settings["enabled_v3"] is True
+        assert settings["username"] == "monitor"
+        assert settings["x_password"] == REDACTED
+        assert "v3-secret" not in repr(result)
+
+    @pytest.mark.asyncio
+    async def test_get_policy_disabled_returns_raw_password(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+        monkeypatch.setenv("UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS", "false")
+
+        result = await system.get_snmp_settings()
+
+        assert result["snmp_settings"]["x_password"] == "v3-secret"
+
+    @pytest.mark.asyncio
+    async def test_preview_shows_current_v3_state_and_redacts_both_passwords(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+
+        result = await system.update_snmp_settings(enabled_v3=False, username="ro", x_password="new", confirm=False)
+
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["current"]["enabled_v3"] is True
+        assert result["preview"]["current"]["x_password"] == REDACTED
+        assert result["preview"]["proposed"] == {"enabled_v3": False, "username": "ro", "x_password": REDACTED}
+        assert "new" not in repr(result["preview"]) and "v3-secret" not in repr(result)
+
+    @pytest.mark.asyncio
+    async def test_preview_policy_disabled_shows_the_proposed_password(self, monkeypatch):
+        system, _ = self._manager(monkeypatch)
+        monkeypatch.setenv("UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS", "false")
+
+        result = await system.update_snmp_settings(x_password="new", confirm=False)
+
+        assert result["preview"]["proposed"]["x_password"] == "new"
+
+    @pytest.mark.asyncio
+    async def test_confirm_sends_controller_keys_and_echoes_model_keys(self, monkeypatch):
+        system, mgr = self._manager(monkeypatch)
+
+        result = await system.update_snmp_settings(enabled_v3=True, username="ro", x_password="new", confirm=True)
+
+        mgr.update_settings.assert_awaited_once_with("snmp", {"enabledV3": True, "username": "ro", "x_password": "new"})
+        assert result["success"] is True
+        assert result["snmp_settings"] == {"enabled_v3": True, "username": "ro", "x_password": REDACTED}
+
+    @pytest.mark.asyncio
+    async def test_v3_only_update_does_not_require_enabled(self, monkeypatch):
+        """Turning v3 off must not force the caller to restate v1 state."""
+        system, mgr = self._manager(monkeypatch)
+
+        result = await system.update_snmp_settings(enabled_v3=False, confirm=True)
+
+        mgr.update_settings.assert_awaited_once_with("snmp", {"enabledV3": False})
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_no_fields_is_rejected(self, monkeypatch):
+        system, mgr = self._manager(monkeypatch)
+
+        result = await system.update_snmp_settings(confirm=True)
+
+        assert result["success"] is False
+        mgr.update_settings.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_controller_error_text_is_not_echoed_or_logged(self, monkeypatch, caplog):
+        """The PUT body carries a password; a controller validation error can
+        quote the document it rejected."""
+        import logging
+
+        system, mgr = self._manager(monkeypatch)
+        mgr.update_settings = AsyncMock(side_effect=RuntimeError("invalid document: x_password=hunter2"))
+
+        with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
+            result = await system.update_snmp_settings(x_password="hunter2", confirm=True)
+
+        assert result["success"] is False
+        assert "hunter2" not in result["error"]
+        assert "RuntimeError" in result["error"]
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert errors and "hunter2" not in caplog.text
+        assert all(r.exc_info is None for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_controller_error_code_is_reported(self, monkeypatch):
+        """A controller api.err.* answer is the actionable part; the body (which
+        can quote the rejected document) is not."""
+        from aiounifi.errors import AiounifiException
+
+        system, mgr = self._manager(monkeypatch)
+        mgr.update_settings = AsyncMock(
+            side_effect=AiounifiException(
+                {"meta": {"rc": "error", "msg": "api.err.InvalidPayload"}, "data": [{"x_password": "hunter2"}]}
+            )
+        )
+
+        result = await system.update_snmp_settings(x_password="hunter2", confirm=True)
+
+        assert result["error"] == "Failed to update SNMP settings: api.err.InvalidPayload"
+
+    @pytest.mark.asyncio
+    async def test_preview_failure_leaks_nothing(self, monkeypatch, caplog):
+        import logging
+
+        system, mgr = self._manager(monkeypatch)
+        mgr.get_settings = AsyncMock(side_effect=RuntimeError("bad doc x_password=v3-secret"))
+
+        with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
+            result = await system.update_snmp_settings(x_password="new", confirm=False)
+
+        assert result["success"] is False
+        assert "RuntimeError" in result["error"] and "v3-secret" not in result["error"]
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert errors and "v3-secret" not in caplog.text
+        assert all(r.exc_info is None for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_get_failure_leaks_nothing(self, monkeypatch, caplog):
+        """A non-string password from the controller makes pydantic quote the
+        input value; the getter must not echo or log it."""
+        import logging
+
+        system, mgr = self._manager(monkeypatch)
+        mgr.get_settings = AsyncMock(return_value=[{"enabled": True, "x_password": {"v": "hunter2"}}])
+
+        with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
+            result = await system.get_snmp_settings()
+
+        assert result["success"] is False
+        assert "ValidationError" in result["error"] and "hunter2" not in result["error"]
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert errors and "hunter2" not in caplog.text
+        assert all(r.exc_info is None for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_enabled_false_alone_is_sent(self, monkeypatch):
+        system, mgr = self._manager(monkeypatch)
+
+        await system.update_snmp_settings(enabled=False, confirm=True)
+
+        mgr.update_settings.assert_awaited_once_with("snmp", {"enabled": False})
+
+    @pytest.mark.asyncio
+    async def test_mixed_v1_and_v3_update(self, monkeypatch):
+        system, mgr = self._manager(monkeypatch)
+
+        result = await system.update_snmp_settings(
+            enabled=False, community="c", enabled_v3=True, x_password="p", confirm=True
+        )
+
+        mgr.update_settings.assert_awaited_once_with(
+            "snmp", {"enabled": False, "community": "c", "enabledV3": True, "x_password": "p"}
+        )
+        assert result["snmp_settings"]["community"] == REDACTED
+        assert result["snmp_settings"]["x_password"] == REDACTED
+
+    @pytest.mark.asyncio
+    async def test_controller_rejecting_the_write_is_reported(self, monkeypatch):
+        system, _ = self._manager(monkeypatch, update_ok=False)
+
+        result = await system.update_snmp_settings(enabled_v3=True, confirm=True)
+
+        assert result == {"success": False, "error": "Failed to update SNMP settings."}

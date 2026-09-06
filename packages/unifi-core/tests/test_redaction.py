@@ -413,3 +413,12 @@ def test_scrub_cost_stays_flat_as_an_adversarial_secret_grows():
     short, long = _cost(12), _cost(24)
 
     assert long < max(short * 8, 0.05), f"cost grew from {short:.4f}s to {long:.4f}s"
+
+
+def test_snmp_v3_secret_is_redacted_and_its_siblings_stay_visible() -> None:
+    """The v3 password key is x_password; the user name and the two enable
+    flags are plain state an operator needs to see."""
+    assert is_sensitive_key("x_password") is True
+    assert is_sensitive_key("username") is False
+    assert is_sensitive_key("enabledV3") is False
+    assert is_sensitive_key("enabled_v3") is False

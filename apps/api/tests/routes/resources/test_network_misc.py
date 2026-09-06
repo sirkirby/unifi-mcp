@@ -279,6 +279,33 @@ async def test_get_snmp_settings_happy_path(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_snmp_settings_exposes_v3_and_redacts_the_password(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+
+    fake = [{"enabled": True, "community": "public", "enabledV3": True, "username": "monitor", "x_password": "p"}]
+
+    async def fake_get(self, section):
+        return fake
+
+    from unifi_core.network.managers.system_manager import SystemManager
+
+    monkeypatch.setattr(SystemManager, "get_settings", fake_get)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.get(
+            f"/v1/sites/default/snmp-settings?controller={cid}",
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data["enabled_v3"] is True
+    assert data["username"] == "monitor"
+    assert data["x_password"] == "***REDACTED***"
+
+
+@pytest.mark.asyncio
 async def test_get_gateway_settings_happy_path(tmp_path, monkeypatch) -> None:
     """Gateway (USG) settings singleton projects through the detail route."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
@@ -322,7 +349,7 @@ async def test_get_snmp_settings_policy_disabled_returns_raw_community(tmp_path,
 
     async def fake_get(self, section):
         assert section == "snmp"
-        return [{"enabled": True, "community": "public", "port": 161, "version": "v2c"}]
+        return [{"enabled": True, "community": "public", "port": 161, "version": "v2c", "x_password": "p"}]
 
     from unifi_core.network.managers.system_manager import SystemManager
 
@@ -335,3 +362,4 @@ async def test_get_snmp_settings_policy_disabled_returns_raw_community(tmp_path,
         )
     assert r.status_code == 200, r.text
     assert r.json()["data"]["community"] == "public"
+    assert r.json()["data"]["x_password"] == "p"

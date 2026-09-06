@@ -27,6 +27,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
+from unifi_core.network.models.system import snmp_from_controller
 from unifi_core.redaction import redact_value
 
 
@@ -290,6 +291,9 @@ class SiteSettings:
 class SnmpSettings:
     enabled: bool
     community: str | None
+    enabled_v3: bool | None
+    username: str | None
+    x_password: str | None
     port: int | None
     version: str | None
     _had_payload: strawberry.Private[bool] = True
@@ -308,15 +312,24 @@ class SnmpSettings:
             return cls(
                 enabled=False,
                 community=None,
+                enabled_v3=None,
+                username=None,
+                x_password=None,
                 port=None,
                 version=None,
                 _had_payload=False,
             )
+        # Non-secret fields come from the core converter (one parser, one
+        # alias table); the two secrets are redacted here, at the boundary.
+        core = snmp_from_controller(obj)
         return cls(
             enabled=bool(obj.get("enabled", False)),
             community=redact_value("community", _get(obj, "community", default=""), redact_sensitive=redact_sensitive),
-            port=_get(obj, "port"),
-            version=_get(obj, "version"),
+            enabled_v3=core.enabled_v3,
+            username=core.username,
+            x_password=redact_value("x_password", core.x_password, redact_sensitive=redact_sensitive),
+            port=core.port,
+            version=core.version,
             _had_payload=True,
         )
 

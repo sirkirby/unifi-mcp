@@ -1905,6 +1905,9 @@ type Snapshot {
 type SnmpSettings {
   enabled: Boolean!
   community: String
+  enabledV3: Boolean
+  username: String
+  xPassword: String
   port: Int
   version: String
 }

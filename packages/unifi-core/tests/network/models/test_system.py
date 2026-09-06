@@ -70,6 +70,39 @@ class TestSnmpSettingsFieldSets:
         all_fields = frozenset(SnmpSettings.model_fields.keys())
         assert SNMPSETTINGS_MUTABLE_FIELDS | SNMPSETTINGS_READ_ONLY_FIELDS == all_fields
 
+    def test_mutable_fields_contains_the_v3_fields(self) -> None:
+        assert {"enabled_v3", "username", "x_password"} <= SNMPSETTINGS_MUTABLE_FIELDS
+
+
+class TestSnmpV3:
+    """The snmp record carries two independent services: v1/v2c (enabled,
+    community) and v3 (enabledV3, username, x_password). Controller key names
+    verified on Network 10.6.102; x_password is echoed by the controller on GET."""
+
+    def test_from_controller_reads_v3_keys(self) -> None:
+        raw = [{"enabled": False, "community": "public", "enabledV3": True, "username": "monitor", "x_password": "p"}]
+        settings = snmp_from_controller(raw)
+        assert settings.enabled is False
+        assert settings.enabled_v3 is True
+        assert settings.username == "monitor"
+        assert settings.x_password == "p"  # lossless; redaction is a response-boundary concern
+
+    def test_from_controller_leaves_v3_none_when_absent(self) -> None:
+        settings = snmp_from_controller([{"enabled": True, "community": "public"}])
+        assert settings.enabled_v3 is None
+        assert settings.username is None
+        assert settings.x_password is None
+
+    def test_to_controller_update_renames_enabled_v3_and_drops_read_only(self) -> None:
+        result = snmp_to_controller_update({"enabled_v3": True, "username": "u", "x_password": "p", "port": 1})
+        assert result == {"enabledV3": True, "username": "u", "x_password": "p"}
+
+    def test_to_controller_update_keeps_false_flags(self) -> None:
+        assert snmp_to_controller_update({"enabled": False, "enabled_v3": False}) == {
+            "enabled": False,
+            "enabledV3": False,
+        }
+
 
 class TestAutoBackupSettingsFieldSets:
     def test_mutable_fields_contains_all_autobackup_keys(self) -> None:

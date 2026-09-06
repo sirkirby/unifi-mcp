@@ -338,3 +338,29 @@ class TestGetNetworkHealth:
 
         assert result == health_data
         mock_connection._update_cache.assert_called_once_with("health_default", health_data, timeout=10)
+
+
+@pytest.mark.asyncio
+async def test_update_settings_scrubs_submitted_secret_from_failure_log(caplog):
+    """The settings document can carry secrets (SNMPv3 password, SSH password);
+    a controller error that quotes it must reach the log with the value scrubbed."""
+    import logging
+    from unittest.mock import AsyncMock, MagicMock
+
+    from unifi_core.network.managers.system_manager import SystemManager
+
+    conn = MagicMock()
+    conn.site = "default"
+    conn.get_cached = MagicMock(return_value=None)
+    conn._update_cache = MagicMock()
+    conn._invalidate_cache = MagicMock()
+    conn.ensure_connected = AsyncMock(return_value=True)
+    conn.request = AsyncMock(side_effect=[[{"_id": "s1", "key": "snmp"}], RuntimeError("rejected: x_password=hunter2")])
+    manager = SystemManager(conn)
+
+    with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
+        with pytest.raises(RuntimeError):
+            await manager.update_settings("snmp", {"x_password": "hunter2"})
+
+    assert "hunter2" not in caplog.text
+    assert "rejected: x_password=***REDACTED***" in caplog.text
