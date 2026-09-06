@@ -64,6 +64,21 @@ def firewall_manager(mock_connection):
     return FirewallManager(mock_connection)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("direction", ["source", "destination"])
+@pytest.mark.parametrize(
+    "endpoint",
+    [{"ports": ["445"]}, {"port_matching_type": "SPECIFIC"}, {"port_matching_type": "SPECIFIC", "port": 445}],
+)
+async def test_create_policy_rejects_invalid_ports_before_connection(
+    firewall_manager, mock_connection, direction, endpoint
+):
+    with pytest.raises(ValueError, match=rf"{direction}\.port"):
+        await firewall_manager.create_firewall_policy({direction: endpoint})
+    mock_connection.ensure_connected.assert_not_awaited()
+    mock_connection.request.assert_not_awaited()
+
+
 class TestUpdateTrafficRouteMutationSafety:
     """Ensure update_traffic_route does not mutate the cached TrafficRoute.raw."""
 

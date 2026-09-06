@@ -496,7 +496,36 @@ class TestCreateFirewallPolicyV2Validation:
 
 
 class TestCreateZoneTargetingValidation:
-    """Test matching_target_type validation for zone-based policies."""
+    """Test matching_target_type and port validation for zone-based policies."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("confirm", [False, True])
+    @pytest.mark.parametrize("direction", ["source", "destination"])
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            {"ports": ["445"]},
+            {"port_matching_type": "SPECIFIC"},
+            {"port_matching_type": "SPECIFIC", "port": 445},
+            {"port_matching_type": "SPECIFIC", "port": " "},
+        ],
+    )
+    async def test_invalid_ports_never_reach_manager(self, confirm, direction, endpoint):
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        data = {
+            "name": "Invalid port",
+            "action": "ALLOW",
+            "source": {"zone_id": "source", "matching_target": "ANY"},
+            "destination": {"zone_id": "destination", "matching_target": "ANY"},
+        }
+        data[direction].update(endpoint)
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as manager:
+            manager.create_firewall_policy = AsyncMock()
+            result = await create_firewall_policy(policy_data=data, confirm=confirm)
+        assert result["success"] is False
+        assert direction + ".port" in result["error"]
+        manager.create_firewall_policy.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_missing_matching_target_type_for_ip(self):
@@ -648,6 +677,133 @@ class TestCreateZoneTargetingValidation:
 
         assert result["success"] is False
         assert "ip_group_id" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_ports_array_is_rejected_not_silently_accepted(self):
+        """A 'ports' array (the plural, undocumented guess) must be rejected at
+        preview/create time instead of being echoed back and only failing on the
+        live controller write with MissingFirewallDestinationPort."""
+        zone_data = {
+            "name": "Bad port shape",
+            "action": "ALLOW",
+            "protocol": "tcp",
+            "source": {
+                "zone_id": "untrusted",
+                "matching_target": "IP",
+                "matching_target_type": "SPECIFIC",
+                "ips": ["10.0.28.10"],
+                "port_matching_type": "ANY",
+            },
+            "destination": {
+                "zone_id": "internal",
+                "matching_target": "IP",
+                "matching_target_type": "SPECIFIC",
+                "ips": ["10.0.15.10"],
+                "port_matching_type": "SPECIFIC",
+                "ports": ["445"],
+            },
+        }
+
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is False
+        assert "ports" in result["error"]
+        assert "port" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_non_string_port_for_specific_port_matching_type_fails(self):
+        """A truthy but non-string port ([\"445\"] or the int 445) must fail the
+        same as a missing one, since the controller only accepts a single string
+        (a truthiness check alone lets these through)."""
+        for bad_port in (["445"], 445):
+            zone_data = {
+                "name": "Malformed port",
+                "action": "ALLOW",
+                "protocol": "tcp",
+                "source": {"zone_id": "untrusted", "matching_target": "ANY"},
+                "destination": {
+                    "zone_id": "internal",
+                    "matching_target": "IP",
+                    "matching_target_type": "SPECIFIC",
+                    "ips": ["10.0.15.10"],
+                    "port_matching_type": "SPECIFIC",
+                    "port": bad_port,
+                },
+            }
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+            assert result["success"] is False
+            assert "port" in result["error"]
+            assert "SPECIFIC" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_missing_port_for_specific_port_matching_type_fails(self):
+        """port_matching_type='SPECIFIC' without a port string should fail validation."""
+        zone_data = {
+            "name": "Missing port",
+            "action": "ALLOW",
+            "protocol": "tcp",
+            "source": {"zone_id": "untrusted", "matching_target": "ANY"},
+            "destination": {
+                "zone_id": "internal",
+                "matching_target": "IP",
+                "matching_target_type": "SPECIFIC",
+                "ips": ["10.0.15.10"],
+                "port_matching_type": "SPECIFIC",
+                # missing port
+            },
+        }
+
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is False
+        assert "port" in result["error"]
+        assert "SPECIFIC" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_specific_port_matching_type_with_port_string_passes_validation(self):
+        """The documented shape (singular 'port' string) must pass validation and
+        reach the manager, matching the controller's actual accepted shape."""
+        zone_data = {
+            "name": "Allow SMB to host",
+            "action": "ALLOW",
+            "protocol": "tcp",
+            "source": {
+                "zone_id": "untrusted",
+                "matching_target": "IP",
+                "matching_target_type": "SPECIFIC",
+                "ips": ["10.0.28.10"],
+                "port_matching_type": "ANY",
+            },
+            "destination": {
+                "zone_id": "internal",
+                "matching_target": "IP",
+                "matching_target_type": "SPECIFIC",
+                "ips": ["10.0.15.10"],
+                "port_matching_type": "SPECIFIC",
+                "port": "445",
+            },
+        }
+        created_raw = {**zone_data, "_id": "new_port_001"}
+        mock_created = MagicMock()
+        mock_created.raw = created_raw
+
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.create_firewall_policy = AsyncMock(return_value=mock_created)
+
+            from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+            result = await create_firewall_policy(policy_data=zone_data, confirm=True)
+
+        assert result["success"] is True
+        assert result["policy_id"] == "new_port_001"
 
 
 # ---------------------------------------------------------------------------

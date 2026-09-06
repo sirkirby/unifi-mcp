@@ -23,6 +23,71 @@ from unifi_core.redaction import REDACTED
 PRODUCTION_REGISTRY = ManifestRegistry.load()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [False, True])
+@pytest.mark.parametrize("direction", ["source", "destination"])
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        {"ports": ["445"]},
+        {"port_matching_type": "SPECIFIC"},
+        {"port_matching_type": "SPECIFIC", "port": ["445"]},
+        {"port_matching_type": "SPECIFIC", "port": 445},
+        {"port_matching_type": "SPECIFIC", "port": ""},
+        {"port_matching_type": "SPECIFIC", "port": " "},
+    ],
+)
+async def test_create_firewall_policy_rejects_invalid_ports_before_preview_or_manager(confirm, direction, endpoint):
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock()
+    data = {"name": "Invalid ports", "action": "ALLOW", direction: endpoint}
+    with pytest.raises(ValueError, match=rf"{direction}\.port"):
+        await dispatch_action(
+            registry=PRODUCTION_REGISTRY,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="unifi_create_firewall_policy",
+            controller_id="cid",
+            controller_products=["network"],
+            site="default",
+            args={"policy_data": data},
+            confirm=confirm,
+        )
+    factory.get_domain_manager.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [False, True])
+@pytest.mark.parametrize("direction", ["source", "destination"])
+async def test_create_firewall_policy_valid_port_preserves_payload(confirm, direction):
+    import copy
+
+    manager = MagicMock()
+    manager.create_firewall_policy = AsyncMock(return_value={"_id": "new-policy"})
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    data = {"name": "Valid port", "action": "ALLOW", direction: {"port_matching_type": "SPECIFIC", "port": "445"}}
+    before = copy.deepcopy(data)
+    result = await dispatch_action(
+        registry=PRODUCTION_REGISTRY,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_create_firewall_policy",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"policy_data": data},
+        confirm=confirm,
+    )
+    assert data == before
+    if confirm:
+        manager.create_firewall_policy.assert_awaited_once_with(policy_data=before)
+        assert result == {"_id": "new-policy"}
+    else:
+        assert isinstance(result, MutationPreview)
+        factory.get_domain_manager.assert_not_awaited()
+
+
 def _registry_with(tool: ToolEntry) -> ManifestRegistry:
     if tool.read_only_hint is None and PRODUCTION_REGISTRY.has(tool.name):
         production_entry = PRODUCTION_REGISTRY.resolve(tool.name)

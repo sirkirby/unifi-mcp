@@ -18,6 +18,7 @@ from unifi_core.network.models.firewall import (
     legacy_policy_error,
     normalize_policy_enums,
     normalize_policy_update,
+    validate_policy_port_targeting,
 )
 from unifi_core.network.read_views import LEGACY_ENGINE_HINT, shape_firewall_policy_list
 from unifi_core.redaction import redact_sensitive_fields
@@ -298,6 +299,10 @@ def _validate_zone_targeting(validated_data: Dict[str, Any]) -> str | None:
                 return "%s.ips array is required when matching_target is 'IP'." % direction
         if target == "NETWORK" and not ep.get("network_ids"):
             return "%s.network_ids array is required when matching_target is 'NETWORK'." % direction
+    try:
+        validate_policy_port_targeting(validated_data)
+    except ValueError as exc:
+        return str(exc)
     return None
 
 
@@ -310,8 +315,10 @@ def _validate_zone_targeting(validated_data: Dict[str, Any]) -> str | None:
         "targeting: matching_target='IP', matching_target_type='SPECIFIC', "
         "ips=[...]. For network targeting: matching_target='NETWORK', "
         "matching_target_type='OBJECT', network_ids=[...]. For any in zone: "
-        "matching_target='ANY'. Use unifi_list_firewall_zones to discover "
-        "zone_ids; unifi_list_networks for network_ids."
+        "matching_target='ANY'. For port targeting (same source/destination dict): "
+        "port_matching_type='SPECIFIC', port='445' (a single string, not a 'ports' "
+        "array). Use unifi_list_firewall_zones to discover zone_ids; "
+        "unifi_list_networks for network_ids."
     ),
     permission_category="firewall_policies",
     permission_action="create",
@@ -327,9 +334,11 @@ async def create_firewall_policy(
                 "destination (same structure). For IP targeting: matching_target='IP', "
                 "matching_target_type='SPECIFIC', ips=[...]. For network targeting: "
                 "matching_target='NETWORK', matching_target_type='OBJECT', "
-                "network_ids=[...]. For any in zone: matching_target='ANY'. Optional: "
-                "enabled, description, protocol, connection_state_type, connection_states, "
-                "ip_version, schedule, logging."
+                "network_ids=[...]. For any in zone: matching_target='ANY'. For port "
+                "targeting: port_matching_type='SPECIFIC', port='445' (a single "
+                "string, not a 'ports' array). Optional: enabled, description, "
+                "protocol, connection_state_type, connection_states, ip_version, "
+                "schedule, logging."
             )
         ),
     ],
