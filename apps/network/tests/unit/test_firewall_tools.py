@@ -496,6 +496,8 @@ class TestCreateFirewallPolicyV2Validation:
 
 
 class TestCreateZoneTargetingValidation:
+    """Test matching_target_type and port validation for zone-based policies."""
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("confirm", [False, True])
     @pytest.mark.parametrize("direction", ["source", "destination"])
@@ -524,8 +526,6 @@ class TestCreateZoneTargetingValidation:
         assert result["success"] is False
         assert direction + ".port" in result["error"]
         manager.create_firewall_policy.assert_not_awaited()
-
-    """Test matching_target_type validation for zone-based policies."""
 
     @pytest.mark.asyncio
     async def test_missing_matching_target_type_for_ip(self):
