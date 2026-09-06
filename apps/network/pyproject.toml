@@ -17,7 +17,7 @@ dependencies = [
     # Core 0.4.37; explicit zero event limits require Core 0.4.39. UTC device
     # timestamps and expanded site settings require Core 0.4.43.
     # Firewall index rejection and uncapped client lookup require Core 0.4.44.
-    "unifi-core[network]>=0.4.44,<0.5",
+    "unifi-core[network]>=0.4.45,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.1.1,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security

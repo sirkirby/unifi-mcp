@@ -18,6 +18,7 @@ from unifi_core.network.models.firewall import (
     legacy_policy_error,
     normalize_policy_enums,
     normalize_policy_update,
+    validate_policy_port_targeting,
 )
 from unifi_core.network.read_views import LEGACY_ENGINE_HINT, shape_firewall_policy_list
 from unifi_core.redaction import redact_sensitive_fields
@@ -298,14 +299,10 @@ def _validate_zone_targeting(validated_data: Dict[str, Any]) -> str | None:
                 return "%s.ips array is required when matching_target is 'IP'." % direction
         if target == "NETWORK" and not ep.get("network_ids"):
             return "%s.network_ids array is required when matching_target is 'NETWORK'." % direction
-        if "ports" in ep:
-            return (
-                "%s.ports is not a valid field; the controller expects %s.port as a single "
-                "string (e.g. '445'), not a plural 'ports' array." % (direction, direction)
-            )
-        port = ep.get("port")
-        if ep.get("port_matching_type") == "SPECIFIC" and not (isinstance(port, str) and port):
-            return "%s.port is required when port_matching_type is 'SPECIFIC'." % direction
+    try:
+        validate_policy_port_targeting(validated_data)
+    except ValueError as exc:
+        return str(exc)
     return None
 
 

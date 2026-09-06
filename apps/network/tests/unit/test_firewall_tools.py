@@ -496,6 +496,35 @@ class TestCreateFirewallPolicyV2Validation:
 
 
 class TestCreateZoneTargetingValidation:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("confirm", [False, True])
+    @pytest.mark.parametrize("direction", ["source", "destination"])
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            {"ports": ["445"]},
+            {"port_matching_type": "SPECIFIC"},
+            {"port_matching_type": "SPECIFIC", "port": 445},
+            {"port_matching_type": "SPECIFIC", "port": " "},
+        ],
+    )
+    async def test_invalid_ports_never_reach_manager(self, confirm, direction, endpoint):
+        from unifi_network_mcp.tools.firewall import create_firewall_policy
+
+        data = {
+            "name": "Invalid port",
+            "action": "ALLOW",
+            "source": {"zone_id": "source", "matching_target": "ANY"},
+            "destination": {"zone_id": "destination", "matching_target": "ANY"},
+        }
+        data[direction].update(endpoint)
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as manager:
+            manager.create_firewall_policy = AsyncMock()
+            result = await create_firewall_policy(policy_data=data, confirm=confirm)
+        assert result["success"] is False
+        assert direction + ".port" in result["error"]
+        manager.create_firewall_policy.assert_not_awaited()
+
     """Test matching_target_type validation for zone-based policies."""
 
     @pytest.mark.asyncio
@@ -653,7 +682,7 @@ class TestCreateZoneTargetingValidation:
     async def test_ports_array_is_rejected_not_silently_accepted(self):
         """A 'ports' array (the plural, undocumented guess) must be rejected at
         preview/create time instead of being echoed back and only failing on the
-        live controller write with MissingFirewallDestinationPort (#608)."""
+        live controller write with MissingFirewallDestinationPort."""
         zone_data = {
             "name": "Bad port shape",
             "action": "ALLOW",
@@ -687,7 +716,7 @@ class TestCreateZoneTargetingValidation:
     async def test_non_string_port_for_specific_port_matching_type_fails(self):
         """A truthy but non-string port ([\"445\"] or the int 445) must fail the
         same as a missing one, since the controller only accepts a single string
-        (#608 review: a truthiness check alone lets these through)."""
+        (a truthiness check alone lets these through)."""
         for bad_port in (["445"], 445):
             zone_data = {
                 "name": "Malformed port",

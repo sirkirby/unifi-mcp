@@ -677,6 +677,15 @@ def _translate_list_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict
 # Tool exposes ``update_data``; manager method takes ``updates``.
 
 
+def _translate_create_firewall_policy(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Apply shared port validation before the API preview/execute split."""
+    from unifi_core.network.models.firewall import validate_policy_port_targeting
+
+    policy_data = args["policy_data"]
+    validate_policy_port_targeting(policy_data)
+    return (), {"policy_data": policy_data}
+
+
 def _translate_update_firewall_policy(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     """Validate and normalize a V2 firewall-policy partial update."""
     from unifi_core.network.models.firewall import normalize_policy_update
@@ -1588,6 +1597,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     # Network — list clients: Core selects online or all/historical clients.
     "unifi_list_clients": _spec(_translate_list_clients, "include_offline"),
     # Network — firewall: kwarg rename
+    "unifi_create_firewall_policy": _spec(_translate_create_firewall_policy, "policy_data"),
     "unifi_update_firewall_policy": _spec(_translate_update_firewall_policy, "policy_id", "updates"),
     # Network — port forward toggle/delete: kwarg rename (port_forward_id → rule_id)
     "unifi_toggle_port_forward": _spec(_rename_port_forward_id_to_rule_id, "rule_id"),
