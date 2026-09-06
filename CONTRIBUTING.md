@@ -81,15 +81,11 @@ make shared-test       # Run unifi-mcp-shared tests
 make relay-test        # Run unifi-mcp-relay tests
 make worker-build      # Install worker deps + typecheck the Worker app
 make worker-check      # Run worker CLI tests + TypeScript checks
-make network-test      # Run network server tests
-make network-lint      # Lint network server
-make network-manifest  # Regenerate network tools manifest
-make protect-test      # Run protect server tests
-make protect-lint      # Lint protect server
-make protect-manifest  # Regenerate protect tools manifest
-make access-test       # Run access server tests
-make access-lint       # Lint access server
-make access-manifest   # Regenerate access tools manifest
+
+# Individual apps (network, protect, access) — see "App-Level Makefile" below
+make -C apps/network test      # Run network server tests
+make -C apps/network lint      # Lint network server
+make -C apps/network manifest  # Regenerate network tools manifest
 ```
 
 ## App-Level Makefile
@@ -143,7 +139,7 @@ make pre-commit   # Format + lint + test
 1. Add the manager method in `apps/network/src/unifi_network_mcp/managers/<domain>_manager.py`
 2. Add the tool function in `apps/network/src/unifi_network_mcp/tools/<category>.py`
 3. Add the tool name to `TOOL_MODULE_MAP` in `apps/network/src/unifi_network_mcp/utils/lazy_tool_loader.py`
-4. Run `make network-manifest` from the repo root (or `make manifest` from `apps/network/`)
+4. Run `make manifest` from `apps/network/` (or `make manifest` from the repo root to regenerate every app)
 5. Add tests in `apps/network/tests/`
 6. Commit code + manifest + tests together
 
@@ -151,7 +147,7 @@ make pre-commit   # Format + lint + test
 
 1. Add the manager method in `apps/protect/src/unifi_protect_mcp/managers/<domain>_manager.py`
 2. Add the tool function in `apps/protect/src/unifi_protect_mcp/tools/<category>.py`
-3. Run `make protect-manifest` from the repo root (or `make manifest` from `apps/protect/`)
+3. Run `make manifest` from `apps/protect/` (or `make manifest` from the repo root to regenerate every app)
    - The manifest auto-discovers tools from `@server.tool()` decorators; no manual map update needed
 4. Add tests in `apps/protect/tests/`
 5. Commit code + manifest + tests together
@@ -160,7 +156,7 @@ make pre-commit   # Format + lint + test
 
 1. Add the manager method in `apps/access/src/unifi_access_mcp/managers/<domain>_manager.py`
 2. Add the tool function in `apps/access/src/unifi_access_mcp/tools/<category>.py`
-3. Run `make access-manifest` from the repo root (or `make manifest` from `apps/access/`)
+3. Run `make manifest` from `apps/access/` (or `make manifest` from the repo root to regenerate every app)
 4. Add tests in `apps/access/tests/`
 5. Commit code + manifest + tests together
 

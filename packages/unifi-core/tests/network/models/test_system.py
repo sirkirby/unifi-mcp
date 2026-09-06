@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unifi_core.network.models.system import (
     ALARM_MUTABLE_FIELDS,
     ALARM_READ_ONLY_FIELDS,
@@ -424,6 +425,107 @@ class TestSiteSettingsFromController:
     def test_non_dict_returns_defaults(self) -> None:
         ss = site_settings_from_controller(None)
         assert ss.site_id is None
+
+
+class TestSiteSettingsExtendedSections:
+    """Timezone, connectivity monitor and NTP come from their own sections of
+    the same GET /get/setting payload the manager already fetches."""
+
+    RAW = {
+        "sections": {
+            "super_identity": {"_id": "site-1", "name": "Home", "role": "master"},
+            "country": {"code": 840},
+            "locale": {"timezone": "America/Denver"},
+            "connectivity": {
+                "enabled": True,
+                "uplink_type": "gateway",
+                "mlo_mesh_enabled": False,
+                "x_mesh_essid": "mesh",
+                "x_mesh_psk": "not-for-output",
+            },
+            "ntp": {
+                "ntp_server_1": "0.ubnt.pool.ntp.org",
+                "ntp_server_2": "1.ubnt.pool.ntp.org",
+                "ntp_server_3": "",
+                "ntp_server_4": "",
+                "setting_preference": "auto",
+            },
+        }
+    }
+
+    def test_sections_mapped(self) -> None:
+        ss = site_settings_from_controller(self.RAW)
+        assert ss.timezone == "America/Denver"
+        assert ss.connectivity_enabled is True
+        assert ss.connectivity_uplink_type == "gateway"
+        assert ss.ntp_servers == ["0.ubnt.pool.ntp.org", "1.ubnt.pool.ntp.org"]
+        assert ss.ntp_setting_preference == "auto"
+
+    def test_model_is_the_allowlist(self) -> None:
+        """The connectivity section carries a mesh PSK; it must not ride along."""
+        dumped = site_settings_from_controller(self.RAW).model_dump()
+        assert "x_mesh_psk" not in repr(dumped)
+        assert "not-for-output" not in repr(dumped)
+
+    def test_missing_sections_leave_new_fields_none(self) -> None:
+        ss = site_settings_from_controller({"sections": {"super_identity": {"name": "Home"}}})
+        assert ss.timezone is None
+        assert ss.connectivity_enabled is None
+        assert ss.connectivity_uplink_type is None
+        assert ss.ntp_servers is None
+        assert ss.ntp_setting_preference is None
+
+    def test_ntp_servers_skips_blank_entries_and_keeps_order(self) -> None:
+        raw = {
+            "sections": {"ntp": {"ntp_server_1": "", "ntp_server_2": "b", "ntp_server_3": "a", "ntp_server_4": None}}
+        }
+        assert site_settings_from_controller(raw).ntp_servers == ["b", "a"]
+
+    def test_ntp_section_with_no_servers_is_an_empty_list_not_none(self) -> None:
+        raw = {"sections": {"ntp": {"ntp_server_1": "", "setting_preference": "auto"}}}
+        assert site_settings_from_controller(raw).ntp_servers == []
+
+    def test_blank_strings_read_as_absent(self) -> None:
+        raw = {
+            "sections": {
+                "locale": {"timezone": ""},
+                "connectivity": {"uplink_type": ""},
+                "ntp": {"setting_preference": ""},
+            }
+        }
+        ss = site_settings_from_controller(raw)
+        assert ss.timezone is None
+        assert ss.connectivity_uplink_type is None
+        assert ss.ntp_setting_preference is None
+
+    @pytest.mark.parametrize(
+        "value,expected",
+        [
+            (True, True),
+            (False, False),
+            (1, True),
+            (0, False),
+            ("true", True),
+            ("false", False),
+            ("on", None),
+            (None, None),
+        ],
+    )
+    def test_connectivity_enabled_coerced_to_bool(self, value, expected) -> None:
+        raw = {"sections": {"connectivity": {"enabled": value}}}
+        assert site_settings_from_controller(raw).connectivity_enabled is expected
+
+    def test_new_fields_are_read_only(self) -> None:
+        from unifi_core.network.models.system import SITESETTINGS_MUTABLE_FIELDS, SITESETTINGS_READ_ONLY_FIELDS
+
+        assert SITESETTINGS_MUTABLE_FIELDS == frozenset()
+        assert {
+            "timezone",
+            "connectivity_enabled",
+            "connectivity_uplink_type",
+            "ntp_servers",
+            "ntp_setting_preference",
+        } <= (SITESETTINGS_READ_ONLY_FIELDS)
 
 
 class TestEventTypesFromController:

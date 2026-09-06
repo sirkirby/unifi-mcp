@@ -15,8 +15,9 @@ dependencies = [
     # 0.4.34; Protect camera detail fields require Core 0.4.35; traffic-flow
     # DPI name enrichment requires Core 0.4.36; exact Network event-key
     # filtering and discovery require Core 0.4.37; explicit zero event limits
-    # require Core 0.4.39.
-    "unifi-core[network,protect,access]>=0.4.40,<0.5",
+    # require Core 0.4.39. UTC device timestamps in action read views require
+    # Core 0.4.43.
+    "unifi-core[network,protect,access]>=0.4.43,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.
@@ -77,8 +78,12 @@ version-file = "src/unifi_api/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/unifi_api"]
+# The repository's logs/ ignore rule also matches these packaged HTML templates.
+# Artifacts bypass VCS ignores without adding duplicate force-include entries.
+artifacts = ["src/unifi_api/templates/admin/logs/*.html"]
 
 [tool.hatch.build.targets.sdist]
+artifacts = ["src/unifi_api/templates/admin/logs/*.html"]
 include = [
     "/src/unifi_api",
     "/alembic",
