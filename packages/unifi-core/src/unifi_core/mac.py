@@ -29,7 +29,14 @@ turns into a request the controller may still reject, later and more quietly.
 import re
 from typing import Any, Optional
 
-__all__ = ["normalize_mac", "mac_equal", "looks_like_mac", "normalize_mac_list"]
+__all__ = [
+    "normalize_mac",
+    "mac_equal",
+    "looks_like_mac",
+    "normalize_mac_list",
+    "canonical_mac",
+    "mask_macs",
+]
 
 # Six hex pairs separated by ':' or '-', or twelve bare hex digits.
 _MAC_RE = re.compile(r"^(?:[0-9a-f]{2}([:-]))(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}$|^[0-9a-f]{12}$")
@@ -102,6 +109,39 @@ def mac_equal(a: Any, b: Any) -> bool:
     # semantics: case-folding one here can select a different controller
     # resource whose identifier differs only by case.
     return isinstance(a, str) and isinstance(b, str) and bool(a) and a == b
+
+
+def canonical_mac(value: Any) -> Optional[str]:
+    """Return *value* as lowercase colon-separated pairs, or ``None`` if not a MAC.
+
+    The form for a request path such as ``/stat/user/<mac>``: our convention
+    (the controller accepts dashed and bare-hex forms too), and the rewrite
+    :func:`normalize_mac` deliberately declines to make.
+    """
+    digits = _mac_digits(value)
+    if digits is None:
+        return None
+    return ":".join(digits[i : i + 2] for i in range(0, 12, 2))
+
+
+# A MAC token inside free text: six pairs with one separator style, or twelve
+# bare hex digits, not adjoining another hex digit. Separators are allowed on
+# either side because aiounifi writes "...stat/user/<mac>: Cannot connect".
+_MAC_TOKEN_RE = re.compile(
+    r"(?<![0-9a-f])(?:[0-9a-f]{2}([:-])(?:[0-9a-f]{2}\1){4}[0-9a-f]{2}|[0-9a-f]{12})(?![0-9a-f])",
+    re.IGNORECASE,
+)
+
+
+def mask_macs(text: str) -> str:
+    """Return *text* with every MAC-shaped token replaced by ``[redacted]``.
+
+    For log lines that quote a request path, a URL or an exception message:
+    ``/stat/user/<mac>`` and ``/stat/device/<mac>`` put the address in the path
+    itself and aiounifi repeats the URL in its error text, and the privacy rule
+    for the client and device paths is that an address never reaches a log.
+    """
+    return _MAC_TOKEN_RE.sub("[redacted]", text)
 
 
 def normalize_mac_list(values: Any) -> Any:

@@ -5,13 +5,23 @@ from typing import Any, List, Optional
 from aiounifi.models.api import ApiRequest
 from aiounifi.models.client import Client
 
-from unifi_core.exceptions import UniFiNotFoundError
-from unifi_core.mac import mac_equal, normalize_mac
-from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
+from unifi_core.mac import canonical_mac, mac_equal, normalize_mac
+from unifi_core.network.managers.connection_manager import (
+    ConnectionManager,
+    controller_error_code,
+    response_status,
+)
 
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_CLIENTS = "clients"
+
+# The controller caps GET /rest/user at this many rows; a client past the
+# window is absent from the list scan although the controller has its record,
+# so get_client_details falls back to the per-MAC GET /stat/user/<mac>.
+REST_USER_ROW_CAP = 3000
+UNKNOWN_USER_CODE = "api.err.UnknownUser"
 
 
 class ClientManager:
@@ -116,7 +126,7 @@ class ClientManager:
         raw = getattr(c, "raw", None)
         return raw if isinstance(raw, dict) else {}
 
-    async def get_client_details(self, client_mac: str) -> Any:
+    async def get_client_details(self, client_mac: str, *, existence_only: bool = False) -> Any:
         """Get detailed information for a specific client by MAC address.
 
         Returns a merged view combining /stat/sta (live data: fresh
@@ -126,7 +136,11 @@ class ClientManager:
         offline clients (not in /stat/sta) it falls back to just /rest/user.
 
         Each endpoint is queried independently so a transient failure on
-        one does not block the lookup.
+        one does not block the lookup. Whenever the /rest/user scan misses a
+        MAC-shaped identifier, the authoritative per-MAC GET /stat/user/<mac>
+        is consulted (see ``REST_USER_ROW_CAP``). With ``existence_only`` a
+        live /stat/sta record is proof enough and the per-MAC request is
+        skipped; callers that need ``_id`` leave it off.
 
         Returns:
             An object with stable ``.mac`` and ``.raw`` attributes so
@@ -135,11 +149,13 @@ class ClientManager:
             it came from.
 
         Raises:
-            UniFiNotFoundError: If at least one endpoint succeeded and
-                neither contained the requested MAC.
-            Original underlying exception: If *both* endpoints failed
-                (e.g., controller offline) — re-raised so callers see an
-                accurate failure cause instead of a misleading not-found.
+            UniFiNotFoundError: The controller reports the MAC unknown, or
+                nothing found it.
+            UniFiOperationError: The lists missed and the per-MAC lookup
+                failed for another reason, so existence is undetermined.
+            Original underlying exception: Both list endpoints failed
+                (e.g., controller offline), re-raised so callers see the
+                real cause instead of a misleading not-found.
         """
         client_mac = normalize_mac(client_mac) or client_mac
         active_record: Optional[Any] = None
@@ -166,11 +182,43 @@ class ClientManager:
             user_error = e
             logger.debug("/rest/user fetch failed during get_client_details: %s", type(e).__name__)
 
+        lookup_error: Optional[Exception] = None
+        path_mac = canonical_mac(client_mac)
+        # A live record already proves existence; only callers that need the
+        # user-table fields (``_id``) pay for the per-MAC request then.
+        live_is_enough = existence_only and active_record is not None
+        if user_record is None and path_mac is not None and not live_is_enough:
+            try:
+                user_record = await self._get_user_by_mac(path_mac)
+            except Exception as e:
+                if response_status(e) == 404:
+                    # aiounifi raises ResponseError for HTTP 404 and 429 alike;
+                    # only the reported status decides (never the URL or body
+                    # text). A 404 means the controller does not serve
+                    # /stat/user, which is no answer, so the lists' verdict
+                    # stands.
+                    logger.debug("/stat/user is not served by this controller: %s", type(e).__name__)
+                else:
+                    lookup_error = e
+                    logger.debug("/stat/user lookup failed during get_client_details: %s", type(e).__name__)
+
         if active_record is None and user_record is None:
+            if lookup_error is not None and controller_error_code(lookup_error) == UNKNOWN_USER_CODE:
+                # The per-MAC endpoint is authoritative: the controller has no
+                # record for this MAC, whatever the list scans did.
+                raise UniFiNotFoundError("client", client_mac)
             if active_error is not None and user_error is not None:
-                # Both endpoints failed — surface the underlying connectivity/
-                # outage error rather than misreporting it as a not-found.
+                # Both list endpoints failed — surface the underlying
+                # connectivity/outage error rather than misreporting it as a
+                # not-found.
                 raise active_error
+            if lookup_error is not None:
+                raise UniFiOperationError(
+                    f"client '{client_mac}' could not be resolved through the online (/stat/sta) or "
+                    f"user (/rest/user, capped at {REST_USER_ROW_CAP} rows) lists, and the per-MAC "
+                    f"lookup (/stat/user) failed with {type(lookup_error).__name__}; "
+                    "existence could not be determined"
+                ) from lookup_error
             raise UniFiNotFoundError("client", client_mac)
 
         active_raw = self._raw_of(active_record)
@@ -193,6 +241,23 @@ class ClientManager:
             return SimpleNamespace(mac=self._mac_of(single), raw=single_raw)
         return single
 
+    async def _get_user_by_mac(self, path_mac: str) -> Optional[dict]:
+        """Fetch one user-table record via GET /stat/user/<mac>, or ``None`` for an empty list.
+
+        A reply that is not a list of records (a non-JSON page from a proxy or
+        a restarting controller decodes to nothing) is a failed lookup, raised
+        as :class:`UniFiOperationError` so it is never read as a not-found.
+        Controller errors propagate as raised; the caller decides whether
+        ``api.err.UnknownUser`` means not-found.
+        """
+        response = await self._connection.request(ApiRequest(method="get", path=f"/stat/user/{path_mac}"))
+        if not isinstance(response, list) or (response and not isinstance(response[0], dict)):
+            raise UniFiOperationError(f"/stat/user reply had unexpected shape {type(response).__name__}")
+        if not response:
+            logger.debug("/stat/user answered with no record")
+            return None
+        return response[0]
+
     async def block_client(self, client_mac: str) -> bool:
         """Block a client by MAC address.
 
@@ -200,7 +265,7 @@ class ClientManager:
             UniFiNotFoundError: If the client does not exist.
         """
         client_mac = normalize_mac(client_mac) or client_mac
-        await self.get_client_details(client_mac)  # existence check; raises on miss
+        await self.get_client_details(client_mac, existence_only=True)  # raises on miss
         try:
             # Construct ApiRequest
             api_request = ApiRequest(
@@ -224,7 +289,7 @@ class ClientManager:
             UniFiNotFoundError: If the client does not exist.
         """
         client_mac = normalize_mac(client_mac) or client_mac
-        await self.get_client_details(client_mac)  # existence check; raises on miss
+        await self.get_client_details(client_mac, existence_only=True)  # raises on miss
         try:
             # Construct ApiRequest
             api_request = ApiRequest(
@@ -281,7 +346,7 @@ class ClientManager:
             UniFiNotFoundError: If the client does not exist.
         """
         client_mac = normalize_mac(client_mac) or client_mac
-        await self.get_client_details(client_mac)  # existence check; raises on miss
+        await self.get_client_details(client_mac, existence_only=True)  # raises on miss
         try:
             api_request = ApiRequest(
                 method="post",
@@ -338,7 +403,7 @@ class ClientManager:
             UniFiNotFoundError: If the client does not exist.
         """
         client_mac = normalize_mac(client_mac) or client_mac
-        await self.get_client_details(client_mac)  # existence check; raises on miss
+        await self.get_client_details(client_mac, existence_only=True)  # raises on miss
         try:
             payload = {"mac": client_mac, "cmd": "authorize-guest", "minutes": minutes}
             if up_kbps is not None:
@@ -366,7 +431,7 @@ class ClientManager:
             UniFiNotFoundError: If the client does not exist.
         """
         client_mac = normalize_mac(client_mac) or client_mac
-        await self.get_client_details(client_mac)  # existence check; raises on miss
+        await self.get_client_details(client_mac, existence_only=True)  # raises on miss
         try:
             api_request = ApiRequest(
                 method="post",
