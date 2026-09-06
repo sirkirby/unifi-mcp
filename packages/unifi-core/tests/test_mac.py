@@ -325,3 +325,64 @@ def test_normalize_mac_still_leaves_separators_alone() -> None:
 
     assert normalize_mac("AA-BB-CC-DD-EE-FF") == "aa-bb-cc-dd-ee-ff"
     assert normalize_mac("1C0B8BEEF6B5") == "1c0b8beef6b5"
+
+
+# --- canonical_mac -----------------------------------------------------------
+
+
+def test_canonical_mac_produces_lowercase_colon_form() -> None:
+    """The form the controller's own payloads use; ``normalize_mac`` deliberately
+    keeps separators, so a request path needs this one."""
+    from unifi_core.mac import canonical_mac
+
+    assert canonical_mac("AA:BB:CC:DD:EE:FF") == "aa:bb:cc:dd:ee:ff"
+    assert canonical_mac("aa-bb-cc-dd-ee-ff") == "aa:bb:cc:dd:ee:ff"
+    assert canonical_mac("AABBCCDDEEFF") == "aa:bb:cc:dd:ee:ff"
+    assert canonical_mac(" aa:bb:cc:dd:ee:ff ") == "aa:bb:cc:dd:ee:ff"
+
+
+def test_canonical_mac_is_none_for_anything_that_is_not_a_mac() -> None:
+    from unifi_core.mac import canonical_mac
+
+    assert canonical_mac("dev-1") is None
+    assert canonical_mac("5f1e2d3c4b5a697877665544") is None
+    assert canonical_mac(None) is None
+    assert canonical_mac("") is None
+
+
+# --- mask_macs -------------------------------------------------------
+
+
+def test_mask_macs_hides_mac_shaped_path_segments() -> None:
+    """Request paths like ``/stat/user/<mac>`` are logged on failure; the
+    address must not reach the log."""
+    from unifi_core.mac import mask_macs
+
+    assert mask_macs("/stat/user/aa:bb:cc:dd:ee:ff") == "/stat/user/[redacted]"
+    assert mask_macs("/stat/device/AA-BB-CC-DD-EE-FF") == "/stat/device/[redacted]"
+    assert mask_macs("/stat/spectrum-scan/aabbccddeeff") == "/stat/spectrum-scan/[redacted]"
+
+
+def test_mask_macs_leaves_other_paths_alone() -> None:
+    from unifi_core.mac import mask_macs
+
+    assert mask_macs("/rest/user/5f1e2d3c4b5a697877665544") == "/rest/user/5f1e2d3c4b5a697877665544"
+    assert mask_macs("/stat/sta") == "/stat/sta"
+    assert mask_macs("") == ""
+
+
+def test_mask_macs_handles_the_shapes_aiounifi_messages_use() -> None:
+    """aiounifi's transport error puts a colon right after the URL; a 403 puts
+    the URL mid-sentence; parenthesised and key=value forms appear in bodies."""
+    from unifi_core.mac import mask_macs
+
+    url = "https://c/proxy/network/api/s/default/stat/user/aa:bb:cc:dd:ee:ff"
+    assert mask_macs(f"Error requesting data from {url}: Cannot connect to host") == (
+        "Error requesting data from https://c/proxy/network/api/s/default/stat/user/[redacted]: Cannot connect to host"
+    )
+    assert mask_macs(f"Call {url} received 403 Forbidden").endswith("/stat/user/[redacted] received 403 Forbidden")
+    assert mask_macs("(AA:BB:CC:DD:EE:FF)") == "([redacted])"
+    assert mask_macs("mac=aabbccddeeff;") == "mac=[redacted];"
+    assert mask_macs("aa:bb:cc:dd:ee:ff") == "[redacted]"
+    assert mask_macs("aa-bb:cc:dd:ee:ff") == "aa-bb:cc:dd:ee:ff"  # mixed separators: not a MAC
+    assert mask_macs("id=5f1e2d3c4b5a697877665544") == "id=5f1e2d3c4b5a697877665544"
