@@ -1,6 +1,6 @@
 """Tests for VPN MCP tool response redaction.
 
-Fixtures mirror the *real* UniFi ``networkconf`` field names (issue #351) with
+Fixtures mirror the *real* UniFi ``networkconf`` field names with
 synthetic values — never live secret material. The controller stores VPN
 secrets two ways: discrete role-infixed keys (WireGuard "manual" mode) and a
 whole config blob (WireGuard "file" mode and OpenVPN).
@@ -68,7 +68,7 @@ async def test_list_vpn_clients_redacts_by_default_and_uses_policy_opt_out(monke
 
     wg_file, wg_manual, ovpn = default["vpn_clients"]
 
-    # WireGuard file-mode config blob (the issue #351 leak) is fully suppressed.
+    # WireGuard file-mode config blob is fully suppressed.
     assert wg_file["wireguard_client_configuration_file"] == REDACTED
     # Non-secret sibling metadata stays visible.
     assert wg_file["wireguard_client_configuration_filename"] == "wg-test.conf"

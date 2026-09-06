@@ -76,7 +76,7 @@ async def list_firewall_policies(
     """Lists firewall policies for the current UniFi site.
 
     Returns V2 zone-based policy fields (zone_id, matching_target, matching_target_type)
-    in source/destination. Legacy V1 ruleset support was removed in #210.
+    in source/destination. Legacy V1 ruleset support has been removed.
     """
     try:
         policies = await firewall_manager.get_firewall_policies(include_predefined=include_predefined)
@@ -355,7 +355,7 @@ async def create_firewall_policy(
             "error": "policy_data must be a non-empty dictionary.",
         }
 
-    # Reject legacy V1 fields up front with an actionable migration error (#210).
+    # Reject legacy V1 fields up front with an actionable migration error.
     legacy_error = legacy_policy_error(policy_data)
     if legacy_error:
         return {"success": False, "error": legacy_error}

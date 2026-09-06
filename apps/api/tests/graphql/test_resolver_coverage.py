@@ -1,8 +1,8 @@
 """CI gate: every typed resolver in type_registry has a fixture e2e test.
 
-Phase 8 PR2 invariant: prevents Phase 6's silent-coverage gap (PR #130
-ACL pattern — controller had zero rules, mutation path went unsmoked)
-from recurring at the resolver level.
+Prevents the silent-coverage gap seen earlier at the tool level (an ACL
+resource where the controller had zero rules, so the mutation path went
+unsmoked) from recurring at the resolver level.
 
 Each entry in ``type_registry._tool_types`` must have a corresponding
 fixture test that exercises the resolver. Fixture tests declare which

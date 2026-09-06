@@ -53,7 +53,7 @@ class TestResourceValidator:
         """validate() must never fill missing fields from schema defaults.
 
         Update tools omit fields to mean "leave unchanged" — injecting defaults
-        would silently overwrite existing resource state (issue #113 class of bug).
+        would silently overwrite existing resource state.
         """
         schema = {
             "type": "object",

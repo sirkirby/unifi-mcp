@@ -22,7 +22,7 @@ Each entry is ``tool_name → (manager_attr, method)`` exactly matching the
 *after* the AST walk in :func:`build_dispatch_table`, so adding an entry
 here always wins over the AST-derived one.
 
-PR4 of the manager-owned-existence-checks refactor (siblings #172 #173 #175).
+Part of the manager-owned-existence-checks refactor.
 
 Argument translators
 --------------------

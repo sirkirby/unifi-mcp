@@ -296,7 +296,7 @@ class TestFirewallToolRedaction:
 
 
 # ---------------------------------------------------------------------------
-# create_firewall_policy — V2 zone-based validation (legacy V1 path removed in #210)
+# create_firewall_policy — V2 zone-based validation (legacy V1 path removed)
 # ---------------------------------------------------------------------------
 
 
@@ -459,7 +459,7 @@ class TestCreateFirewallPolicyV2Validation:
     async def test_create_normalizes_mixed_case_ip_version(self):
         """Mixed-case ip_version ('IPv4') must be normalized before reaching the controller.
 
-        Regression test for issue #203: the V2 enum is strict upper-case (BOTH/IPV4/IPV6).
+        The V2 enum is strict upper-case (BOTH/IPV4/IPV6).
         The wrapper must accept the natural form ('IPv4') and uppercase it before send.
         """
         zone_data = {
@@ -807,12 +807,12 @@ class TestCreateZoneTargetingValidation:
 
 
 # ---------------------------------------------------------------------------
-# Legacy V1 field migration errors (#210)
+# Legacy V1 field migration errors
 # ---------------------------------------------------------------------------
 
 
 class TestLegacyFieldMigration:
-    """Test that legacy V1 firewall fields produce a #210 migration error
+    """Test that legacy V1 firewall fields produce a migration error
     instead of being silently forwarded to a V2 endpoint that rejects them."""
 
     @pytest.mark.asyncio
@@ -831,7 +831,8 @@ class TestLegacyFieldMigration:
         )
 
         assert result["success"] is False
-        assert "#210" in result["error"]
+        assert "no longer supported" in result["error"]
+        assert "V2 zone-based fields" in result["error"]
 
     @pytest.mark.asyncio
     async def test_create_with_lowercase_action_returns_migration_error(self):
@@ -849,7 +850,8 @@ class TestLegacyFieldMigration:
         )
 
         assert result["success"] is False
-        assert "#210" in result["error"]
+        assert "no longer supported" in result["error"]
+        assert "V2 zone-based fields" in result["error"]
 
     @pytest.mark.asyncio
     async def test_update_with_ruleset_returns_migration_error(self):
@@ -863,7 +865,8 @@ class TestLegacyFieldMigration:
         )
 
         assert result["success"] is False
-        assert "#210" in result["error"]
+        assert "no longer supported" in result["error"]
+        assert "V2 zone-based fields" in result["error"]
 
     @pytest.mark.asyncio
     async def test_update_with_src_address_returns_migration_error(self):
@@ -877,11 +880,12 @@ class TestLegacyFieldMigration:
         )
 
         assert result["success"] is False
-        assert "#210" in result["error"]
+        assert "no longer supported" in result["error"]
+        assert "V2 zone-based fields" in result["error"]
 
 
 # ---------------------------------------------------------------------------
-# update_firewall_policy — V2 zone-based fields (legacy V1 path removed in #210)
+# update_firewall_policy — V2 zone-based fields (legacy V1 path removed)
 # ---------------------------------------------------------------------------
 
 
@@ -921,7 +925,7 @@ class TestUpdateFirewallPolicyV2Fields:
     async def test_action_and_ip_version_normalization(self):
         """Mixed-case action and ip_version should be normalized to controller-accepted form.
 
-        Regression test for issue #203: the controller's V2 firewall enum is strict
+        The controller's V2 firewall enum is strict
         upper-case (BOTH/IPV4/IPV6); accepting "IPv4" wrapper-side then sending it raw
         produced a cryptic deserialization error.
         """
@@ -992,7 +996,7 @@ class TestUpdateFirewallPolicyV2Fields:
     async def test_connection_state_normalized(self):
         """Mixed-case connection_state_type and connection_states get normalized.
 
-        Live controller (issue #203 follow-up) accepts only:
+        Live controller accepts only:
           connection_state_type: [ALL, RESPOND_ONLY, CUSTOM]
           connection_states[]:    [NEW, RELATED, INVALID, ESTABLISHED]
         """
@@ -1114,7 +1118,7 @@ class TestUpdateFirewallPolicyV2Fields:
         zone_data = {
             "name": "Reject unknown",
             "action": "ALLOW",
-            "dst_port_group_id": "abc123",  # silent-drop case from comment on #136
+            "dst_port_group_id": "abc123",  # silent-drop case
             "source": {"zone_id": "internal", "matching_target": "ANY"},
             "destination": {"zone_id": "internal", "matching_target": "ANY"},
         }
@@ -1385,7 +1389,7 @@ class TestDeleteFirewallPolicy:
 
 
 # ---------------------------------------------------------------------------
-# list_firewall_zones — projection + error surfacing (issue #154)
+# list_firewall_zones — projection + error surfacing
 # ---------------------------------------------------------------------------
 
 

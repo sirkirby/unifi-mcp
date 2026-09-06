@@ -1,8 +1,8 @@
 """Test that TOOL_MODULE_MAP stays in sync with tools_manifest.json.
 
 This test ensures that the lazy loader's dynamic tool discovery finds all
-tools that are listed in the manifest, preventing issues like #33 where
-tools were missing from the map.
+tools that are listed in the manifest, preventing the case where tools go
+missing from the map.
 """
 
 import json

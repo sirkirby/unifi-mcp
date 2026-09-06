@@ -826,7 +826,7 @@ class TestListAclRules:
     async def test_list_and_create_field_symmetry(self):
         """Every mutable field in list output is accepted by create_acl_rule.
 
-        This is the structural guarantee from #137 — round-tripping works
+        This is the structural guarantee — round-tripping works
         by construction because both tools derive from the same model.
         """
         import inspect

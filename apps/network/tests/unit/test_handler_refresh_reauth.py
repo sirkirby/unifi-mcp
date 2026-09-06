@@ -1,7 +1,7 @@
 """An expired session must be recovered on the handler-refresh path too.
 
-#500 reported `unifi_list_devices`, `get_client_details` and `get_top_clients`
-failing with 401 after the controller had been up for a while, while
+`unifi_list_devices`, `get_client_details` and `get_top_clients` once failed
+with 401 after the controller had been up for a while, while
 `get_network_health`, `get_traffic_flows` and `get_system_info` kept working.
 That split is not arbitrary: the working tools go through
 ``ConnectionManager.request()``, which catches ``LoginRequired`` and
@@ -9,10 +9,10 @@ re-authenticates. The failing ones call an aiounifi handler's ``update()``
 directly, so the exception is raised straight past that wrapper and no login is
 ever attempted.
 
-#514 added the re-authentication and closed #500, but its test drove
+The first fix added re-authentication but its test drove
 ``ConnectionManager.request()`` — the path that already recovered. These tests
-drive ``handler.update()`` instead, which is the path that did not, so they fail
-against the code #514 shipped.
+drive ``handler.update()`` instead, which is the path that did not, so they
+fail against that first fix and pass against the handler-refresh recovery.
 """
 
 import pytest
@@ -28,7 +28,7 @@ class _Handler:
     ``update()`` raises ``LoginRequired`` until a login happens, which is what an
     expired controller session does. Crucially the failure surfaces from
     ``update()`` and not from ``controller.request()`` — reproducing the real
-    call path rather than the one #514's test exercised.
+    call path rather than the one the original fix's test exercised.
     """
 
     def __init__(self, controller, values):
@@ -161,10 +161,10 @@ async def test_persistent_login_required_after_refresh_opens_the_auth_circuit():
 
 @pytest.mark.asyncio
 async def test_get_devices_recovers_from_an_expired_session():
-    """The user-visible regression from #500, end to end.
+    """The user-visible regression, end to end.
 
-    `unifi_list_devices` is `DeviceManager.get_devices`. Against the code #514
-    shipped this raises `LoginRequired` and the tool reports
+    `unifi_list_devices` is `DeviceManager.get_devices`. Without handler-refresh
+    recovery this raises `LoginRequired` and the tool reports
     "received 401 Unauthorized".
     """
     controller = _Controller(values=[{"mac": "aa:bb:cc:dd:ee:ff", "name": "sw"}])

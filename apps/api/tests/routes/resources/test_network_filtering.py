@@ -324,7 +324,7 @@ async def test_get_qos_rule_details_404(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_get_qos_rule_details_unifi_not_found(tmp_path, monkeypatch) -> None:
-    """Manager refactor PR #172: get_qos_rule_details raises UniFiNotFoundError."""
+    """Manager-owned existence check: get_qos_rule_details raises UniFiNotFoundError."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
@@ -513,7 +513,7 @@ async def test_get_content_filter_details_happy_path(tmp_path, monkeypatch) -> N
 
 @pytest.mark.asyncio
 async def test_get_content_filter_details_unifi_not_found(tmp_path, monkeypatch) -> None:
-    """Manager refactor PR #172: get_content_filter_by_id raises UniFiNotFoundError."""
+    """Manager-owned existence check: get_content_filter_by_id raises UniFiNotFoundError."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
@@ -594,7 +594,7 @@ async def test_get_acl_rule_details_happy_path(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_get_acl_rule_details_unifi_not_found(tmp_path, monkeypatch) -> None:
-    """Manager refactor PR #172: get_acl_rule_by_id raises UniFiNotFoundError."""
+    """Manager-owned existence check: get_acl_rule_by_id raises UniFiNotFoundError."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)

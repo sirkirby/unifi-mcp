@@ -133,7 +133,7 @@ class TestUpdateTrafficRouteMutationSafety:
 
 
 # ---------------------------------------------------------------------------
-# update_firewall_policy — endpoint and merge tests (issue #124)
+# update_firewall_policy — endpoint and merge tests
 # ---------------------------------------------------------------------------
 
 SAMPLE_POLICY_RAW = {
@@ -529,7 +529,7 @@ class TestFirewallPolicyOrdering:
 
 
 # ---------------------------------------------------------------------------
-# ID-lookup iteration robustness — issue #151
+# ID-lookup iteration robustness
 #
 # `next((x for x in items if x.id == target), None)` over aiounifi item
 # objects raises KeyError when any item in the list has a `raw` dict missing
@@ -592,7 +592,7 @@ class TestTrafficRouteLookupRobustness:
 
 
 # ---------------------------------------------------------------------------
-# get_firewall_zones — Network 10.2+ /firewall/zone-matrix support (issue #154)
+# get_firewall_zones — Network 10.2+ /firewall/zone-matrix support
 #
 # - Primary path /firewall/zone-matrix succeeds → returns zone metadata with
 #   the inter-zone policy-count `data` matrix stripped.

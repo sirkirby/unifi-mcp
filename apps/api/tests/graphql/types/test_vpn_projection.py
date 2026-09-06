@@ -1,6 +1,6 @@
 """The REST/GraphQL VPN path is safe by *projection*: VpnClient/VpnServer expose
 only an allowlisted field set, so secret-bearing controller fields (config blobs,
-private keys) can never reach the API output regardless of redaction (issue #351).
+private keys) can never reach the API output regardless of redaction.
 """
 
 from __future__ import annotations

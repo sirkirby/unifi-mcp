@@ -980,7 +980,7 @@ class TestProtectListSensorsTool:
         result = await protect_list_sensors()
         assert result["success"] is True
         assert result["data"]["count"] == 1
-        # Every field the manager emits must survive the tool projection (#621).
+        # Every field the manager emits must survive the tool projection.
         assert result["data"]["sensors"][0] == {k: v for k, v in summary.items() if v is not None}
 
     @pytest.mark.asyncio

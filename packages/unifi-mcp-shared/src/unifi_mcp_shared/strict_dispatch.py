@@ -3,8 +3,7 @@
 FastMCP's ``tools/call`` handler runs incoming ``arguments`` through pydantic
 with ``extra="ignore"`` (the default), which silently drops unknown keys.
 Result: callers passing typos or stale field names get ``success=True`` from
-tools that didn't actually receive the param — the silent-drop class behind
-issue #135 and similar.
+tools that didn't actually receive the param — a silent-drop class of bug.
 
 This subclass overrides :meth:`call_tool` to diff incoming ``arguments`` keys
 against the tool's declared input schema (loaded from ``tools_manifest.json``)
@@ -38,7 +37,7 @@ class StrictKwargFastMCP(MCPServer):
     human-readable message.
 
     Note: only top-level kwargs are checked. Inner dict shapes (e.g. a
-    ``policy_data`` blob) are the responsibility of the schema layer (#206).
+    ``policy_data`` blob) are the responsibility of the schema layer.
     """
 
     def __init__(

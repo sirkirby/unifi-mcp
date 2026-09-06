@@ -434,7 +434,7 @@ class TestStatsManagerEnhanced:
 
     @pytest.mark.asyncio
     async def test_get_client_wifi_details_uses_get_stat_sta(self, stats_manager, mock_connection):
-        """Regression for #148: /stat/sta ignores MAC in POST body — must use GET."""
+        """/stat/sta ignores MAC in POST body — must use GET."""
         mock_connection.request.return_value = []
 
         await stats_manager.get_client_wifi_details("aa:bb:cc:dd:ee:ff")
@@ -445,7 +445,7 @@ class TestStatsManagerEnhanced:
 
     @pytest.mark.asyncio
     async def test_get_client_wifi_details_filters_by_mac(self, stats_manager, mock_connection):
-        """Regression for #148: must filter list by MAC, not return clients[0]."""
+        """Must filter list by MAC, not return clients[0]."""
         mock_connection.request.return_value = [
             {"mac": "11:11:11:11:11:11", "signal": -57, "channel": 132, "radio": "na"},
             {"mac": "aa:bb:cc:dd:ee:ff", "signal": -34, "channel": 1, "radio": "ng"},
@@ -461,7 +461,7 @@ class TestStatsManagerEnhanced:
 
     @pytest.mark.asyncio
     async def test_get_client_wifi_details_no_match_returns_none(self, stats_manager, mock_connection):
-        """Regression for #148: unknown MAC must return None, not clients[0]."""
+        """Unknown MAC must return None, not clients[0]."""
         mock_connection.request.return_value = [
             {"mac": "11:11:11:11:11:11", "signal": -57, "channel": 132},
             {"mac": "22:22:22:22:22:22", "signal": -60, "channel": 36},

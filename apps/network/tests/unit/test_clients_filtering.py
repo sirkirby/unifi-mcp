@@ -88,7 +88,7 @@ async def test_limit_truncates_but_reports_total():
 
 @pytest.mark.asyncio
 async def test_fields_selects_subset():
-    # Valid on this branch: upstream/main (post-#299) emits a distinct `name` key.
+    # upstream/main emits a distinct `name` key.
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
         mock_cm.get_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
         mock_cm.get_all_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
@@ -103,8 +103,8 @@ async def test_fields_selects_subset():
 
 
 @pytest.mark.asyncio
-async def test_name_and_hostname_are_distinct_post_pr299():
-    # Guards the #299 interaction: user alias (name) vs DHCP hostname stay separate.
+async def test_name_and_hostname_are_distinct():
+    # User alias (name) and DHCP hostname must stay separate.
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
         mock_cm.get_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
         mock_cm.get_all_clients = AsyncMock(return_value=list(SAMPLE_CLIENTS))
@@ -120,7 +120,7 @@ async def test_name_and_hostname_are_distinct_post_pr299():
 
 
 # ---------------------------------------------------------------------------
-# get_client_details — opt-in section selection (default preserves #300 full object)
+# get_client_details — opt-in section selection (default preserves the full object)
 # ---------------------------------------------------------------------------
 
 CLIENT_DETAIL_RAW = {
@@ -140,9 +140,9 @@ CLIENT_DETAIL_RAW = {
 
 
 @pytest.mark.asyncio
-async def test_get_client_details_default_preserves_pr300_full_object():
+async def test_get_client_details_default_preserves_full_object():
     # Regression guard: default (no args) must return the full raw object in the
-    # {success, site, client} envelope — byte-for-byte the #300 behavior, no trimming.
+    # {success, site, client} envelope — byte-for-byte the prior behavior, no trimming.
     with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
         mock_cm.get_client_details = AsyncMock(return_value=CLIENT_DETAIL_RAW)
         mock_cm._connection = _mock_conn()

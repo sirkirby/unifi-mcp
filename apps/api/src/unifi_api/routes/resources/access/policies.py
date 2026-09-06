@@ -2,7 +2,7 @@
 
 Access is a single-controller, no-site product. ``site_id`` is accepted for
 URL symmetry but no-ops on access. PolicyManager.get_policy may raise
-UniFiNotFoundError post-#175 when proxy returns a miss.
+UniFiNotFoundError when the proxy returns a miss.
 """
 
 from __future__ import annotations

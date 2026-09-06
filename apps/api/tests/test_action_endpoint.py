@@ -554,7 +554,7 @@ async def test_action_endpoint_unwraps_recognition_list_envelope(
 ) -> None:
     """Recognition list tools return a ``{items_key: [...], count, links}`` dict
     envelope (not a bare list); the action path must unwrap it rather than 500
-    with a serializer contract error. Regression for issue #312."""
+    with a serializer contract error."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
 

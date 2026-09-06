@@ -168,7 +168,7 @@ async def test_get_port_forward_404(tmp_path, monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_get_port_forward_unifi_not_found(tmp_path, monkeypatch) -> None:
-    """Manager refactor PR #172: get_port_forward_by_id raises UniFiNotFoundError."""
+    """Manager-owned existence check: get_port_forward_by_id raises UniFiNotFoundError."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)
     _stub_connection(app, cid)
