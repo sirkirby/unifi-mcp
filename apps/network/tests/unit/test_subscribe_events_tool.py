@@ -51,6 +51,82 @@ class TestUnifiRecentEvents:
         )
 
 
+class TestListenerState:
+    @pytest.mark.asyncio
+    async def test_recent_events_reports_a_running_listener(self, mock_event_manager):
+        from unifi_network_mcp.tools.events import unifi_recent_events
+
+        mock_event_manager.get_recent_from_buffer.return_value = []
+        mock_event_manager.buffer_size = 0
+        mock_event_manager.buffer_capacity = 100
+        mock_event_manager.is_listening = True
+        mock_event_manager.attached = True
+        mock_event_manager.last_error = None
+
+        result = await unifi_recent_events()
+
+        assert result["success"] is True
+        assert result["listening"] is True
+        assert result["attached"] is True
+        assert result["buffer_capacity"] == 100
+        assert "hint" not in result
+
+    @pytest.mark.asyncio
+    async def test_recent_events_hints_when_the_listener_is_not_running(self, mock_event_manager):
+        """An empty buffer with no listener is not "no events"; say so."""
+        from unifi_network_mcp.tools.events import unifi_recent_events
+
+        mock_event_manager.get_recent_from_buffer.return_value = []
+        mock_event_manager.buffer_size = 0
+        mock_event_manager.buffer_capacity = 100
+        mock_event_manager.is_listening = False
+
+        result = await unifi_recent_events()
+
+        assert result["listening"] is False
+        assert "UNIFI_NETWORK_WEBSOCKET_ENABLED" in result["hint"]
+        assert "unifi_list_events" in result["hint"]
+
+    @pytest.mark.asyncio
+    async def test_recent_events_hints_when_the_listener_never_attached(self, mock_event_manager):
+        from unifi_network_mcp.tools.events import unifi_recent_events
+
+        mock_event_manager.get_recent_from_buffer.return_value = []
+        mock_event_manager.buffer_size = 0
+        mock_event_manager.buffer_capacity = 100
+        mock_event_manager.is_listening = True
+        mock_event_manager.attached = False
+        mock_event_manager.last_error = "WSServerHandshakeError (HTTP 404)"
+
+        result = await unifi_recent_events()
+
+        assert result["listening"] is True
+        assert result["attached"] is False
+        assert result["last_error"] == "WSServerHandshakeError (HTTP 404)"
+        assert "has not attached" in result["hint"]
+
+    def test_tools_and_main_share_one_event_manager(self):
+        from unifi_network_mcp import runtime
+        from unifi_network_mcp.tools import events
+
+        assert events._get_event_manager() is runtime.event_manager
+
+    @pytest.mark.asyncio
+    async def test_subscribe_events_reports_listener_state(self, mock_event_manager):
+        from unifi_network_mcp.tools.events import unifi_subscribe_events
+
+        mock_event_manager.buffer_size = 0
+        mock_event_manager.buffer_capacity = 100
+        mock_event_manager.is_listening = False
+
+        result = await unifi_subscribe_events()
+
+        assert result["success"] is True
+        assert result["listening"] is False
+        assert result["buffer_capacity"] == 100
+        assert "hint" in result
+
+
 class TestUnifiSubscribeEvents:
     @pytest.mark.asyncio
     async def test_unifi_subscribe_events_returns_handle_dict(self, mock_event_manager):

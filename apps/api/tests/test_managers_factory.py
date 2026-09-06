@@ -509,3 +509,59 @@ async def test_invalidate_closes_every_site_connection(tmp_path: Path, monkeypat
     assert len(instances) == 2
     assert [cm.close_calls for cm in instances] == [1, 1]
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_invalidate_stops_listening_event_managers(tmp_path: Path, monkeypatch) -> None:
+    """The Network EventManager owns a background websocket task; dropping it
+    from the cache must stop the task, or it keeps reconnecting with the
+    discarded credentials."""
+    _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    async with sm() as session:
+        mgr = await factory.get_domain_manager(session, cid, "network", "event_manager")
+    stop = AsyncMock()
+    monkeypatch.setattr(mgr, "stop_listening", stop)
+
+    await factory.invalidate_controller(cid)
+
+    stop.assert_awaited_once()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_probe_heal_stops_listening_event_managers(tmp_path: Path, monkeypatch) -> None:
+    _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    async with sm() as session:
+        cached = await factory.get_connection_manager(session, cid, "network")
+        mgr = await factory.get_domain_manager(session, cid, "network", "event_manager")
+    cached.reconnect_blocked = True
+    stop = AsyncMock()
+    monkeypatch.setattr(mgr, "stop_listening", stop)
+
+    result = await factory.probe_controller(cid)
+
+    assert result["ok"] is True
+    stop.assert_awaited_once()
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_invalidate_still_closes_the_connection_when_a_listener_fails_to_stop(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    async with sm() as session:
+        cm = await factory.get_connection_manager(session, cid, "network")
+        mgr = await factory.get_domain_manager(session, cid, "network", "event_manager")
+    monkeypatch.setattr(mgr, "stop_listening", AsyncMock(side_effect=RuntimeError("stuck")))
+
+    await factory.invalidate_controller(cid)
+
+    assert cm.close_calls == 1
+    await engine.dispose()

@@ -433,6 +433,17 @@ class ConnectionManager:
         self._reconnect_block_count = 0
 
     @property
+    def reconnect_cooldown_active(self) -> bool:
+        """True while the auth circuit's cool-down is running.
+
+        Unlike :attr:`reconnect_blocked`, which stays latched until a login
+        succeeds, this half-opens on the timer: a caller that retries on its
+        own (the event websocket) consults this and gets one attempt after
+        expiry instead of waiting for a process restart.
+        """
+        return self._reconnect_block_active() is not None
+
+    @property
     def reconnect_blocked(self) -> bool:
         """Whether the last authentication attempt failed terminally with no success since."""
         return self._reconnect_block_error is not None
@@ -686,6 +697,15 @@ class ConnectionManager:
             logger.debug("connectivity.config.session attribute not found – skipping additional session check.")
 
         return True
+
+    async def reauthenticate(self) -> bool:
+        """Refresh the controller login for the current session generation.
+
+        For callers outside ``request()`` that learn the session is stale on
+        their own, such as the event websocket after a rejected handshake.
+        Honours the reconnect circuit like every other login path.
+        """
+        return await self._reauthenticate(self._auth_generation)
 
     async def _reauthenticate(self, expected_generation: int) -> bool:
         """Refresh an expired controller login once, deduplicating concurrent attempts."""

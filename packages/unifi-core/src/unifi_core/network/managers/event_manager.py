@@ -4,11 +4,13 @@ Manages event log and alarm operations using the v2 system-log API
 (UniFi Network 10.x+). Falls back to legacy /stat/event for older controllers.
 """
 
+import asyncio
 import logging
 import time
 from collections import deque
 from typing import Any, Callable, Dict, List, Optional
 
+import aiohttp
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.message import MessageKey
 
@@ -33,6 +35,10 @@ class EventBuffer:
     def __init__(self, max_size: int = 100, ttl_seconds: int = 300) -> None:
         self._buffer: deque[dict[str, Any]] = deque(maxlen=max_size)
         self._ttl = ttl_seconds
+
+    @property
+    def capacity(self) -> int:
+        return self._buffer.maxlen or 0
 
     def add(self, event: dict[str, Any]) -> None:
         """Add *event* to the buffer, stamping it with the current time."""
@@ -115,36 +121,248 @@ class EventManager:
         )
         self._subscribers: list[Callable[[dict], None]] = []
         self._ws_unsub: Callable[[], None] | None = None
+        self._subscribed_controller: Any = None
+        self._ws_task: asyncio.Task[None] | None = None
+        self._stopping = False
+        self._closed = False
+        self._last_error: str | None = None
+        self._attach_failures = 0
+        self._clock = time.monotonic  # injectable for tests; the loop's clock is untouched
+        # The socket currently being attached: aiounifi's connectivity object
+        # (it stamps ws_message_received on every frame) and the stamp it held
+        # when this attempt began. None outside an attempt (backoff, stopped).
+        self._ws_connectivity: Any = None
+        self._ws_frame_baseline: Any = None
 
     # ------------------------------------------------------------------
     # Websocket lifecycle
     # ------------------------------------------------------------------
 
+    # Reconnect backoff bounds, in seconds, and how long a socket must stay
+    # attached before the backoff resets (a peer that accepts then closes at
+    # once must not be polled every second).
+    _BACKOFF_INITIAL = 1.0
+    _BACKOFF_MAX = 60.0
+    _STABLE_SECONDS = 5.0
+
+    @property
+    def is_listening(self) -> bool:
+        """True while the background websocket task is alive."""
+        return self._ws_task is not None and not self._ws_task.done()
+
+    @property
+    def attached(self) -> bool:
+        """True only while a frame has been received on the socket now open.
+
+        A running task is not an open socket: a controller that holds the
+        handshake, rejects it, or accepts and closes at once keeps the task
+        alive and the buffer empty. aiounifi exposes no open/close callback,
+        but it stamps ``ws_message_received`` on every frame, and the
+        controller sends sync frames continuously, so a stamp that changed
+        since the current attempt began is the confirmation (a stamp left by
+        an earlier socket does not count). Cleared the moment
+        ``start_websocket`` returns or raises, for the whole backoff.
+        """
+        if not self.is_listening or self._ws_connectivity is None:
+            return False
+        return getattr(self._ws_connectivity, "ws_message_received", None) != self._ws_frame_baseline
+
+    @property
+    def last_error(self) -> str | None:
+        """Class (and HTTP status) of the last attach failure, or ``None``."""
+        return self._last_error
+
     async def start_listening(self) -> None:
-        """Open the aiounifi websocket and subscribe to event/alert messages.
+        """Subscribe to event/alert messages and run the websocket in the background.
 
         aiounifi exposes events through ``Controller.messages`` (a
-        ``MessageHandler``). ``messages.subscribe(callback, message_filter)``
-        returns an unsubscribe callable. We filter to ``EVENT`` + ``ALERT``
-        so only event-log payloads flow through.
+        ``MessageHandler``); ``messages.subscribe(callback, message_filter)``
+        returns an unsubscribe callable. ``Controller.start_websocket()`` is
+        the blocking receive loop with no reconnect of its own, so it runs in
+        a task that reconnects with backoff, re-subscribes when a reconnect
+        replaces the Controller object, and re-logs-in when the handshake is
+        rejected (aiounifi reuses the cookie captured at login). Idempotent.
         """
-        controller = self._cm.controller
-        await controller.start_websocket()
+        if self.is_listening:
+            return
+        if self._closed:
+            # Stopped by its owner (shutdown, or the API dropping the manager
+            # on credential rotation); a late caller must not revive it.
+            logger.debug("[network-event-mgr] start_listening ignored on a stopped manager")
+            return
+        self._stopping = False
+        self._subscribe(self._cm.controller)
+        self._ws_task = asyncio.create_task(self._run_websocket(), name="network-event-websocket")
+        self._ws_task.add_done_callback(self._on_task_done)
+        logger.info("[network-event-mgr] websocket listener started")
+
+    async def stop_listening(self) -> None:
+        """Stop the background websocket task and drop the subscription.
+
+        The subscription is released in ``finally``: a cancellation aimed at
+        the stopping caller (a second interrupt at shutdown) still propagates,
+        but never leaves the controller holding our callback.
+        """
+        self._stopping = True
+        self._closed = True
+        task, self._ws_task = self._ws_task, None
+        try:
+            if task is not None and not task.done():
+                current = asyncio.current_task()
+                cancelling_before = current.cancelling() if current is not None else 0
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    # Re-raise when the cancellation was aimed at the caller,
+                    # not at the task we just cancelled.
+                    if current is not None and current.cancelling() > cancelling_before:
+                        raise
+                except Exception as exc:
+                    logger.error("[network-event-mgr] websocket loop ended with %s", type(exc).__name__)
+                    logger.debug("[network-event-mgr] websocket loop failure", exc_info=exc)
+        finally:
+            self._unsubscribe()
+            self._socket_closed()
+            self._last_error = None
+            if task is not None:
+                logger.info("[network-event-mgr] websocket listener stopped")
+
+    def _socket_closed(self) -> None:
+        """Forget the current attempt: nothing is attached until the next frame."""
+        self._ws_connectivity = None
+        self._ws_frame_baseline = None
+
+    @staticmethod
+    def _on_task_done(task: "asyncio.Task[None]") -> None:
+        """Nothing in the loop should escape; if something does, say so now."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("[network-event-mgr] websocket task died: %s", type(exc).__name__)
+            logger.debug("[network-event-mgr] websocket task failure", exc_info=exc)
+
+    def _subscribe(self, controller: Any) -> None:
+        """Bind the message subscription to *controller*, releasing any previous one."""
+        if controller is None or controller is self._subscribed_controller:
+            return
+        self._unsubscribe()
         self._ws_unsub = controller.messages.subscribe(
             self._on_ws_event,
             (MessageKey.EVENT, MessageKey.ALERT),
         )
-        logger.info("[network-event-mgr] websocket subscription started")
+        self._subscribed_controller = controller
 
-    async def stop_listening(self) -> None:
-        """Unsubscribe from the websocket message handler."""
+    def _unsubscribe(self) -> None:
         if self._ws_unsub is not None:
             try:
                 self._ws_unsub()
             except Exception:
                 logger.debug("[network-event-mgr] error unsubscribing", exc_info=True)
-            self._ws_unsub = None
-            logger.info("[network-event-mgr] websocket subscription stopped")
+        self._ws_unsub = None
+        self._subscribed_controller = None
+
+    @staticmethod
+    def _is_rejected_handshake(exc: BaseException) -> bool:
+        return isinstance(exc, aiohttp.WSServerHandshakeError) and exc.status in (401, 403)
+
+    @staticmethod
+    def _describe(exc: BaseException) -> str:
+        """Class name, plus the HTTP status of a handshake error or the text of
+        our own ConnectionError; never aiounifi's messages, which quote the URL."""
+        if isinstance(exc, aiohttp.WSServerHandshakeError):
+            return f"{type(exc).__name__} (HTTP {exc.status})"
+        if type(exc) is ConnectionError:
+            return f"ConnectionError ({exc})"
+        return type(exc).__name__
+
+    async def _run_websocket(self) -> None:
+        """Keep the websocket attached until stopped.
+
+        The loop never spins against the controller: while the connection
+        manager's reconnect circuit is open it only sleeps, and every failure
+        backs off (doubling to ``_BACKOFF_MAX``) until an attach succeeds. A
+        rejected handshake (401/403) triggers one re-login per attempt, since
+        aiounifi reuses the cookie captured at login.
+        """
+        backoff = self._BACKOFF_INITIAL
+        while not self._stopping:
+            needs_reauth = False
+            try:
+                # The circuit half-opens on a timer; ``reconnect_blocked``
+                # stays latched until a login succeeds, so it must not gate
+                # the retry or an expired cool-down would never be tried.
+                if self._cm.reconnect_cooldown_active:
+                    raise ConnectionError("reconnect circuit open")
+                if not await self._cm.ensure_connected():
+                    raise ConnectionError("controller not connected")
+                controller = self._cm.controller
+                if controller is None:
+                    raise ConnectionError("controller not available")
+                self._subscribe(controller)
+                self._last_error = None
+                attached_at = self._clock()
+                self._ws_connectivity = getattr(controller, "connectivity", None)
+                self._ws_frame_baseline = getattr(self._ws_connectivity, "ws_message_received", None)
+                try:
+                    await controller.start_websocket()
+                finally:
+                    # Returned or raised: the socket is closed either way, and
+                    # nothing is attached until the next attempt's first frame.
+                    self._socket_closed()
+                # Closed by the peer without an error. Only a socket that
+                # stayed up counts as a success; an accept-then-close is a
+                # failed attach and backs off like one.
+                if self._clock() - attached_at < self._STABLE_SECONDS:
+                    raise ConnectionError("closed by the controller before it was stable")
+                backoff = self._BACKOFF_INITIAL
+                self._attach_failures = 0
+                logger.info("[network-event-mgr] websocket closed by the controller; reconnecting")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self._last_error = self._describe(exc)
+                self._attach_failures += 1
+                needs_reauth = self._is_rejected_handshake(exc)
+                logger.debug("[network-event-mgr] websocket attach failed", exc_info=True)
+                if backoff >= self._BACKOFF_MAX and self._attach_failures == self._failures_at_max_backoff():
+                    logger.error(
+                        "[network-event-mgr] websocket has not attached after %d attempts (%s); "
+                        "unifi_recent_events will stay empty until it does",
+                        self._attach_failures,
+                        self._last_error,
+                    )
+                else:
+                    logger.warning(
+                        "[network-event-mgr] websocket attach failed (%s); retrying in %.0fs",
+                        self._last_error,
+                        backoff,
+                    )
+            if self._stopping:
+                break
+            if needs_reauth:
+                await self._reauthenticate_quietly()
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, self._BACKOFF_MAX)
+
+    def _failures_at_max_backoff(self) -> int:
+        """The attempt count at which backoff first reaches its cap (escalate once)."""
+        steps, value = 0, self._BACKOFF_INITIAL
+        while value < self._BACKOFF_MAX:
+            value *= 2
+            steps += 1
+        return steps + 1
+
+    async def _reauthenticate_quietly(self) -> None:
+        """Re-login after a rejected handshake; its own failure must not end the loop."""
+        try:
+            ok = await self._cm.reauthenticate()
+        except Exception as exc:
+            logger.warning("[network-event-mgr] re-authentication failed: %s", type(exc).__name__)
+            return
+        if not ok:
+            logger.warning("[network-event-mgr] re-authentication failed; the reconnect circuit may be open")
 
     # ------------------------------------------------------------------
     # Event ingestion + fan-out
@@ -228,7 +446,12 @@ class EventManager:
 
     @property
     def buffer_size(self) -> int:
+        """Current occupancy of the ring buffer (not its capacity)."""
         return len(self._buffer)
+
+    @property
+    def buffer_capacity(self) -> int:
+        return self._buffer.capacity
 
     async def _detect_api_version(self) -> bool:
         """Detect whether the controller supports the v2 system-log API.

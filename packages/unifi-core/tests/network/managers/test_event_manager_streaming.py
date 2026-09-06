@@ -8,6 +8,9 @@ from unifi_core.network.managers.event_manager import EventManager
 
 def _make_manager_with_mock_cm() -> EventManager:
     cm = MagicMock()
+    cm.reconnect_blocked = False
+    cm.reconnect_cooldown_active = False
+    cm.ensure_connected = AsyncMock(return_value=True)
     cm.controller = MagicMock()
     cm.controller.start_websocket = AsyncMock()
     cm.controller.messages = MagicMock()
@@ -76,11 +79,22 @@ def test_get_recent_from_buffer_returns_buffered() -> None:
 
 @pytest.mark.asyncio
 async def test_start_listening_calls_controller_start_websocket() -> None:
+    """The receive loop runs in a background task; start_listening returns at once."""
+    import asyncio
+
     mgr = _make_manager_with_mock_cm()
+    started = asyncio.Event()
+
+    async def _ws():
+        started.set()
+        await asyncio.Event().wait()
+
+    mgr._cm.controller.start_websocket = AsyncMock(side_effect=_ws)
     await mgr.start_listening()
-    mgr._cm.controller.start_websocket.assert_awaited_once()
-    # subscribe was called to register _on_ws_event handler
+    # subscribe is registered before the loop starts
     mgr._cm.controller.messages.subscribe.assert_called_once()
+    await asyncio.wait_for(started.wait(), 1)
+    await mgr.stop_listening()
 
 
 @pytest.mark.asyncio

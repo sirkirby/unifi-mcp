@@ -17,19 +17,39 @@ from unifi_network_mcp.runtime import server
 
 logger = logging.getLogger(__name__)
 
-# Lazy import to avoid circular dependencies
-_event_manager = None
+_NOT_RUNNING_HINT = (
+    "The websocket listener is not running, so this buffer cannot fill. Check "
+    "UNIFI_NETWORK_WEBSOCKET_ENABLED (default true) and the server startup log; use "
+    "unifi_list_events for historical events."
+)
+_NOT_ATTACHED_HINT = (
+    "The websocket listener is running but has not attached to the controller ({error}), so this "
+    "buffer cannot fill; it keeps retrying. Check the server log; use unifi_list_events for "
+    "historical events."
+)
 
 
 def _get_event_manager():
-    """Lazy-load the event manager to avoid circular imports."""
-    global _event_manager
-    if _event_manager is None:
-        from unifi_core.network.managers.event_manager import EventManager
-        from unifi_network_mcp.runtime import get_connection_manager
+    """The runtime's EventManager singleton (the one main_async starts); resolved
+    lazily so importing this module does not import the runtime's managers."""
+    from unifi_network_mcp.runtime import get_event_manager
 
-        _event_manager = EventManager(get_connection_manager())
-    return _event_manager
+    return get_event_manager()
+
+
+def _listener_state(mgr) -> Dict[str, Any]:
+    state: Dict[str, Any] = {
+        "listening": bool(mgr.is_listening),
+        "attached": bool(mgr.attached),
+        "last_error": mgr.last_error,
+        "buffer_size": mgr.buffer_size,
+        "buffer_capacity": mgr.buffer_capacity,
+    }
+    if not state["listening"]:
+        state["hint"] = _NOT_RUNNING_HINT
+    elif not state["attached"]:
+        state["hint"] = _NOT_ATTACHED_HINT.format(error=mgr.last_error or "unknown")
+    return state
 
 
 @server.tool(
@@ -144,7 +164,11 @@ async def list_alarms(
         "(no API call) and returns events received via the real-time websocket "
         "stream. Supports filtering by exact event_type key, client/device mac, "
         "and limit. Use this for real-time monitoring; use unifi_list_events "
-        "for historical queries."
+        "for historical queries. The response reports whether the listener is "
+        "running (listening) and attached to the controller (attached, with "
+        "last_error when not), the buffer occupancy (buffer_size) and its "
+        "capacity (buffer_capacity); an empty buffer with attached=false is "
+        "not 'no events'."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -169,7 +193,7 @@ async def unifi_recent_events(
     mgr = _get_event_manager()
     events = mgr.get_recent_from_buffer(event_type=event_type, mac=mac, limit=limit)
     shaped = [event_log_from_controller(e).model_dump(exclude_none=True) for e in events]
-    return {"events": shaped, "count": len(shaped), "buffer_size": mgr.buffer_size}
+    return {"success": True, "events": shaped, "count": len(shaped), **_listener_state(mgr)}
 
 
 @server.tool(
@@ -177,7 +201,10 @@ async def unifi_recent_events(
     description=(
         "Returns a handle describing how to subscribe to live network events. "
         "Provides the MCP resource URI for the event stream and pointers to the "
-        "buffered-event tool. Use this to set up continuous event monitoring."
+        "buffered-event tool, plus whether the websocket listener is running "
+        "(listening) and attached (attached, last_error) and the buffer "
+        "occupancy and capacity. Use this to set up "
+        "continuous event monitoring."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -186,9 +213,10 @@ async def unifi_subscribe_events() -> Dict[str, Any]:
     logger.info("unifi_subscribe_events called")
     mgr = _get_event_manager()
     return {
+        "success": True,
         "resource_uri": "unifi://network/events",
         "summary_uri": "unifi://network/events/recent",
-        "buffer_size": mgr.buffer_size,
+        **_listener_state(mgr),
         "instructions": (
             "Call unifi_recent_events to read buffered events. The unifi-api "
             "service (if running) exposes /v1/streams/network/events for live "

@@ -13752,7 +13752,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by exact event_type key, client/device mac, and limit. Use this for real-time monitoring; use unifi_list_events for historical queries.",
+      "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by exact event_type key, client/device mac, and limit. Use this for real-time monitoring; use unifi_list_events for historical queries. The response reports whether the listener is running (listening) and attached to the controller (attached, with last_error when not), the buffer occupancy (buffer_size) and its capacity (buffer_capacity); an empty buffer with attached=false is not 'no events'.",
       "name": "unifi_recent_events",
       "schema": {
         "input": {
@@ -14914,7 +14914,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns a handle describing how to subscribe to live network events. Provides the MCP resource URI for the event stream and pointers to the buffered-event tool. Use this to set up continuous event monitoring.",
+      "description": "Returns a handle describing how to subscribe to live network events. Provides the MCP resource URI for the event stream and pointers to the buffered-event tool, plus whether the websocket listener is running (listening) and attached (attached, last_error) and the buffer occupancy and capacity. Use this to set up continuous event monitoring.",
       "name": "unifi_subscribe_events",
       "schema": {
         "input": {
