@@ -15,7 +15,7 @@ from unifi_core.auth import UniFiAuth
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
-from unifi_core.network.models.firewall import _normalize_endpoint_macs
+from unifi_core.network.models.firewall import _normalize_endpoint_macs, validate_policy_port_targeting
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -984,6 +984,7 @@ class FirewallManager:
         Returns:
             The created FirewallPolicy object, or None if creation failed.
         """
+        validate_policy_port_targeting(policy_data)
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
 
