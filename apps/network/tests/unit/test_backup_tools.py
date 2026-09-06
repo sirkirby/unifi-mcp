@@ -202,6 +202,41 @@ class TestBackupTools:
         assert api_req.data["cmd"] == "list-backups"
 
 
+class TestAutoBackupTools:
+    """Tests for the auto-backup update preview."""
+
+    @pytest.mark.asyncio
+    async def test_update_autobackup_settings_preview_shows_current_values(self, monkeypatch):
+        """The preview must diff against the live settings, not against an empty dict."""
+        from unifi_network_mcp.tools import system
+
+        mock_mgr = MagicMock()
+        mock_mgr._connection.site = "default"
+        mock_mgr.get_autobackup_settings = AsyncMock(
+            return_value={
+                "autobackup_enabled": True,
+                "autobackup_cron_expr": "0 2 * * *",
+                "autobackup_days": 30,
+                "autobackup_max_files": 10,
+                "autobackup_timezone": "America/Denver",
+                "autobackup_cloud_enabled": False,
+            }
+        )
+        monkeypatch.setattr(system, "system_manager", mock_mgr)
+
+        result = await system.update_autobackup_settings(
+            update_data={"autobackup_max_files": 5, "autobackup_cron_expr": "30 0 * * 0"},
+            confirm=False,
+        )
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["current"]["autobackup_max_files"] == 10
+        assert result["preview"]["current"]["autobackup_cron_expr"] == "0 2 * * *"
+        assert result["preview"]["proposed"]["autobackup_max_files"] == 5
+        assert result["preview"]["proposed"]["autobackup_cron_expr"] == "30 0 * * 0"
+
+
 class TestSnmpTools:
     """Tests for SNMP tool response redaction."""
 

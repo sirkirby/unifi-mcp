@@ -6319,7 +6319,7 @@
             "type": "string"
           },
           "update_data": {
-            "description": "Dictionary of fields to update. See tool description for all supported fields.",
+            "description": "Dict of network fields to change (keys listed in the tool description), e.g. {'enabled': false}.",
             "type": "object"
           }
         },
@@ -6690,7 +6690,7 @@
       "input_schema": {
         "properties": {
           "update_data": {
-            "description": "Dictionary of fields to update. See tool description for all supported fields.",
+            "description": "Dict of WLAN fields to change (keys listed in the tool description), e.g. {'enabled': false}.",
             "type": "object"
           },
           "wlan_id": {

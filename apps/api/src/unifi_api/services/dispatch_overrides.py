@@ -91,6 +91,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # Gateway/SNMP settings updates pre-fetch current state for previews.
     "unifi_update_gateway_settings": ("gateway_settings_manager", "update_gateway_settings"),
     "unifi_update_snmp_settings": ("system_manager", "update_settings"),
+    # Auto-backup update pre-fetches get_autobackup_settings for the preview.
+    "unifi_update_autobackup_settings": ("system_manager", "update_autobackup_settings"),
     # Firewall: tool layer pre-fetches list to find policy by id.
     "unifi_toggle_firewall_policy": ("firewall_manager", "toggle_firewall_policy"),
     "unifi_get_firewall_policy_details": ("firewall_manager", "get_firewall_policy_by_id"),

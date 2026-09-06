@@ -246,7 +246,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 
 - `unifi_get_system_info` — Controller version, uptime, resource usage
 - `unifi_get_network_health` — Per-subsystem health (WAN, LAN, WLAN, VPN)
-- `unifi_get_site_settings` — Current site settings
+- `unifi_get_site_settings` — Site identity, country, timezone, connectivity monitor and NTP servers
 - `unifi_get_snmp_settings` — SNMP configuration
 - `unifi_update_snmp_settings` — Update SNMP settings
 - `unifi_list_backups` — List available backups on the controller

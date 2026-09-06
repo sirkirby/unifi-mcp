@@ -253,6 +253,8 @@ SECURITY_CRITICAL_NETWORK_FIELDS: frozenset[str] = frozenset({"firewall_zone_id"
     name="unifi_update_network",
     description="Update specific fields of an existing network (LAN/VLAN). "
     "Pass only the fields you want to change — current values are automatically preserved. "
+    "Every network field below is a key inside the update_data dict, not a top-level argument, e.g. "
+    "update_data={'dhcpd_enabled': false}. Unknown keys are rejected. "
     "Basic: name, purpose ('corporate'/'vlan-only'), vlan_enabled (bool), vlan (str), "
     "ip_subnet (CIDR), enabled (bool), network_isolation_enabled (bool, corporate only), "
     "internet_access_enabled (bool), upnp_lan_enabled (bool), "
@@ -299,7 +301,9 @@ async def update_network(
     ],
     update_data: Annotated[
         Dict[str, Any],
-        Field(description="Dictionary of fields to update. See tool description for all supported fields."),
+        Field(
+            description="Dict of network fields to change (keys listed in the tool description), e.g. {'enabled': false}."
+        ),
     ],
     confirm: Annotated[
         bool,
@@ -815,6 +819,8 @@ async def get_wlan_details(
     name="unifi_update_wlan",
     description="Update specific fields of an existing WLAN (SSID). "
     "Pass only the fields you want to change — current values are automatically preserved. "
+    "Every WLAN field below is a key inside the update_data dict, not a top-level argument, e.g. "
+    "update_data={'enabled': false, 'hide_ssid': true}. Unknown keys are rejected. "
     "Basic: name (str), security ('open'/'wpapsk'/'wpa2-psk'), x_passphrase (str), "
     "enabled (bool), hide_ssid (bool), guest_policy (controller-dependent bool; may be reported as dropped), "
     "usergroup_id (str), networkconf_id (str). "
@@ -843,7 +849,9 @@ async def update_wlan(
     wlan_id: Annotated[str, Field(description="Unique identifier (_id) of the WLAN to update (from unifi_list_wlans)")],
     update_data: Annotated[
         Dict[str, Any],
-        Field(description="Dictionary of fields to update. See tool description for all supported fields."),
+        Field(
+            description="Dict of WLAN fields to change (keys listed in the tool description), e.g. {'enabled': false}."
+        ),
     ],
     confirm: Annotated[
         bool,

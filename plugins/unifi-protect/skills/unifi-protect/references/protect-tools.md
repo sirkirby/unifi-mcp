@@ -2,6 +2,8 @@
 
 Complete reference for `protect_*` tools. All read tools are always available. All mutations are **disabled by default** — the user must explicitly enable them because Protect controls physical security hardware.
 
+Permission variables use the server's config keys (`CAMERAS`, `LIGHTS`, `CHIMES`, `SENSORS`), not the singular `permission_category` shorthand in `tools_manifest.json` (`camera`, `light`, `chime`). `UNIFI_POLICY_PROTECT_CAMERA_UPDATE` is never read; a denied tool's error names the exact variable to set.
+
 ## Table of Contents
 - [Meta-Tools](#meta-tools)
 - [Cameras](#cameras)
