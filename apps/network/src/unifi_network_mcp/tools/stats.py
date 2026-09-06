@@ -241,7 +241,7 @@ async def get_top_clients(
         for entry in top_client_stats:
             mac = entry.get("mac")
             if mac:
-                details = await client_manager.get_client_details(mac)
+                details = await client_manager.get_client_details(mac, existence_only=True)
                 if details:
                     raw = details.raw if hasattr(details, "raw") else details
                     if not entry.get("name") and not entry.get("hostname"):

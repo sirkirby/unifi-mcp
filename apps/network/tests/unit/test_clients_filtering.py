@@ -251,6 +251,24 @@ async def test_get_client_details_not_found():
 
 
 @pytest.mark.asyncio
+async def test_get_client_details_reports_an_undetermined_lookup_as_an_error():
+    from unifi_core.exceptions import UniFiOperationError
+
+    with patch("unifi_network_mcp.tools.clients.client_manager") as mock_cm:
+        mock_cm.get_client_details = AsyncMock(side_effect=UniFiOperationError("existence could not be determined"))
+        mock_cm._connection = _mock_conn()
+
+        from unifi_network_mcp.tools.clients import get_client_details
+
+        result = await get_client_details("aa:bb:cc:99:99:99")
+
+    assert result == {
+        "success": False,
+        "error": "Failed to get client details for aa:bb:cc:99:99:99: existence could not be determined",
+    }
+
+
+@pytest.mark.asyncio
 async def test_get_client_details_summary_status_offline_without_signal():
     # Offline/historical clients lack `is_online` and active-connection counters;
     # status must be derived as Offline, not defaulted to Online.
