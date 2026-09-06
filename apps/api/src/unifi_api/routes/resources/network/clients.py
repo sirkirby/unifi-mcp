@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -109,6 +109,9 @@ async def get_client(
             client = await mgr.get_client_details(mac)
     except UniFiNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except UniFiOperationError as exc:
+        # The per-MAC lookup failed, so existence is undetermined: not a 404.
+        raise HTTPException(status_code=502, detail=str(exc))
     if client is None:
         raise HTTPException(status_code=404, detail="client not found")
 
