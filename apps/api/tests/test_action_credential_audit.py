@@ -1,4 +1,4 @@
-"""Audit ``detail`` must not carry submitted credential values (#645, #648).
+"""Audit ``detail`` must not carry submitted credential values.
 
 Runs the action route against the real ``SystemManager`` + ``ConnectionManager``
 with a fake aiounifi controller that fails while quoting the submitted secret,
@@ -152,7 +152,7 @@ async def test_preview_validation_error_audit_detail_is_scrubbed(tmp_path, monke
 
 
 # ---------------------------------------------------------------------------
-# Encoded representations (#660 review)
+# Encoded representations
 #
 # Schema validation quotes the offending value with ``repr``. A credential
 # holding a backslash, quote or newline never appears literally in that

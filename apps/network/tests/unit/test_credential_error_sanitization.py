@@ -2,7 +2,7 @@
 
 Drives the real ``SystemManager`` and ``ConnectionManager`` with a fake
 aiounifi controller whose request fails with an error quoting the submitted
-secret (the reproduction from #645/#648). Asserts the MCP tool response and
+secret. Asserts the MCP tool response and
 the captured log are both free of the sentinel, for preview and write.
 """
 

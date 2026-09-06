@@ -127,7 +127,7 @@ def _audit_detail(error: BaseException, args: dict) -> str:
     transport errors, and ``_validate_action_args`` keeps the submitted value
     out of its own message, so nothing on either path is expected to carry a
     credential here. This stays as the last barrier for a translator or
-    serializer message built somewhere else (#645, #648).
+    serializer message built somewhere else.
     """
     return scrub_secret_values(str(error), collect_secret_values(args))
 

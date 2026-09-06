@@ -245,7 +245,7 @@ def test_sanitize_exception_redacts_dict_args_like_aiounifi():
 
 
 # ---------------------------------------------------------------------------
-# Encoded representations of a secret (#660 review)
+# Encoded representations of a secret
 #
 # A message that quotes the offending value through ``repr`` or JSON does not
 # contain the literal credential: backslashes are doubled, quotes and newlines

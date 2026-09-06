@@ -376,7 +376,7 @@ class ConnectionManager:
 
         A controller error can quote the request it rejected, and a transport
         error can quote the login. Both would otherwise reach the manager log,
-        any caller that formats ``str(e)`` and the API audit sink (#645, #648).
+        any caller that formats ``str(e)`` and the API audit sink.
         Scrubs the configured login plus every value held under a sensitive
         key in the request payload, following the exception's cause chain, and
         marks them the way this manager's own credential masking does.

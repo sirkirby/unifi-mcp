@@ -327,7 +327,7 @@ class SystemManager:
             else:
                 # A rejected write can echo the submitted record (x_password,
                 # community, ...). Redact by key and scrub the submitted values
-                # before the log line (#645, #648).
+                # before the log line.
                 secrets = collect_secret_values(settings_data)
                 safe_response = scrub_secret_values(str(redact_sensitive_fields(response)), secrets)
                 logger.error("Error updating %s settings: %s", section, safe_response)
@@ -335,7 +335,7 @@ class SystemManager:
             return success
         except Exception as e:
             # The transport scrubs its own errors; repeat here so the manager
-            # holds the contract on its own (#645, #648).
+            # holds the contract on its own.
             sanitize_exception(e, collect_secret_values(settings_data))
             logger.error("Error updating %s settings: %s", section, e)
             raise

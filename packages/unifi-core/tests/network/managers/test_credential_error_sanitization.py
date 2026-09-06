@@ -1,6 +1,6 @@
 """Credential values must not survive into logs or re-raised errors.
 
-Reported on #645 and #648: a controller exception that quotes the submitted
+A controller exception that quotes the submitted
 request reached ``ConnectionManager``'s raw exception log, ``SystemManager``'s
 raw response/exception log and (via the unchanged exception) the API audit
 sink. These tests drive the real managers with a fake transport that raises
@@ -215,7 +215,7 @@ async def test_system_manager_rejected_response_log_is_scrubbed(caplog):
 
 
 # ---------------------------------------------------------------------------
-# Encoded representations (#660 review)
+# Encoded representations
 #
 # The controller error above quotes the payload with ``repr``. When the secret
 # itself contains a backslash, quote or newline, its literal form never appears
