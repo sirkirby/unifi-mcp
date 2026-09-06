@@ -562,9 +562,17 @@ def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Validate and normalize a public V2 firewall-policy partial update.
 
     This is the shared mutation boundary for MCP and API callers. It rejects
-    retired V1 fields, normalizes the controller's upper-case enums, and drops
-    unknown/read-only fields through :func:`to_controller_update`.
+    ``index`` (ordering is a separate tool family), rejects retired V1 fields,
+    normalizes the controller's upper-case enums, and drops unknown/read-only
+    fields through :func:`to_controller_update`.
     """
+    if "index" in fields:
+        # The V2 policy endpoint accepts index and silently ignores it, so the
+        # caller would get a partly applied update. Ordering is its own tool family.
+        raise ValueError(
+            "index cannot be changed with unifi_update_firewall_policy; the controller "
+            "ignores it on this endpoint. Use unifi_reorder_firewall_policies to change policy order."
+        )
     if error := legacy_policy_error(fields):
         raise ValueError(error)
     normalized = normalize_policy_enums(fields)

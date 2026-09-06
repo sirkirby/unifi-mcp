@@ -909,21 +909,29 @@ class TestUpdateFirewallPolicyV2Fields:
         assert result["preview"]["proposed"]["connection_states"] == ["NEW", "BOGUS"]
 
     @pytest.mark.asyncio
-    async def test_v2_update_rejects_index_and_points_at_reorder(self):
+    @pytest.mark.parametrize("confirm", [False, True])
+    async def test_v2_update_rejects_index_before_any_manager_call(self, confirm):
         """index is not a write field on the V2 policy endpoint; the controller accepts
-        the request and silently leaves the order unchanged. Reject it up front and
+        the request and silently leaves the order unchanged. Reject it before the
+        current-state read and before any mutation, on preview and on confirm, and
         name the tool that does reorder."""
         from unifi_network_mcp.tools.firewall import update_firewall_policy
 
-        result = await update_firewall_policy(
-            policy_id="pol_zone_001",
-            update_data={"index": 2000, "enabled": True},
-            confirm=False,
-        )
+        with patch("unifi_network_mcp.tools.firewall.firewall_manager") as mock_fm:
+            mock_fm.get_firewall_policies = AsyncMock(return_value=[])
+            mock_fm.update_firewall_policy = AsyncMock(return_value=True)
+
+            result = await update_firewall_policy(
+                policy_id="pol_zone_001",
+                update_data={"index": 2000, "enabled": True},
+                confirm=confirm,
+            )
 
         assert result["success"] is False
         assert "index" in result["error"]
         assert "unifi_reorder_firewall_policies" in result["error"]
+        mock_fm.get_firewall_policies.assert_not_awaited()
+        mock_fm.update_firewall_policy.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_v2_update_drops_unknown_key(self):
