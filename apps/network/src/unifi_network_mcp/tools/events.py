@@ -40,7 +40,7 @@ def _get_event_manager():
         "state changes, firmware updates, config changes) sorted newest-first. "
         "Filter by within_hours (default 24), an exact event_type key (use "
         "unifi_get_event_types for recently observed keys), categories (for example "
-        "['SECURITY']) and severities (for example ['HIGH', 'CRITICAL']) on v2 controllers, "
+        "['SECURITY']) and severities (for example ['HIGH', 'VERY_HIGH']) on v2 controllers, "
         "and paginate with start/limit. "
         "For critical alerts specifically, use unifi_list_alarms instead."
     ),
@@ -58,13 +58,13 @@ async def list_events(
     categories: Annotated[
         Optional[List[str]],
         Field(
-            description="Filter by v2 system-log categories (for example ['SECURITY', 'DEVICES']). Ignored on legacy controllers"
+            description="Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). Ignored on legacy controllers"
         ),
     ] = None,
     severities: Annotated[
         Optional[List[str]],
         Field(
-            description="Filter by v2 system-log severities (for example ['HIGH', 'CRITICAL']). Ignored on legacy controllers"
+            description="Filter by v2 system-log severities (for example ['HIGH', 'VERY_HIGH']). Ignored on legacy controllers"
         ),
     ] = None,
 ) -> Dict[str, Any]:

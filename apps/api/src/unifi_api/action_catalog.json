@@ -4940,7 +4940,7 @@
       "input_schema": {
         "properties": {
           "categories": {
-            "description": "Filter by v2 system-log categories (for example ['SECURITY', 'DEVICES']). Ignored on legacy controllers",
+            "description": "Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). Ignored on legacy controllers",
             "type": "array"
           },
           "event_type": {
@@ -4952,7 +4952,7 @@
             "type": "integer"
           },
           "severities": {
-            "description": "Filter by v2 system-log severities (for example ['HIGH', 'CRITICAL']). Ignored on legacy controllers",
+            "description": "Filter by v2 system-log severities (for example ['HIGH', 'VERY_HIGH']). Ignored on legacy controllers",
             "type": "array"
           },
           "start": {
