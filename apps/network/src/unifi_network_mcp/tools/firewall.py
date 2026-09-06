@@ -474,8 +474,8 @@ async def create_firewall_policy(
     description=(
         "Update specific fields of an existing V2 zone-based firewall policy by ID. "
         "Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, "
-        "protocol, ip_version, index, logging, connection_state_type, connection_states, "
-        "schedule."
+        "protocol, ip_version, logging, connection_state_type, connection_states, "
+        "schedule. To change policy order use unifi_reorder_firewall_policies; index is rejected here."
     ),
     permission_category="firewall_policies",
     permission_action="update",
@@ -494,7 +494,8 @@ async def update_firewall_policy(
             description=(
                 "Dictionary of V2 zone-based fields to update: name, action "
                 "(ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, "
-                "index, logging, connection_state_type, connection_states, schedule."
+                "logging, connection_state_type, connection_states, schedule. "
+                "index is not accepted here; use unifi_reorder_firewall_policies to change order."
             )
         ),
     ],
@@ -509,8 +510,9 @@ async def update_firewall_policy(
         return {"success": False, "error": "policy_id is required"}
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
-
     try:
+        # normalize_policy_update is the shared MCP/API boundary; it rejects index
+        # (the V2 endpoint silently ignores it) before any controller read or write.
         validated_data = normalize_policy_update(update_data)
     except ValueError as e:
         return {"success": False, "error": str(e)}

@@ -2376,6 +2376,58 @@ async def test_dispatch_translates_update_firewall_policy_update_data_to_updates
     domain_manager.update_firewall_policy.assert_awaited_once_with(policy_id="p1", updates={"enabled": False})
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [False, True])
+async def test_dispatch_update_firewall_policy_rejects_index_before_preview_and_manager(confirm: bool) -> None:
+    """unifi_update_firewall_policy: ``index`` is rejected on the API path for both
+    confirmation states, before a preview is built and before any manager call.
+
+    The MCP wrapper guards this; the API translator must share the same
+    rejection so callers cannot reach the ignored-index partial-update path."""
+    entry = ToolEntry(
+        name="unifi_update_firewall_policy",
+        product="network",
+        category="firewall_policies",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+
+    domain_manager = MagicMock()
+    domain_manager.get_firewall_policies = AsyncMock(return_value=[])
+    domain_manager.update_firewall_policy = AsyncMock(return_value=True)
+
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    with pytest.raises(ValueError, match="unifi_reorder_firewall_policies"):
+        await dispatch_action(
+            registry=registry,
+            factory=factory,
+            session=MagicMock(),
+            tool_name="unifi_update_firewall_policy",
+            controller_id="cid",
+            controller_products=["network"],
+            site="default",
+            args={"policy_id": "p1", "update_data": {"index": 2000, "enabled": True}},
+            confirm=confirm,
+            dispatch_table={
+                "unifi_update_firewall_policy": DispatchEntry(
+                    manager_attr="firewall_manager", method="update_firewall_policy"
+                ),
+            },
+        )
+
+    factory.get_domain_manager.assert_not_called()
+    domain_manager.get_firewall_policies.assert_not_awaited()
+    domain_manager.update_firewall_policy.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Network — toggle_port_forward: port_forward_id → rule_id rename
 # ---------------------------------------------------------------------------
