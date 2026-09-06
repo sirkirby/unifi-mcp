@@ -517,6 +517,26 @@ def to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in fields.items() if k in MUTABLE_FIELDS and v is not None}
 
 
+def validate_policy_port_targeting(fields: Dict[str, Any]) -> None:
+    """Reject malformed V2 create-policy ports before preview or controller I/O.
+
+    Endpoints remain opaque controller dictionaries. Validate the confirmed
+    SPECIFIC port contract without changing other targeting modes or values.
+    """
+    for direction in ("source", "destination"):
+        endpoint = fields.get(direction)
+        if not isinstance(endpoint, dict):
+            continue
+        if "ports" in endpoint:
+            raise ValueError(
+                "%s.ports is not a valid field; the controller expects %s.port as a single "
+                "string (e.g. '445'), not a plural 'ports' array." % (direction, direction)
+            )
+        port = endpoint.get("port")
+        if endpoint.get("port_matching_type") == "SPECIFIC" and not (isinstance(port, str) and port.strip()):
+            raise ValueError("%s.port must be a non-empty string when port_matching_type is 'SPECIFIC'." % direction)
+
+
 def legacy_policy_error(fields: Dict[str, Any]) -> str | None:
     """Return the actionable V1-to-V2 migration error when legacy input is detected."""
     if _LEGACY_V1_FIREWALL_FIELDS & set(fields):

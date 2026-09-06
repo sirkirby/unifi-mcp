@@ -27,7 +27,41 @@ from unifi_core.network.models.firewall import (
     to_group_create,
     to_zone_create,
     to_zone_update,
+    validate_policy_port_targeting,
 )
+
+
+@pytest.mark.parametrize("direction", ["source", "destination"])
+@pytest.mark.parametrize("port", [None, "", " ", 445, ["445"], True, {}])
+def test_policy_specific_port_rejects_malformed_values(direction, port):
+    with pytest.raises(ValueError, match=rf"{direction}\.port.*non-empty string"):
+        validate_policy_port_targeting({direction: {"port_matching_type": "SPECIFIC", "port": port}})
+
+
+@pytest.mark.parametrize("direction", ["source", "destination"])
+@pytest.mark.parametrize("mode", ["ANY", "SPECIFIC", "OBJECT"])
+def test_policy_plural_ports_rejected_even_with_valid_singular_port(direction, mode):
+    with pytest.raises(ValueError, match=rf"{direction}\.ports is not a valid field"):
+        validate_policy_port_targeting({direction: {"port_matching_type": mode, "ports": [], "port": "445"}})
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        {},
+        {"port_matching_type": "ANY"},
+        {"port_matching_type": "OBJECT", "port_group_id": "group"},
+        {"port_matching_type": "SPECIFIC", "port": "445"},
+        {"port_matching_type": "SPECIFIC", "port": "1000-2000"},
+    ],
+)
+def test_policy_valid_port_targeting_preserves_input(endpoint):
+    import copy
+
+    data = {"source": endpoint, "destination": endpoint}
+    before = copy.deepcopy(data)
+    validate_policy_port_targeting(data)
+    assert data == before
 
 
 class TestFirewallRuleFieldSets:
