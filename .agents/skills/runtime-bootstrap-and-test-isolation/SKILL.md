@@ -79,9 +79,10 @@ Every shared service (network client, cache, connection pool) is managed as an `
 from functools import lru_cache
 from managers.door_manager import DoorManager
 
+
 @lru_cache
 def get_door_manager() -> DoorManager:
-    return DoorManager(get_connection_manager())   # pass your dependency via its getter
+    return DoorManager(get_connection_manager())  # pass your dependency via its getter
 ```
 
 3. Add a module-level alias in the **"Shorthand aliases"** section at the bottom of `runtime.py` so tool modules can import the singleton by name (e.g. `traffic_flow_manager = get_traffic_flow_manager()` in `apps/network/src/unifi_network_mcp/runtime.py`):
@@ -97,6 +98,7 @@ Tool modules then import: `from unifi_access_mcp.runtime import door_manager`
 
 ```python
 from unifi_access_mcp.runtime import get_door_manager
+
 assert get_door_manager() is get_door_manager()
 ```
 
@@ -135,10 +137,10 @@ from unifi_mcp_shared.permissioned_tool import setup_permissioned_tool
 
 setup_permissioned_tool(
     server=server,
-    category_map=category_map,           # maps tool category to permission category
-    server_prefix=server_prefix,         # used for env var resolution
-    register_tool_fn=register_tool,      # callback to add tool to tool_index
-    diagnostics_enabled_fn=lambda: diag, # callable returning bool
+    category_map=category_map,  # maps tool category to permission category
+    server_prefix=server_prefix,  # used for env var resolution
+    register_tool_fn=register_tool,  # callback to add tool to tool_index
+    diagnostics_enabled_fn=lambda: diag,  # callable returning bool
     wrap_tool_fn=wrap_with_diagnostics,  # diagnostics wrapper
     logger=logger,
 )
@@ -260,10 +262,14 @@ async def _tool_index_wrapper(
     include_schemas: bool = False,
 ) -> dict:
     args = {}
-    if category is not None: args["category"] = category
-    if search is not None: args["search"] = search
-    if include_schemas: args["include_schemas"] = include_schemas
+    if category is not None:
+        args["category"] = category
+    if search is not None:
+        args["search"] = search
+    if include_schemas:
+        args["include_schemas"] = include_schemas
     return await tool_index_handler(args or None)
+
 
 # Layer 2 — e.g. apps/access/src/unifi_access_mcp/tool_index.py (still takes assembled args dict):
 async def tool_index_handler(args=None) -> dict:
