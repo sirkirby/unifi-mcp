@@ -31,10 +31,11 @@ RULE_ID = DNS_REDIRECT["_id"]
 class _Connection:
     site = "default"
 
-    def __init__(self, responses: list[Any], error: Exception | None = None) -> None:
+    def __init__(self, responses: list[Any], error: Exception | None = None, *, fail_on: str | None = None) -> None:
         self.requests: list[Any] = []
         self._responses = responses
         self._error = error
+        self._fail_on = fail_on  # raise ``error`` only for requests with this method
         self.cache: dict[str, Any] = {}
         self.invalidated: list[str] = []
 
@@ -43,7 +44,7 @@ class _Connection:
 
     async def request(self, api_request: Any) -> Any:
         self.requests.append(api_request)
-        if self._error is not None:
+        if self._error is not None and self._fail_on in (None, api_request.method):
             raise self._error
         return self._responses.pop(0) if self._responses else None
 
@@ -374,3 +375,70 @@ class TestReReviewFindings:
         with pytest.raises(UniFiOperationError) as exc:
             await manager.create_nat_rule(dnat())
         assert "may have been created" in str(exc.value)
+
+
+class TestCachePreservation:
+    """Review finding on 4ea1b8d: update/toggle built the replacement document
+    from the cached list, so an external change was silently reverted, and a
+    PUT/DELETE whose reply never arrived left the stale cache valid."""
+
+    FRESH = dict(STORED, enabled=False, ip_address="192.0.2.54")
+
+    @staticmethod
+    def _failing_on(method: str, error: Exception) -> tuple[NatManager, _Connection]:
+        connection = _Connection([STORED, STORED, STORED], error, fail_on=method)
+        return NatManager(connection), connection
+
+    async def test_update_fetches_fresh_state_before_building_the_replacement(self) -> None:
+        manager, connection = _manager([STORED], self.FRESH)
+        await manager.list_nat_rules()  # warms the cache with the old document
+        await manager.update_nat_rule(RULE_ID, {"description": "Renamed"})
+        methods = [r.method for r in connection.requests]
+        assert methods == ["get", "get", "put"], "the replacement must come from a fresh list"
+        put = connection.requests[-1].data
+        assert put["enabled"] is False
+        assert put["ip_address"] == "192.0.2.54"
+        assert put["description"] == "Renamed"
+
+    async def test_toggle_flips_the_fresh_state_not_the_cached_one(self) -> None:
+        manager, connection = _manager([STORED], self.FRESH)
+        await manager.list_nat_rules()
+        result = await manager.toggle_nat_rule(RULE_ID)
+        put = connection.requests[-1].data
+        assert put["enabled"] is True  # the fresh document was disabled
+        assert put["ip_address"] == "192.0.2.54"
+        assert result["enabled"] is True
+
+    async def test_toggle_with_explicit_state_still_uses_the_fresh_document(self) -> None:
+        manager, connection = _manager([STORED], self.FRESH)
+        await manager.list_nat_rules()
+        await manager.toggle_nat_rule(RULE_ID, enabled=False)
+        assert connection.requests[-1].data["ip_address"] == "192.0.2.54"
+
+    @pytest.mark.parametrize("error", [TimeoutError("reply timeout"), ResponseError("Call x received 502 bad gateway")])
+    async def test_put_with_an_ambiguous_outcome_invalidates_the_cache(self, error: Exception) -> None:
+        manager, connection = self._failing_on("put", error)
+        await manager.list_nat_rules()
+        with pytest.raises(type(error)):
+            await manager.update_nat_rule(RULE_ID, {"description": "Renamed"})
+        assert CACHE_PREFIX_NAT in connection.invalidated
+        assert not [k for k in connection.cache if k.startswith(CACHE_PREFIX_NAT)]
+
+    @pytest.mark.parametrize("error", [TimeoutError("reply timeout"), ResponseError("Call x received 502 bad gateway")])
+    async def test_delete_with_an_ambiguous_outcome_invalidates_the_cache(self, error: Exception) -> None:
+        manager, connection = self._failing_on("delete", error)
+        await manager.list_nat_rules()
+        with pytest.raises(type(error)):
+            await manager.delete_nat_rule(RULE_ID)
+        assert CACHE_PREFIX_NAT in connection.invalidated
+        assert not [k for k in connection.cache if k.startswith(CACHE_PREFIX_NAT)]
+
+    async def test_next_read_after_a_failed_put_goes_to_the_controller(self) -> None:
+        manager, connection = self._failing_on("put", TimeoutError("reply timeout"))
+        await manager.list_nat_rules()
+        with pytest.raises(TimeoutError):
+            await manager.toggle_nat_rule(RULE_ID)
+        gets_before = [r for r in connection.requests if r.method == "get"]
+        await manager.get_nat_rule(RULE_ID)
+        gets_after = [r for r in connection.requests if r.method == "get"]
+        assert len(gets_after) == len(gets_before) + 1

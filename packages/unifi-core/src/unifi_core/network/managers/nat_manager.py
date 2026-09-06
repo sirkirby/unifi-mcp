@@ -77,13 +77,18 @@ class NatManager:
         self._connection._update_cache(cache_key, rules)
         return rules
 
-    async def get_nat_rule(self, rule_id: str) -> Dict[str, Any]:
+    async def get_nat_rule(self, rule_id: str, *, refresh: bool = False) -> Dict[str, Any]:
         """Get one NAT rule by id (list + filter; the endpoint has no GET by id).
+
+        ``refresh`` bypasses the cached list. Every mutation reads the rule this
+        way: PUT replaces the whole document, so a replacement built from a
+        cached copy would undo any change made outside this process since the
+        list was cached (an operator disabling the rule, a moved address).
 
         Raises:
             UniFiNotFoundError: If no rule has that id.
         """
-        rules = await self.list_nat_rules()
+        rules = await self.list_nat_rules(refresh=refresh)
         match = next((r for r in rules if r.get("_id", r.get("id")) == rule_id), None)
         if match is None:
             raise UniFiNotFoundError("nat_rule", rule_id)
@@ -103,15 +108,7 @@ class NatManager:
             indexes = (r.get("rule_index") for r in rules if not r.get("is_predefined"))
             payload["rule_index"] = max((i for i in indexes if isinstance(i, int)), default=0) + 1
 
-        if not await self._connection.ensure_connected():
-            raise ConnectionError("Not connected to controller")
-        try:
-            response = await self._connection.request(ApiRequestV2(method="post", path="/nat", data=payload))
-        except Exception as e:
-            logger.error("Error creating NAT rule: %s", type(e).__name__)
-            self._invalidate_cache()
-            raise
-        self._invalidate_cache()
+        response = await self._mutate(ApiRequestV2(method="post", path="/nat", data=payload), "creating")
         created = _rules_from(response)
         if not created:
             logger.warning("NAT rule create returned no decodable data")
@@ -131,7 +128,7 @@ class NatManager:
             UniFiNotFoundError: If the rule does not exist.
         """
         update = normalize_nat_update(update_data)
-        current = await self.get_nat_rule(rule_id)
+        current = await self.get_nat_rule(rule_id, refresh=True)
         return await self._put_update(rule_id, current, update)
 
     async def delete_nat_rule(self, rule_id: str) -> bool:
@@ -140,20 +137,13 @@ class NatManager:
         Raises:
             UniFiNotFoundError: If the rule does not exist.
         """
-        await self.get_nat_rule(rule_id)
-        if not await self._connection.ensure_connected():
-            raise ConnectionError("Not connected to controller")
-        try:
-            await self._connection.request(ApiRequestV2(method="delete", path=f"/nat/{rule_id}"))
-        except Exception as e:
-            logger.error("Error deleting NAT rule: %s", type(e).__name__)
-            raise
-        self._invalidate_cache()
+        await self.get_nat_rule(rule_id)  # resolves the id; nothing is built from the document
+        await self._mutate(ApiRequestV2(method="delete", path=f"/nat/{rule_id}"), "deleting")
         return True
 
     async def toggle_nat_rule(self, rule_id: str, enabled: Optional[bool] = None) -> Dict[str, Any]:
-        """Enable or disable a NAT rule; flips the stored state when ``enabled`` is omitted."""
-        current = await self.get_nat_rule(rule_id)
+        """Enable or disable a NAT rule; flips the controller's current state when ``enabled`` is omitted."""
+        current = await self.get_nat_rule(rule_id, refresh=True)
         if enabled is None:
             enabled = not current.get("enabled", False)
         return await self._put_update(rule_id, current, {"enabled": enabled})
@@ -165,15 +155,26 @@ class NatManager:
         if error := nat_update_error(current, merged):
             raise ValueError(error)
 
+        await self._mutate(ApiRequestV2(method="put", path=f"/nat/{rule_id}", data=merged), "updating")
+        return merged
+
+    async def _mutate(self, request: ApiRequestV2, verb: str) -> Any:
+        """Send a POST/PUT/DELETE and drop the cached list whatever the outcome.
+
+        A reply that never arrives (timeout, gateway error) may still have been
+        committed by the controller, so the cached list is invalidated on the
+        failure path too; otherwise the next read would serve the old document
+        or a deleted rule.
+        """
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
         try:
-            await self._connection.request(ApiRequestV2(method="put", path=f"/nat/{rule_id}", data=merged))
+            return await self._connection.request(request)
         except Exception as e:
-            logger.error("Error updating NAT rule: %s", type(e).__name__)
+            logger.error("Error %s NAT rule: %s", verb, type(e).__name__)
             raise
-        self._invalidate_cache()
-        return merged
+        finally:
+            self._invalidate_cache()
 
     def _invalidate_cache(self) -> None:
         self._connection._invalidate_cache(CACHE_PREFIX_NAT)
