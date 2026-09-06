@@ -5,7 +5,7 @@ description = "UniFi Protect MCP Server"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "unifi-mcp-shared>=0.6.13,<0.7",
+    "unifi-mcp-shared>=0.6.15,<0.7",
     # Protect managers in unifi-core import uiprotect; pull it in via the
     # [protect] extra rather than declaring uiprotect here directly. Camera
     # detail fields require Core 0.4.35; explicit zero event limits require
