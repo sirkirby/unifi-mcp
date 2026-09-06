@@ -33,6 +33,9 @@ LABEL_ALLOWLIST = [
     "protect",
     "access",
     "needs-info",
+    "priority: high",
+    "priority: medium",
+    "priority: low",
 ]
 
 
@@ -47,6 +50,7 @@ def _issue(
     body: str = "Sanitized reproduction details.",
     state: str = "open",
     updated_at: str = "2026-05-10T15:30:00Z",
+    author_association: str = "CONTRIBUTOR",
 ) -> dict[str, object]:
     return {
         "number": number,
@@ -57,7 +61,8 @@ def _issue(
         "updated_at": updated_at,
         "closed_at": "2026-05-10T16:00:00Z" if state == "closed" else None,
         "user": {"login": "community-member"},
-        "labels": [{"name": "network"}],
+        "author_association": author_association,
+        "labels": [{"name": "network"}, {"name": "priority: medium"}],
     }
 
 
@@ -131,6 +136,12 @@ const github = {
     },
     get: async (request) => {
       calls.get.push(request.issue_number);
+      const configuredStatus = (payload.failGetStatuses || {})[String(request.issue_number)];
+      if (configuredStatus !== undefined) {
+        const error = new Error(`simulated issue fetch status ${configuredStatus} for ${request.issue_number}`);
+        error.status = Number(configuredStatus);
+        throw error;
+      }
       if ((payload.failGet || []).includes(request.issue_number)) {
         throw new Error(`simulated issue fetch failure ${request.issue_number}`);
       }
@@ -493,6 +504,21 @@ def _compiled_safe_output_config(compiled: str) -> dict[str, object]:
     return json.loads(json.loads(encoded))
 
 
+def _compiled_safe_output_handler_config(compiled: str) -> dict[str, object]:
+    line = next(line for line in compiled.splitlines() if "GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG:" in line)
+    encoded = line.split("GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: ", 1)[1]
+    return json.loads(json.loads(encoded))
+
+
+def _compiled_safe_output_messages(compiled: str) -> list[dict[str, object]]:
+    encoded_values = [
+        line.split("GH_AW_SAFE_OUTPUT_MESSAGES: ", 1)[1]
+        for line in compiled.splitlines()
+        if "GH_AW_SAFE_OUTPUT_MESSAGES:" in line
+    ]
+    return [json.loads(json.loads(encoded)) for encoded in encoded_values]
+
+
 def _eligibility(
     *,
     event_name: str = "issues",
@@ -595,6 +621,24 @@ def test_safe_output_surface_is_bounded_to_triage_labels_comments_and_needs_info
     assert "report-incomplete: false" in source
 
 
+def test_public_comment_uses_one_disclosure_and_one_workflow_run_link():
+    source = WORKFLOW.read_text()
+    compiled = LOCK.read_text()
+    safe_outputs = source.split("safe-outputs:\n", 1)[1].split("\n  report-failure-as-issue:", 1)[0]
+    assert "footer: false" in safe_outputs
+    assert safe_outputs.count("{run_url}") == 1
+    assert "automated first-pass triage" not in CONTRACT.read_text()
+
+    config = _compiled_safe_output_config(compiled)
+    assert config["add_comment"]["footer"] is False
+    handler_config = _compiled_safe_output_handler_config(compiled)
+    assert handler_config["add_comment"]["footer"] is False
+    messages = _compiled_safe_output_messages(compiled)
+    assert messages
+    assert all(message["disclosureHeader"].count("{run_url}") == 1 for message in messages)
+    assert all("automated first-pass triage" not in json.dumps(message) for message in messages)
+
+
 def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     source = WORKFLOW.read_text()
     compiled = LOCK.read_text()
@@ -607,6 +651,8 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
     assert "github.event.issue.pull_request == null" in gate
     assert "github.event.issue.state == 'open'" in gate
     assert "github.event.issue.user.type != 'Bot'" in gate
+    assert "github.event.issue.author_association" in gate
+    assert '"NONE","FIRST_TIMER","FIRST_TIME_CONTRIBUTOR","CONTRIBUTOR"' in gate
     assert "github.actor == github.event.issue.user.login" in gate
     assert "github.event.comment.user.login == github.actor" in gate
     assert "permissions:\n      contents: read\n      issues: read\n" in gate
@@ -623,6 +669,7 @@ def test_intake_gate_and_downstream_jobs_are_explicitly_eligibility_bound():
         "github.event.issue.pull_request == null",
         "github.event.issue.state == 'open'",
         "github.event.issue.user.type != 'Bot'",
+        "github.event.issue.author_association",
         "github.actor == github.event.issue.user.login",
         "github.event.comment.user.login == github.actor",
     ):
@@ -988,6 +1035,37 @@ def test_initial_intake_gate_emits_the_trusted_binding_metadata():
         "continuation_count": 0,
         "needs_info_present": False,
     }
+
+
+@pytest.mark.parametrize("association", ["OWNER", "MEMBER", "COLLABORATOR", "MANNEQUIN", "", "UNKNOWN_ROLE"])
+def test_automatic_intake_excludes_maintainers_and_unknown_author_associations(association: str):
+    issue = _issue(TARGET_NUMBER, author_association=association)
+    result = _eligibility(issue=issue)
+    assert result["eligible"] is False
+    assert result["reason"] == "target author association is not eligible community intake"
+
+
+@pytest.mark.parametrize("association", ["NONE", "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR", "CONTRIBUTOR"])
+def test_automatic_intake_accepts_only_known_community_author_associations(association: str):
+    issue = _issue(TARGET_NUMBER, author_association=association)
+    assert _eligibility(issue=issue)["eligible"] is True
+
+
+def test_issue_664_shape_is_rejected_before_spending_ai_credits():
+    issue = _issue(
+        664,
+        body="Design follow-up to #635 and #649.",
+        author_association="OWNER",
+    )
+    issue["user"] = {"login": "sirkirby", "type": "User"}
+    issue["labels"] = [
+        {"name": "enhancement"},
+        {"name": "network"},
+        {"name": "priority: medium"},
+    ]
+    result = _eligibility(actor="sirkirby", issue=issue)
+    assert result["eligible"] is False
+    assert result["reason"] == "target author association is not eligible community intake"
 
 
 @pytest.mark.parametrize("event_name", ["issues", "issue_comment"])
@@ -1602,6 +1680,159 @@ def test_snapshot_fetches_target_comments_and_ranked_candidates_with_receipts():
     assert created["calls"]["comments"] == [{"issue_number": TARGET_NUMBER, "page": 1, "per_page": 100}]
 
 
+def test_snapshot_retains_explicit_same_repository_issue_and_pull_request_references_before_lexical_search():
+    referenced_issue = _issue(635, title="Earlier issue with unrelated title words")
+    referenced_pr = _issue(649, title="Implementation pull request with unrelated title words")
+    referenced_pr["pull_request"] = {"url": "https://api.github.test/repos/sirkirby/unifi-mcp/pulls/649"}
+    payload = _snapshot_payload(candidates=[])
+    payload["issues"].update({"635": referenced_issue, "649": referenced_pr})
+    payload["issues"][str(TARGET_NUMBER)]["body"] = (
+        "This follows #635 and https://github.com/sirkirby/unifi-mcp/pull/649. "
+        "Ignore https://github.com/example/other/issues/700 and the current #228."
+    )
+
+    created = _create_snapshot(payload)
+
+    assert [(item["number"], item["kind"], item["source"]) for item in created["bundle"]["candidates"]] == [
+        (635, "issue", "explicit"),
+        (649, "pull_request", "explicit"),
+    ]
+    assert created["calls"]["get"].count(635) == 1
+    assert created["calls"]["get"].count(649) == 1
+
+
+def test_snapshot_deduplicates_and_caps_explicit_references():
+    referenced = [_issue(number, title=f"Referenced item {number}") for number in range(300, 307)]
+    payload = _snapshot_payload(candidates=[])
+    payload["issues"].update({str(item["number"]): item for item in referenced})
+    payload["issues"][str(TARGET_NUMBER)]["body"] = " ".join(
+        ["#300", "#300", *[f"https://github.com/sirkirby/unifi-mcp/issues/{number}" for number in range(301, 307)]]
+    )
+
+    created = _create_snapshot(payload)
+
+    assert [item["number"] for item in created["bundle"]["candidates"]] == [300, 301, 302, 303, 304]
+
+
+def test_explicit_references_take_precedence_and_lexical_candidates_fill_the_remaining_bound():
+    candidates = [_issue(number) for number in range(220, 226)]
+    referenced_pr = _issue(649, title="Implementation pull request with unrelated title words")
+    referenced_pr["pull_request"] = {"url": "https://api.github.test/pulls/649"}
+    payload = _snapshot_payload(candidates=candidates)
+    payload["issues"]["649"] = referenced_pr
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "References #649 and #220; #220 is also a lexical match."
+
+    created = _create_snapshot(payload)
+
+    assert [(item["number"], item["kind"], item["source"]) for item in created["bundle"]["candidates"]] == [
+        (649, "pull_request", "explicit"),
+        (220, "issue", "explicit"),
+        (225, "issue", "lexical"),
+        (224, "issue", "lexical"),
+        (223, "issue", "lexical"),
+    ]
+    assert created["calls"]["get"].count(220) == 1
+
+
+def test_explicit_reference_is_retained_when_title_has_no_search_tokens():
+    referenced = _issue(635, title="Earlier report")
+    payload = _snapshot_payload(candidates=[])
+    payload["issues"]["635"] = referenced
+    payload["issues"][str(TARGET_NUMBER)]["title"] = "This issue"
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "See #635."
+
+    created = _create_snapshot(payload)
+
+    assert created["calls"]["graphql"] == 0
+    assert [(item["number"], item["source"]) for item in created["bundle"]["candidates"]] == [(635, "explicit")]
+    assert created["bundle"]["search_performed"] is True
+    assert created["bundle"]["search_reason"] == "no-distinctive-title-terms"
+
+
+def test_missing_explicit_reference_is_ignored_but_other_fetch_failures_remain_fail_closed():
+    payload = _snapshot_payload(candidates=[])
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "A stale or mistyped link: #999999."
+    payload["failGetStatuses"] = {"999999": 404}
+
+    created = _create_snapshot(payload)
+
+    assert created["calls"]["get"] == [TARGET_NUMBER, 999999]
+    assert created["bundle"]["candidates"] == []
+    assert created["bundle"]["status"] == "complete"
+
+    payload["failGetStatuses"] = {"999999": 403}
+    inaccessible = _run_contract(payload)
+    assert inaccessible.returncode != 0
+    assert "simulated issue fetch status 403" in inaccessible.stderr
+
+
+@pytest.mark.parametrize("kind", ["issue", "pull_request"])
+def test_sensitive_explicit_reference_stops_with_candidate_metadata_only(kind: str):
+    referenced = _issue(635, title="Earlier report", body="UNIFI_PASSWORD=hunter22")
+    if kind == "pull_request":
+        referenced["pull_request"] = {"url": "https://api.github.test/pulls/635"}
+    payload = _snapshot_payload(candidates=[])
+    payload["issues"]["635"] = referenced
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "See #635."
+
+    bundle = _create_snapshot(payload)["bundle"]
+
+    assert bundle["status"] == "sensitive_stop"
+    assert bundle["sensitivity"] == {"scope": "candidate"}
+    assert bundle["content_persisted"] is False
+    assert bundle["target"]["data"] is None
+    assert bundle["comments"]["data"] is None
+    assert bundle["candidates"][0]["data"] is None
+
+
+def test_explicit_reference_assessments_are_concrete_in_trusted_public_output():
+    referenced_issue = _issue(635, title="Earlier issue")
+    referenced_pr = _issue(649, title="Implementation pull request")
+    referenced_pr["pull_request"] = {"url": "https://api.github.test/pulls/649"}
+    payload = _snapshot_payload()
+    payload["issues"].update({"635": referenced_issue, "649": referenced_pr})
+    payload["issues"][str(TARGET_NUMBER)]["body"] = "Related context: #635 and #649."
+    bundle = _create_snapshot(payload)["bundle"]
+
+    result = _render(bundle, _normal_proposal(bundle, verdicts=["NOT_RELATED", "RELATED"]))
+
+    assert result.returncode == 0, result.stderr
+    rendered = json.loads(result.stdout)["rendered"]
+    assert "Referenced issue #635: NOT_RELATED" in rendered
+    assert "Referenced pull request #649: RELATED" in rendered
+
+    proposal = _normal_proposal(bundle, verdicts=["NOT_RELATED", "RELATED"])
+    parsed = json.loads(proposal)
+    rewritten = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": proposal},
+                    {"type": "add_labels", "labels": parsed["label_intents"]},
+                ]
+            },
+        }
+    )
+    assert rewritten.returncode == 0, rewritten.stderr
+    public_comment = next(
+        item for item in json.loads(rewritten.stdout)["output"]["items"] if item["type"] == "add_comment"
+    )
+    assert "Referenced pull request #649: RELATED" in public_comment["body"]
+
+
+def test_lexical_candidate_public_wording_does_not_claim_the_reporter_referenced_it():
+    bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
+
+    result = _render(bundle, _normal_proposal(bundle, verdicts=["RELATED"]))
+
+    assert result.returncode == 0, result.stderr
+    rendered = json.loads(result.stdout)["rendered"]
+    assert "Related issue candidate #225: RELATED" in rendered
+    assert "Referenced #225" not in rendered
+
+
 def test_snapshot_requires_target_and_comment_receipts_even_with_zero_candidates():
     bundle = _create_snapshot()["bundle"]
     assert bundle["candidates"] == []
@@ -1614,7 +1845,7 @@ def test_snapshot_requires_target_and_comment_receipts_even_with_zero_candidates
 def test_snapshot_v3_binds_initial_trigger_identity_and_gate_state_with_an_independent_receipt():
     bundle = _create_snapshot()["bundle"]
     assert bundle["version"] == 3
-    assert bundle["strategy"] == "bounded-title-lexical-v3"
+    assert bundle["strategy"] == "bounded-explicit-and-title-v3"
     assert bundle["run_kind"] == "initial"
     assert bundle["trigger"] == {
         "event_name": "issues",
@@ -2881,15 +3112,13 @@ def test_noop_rejects_every_free_form_reason(reason: str):
     assert "noop decision contains unexpected fields" in result.stderr
 
 
-def test_ready_for_maintainer_uses_fixed_trusted_prose_and_structured_relationships():
+def test_ready_for_maintainer_summarizes_selected_labels_and_omits_irrelevant_lexical_candidates():
     bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
     result = _render(bundle, _normal_proposal(bundle, verdicts=["NOT_RELATED"]), "ready_for_maintainer")
     assert result.returncode == 0, result.stderr
     rendered = json.loads(result.stdout)["rendered"]
-    assert rendered.startswith(
-        "Thanks for the report. This automated first pass found enough information for maintainer review."
-    )
-    assert "Candidate #225: NOT_RELATED" in rendered
+    assert rendered.startswith("Triage result:\n\n- Labels selected: `network`")
+    assert "#225" not in rendered
     assert rendered.endswith(INITIAL_MARKER)
 
 
@@ -2943,7 +3172,7 @@ def test_v3_label_intents_require_one_to_four_unique_exact_allowlisted_entries(m
     assert result.returncode != 0
 
 
-def test_initial_complete_support_question_can_emit_a_truthful_comment_without_forcing_a_label():
+def test_initial_complete_support_question_is_silent_without_a_concrete_action():
     bundle = _create_snapshot()["bundle"]
     proposal = _normal_proposal(bundle, label_intents=[])
     result = _run_contract(
@@ -2955,8 +3184,203 @@ def test_initial_complete_support_question_can_emit_a_truthful_comment_without_f
     )
     assert result.returncode == 0, result.stderr
     rewritten = json.loads(result.stdout)["output"]["items"]
-    assert [item["type"] for item in rewritten] == ["add_comment"]
-    assert rewritten[0]["body"].startswith("Thanks for the report.")
+    assert rewritten == [{"type": "noop", "message": "No public triage action was needed."}]
+
+
+def test_initial_ready_proposal_with_no_new_labels_or_relationships_is_silent():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [
+        {"name": "network"},
+        {"name": "enhancement"},
+        {"name": "priority: medium"},
+    ]
+    bundle = _create_snapshot(payload)["bundle"]
+    proposal = _normal_proposal(bundle, label_intents=[])
+
+    result = _run_contract(
+        {"op": "rewrite", "bundle": bundle, "output": {"items": [{"type": "add_comment", "body": proposal}]}}
+    )
+
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)
+    assert rewritten["output"]["items"] == [{"type": "noop", "message": "No public triage action was needed."}]
+    assert rewritten["carrier"] == "silent"
+
+
+def test_initial_triage_requires_exactly_one_priority_when_target_has_none():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": "network"}]
+    bundle = _create_snapshot(payload)["bundle"]
+    no_priority = _normal_proposal(bundle, label_intents=[])
+    missing = _run_contract(
+        {"op": "rewrite", "bundle": bundle, "output": {"items": [{"type": "add_comment", "body": no_priority}]}}
+    )
+    assert missing.returncode != 0
+    assert "exactly one priority label" in missing.stderr
+
+    two_priorities = [
+        {
+            "name": "priority: high",
+            "rationale": "The report describes a correctness risk that blocks users.",
+            "confidence": "HIGH",
+        },
+        {
+            "name": "priority: medium",
+            "rationale": "The report describes a real gap with an available workaround.",
+            "confidence": "HIGH",
+        },
+    ]
+    proposal = _normal_proposal(bundle, label_intents=two_priorities)
+    multiple = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": proposal},
+                    {"type": "add_labels", "labels": two_priorities},
+                ]
+            },
+        }
+    )
+    assert multiple.returncode != 0
+    assert "exactly one priority label" in multiple.stderr
+
+
+def test_initial_triage_applies_one_priority_alongside_other_classification_labels():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = []
+    bundle = _create_snapshot(payload)["bundle"]
+    labels = [
+        {
+            "name": "enhancement",
+            "rationale": "The report requests a new maintainer-facing capability.",
+            "confidence": "HIGH",
+        },
+        {
+            "name": "network",
+            "rationale": "The issue form explicitly selects the Network component.",
+            "confidence": "HIGH",
+        },
+        {
+            "name": "priority: medium",
+            "rationale": "The gap is real but the report describes an available workaround.",
+            "confidence": "HIGH",
+        },
+    ]
+    proposal = _normal_proposal(bundle, label_intents=labels)
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": proposal},
+                    {"type": "add_labels", "labels": labels},
+                ]
+            },
+        }
+    )
+
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)["output"]["items"]
+    label_item = next(item for item in rewritten if item["type"] == "add_labels")
+    assert [item["name"] for item in label_item["labels"]] == [
+        "enhancement",
+        "network",
+        "priority: medium",
+    ]
+    comment = next(item for item in rewritten if item["type"] == "add_comment")
+    assert "`priority: medium`" in comment["body"]
+
+
+def test_unprioritized_missing_information_triage_requires_and_applies_one_priority():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": "network"}]
+    bundle = _create_snapshot(payload)["bundle"]
+    decision = {"kind": "missing_information", "fields": ["package_version"]}
+    labels = [
+        {
+            "name": "needs-info",
+            "rationale": "The report omits the exact unifi-mcp package version.",
+            "confidence": "HIGH",
+        },
+        {
+            "name": "priority: medium",
+            "rationale": "The report describes a real gap that still requires diagnostic detail.",
+            "confidence": "MEDIUM",
+        },
+    ]
+    proposal = _normal_proposal(bundle, decision=decision, label_intents=labels)
+    accepted = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": proposal},
+                    {"type": "add_labels", "labels": labels},
+                ]
+            },
+        }
+    )
+    assert accepted.returncode == 0, accepted.stderr
+    applied = next(item for item in json.loads(accepted.stdout)["output"]["items"] if item["type"] == "add_labels")
+    assert [item["name"] for item in applied["labels"]] == ["needs-info", "priority: medium"]
+
+    missing_priority = labels[:1]
+    missing_proposal = _normal_proposal(bundle, decision=decision, label_intents=missing_priority)
+    rejected = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": missing_proposal},
+                    {"type": "add_labels", "labels": missing_priority},
+                ]
+            },
+        }
+    )
+    assert rejected.returncode != 0
+    assert "exactly one priority label" in rejected.stderr
+
+
+def test_existing_priority_is_preserved_and_conflicting_priority_state_fails_closed():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": "network"}, {"name": "priority: low"}]
+    bundle = _create_snapshot(payload)["bundle"]
+    proposed_priority = [
+        {
+            "name": "priority: high",
+            "rationale": "The report describes a correctness risk that blocks users.",
+            "confidence": "HIGH",
+        }
+    ]
+    proposal = _normal_proposal(bundle, label_intents=proposed_priority)
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": proposal},
+                    {"type": "add_labels", "labels": proposed_priority},
+                ]
+            },
+        }
+    )
+    assert result.returncode != 0
+    assert "preserve the existing priority label" in result.stderr
+
+    conflicting_payload = _snapshot_payload()
+    conflicting_payload["issues"][str(TARGET_NUMBER)]["labels"] = [
+        {"name": "priority: low"},
+        {"name": "priority: high"},
+    ]
+    conflict_result = _run_contract(conflicting_payload)
+    assert conflict_result.returncode != 0
+    assert "multiple existing priority labels" in conflict_result.stderr
 
 
 @pytest.mark.parametrize(
@@ -3032,11 +3456,7 @@ def test_initial_ready_for_maintainer_rewrites_only_fixed_trusted_acknowledgemen
     assert result.returncode == 0, result.stderr
     rewritten = json.loads(result.stdout)["output"]["items"]
     comment = next(item for item in rewritten if item["type"] == "add_comment")
-    assert comment["body"] == (
-        "Thanks for the report. This automated first pass found enough information for maintainer review.\n\n"
-        "This is an automated first-pass triage; a maintainer will make final decisions.\n\n"
-        f"{INITIAL_MARKER}"
-    )
+    assert comment["body"] == (f"Triage result:\n\n- Labels selected: `bug`\n\n{INITIAL_MARKER}")
     label_item = next(item for item in rewritten if item["type"] == "add_labels")
     assert label_item["item_number"] == TARGET_NUMBER
     assert label_item["labels"] == [
@@ -3046,8 +3466,81 @@ def test_initial_ready_for_maintainer_rewrites_only_fixed_trusted_acknowledgemen
             "suggest": True,
         }
         for intent in labels
+        if intent["name"] == "bug"
     ]
     assert "triage_proposal" not in _canonical(rewritten)
+
+
+def test_echoing_only_existing_labels_produces_no_public_comment_or_label_action():
+    bundle = _create_snapshot()["bundle"]
+    existing_label = [
+        {
+            "name": "network",
+            "rationale": "The report concerns the UniFi Network application family.",
+            "confidence": "HIGH",
+        }
+    ]
+    proposal = _normal_proposal(bundle, label_intents=existing_label)
+
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": proposal},
+                    {"type": "add_labels", "labels": existing_label},
+                ]
+            },
+        }
+    )
+
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)
+    assert rewritten["output"]["items"] == [{"type": "noop", "message": "No public triage action was needed."}]
+    assert rewritten["proposal"]["label_intents"] == []
+
+
+def test_existing_label_is_removed_while_actionable_missing_information_comment_remains():
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [
+        {"name": "network"},
+        {"name": "needs-info"},
+        {"name": "priority: medium"},
+    ]
+    payload["expectedNeedsInfoPresent"] = True
+    bundle = _create_snapshot(payload)["bundle"]
+    existing_label = [
+        {
+            "name": "needs-info",
+            "rationale": "The report omits the exact unifi-mcp package version.",
+            "confidence": "HIGH",
+        }
+    ]
+    proposal = _normal_proposal(
+        bundle,
+        decision={"kind": "missing_information", "fields": ["package_version"]},
+        label_intents=existing_label,
+    )
+
+    result = _run_contract(
+        {
+            "op": "rewrite",
+            "bundle": bundle,
+            "output": {
+                "items": [
+                    {"type": "add_comment", "body": proposal},
+                    {"type": "add_labels", "labels": existing_label},
+                ]
+            },
+        }
+    )
+
+    assert result.returncode == 0, result.stderr
+    rewritten = json.loads(result.stdout)
+    assert [item["type"] for item in rewritten["output"]["items"]] == ["add_comment"]
+    assert "exact unifi-mcp package version" in rewritten["output"]["items"][0]["body"]
+    assert rewritten["proposal"]["label_intents"] == []
 
 
 @pytest.mark.parametrize("mutation", ["missing", "extra", "name", "rationale", "confidence", "order"])
@@ -3561,7 +4054,9 @@ def test_candidate_summary_distinguishes_skipped_search_from_zero_results():
     zero_result_bundle = _create_snapshot()["bundle"]
     zero_result = _run_contract({"op": "candidateSummary", "bundle": zero_result_bundle})
     assert zero_result.returncode == 0, zero_result.stderr
-    assert json.loads(zero_result.stdout)["summary"] == "No lexical candidates met the deterministic threshold."
+    assert json.loads(zero_result.stdout)["summary"] == (
+        "No explicit references or lexical candidates met the deterministic threshold."
+    )
 
 
 @pytest.mark.parametrize(
@@ -3738,7 +4233,9 @@ def test_prompt_exact_proposal_shape_copies_the_artifact_run_kind():
 
 
 def test_contract_cli_accepts_only_file_paths_for_proposal_validation(tmp_path: Path):
-    bundle = _create_snapshot()["bundle"]
+    payload = _snapshot_payload()
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": "priority: medium"}]
+    bundle = _create_snapshot(payload)["bundle"]
     proposal = _normal_proposal(bundle)
     bundle_path = tmp_path / "bundle.json"
     input_path = tmp_path / "agent.json"
@@ -3797,7 +4294,10 @@ def test_trusted_support_request_codes_render_one_fixed_tool_probe_and_guide(
     expected: tuple[str, str],
 ):
     payload = _snapshot_payload()
-    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": code.split("_", 1)[0]}]
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [
+        {"name": code.split("_", 1)[0]},
+        {"name": "priority: medium"},
+    ]
     bundle = _create_snapshot(payload)["bundle"]
     labels = [
         {
@@ -3822,7 +4322,10 @@ def test_trusted_support_request_codes_render_one_fixed_tool_probe_and_guide(
 
 def test_unsupported_protect_sensor_shape_request_is_rejected_for_matching_product():
     payload = _snapshot_payload()
-    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": "protect"}]
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [
+        {"name": "protect"},
+        {"name": "priority: medium"},
+    ]
     bundle = _create_snapshot(payload)["bundle"]
     proposal = _normal_proposal(
         bundle,
@@ -3863,7 +4366,10 @@ def test_support_requests_require_one_matching_existing_product_label(code: str,
     if component_labels == [product]:
         pytest.skip("Matching cases are covered by the rendering test")
     payload = _snapshot_payload()
-    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": label} for label in component_labels]
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [
+        *({"name": label} for label in component_labels),
+        {"name": "priority: medium"},
+    ]
     bundle = _create_snapshot(payload)["bundle"]
     proposal = _normal_proposal(
         bundle,
@@ -3883,7 +4389,7 @@ def test_support_requests_require_one_matching_existing_product_label(code: str,
 
 def test_proposed_product_label_cannot_authorize_a_support_request():
     payload = _snapshot_payload()
-    payload["issues"][str(TARGET_NUMBER)]["labels"] = []
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": "priority: medium"}]
     bundle = _create_snapshot(payload)["bundle"]
     proposal = _normal_proposal(
         bundle,
@@ -3908,7 +4414,7 @@ def test_proposed_product_label_cannot_authorize_a_support_request():
 
 def test_missing_product_label_still_allows_ordinary_missing_information():
     payload = _snapshot_payload()
-    payload["issues"][str(TARGET_NUMBER)]["labels"] = []
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": "priority: medium"}]
     bundle = _create_snapshot(payload)["bundle"]
     proposal = _normal_proposal(
         bundle,
@@ -4063,7 +4569,9 @@ def test_support_request_rejects_unknown_or_multiple_codes(support_request: obje
 )
 @pytest.mark.parametrize("field", ["relationship", "label"])
 def test_free_form_rationales_never_escape_the_trusted_publication_boundary(reason: str, field: str):
-    bundle = _create_snapshot(_snapshot_payload(candidates=[_issue(225)]))["bundle"]
+    payload = _snapshot_payload(candidates=[_issue(225)])
+    payload["issues"][str(TARGET_NUMBER)]["labels"] = [{"name": "priority: medium"}]
+    bundle = _create_snapshot(payload)["bundle"]
     proposal = json.loads(_normal_proposal(bundle))
     if field == "relationship":
         proposal["relationships"][0]["reason"] = reason
@@ -4144,7 +4652,7 @@ def test_relationship_reason_is_not_rendered_into_the_public_comment():
     result = _render(bundle, _canonical(proposal), "ready_for_maintainer")
     assert result.returncode == 0, result.stderr
     rendered = json.loads(result.stdout)["rendered"]
-    assert "Candidate #225: UNCERTAIN" in rendered
+    assert "Related issue candidate #225: UNCERTAIN" in rendered
     assert reason not in rendered
 
 
@@ -4178,7 +4686,11 @@ def test_fixed_rationale_boundary_covers_all_public_decisions_and_verdicts(verdi
     rewritten = json.loads(result.stdout)
     assert reason not in json.dumps(rewritten)
     assert rewritten["proposal"]["relationships"][0]["verdict"] == verdict
-    assert rewritten["summary"]["relationships"][0]["verdict_html"] == verdict
+    if kind == "ready_for_maintainer" and verdict == "NOT_RELATED":
+        assert rewritten["carrier"] == "silent"
+        assert rewritten["summary"]["relationships"] == []
+    else:
+        assert rewritten["summary"]["relationships"][0]["verdict_html"] == verdict
     if kind == "missing_information":
         assert "exact unifi-mcp package version" in rewritten["output"]["items"][0]["body"]
     elif kind == "repository_evidence":

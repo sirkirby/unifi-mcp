@@ -13,7 +13,7 @@ import {isIP} from "node:net";
 import {pathToFileURL} from "node:url";
 
 export const CONTRACT_VERSION = 3;
-export const SNAPSHOT_STRATEGY = "bounded-title-lexical-v3";
+export const SNAPSHOT_STRATEGY = "bounded-explicit-and-title-v3";
 export const MAX_TARGET_COMMENTS = 100;
 export const MAX_TIMELINE_EVENTS = 100;
 export const MAX_CANDIDATES = 5;
@@ -33,6 +33,11 @@ const ACTIONS_BOT = "github-actions[bot]";
 const ALLOWED_LABELS = new Set([
   "bug", "enhancement", "documentation", "dependencies", "docker",
   "github-actions", "api", "network", "protect", "access", "needs-info",
+  "priority: high", "priority: medium", "priority: low",
+]);
+const PRIORITY_LABELS = new Set(["priority: high", "priority: medium", "priority: low"]);
+const COMMUNITY_AUTHOR_ASSOCIATIONS = new Set([
+  "NONE", "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR", "CONTRIBUTOR",
 ]);
 const SENSITIVE_SCOPES = new Set(["target", "comments", "candidate"]);
 const SENSITIVE_CONFIGURATION_BLOB_KEYS = new Set([
@@ -147,9 +152,6 @@ const REPOSITORY_EVIDENCE_PATHS = [
   /^docs\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/,
   /^(?:apps|packages)\/[A-Za-z0-9][A-Za-z0-9._-]*\/src\/[A-Za-z0-9_][A-Za-z0-9_-]*(?:\/[A-Za-z0-9_][A-Za-z0-9_-]*)*\.py$/,
 ];
-const COMMENT_FOOTER =
-  "This is an automated first-pass triage; a maintainer will make final decisions.";
-
 function fail(message) {
   throw new Error(message);
 }
@@ -1229,7 +1231,11 @@ export function normalizeIssue(raw) {
     updated_at: normalizeNullableText(raw.updated_at),
     closed_at: raw.closed_at === null || raw.closed_at === undefined ? null : normalizeNullableText(raw.closed_at),
     author: normalizeAuthor(raw.user ?? raw.author),
+    author_association: typeof raw.author_association === "string"
+      ? raw.author_association.toUpperCase()
+      : "",
     labels: normalizeLabels(raw.labels),
+    kind: raw.kind === "pull_request" || raw.pull_request ? "pull_request" : "issue",
   };
 }
 
@@ -1346,6 +1352,9 @@ export function evaluateIntakeEligibility({
   if (typeof target.author !== "string" || target.author === "" || issue?.user?.type === "Bot") {
     return {...base, reason: "target author is not an eligible human reporter"};
   }
+  if (!COMMUNITY_AUTHOR_ASSOCIATIONS.has(target.author_association)) {
+    return {...base, reason: "target author association is not eligible community intake"};
+  }
   if (actor !== target.author) return {...base, reason: "trigger actor is not the issue author"};
   if (eventName === "issues" && action === "opened") {
     if (triggerComment !== null) return {...base, reason: "initial issue event cannot bind a comment"};
@@ -1430,6 +1439,21 @@ async function fetchIssue(github, owner, repo, issueNumber) {
   return normalizeIssue(raw);
 }
 
+async function fetchCandidate(github, owner, repo, number) {
+  const response = await github.rest.issues.get({owner, repo, issue_number: number});
+  if (!response?.data) fail(`referenced item #${number} is missing`);
+  return normalizeIssue(response.data);
+}
+
+async function fetchExplicitCandidate(github, owner, repo, number) {
+  try {
+    return await fetchCandidate(github, owner, repo, number);
+  } catch (error) {
+    if (Number(error?.status) === 404) return null;
+    throw error;
+  }
+}
+
 async function requireNeedsInfoLabel(github, owner, repo) {
   let response;
   try {
@@ -1470,10 +1494,46 @@ async function fetchBoundedTimelineEvents(github, owner, repo, issueNumber) {
   return events;
 }
 
+function explicitReferenceNumbers(owner, repo, target) {
+  const escapedRepository = `${owner}/${repo}`.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const text = `${target.title}\n${target.body}`;
+  const matches = [];
+  for (const match of text.matchAll(new RegExp(`https://github\\.com/${escapedRepository}/(?:issues|pull)/(\\d+)\\b`, "giu"))) {
+    matches.push({index: match.index, number: Number(match[1])});
+  }
+  for (const match of text.matchAll(/(^|[\s([{:;,])#(\d+)\b/gu)) {
+    matches.push({index: (match.index || 0) + match[1].length, number: Number(match[2])});
+  }
+  matches.sort((left, right) => left.index - right.index);
+  const numbers = [];
+  const seen = new Set([target.number]);
+  for (const match of matches) {
+    if (!Number.isSafeInteger(match.number) || match.number < 1 || seen.has(match.number)) continue;
+    seen.add(match.number);
+    numbers.push(match.number);
+    if (numbers.length === MAX_CANDIDATES) break;
+  }
+  return numbers;
+}
+
 async function scanCandidates(github, owner, repo, target) {
+  const explicit = [];
+  for (const number of explicitReferenceNumbers(owner, repo, target)) {
+    const data = await fetchExplicitCandidate(github, owner, repo, number);
+    if (data === null) continue;
+    explicit.push({
+      number,
+      state: data.state,
+      score: 0,
+      title: data.title,
+      kind: data.kind,
+      source: "explicit",
+      data,
+    });
+  }
   const targetTokens = tokenize(target.title);
   if (targetTokens.length === 0) {
-    return {candidates: [], scanned: 0, truncated: false, searchPerformed: false, reason: "no-distinctive-title-terms"};
+    return {candidates: explicit, scanned: 0, truncated: false, searchPerformed: explicit.length > 0, reason: "no-distinctive-title-terms"};
   }
   const collected = [];
   let cursor = null;
@@ -1510,6 +1570,7 @@ async function scanCandidates(github, owner, repo, target) {
   const targetTokenSet = new Set(targetTokens);
   const ranked = collected
     .filter((candidate) => Number(candidate?.number) !== target.number)
+    .filter((candidate) => !explicit.some(({number}) => Number(candidate?.number) === number))
     .filter((candidate) => {
       const state = String(candidate?.state || "").toUpperCase();
       if (state === "OPEN") return true;
@@ -1532,13 +1593,20 @@ async function scanCandidates(github, owner, repo, target) {
     .sort((left, right) =>
       right.score - left.score || right.shared.length - left.shared.length || right.number - left.number,
     )
-    .slice(0, MAX_CANDIDATES)
+    .slice(0, MAX_CANDIDATES - explicit.length)
     .map(({number, state, score}) => {
       const source = collected.find((candidate) => candidate.number === number);
-      return {number, state, score, title: normalizeNullableText(source?.title)};
+      return {
+        number,
+        state,
+        score,
+        title: normalizeNullableText(source?.title),
+        kind: "issue",
+        source: "lexical",
+      };
     });
 
-  return {candidates: ranked, scanned: collected.length, truncated, searchPerformed: true, reason: null};
+  return {candidates: [...explicit, ...ranked], scanned: collected.length, truncated, searchPerformed: true, reason: null};
 }
 
 function issueTextItems(issue, prefix) {
@@ -1650,6 +1718,9 @@ export async function createTrustedSnapshot({
 
   await requireNeedsInfoLabel(github, owner, repo);
   const target = await fetchIssue(github, owner, repo, targetNumber);
+  if (target.labels.filter((name) => PRIORITY_LABELS.has(name)).length > 1) {
+    fail("target has multiple existing priority labels");
+  }
   const targetReceipt = nextReceipt();
   const targetDigest = canonicalDigest(target);
   const bundle = baseBundle({
@@ -1711,14 +1782,18 @@ export async function createTrustedSnapshot({
 
   const retained = [];
   for (const candidate of scan.candidates) {
-    const data = await fetchIssue(github, owner, repo, candidate.number);
-    if (data.title !== candidate.title || data.state !== candidate.state) {
+    const data = candidate.source === "explicit"
+      ? candidate.data
+      : await fetchCandidate(github, owner, repo, candidate.number);
+    if (data.title !== candidate.title || data.state !== candidate.state || data.kind !== candidate.kind) {
       fail(`candidate #${candidate.number} changed during trusted snapshot creation`);
     }
     retained.push({
       number: candidate.number,
       state: candidate.state,
       score: candidate.score,
+      kind: candidate.kind,
+      source: candidate.source,
       receipt: nextReceipt(),
       digest: canonicalDigest(data),
       data,
@@ -1741,13 +1816,17 @@ export async function createTrustedSnapshot({
 }
 
 function validateCandidateMetadata(candidate, targetNumber) {
-  if (!exactKeys(candidate, ["number", "state", "score", "receipt", "digest", "data"])) {
+  if (!exactKeys(candidate, ["number", "state", "score", "kind", "source", "receipt", "digest", "data"])) {
     fail("snapshot candidate contains unexpected fields or field order");
   }
   assertSafePositiveInteger(candidate.number, "candidate number");
   if (candidate.number === targetNumber) fail("snapshot candidate cannot equal the target");
   if (candidate.state !== "open" && candidate.state !== "closed") fail("snapshot candidate has an invalid state");
-  if (!Number.isSafeInteger(candidate.score) || candidate.score < 6) fail("snapshot candidate has an invalid lexical score");
+  if (!new Set(["issue", "pull_request"]).has(candidate.kind)) fail("snapshot candidate has an invalid kind");
+  if (!new Set(["explicit", "lexical"]).has(candidate.source)) fail("snapshot candidate has an invalid source");
+  if (!Number.isSafeInteger(candidate.score) || (candidate.source === "lexical" ? candidate.score < 6 : candidate.score !== 0)) {
+    fail("snapshot candidate has an invalid source score");
+  }
   assertReceipt(candidate.receipt, "candidate receipt");
   assertDigest(candidate.digest, "candidate digest");
 }
@@ -1813,7 +1892,10 @@ export function validateBundle(bundle) {
     if (canonicalDigest(comments) !== bundle.comments.digest) fail("snapshot comment digest does not match its content");
     for (const candidate of bundle.candidates) {
       const data = normalizeIssue(candidate.data);
-      if (data.number !== candidate.number || data.state !== candidate.state || canonicalDigest(data) !== candidate.digest) fail(`snapshot candidate #${candidate.number} digest does not match its content`);
+      if (
+        data.number !== candidate.number || data.state !== candidate.state ||
+        data.kind !== candidate.kind || canonicalDigest(data) !== candidate.digest
+      ) fail(`snapshot candidate #${candidate.number} digest does not match its content`);
     }
     const inspection = inspectEvidence([
       ...issueTextItems(target, "target"),
@@ -1942,8 +2024,8 @@ export async function verifyFreshness({github, bundle, owner, repo}) {
 
   const candidates = [];
   for (const candidate of bundle.candidates) {
-    const current = await fetchIssue(github, owner, repo, candidate.number);
-    if (current.state !== candidate.state || canonicalDigest(current) !== candidate.digest) {
+    const current = await fetchCandidate(github, owner, repo, candidate.number);
+    if (current.state !== candidate.state || current.kind !== candidate.kind || canonicalDigest(current) !== candidate.digest) {
       fail(`candidate #${candidate.number} changed after the trusted snapshot`);
     }
     candidates.push(current);
@@ -2039,13 +2121,23 @@ function validateDecision(decision, expectedKind, bundle) {
   fail("proposal decision kind is invalid");
 }
 
-function relationshipText(relationships) {
-  return relationships.slice(0, 1).map(
-    (relationship) => `Candidate #${relationship.candidate_number}: ${relationship.verdict}`,
-  );
+function publicRelationshipText(relationships, bundle) {
+  const candidates = new Map(bundle.candidates.map((candidate) => [candidate.number, candidate]));
+  return relationships
+    .filter((relationship) => {
+      const candidate = candidates.get(relationship.candidate_number);
+      return candidate?.source === "explicit" || relationship.verdict !== "NOT_RELATED";
+    })
+    .slice(0, 3)
+    .map((relationship) => {
+      const candidate = candidates.get(relationship.candidate_number);
+      const kind = candidate?.kind === "pull_request" ? "pull request" : "issue";
+      const prefix = candidate?.source === "explicit" ? `Referenced ${kind}` : `Related ${kind} candidate`;
+      return `${prefix} #${relationship.candidate_number}: ${relationship.verdict}`;
+    });
 }
 
-function renderDecision(decision, relationships, runKind = "initial") {
+function renderDecision(decision, relationships, runKind = "initial", labelIntents = [], bundle = null) {
   let body;
   if (decision.kind === "missing_information") {
     const requests = decision.fields.map((field) => MISSING_INFORMATION_TEXT.get(field));
@@ -2054,17 +2146,33 @@ function renderDecision(decision, relationships, runKind = "initial") {
   } else if (decision.kind === "repository_evidence") {
     body = `Repository evidence (${decision.path}):\n\n> ${decision.quote}`;
   } else if (decision.kind === "ready_for_maintainer") {
-    body = "Thanks for the report. This automated first pass found enough information for maintainer review.";
+    const lines = [];
+    if (labelIntents.length > 0) {
+      lines.push(`- Labels selected: ${labelIntents.map(({name}) => `\`${name}\``).join(", ")}`);
+    }
+    const relationshipsText = bundle ? publicRelationshipText(relationships, bundle) : [];
+    lines.push(...relationshipsText.map((value) => `- ${value}`));
+    body = lines.length > 0 ? `Triage result:\n\n${lines.join("\n")}` : "";
   } else {
     body = "No public triage action is proposed by this first pass.";
   }
-  const assessments = relationshipText(relationships);
+  const assessments = decision.kind === "ready_for_maintainer" || !bundle
+    ? []
+    : publicRelationshipText(relationships, bundle);
   if (assessments.length > 0) body += `\n\n${assessments.join("\n")}`;
   if (decision.kind === "missing_information" || decision.kind === "repository_evidence" || decision.kind === "ready_for_maintainer") {
-    body += `\n\n${COMMENT_FOOTER}`;
-    body += `\n\n${runKind === "continuation" ? CONTINUATION_MARKER : INITIAL_MARKER}`;
+    if (body !== "") body += `\n\n${runKind === "continuation" ? CONTINUATION_MARKER : INITIAL_MARKER}`;
   }
   return body;
+}
+
+function validatePrioritySelection(labelIntents, bundle) {
+  if (bundle.run_kind !== "initial") return;
+  const existing = bundle.target.data.labels.filter((name) => PRIORITY_LABELS.has(name));
+  if (existing.length > 1) fail("target has multiple existing priority labels");
+  const proposed = labelIntents.filter(({name}) => PRIORITY_LABELS.has(name));
+  if (existing.length === 1 && proposed.length > 0) fail("triage must preserve the existing priority label");
+  if (existing.length === 0 && proposed.length !== 1) fail("initial triage must propose exactly one priority label");
 }
 
 function validateLabelIntents(value, allowEmpty = false) {
@@ -2125,6 +2233,7 @@ export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind
   const relationships = validateRelationships(proposal.relationships, bundle);
   const decision = validateDecision(proposal.decision, expectedDecisionKind, bundle);
   const labelIntents = validateLabelIntents(proposal.label_intents, true);
+  validatePrioritySelection(labelIntents, bundle);
   if (bundle.run_kind === "initial" && !new Set(["ready_for_maintainer", "missing_information", "repository_evidence"]).has(decision.kind)) fail("initial decision is not allowlisted");
   if (bundle.run_kind === "continuation" && decision.kind !== "missing_information") fail("incomplete continuation must request missing information");
   if (bundle.run_kind === "initial") {
@@ -2133,7 +2242,11 @@ export function validateAndRenderProposal({carrier, bundle, expectedDecisionKind
     if (decision.kind !== "missing_information" && hasNeedsInfo) fail("needs-info is valid only for missing-information initial triage");
   }
   rejectRelationshipSemanticsOutsideCarrier(decision, bundle, labelIntents);
-  return {proposal: {...proposal, label_intents: labelIntents, relationships, decision}, rendered: renderDecision(decision, relationships, bundle.run_kind), relationships};
+  return {
+    proposal: {...proposal, label_intents: labelIntents, relationships, decision},
+    rendered: renderDecision(decision, relationships, bundle.run_kind, labelIntents, bundle),
+    relationships,
+  };
 }
 
 /** Select the one designated carrier: label rationale, else comment body, else noop message. */
@@ -2182,7 +2295,11 @@ function inspectRenderedText(value, bundle) {
   const violations = [];
   const normalized = normalizePolicyText(value);
   const trustedNumbers = new Set([bundle.target_number, ...bundle.candidates.map(({number}) => number)]);
+  const trustedPullNumbers = new Set(
+    bundle.candidates.filter(({kind}) => kind === "pull_request").map(({number}) => number),
+  );
   const referenced = new Set();
+  const referencedPulls = new Set();
   for (const match of normalized.matchAll(/(^|[^A-Za-z0-9_])#\s*(\d+)\b/g)) referenced.add(Number(match[2]));
   for (const match of normalized.matchAll(/\bissue\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi)) referenced.add(Number(match[1]));
   for (const match of normalized.matchAll(/\bGH\s*-\s*(\d+)\b/gi)) referenced.add(Number(match[1]));
@@ -2199,12 +2316,14 @@ function inspectRenderedText(value, bundle) {
     if (repository !== bundle.repository.toLowerCase()) {
       violations.push("cross-repository reference is not allowed");
     } else if (match[4].toLowerCase() === "pull") {
-      violations.push("numbered pull-request reference is not allowed");
+      referencedPulls.add(Number(match[5]));
     } else {
       referenced.add(Number(match[5]));
     }
   }
-  if (/\b(?:PRs?|pull[\s-]+requests?)\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*\d+\b/i.test(normalized)) violations.push("numbered pull-request reference is not allowed");
+  for (const match of normalized.matchAll(/\b(?:PRs?|pull[\s-]+requests?)\s*(?:(?:number|num(?:ber)?|no)\.?\s*)?:?\s*#?\s*(\d+)\b/gi)) {
+    referencedPulls.add(Number(match[1]));
+  }
   if (/(^|[^A-Za-z0-9_])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\b/.test(value)) violations.push("user or bot mention is not allowed");
   if (/\[[^\]]+\]\s*(?:\([^)]*\)|\[[^\]]*\])/.test(value) || /<(?:a\s|[^>]+\shref\s*=)/i.test(value)) violations.push("agent-authored link syntax is not allowed");
   if (/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?[ \t]*#\d+\b/i.test(normalized)) violations.push("closing keyword is not allowed");
@@ -2234,9 +2353,12 @@ function inspectRenderedText(value, bundle) {
     const issueMatch = relativePath.match(/^\/issues\/(\d+)(?:\/|$)/);
     const pullMatch = relativePath.match(/^\/pull\/(\d+)(?:\/|$)/);
     if (issueMatch) referenced.add(Number(issueMatch[1]));
-    if (pullMatch) violations.push("numbered pull-request reference is not allowed");
+    if (pullMatch) referencedPulls.add(Number(pullMatch[1]));
   }
   for (const number of referenced) if (!trustedNumbers.has(number)) violations.push("issue reference outside trusted evidence");
+  for (const number of referencedPulls) {
+    if (!trustedPullNumbers.has(number)) violations.push("numbered pull-request reference is not allowed");
+  }
   if (violations.length > 0) fail([...new Set(violations)].join(", "));
 }
 
@@ -2248,8 +2370,10 @@ export function summarizeCandidateResearch(bundle) {
       ? "Candidate research was skipped because sensitive intake was detected before search."
       : "Candidate research was skipped because the target title had no distinctive search terms.";
   }
-  if (bundle.candidates.length === 0) return "No lexical candidates met the deterministic threshold.";
-  return bundle.candidates.map((candidate) => `- #${candidate.number} (score ${candidate.score})`).join("\n");
+  if (bundle.candidates.length === 0) return "No explicit references or lexical candidates met the deterministic threshold.";
+  return bundle.candidates.map((candidate) => candidate.source === "explicit"
+    ? `- #${candidate.number} (${candidate.kind.replace("_", " ")}, explicit reference)`
+    : `- #${candidate.number} (issue, lexical score ${candidate.score})`).join("\n");
 }
 
 async function renderRepositoryEvidence(decision, bundle, fetchRepositoryFile) {
@@ -2272,21 +2396,22 @@ async function renderRepositoryEvidence(decision, bundle, fetchRepositoryFile) {
   );
 }
 
-function appendRelationshipsAndFooter(body, decision, relationships, runKind) {
-  const assessments = relationshipText(relationships);
+function appendRelationshipsAndFooter(body, decision, relationships, runKind, bundle) {
+  const assessments = publicRelationshipText(relationships, bundle);
   let rendered = body;
   if (assessments.length > 0) rendered += `\n\n${assessments.join("\n")}`;
   if (decision.kind === "missing_information" || decision.kind === "repository_evidence") {
-    rendered += `\n\n${COMMENT_FOOTER}`;
     rendered += `\n\n${runKind === "continuation" ? CONTINUATION_MARKER : INITIAL_MARKER}`;
   }
   return rendered;
 }
 
-async function renderVerifiedDecision(decision, relationships, bundle, fetchRepositoryFile) {
-  if (decision.kind !== "repository_evidence") return renderDecision(decision, relationships, bundle.run_kind);
+async function renderVerifiedDecision(decision, relationships, labelIntents, bundle, fetchRepositoryFile) {
+  if (decision.kind !== "repository_evidence") {
+    return renderDecision(decision, relationships, bundle.run_kind, labelIntents, bundle);
+  }
   const evidence = await renderRepositoryEvidence(decision, bundle, fetchRepositoryFile);
-  return appendRelationshipsAndFooter(evidence, decision, relationships, bundle.run_kind);
+  return appendRelationshipsAndFooter(evidence, decision, relationships, bundle.run_kind, bundle);
 }
 
 function rejectRelationshipSemanticsOutsideCarrier(decision, bundle, labelIntents = []) {
@@ -2408,22 +2533,50 @@ export async function validateAndRewriteAgentOutput({
     if (validated.proposal.decision.kind !== "missing_information" && hasNeedsInfo) fail("needs-info is valid only for missing-information initial triage");
   }
   if (bundle.status === "complete") {
+    const existingLabels = new Set(bundle.target.data.labels);
+    validated.proposal.label_intents = validated.proposal.label_intents.filter(({name}) => !existingLabels.has(name));
+    if (labelsItem) labelsItem.labels = validated.proposal.label_intents;
     validated.rendered = await renderVerifiedDecision(
       validated.proposal.decision,
       validated.relationships,
+      validated.proposal.label_intents,
       bundle,
       fetchRepositoryFile,
     );
+  }
+  const actionableRelationships = publicRelationshipText(validated.relationships, bundle);
+  if (
+    bundle.status === "complete" && bundle.run_kind === "initial" &&
+    validated.proposal.decision.kind === "ready_for_maintainer" &&
+    validated.proposal.label_intents.length === 0 && actionableRelationships.length === 0
+  ) {
+    const silentMessage = "No public triage action was needed.";
+    return {
+      output: {...trustedOutput, items: [{type: "noop", message: silentMessage}]},
+      carrier: "silent",
+      proposal: {...validated.proposal, relationships: validated.relationships.map((relationship) => ({
+        ...relationship, reason: PUBLIC_RELATIONSHIP_REASON,
+      }))},
+      summary: {
+        heading_html: "Trusted no-action triage",
+        rendered_html: [escapeHtml(silentMessage)],
+        relationships: [],
+      },
+    };
   }
   const carrierItem = trustedOutput.items[carrier.itemIndex];
   if (carrier.type === "comment") carrierItem.body = validated.rendered;
   if (carrier.type === "noop") carrierItem.message = validated.rendered;
 
   if (labelsItem) {
-    labelsItem.item_number = targetNumber;
-    for (const label of labelsItem.labels) {
-      label.rationale = PUBLIC_LABEL_RATIONALE;
-      label.suggest = true;
+    if (labelsItem.labels.length === 0) {
+      trustedOutput.items.splice(trustedOutput.items.indexOf(labelsItem), 1);
+    } else {
+      labelsItem.item_number = targetNumber;
+      for (const label of labelsItem.labels) {
+        label.rationale = PUBLIC_LABEL_RATIONALE;
+        label.suggest = true;
+      }
     }
   }
 
