@@ -1,6 +1,7 @@
 """Tests for event/alarm tool confirmation previews."""
 
 import os
+import re
 
 import pytest
 
@@ -166,3 +167,64 @@ async def test_get_event_types_returns_standard_error_when_discovery_fails(monke
         "success": False,
         "error": "Failed to get event types: controller event query failed",
     }
+
+
+@pytest.mark.asyncio
+async def test_list_events_passes_categories_and_severities_through(monkeypatch):
+    """The manager already accepts categories/severities; the tool must expose and forward them."""
+    from unifi_network_mcp.tools import events as events_module
+
+    captured: dict = {}
+
+    class _CapturingEventManager(_StubEventManager):
+        async def get_events(self, **kwargs):
+            captured.update(kwargs)
+            return self._records
+
+    monkeypatch.setattr(events_module, "_get_event_manager", lambda: _CapturingEventManager([]))
+
+    result = await events_module.list_events(categories=["SECURITY"], severities=["HIGH", "VERY_HIGH"])
+
+    assert result["success"] is True
+    assert captured["categories"] == ["SECURITY"]
+    assert captured["severities"] == ["HIGH", "VERY_HIGH"]
+    assert result["filters"]["categories"] == ["SECURITY"]
+    assert result["filters"]["severities"] == ["HIGH", "VERY_HIGH"]
+
+
+def _bracketed_examples(text: str) -> list[str]:
+    """Return every quoted value inside a bracketed example list in ``text``."""
+    values: list[str] = []
+    for group in re.findall(r"\[([^\]]*)\]", text):
+        values.extend(re.findall(r"'([A-Z_]+)'", group))
+    return values
+
+
+def test_list_events_examples_use_controller_supported_spellings():
+    """Every category/severity example the tool advertises must be a manager-known spelling.
+
+    Maintainer live run on Network 10.6.102: ``categories=["DEVICES"]`` and
+    ``severities=["CRITICAL"]`` both fail on the controller, yet the tool
+    description, the manifest and the API catalog advertised them.
+    """
+    from unifi_core.network.managers import event_manager as manager_module
+    from unifi_network_mcp.tools import events as events_module
+
+    known_categories = {entry["category"] for entry in manager_module.EventManager.get_event_categories(None)}
+    known_severities = set(manager_module._DEFAULT_SEVERITIES)
+
+    tool = events_module.server._tool_manager.get_tool("unifi_list_events")
+    assert tool is not None
+    schema = tool.parameters["properties"]
+
+    advertised_categories = set(_bracketed_examples(schema["categories"]["description"]))
+    advertised_severities = set(_bracketed_examples(schema["severities"]["description"]))
+    advertised_in_description = set(_bracketed_examples(tool.description))
+
+    assert advertised_categories, "category example missing from the parameter description"
+    assert advertised_severities, "severity example missing from the parameter description"
+    assert advertised_in_description <= known_categories | known_severities, (
+        advertised_in_description - known_categories - known_severities
+    )
+    assert advertised_categories <= known_categories, advertised_categories - known_categories
+    assert advertised_severities <= known_severities, advertised_severities - known_severities

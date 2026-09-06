@@ -4939,6 +4939,10 @@
       "manager_method": "get_events",
       "input_schema": {
         "properties": {
+          "categories": {
+            "description": "Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). Ignored on legacy controllers",
+            "type": "array"
+          },
           "event_type": {
             "description": "Filter by an exact event key (for example 'CLIENT_DISCONNECTED_WIRELESS_2'). Use unifi_get_event_types to see recently observed keys",
             "type": "string"
@@ -4946,6 +4950,10 @@
           "limit": {
             "description": "Maximum number of events to return (default 100)",
             "type": "integer"
+          },
+          "severities": {
+            "description": "Filter by v2 system-log severities (for example ['HIGH', 'VERY_HIGH']). Ignored on legacy controllers",
+            "type": "array"
           },
           "start": {
             "description": "Offset for pagination, skip the first N events (default 0)",

@@ -11682,11 +11682,15 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns timestamped event log entries (client connects/disconnects, device state changes, firmware updates, config changes) sorted newest-first. Filter by within_hours (default 24), an exact event_type key (use unifi_get_event_types for recently observed keys), and paginate with start/limit. For critical alerts specifically, use unifi_list_alarms instead.",
+      "description": "Returns timestamped event log entries (client connects/disconnects, device state changes, firmware updates, config changes) sorted newest-first. Filter by within_hours (default 24), an exact event_type key (use unifi_get_event_types for recently observed keys), categories (for example ['SECURITY']) and severities (for example ['HIGH', 'VERY_HIGH']) on v2 controllers, and paginate with start/limit. For critical alerts specifically, use unifi_list_alarms instead.",
       "name": "unifi_list_events",
       "schema": {
         "input": {
           "properties": {
+            "categories": {
+              "description": "Filter by v2 system-log categories (for example ['SECURITY', 'UNIFI_DEVICES']). Ignored on legacy controllers",
+              "type": "array"
+            },
             "event_type": {
               "description": "Filter by an exact event key (for example 'CLIENT_DISCONNECTED_WIRELESS_2'). Use unifi_get_event_types to see recently observed keys",
               "type": "string"
@@ -11694,6 +11698,10 @@
             "limit": {
               "description": "Maximum number of events to return (default 100)",
               "type": "integer"
+            },
+            "severities": {
+              "description": "Filter by v2 system-log severities (for example ['HIGH', 'VERY_HIGH']). Ignored on legacy controllers",
+              "type": "array"
             },
             "start": {
               "description": "Offset for pagination, skip the first N events (default 0)",
