@@ -306,10 +306,37 @@ def _load_manifest_cached(manifest_path: Path) -> Dict[str, Any] | None:
     except Exception as e:
         logger.warning("Failed to load tool manifest: %s, falling back to runtime", e)
         return None
+    if not isinstance(manifest, dict):
+        logger.warning("Tool manifest at %s is not a JSON object, falling back to runtime", manifest_path)
+        return None
 
     logger.debug("Loaded tool index from manifest: %d tools", manifest.get("count", 0))
     _MANIFEST_CACHE[manifest_path] = manifest
     return manifest
+
+
+def policy_gates_from_manifest(manifest_path: Path) -> frozenset[tuple[str, str]]:
+    """Return the ``(permission_category, permission_action)`` pairs a manifest's tools register.
+
+    Categories are the manifest shorthand; resolve them through the server's
+    category map (``PolicyGateChecker``) before building env var names.
+    A missing or unreadable manifest yields no gates.
+    """
+    manifest = _load_manifest_cached(manifest_path)
+    if manifest is None:
+        return frozenset()
+    tools = manifest.get("tools")
+    if not isinstance(tools, list):
+        return frozenset()
+    gates = set()
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        category = tool.get("permission_category")
+        action = tool.get("permission_action")
+        if isinstance(category, str) and isinstance(action, str) and category and action:
+            gates.add((category, action))
+    return frozenset(gates)
 
 
 def _tools_from_registry() -> list:
