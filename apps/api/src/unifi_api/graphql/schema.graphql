@@ -1026,6 +1026,28 @@ type LldpRow {
   capabilities: [String!]!
 }
 
+"""
+Read-only device management (mgmt) posture: device SSH state, key and credential presence. No credential, hash or key material is ever returned.
+"""
+type MgmtSettings {
+  xSshEnabled: Boolean
+  xSshUsername: String
+  xSshAuthPasswordEnabled: Boolean
+  xSshBindWildcard: Boolean
+  sshKeysPresent: Boolean
+  sshKeysCount: Int
+  sshPasswordSet: Boolean
+  sshPasswordHashSet: Boolean
+  mgmtKeySet: Boolean
+  apiTokenSet: Boolean
+  debugToolsEnabled: Boolean
+  autoUpgrade: Boolean
+  autoUpgradeHour: Int
+  advancedFeatureEnabled: Boolean
+  unifiIdpEnabled: Boolean
+  wifimanEnabled: Boolean
+}
+
 """A UniFi LAN/VLAN network configuration."""
 type Network {
   id: ID
@@ -1353,6 +1375,11 @@ type NetworkQuery {
 
   """Get SNMP settings."""
   snmpSettings(controller: ID!, site: String! = "default"): SnmpSettings
+
+  """
+  Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.
+  """
+  mgmtSettings(controller: ID!, site: String! = "default"): MgmtSettings
 
   """Get gateway (USG) security / NAT / connection-tracking settings."""
   gatewaySettings(controller: ID!, site: String! = "default"): GatewaySettings

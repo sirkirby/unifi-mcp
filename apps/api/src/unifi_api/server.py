@@ -123,6 +123,9 @@ from unifi_api.routes.resources.network import (
     lookup as net_lookup_routes,
 )
 from unifi_api.routes.resources.network import (
+    mgmt as net_mgmt_routes,
+)
+from unifi_api.routes.resources.network import (
     networks as net_networks_routes,
 )
 from unifi_api.routes.resources.network import (
@@ -525,6 +528,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_port_forwards_routes,
         net_vouchers_routes,
         net_snmp_routes,
+        net_mgmt_routes,
         # Cluster 6: stats / events / system. The network events router owns
         # the bare /events path for both products via a capability-aware
         # dispatcher; it must be included before protect_events_routes so the

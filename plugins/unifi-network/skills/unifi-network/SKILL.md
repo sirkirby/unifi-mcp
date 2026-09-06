@@ -5,7 +5,7 @@ description: How to manage UniFi network infrastructure — devices, clients, fi
 
 # UniFi Network MCP Server
 
-You have access to a UniFi Network MCP server that lets you query and manage a UniFi Network Controller. It provides 193 tools covering devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, statistics, and more.
+You have access to a UniFi Network MCP server that lets you query and manage a UniFi Network Controller. It provides 194 tools covering devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, statistics, and more.
 
 ## Tool Discovery
 
@@ -43,50 +43,4 @@ Always preview first and show the user before confirming.
 
 All tools return: `{"success": true, "data": ...}`, `{"success": false, "error": "..."}`, or `{"success": true, "requires_confirmation": true, "preview": ...}`. Always check `success` first. Network/WLAN and VPN-state writes are read back after execution and also report `mutation_applied`, `partial_success`, `persisted_fields`, `unchanged_fields`, `dropped_fields`, `coerced_fields`, and actual post-write details. Already-satisfied no-op fields appear in `unchanged_fields` and do not make a failed write partially successful. A failed confirmed write is not necessarily a rollback; inspect those fields before retrying or compensating.
 
-**Redacted secrets:** Secret fields — WLAN passphrases (`x_passphrase`), VPN private/preshared keys, whole VPN config blobs (imported WireGuard/OpenVPN config files), SNMP community strings, and SNMPv3 passwords — come back as `***REDACTED***` by default. Raw values are controlled by process policy (`UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false` or global `UNIFI_REDACT_SENSITIVE_FIELDS=false`), not by tool arguments. On an update, send **only** the fields you are changing — to keep a secret unchanged, omit it; never echo `***REDACTED***` back, which is rejected so the placeholder can't overwrite the real secret.
-
-## Device Classification
-
-`unifi_list_devices` returns a `device_category` field that accurately classifies devices:
-- `ap` — real access points (excludes USP Smart Power strips that report as `uap` type)
-- `switch` — switches
-- `gateway` — UDM/USG gateways
-- `pdu` — smart power strips, UPS devices
-- `wan` — cable internet (UCI) devices
-
-Use `device_category` (not `type`) when counting or filtering devices. The `device_type` filter parameter uses this classification.
-
-Additional enriched fields: `upgradable` (bool), `connection_network` (VLAN name), `uplink` (topology), `load_avg_1`, `mem_pct`, `model_eol`.
-
-## Efficiency Tips
-
-- **Batch reads** — `unifi_batch` for parallel queries (biggest efficiency win)
-- **`unifi_lookup_by_ip`** — faster than listing all clients when you know the IP
-- **Use filters** — most list tools accept time range, type, and ID parameters
-- **`unifi_get_top_clients`** — fastest way to find bandwidth hogs
-- **`unifi_get_traffic_flows`** — query historical Insights > Flows records when the user asks who talked to what, which ports/protocols were used, or where traffic went
-- **Check health first** — `unifi_get_network_health` for quick "is everything OK?"
-- **Device counts** — use `device_category` field, not `type`, for accurate AP/switch/PDU counts
-
-## Authentication
-
-Username and password are **required** (local admin credentials, not Ubiquiti SSO). API key support exists but is **experimental** — limited to read-only operations and a subset of tools.
-
-To configure, run `/unifi-network:unifi-network-setup` or set env vars manually:
-```
-UNIFI_NETWORK_HOST=192.168.1.1
-UNIFI_NETWORK_USERNAME=admin
-UNIFI_NETWORK_PASSWORD=your-password
-```
-
-## Other UniFi Servers
-
-If the user also has cameras or door access control, other UniFi MCP plugins are available:
-- `unifi-protect` — security cameras, NVR, recordings, smart detections
-- `unifi-access` — door locks, credentials, visitors, access policies
-
-Cameras and access readers appear as network clients — use `unifi_lookup_by_ip` to cross-reference if troubleshooting connectivity for those devices.
-
-## Tool Reference
-
-For the complete list of all 193 tools organized by category with descriptions, tips, and common scenarios, read `references/network-tools.md`.
+**Redacted secrets:** Secret fields — WLAN passphrases (`x_passphrase`), VPN private/preshared keys, whole VPN config blobs (imported WireGuard/OpenVPN config files), SNMP community strings, SNMPv3 passwords, and device-SSH credentials — come back as `***REDACTED***` by default. Raw values are controlled by process policy (`UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false` or global `UNIFI_REDACT_SENSITIVE_FIELDS=false`), not by tool arguments. On an update, send **only** the fields you are changing — to keep a secret unchanged, omit it; never echo `***REDACTED***` back, which is rejected so the placeholder can't overwrite the real secret.

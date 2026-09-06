@@ -14,6 +14,7 @@ from unifi_core.confirmation import create_preview, delete_preview, update_previ
 from unifi_core.network.models.system import (
     autobackup_to_controller_update,
     backup_from_controller,
+    mgmt_from_controller,
     network_health_from_controller,
     site_settings_from_controller,
     snmp_from_controller,
@@ -241,6 +242,29 @@ async def update_snmp_settings(
     except Exception as e:
         logger.error("Error updating SNMP settings: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to update SNMP settings: {_error_detail(e)}"}
+
+
+@server.tool(
+    name="unifi_get_mgmt_settings",
+    description="Get the site's device management (mgmt) settings, read-only: device SSH state and user name, "
+    "password-auth flag, authorised-key count, whether an SSH password, password hash, management key and API "
+    "token are stored (presence only; values never returned), debug tools, auto-upgrade and its hour.",
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def get_mgmt_settings() -> Dict[str, Any]:
+    """Implementation for getting device management settings.
+
+    ``mgmt_from_controller`` is the allowlist: the shaped record holds no
+    credential, hash or key material, so there is nothing left to redact.
+    """
+    logger.info("unifi_get_mgmt_settings tool called")
+    try:
+        settings_list = await system_manager.get_settings("mgmt")
+        shaped = mgmt_from_controller(settings_list).model_dump(exclude_none=False)
+        return {"success": True, "site": system_manager._connection.site, "mgmt_settings": shaped}
+    except Exception as e:
+        logger.error("Error getting management settings: %s", e, exc_info=True)
+        return {"success": False, "error": f"Failed to get management settings: {e}"}
 
 
 # ---- Backup Management ----

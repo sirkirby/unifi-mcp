@@ -332,7 +332,7 @@ def test_repository_catalog_is_complete_with_only_streaming_exclusions() -> None
 
     payload = json.loads(generator.render_catalog(REPO_ROOT))
 
-    assert len(payload["actions"]) == 271
+    assert len(payload["actions"]) == 272
     assert [item["name"] for item in payload["excluded"]] == [
         "access_subscribe_events",
         "protect_subscribe_events",

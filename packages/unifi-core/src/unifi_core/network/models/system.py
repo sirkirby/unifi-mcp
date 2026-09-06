@@ -124,6 +124,58 @@ class AutoBackupSettings(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# MgmtSettings
+# ---------------------------------------------------------------------------
+
+
+class MgmtSettings(BaseModel):
+    """Read-only posture view of the ``mgmt`` site setting: the device-SSH management plane.
+
+    There is no writer for this record. Field names match the controller's
+    keys where the value is passed through (verified on Network 10.6.102).
+    The model is the allowlist: the four credentials the record carries
+    (``x_ssh_password`` in clear text, ``x_ssh_sha512passwd``, ``x_mgmt_key``,
+    ``x_api_token``) are not modelled at all and are reported only by the
+    ``*_set`` presence flags, so no redaction policy can hand out the device
+    root password, its hash or the adoption key. The authorised-key list is
+    reported by presence and count only; the key objects never leave the
+    converter.
+    """
+
+    x_ssh_enabled: Optional[bool] = Field(default=None, description="Whether SSH is enabled on adopted devices")
+    x_ssh_username: Optional[str] = Field(default=None, description="Device SSH user name")
+    x_ssh_auth_password_enabled: Optional[bool] = Field(
+        default=None, description="Whether password authentication is allowed for device SSH"
+    )
+    x_ssh_bind_wildcard: Optional[bool] = Field(default=None, description="Whether device SSH binds all interfaces")
+    ssh_keys_present: Optional[bool] = Field(
+        default=None,
+        description="Whether any authorised public keys are configured for device SSH (the keys are never returned)",
+    )
+    ssh_keys_count: Optional[int] = Field(
+        default=None, description="Number of authorised public keys configured for device SSH"
+    )
+    ssh_password_set: Optional[bool] = Field(
+        default=None, description="Whether a device SSH password is stored (the password is never returned)"
+    )
+    ssh_password_hash_set: Optional[bool] = Field(
+        default=None, description="Whether a device SSH password hash is stored (the hash is never returned)"
+    )
+    mgmt_key_set: Optional[bool] = Field(
+        default=None, description="Whether a management key is stored (the key is never returned)"
+    )
+    api_token_set: Optional[bool] = Field(
+        default=None, description="Whether a management API token is stored (the token is never returned)"
+    )
+    debug_tools_enabled: Optional[bool] = Field(default=None, description="Whether device debug tools are enabled")
+    auto_upgrade: Optional[bool] = Field(default=None, description="Whether device firmware is upgraded automatically")
+    auto_upgrade_hour: Optional[int] = Field(default=None, description="Hour of day (0-23) for automatic upgrades")
+    advanced_feature_enabled: Optional[bool] = Field(default=None, description="Advanced features enabled on the site")
+    unifi_idp_enabled: Optional[bool] = Field(default=None, description="UniFi Identity integration enabled")
+    wifiman_enabled: Optional[bool] = Field(default=None, description="WiFiman integration enabled")
+
+
+# ---------------------------------------------------------------------------
 # Field sets
 # ---------------------------------------------------------------------------
 
@@ -136,6 +188,10 @@ SNMPSETTINGS_READ_ONLY_FIELDS: frozenset[str] = frozenset(
     for name, field in SnmpSettings.model_fields.items()
     if (field.json_schema_extra or {}).get("mutable", True) is False
 )
+
+# MgmtSettings is a read-only posture view: no field is mutable.
+MGMTSETTINGS_MUTABLE_FIELDS: frozenset[str] = frozenset()
+MGMTSETTINGS_READ_ONLY_FIELDS: frozenset[str] = frozenset(MgmtSettings.model_fields)
 
 AUTOBACKUPSETTINGS_MUTABLE_FIELDS: frozenset[str] = frozenset(
     name
@@ -222,6 +278,44 @@ def snmp_to_controller_update(fields: Dict[str, Any]) -> Dict[str, Any]:
         for k, v in fields.items()
         if k in SNMPSETTINGS_MUTABLE_FIELDS and v is not None
     }
+
+
+# ---------------------------------------------------------------------------
+# Public factory helpers — MgmtSettings
+# ---------------------------------------------------------------------------
+
+# Presence flag -> the controller key it summarises. These keys are read for
+# their truthiness only and never copied into the model.
+_MGMT_STORED_SECRETS = {
+    "ssh_password_set": "x_ssh_password",
+    "ssh_password_hash_set": "x_ssh_sha512passwd",
+    "mgmt_key_set": "x_mgmt_key",
+    "api_token_set": "x_api_token",
+}
+
+
+def mgmt_from_controller(raw: Any) -> MgmtSettings:
+    """Build a MgmtSettings from a ``mgmt`` settings record (list or dict).
+
+    The model is the allowlist: only its fields leave here. Stored credentials
+    are reduced to presence booleans and the authorised-key list to a
+    presence flag plus a count.
+    """
+    if isinstance(raw, list):
+        raw = raw[0] if raw else None
+    if not isinstance(raw, dict):
+        return MgmtSettings()
+    values: Dict[str, Any] = {name: raw.get(name) for name in MgmtSettings.model_fields}
+    for flag, secret_key in _MGMT_STORED_SECRETS.items():
+        values[flag] = bool(raw.get(secret_key))
+    keys = raw.get("x_ssh_keys")
+    if isinstance(keys, list):
+        values["ssh_keys_present"] = len(keys) > 0
+        values["ssh_keys_count"] = len(keys)
+    else:
+        values["ssh_keys_present"] = None
+        values["ssh_keys_count"] = None
+    return MgmtSettings(**values)
 
 
 # ---------------------------------------------------------------------------

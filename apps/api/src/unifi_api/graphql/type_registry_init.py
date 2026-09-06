@@ -190,6 +190,9 @@ from unifi_api.graphql.types.network.system import (
     EventTypes as NetworkEventTypesType,
 )
 from unifi_api.graphql.types.network.system import (
+    MgmtSettings as NetworkMgmtSettingsType,
+)
+from unifi_api.graphql.types.network.system import (
     NetworkHealth as NetworkNetworkHealthType,
 )
 from unifi_api.graphql.types.network.system import (
@@ -545,6 +548,7 @@ def build_type_registry() -> TypeRegistry:
     )
     reg.register_tool_type("unifi_get_site_settings", NetworkSiteSettingsType, "detail")
     reg.register_tool_type("unifi_get_snmp_settings", NetworkSnmpSettingsType, "detail")
+    reg.register_tool_type("unifi_get_mgmt_settings", NetworkMgmtSettingsType, "detail")
     reg.register_tool_type("unifi_get_event_types", NetworkEventTypesType, "detail")
     reg.register_tool_type(
         "unifi_get_autobackup_settings",

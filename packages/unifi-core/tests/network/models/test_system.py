@@ -561,6 +561,89 @@ class TestSiteSettingsExtendedSections:
         } <= (SITESETTINGS_READ_ONLY_FIELDS)
 
 
+class TestMgmtSettings:
+    """The ``mgmt`` site setting: device-SSH management plane, read-only posture
+    view. Keys verified on Network 10.6.102; the four credentials and the
+    authorised-key objects are never carried, only their presence (and the key
+    count)."""
+
+    RECORD = [
+        {
+            "_id": "m1",
+            "key": "mgmt",
+            "site_id": "s1",
+            "x_ssh_enabled": True,
+            "x_ssh_username": "ubnt",
+            "x_ssh_auth_password_enabled": True,
+            "x_ssh_password": "clear",
+            "x_ssh_sha512passwd": "$6$hash",
+            "x_ssh_keys": [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}],
+            "x_ssh_bind_wildcard": False,
+            "debug_tools_enabled": False,
+            "auto_upgrade": True,
+            "auto_upgrade_hour": 3,
+            "advanced_feature_enabled": False,
+            "unifi_idp_enabled": False,
+            "wifiman_enabled": True,
+            "x_api_token": "tok-3f9a",
+            "x_mgmt_key": "0123456789abcdef",
+        }
+    ]
+    SECRETS = ("clear", "$6$hash", "0123456789abcdef", "tok-3f9a", "AAAA", "laptop", "ssh-ed25519")
+
+    def test_every_field_is_read_only(self) -> None:
+        from unifi_core.network.models.system import (
+            MGMTSETTINGS_MUTABLE_FIELDS,
+            MGMTSETTINGS_READ_ONLY_FIELDS,
+            MgmtSettings,
+        )
+
+        assert MGMTSETTINGS_MUTABLE_FIELDS == frozenset()
+        assert MGMTSETTINGS_READ_ONLY_FIELDS == frozenset(MgmtSettings.model_fields)
+        for absent in ("x_ssh_password", "x_ssh_keys", "x_ssh_sha512passwd", "x_mgmt_key", "x_api_token"):
+            assert absent not in MgmtSettings.model_fields
+
+    def test_from_controller_unwraps_and_reports_presence_only(self) -> None:
+        from unifi_core.network.models.system import mgmt_from_controller
+
+        settings = mgmt_from_controller(self.RECORD)
+        assert settings.x_ssh_enabled is True
+        assert settings.x_ssh_username == "ubnt"
+        assert settings.x_ssh_auth_password_enabled is True
+        assert settings.x_ssh_bind_wildcard is False
+        assert settings.ssh_keys_present is True and settings.ssh_keys_count == 1
+        assert settings.ssh_password_set is True
+        assert settings.ssh_password_hash_set is True
+        assert settings.mgmt_key_set is True
+        assert settings.api_token_set is True
+        assert settings.auto_upgrade_hour == 3 and settings.wifiman_enabled is True
+        dumped = repr(settings.model_dump())
+        for secret in self.SECRETS:
+            assert secret not in dumped
+
+    def test_from_controller_missing_secrets_and_keys(self) -> None:
+        from unifi_core.network.models.system import mgmt_from_controller
+
+        settings = mgmt_from_controller([{"x_ssh_enabled": False, "x_ssh_sha512passwd": "", "x_ssh_keys": []}])
+        assert settings.ssh_password_set is False
+        assert settings.ssh_password_hash_set is False
+        assert settings.mgmt_key_set is False
+        assert settings.api_token_set is False
+        assert settings.ssh_keys_present is False and settings.ssh_keys_count == 0
+
+    def test_from_controller_without_key_list_leaves_key_fields_none(self) -> None:
+        from unifi_core.network.models.system import mgmt_from_controller
+
+        settings = mgmt_from_controller({"x_ssh_enabled": True})
+        assert settings.ssh_keys_present is None and settings.ssh_keys_count is None
+
+    @pytest.mark.parametrize("raw", [None, [], "not-a-record", 42])
+    def test_from_controller_non_record_is_empty(self, raw) -> None:
+        from unifi_core.network.models.system import MgmtSettings, mgmt_from_controller
+
+        assert mgmt_from_controller(raw) == MgmtSettings()
+
+
 class TestEventTypesFromController:
     def test_list_input(self) -> None:
         raw = [{"prefix": "EVT_SW_", "desc": "Switch events"}]

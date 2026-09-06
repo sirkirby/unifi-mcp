@@ -1,4 +1,4 @@
-# Network Server Tool Reference (193 tools)
+# Network Server Tool Reference (194 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -550,11 +550,12 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## System
 
 <!-- AUTO:tools:system,config -->
-10 tools.
+11 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
 | `unifi_get_autobackup_settings` | Read | Get auto-backup settings (enabled state, schedule, retention count, cloud backup). |
+| `unifi_get_mgmt_settings` | Read | Get the site's device management (mgmt) settings, read-only: device SSH state and user name, password-auth flag, authorised-key count, wh... |
 | `unifi_get_network_health` | Read | Returns per-subsystem health status for WAN, LAN, WLAN, and VPN — each with status, number of gateways/switches/APs, and active user counts. |
 | `unifi_get_site_settings` | Read | Get current site settings: site identity, regulatory country code, timezone, connectivity monitor (enabled, uplink type) and NTP servers. |
 | `unifi_get_snmp_settings` | Read | Get current SNMP settings for the site: v1/v2c enabled state and community string, SNMPv3 enabled state and user name. |

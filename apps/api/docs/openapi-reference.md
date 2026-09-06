@@ -747,6 +747,20 @@ Returns the user-defined firewall policy ordering for a source/destination zone 
 **Returns:** `object`
 
 
+## network/mgmt
+
+### `GET /v1/sites/{site_id}/mgmt-settings` — Get Mgmt Settings
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `object`
+
+
 ## network/networks
 
 ### `GET /v1/sites/{site_id}/networks` — List Networks

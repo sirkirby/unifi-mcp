@@ -463,3 +463,13 @@ def test_ssh_public_keys_stay_visible() -> None:
     assert redact_sensitive_fields({"x_ssh_keys": [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}]}) == {
         "x_ssh_keys": [{"name": "laptop", "type": "ssh-ed25519", "key": "AAAA"}]
     }
+
+
+def test_sanitize_exception_dict_arg_keeps_boolean_flags_visible():
+    """The boolean rule is one predicate for all three walkers; the exception path must honour it too."""
+    from unifi_core.redaction import REDACTED, sanitize_exception
+
+    error = ValueError({"data": [{"x_ssh_auth_password_enabled": True, "x_ssh_password": "hunter2"}]})
+    sanitize_exception(error, {"hunter2"})
+
+    assert error.args[0]["data"][0] == {"x_ssh_auth_password_enabled": True, "x_ssh_password": REDACTED}

@@ -1713,6 +1713,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     ),
     "unifi_get_site_dpi_traffic": _spec(_rename_and_drop(rename={"group_by": "by"}), "by"),
     "unifi_get_snmp_settings": _spec(_rename_and_drop(constants={"section": "snmp"}), "section"),
+    "unifi_get_mgmt_settings": _spec(_rename_and_drop(constants={"section": "mgmt"}), "section"),
     "unifi_get_speedtest_results": _spec(lambda args: _translate_duration(args, default_hours=24), "duration_hours"),
     "unifi_get_traffic_flows": _spec(_translate_traffic_flows, "query"),
     "unifi_list_devices": _spec(
