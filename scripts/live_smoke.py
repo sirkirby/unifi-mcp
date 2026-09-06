@@ -871,6 +871,12 @@ class LiveSmokeRunner:
                 "group_members": ["192.0.2.123"],
             },
             "access_create_visitor": self.visitor_args(stamp),
+            # Every parameter on this tool is optional, so no argument is
+            # discoverable from the schema and the generic builder would call
+            # it empty — which the tool rightly rejects. Name a field so the
+            # preview still exercises the diff; run_previews forces
+            # confirm=False, so nothing is written.
+            "unifi_update_snmp_settings": {"enabled_v3": False},
         }
         if name in simple:
             return dict(simple[name]), ""
