@@ -41,6 +41,16 @@ class TestProtectListEvents:
         assert len(result["data"]["events"]) == 2
 
     @pytest.mark.asyncio
+    async def test_negative_limit_is_rejected_before_controller_io(self, mock_event_manager):
+        from unifi_protect_mcp.tools.events import protect_list_events
+
+        mock_event_manager.list_events = AsyncMock()
+        result = await protect_list_events(limit=-1)
+
+        assert result == {"success": False, "error": "limit must be zero or greater"}
+        mock_event_manager.list_events.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_with_filters(self, mock_event_manager):
         from unifi_protect_mcp.tools.events import protect_list_events
 

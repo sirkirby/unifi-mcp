@@ -36,6 +36,18 @@ async def test_list_events_projects_a_stable_system_log_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_list_events_rejects_negative_limit_before_controller_io() -> None:
+    with patch("unifi_access_mcp.tools.events.event_manager") as manager:
+        manager.list_events = AsyncMock()
+        from unifi_access_mcp.tools.events import access_list_events
+
+        result = await access_list_events(limit=-1)
+
+    assert result == {"success": False, "error": "limit must be zero or greater"}
+    manager.list_events.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_get_event_round_trips_the_synthetic_id() -> None:
     raw = {
         "id": "",

@@ -64,10 +64,12 @@ async def access_list_events(
     ] = None,
     limit: Annotated[
         int,
-        Field(description="Maximum number of events to return (default 30)."),
+        Field(description="Maximum number of events to return; must be zero or greater (default 30)."),
     ] = 30,
 ) -> Dict[str, Any]:
     """List access events."""
+    if limit < 0:
+        return {"success": False, "error": "limit must be zero or greater"}
     logger.info("access_list_events tool called (topic=%s, door=%s, user=%s, limit=%s)", topic, door_id, user_id, limit)
     try:
         raw_events = await event_manager.list_events(
