@@ -7,6 +7,7 @@ from aiounifi.models.api import ApiRequest
 from aiounifi.models.site import Site  # Import Site model
 
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.redaction import collect_secret_values, redact_sensitive_fields, sanitize_exception, scrub_secret_values
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -324,10 +325,18 @@ class SystemManager:
             if success:
                 logger.info("%s settings updated successfully", section)
             else:
-                logger.error("Error updating %s settings: %s", section, response)
+                # A rejected write can echo the submitted record (x_password,
+                # community, ...). Redact by key and scrub the submitted values
+                # before the log line (#645, #648).
+                secrets = collect_secret_values(settings_data)
+                safe_response = scrub_secret_values(str(redact_sensitive_fields(response)), secrets)
+                logger.error("Error updating %s settings: %s", section, safe_response)
 
             return success
         except Exception as e:
+            # The transport scrubs its own errors; repeat here so the manager
+            # holds the contract on its own (#645, #648).
+            sanitize_exception(e, collect_secret_values(settings_data))
             logger.error("Error updating %s settings: %s", section, e)
             raise
 

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import inspect
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Iterable
 
 from jsonschema import Draft202012Validator
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from unifi_core.confirmation import create_preview, delete_preview, preview_response
 from unifi_core.redaction import redaction_marker_paths
@@ -152,6 +155,10 @@ def _effective_preview_args(
     return effective
 
 
+# A constraint longer than this is a schema dump, not a diagnostic.
+_CONSTRAINT_REPR_MAX = 120
+
+
 def _validate_action_args(entry: ToolEntry, args: dict[str, Any]) -> None:
     """Validate raw REST args against the generated MCP input contract."""
     errors = sorted(
@@ -163,7 +170,60 @@ def _validate_action_args(entry: ToolEntry, args: dict[str, Any]) -> None:
     error = errors[0]
     path = ".".join(str(part) for part in error.absolute_path)
     location = f" at args.{path}" if path else ""
-    raise ValueError(f"Invalid action arguments for '{entry.name}'{location}: {error.message}")
+    # ``error.message`` embeds the submitted instance, so an operator value —
+    # a credential in the worst case — would enter every sink this message
+    # reaches: the HTTP body, the log and the durable audit row. The
+    # schema-side facts identify the same failure and carry nothing the caller
+    # sent.
+    if error.validator == "required" and isinstance(error.instance, Mapping):
+        # ``required`` carries no path, so it sorts first and is often the only
+        # diagnostic the caller sees. The names come from the schema.
+        missing = [name for name in error.validator_value if name not in error.instance]
+        raise ValueError(f"Invalid action arguments for '{entry.name}': missing argument(s) {', '.join(missing)}")
+    if error.validator == "additionalProperties" and isinstance(error.instance, Mapping):
+        # jsonschema puts the offending key only in ``message``. A key is not
+        # a value: the MCP side names it the same way in its unknown-argument
+        # error.
+        declared = error.schema.get("properties", {}) if isinstance(error.schema, Mapping) else {}
+        patterned = error.schema.get("patternProperties", {}) if isinstance(error.schema, Mapping) else {}
+        unexpected = sorted(
+            key
+            for key in set(error.instance) - set(declared)
+            # A schema can also admit keys by pattern; those are declared, just
+            # not by name, and naming them as unknown would send the caller
+            # after the wrong argument.
+            if not any(re.search(pattern, key) for pattern in patterned)
+        )
+        if unexpected:
+            raise ValueError(
+                f"Invalid action arguments for '{entry.name}'{location}: unknown argument(s) {', '.join(unexpected)}"
+            )
+    # A composite validator's value is the whole subschema tree, which is noise
+    # in a durable audit row; the validator name alone says what failed.
+    constraint = repr(error.validator_value)
+    if error.validator in {"anyOf", "oneOf", "allOf", "not"} or len(constraint) > _CONSTRAINT_REPR_MAX:
+        constraint = ""
+    named = f"{error.validator or 'schema'}"
+    detail = f"does not satisfy {named!r}" + (f": {constraint}" if constraint else "")
+    raise ValueError(f"Invalid action arguments for '{entry.name}'{location}: {detail}")
+
+
+def _value_free_validation_error(tool_name: str, error: ValidationError) -> ValueError:
+    """Restate a pydantic validation failure without the caller's data.
+
+    ``str(ValidationError)`` embeds ``input_value=``, truncated at about fifty
+    characters — so a long credential survives as fragments that no
+    value-matching scrub can find, all the way into the durable audit row.
+    ``errors()`` without input, url or context carries the same diagnostic: the
+    field and the failure. One residue remains — a custom validator writes its
+    own text into ``msg`` as ``Value error, ...`` — which is why the audit
+    sink's scrub stays behind this as a barrier.
+    """
+    details = error.errors(include_url=False, include_input=False, include_context=False)
+    fields = "; ".join(
+        f"{'.'.join(str(part) for part in detail['loc']) or '<root>'}: {detail['msg']}" for detail in details
+    )
+    return ValueError(f"Invalid action arguments for '{tool_name}': {fields}")
 
 
 async def dispatch_action(
@@ -222,7 +282,10 @@ async def dispatch_action(
     manager_args = dict(args)
     translator = DISPATCH_ARG_TRANSLATORS.get(tool_name)
     if translator is not None:
-        positional, keyword = translator(manager_args)
+        try:
+            positional, keyword = translator(manager_args)
+        except ValidationError as e:
+            raise _value_free_validation_error(tool_name, e) from None
     else:
         positional, keyword = (), manager_args
 
