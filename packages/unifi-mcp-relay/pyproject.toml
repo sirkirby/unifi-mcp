@@ -19,7 +19,7 @@ dependencies = [
     "unifi-mcp-shared>=0.6.10,<0.7",
     # location_timeline.py imports unifi_core.event_timeline directly. This resolves
     # today only as a transitive of unifi-mcp-shared; declare it so it does not.
-    "unifi-core>=0.4.46,<0.5",
+    "unifi-core>=0.4.47,<0.5",
 ]
 
 [project.scripts]
