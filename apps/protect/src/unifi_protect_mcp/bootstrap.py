@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
 from omegaconf import OmegaConf
 
 from unifi_core.config import load_yaml_config  # noqa: F401 -- re-export for convenience
@@ -27,13 +26,13 @@ from unifi_core.config import setup_logging as _shared_setup_logging
 # ---------------------------------------------------------------------------
 # Environment & logging
 # ---------------------------------------------------------------------------
+# Snapshot the real environment first, then load the .env files: the
+# UNIFI_*_FILE credential indirection is honoured only for variables the process
+# was started with, so a .env in an untrusted project directory cannot make the
+# server read an arbitrary file. The order lives in one place, in unifi_mcp_shared.
+from unifi_mcp_shared.bootstrap import load_process_env
 
-load_dotenv()
-# Under an installed package (pip/uvx), find_dotenv() walks up from this file's
-# site-packages location and never reaches the caller's project, so also load a
-# .env from the process working directory (MCP clients spawn servers with the
-# project as cwd). Real environment variables still take precedence.
-load_dotenv(Path.cwd() / ".env", override=False)
+load_process_env()
 
 
 DEFAULT_LOG_LEVEL = os.getenv("UNIFI_MCP_LOG_LEVEL", "INFO").upper()

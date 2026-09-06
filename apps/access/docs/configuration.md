@@ -21,6 +21,14 @@ The Access server supports server-specific environment variables with the `UNIFI
 
 **Resolution order:** `UNIFI_ACCESS_*` > `UNIFI_*` > YAML config > hardcoded default.
 
+### Keeping the password out of the client environment
+
+`UNIFI_ACCESS_PASSWORD` and `UNIFI_ACCESS_API_KEY` (and their `UNIFI_*` fallbacks) each accept an indirect spelling, `UNIFI_ACCESS_PASSWORD_FILE=<path>` (and `UNIFI_ACCESS_API_KEY_FILE`), a file whose contents are the value (Docker and systemd secrets convention; trailing newlines dropped), so the secret only ever exists inside the server process.
+
+Set exactly one spelling per level: `UNIFI_ACCESS_PASSWORD` next to `UNIFI_ACCESS_PASSWORD_FILE` refuses to start as ambiguous. A missing, unreadable, empty, multi-line or oversized file also refuses to start (exit code 6) with the variable name in the log; the file's contents are never logged. `UNIFI_ACCESS_API_KEY_FILE` behaves the same way.
+
+One boundary to know about. The indirection is honoured only from the environment the server process was started with (an exported variable, the MCP client's `env` block, Docker `environment:` or `env_file:`), never from a `.env` file the server itself loads from its working directory, so a `.env` inside an untrusted project cannot make the server read an arbitrary file.
+
 ## Dual-Path Authentication
 
 The Access server has two independent auth paths. At least one must be configured.
