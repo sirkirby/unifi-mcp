@@ -2428,6 +2428,115 @@ async def test_dispatch_update_firewall_policy_rejects_index_before_preview_and_
     domain_manager.update_firewall_policy.assert_not_awaited()
 
 
+def _live_firewall_manager(stored: dict) -> tuple[object, list]:
+    """A real FirewallManager over a fake connection; returns it and the mutation log."""
+    from unifi_core.network.managers.firewall_manager import FirewallManager
+
+    sent: list = []
+
+    async def request(api_request, *args, **kwargs):
+        if api_request.method == "get":
+            return [stored]
+        sent.append((api_request.method, api_request.data))
+        return {}
+
+    conn = MagicMock()
+    conn.site = "default"
+    conn.ensure_connected = AsyncMock(return_value=True)
+    conn.request = AsyncMock(side_effect=request)
+    conn.get_cached = MagicMock(return_value=None)
+    conn._update_cache = MagicMock()
+    conn._invalidate_cache = MagicMock()
+    return FirewallManager(conn), sent
+
+
+def _stored_policy(destination: dict) -> dict:
+    return {
+        "_id": "pol_zone_001",
+        "name": "disposable",
+        "enabled": False,
+        "action": "BLOCK",
+        "predefined": False,
+        "source": {"zone_id": "z1", "matching_target": "ANY"},
+        "destination": {"zone_id": "z1", "matching_target": "ANY", **destination},
+    }
+
+
+async def _dispatch_update_firewall_policy(manager, update_data: dict, *, confirm: bool):
+    entry = ToolEntry(
+        name="unifi_update_firewall_policy",
+        product="network",
+        category="firewall_policies",
+        manager="",
+        method="",
+    )
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    factory.get_connection_manager = AsyncMock(return_value=MagicMock(site="default", set_site=AsyncMock()))
+    result = await dispatch_action(
+        registry=_registry_with(entry),
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_update_firewall_policy",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"policy_id": "pol_zone_001", "update_data": update_data},
+        confirm=confirm,
+        dispatch_table={
+            "unifi_update_firewall_policy": DispatchEntry(
+                manager_attr="firewall_manager", method="update_firewall_policy"
+            ),
+        },
+    )
+    return result, factory
+
+
+@pytest.mark.asyncio
+async def test_dispatch_update_firewall_policy_rejects_selector_only_update_on_inactive_enum() -> None:
+    """API confirmed execution: port on a stored port_matching_type ANY is rejected by the
+    real manager before any PUT (the MCP wrapper already rejected this; the API did not)."""
+    manager, sent = _live_firewall_manager(_stored_policy({"port_matching_type": "ANY"}))
+
+    with pytest.raises(ValueError, match="port_matching_type"):
+        await _dispatch_update_firewall_policy(manager, {"destination": {"port": "53"}}, confirm=True)
+
+    assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_dispatch_update_firewall_policy_activation_change_retires_stored_port() -> None:
+    """API confirmed execution: SPECIFIC/53 → ANY must not carry the stale port to the controller."""
+    stored = _stored_policy({"port_matching_type": "SPECIFIC", "port": "53"})
+    manager, sent = _live_firewall_manager(stored)
+
+    result, _ = await _dispatch_update_firewall_policy(
+        manager, {"destination": {"port_matching_type": "ANY"}}, confirm=True
+    )
+
+    assert result is True
+    assert [method for method, _ in sent] == ["put"]
+    body = sent[0][1]
+    assert body["destination"]["port_matching_type"] == "ANY"
+    assert "port" not in body["destination"]
+    assert body["source"] == stored["source"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [False, True])
+async def test_dispatch_update_firewall_policy_rejects_contradictory_selector_before_manager(confirm: bool) -> None:
+    """A selector paired with a non-activating enum in the same update is rejected statelessly,
+    so the API preview refuses it too, before any manager is resolved."""
+    manager, sent = _live_firewall_manager(_stored_policy({"port_matching_type": "ANY"}))
+
+    with pytest.raises(ValueError, match="port_matching_type"):
+        await _dispatch_update_firewall_policy(
+            manager, {"destination": {"port_matching_type": "ANY", "port": "53"}}, confirm=confirm
+        )
+
+    assert sent == []
+
+
 # ---------------------------------------------------------------------------
 # Network — toggle_port_forward: port_forward_id → rule_id rename
 # ---------------------------------------------------------------------------

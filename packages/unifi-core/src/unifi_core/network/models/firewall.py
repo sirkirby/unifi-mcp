@@ -635,7 +635,21 @@ def _endpoint_targeting_errors(direction: str, ep: Any) -> List[str]:
             errors.append("%s.ips array is required when matching_target is 'IP'." % direction)
     if target == "NETWORK" and not ep.get("network_ids"):
         errors.append("%s.network_ids array is required when matching_target is 'NETWORK'." % direction)
+    errors.extend(_selector_activator_errors(direction, ep))
+    return errors
+
+
+def _selector_activator_errors(direction: str, ep: Dict[str, Any], *, require_both_present: bool = False) -> List[str]:
+    """Selector-vs-activating-enum problems on one endpoint dict.
+
+    With ``require_both_present`` the check is limited to pairs the dict itself
+    carries, which is what a partial update can be judged on without the
+    stored policy.
+    """
+    errors: List[str] = []
     for selector, activator_key, activator_value in SELECTOR_ACTIVATORS:
+        if require_both_present and (activator_key not in ep or selector not in ep):
+            continue
         value = ep.get(selector)
         if ep.get(activator_key) == activator_value:
             error = _SELECTOR_VALIDATORS[selector](direction, value)
@@ -712,6 +726,37 @@ def policy_update_targeting_error(current: Dict[str, Any], updates: Dict[str, An
     return None
 
 
+def _selector_contradiction_error(direction: str, ep: Any) -> str | None:
+    """Reject a selector paired with a non-activating enum inside one update dict.
+
+    This needs no stored state, so it runs at the normalization boundary and
+    protects previews on surfaces that cannot read the controller first.
+    """
+    if not isinstance(ep, dict):
+        return None
+    errors = _selector_activator_errors(direction, ep, require_both_present=True)
+    return errors[0] if errors else None
+
+
+def prepare_policy_update(current: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Finish a normalized partial update against the stored policy document.
+
+    This is the shared MCP/API step that needs controller state: it retires the
+    selectors an activation change deactivates (:func:`retire_stale_selectors`)
+    and validates each updated side as the controller will store it
+    (:func:`policy_update_targeting_error`). Raises ``ValueError`` on the first
+    targeting error; the manager calls it before building the PUT body and the
+    MCP wrapper calls it for the preview.
+    """
+    prepared = dict(updates)
+    for side in ("source", "destination"):
+        if side in prepared:
+            prepared[side] = retire_stale_selectors(current.get(side), prepared[side])
+    if error := policy_update_targeting_error(current, prepared):
+        raise ValueError(error)
+    return prepared
+
+
 def _normalize_endpoint_macs(endpoint: Any) -> Any:
     """Lowercase the ``client_macs`` inside a source/destination endpoint dict.
 
@@ -730,8 +775,10 @@ def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
 
     This is the shared mutation boundary for MCP and API callers. It rejects
     ``index`` (ordering is a separate tool family), rejects retired V1 fields,
-    normalizes the controller's upper-case enums, and drops unknown/read-only
-    fields through :func:`to_controller_update`.
+    normalizes the controller's upper-case enums, drops unknown/read-only
+    fields through :func:`to_controller_update`, and rejects a selector paired
+    with a non-activating enum in the same update. Checks that need the stored
+    policy run in :func:`prepare_policy_update`.
     """
     if "index" in fields:
         # The V2 policy endpoint accepts index and silently ignores it, so the
@@ -747,6 +794,8 @@ def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     payload = to_controller_update(normalized)
     for side in ("source", "destination"):
         if side in payload:
+            if error := _selector_contradiction_error(side, payload[side]):
+                raise ValueError(error)
             payload[side] = _normalize_endpoint_macs(payload[side])
     if not payload:
         raise ValueError("Update data is effectively empty or invalid.")

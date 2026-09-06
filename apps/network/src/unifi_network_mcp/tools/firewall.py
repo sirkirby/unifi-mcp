@@ -19,8 +19,7 @@ from unifi_core.network.models.firewall import (
     legacy_policy_error,
     normalize_policy_enums,
     normalize_policy_update,
-    policy_update_targeting_error,
-    retire_stale_selectors,
+    prepare_policy_update,
     validate_policy_targeting,
 )
 from unifi_core.network.read_views import LEGACY_ENGINE_HINT, shape_firewall_policy_list
@@ -495,17 +494,13 @@ async def update_firewall_policy(
             }
         current = current_policy_obj.raw
 
-        # Validate each updated endpoint as the controller will store it: the
-        # manager deep-merges, so a partial source/destination is legitimately
-        # incomplete on its own. Untouched endpoints are not re-validated, and an
-        # error the stored endpoint already has (state this tool did not author)
-        # is not held against an update that leaves it unchanged.
-        for side in ("source", "destination"):
-            if side in validated_data:
-                validated_data[side] = retire_stale_selectors(current.get(side), validated_data[side])
-        targeting_error = policy_update_targeting_error(current, validated_data)
-        if targeting_error:
-            return {"success": False, "error": targeting_error}
+        # Retire deactivated selectors and validate each updated side as merged.
+        # The manager runs the same step before its PUT; it is repeated here so
+        # the preview shows the retired selectors and fails the same way.
+        try:
+            validated_data = prepare_policy_update(current, validated_data)
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
 
         if not confirm:
             return redact_sensitive_fields(

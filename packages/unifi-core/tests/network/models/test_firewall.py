@@ -25,6 +25,7 @@ from unifi_core.network.models.firewall import (
     normalize_policy_enums,
     normalize_policy_update,
     policy_update_targeting_error,
+    prepare_policy_update,
     retire_stale_selectors,
     to_controller_update,
     to_group_create,
@@ -196,6 +197,9 @@ class TestNormalizePolicyUpdate:
             ({"id": "read-only"}, "effectively empty"),
             ({"index": 2000, "enabled": True}, "unifi_reorder_firewall_policies"),
             ({"index": 2000}, "unifi_reorder_firewall_policies"),
+            ({"destination": {"port_matching_type": "ANY", "port": "53"}}, "port_matching_type"),
+            ({"destination": {"port_matching_type": "SPECIFIC", "port": "not-a-port"}}, "port"),
+            ({"source": {"matching_target": "ANY", "client_macs": ["aa:bb:cc:dd:ee:ff"]}}, "matching_target"),
         ],
     )
     def test_rejects_legacy_invalid_or_empty_updates(self, fields: dict, message: str) -> None:
@@ -372,6 +376,28 @@ class TestPolicyUpdateTargetingError:
             is None
         )
         assert "object" in policy_update_targeting_error({"source": "junk"}, {"source": "ANY"})
+
+
+class TestPreparePolicyUpdate:
+    """The one update path both MCP and API run composes retire + merged validation;
+    each half is covered by its own class below."""
+
+    _stored = {"zone_id": "z2", "matching_target": "ANY", "port_matching_type": "SPECIFIC", "port": "53"}
+
+    def test_selector_only_update_on_inactive_stored_enum_is_rejected(self) -> None:
+        current = {"destination": {"zone_id": "z2", "matching_target": "ANY", "port_matching_type": "ANY"}}
+        with pytest.raises(ValueError, match="port_matching_type"):
+            prepare_policy_update(current, {"destination": {"port": "53"}})
+
+    def test_activation_change_retires_the_stored_selector(self) -> None:
+        current = {"destination": dict(self._stored)}
+        assert prepare_policy_update(current, {"destination": {"port_matching_type": "ANY"}}) == {
+            "destination": {"port_matching_type": "ANY", "port": None}
+        }
+
+    def test_non_endpoint_updates_pass_through_untouched(self) -> None:
+        current = {"destination": dict(self._stored)}
+        assert prepare_policy_update(current, {"enabled": False}) == {"enabled": False}
 
 
 class TestRetireStaleSelectors:

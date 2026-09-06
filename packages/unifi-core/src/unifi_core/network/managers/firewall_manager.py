@@ -15,7 +15,7 @@ from unifi_core.auth import UniFiAuth
 from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
-from unifi_core.network.models.firewall import _normalize_endpoint_macs
+from unifi_core.network.models.firewall import _normalize_endpoint_macs, prepare_policy_update
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -390,11 +390,15 @@ class FirewallManager:
                 logger.error("Could not get raw data for policy %s. Update aborted.", policy_id)
                 return False
 
+            # Shared MCP/API step: retire selectors an activation change deactivates and
+            # validate each updated side as merged. Raises ValueError before any PUT.
+            updates = prepare_policy_update(policy_to_update.raw, updates)
+
             # Deep merge preserves nested sub-objects (source, destination, schedule, etc.)
             merged_data = deep_merge(policy_to_update.raw, updates)
             # None inside an endpoint means "remove this key": the controller stores a
             # selector (port, port_group_id, client_macs) only under its activating enum,
-            # and the update path retires a selector by setting it to None.
+            # and prepare_policy_update retires a selector by setting it to None.
             for side in ("source", "destination"):
                 endpoint = merged_data.get(side)
                 if isinstance(endpoint, dict):
