@@ -15,7 +15,7 @@ Factory helpers:
 type must expose every field listed here.
 
 Note: ``qos_enabled`` and ``route_enabled`` are included as explicit
-mutable fields to prevent silent-drop bugs (issue #137). The full ``qos``
+mutable fields to prevent silent-drop bugs. The full ``qos``
 and ``route`` nested dicts are also mutable.
 """
 

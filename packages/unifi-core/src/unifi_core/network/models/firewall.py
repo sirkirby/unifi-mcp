@@ -142,7 +142,7 @@ READ_ONLY_FIELDS: frozenset[str] = frozenset(
 _LEGACY_V1_FIREWALL_FIELDS = frozenset({"ruleset", "rule_index", "src_address", "dst_address", "src_port", "dst_port"})
 _LEGACY_V1_ACTIONS = frozenset({"accept", "drop", "reject"})
 _LEGACY_MIGRATION_ERROR = (
-    "Legacy V1 firewall fields are no longer supported (#210). "
+    "Legacy V1 firewall fields are no longer supported. "
     "Use V2 zone-based fields: action (ALLOW/BLOCK/REJECT), source "
     "(zone_id + matching_target), destination (zone_id + matching_target). "
     "See unifi_list_firewall_policies for examples of valid V2 shape."

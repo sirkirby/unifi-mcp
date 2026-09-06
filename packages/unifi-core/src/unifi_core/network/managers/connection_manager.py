@@ -805,7 +805,7 @@ class ConnectionManager:
         aiounifi handler's own ``update()``, which builds and issues its request
         internally. ``LoginRequired`` therefore propagates past ``request()``'s
         recovery entirely, and an expired session surfaced to the caller as a
-        bare 401 with no login ever attempted (#500).
+        bare 401 with no login ever attempted.
 
         The handler is resolved by *name* rather than passed in, so the retry
         reads it off ``self.controller`` again — the same reason ``request()``

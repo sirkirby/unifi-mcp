@@ -55,7 +55,7 @@ def _manager_summary(**overrides) -> dict:
 
 
 class TestSensorProjectionFromManagerSummary:
-    """The tool boundary must not drop what the manager emits (#621)."""
+    """The tool boundary must not drop what the manager emits."""
 
     def test_every_manager_field_survives_model_dump(self) -> None:
         summary = _manager_summary()

@@ -122,7 +122,7 @@ def test_does_not_redact_preshared_keys_enabled_flag() -> None:
 def test_redacts_role_infixed_private_and_preshared_keys() -> None:
     # Real UniFi networkconf field names (WireGuard manual mode) carry a role
     # infix (wireguard_client_*/wireguard_server_*) that the bare exact-match
-    # vocabulary missed, leaking key material — see issue #351.
+    # vocabulary missed, leaking key material.
     assert is_sensitive_key("wireguard_client_private_key") is True
     assert is_sensitive_key("wireguard_server_private_key") is True
     assert is_sensitive_key("x_wireguard_private_key") is True
@@ -143,8 +143,8 @@ def test_redacts_underscore_split_preshared_key_fields() -> None:
 
 
 def test_redacts_vpn_config_blob_fields() -> None:
-    # The secret rides inside a config-blob string under an innocuous key
-    # (issue #351): the whole blob field is treated as a secret (suppression).
+    # The secret rides inside a config-blob string under an innocuous key,
+    # so the whole blob field is treated as a secret (suppression).
     assert is_sensitive_key("openvpn_configuration") is True
     assert is_sensitive_key("wireguard_client_configuration_file") is True
     assert is_sensitive_key("wireguard_server_configuration_file") is True

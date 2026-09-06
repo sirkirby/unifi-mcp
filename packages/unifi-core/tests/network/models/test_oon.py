@@ -18,7 +18,7 @@ class TestFieldSets:
             assert field in MUTABLE_FIELDS, f"Expected {field!r} in MUTABLE_FIELDS"
 
     def test_mutable_fields_contains_qos_enabled_and_route_enabled(self) -> None:
-        # These were silent-drop bugs (issue #137)
+        # These were silent-drop bugs
         assert "qos_enabled" in MUTABLE_FIELDS
         assert "route_enabled" in MUTABLE_FIELDS
 
