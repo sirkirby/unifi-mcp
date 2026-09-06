@@ -7,7 +7,7 @@ from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from unifi_core.redaction import redact_sensitive_fields
+from unifi_core.redaction import collect_secret_values, redact_sensitive_fields, scrub_secret_values
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -118,6 +118,18 @@ def _shape_shared_read_result(
     if metadata:
         shaped["meta"] = metadata
     return shaped
+
+
+def _audit_detail(error: BaseException, args: dict) -> str:
+    """Return ``str(error)`` with every secret-keyed request value scrubbed.
+
+    The audit row is a durable sink. Core managers already scrub controller and
+    transport errors, and ``_validate_action_args`` keeps the submitted value
+    out of its own message, so nothing on either path is expected to carry a
+    credential here. This stays as the last barrier for a translator or
+    serializer message built somewhere else.
+    """
+    return scrub_secret_values(str(error), collect_secret_values(args))
 
 
 class ActionIn(BaseModel):
@@ -254,7 +266,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 target=tool_name,
                 outcome="error",
                 error_kind="serializer_contract",
-                detail=str(e),
+                detail=_audit_detail(e, body.args),
             )
             await session.commit()
             raise HTTPException(
@@ -273,7 +285,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 target=tool_name,
                 outcome="error",
                 error_kind="serializer_missing",
-                detail=str(e),
+                detail=_audit_detail(e, body.args),
             )
             await session.commit()
             raise HTTPException(
@@ -292,7 +304,7 @@ async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:
                 target=tool_name,
                 outcome="error",
                 error_kind=type(e).__name__,
-                detail=str(e),
+                detail=_audit_detail(e, body.args),
             )
             await session.commit()
             return {"success": False, "error": "Failed to execute action. Check the server audit log for details."}

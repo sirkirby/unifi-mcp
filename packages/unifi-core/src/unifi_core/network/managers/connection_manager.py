@@ -4,6 +4,7 @@ import re
 import time
 import time as _time
 import traceback
+from collections.abc import Iterable, Mapping
 from typing import Any, Dict, Optional
 
 import aiohttp
@@ -23,6 +24,7 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
 from unifi_core.mac import mask_macs
+from unifi_core.redaction import collect_secret_values, sanitize_exception, scrub_secret_values
 from unifi_core.support_bundle import (
     ConnectivityProbe,
     SafeConnectionAttempt,
@@ -290,6 +292,12 @@ async def detect_unifi_os_proactively(
         return None
 
 
+# Free-text marker for a credential masked inside a message. Shorter than
+# ``redaction.REDACTED`` because it reads inside a sentence; the payload marker
+# stays on structured values, where the write-back guards look for it.
+_CREDENTIAL_MASK = "<redacted>"
+
+
 class ConnectionManager:
     """Manages the connection and session with the Unifi Network Controller."""
 
@@ -346,14 +354,59 @@ class ConnectionManager:
         """Return a user-facing connection error without configured secrets or addresses."""
         return self._sanitize_text(str(error) or type(error).__name__)
 
-    def _sanitize_text(self, text: str) -> str:
-        """Mask MAC addresses and the configured credentials in *text*."""
-        message = mask_macs(text)
-        for secret in (self.password, self.username):
-            if secret:
-                pattern = rf"(?<![A-Za-z0-9_-]){re.escape(secret)}(?![A-Za-z0-9_-])"
-                message = re.sub(pattern, "<redacted>", message)
-        return message
+    def _sanitize_text(self, text: str, extra_secrets: Mapping[str, bool] | Iterable[str] = ()) -> str:
+        """Mask MAC addresses, the configured credentials and *extra_secrets* in *text*.
+
+        The login is matched on token boundaries (see :meth:`_secret_rules`);
+        a credential written directly against ``-`` or ``_`` is not covered by
+        that rule. ``extra_secrets`` — the values the request itself submitted
+        — are matched literally. Both cover the escaped forms a message can
+        quote a value with, so nothing decodable reaches
+        ``last_connection_error`` or a log line.
+        """
+        rules = self._secret_rules()
+        if isinstance(extra_secrets, Mapping):
+            rules.update(extra_secrets)
+        else:
+            rules.update(dict.fromkeys(extra_secrets, False))
+        return scrub_secret_values(mask_macs(text), rules, marker=_CREDENTIAL_MASK)
+
+    def _scrub_error(self, error: BaseException, api_request: Any = None) -> set[str]:
+        """Strip credential values out of ``error`` in place before it is logged or re-raised.
+
+        A controller error can quote the request it rejected, and a transport
+        error can quote the login. Both would otherwise reach the manager log,
+        any caller that formats ``str(e)`` and the API audit sink.
+        Scrubs the configured login plus every value held under a sensitive
+        key in the request payload, following the exception's cause chain, and
+        marks them the way this manager's own credential masking does.
+
+        Returns the secret set so the log sink can scrub the text it is about
+        to write: an exception whose ``__str__`` ignores ``args`` (pydantic's
+        ValidationError) passes through the rewrite untouched.
+        """
+        secrets = self._secret_rules(api_request)
+        sanitize_exception(error, secrets, marker=_CREDENTIAL_MASK)
+        return secrets
+
+    def _secret_rules(self, api_request: Any = None) -> dict[str, bool]:
+        """Every value to mask, mapped to whether it is matched on token boundaries.
+
+        The login is word-like, so it is boundary-matched: masking "admin" as a
+        substring would shred "administrator". A submitted value is opaque and
+        matched wherever it appears — including when it equals the login, since
+        a reused password is still the caller's value. One mapping rather than
+        two passes: masking the login first would chop a longer submitted value
+        that starts with it and leave the tail beside a mask the reader can
+        identify.
+        """
+        rules = {secret: True for secret in (self.password, self.username) if secret}
+        payload = None
+        if api_request is not None:
+            payload = getattr(api_request, "json", None) or getattr(api_request, "data", None)
+        if payload is not None:
+            rules.update(dict.fromkeys(collect_secret_values(payload), False))
+        return rules
 
     def _record_connection_error(self, error: BaseException) -> str:
         self._support_attempt = connection_attempt_failed(error)
@@ -778,7 +831,12 @@ class ConnectionManager:
                 # LoginRequired means the refreshed session was rejected, so
                 # stop here rather than let every later tool call start another
                 # controller login.
-                logger.error("%s refresh failed even after re-authentication: %s", name, retry_error)
+                secrets = self._scrub_error(retry_error)
+                logger.error(
+                    "%s refresh failed even after re-authentication: %s",
+                    name,
+                    self._sanitize_text(str(retry_error) or type(retry_error).__name__, secrets),
+                )
                 self._block_automatic_reconnect(retry_error)
                 await self._discard_connection()
                 raise
@@ -791,6 +849,7 @@ class ConnectionManager:
         detail: str,
         *,
         with_traceback: bool = False,
+        secrets: Mapping[str, bool] | Iterable[str] = (),
     ) -> None:
         """Log a failed request with every address and credential masked.
 
@@ -803,10 +862,10 @@ class ConnectionManager:
         if not logger.isEnabledFor(level):
             return
         message = f"{what}: %s %s - %s"
-        args = [api_request.method.upper(), mask_macs(api_request.path), self._sanitize_text(detail)]
+        args = [api_request.method.upper(), mask_macs(api_request.path), self._sanitize_text(detail, secrets)]
         if with_traceback:
             message += "\n%s"
-            args.append(self._sanitize_text(traceback.format_exc()))
+            args.append(self._sanitize_text(traceback.format_exc(), secrets))
         logger.log(level, message, *args)
 
     @staticmethod
@@ -857,7 +916,13 @@ class ConnectionManager:
                 pass
             return response if return_raw else response.get("data")
 
-        except LoginRequired:
+        except LoginRequired as e:
+            # Bound and scrubbed even though this branch does not re-raise it:
+            # both exits below leave it as ``__context__`` of the error the
+            # caller receives, and every ``exc_info=True`` caller renders that
+            # chain in full. ``args[0]`` is the decoded response, which echoes
+            # the submitted record on a rejected write.
+            self._scrub_error(e, api_request)
             logger.warning("Login required detected during request, attempting explicit re-authentication...")
             if await self._reauthenticate(auth_generation):
                 if not self.controller:
@@ -885,9 +950,14 @@ class ConnectionManager:
                         pass
                     return retry_response if return_raw else retry_response.get("data")
                 except Exception as retry_e:
-                    retry_error = self._sanitize_connection_error(retry_e)
+                    secrets = self._scrub_error(retry_e, api_request)
+                    retry_error = str(retry_e) or type(retry_e).__name__
                     self._log_request_failure(
-                        logging.ERROR, "API request failed even after re-authentication", api_request, retry_error
+                        logging.ERROR,
+                        "API request failed even after re-authentication",
+                        api_request,
+                        retry_error,
+                        secrets=secrets,
                     )
                     # A second LoginRequired means the refreshed session was not
                     # accepted. Treat it as terminal so later tool calls cannot
@@ -900,14 +970,19 @@ class ConnectionManager:
             else:
                 raise self._not_connected_error()
         except (RequestError, ResponseError, aiohttp.ClientError) as e:
-            if response_status(e) == 404:
+            # Classify before scrubbing: the scrub rewrites the message in
+            # place, and a submitted value that collides with the status text
+            # would otherwise change how the reply is read.
+            status = response_status(e)
+            secrets = self._scrub_error(e, api_request)
+            if status == 404:
                 # The controller answered: it does not serve this path. That is
                 # a negative reply the caller interprets, not a transport fault.
                 self._log_request_failure(
-                    self._rejection_level(api_request), "Controller answered 404", api_request, str(e)
+                    self._rejection_level(api_request), "Controller answered 404", api_request, str(e), secrets=secrets
                 )
             else:
-                self._log_request_failure(logging.ERROR, "API request error", api_request, str(e))
+                self._log_request_failure(logging.ERROR, "API request error", api_request, str(e), secrets=secrets)
             try:
                 from unifi_core.diagnostics import diagnostics_enabled, log_api_request
 
@@ -925,18 +1000,29 @@ class ConnectionManager:
                 pass
             raise
         except Exception as e:
+            # Classified before the scrub, for the same reason as above.
             code = controller_error_code(e)
+            secrets = self._scrub_error(e, api_request)
             if code is not None:
                 # A controller-reported api.err.* is a negative reply, not an
                 # operator event: routine on a read (an unknown MAC on a
                 # per-MAC lookup), worth a warning on a write. The body can
                 # echo request values, so only the code is logged.
                 self._log_request_failure(
-                    self._rejection_level(api_request), "Controller rejected request", api_request, code
+                    self._rejection_level(api_request),
+                    "Controller rejected request",
+                    api_request,
+                    code,
+                    secrets=secrets,
                 )
             else:
                 self._log_request_failure(
-                    logging.ERROR, "Unexpected error during API request", api_request, str(e), with_traceback=True
+                    logging.ERROR,
+                    "Unexpected error during API request",
+                    api_request,
+                    str(e),
+                    with_traceback=True,
+                    secrets=secrets,
                 )
             try:
                 from unifi_core.diagnostics import diagnostics_enabled, log_api_request
