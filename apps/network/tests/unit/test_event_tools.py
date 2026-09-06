@@ -97,6 +97,21 @@ async def test_list_events_surfaces_mac_ip_and_msg_for_v2_records(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("tool_name", ["list_events", "unifi_recent_events"])
+async def test_event_tools_reject_negative_limit_before_controller_io(monkeypatch, tool_name):
+    from unifi_network_mcp.tools import events as events_module
+
+    def unexpected_manager_lookup():
+        raise AssertionError("negative limit must not reach the event manager")
+
+    monkeypatch.setattr(events_module, "_get_event_manager", unexpected_manager_lookup)
+
+    result = await getattr(events_module, tool_name)(limit=-1)
+
+    assert result == {"success": False, "error": "limit must be zero or greater"}
+
+
+@pytest.mark.asyncio
 async def test_list_events_still_maps_legacy_records(monkeypatch):
     from unifi_network_mcp.tools import events as events_module
 

@@ -86,7 +86,7 @@ async def protect_list_events(
     ] = None,
     limit: Annotated[
         int,
-        Field(description="Maximum number of events to return (default 30)."),
+        Field(description="Maximum number of events to return; must be zero or greater (default 30)."),
     ] = 30,
     compact: Annotated[
         bool,
@@ -108,6 +108,8 @@ async def protect_list_events(
     ] = None,
 ) -> Dict[str, Any]:
     """List events from the NVR."""
+    if limit < 0:
+        return {"success": False, "error": "limit must be zero or greater"}
     logger.info(
         "protect_list_events called (type=%s, camera=%s, limit=%s, compact=%s)", event_type, camera_id, limit, compact
     )

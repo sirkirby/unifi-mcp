@@ -47,7 +47,9 @@ def _get_event_manager():
 )
 async def list_events(
     within_hours: Annotated[int, Field(description="Only return events from the last N hours (default 24)")] = 24,
-    limit: Annotated[int, Field(description="Maximum number of events to return (default 100)")] = 100,
+    limit: Annotated[
+        int, Field(description="Maximum number of events to return; must be zero or greater (default 100)")
+    ] = 100,
     start: Annotated[int, Field(description="Offset for pagination, skip the first N events (default 0)")] = 0,
     event_type: Annotated[
         Optional[str],
@@ -69,6 +71,8 @@ async def list_events(
     ] = None,
 ) -> Dict[str, Any]:
     """List events with optional filtering."""
+    if limit < 0:
+        return {"success": False, "error": "limit must be zero or greater"}
     try:
         event_manager = _get_event_manager()
         events = await event_manager.get_events(
@@ -161,10 +165,14 @@ async def unifi_recent_events(
     ] = None,
     limit: Annotated[
         Optional[int],
-        Field(description="Maximum number of events to return from the buffer. Omit to return all buffered events."),
+        Field(
+            description="Maximum number of events to return from the buffer; must be zero or greater. Omit to return all buffered events."
+        ),
     ] = None,
 ) -> Dict[str, Any]:
     """Return recent events from the websocket ring buffer."""
+    if limit is not None and limit < 0:
+        return {"success": False, "error": "limit must be zero or greater"}
     logger.info("unifi_recent_events called (type=%s, mac=%s)", event_type, mac)
     mgr = _get_event_manager()
     events = mgr.get_recent_from_buffer(event_type=event_type, mac=mac, limit=limit)
