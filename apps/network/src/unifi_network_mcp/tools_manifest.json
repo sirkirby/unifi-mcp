@@ -1787,7 +1787,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Create a V2 zone-based firewall policy with schema validation. Required: name, action (ALLOW/BLOCK/REJECT), source (zone_id + matching_target), destination (same structure). For specific IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. Use unifi_list_firewall_zones to discover zone_ids; unifi_list_networks for network_ids.",
+      "description": "Create a V2 zone-based firewall policy with schema validation. Required: name, action (ALLOW/BLOCK/REJECT), source (zone_id + matching_target), destination (same structure). For specific IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. For client targeting: matching_target='CLIENT', client_macs=[...]. Port matching on either side: port_matching_type='SPECIFIC', port='53,853' (comma list, low-high ranges) or port_matching_type='OBJECT', port_group_id=<port group>; set protocol to tcp, udp or tcp_udp. match_opposite_ips/ports invert a match. Use unifi_list_firewall_zones to discover zone_ids; unifi_list_networks for network_ids; unifi_list_firewall_groups for ip_group_id/port_group_id.",
       "name": "unifi_create_firewall_policy",
       "permission_action": "create",
       "permission_category": "firewall_policies",
@@ -1799,7 +1799,7 @@
               "type": "boolean"
             },
             "policy_data": {
-              "description": "V2 zone-based firewall policy dict. Required: name, action (ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), destination (same structure). For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. Optional: enabled, description, protocol, connection_state_type, connection_states, ip_version, schedule, logging.",
+              "description": "V2 zone-based firewall policy dict. Required: name, action (ALLOW/BLOCK/REJECT), source (object with zone_id, matching_target), destination (same structure). For IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. For clients: matching_target='CLIENT', client_macs=[...]. Ports on either side: port_matching_type='SPECIFIC' + port='53,853' or 'OBJECT' + port_group_id. Optional: enabled, description, protocol, connection_state_type, connection_states, ip_version, schedule, logging.",
               "type": "object"
             }
           },
@@ -11867,7 +11867,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List firewall policies configured on the Unifi Network controller. Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, IPs, network IDs).\n\nFilters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, limit (default 50), include_predefined. By default (summary=true) returns a curated entry per policy (id, name, enabled, action, rule_index, description + source/destination targeting). Set summary=false for the full fw_from_controller().model_dump() shape including protocol, schedule, logging, ip_version, index, etc.",
+      "description": "List firewall policies configured on the Unifi Network controller. Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, IPs, network IDs, client MACs, IP/port groups, port matching).\n\nFilters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, limit (default 50), include_predefined. By default (summary=true) returns a curated entry per policy (id, name, enabled, action, rule_index, description + source/destination targeting incl. port_matching_type/port/port_group_id when set, and protocol). Set summary=false for the full fw_from_controller().model_dump() shape including protocol, schedule, logging, ip_version, connection_state_type, index, etc.",
       "name": "unifi_list_firewall_policies",
       "schema": {
         "input": {
@@ -17144,7 +17144,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Update specific fields of an existing V2 zone-based firewall policy by ID. Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule.",
+      "description": "Update specific fields of an existing V2 zone-based firewall policy by ID. Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. source/destination are deep-merged with the current policy and support the same targeting and port fields as create (matching_target, port_matching_type, port, port_group_id, client_macs). To change policy order use unifi_reorder_firewall_policies; index is rejected here.",
       "name": "unifi_update_firewall_policy",
       "permission_action": "update",
       "permission_category": "firewall_policies",
@@ -17160,7 +17160,7 @@
               "type": "string"
             },
             "update_data": {
-              "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, index, logging, connection_state_type, connection_states, schedule.",
+              "description": "Dictionary of V2 zone-based fields to update: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. Partial source/destination dicts are merged with the current policy; port_matching_type='SPECIFIC' needs port, 'OBJECT' needs port_group_id, and switching to another port_matching_type (or a side off CLIENT) retires the stored port/port_group_id/client_macs automatically. index is not accepted here; use unifi_reorder_firewall_policies to change order.",
               "type": "object"
             }
           },

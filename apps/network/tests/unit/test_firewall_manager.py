@@ -199,6 +199,24 @@ class TestUpdateFirewallPolicyEndpoint:
         assert payload["source"]["network_ids"] == ["net001"]
 
     @pytest.mark.asyncio
+    async def test_none_inside_an_endpoint_removes_the_key_from_the_payload(self, firewall_manager, mock_connection):
+        """A retired selector (value None) must not be sent as null; the controller stores selectors only
+        under their activating enum, so the key is dropped from the merged endpoint."""
+        raw = copy.deepcopy(SAMPLE_POLICY_RAW)
+        raw["destination"].update({"port_matching_type": "SPECIFIC", "port": "53"})
+        policy = _make_firewall_policy(raw)
+
+        with patch.object(firewall_manager, "get_firewall_policies", new_callable=AsyncMock, return_value=[policy]):
+            await firewall_manager.update_firewall_policy(
+                "pol001", {"destination": {"port_matching_type": "ANY", "port": None}}
+            )
+
+        payload = mock_connection.request.call_args[0][0].data
+        assert payload["destination"]["port_matching_type"] == "ANY"
+        assert "port" not in payload["destination"]
+        assert payload["destination"]["zone_id"] == "zone-external"
+
+    @pytest.mark.asyncio
     async def test_does_not_mutate_cached_policy(self, firewall_manager, mock_connection):
         """The cached FirewallPolicy.raw must be unchanged after update."""
         policy = _make_firewall_policy()
@@ -1282,3 +1300,61 @@ class TestFirewallZoneCrud:
 
         assert zone["_id"] == "znew"
         sleep.assert_awaited_once()
+
+
+class TestUpdateFirewallPolicySelectorPath:
+    """Selector retirement and merged-state validation live in the manager, so every
+    caller (MCP wrapper, API dispatcher, direct Core use) gets the same behaviour."""
+
+    @staticmethod
+    def _stored(destination: dict) -> dict:
+        return {
+            "_id": "pol_zone_001",
+            "name": "disposable",
+            "enabled": False,
+            "action": "BLOCK",
+            "predefined": False,
+            "source": {"zone_id": "z1", "matching_target": "ANY"},
+            "destination": {"zone_id": "z1", "matching_target": "ANY", **destination},
+        }
+
+    @staticmethod
+    def _wire(mock_connection, stored: dict) -> list:
+        sent: list = []
+
+        async def request(api_request, *args, **kwargs):
+            if api_request.method == "get":
+                return [stored]
+            sent.append((api_request.method, api_request.data))
+            return {}
+
+        mock_connection.request = AsyncMock(side_effect=request)
+        return sent
+
+    @pytest.mark.asyncio
+    async def test_activation_change_retires_the_stored_port_in_the_put_body(self, firewall_manager, mock_connection):
+        stored = self._stored({"port_matching_type": "SPECIFIC", "port": "53"})
+        sent = self._wire(mock_connection, stored)
+
+        assert await firewall_manager.update_firewall_policy(
+            "pol_zone_001", {"destination": {"port_matching_type": "ANY"}}
+        )
+
+        assert [method for method, _ in sent] == ["put"]
+        body = sent[0][1]
+        assert body["destination"]["port_matching_type"] == "ANY"
+        assert "port" not in body["destination"]
+        assert body["source"] == stored["source"]
+        assert body["enabled"] is False
+
+    @pytest.mark.asyncio
+    async def test_selector_only_update_on_inactive_enum_is_rejected_before_any_put(
+        self, firewall_manager, mock_connection
+    ):
+        stored = self._stored({"port_matching_type": "ANY"})
+        sent = self._wire(mock_connection, stored)
+
+        with pytest.raises(ValueError, match="port_matching_type"):
+            await firewall_manager.update_firewall_policy("pol_zone_001", {"destination": {"port": "53"}})
+
+        assert sent == []

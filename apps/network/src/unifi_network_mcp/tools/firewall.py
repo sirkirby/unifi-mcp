@@ -12,12 +12,15 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, delete_preview, toggle_preview, update_preview
 from unifi_core.network.models.firewall import (
+    MUTABLE_FIELDS,
     firewall_group_from_controller,
     firewall_zone_from_controller,
     legacy_firewall_rule_from_controller,
     legacy_policy_error,
     normalize_policy_enums,
     normalize_policy_update,
+    prepare_policy_update,
+    validate_policy_targeting,
 )
 from unifi_core.network.read_views import LEGACY_ENGINE_HINT, shape_firewall_policy_list
 from unifi_core.redaction import redact_sensitive_fields
@@ -31,12 +34,12 @@ logger = logging.getLogger(__name__)
     description=(
         "List firewall policies configured on the Unifi Network controller. "
         "Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, "
-        "IPs, network IDs).\n\n"
+        "IPs, network IDs, client MACs, IP/port groups, port matching).\n\n"
         "Filters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, "
         "limit (default 50), include_predefined. By default (summary=true) returns a curated "
         "entry per policy (id, name, enabled, action, rule_index, description + source/destination "
-        "targeting). Set summary=false for the full fw_from_controller().model_dump() shape "
-        "including protocol, schedule, logging, ip_version, index, etc."
+        "targeting incl. port_matching_type/port/port_group_id when set, and protocol). Set summary=false for the full fw_from_controller().model_dump() shape "
+        "including protocol, schedule, logging, ip_version, connection_state_type, index, etc."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -270,37 +273,6 @@ async def toggle_firewall_policy(
         return {"success": False, "error": f"Failed to toggle firewall policy {policy_id}: {e}"}
 
 
-def _validate_zone_targeting(validated_data: Dict[str, Any]) -> str | None:
-    """Validate matching_target_type requirements for zone-based policies.
-
-    Returns an error message string if validation fails, or None if valid.
-    """
-    for direction in ("source", "destination"):
-        ep = validated_data.get(direction, {})
-        if not isinstance(ep, dict):
-            continue
-        target = ep.get("matching_target")
-        if target in ("IP", "NETWORK") and not ep.get("matching_target_type"):
-            expected = "'SPECIFIC' or 'OBJECT'" if target == "IP" else "'OBJECT'"
-            return "%s.matching_target_type is required when matching_target is '%s'. Use %s." % (
-                direction,
-                target,
-                expected,
-            )
-        if target == "IP":
-            target_type = ep.get("matching_target_type")
-            if target_type == "OBJECT" and not ep.get("ip_group_id"):
-                return (
-                    "%s.ip_group_id is required when matching_target is 'IP' with matching_target_type 'OBJECT'."
-                    % direction
-                )
-            if target_type != "OBJECT" and not ep.get("ips"):
-                return "%s.ips array is required when matching_target is 'IP'." % direction
-        if target == "NETWORK" and not ep.get("network_ids"):
-            return "%s.network_ids array is required when matching_target is 'NETWORK'." % direction
-    return None
-
-
 @server.tool(
     name="unifi_create_firewall_policy",
     description=(
@@ -310,8 +282,13 @@ def _validate_zone_targeting(validated_data: Dict[str, Any]) -> str | None:
         "targeting: matching_target='IP', matching_target_type='SPECIFIC', "
         "ips=[...]. For network targeting: matching_target='NETWORK', "
         "matching_target_type='OBJECT', network_ids=[...]. For any in zone: "
-        "matching_target='ANY'. Use unifi_list_firewall_zones to discover "
-        "zone_ids; unifi_list_networks for network_ids."
+        "matching_target='ANY'. For client targeting: matching_target='CLIENT', "
+        "client_macs=[...]. Port matching on either side: port_matching_type='SPECIFIC', "
+        "port='53,853' (comma list, low-high ranges) or port_matching_type='OBJECT', "
+        "port_group_id=<port group>; set protocol to tcp, udp or tcp_udp. "
+        "match_opposite_ips/ports invert a match. Use unifi_list_firewall_zones to discover "
+        "zone_ids; unifi_list_networks for network_ids; unifi_list_firewall_groups for "
+        "ip_group_id/port_group_id."
     ),
     permission_category="firewall_policies",
     permission_action="create",
@@ -327,9 +304,11 @@ async def create_firewall_policy(
                 "destination (same structure). For IP targeting: matching_target='IP', "
                 "matching_target_type='SPECIFIC', ips=[...]. For network targeting: "
                 "matching_target='NETWORK', matching_target_type='OBJECT', "
-                "network_ids=[...]. For any in zone: matching_target='ANY'. Optional: "
-                "enabled, description, protocol, connection_state_type, connection_states, "
-                "ip_version, schedule, logging."
+                "network_ids=[...]. For any in zone: matching_target='ANY'. For clients: "
+                "matching_target='CLIENT', client_macs=[...]. Ports on either side: "
+                "port_matching_type='SPECIFIC' + port='53,853' or 'OBJECT' + port_group_id. "
+                "Optional: enabled, description, protocol, connection_state_type, "
+                "connection_states, ip_version, schedule, logging."
             )
         ),
     ],
@@ -368,28 +347,7 @@ async def create_firewall_policy(
         return {"success": False, "error": "Validation Error: %s" % err}
 
     # Reject unknown top-level keys (mirrors additionalProperties: False in the schema).
-    _allowed_keys = frozenset(
-        {
-            "name",
-            "action",
-            "enabled",
-            "index",
-            "protocol",
-            "ip_version",
-            "logging",
-            "connection_state_type",
-            "connection_states",
-            "create_allow_respond",
-            "match_ip_sec",
-            "match_opposite_protocol",
-            "icmp_typename",
-            "icmp_v6_typename",
-            "schedule",
-            "source",
-            "destination",
-            "description",
-        }
-    )
+    _allowed_keys = MUTABLE_FIELDS | {"description"}
     _unknown = sorted(set(policy_data.keys()) - _allowed_keys)
     if _unknown:
         err = "Additional properties not allowed: %s" % ", ".join(_unknown)
@@ -411,7 +369,7 @@ async def create_firewall_policy(
         validated_data["schedule"] = {"mode": "ALWAYS"}
 
     # Validate zone targeting requirements (matching_target_type, ips, network_ids)
-    targeting_error = _validate_zone_targeting(validated_data)
+    targeting_error = validate_policy_targeting(validated_data)
     if targeting_error:
         return {"success": False, "error": targeting_error}
     # Normalize action to uppercase and require V2 enum
@@ -474,8 +432,11 @@ async def create_firewall_policy(
     description=(
         "Update specific fields of an existing V2 zone-based firewall policy by ID. "
         "Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, "
-        "protocol, ip_version, index, logging, connection_state_type, connection_states, "
-        "schedule."
+        "protocol, ip_version, logging, connection_state_type, connection_states, "
+        "schedule. source/destination are deep-merged with the current policy and support "
+        "the same targeting and port fields as create (matching_target, "
+        "port_matching_type, port, port_group_id, client_macs). "
+        "To change policy order use unifi_reorder_firewall_policies; index is rejected here."
     ),
     permission_category="firewall_policies",
     permission_action="update",
@@ -494,7 +455,12 @@ async def update_firewall_policy(
             description=(
                 "Dictionary of V2 zone-based fields to update: name, action "
                 "(ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, "
-                "index, logging, connection_state_type, connection_states, schedule."
+                "logging, connection_state_type, connection_states, schedule. "
+                "Partial source/destination dicts are merged with the current policy; "
+                "port_matching_type='SPECIFIC' needs port, 'OBJECT' needs port_group_id, and "
+                "switching to another port_matching_type (or a side off CLIENT) retires the "
+                "stored port/port_group_id/client_macs automatically. "
+                "index is not accepted here; use unifi_reorder_firewall_policies to change order."
             )
         ),
     ],
@@ -509,8 +475,9 @@ async def update_firewall_policy(
         return {"success": False, "error": "policy_id is required"}
     if not update_data:
         return {"success": False, "error": "update_data cannot be empty"}
-
     try:
+        # normalize_policy_update is the shared MCP/API boundary; it rejects index
+        # (the V2 endpoint silently ignores it) before any controller read or write.
         validated_data = normalize_policy_update(update_data)
     except ValueError as e:
         return {"success": False, "error": str(e)}
@@ -526,6 +493,14 @@ async def update_firewall_policy(
                 "error": "Firewall policy with ID '%s' not found." % policy_id,
             }
         current = current_policy_obj.raw
+
+        # Retire deactivated selectors and validate each updated side as merged.
+        # The manager runs the same step before its PUT; it is repeated here so
+        # the preview shows the retired selectors and fails the same way.
+        try:
+            validated_data = prepare_policy_update(current, validated_data)
+        except ValueError as e:
+            return {"success": False, "error": str(e)}
 
         if not confirm:
             return redact_sensitive_fields(

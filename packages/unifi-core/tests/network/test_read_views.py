@@ -210,9 +210,103 @@ def test_shape_firewall_policy_list_applies_filters_and_shapes() -> None:
     full = shape_firewall_policy_list(policies[:1], site="default", summary=False)
 
     assert result["policies"][0]["id"] == "p1"
+    assert "protocol" not in result["policies"][0]
     assert result["returned_count"] == 1
     assert "source" in full["policies"][0]
     assert shape_firewall_policy_list([], site="default")["note"]
+
+
+def test_shape_firewall_policy_list_summary_surfaces_port_matching() -> None:
+    policies = [
+        {
+            "_id": "p-port",
+            "name": "Block external DNS",
+            "enabled": True,
+            "action": "BLOCK",
+            "index": 1,
+            "protocol": "tcp_udp",
+            "source": {
+                "zone_id": "z1",
+                "matching_target": "IP",
+                "matching_target_type": "OBJECT",
+                "ip_group_id": "resolvers",
+                "match_opposite_ips": True,
+                "port_matching_type": "ANY",
+                "match_opposite_ports": False,
+            },
+            "destination": {
+                "zone_id": "z2",
+                "matching_target": "ANY",
+                "port_matching_type": "SPECIFIC",
+                "port": "53,853",
+                "match_opposite_ports": False,
+            },
+        },
+        {
+            "_id": "p-plain",
+            "name": "Allow all",
+            "enabled": True,
+            "action": "ALLOW",
+            "index": 2,
+            "protocol": "all",
+            "source": {"zone_id": "z1", "matching_target": "ANY", "port_matching_type": "ANY"},
+            "destination": {"zone_id": "z2", "matching_target": "ANY", "port_matching_type": "ANY"},
+        },
+    ]
+
+    result = shape_firewall_policy_list(policies, site="default", summary=True)
+    port_entry, plain_entry = result["policies"]
+
+    assert port_entry["protocol"] == "tcp_udp"
+    assert port_entry["destination"] == {
+        "zone_id": "z2",
+        "matching_target": "ANY",
+        "port_matching_type": "SPECIFIC",
+        "port": "53,853",
+    }
+    assert port_entry["source"]["ip_group_id"] == "resolvers"
+    assert port_entry["source"]["match_opposite_ips"] is True
+    assert "match_opposite_ports" not in port_entry["source"]
+    assert "port_matching_type" not in port_entry["source"]
+
+    assert plain_entry["protocol"] == "all"
+    assert plain_entry["destination"] == {"zone_id": "z2", "matching_target": "ANY"}
+
+
+def test_shape_firewall_policy_list_summary_hides_selectors_the_controller_ignores() -> None:
+    """A residual port under port_matching_type ANY must not read as a port match."""
+    policies = [
+        {
+            "_id": "p-stale",
+            "name": "Stale",
+            "enabled": True,
+            "action": "ALLOW",
+            "index": 1,
+            "source": {"zone_id": "z1", "matching_target": "ANY", "port_matching_type": "ANY", "port": "53"},
+            "destination": {
+                "zone_id": "z2",
+                "matching_target": "ANY",
+                "port_matching_type": "SPECIFIC",
+                "port_group_id": "g1",
+            },
+        },
+        {
+            "_id": "p-no-enum",
+            "name": "No enum at all",
+            "enabled": True,
+            "action": "ALLOW",
+            "index": 2,
+            "source": {"zone_id": "z1", "matching_target": "ANY", "port": "53"},
+            "destination": {"zone_id": "z2", "matching_target": "ANY"},
+        },
+    ]
+
+    entry, no_enum = shape_firewall_policy_list(policies, site="default", summary=True)["policies"]
+
+    assert entry["source"] == {"zone_id": "z1", "matching_target": "ANY"}
+    assert entry["destination"] == {"zone_id": "z2", "matching_target": "ANY", "port_matching_type": "SPECIFIC"}
+    # Every observed controller emits port_matching_type; a port with no enum at all is treated as inert.
+    assert no_enum["source"] == {"zone_id": "z1", "matching_target": "ANY"}
 
 
 def test_shape_rogue_ap_list_applies_filters_pagination_and_shape() -> None:

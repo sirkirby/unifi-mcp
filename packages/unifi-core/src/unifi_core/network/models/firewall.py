@@ -28,11 +28,13 @@ FirewallZone.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from unifi_core.mac import normalize_mac_list
+from unifi_core.mac import looks_like_mac, normalize_mac_list
+from unifi_core.merge import deep_merge
 
 # ---------------------------------------------------------------------------
 # FirewallRule pydantic model
@@ -527,6 +529,19 @@ def legacy_policy_error(fields: Dict[str, Any]) -> str | None:
     return None
 
 
+_ENDPOINT_ENUM_KEYS = ("matching_target", "matching_target_type", "port_matching_type")
+_PORT_TOKEN = re.compile(r"^(\d{1,5})(?:-(\d{1,5}))?$")
+
+
+def _normalize_endpoint_enums(endpoint: Any) -> Any:
+    """Upper-case the enum-valued keys inside a source/destination endpoint dict."""
+    if not isinstance(endpoint, dict):
+        return endpoint
+    return {
+        k: (v.strip().upper() if k in _ENDPOINT_ENUM_KEYS and isinstance(v, str) else v) for k, v in endpoint.items()
+    }
+
+
 def normalize_policy_enums(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Upper-case the controller's V2 firewall enum values."""
     normalized = dict(fields)
@@ -542,7 +557,204 @@ def normalize_policy_enums(fields: Dict[str, Any]) -> Dict[str, Any]:
     states = normalized.get("connection_states")
     if isinstance(states, list):
         normalized["connection_states"] = [state.upper() if isinstance(state, str) else state for state in states]
+    for side in ("source", "destination"):
+        if side in normalized:
+            normalized[side] = _normalize_endpoint_enums(normalized[side])
     return normalized
+
+
+def _port_string_error(direction: str, value: Any) -> str | None:
+    """Validate a V2 ``port`` string: comma-separated ports or ``low-high`` ranges, 1-65535."""
+    if not isinstance(value, str) or not value:
+        return "%s.port must be a non-empty string when port_matching_type is 'SPECIFIC'." % direction
+    for token in value.split(","):
+        match = _PORT_TOKEN.fullmatch(token)
+        if not match:
+            return (
+                "%s.port %r must be a comma-separated list of ports or low-high ranges "
+                "with no spaces, e.g. '53,853' or '1000-2000'." % (direction, value)
+            )
+        low = int(match.group(1))
+        high = int(match.group(2)) if match.group(2) else low
+        if not (1 <= low <= 65535 and 1 <= high <= 65535) or low > high:
+            return "%s.port '%s' must use ports 1-65535 with ranges written low-high." % (direction, value)
+    return None
+
+
+def _client_macs_error(direction: str, value: Any) -> str | None:
+    if not isinstance(value, list) or not value or any(not looks_like_mac(mac) for mac in value):
+        return "%s.client_macs %r must be a non-empty array of MAC addresses when matching_target is 'CLIENT'." % (
+            direction,
+            value,
+        )
+    return None
+
+
+def _port_group_error(direction: str, value: Any) -> str | None:
+    if not value:
+        return "%s.port_group_id is required when port_matching_type is 'OBJECT'." % direction
+    return None
+
+
+# (selector key, the enum key that activates it, the activating value). A selector present
+# under any other enum value is ignored by the controller, so it is rejected on write and
+# hidden in list summaries.
+SELECTOR_ACTIVATORS: tuple[tuple[str, str, str], ...] = (
+    ("client_macs", "matching_target", "CLIENT"),
+    ("port", "port_matching_type", "SPECIFIC"),
+    ("port_group_id", "port_matching_type", "OBJECT"),
+)
+_SELECTOR_VALIDATORS = {
+    "client_macs": _client_macs_error,
+    "port": _port_string_error,
+    "port_group_id": _port_group_error,
+}
+
+
+def _endpoint_targeting_errors(direction: str, ep: Any) -> List[str]:
+    """Every targeting problem on one source/destination endpoint, in check order."""
+    if ep is None:
+        return []
+    if not isinstance(ep, dict):
+        return ["%s must be an object with zone_id and matching_target." % direction]
+    errors: List[str] = []
+    target = ep.get("matching_target")
+    if target in ("IP", "NETWORK") and not ep.get("matching_target_type"):
+        expected = "'SPECIFIC' or 'OBJECT'" if target == "IP" else "'OBJECT'"
+        errors.append(
+            "%s.matching_target_type is required when matching_target is '%s'. Use %s." % (direction, target, expected)
+        )
+    if target == "IP":
+        target_type = ep.get("matching_target_type")
+        if target_type == "OBJECT" and not ep.get("ip_group_id"):
+            errors.append(
+                "%s.ip_group_id is required when matching_target is 'IP' with matching_target_type 'OBJECT'."
+                % direction
+            )
+        if target_type != "OBJECT" and not ep.get("ips"):
+            errors.append("%s.ips array is required when matching_target is 'IP'." % direction)
+    if target == "NETWORK" and not ep.get("network_ids"):
+        errors.append("%s.network_ids array is required when matching_target is 'NETWORK'." % direction)
+    errors.extend(_selector_activator_errors(direction, ep))
+    return errors
+
+
+def _selector_activator_errors(direction: str, ep: Dict[str, Any], *, require_both_present: bool = False) -> List[str]:
+    """Selector-vs-activating-enum problems on one endpoint dict.
+
+    With ``require_both_present`` the check is limited to pairs the dict itself
+    carries, which is what a partial update can be judged on without the
+    stored policy.
+    """
+    errors: List[str] = []
+    for selector, activator_key, activator_value in SELECTOR_ACTIVATORS:
+        if require_both_present and (activator_key not in ep or selector not in ep):
+            continue
+        value = ep.get(selector)
+        if ep.get(activator_key) == activator_value:
+            error = _SELECTOR_VALIDATORS[selector](direction, value)
+            if error:
+                errors.append(error)
+        elif value:
+            # The controller stores and enforces a selector only under its activating enum;
+            # anything else would be accepted and silently ignored.
+            errors.append(
+                "%s.%s must be '%s' when %s.%s is set."
+                % (direction, activator_key, activator_value, direction, selector)
+            )
+    return errors
+
+
+def validate_policy_targeting(fields: Dict[str, Any]) -> str | None:
+    """Validate V2 zone-based source/destination targeting.
+
+    Returns the first error message or ``None``. Enforces the requirements of
+    the matching targets and port matching types this project has observed on
+    live controllers (ANY / IP / NETWORK / CLIENT; ANY / SPECIFIC / OBJECT).
+    Other values pass through untouched so newer controller targets (App,
+    Web, Region, ...) keep working through update calls.
+    """
+    for direction in ("source", "destination"):
+        errors = _endpoint_targeting_errors(direction, fields.get(direction))
+        if errors:
+            return errors[0]
+    return None
+
+
+def retire_stale_selectors(stored: Any, update: Any) -> Any:
+    """Mark selectors a partial endpoint update deactivates for removal.
+
+    A partial update that moves ``port_matching_type`` or ``matching_target``
+    away from the value that activates a stored selector (``port``,
+    ``port_group_id``, ``client_macs``) would otherwise deep-merge into a
+    document carrying a selector the controller ignores. The returned copy of
+    ``update`` sets each such selector to ``None``; the manager drops ``None``
+    keys inside an endpoint before the PUT. Selectors the update sets itself
+    are left alone.
+    """
+    if not isinstance(stored, dict) or not isinstance(update, dict):
+        return update
+    retired = dict(update)
+    for selector, activator_key, activator_value in SELECTOR_ACTIVATORS:
+        if activator_key not in update or selector in update:
+            continue
+        if update[activator_key] != activator_value and stored.get(selector) is not None:
+            retired[selector] = None
+    return retired
+
+
+def policy_update_targeting_error(current: Dict[str, Any], updates: Dict[str, Any]) -> str | None:
+    """Return the first targeting error a partial update would introduce.
+
+    The manager deep-merges ``source``/``destination`` with the stored policy,
+    so each updated side is validated as merged. Sides the update does not
+    touch are left alone, and errors the stored side already has (state this
+    project did not author) are not held against an update that leaves them
+    in place.
+    """
+    for side in ("source", "destination"):
+        if side not in updates:
+            continue
+        stored = current.get(side)
+        stored = stored if isinstance(stored, dict) else {}
+        update = updates[side]
+        merged = deep_merge(stored, update) if isinstance(update, dict) else update
+        preexisting = set(_endpoint_targeting_errors(side, stored))
+        for error in _endpoint_targeting_errors(side, merged):
+            if error not in preexisting:
+                return error
+    return None
+
+
+def _selector_contradiction_error(direction: str, ep: Any) -> str | None:
+    """Reject a selector paired with a non-activating enum inside one update dict.
+
+    This needs no stored state, so it runs at the normalization boundary and
+    protects previews on surfaces that cannot read the controller first.
+    """
+    if not isinstance(ep, dict):
+        return None
+    errors = _selector_activator_errors(direction, ep, require_both_present=True)
+    return errors[0] if errors else None
+
+
+def prepare_policy_update(current: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Finish a normalized partial update against the stored policy document.
+
+    This is the shared MCP/API step that needs controller state: it retires the
+    selectors an activation change deactivates (:func:`retire_stale_selectors`)
+    and validates each updated side as the controller will store it
+    (:func:`policy_update_targeting_error`). Raises ``ValueError`` on the first
+    targeting error; the manager calls it before building the PUT body and the
+    MCP wrapper calls it for the preview.
+    """
+    prepared = dict(updates)
+    for side in ("source", "destination"):
+        if side in prepared:
+            prepared[side] = retire_stale_selectors(current.get(side), prepared[side])
+    if error := policy_update_targeting_error(current, prepared):
+        raise ValueError(error)
+    return prepared
 
 
 def _normalize_endpoint_macs(endpoint: Any) -> Any:
@@ -562,9 +774,19 @@ def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Validate and normalize a public V2 firewall-policy partial update.
 
     This is the shared mutation boundary for MCP and API callers. It rejects
-    retired V1 fields, normalizes the controller's upper-case enums, and drops
-    unknown/read-only fields through :func:`to_controller_update`.
+    ``index`` (ordering is a separate tool family), rejects retired V1 fields,
+    normalizes the controller's upper-case enums, drops unknown/read-only
+    fields through :func:`to_controller_update`, and rejects a selector paired
+    with a non-activating enum in the same update. Checks that need the stored
+    policy run in :func:`prepare_policy_update`.
     """
+    if "index" in fields:
+        # The V2 policy endpoint accepts index and silently ignores it, so the
+        # caller would get a partly applied update. Ordering is its own tool family.
+        raise ValueError(
+            "index cannot be changed with unifi_update_firewall_policy; the controller "
+            "ignores it on this endpoint. Use unifi_reorder_firewall_policies to change policy order."
+        )
     if error := legacy_policy_error(fields):
         raise ValueError(error)
     normalized = normalize_policy_enums(fields)
@@ -572,6 +794,8 @@ def normalize_policy_update(fields: Dict[str, Any]) -> Dict[str, Any]:
     payload = to_controller_update(normalized)
     for side in ("source", "destination"):
         if side in payload:
+            if error := _selector_contradiction_error(side, payload[side]):
+                raise ValueError(error)
             payload[side] = _normalize_endpoint_macs(payload[side])
     if not payload:
         raise ValueError("Update data is effectively empty or invalid.")
