@@ -672,9 +672,9 @@ def _translate_list_clients(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict
 
 
 # ---------------------------------------------------------------------------
-# Network — update_firewall_policy
+# Network — firewall policy create/update validation
 # ---------------------------------------------------------------------------
-# Tool exposes ``update_data``; manager method takes ``updates``.
+# Create validates port targeting; update also renames ``update_data`` to ``updates``.
 
 
 def _translate_create_firewall_policy(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -1596,7 +1596,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_forget_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
     # Network — list clients: Core selects online or all/historical clients.
     "unifi_list_clients": _spec(_translate_list_clients, "include_offline"),
-    # Network — firewall: kwarg rename
+    # Network — firewall: shared validation and update kwarg rename
     "unifi_create_firewall_policy": _spec(_translate_create_firewall_policy, "policy_data"),
     "unifi_update_firewall_policy": _spec(_translate_update_firewall_policy, "policy_id", "updates"),
     # Network — port forward toggle/delete: kwarg rename (port_forward_id → rule_id)
