@@ -212,3 +212,15 @@ trips the gate.
   coalescing masks a default-value mismatch), the generated schema is
   what LLM clients and downstream integrators actually read — treat
   schema/doc drift as a real defect, not cosmetic, even at low severity.
+- **Out of scope: the runtime tool-index/registration-mode catalog is a
+  different "manifest" from the ones this skill covers.** `docs/tool-index.md`
+  and `apps/worker/worker/src/relay-object.ts` describe a discovery-time
+  catalog keyed by `UNIFI_TOOL_REGISTRATION_MODE` (`eager`/`lazy`/`meta_only`)
+  — it is hand-authored documentation of runtime behavior, not a generated
+  artifact from `packages/unifi-mcp-shared/src/unifi_mcp_shared/manifest_generator.py`.
+  A known divergence had `meta_only` mode's index initially behaving like
+  `lazy` mode instead of the `meta_only` behavior documented in
+  `docs/tool-index.md`. Regenerating an app's generated manifest (e.g. the
+  one under `apps/protect/src/unifi_protect_mcp/`) or skill-reference docs
+  does not touch this code path — treat registration-mode divergence as a
+  separate bug class from the generated-artifact drift this skill addresses.

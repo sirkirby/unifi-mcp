@@ -634,7 +634,7 @@ Resolution:
 4. Push the regenerated artifacts and wait for CI to re-run.
 5. Proceed with the standard review checklist on the rebased branch.
 
-Do not merge both PRs in rapid succession without first checking for shared artifact dependencies.
+Do not merge both PRs in rapid succession without first checking for shared artifact dependencies. Release-batch check: if an open PR touches the same package as a diff just merged, fold it into the same release batch instead of tagging early; if not, tag now and start the next batch with that PR.
 
 ---
 
@@ -756,7 +756,7 @@ may be working from a stale branch or an AI hallucination. Before accepting the 
    may have shifted and their fix may have merge conflicts that invalidate the analysis.
 Only after all three checks pass should you treat the AI-traced diagnosis as actionable.
 
-**Gotcha: hardware-specific bug reports still need the UniFi OS version, even when well-investigated.** A well-investigated hardware-specific bug report (device the maintainer lacked access to) omitted the OS version needed to correlate against a firmware-version block. Always request it explicitly.
+**Gotcha: hardware-specific bug reports still need the UniFi OS version, even when well-investigated.** A well-investigated hardware-specific bug report (device the maintainer lacked access to) omitted the OS version needed to correlate against a firmware-version block. Always request it explicitly. Similarly, don't close an issue on the reporter's say-so that a sub-issue "implemented" it — verify the sub-issue's acceptance criteria cover the parent issue's full scope and that the fix shipped in a released version (not just merged to `main`) before closing.
 
 ---
 

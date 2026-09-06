@@ -243,6 +243,23 @@ to server-owned policy:
   server-side policy check, decide whether it's an allow/deny gate
   (`PolicyGateChecker` shape) or a surface-scoped value (resolver shape),
   and extend the matching existing mechanism in `packages/unifi-core`.
+- **Secret-vocabulary boundary vs. logging hygiene**: CodeQL's
+  clear-text-logging-sensitive-data alert rule, applied to Network
+  client/device managers and tools, typically flags MAC-address logger
+  arguments, not leaked passwords or tokens. `unifi_core.redaction`
+  intentionally targets secret key material and leaves inventory
+  identifiers (MAC addresses, serials) readable — that's a separate
+  boundary from this domain's secret-field redaction pattern. Don't add
+  inventory identifiers to the redaction vocabulary to silence these
+  alerts; fix the logging call site instead.
+- **Exception text is a disclosure surface too**: error-classification /
+  support-bundle code must never serialize a raw exception's text or
+  status property back into a response — a hostile exception subclass can
+  carry sensitive data via its message or attributes
+  (`test_error_classification_never_serializes_exception_text` guards
+  this). Treat exception serialization as another redaction-adjacent
+  boundary alongside tool/route payloads, not something the read-path
+  `redact_sensitive_fields()` call alone covers.
 
 ## Historical context
 

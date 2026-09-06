@@ -79,10 +79,9 @@ Every shared service (network client, cache, connection pool) is managed as an `
 from functools import lru_cache
 from managers.door_manager import DoorManager
 
-
 @lru_cache
 def get_door_manager() -> DoorManager:
-    return DoorManager(get_connection_manager())  # pass your dependency via its getter
+    return DoorManager(get_connection_manager())   # pass your dependency via its getter
 ```
 
 3. Add a module-level alias in the **"Shorthand aliases"** section at the bottom of `runtime.py` so tool modules can import the singleton by name (e.g. `traffic_flow_manager = get_traffic_flow_manager()` in `apps/network/src/unifi_network_mcp/runtime.py`):
@@ -98,7 +97,6 @@ Tool modules then import: `from unifi_access_mcp.runtime import door_manager`
 
 ```python
 from unifi_access_mcp.runtime import get_door_manager
-
 assert get_door_manager() is get_door_manager()
 ```
 
@@ -137,10 +135,10 @@ from unifi_mcp_shared.permissioned_tool import setup_permissioned_tool
 
 setup_permissioned_tool(
     server=server,
-    category_map=category_map,  # maps tool category to permission category
-    server_prefix=server_prefix,  # used for env var resolution
-    register_tool_fn=register_tool,  # callback to add tool to tool_index
-    diagnostics_enabled_fn=lambda: diag,  # callable returning bool
+    category_map=category_map,           # maps tool category to permission category
+    server_prefix=server_prefix,         # used for env var resolution
+    register_tool_fn=register_tool,      # callback to add tool to tool_index
+    diagnostics_enabled_fn=lambda: diag, # callable returning bool
     wrap_tool_fn=wrap_with_diagnostics,  # diagnostics wrapper
     logger=logger,
 )
@@ -184,6 +182,8 @@ Domain tools are not registered at startup. Only meta-tools register during boot
 - `categories.py` builds `TOOL_MODULE_MAP` from `tools_manifest.json` at module load time
 - `setup_lazy_loading` installs a loader that imports the relevant `tools/<category>.py` module on demand when that tool is first called
 - Subsequent calls to the same category are already cached by Python's module system
+
+**Three registration modes, one shared dispatcher:** all three servers route through `register_tools_for_mode()` in `packages/unifi-mcp-shared/src/unifi_mcp_shared/tool_registration.py`, selected via `UNIFI_TOOL_REGISTRATION_MODE` (`lazy` default, `eager`, `meta_only`). `lazy` and `meta_only` both call `setup_lazy_loading()` against the same `tool_module_map` — they differ only in which meta-tools get registered (`meta_only` omits the `_load_tools` meta-tool, exposing just `_execute`). `eager` skips the lazy loader entirely and calls `auto_load_tools()` to register every tool up front, optionally filtered by `enabled_categories`/`enabled_tools` in server config. When changing lazy-loading behavior, verify the change holds across all three modes, not just the `lazy` default — a fix applied only inside `setup_lazy_loading` silently does not reach the `eager` path since `auto_load_tools()` is a separate code path.
 
 **`tools_manifest.json` — the visibility gate:**
 
@@ -260,14 +260,10 @@ async def _tool_index_wrapper(
     include_schemas: bool = False,
 ) -> dict:
     args = {}
-    if category is not None:
-        args["category"] = category
-    if search is not None:
-        args["search"] = search
-    if include_schemas:
-        args["include_schemas"] = include_schemas
+    if category is not None: args["category"] = category
+    if search is not None: args["search"] = search
+    if include_schemas: args["include_schemas"] = include_schemas
     return await tool_index_handler(args or None)
-
 
 # Layer 2 — e.g. apps/access/src/unifi_access_mcp/tool_index.py (still takes assembled args dict):
 async def tool_index_handler(args=None) -> dict:

@@ -232,6 +232,14 @@ run destructive smoke against a production resource. If a dedicated test resourc
 guaranteed (e.g., hardware-bound resources like camera channels), add the tool to
 `RISKY_OPERATION_NAMES` to exclude it from automated phases and require explicit human approval.
 
+**Pre-existing infrastructure guard (distinct from the disposable-resource rule above):** the
+`safe` phase can mutate settings on pre-existing, non-disposable infrastructure — e.g. a
+gateway's `broadcast_ping` setting — in addition to resources the run itself created. The
+disposable-resource rule only covers destructive ops on run-created resources; it does not
+cover safe-phase writes to settings on hardware that already existed before the run. Safe-phase
+lifecycle methods must reject writes to any resource ID not created by the run itself — verify
+the target ID against the run's own `created_resources` list before mutating.
+
 **VLAN reserved-range bug:** the disposable-network VLAN picker used for approved-phase
 lifecycle testing selected a controller-reserved VLAN (>=4010), causing the lifecycle create to
 fail against real hardware even though the harness logic was correct. Fix: bound the VLAN scan
@@ -520,3 +528,5 @@ in developer workflows; the fourth is automated in the release pipeline.
 - **`access_update_device_config` has no `confirm`/preview argument — it does not get the Stage 1 preview safety net.** Because the harness's preview gate only applies to tools with a `confirm` param, this tool is not automatically protected by Procedure C. Treat it as `mutating_requires_review`: verify its classification manually and require explicit human review of arguments before any live call, since there is no preview payload to inspect first.
 
 - **Lab hardware strategy: production controllers are discovery/read-only only — mutation testing uses a dedicated Gateway Ultra.** Never run `safe`/`approved`-phase mutations against a production controller. Point mutation-phase runs at a dedicated lab Gateway Ultra (or equivalent disposable hardware) reserved for this purpose; reserve production hardware for `readonly`/`inventory` discovery passes only.
+
+- **`--server all` is unsafe as evidence that an installed wheel (not repo source) is under test.** `--server all` invokes `uv run --package` per app, which resolves the repo workspace and can silently substitute the published wheel with local source. To verify a published-package version is actually what's running, invoke `--server network` / `--server protect` / `--server access` separately using the isolated env's Python, and assert both `importlib.metadata.version(...)` and the module's `__file__` path resolve under `site-packages` (not the repo checkout). Also run `uv pip install --refresh` first — a freshly published PyPI version can be absent from cached index metadata, so a stale cache silently keeps resolving the prior version.

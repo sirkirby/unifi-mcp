@@ -137,7 +137,9 @@ Tag only the affected app(s). Unnecessary tags create spurious releases.
 
 When releasing multiple packages in one coordination, avoid bumping major versions for multiple packages simultaneously. This prevents accidental lockstep coupling.
 
-**Strategy:** When releasing shared with core, release `core/v0.3.0` (major bump) and `shared/v0.4.9` (patch bump, staying within 0.4.x). Defer `shared/v0.5.0` to a future cycle. Downstream apps can adopt `core@0.3.0` while keeping `shared@0.4.x`, then adopt `shared@0.5.0` independently later.
+**Strategy:** When releasing shared with core, give core the larger bump (minor/major as needed) while keeping shared's bump narrow (patch-only, staying within its current minor). Defer shared's next minor bump to a future cycle. Downstream apps can adopt the new core version while keeping the prior shared minor pinned, then adopt the new shared minor independently later.
+
+**Verify current floor bounds before citing an example** — they shift every release. Re-check the live dependency line with `grep unifi-core packages/unifi-mcp-shared/pyproject.toml` rather than trusting a hardcoded version string from this skill.
 
 **When to break the rule:** Only when breaking API changes are required in both packages with no feasible bridge, all downstream maintainers are coordinated, and you can support a temporary dual-version install guide.
 

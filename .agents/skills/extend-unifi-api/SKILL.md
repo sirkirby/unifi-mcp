@@ -43,7 +43,6 @@ Reference `packages/unifi-core/src/unifi_core/network/managers/dns_manager.py` a
 from functools import lru_cache
 from unifi_core.network.managers.dns_manager import DnsManager
 
-
 @lru_cache
 def get_dns_manager() -> DnsManager:
     return DnsManager(get_connection_manager())
@@ -64,8 +63,7 @@ async def get_dns_record(self, record_id: str) -> dict:
 **2B: V2 single-resource responses may be wrapped in lists.** Always check `isinstance(response, list)` BEFORE `isinstance(response, dict)`:
 ```python
 response = await self._connection.request(api_request)
-if isinstance(response, list):
-    return response[0] if response else None
+if isinstance(response, list): return response[0] if response else None
 return response
 ```
 
@@ -90,7 +88,6 @@ return response
 from pydantic import BaseModel
 from typing import Optional, FrozenSet
 
-
 class DnsRecord(BaseModel):
     id: Optional[str] = None
     record_type: Optional[str] = None
@@ -100,15 +97,12 @@ class DnsRecord(BaseModel):
     enabled: Optional[bool] = None
     model_config = {"populate_by_name": True}
 
-
 MUTABLE_FIELDS = frozenset({"record_type", "key", "value", "ttl", "enabled"})
 READ_ONLY_FIELDS = frozenset({"id"})
 
-
 def to_controller_update(fields: dict) -> dict:
     invalid = set(fields) - MUTABLE_FIELDS
-    if invalid:
-        raise ValueError(f"Read-only fields: {invalid}")
+    if invalid: raise ValueError(f"Read-only fields: {invalid}")
     return fields
 ```
 
@@ -124,27 +118,16 @@ from mcp.types import Tool, ToolAnnotations
 from ..runtime import get_dns_manager
 from unifi_core.network.models.dns_record import DnsRecord, MUTABLE_FIELDS
 
-
 def get_tools() -> list[Tool]:
     _mutable = {k: v for k, v in DnsRecord.model_json_schema()["properties"].items() if k in MUTABLE_FIELDS}
     return [
-        Tool(
-            name="network_dns_record_list",
-            description="List DNS records.",
-            inputSchema={"type": "object", "properties": {}},
-            annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True),
-        ),
-        Tool(
-            name="network_dns_record_update",
-            description="Update DNS record.",
-            inputSchema={
-                "type": "object",
-                "properties": {"record_id": {"type": "string"}, **_mutable},
-                "required": ["record_id"],
-                "additionalProperties": False,
-            },
-            annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True),
-        ),
+        Tool(name="network_dns_record_list", description="List DNS records.",
+             inputSchema={"type": "object", "properties": {}},
+             annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True)),
+        Tool(name="network_dns_record_update", description="Update DNS record.",
+             inputSchema={"type": "object", "properties": {"record_id": {"type": "string"}, **_mutable},
+                          "required": ["record_id"], "additionalProperties": False},
+             annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True)),
     ]
 ```
 
@@ -157,7 +140,6 @@ All mutating tools require preview/confirm flow.
 ```python
 from pydantic import BaseModel, Field
 from typing import Optional
-
 
 class AlarmArmInput(BaseModel):
     alarm_id: str = Field(..., description="Alarm ID to arm")
@@ -176,7 +158,6 @@ class AlarmArmInput(BaseModel):
 **Action translators** (arm, disarm, toggle — no nested `rule_data`):
 ```python
 from unifi_core.protect.models._actions import AlarmArmInput
-
 DISPATCH_ARG_TRANSLATORS = {
     "protect_alarm_arm": lambda args, ctx: AlarmArmInput(**args).model_dump(),
 }
@@ -227,7 +208,6 @@ import strawberry
 from typing import Optional
 from unifi_api.types._base import UniFiType
 
-
 @strawberry.type
 class Client(UniFiType):
     kind: str = "LIST"  # required
@@ -269,9 +249,8 @@ from unifi_api.services.pagination import Cursor, paginate
 
 cursor = Cursor.decode(cursor_param) if cursor_param else None
 items = await manager.get_clients()
-page, next_cursor = paginate(
-    items, limit=50, cursor=cursor, key_fn=lambda i: (i.raw.get("last_seen", 0), i.raw.get("_id", ""))
-)
+page, next_cursor = paginate(items, limit=50, cursor=cursor,
+                            key_fn=lambda i: (i.raw.get("last_seen", 0), i.raw.get("_id", "")))
 return {"items": [...], "next_cursor": next_cursor.encode() if next_cursor else None}
 ```
 
@@ -301,7 +280,6 @@ Uses `asyncio.Lock` per controller to prevent concurrent cache-miss races. Call 
 Use `copy.deepcopy()` to preserve sibling fields during merge:
 ```python
 import copy
-
 current = await self.get_firewall_rule(rule_id)
 merged = copy.deepcopy(current.raw)
 merged.update(updates)
@@ -393,12 +371,9 @@ All `update_*` tools use the fetch-merge-put pattern. Skipping the fetch step ca
 async def update_dns_record(self, record_id: str, update_data: dict) -> dict:
     # 1. Fetch current state
     current = await self.get_dns_record(record_id)
-    if not current:
-        raise ValueError(f"Record {record_id} not found")
+    if not current: raise ValueError(f"Record {record_id} not found")
     # 2. Deep-copy before mutating (protects cached response)
-    import copy
-
-    base = copy.deepcopy(current)
+    import copy; base = copy.deepcopy(current)
     # 3. Merge caller's partial dict over the base
     merged = {**base, **update_data}
     # 4. PUT the fully-merged object
@@ -440,9 +415,9 @@ Every update tool must verify non-passed fields are preserved after the update:
 # mock_get returns {"name": "original", "vlan": 10, "notes": "keep me"}
 await manager.update_dns_record("id-1", {"name": "new-name"})
 payload = mock_put.call_args[1]["json"]
-assert payload["vlan"] == 10  # preserved
-assert payload["notes"] == "keep me"  # preserved
-assert payload["name"] == "new-name"  # updated
+assert payload["vlan"] == 10            # preserved
+assert payload["notes"] == "keep me"   # preserved
+assert payload["name"] == "new-name"   # updated
 ```
 
 ### Write-Verification Standard
@@ -544,3 +519,13 @@ Manager methods: `list_{resource}s()`, `get_{resource}(id)`, `create_{resource}(
 **Alarm rule write-schema vocabulary — legacy ≠ v2:** Do not reuse `rule_to_controller` for v2 mutations; it emits legacy vocabulary only. Legacy: `name`/`enable`/`conditions`/`sources`; v2: `title`/`enabled`/`triggers`/scope-nested sources. Implement `alarm_rule_to_legacy_body` in `packages/unifi-core/src/unifi_core/protect/models/alarm_rules.py`. Echo `data` verbatim in the inverse — do not reconstruct nested legacy structures.
 
 **`require_non_empty_actions` guard prevents Protect UI corruption:** Creating/updating an alarm rule with `actions: []` makes the Protect UI non-functional; only API deletion recovers it. Guard defined in `packages/unifi-core/src/unifi_core/protect/models/_validators.py`; applied in the alarm facade before routing. Apply on Create always; on Update only when `actions` is in the change set.
+
+**`isinstance(value, int)` matches `bool` — exclude it explicitly in numeric validators:** Because `bool` is a subclass of `int` in Python, a validator/normalizer that checks `isinstance(value, int)` without also excluding `bool` will silently accept `True`/`False` as valid integer values. Review flagged this gap in the status/epoch normalizers in `packages/unifi-core/src/unifi_core/access/models/visitors.py` (`_status_name`, `_epoch_to_iso`), which coerce with `int(value)`/`isinstance(value, int)` without a bool guard. The correct pattern already used elsewhere is `isinstance(value, int) and not isinstance(value, bool)` (see `packages/unifi-core/src/unifi_core/network/managers/dpi_manager.py`) — apply it to any new numeric-field validator.
+
+**New REST resource routes must explicitly declare the scope dependency — it is not inherited:** Every router in `apps/api/src/unifi_api/routes/resources/<server>/*.py` wires auth itself via `dependencies=[Depends(require_scope(Scope.READ))]` (import `require_scope` from `unifi_api.auth.middleware`); there is no base-router default. Omitting this line on a new resource route leaves the endpoint reachable without scope enforcement — copy the dependency line from a sibling file (e.g., `apps/api/src/unifi_api/routes/resources/network/devices.py`) when scaffolding a new resource route, don't assume it's inherited.
+
+**Assert on the captured payload, not just that the mock was called:** A test that only does `mock_put.assert_called_once()` (or similar call-count-only assertions) will pass even when the payload is wrong — e.g., a field silently dropped or mistranslated. Follow the Regression Test Standard above: capture `call_args` and assert on individual payload keys/values, not call presence alone. A fixture/mock returning a plausible-looking default can mask a real serialization or fetch-merge-put bug.
+
+**DETAIL resolvers must fetch full detail data, not reuse the LIST-shape summary item:** Per Procedure B.5, a `kind=DETAIL` resolver that falls back to returning the cached LIST-summary object (instead of calling `from_manager_output` against the full detail payload) will silently return truncated fields to GraphQL clients. Verify each DETAIL resolver actually fetches/normalizes detail-shaped data rather than passing through the list item it was resolved from.
+
+**Typed domain models silently drop undeclared manager fields — audit field coverage, not just types:** A typed Pydantic model layered over a manager's raw dict only exposes the fields it declares; any manager field not listed is silently dropped from the response, even though the raw data was fetched. Regression found in the Protect `Sensor` model, which reduced a manager-shaped sensor record down to `id`/`name`/`type`/`motion_detected_at` only — dropping `battery`, `connection`, `state`, `last_seen`, and `readings` that the manager actually returns. This is the same class of bug as Step 3's model-field coverage concern; when adding or reviewing a typed domain model, diff the model's declared fields against every key the manager's raw response actually contains, not just against the fields the PR's use case needs.
