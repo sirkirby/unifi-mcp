@@ -13,6 +13,7 @@ to catch.
 """
 
 import asyncio
+import logging
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
@@ -69,3 +70,12 @@ def test_a_listener_failure_does_not_take_the_server_down() -> None:
     with _startup(connected=True, websocket_enabled=True, listener=failing) as (started, transports):
         started.assert_awaited_once()
         assert transports.await_count == 1, "a websocket failure stopped the server starting"
+
+
+def test_startup_warns_about_an_unrecognized_policy_variable(monkeypatch, caplog) -> None:
+    """The scan runs from `main_async`, not only from its own unit tests."""
+    monkeypatch.setenv("UNIFI_POLICY_ACCESS_DOOR_UPDATE", "true")
+    with caplog.at_level(logging.WARNING), _startup(connected=True, websocket_enabled=False):
+        pass
+    assert "UNIFI_POLICY_ACCESS_DOOR_UPDATE" in caplog.text
+    assert "UNIFI_POLICY_ACCESS_DOORS_UPDATE" in caplog.text
