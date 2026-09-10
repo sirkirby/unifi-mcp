@@ -7,6 +7,7 @@ from unifi_core.auth import AuthenticationStatus, AuthMethod, UniFiAuth
 from unifi_core.exceptions import UniFiAuthError
 from unifi_core.network.managers.client_manager import ClientManager
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.managers.network_manager import NetworkManager
 from unifi_core.network.models.integration import PublicInventory, PublicInventoryItem
 from unifi_core.network.read_views import shape_client_list, shape_device_list, shape_network_list, shape_wlan_list
 
@@ -123,3 +124,24 @@ def test_unknown_client_transport_is_not_wireless_and_missing_guest_is_unknown()
     assert result["clients"][0]["connection_type"] is None
     assert result["clients"][0]["is_guest"] is None
     assert shape_client_list(records, site="default", filter_type="wireless")["count"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("warm", [False, True])
+@pytest.mark.parametrize("has_wlans", [False, True])
+async def test_public_wlan_details_require_session_after_cold_or_warm_initialization(warm, has_wlans):
+    cm = connection()
+    cm._initialized = cm._key_mode = warm
+
+    async def initialize():
+        cm._initialized = cm._key_mode = True
+        return True
+
+    cm.initialize = AsyncMock(side_effect=initialize)
+    cm.public_inventory = AsyncMock(
+        return_value=PublicInventory(
+            [PublicInventoryItem(id=ITEM_ID, name="Synthetic").inventory_record("wlans")] if has_wlans else []
+        )
+    )
+    with pytest.raises(UniFiAuthError, match="WLAN details.*session authentication"):
+        await NetworkManager(cm).get_wlan_details(ITEM_ID)

@@ -89,6 +89,21 @@ async def test_public_only_key_survives_rejected_legacy_and_failed_session(monke
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("session_succeeds", [True, False])
+async def test_post_construction_auth_preserves_legacy_session_contract(session_succeeds):
+    cm = ConnectionManager("controller.test", "user", "password")
+    cm.unifi_auth = UniFiAuth(api_key="synthetic-key")
+    with (
+        patch.object(cm, "_initialize_session", new=AsyncMock(return_value=session_succeeds)) as session,
+        patch.object(cm, "_initialize_key", new_callable=AsyncMock) as key,
+    ):
+        assert cm.has_api_key
+        assert await cm.initialize() is session_succeeds
+        session.assert_awaited_once()
+        key.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_working_session_is_preserved_when_both_credentials_configured():
     cm = connection("user", "password")
     with (

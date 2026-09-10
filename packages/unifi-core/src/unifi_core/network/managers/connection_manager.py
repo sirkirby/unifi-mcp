@@ -327,6 +327,10 @@ class ConnectionManager:
         self._max_retries = max_retries
         self._retry_delay = retry_delay
         self.unifi_auth = auth or UniFiAuth()
+        # Older callers attach unifi_auth for operation-specific Integration API
+        # access. Only constructor injection opts inventory into key negotiation;
+        # those callers also understand the public inventory response contract.
+        self._key_inventory_enabled = auth is not None
         self._key_mode = False
         self._key_retry_until = 0.0
         self._integration_prefix: str | None = None
@@ -588,7 +592,7 @@ class ConnectionManager:
         Preserve session behavior when it works. Only negotiate a key route at
         initialization, never as a retry of an operation that may have mutated.
         """
-        if not self.unifi_auth.has_api_key:
+        if not self._key_inventory_enabled or not self.unifi_auth.has_api_key:
             return await self._initialize_session()
         async with self._initialize_lock:
             if self.integration_inventory_only or (

@@ -314,6 +314,12 @@ class NetworkManager:
             UniFiNotFoundError: If the WLAN does not exist.
         """
         wlans = await self.get_wlans()
+        if getattr(self._connection, "integration_inventory_only", False) is True:
+            from unifi_core.exceptions import UniFiAuthError
+
+            raise UniFiAuthError(
+                "Full WLAN details and WLAN mutations require Network session authentication on this controller."
+            )
         wlan_obj: Optional[Wlan] = next(
             (w for w in wlans if isinstance(w.raw, dict) and w.raw.get("_id") == wlan_id),
             None,
