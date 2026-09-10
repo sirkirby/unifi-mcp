@@ -223,7 +223,10 @@ async def test_public_inventory_cursor_uses_public_identity(tmp_path, monkeypatc
                 )
             else:
                 cursor_arg = f', cursor: "{cursor}"' if cursor else ""
-                query = f'{{ network {{ {resource}(controller: "{cid}", limit: 1{cursor_arg}) {{ items {{ id sourceApi integrationId }} nextCursor }} }} }}'
+                query = (
+                    f'{{ network {{ {resource}(controller: "{cid}", limit: 1{cursor_arg}) '
+                    "{ items { id sourceApi integrationId } nextCursor } } }"
+                )
                 response = await client.post(
                     "/v1/graphql", headers={"Authorization": f"Bearer {key}"}, json={"query": query}
                 )
