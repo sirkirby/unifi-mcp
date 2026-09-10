@@ -42,8 +42,25 @@ def _raw(value: Any) -> dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
 
+def _with_inventory_source(response: dict[str, Any], records: list[Any]) -> dict[str, Any]:
+    if getattr(records, "source_api", None) == "integration" or any(
+        _raw(record).get("source_api") == "integration" for record in records
+    ):
+        response["_meta"] = {
+            "source_api": "integration",
+            "complete": False,
+            "note": (
+                "Public inventory has limited fields/coverage. integration_id is a public UUID, not a legacy ID. "
+                "Missing legacy fields are unknown; legacy operations may require session credentials."
+            ),
+        }
+    return response
+
+
 def classify_device(device: dict[str, Any]) -> str:
     """Classify a raw controller device into its public semantic category."""
+    if device.get("source_api") == "integration":
+        return device.get("device_category", "unknown")
     device_type = device.get("type", "")
     model = device.get("model", "")
     if device_type.startswith("usp"):
@@ -89,7 +106,7 @@ def shape_client_list(
     """Apply the public client-list filters, projection, and envelope."""
     clients_raw = [_raw(client) for client in clients]
     if filter_type == "wireless":
-        clients_raw = [client for client in clients_raw if not client.get("is_wired", False)]
+        clients_raw = [client for client in clients_raw if client.get("is_wired", False) is False]
     elif filter_type == "wired":
         clients_raw = [client for client in clients_raw if client.get("is_wired", False)]
 
@@ -107,6 +124,8 @@ def shape_client_list(
     total_count = len(clients_raw)
     clients_raw = clients_raw[:limit]
     known_fields = {
+        "source_api",
+        "integration_id",
         "mac",
         "name",
         "hostname",
@@ -131,11 +150,18 @@ def shape_client_list(
         full_data = client_from_controller(client).model_dump(exclude_none=True)
         full_data["connection_type"] = "Wired" if client.get("is_wired", False) else "Wireless"
         full_data["_id"] = client.get("_id")
+        if client.get("source_api") == "integration":
+            full_data.update(source_api="integration", integration_id=client["integration_id"])
+            full_data.update(is_wired=client.get("is_wired"), is_guest=None)
+            if client.get("is_wired") is None:
+                full_data["connection_type"] = None
         if not client.get("is_wired", False):
             full_data["essid"] = client.get("essid", "Unknown")
             full_data["signal_dbm"] = client.get("signal")
             full_data["channel"] = client.get("channel", "Unknown")
             full_data["radio"] = client.get("radio", "Unknown")
+        if client.get("source_api") == "integration":
+            full_data.update(essid=None, channel=None, radio=None)
         formatted_clients.append(
             {key: value for key, value in full_data.items() if key in requested_fields}
             if requested_fields
@@ -156,7 +182,7 @@ def shape_client_list(
     }
     if unknown_fields:
         response["unknown_fields"] = unknown_fields
-    return response
+    return _with_inventory_source(response, clients)
 
 
 def shape_client_details(
@@ -260,6 +286,36 @@ def shape_client_details(
 
 
 def _device_base(device: dict[str, Any]) -> dict[str, Any]:
+    if device.get("source_api") == "integration":
+        return {
+            "mac": device.get("mac"),
+            "name": device.get("name"),
+            "model": device.get("model"),
+            "ip": device.get("ip"),
+            "firmware": device.get("version"),
+            "upgradable": device.get("upgradable"),
+            "status": {
+                0: "offline",
+                1: "online",
+                2: "pending_adoption",
+                4: "managed_by_other/adopting",
+                5: "provisioning",
+                6: "upgrading",
+            }.get(device.get("state")),
+            "device_category": classify_device(device),
+            "adopted": True,
+            "_id": None,
+            "source_api": "integration",
+            "integration_id": device["integration_id"],
+            "uptime": None,
+            "last_seen": None,
+            "type": None,
+            "connection_network": None,
+            "uplink": None,
+            "load_avg_1": None,
+            "mem_pct": None,
+            "model_eol": None,
+        }
     state = device.get("state", 0)
     state_map = {
         0: "offline",
@@ -307,6 +363,8 @@ def _device_base(device: dict[str, Any]) -> dict[str, Any]:
 
 
 def _add_device_details(device: dict[str, Any], target: dict[str, Any], *, summary: bool) -> None:
+    if device.get("source_api") == "integration":
+        return
     category = classify_device(device)
     target.update(
         {
@@ -435,18 +493,21 @@ def shape_device_list(
         if include_details:
             _add_device_details(device, item, summary=summary)
         formatted.append(item)
-    return {
-        "success": True,
-        "site": site,
-        "filter_type": device_type,
-        "filter_status": status,
-        "search": search,
-        "total_count": total_count,
-        "returned_count": len(formatted),
-        "count": len(formatted),
-        "limit": limit,
-        "devices": formatted,
-    }
+    return _with_inventory_source(
+        {
+            "success": True,
+            "site": site,
+            "filter_type": device_type,
+            "filter_status": status,
+            "search": search,
+            "total_count": total_count,
+            "returned_count": len(formatted),
+            "count": len(formatted),
+            "limit": limit,
+            "devices": formatted,
+        },
+        devices,
+    )
 
 
 def shape_device_details(
@@ -577,6 +638,8 @@ def shape_network_list(
     total_count = len(filtered)
     filtered = filtered[:limit]
     known_fields = {
+        "source_api",
+        "integration_id",
         "_id",
         "name",
         "enabled",
@@ -608,6 +671,8 @@ def shape_network_list(
             "dhcpd_start": shaped.dhcpd_start,
             "dhcpd_stop": shaped.dhcpd_stop,
         }
+        if network.get("source_api") == "integration":
+            full_data.update(source_api="integration", integration_id=network["integration_id"])
         formatted.append(
             {key: value for key, value in full_data.items() if key in requested_fields}
             if requested_fields
@@ -627,7 +692,7 @@ def shape_network_list(
     }
     if unknown_fields:
         response["unknown_fields"] = unknown_fields
-    return response
+    return _with_inventory_source(response, networks)
 
 
 def shape_network_details(
@@ -768,20 +833,28 @@ def shape_wlan_list(
             "security": wlan.get("security"),
             "network_id": wlan.get("networkconf_id"),
             "usergroup_id": wlan.get("usergroup_id"),
+            **(
+                {"source_api": "integration", "integration_id": wlan["integration_id"]}
+                if wlan.get("source_api") == "integration"
+                else {}
+            ),
         }
         for wlan in raw
     ]
-    return {
-        "success": True,
-        "site": site,
-        "search": search,
-        "enabled_only": enabled_only,
-        "total_count": total_count,
-        "returned_count": len(formatted),
-        "count": len(formatted),
-        "limit": limit,
-        "wlans": formatted,
-    }
+    return _with_inventory_source(
+        {
+            "success": True,
+            "site": site,
+            "search": search,
+            "enabled_only": enabled_only,
+            "total_count": total_count,
+            "returned_count": len(formatted),
+            "count": len(formatted),
+            "limit": limit,
+            "wlans": formatted,
+        },
+        wlans,
+    )
 
 
 # selector -> (activating enum key, value); a selector under any other value is not shown.

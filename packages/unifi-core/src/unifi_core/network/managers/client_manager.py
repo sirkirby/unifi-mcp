@@ -35,7 +35,7 @@ class ClientManager:
         """
         self._connection = connection_manager
 
-    async def get_clients(self, include_offline: bool = False) -> List[Client]:
+    async def get_clients(self, include_offline: bool = False) -> List[Client | dict[str, Any]]:
         """Get clients for the current site.
 
         The default preserves the online-only ``/stat/sta`` contract.  Set
@@ -45,6 +45,10 @@ class ClientManager:
         """
         if include_offline:
             return await self.get_all_clients()
+        if getattr(self._connection, "has_api_key", False) is True:
+            await self._connection.initialize()
+            if self._connection.integration_inventory_only:
+                return await self._connection.public_inventory("clients")
         if not await self._connection.ensure_connected() or not self._connection.controller:
             raise ConnectionError("Not connected to controller")
         cache_key = f"{CACHE_PREFIX_CLIENTS}_online_{self._connection.site}"
@@ -78,6 +82,15 @@ class ClientManager:
 
     async def get_all_clients(self) -> List[Client]:
         """Get list of all clients (including offline/historical) for the current site."""
+        if getattr(self._connection, "has_api_key", False) is True:
+            await self._connection.initialize()
+            if self._connection.integration_inventory_only:
+                from unifi_core.exceptions import UniFiAuthError
+
+                raise UniFiAuthError(
+                    "Historical/offline clients require Network session authentication on this controller. "
+                    "Use include_offline=false for public connected-client inventory."
+                )
         if not await self._connection.ensure_connected() or not self._connection.controller:
             raise ConnectionError("Not connected to controller")
         cache_key = f"{CACHE_PREFIX_CLIENTS}_all_{self._connection.site}"

@@ -96,6 +96,34 @@ All tools MUST include `annotations=ToolAnnotations(...)` in `@server.tool()`:
 
 UniFi exposes three API surfaces with disjoint ID/auth models: the V2 controller API (session cookie auth, Mongo ObjectIDs, `snake_case` fields), the public Integration API (`X-API-Key` auth, UUIDs, `camelCase` fields), and the UniFi-OS **Alarm Manager v2** service (`/api/v2/alarms/`, session + **SuperAdmin** auth, UUIDs, `snake_case` fields). They are **not interchangeable**.
 
+Authentication credentials and API surfaces are separate concepts. Network 10.6.106
+also accepts API keys on verified legacy inventory GET endpoints, preserving legacy
+IDs and fields. Detect that capability at runtime; do not assume it on every
+controller or infer write/websocket support from successful reads.
+
+### Authentication routing golden path
+
+- ConnectionManagers own credential availability and transport selection. Reuse
+  the shared authentication status contract in `unifi_core.auth`; retain each
+  product's SDK/lifecycle implementation.
+- Network preserves working session behavior when both credentials are configured;
+  Access retains its existing per-operation preference. A failed session must not
+  block an independently usable API-key path. Protect public setters still require
+  session bootstrap, so they are not an independent key-only startup path.
+- Choose a route before an operation. Never replay an uncertain mutation using
+  another credential or API surface. Require a session for unvalidated key-backed
+  legacy writes, including direct SDK callers.
+- Keep tool auth metadata accurate (`local_only`, `api_key_only`, `either`, or
+  `both`); describe field-dependent requirements. Metadata is discovery, not
+  enforcement. Core manager checks apply equally to MCP and REST/GraphQL/actions.
+- Public-only inventory must label its source and incomplete field/collection
+  coverage. Do not fabricate legacy IDs or default unknown values to false/zero.
+  Preserve MAC-based identity where verified; public UUIDs are separate fields.
+- Anchors: Access `ConnectionManager.initialize` and `DoorManager.list_doors`;
+  Protect `require_public_api_key` and `validate_public_id_portability`.
+
+### API tool families
+
 - **Tool families share an ID space.** Tools whose returned IDs and accepted IDs are mutually portable form a *family*. Cross-family ID use is prohibited.
 - **Tool descriptions MUST scope IDs** when they could be confused with another family's IDs. Standard formula: *"These IDs are scoped to the <family> tool family — do not pass them to other <resource> tools."* This applies to MCP tool descriptions, GraphQL type/query descriptions, and REST route descriptions alike.
 - **Integration API tools MUST require an API key** and fail with a clear remediation message when it is missing. The auth check belongs in the manager so every tool in the family inherits it.

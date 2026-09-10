@@ -16,6 +16,7 @@ import aiohttp
 from uiprotect import ProtectApiClient
 from uiprotect.data import WSSubscriptionMessage
 
+from unifi_core.auth import AuthenticationStatus, AuthMethod
 from unifi_core.exceptions import UniFiConnectionError
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
 from unifi_core.retry import RetryPolicy, retry_with_backoff
@@ -236,9 +237,20 @@ class ProtectConnectionManager:
         )
         return result
 
+    @property
+    def authentication_status(self) -> AuthenticationStatus:
+        return AuthenticationStatus(
+            session_configured=bool(self.username and self.password),
+            api_key_configured=self.has_api_key,
+            session_available=self.is_connected,
+            # Bootstrap success does not verify the independently authenticated
+            # public API. Public methods enforce/validate it when called.
+            api_key_available=None,
+        )
+
     def require_public_api_key(self, operation: str) -> None:
         """Raise an actionable error when a public Integration API call lacks an API key."""
-        if self.has_api_key:
+        if self.authentication_status.configured(AuthMethod.API_KEY_ONLY):
             return
         raise ValueError(
             f"Cannot {operation}: UniFi Protect public Integration API access requires an API key. "

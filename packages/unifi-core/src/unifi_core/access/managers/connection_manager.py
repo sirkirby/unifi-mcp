@@ -26,6 +26,7 @@ from typing import Any, Dict
 
 import aiohttp
 
+from unifi_core.auth import AuthenticationStatus, AuthMethod
 from unifi_core.exceptions import UniFiAuthError, UniFiConnectionError
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
@@ -183,7 +184,7 @@ class AccessConnectionManager:
 
     async def _try_api_client(self) -> None:
         """Attempt to initialise the py-unifi-access API client."""
-        if not self._api_key:
+        if not self.authentication_status.configured(AuthMethod.API_KEY_ONLY):
             self._api_support_attempt = connection_attempt_not_configured()
             logger.debug("[access-cm] No API key configured; skipping API client path.")
             return
@@ -544,6 +545,15 @@ class AccessConnectionManager:
     def has_api_key(self) -> bool:
         """Return whether an Access Developer API token is configured."""
         return bool(self._api_key)
+
+    @property
+    def authentication_status(self) -> AuthenticationStatus:
+        return AuthenticationStatus(
+            session_configured=bool(self.username and self.password),
+            api_key_configured=self.has_api_key,
+            session_available=self.has_proxy,
+            api_key_available=self.has_api_client,
+        )
 
     @property
     def has_api_client(self) -> bool:

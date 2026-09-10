@@ -23,6 +23,8 @@ from aiounifi.errors import (
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.configuration import Configuration
 
+from unifi_core.auth import AuthenticationStatus, UniFiAuth
+from unifi_core.exceptions import UniFiAuthError
 from unifi_core.mac import mask_exception_macs, mask_macs
 from unifi_core.redaction import collect_secret_values, sanitize_exception, scrub_secret_values
 from unifi_core.support_bundle import (
@@ -312,6 +314,7 @@ class ConnectionManager:
         cache_timeout: int = 30,
         max_retries: int = 3,
         retry_delay: int = 5,
+        auth: UniFiAuth | None = None,
     ):
         """Initialize the Connection Manager."""
         self.host = host
@@ -323,6 +326,15 @@ class ConnectionManager:
         self.cache_timeout = cache_timeout
         self._max_retries = max_retries
         self._retry_delay = retry_delay
+        self.unifi_auth = auth or UniFiAuth()
+        # Older callers attach unifi_auth for operation-specific Integration API
+        # access. Only constructor injection opts inventory into key negotiation;
+        # those callers also understand the public inventory response contract.
+        self._key_inventory_enabled = auth is not None
+        self._key_mode = False
+        self._key_retry_until = 0.0
+        self._integration_prefix: str | None = None
+        self._initialize_lock = asyncio.Lock()
         self.controller: Optional[Controller] = None
         self._aiohttp_session: Optional[aiohttp.ClientSession] = None
         self._initialized = False
@@ -575,6 +587,239 @@ class ConnectionManager:
         self._initialized = False
 
     async def initialize(self) -> bool:
+        """Initialize an independent session or API-key route.
+
+        Preserve session behavior when it works. Only negotiate a key route at
+        initialization, never as a retry of an operation that may have mutated.
+        """
+        if not self._key_inventory_enabled or not self.unifi_auth.has_api_key:
+            return await self._initialize_session()
+        async with self._initialize_lock:
+            if self.integration_inventory_only or (
+                self._initialized and self._aiohttp_session and not self._aiohttp_session.closed
+            ):
+                return True
+            if self.username and self.password and await self._initialize_session():
+                self._key_mode = False
+                return True
+            if _time.monotonic() < self._key_retry_until:
+                return False
+            async with self._connect_lock:
+                succeeded = await self._initialize_key()
+                self._key_retry_until = 0.0 if succeeded else _time.monotonic() + _RECONNECT_BLOCK_BASE_SECONDS
+                return succeeded
+
+    @property
+    def has_api_key(self) -> bool:
+        return self.unifi_auth.has_api_key
+
+    @property
+    def authentication_status(self) -> AuthenticationStatus:
+        available = self.integration_inventory_only or bool(
+            self._initialized and self.controller and self._aiohttp_session and not self._aiohttp_session.closed
+        )
+        return AuthenticationStatus(
+            session_configured=bool(self.username and self.password),
+            api_key_configured=self.unifi_auth.has_api_key,
+            session_available=available and not self._key_mode,
+            api_key_available=available if self._key_mode else None,
+        )
+
+    @property
+    def integration_inventory_only(self) -> bool:
+        return self._initialized and self._key_mode and self.controller is None
+
+    async def _key_read_transport(self, request, handler):
+        """Bound even direct SDK calls to verified inventory reads and this host."""
+        from yarl import URL
+
+        target = URL(self.url_base)
+        if (request.url.scheme, request.url.host, request.url.port) != (target.scheme, target.host, target.port):
+            raise UniFiAuthError("API-key inventory requests cannot leave the configured controller.")
+        path = request.url.path
+        allowed = path in {"/api/self/sites", "/proxy/network/api/self/sites"} or any(
+            path == f"{prefix}/api/s/{self.site}/{suffix}"
+            for prefix in ("", "/proxy/network")
+            for suffix in ("rest/networkconf", "rest/wlanconf", "stat/device", "stat/sta", "rest/user")
+        )
+        if request.method != "GET" or not allowed:
+            raise UniFiAuthError(
+                "This operation requires Network session authentication. "
+                "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD; "
+                "API-key legacy access currently supports inventory reads only."
+            )
+        return await handler(request)
+
+    async def _initialize_key(self) -> bool:
+        from unifi_core.network.controller_type import resolve_controller_type
+
+        await self._discard_connection()
+        mode = resolve_controller_type()
+        prefixes = ["/proxy/network"] if mode == "proxy" else [""] if mode == "direct" else ["/proxy/network", ""]
+        session = await self.unifi_auth.get_api_key_session(
+            cookie_jar=aiohttp.DummyCookieJar(),
+            timeout=aiohttp.ClientTimeout(total=10),
+            middlewares=(self._key_read_transport,),
+        )
+        try:
+            for prefix in prefixes:
+                async with session.get(
+                    f"{self.url_base}{prefix}/api/self/sites", ssl=self.verify_ssl, allow_redirects=False
+                ) as response:
+                    if response.status == 429:
+                        raise AuthenticationRateLimitError("API-key capability probe rate limited; retry later.")
+                    if response.status != 200:
+                        continue
+                    try:
+                        body = await response.json()
+                    except (aiohttp.ContentTypeError, ValueError):
+                        # Login HTML is not authenticated inventory. The public
+                        # API may still be available on the same controller.
+                        continue
+                    if (
+                        not isinstance(body, dict)
+                        or not isinstance(body.get("meta"), dict)
+                        or body["meta"].get("rc") != "ok"
+                        or not isinstance(body.get("data"), list)
+                    ):
+                        continue
+                config = Configuration(
+                    session=session,
+                    host=self.host,
+                    username="",
+                    password="",
+                    port=self.port,
+                    site=self.site,
+                    ssl_context=False if not self.verify_ssl else None,
+                )
+                self.controller = Controller(config=config)
+                self.controller.connectivity.is_unifi_os = bool(prefix)
+                self.controller.connectivity.can_retry_login = False
+                self._unifi_os_override = bool(prefix)
+                self._integration_prefix = prefix
+                self._aiohttp_session = session
+                self._key_mode = True
+                self._initialized = True
+                self._auth_generation += 1
+                self._last_connection_error = None
+                self._support_attempt = connection_attempt_succeeded()
+                return True
+        except AuthenticationRateLimitError:
+            self._last_connection_error = "API-key capability probe rate limited; retry later."
+            return False
+        except Exception as error:
+            logger.warning("API-key legacy capability probe failed: %s", type(error).__name__)
+            self._last_connection_error = "API-key capability probe failed; verify controller connectivity and API key."
+            return False
+        finally:
+            if self._aiohttp_session is not session:
+                await session.close()
+        # A controller can support public Integration API keys without supporting
+        # them on legacy paths. Keep that route independent from the login circuit.
+        for prefix in prefixes:
+            try:
+                self._integration_prefix = prefix
+                body = await self.request_integration("/v1/sites", params={"limit": 1, "offset": 0})
+                if not isinstance(body.get("data"), list) or type(body.get("totalCount")) is not int:
+                    continue
+                if body["totalCount"] < len(body["data"]):
+                    continue
+                self._key_mode = True
+                self._initialized = True
+                self._last_connection_error = None
+                return True
+            except AuthenticationRateLimitError:
+                self._last_connection_error = "API-key capability probe rate limited; retry later."
+                return False
+            except UniFiAuthError:
+                continue
+        self._integration_prefix = None
+        self._last_connection_error = (
+            "No usable Network authentication path. Verify the API key or session credentials."
+        )
+        return False
+
+    async def request_integration(self, path: str, params: dict | None = None) -> dict:
+        """Bounded public inventory GET; never reuse cookies or forward redirects."""
+        if not self.unifi_auth.has_api_key:
+            raise UniFiAuthError("Network Integration API requires UNIFI_NETWORK_API_KEY or UNIFI_API_KEY.")
+        if not path.startswith("/v1/") or ".." in path or "?" in path or "#" in path:
+            raise ValueError("Invalid Network Integration API path")
+        prefix = self._integration_prefix if self._integration_prefix is not None else "/proxy/network"
+        try:
+            async with await self.unifi_auth.get_api_key_session(
+                cookie_jar=aiohttp.DummyCookieJar(), timeout=aiohttp.ClientTimeout(total=10)
+            ) as session:
+                async with session.get(
+                    f"{self.url_base}{prefix}/integration{path}",
+                    params=params,
+                    ssl=self.verify_ssl,
+                    allow_redirects=False,
+                ) as response:
+                    if response.status == 429:
+                        raise AuthenticationRateLimitError("Network Integration API rate limited; retry later.")
+                    if response.status != 200:
+                        raise UniFiAuthError(
+                            f"Network Integration API read failed (HTTP {response.status}); "
+                            "verify API-key permissions and controller support."
+                        )
+                    body = await response.json()
+                    if not isinstance(body, dict):
+                        raise UniFiAuthError("Network Integration API returned an invalid response.")
+                    return body
+        except (UniFiAuthError, AuthenticationRateLimitError):
+            raise
+        except Exception as error:
+            raise UniFiAuthError(
+                f"Network Integration API read failed ({type(error).__name__}); verify controller connectivity."
+            ) from None
+
+    async def integration_pages(self, path: str) -> list[dict]:
+        """Retrieve complete bounded pages, rejecting duplicate/truncated results."""
+        rows: list[dict] = []
+        seen: set[str] = set()
+        expected_total: int | None = None
+        for _ in range(100):
+            body = await self.request_integration(path, {"limit": 200, "offset": len(rows)})
+            page, total = body.get("data"), body.get("totalCount")
+            if not isinstance(page, list) or type(total) is not int or total < 0:
+                raise UniFiAuthError("Network Integration API returned invalid inventory pagination.")
+            if expected_total is not None and total != expected_total:
+                raise UniFiAuthError("Network inventory changed during pagination; retry the read.")
+            expected_total = total
+            for row in page:
+                if not isinstance(row, dict) or not isinstance(row.get("id"), str) or row["id"] in seen:
+                    raise UniFiAuthError("Network Integration API returned invalid or duplicate inventory IDs.")
+                seen.add(row["id"])
+                rows.append(row)
+            if len(rows) == total:
+                return rows
+            if not page or len(rows) > total:
+                break
+        raise UniFiAuthError("Network Integration API inventory is incomplete; narrow the controller/site scope.")
+
+    async def public_inventory(self, domain: str) -> list[dict]:
+        """Public-only inventory fallback with explicit source and ID provenance."""
+        from unifi_core.network.models.integration import PublicInventory, PublicInventoryItem, PublicSite
+
+        suffixes = {"devices": "devices", "clients": "clients", "networks": "networks", "wlans": "wifi/broadcasts"}
+        if domain not in suffixes:
+            raise ValueError("Unsupported public inventory resource")
+        try:
+            sites = [PublicSite.model_validate(row) for row in await self.integration_pages("/v1/sites")]
+            matches = [site for site in sites if self.site in {site.internalReference, str(site.id)}]
+            if len(matches) != 1:
+                raise UniFiAuthError(
+                    "Cannot resolve Network site: use its internal site key or Integration UUID, not a display name."
+                )
+            rows = await self.integration_pages(f"/v1/sites/{matches[0].id}/{suffixes[domain]}")
+            return PublicInventory(PublicInventoryItem.model_validate(row).inventory_record(domain) for row in rows)
+        except UniFiAuthError:
+            raise
+        except Exception as error:
+            raise UniFiAuthError(f"Invalid Network public inventory ({type(error).__name__}).") from None
+
+    async def _initialize_session(self) -> bool:
         """Initialize the controller connection (correct for attached aiounifi version)."""
         blocked = self._reconnect_block_active()
         if blocked:
@@ -738,9 +983,19 @@ class ConnectionManager:
     async def ensure_connected(self) -> bool:
         """Ensure the controller is connected, attempting to reconnect if necessary."""
 
+        if self.integration_inventory_only:
+            raise UniFiAuthError(
+                "This operation requires Network session authentication on this controller. "
+                "API-key-only access is limited to public inventory; configure "
+                "UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD for legacy operations."
+            )
+
         if not self._initialized or not self.controller or not self._aiohttp_session or self._aiohttp_session.closed:
             logger.warning("Controller not initialized or session lost/closed, attempting to reconnect...")
-            return await self.initialize()
+            connected = await self.initialize()
+            if self.integration_inventory_only:
+                return await self.ensure_connected()
+            return connected
 
         try:
             internal_session = self.controller.connectivity.config.session
@@ -765,6 +1020,11 @@ class ConnectionManager:
 
     async def _reauthenticate(self, expected_generation: int) -> bool:
         """Refresh an expired controller login once, deduplicating concurrent attempts."""
+        if self._key_mode:
+            self._last_connection_error = (
+                "API-key request rejected; verify UNIFI_NETWORK_API_KEY and controller permissions."
+            )
+            return False
         if self._reconnect_block_active():
             return False
 
@@ -804,7 +1064,7 @@ class ConnectionManager:
 
     async def cleanup(self):
         """Clean up resources without racing initialization or reauthentication."""
-        async with self._connect_lock:
+        async with self._initialize_lock, self._connect_lock:
             had_open_session = bool(self._aiohttp_session and not self._aiohttp_session.closed)
             await self._discard_connection()
             if had_open_session:
@@ -814,6 +1074,9 @@ class ConnectionManager:
             self._last_connection_error = None
             self._clear_reconnect_block()
             self._auth_generation = 0
+            self._key_mode = False
+            self._key_retry_until = 0.0
+            self._integration_prefix = None
             logger.info("Unifi connection manager resources cleared.")
 
     async def close(self) -> None:

@@ -78,6 +78,10 @@ class NetworkManager:
 
     async def get_networks(self) -> List[Dict[str, Any]]:
         """Get list of networks (LAN/VLAN) for the current site."""
+        if getattr(self._connection, "has_api_key", False) is True:
+            await self._connection.initialize()
+            if self._connection.integration_inventory_only:
+                return await self._connection.public_inventory("networks")
         cache_key = f"{CACHE_PREFIX_NETWORKS}_{self._connection.site}"
         cached_data = self._connection.get_cached(cache_key)
         if cached_data is not None:
@@ -282,6 +286,10 @@ class NetworkManager:
 
     async def get_wlans(self) -> List[Wlan]:
         """Get list of wireless networks (WLANs) for the current site."""
+        if getattr(self._connection, "has_api_key", False) is True:
+            await self._connection.initialize()
+            if self._connection.integration_inventory_only:
+                return await self._connection.public_inventory("wlans")
         cache_key = f"{CACHE_PREFIX_WLANS}_{self._connection.site}"
         cached_data: Optional[List[Wlan]] = self._connection.get_cached(cache_key)
         if cached_data is not None:
@@ -306,6 +314,12 @@ class NetworkManager:
             UniFiNotFoundError: If the WLAN does not exist.
         """
         wlans = await self.get_wlans()
+        if getattr(self._connection, "integration_inventory_only", False) is True:
+            from unifi_core.exceptions import UniFiAuthError
+
+            raise UniFiAuthError(
+                "Full WLAN details and WLAN mutations require Network session authentication on this controller."
+            )
         wlan_obj: Optional[Wlan] = next(
             (w for w in wlans if isinstance(w.raw, dict) and w.raw.get("_id") == wlan_id),
             None,

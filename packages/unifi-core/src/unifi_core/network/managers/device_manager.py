@@ -29,8 +29,12 @@ class DeviceManager:
         """
         self._connection = connection_manager
 
-    async def get_devices(self) -> List[Device]:
+    async def get_devices(self) -> List[Device | dict[str, Any]]:
         """Get list of devices for the current site."""
+        if getattr(self._connection, "has_api_key", False) is True:
+            await self._connection.initialize()
+            if self._connection.integration_inventory_only:
+                return await self._connection.public_inventory("devices")
         if not await self._connection.ensure_connected() or not self._connection.controller:
             raise ConnectionError("Not connected to controller")
         cache_key = f"{CACHE_PREFIX_DEVICES}_{self._connection.site}"
@@ -55,6 +59,12 @@ class DeviceManager:
         """
         device_mac = normalize_mac(device_mac) or device_mac
         devices = await self.get_devices()
+        if getattr(self._connection, "integration_inventory_only", False) is True:
+            from unifi_core.exceptions import UniFiAuthError
+
+            raise UniFiAuthError(
+                "Full device details and device mutations require Network session authentication on this controller."
+            )
         device: Optional[Device] = next((d for d in devices if mac_equal(d.mac, device_mac)), None)
         if device is None:
             raise UniFiNotFoundError("device", device_mac)

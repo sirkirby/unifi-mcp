@@ -2,7 +2,8 @@
 
 import enum
 import logging
-from typing import Protocol
+from dataclasses import dataclass
+from typing import Any, Protocol
 
 import aiohttp
 
@@ -15,6 +16,7 @@ class AuthMethod(enum.Enum):
     LOCAL_ONLY = "local_only"
     API_KEY_ONLY = "api_key_only"
     EITHER = "either"
+    BOTH = "both"
 
     @classmethod
     def from_string(cls, value: str | None) -> "AuthMethod":
@@ -31,6 +33,29 @@ class LocalAuthProvider(Protocol):
     """Contract that each app fulfills for local auth."""
 
     async def get_session(self) -> aiohttp.ClientSession: ...
+
+
+@dataclass(frozen=True)
+class AuthenticationStatus:
+    """Credential configuration is not proof that a controller accepts it.
+
+    None means a path has not been verified. Products retain their own transports
+    and capability checks; this value performs no I/O and contains no secrets.
+    """
+
+    session_configured: bool = False
+    api_key_configured: bool = False
+    session_available: bool | None = None
+    api_key_available: bool | None = None
+
+    def configured(self, requirement: AuthMethod) -> bool:
+        if requirement is AuthMethod.LOCAL_ONLY:
+            return self.session_configured
+        if requirement is AuthMethod.API_KEY_ONLY:
+            return self.api_key_configured
+        if requirement is AuthMethod.BOTH:
+            return self.session_configured and self.api_key_configured
+        return self.session_configured or self.api_key_configured
 
 
 class UniFiAuth:
@@ -51,10 +76,10 @@ class UniFiAuth:
     def set_local_provider(self, provider: LocalAuthProvider) -> None:
         self._local_provider = provider
 
-    async def get_api_key_session(self) -> aiohttp.ClientSession:
+    async def get_api_key_session(self, **session_options: Any) -> aiohttp.ClientSession:
         if not self.has_api_key:
             raise UniFiAuthError("API key authentication not configured. Set UNIFI_API_KEY environment variable.")
-        return aiohttp.ClientSession(headers={"X-API-Key": self._api_key})
+        return aiohttp.ClientSession(headers={"X-API-Key": self._api_key}, **session_options)
 
     async def get_local_session(self) -> aiohttp.ClientSession:
         if not self.has_local:
@@ -62,6 +87,8 @@ class UniFiAuth:
         return await self._local_provider.get_session()
 
     async def get_session(self, method: AuthMethod) -> aiohttp.ClientSession:
+        if method == AuthMethod.BOTH:
+            raise UniFiAuthError("Both authentication paths are required; request each session explicitly.")
         if method == AuthMethod.API_KEY_ONLY:
             return await self.get_api_key_session()
         elif method == AuthMethod.LOCAL_ONLY:
