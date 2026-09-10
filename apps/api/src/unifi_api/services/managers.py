@@ -345,18 +345,14 @@ class ManagerFactory:
 
             cm: Any = NetCM(
                 host=host,
-                username=creds["username"],
-                password=creds["password"],
+                username=creds.get("username") or "",
+                password=creds.get("password") or "",
                 port=port,
                 site=site or "default",
                 verify_ssl=controller.verify_tls,
+                auth=UniFiAuth(api_key=creds.get("api_token") or None),
             )
-            # Stash a UniFiAuth carrying the controller's API token (if any)
-            # so managers that hit the official integration API (DPI today,
-            # potentially others later) can authenticate. None when the
-            # operator hasn't provided a token; consuming managers handle
-            # that case with a clear error rather than crashing.
-            cm.unifi_auth = UniFiAuth(api_key=creds.get("api_token") or None)
+            # Negotiate the same independent auth routes as the MCP runtime.
             return await self._require_initialized(cm, product)
         if product == "protect":
             from unifi_core.protect.managers.connection_manager import (

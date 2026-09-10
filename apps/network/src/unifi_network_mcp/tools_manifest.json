@@ -200,6 +200,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Adopt a pending device into the Unifi Network by MAC address",
       "name": "unifi_adopt_device",
       "permission_action": "create",
@@ -300,6 +301,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Archive (resolve/dismiss) a specific alarm by its ID",
       "name": "unifi_archive_alarm",
       "permission_action": "update",
@@ -400,6 +402,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Archive (resolve/dismiss) all active alarms",
       "name": "unifi_archive_all_alarms",
       "permission_action": "update",
@@ -493,6 +496,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Authorize a guest client to access the guest network by MAC address",
       "name": "unifi_authorize_guest",
       "permission_action": "update",
@@ -609,6 +613,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Execute multiple UniFi Network tools in parallel through the indirect execution wrapper. Returns job IDs; use unifi_batch_status to check progress.",
       "name": "unifi_batch",
       "schema": {
@@ -680,6 +685,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Check status of UniFi Network batch operations. Returns status, result (if done), or error (if failed).",
       "name": "unifi_batch_status",
       "schema": {
@@ -735,6 +741,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Block a client/device from the network by MAC address",
       "name": "unifi_block_client",
       "permission_action": "update",
@@ -835,6 +842,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Configure link aggregation (LACP/LAG) on a switch. Bonds consecutive ports for increased bandwidth. Most switches support up to 8 aggregate sessions. Ports must be sequential and same speed. The master port override must include: op_mode='aggregate', aggregate_members=[list of port indices], and lag_idx=<group number starting at 1>. Member ports (all except the master) must be REMOVED from the overrides array \u2014 the controller auto-manages them. Requires confirmation.",
       "name": "unifi_configure_port_aggregation",
       "permission_action": "update",
@@ -940,6 +948,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Configure port mirroring on a switch. Mirrors traffic from one port to a destination port for packet capture/analysis. Most switches support only 1 mirror session. Fetch current overrides with unifi_get_switch_ports, set op_mode='mirror' and mirror_port_idx on the source port, then send all overrides. Requires confirmation.",
       "name": "unifi_configure_port_mirror",
       "permission_action": "update",
@@ -1045,6 +1054,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new MAC ACL rule for Layer 2 access control within a VLAN. Uses the same field names as unifi_list_acl_rules output \u2014 source_macs, destination_macs, network_id, action, etc. Empty MAC list = match any device. Optionally apply a netmask (source_netmask/destination_netmask) to match a leading-bit prefix instead of exact MACs. Requires confirmation.",
       "name": "unifi_create_acl_rule",
       "permission_action": "create",
@@ -1180,6 +1190,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new AP group to control which APs broadcast which SSIDs. Requires confirmation.",
       "name": "unifi_create_ap_group",
       "permission_action": "create",
@@ -1280,6 +1291,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new backup of the controller configuration. Returns the backup metadata on success. Requires confirmation.",
       "name": "unifi_create_backup",
       "permission_action": "create",
@@ -1373,6 +1385,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new client group (network member group). Groups organize devices by MAC address for use in OON policies and firewall rules. Requires confirmation.",
       "name": "unifi_create_client_group",
       "permission_action": "create",
@@ -1478,6 +1491,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new static DNS record. Required: key (hostname, e.g. 'myhost.example.com'), value (IP or target hostname), record_type ('A'/'AAAA'/'CNAME'/'MX'/'TXT'/'SRV'). Optional: enabled (bool, default true), ttl (int, 0=default 300s), port (int, for SRV), priority (int, for MX/SRV), weight (int, for SRV). Requires confirmation.",
       "name": "unifi_create_dns_record",
       "permission_action": "create",
@@ -1578,6 +1592,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new Dynamic DNS provider entry. Required: host_name (hostname to keep updated, e.g. 'home.example.com'), service (provider: 'dyndns'/'noip'/'namecheap'/'cloudflare'/'custom'/...). Optional: interface ('wan' [default] or 'wan2'), login (username), x_password (password/token), server + custom_service (for the 'custom' service), options (list of strings). Requires confirmation.",
       "name": "unifi_create_dynamic_dns",
       "permission_action": "create",
@@ -1678,6 +1693,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new firewall group (address or port group). group_type must be 'address-group' (for IPs/CIDRs), 'ipv6-address-group', or 'port-group' (for port numbers/ranges). IMPORTANT: group_type cannot be changed after creation. group_members format: addresses use ['10.0.0.1', '10.0.0.0/24'], ports use ['80', '443', '8080-8090']. Requires confirmation.",
       "name": "unifi_create_firewall_group",
       "permission_action": "create",
@@ -1788,6 +1804,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a V2 zone-based firewall policy with schema validation. Required: name, action (ALLOW/BLOCK/REJECT), source (zone_id + matching_target), destination (same structure). For specific IP targeting: matching_target='IP', matching_target_type='SPECIFIC', ips=[...]. For network targeting: matching_target='NETWORK', matching_target_type='OBJECT', network_ids=[...]. For any in zone: matching_target='ANY'. For client targeting: matching_target='CLIENT', client_macs=[...]. For port targeting (same source/destination dict): port_matching_type='SPECIFIC', port='53,853' (a single string, not a 'ports' array) or port_matching_type='OBJECT', port_group_id=<port group>; set protocol to tcp, udp or tcp_udp. Use unifi_list_firewall_zones to discover zone_ids; unifi_list_networks for network_ids; unifi_list_firewall_groups for ip_group_id/port_group_id.",
       "name": "unifi_create_firewall_policy",
       "permission_action": "create",
@@ -1888,7 +1905,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Create a new firewall zone. Zones group networks for zone-based firewall policy targeting. Network assignment happens separately via firewall_zone_id on unifi_update_network. Requires a UniFi API key (UNIFI_API_KEY). Returns a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "auth_method": "both",
+      "description": "Create a new firewall zone. Zones group networks for zone-based firewall policy targeting. Network assignment happens separately via firewall_zone_id on unifi_update_network. Requires a UniFi API key (UNIFI_API_KEY) and session authentication. Returns a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
       "name": "unifi_create_firewall_zone",
       "permission_action": "create",
       "permission_category": "firewall",
@@ -1988,6 +2006,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new network (LAN/VLAN) with schema validation. Guest-purpose creation is rejected because the legacy API can silently place it in the Internal zone. Confirmed creates are read back and report exact persisted, dropped, and coerced fields; a failed result may still identify a created resource for cleanup. Requires confirmation.",
       "name": "unifi_create_network",
       "permission_action": "create",
@@ -2088,6 +2107,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new OON (Object-Oriented Network) policy for internet access scheduling, app blocking, bandwidth limiting, or VPN routing. IMPORTANT: qos and route must be full nested dicts (not the flattened qos_enabled/route_enabled booleans from list output). Use unifi_get_oon_policy_details on an existing policy as a template for the nested structure. Requires confirmation.",
       "name": "unifi_create_oon_policy",
       "permission_action": "create",
@@ -2214,6 +2234,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new port forwarding rule on your Unifi Network controller using schema validation. Requires confirmation.",
       "name": "unifi_create_port_forward",
       "permission_action": "create",
@@ -2314,6 +2335,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new port profile. forward values: 'native' (access port), 'all' (trunk), or 'customize' (selective trunk). Port State (Active/Disabled) is a separate controller setting that these port-profile tools do not currently expose. tagged_vlan_mgmt is the access-vs-trunk control ('auto'/'block_all'/'custom'): the controller rewrites forward to agree with it, so an access port needs forward='native' with tagged_vlan_mgmt='block_all'. Port Mode in the UI maps to stp_edge_state + stp_bpdu_guard_enabled + stp_uplink (Edge = 'enabled'/true/false). Requires confirmation.",
       "name": "unifi_create_port_profile",
       "permission_action": "create",
@@ -2491,6 +2513,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new QoS rule on the Unifi Network controller. Requires confirmation.",
       "name": "unifi_create_qos_rule",
       "permission_action": "create",
@@ -2591,6 +2614,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new static route for advanced routing configuration.\n\nSpecify destination network in CIDR format (e.g., \"10.0.0.0/24\") and\nnext-hop IP address (e.g., \"192.168.1.1\").",
       "name": "unifi_create_route",
       "permission_action": "create",
@@ -2709,6 +2733,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a port forward using a simplified schema. Returns a preview unless confirm=true.",
       "name": "unifi_create_simple_port_forward",
       "permission_action": "create",
@@ -2809,6 +2834,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a QoS rule using a simplified high-level schema. Returns a preview unless confirm=true.",
       "name": "unifi_create_simple_qos_rule",
       "permission_action": "create",
@@ -2909,6 +2935,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new user group (bandwidth profile) with optional speed limits.\n\nBandwidth limits are specified in Kbps. Use -1 for unlimited.\nUser groups can be assigned to clients to enforce bandwidth policies.",
       "name": "unifi_create_usergroup",
       "permission_action": "create",
@@ -3017,6 +3044,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create hotspot voucher(s) for guest network access.\n\nVouchers can have:\n- Time limits: How long the voucher is valid after activation\n- Usage quota: Single-use (1), multi-use (0), or n-times usable\n- Bandwidth limits: Upload/download speed caps in Kbps\n- Data caps: Total data transfer limit in MB",
       "name": "unifi_create_voucher",
       "permission_action": "create",
@@ -3138,6 +3166,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Create a new Wireless LAN (WLAN/SSID) with schema validation. Confirmed creates are read back and report exact persisted, dropped, and controller-coerced fields; a failed result may still identify a created WLAN for cleanup. Requires confirmation.",
       "name": "unifi_create_wlan",
       "permission_action": "create",
@@ -3238,6 +3267,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a MAC ACL rule. Requires confirmation. WARNING: Removing an ALLOW rule may block device communication. Removing a BLOCK rule may open access.",
       "name": "unifi_delete_acl_rule",
       "permission_action": "delete",
@@ -3338,6 +3368,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete an AP group by ID. Requires confirmation. WARNING: APs in this group may lose their SSID assignments.",
       "name": "unifi_delete_ap_group",
       "permission_action": "delete",
@@ -3438,6 +3469,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a backup file from the controller. Use unifi_list_backups to find filenames. Requires confirmation.",
       "name": "unifi_delete_backup",
       "permission_action": "delete",
@@ -3538,6 +3570,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a client group. Requires confirmation. WARNING: Deleting a group may affect OON policies and firewall rules that reference it.",
       "name": "unifi_delete_client_group",
       "permission_action": "delete",
@@ -3638,6 +3671,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a content filtering profile. Requires confirmation. WARNING: Deleting a profile removes DNS-based blocking for all targeted clients/networks.",
       "name": "unifi_delete_content_filter",
       "permission_action": "delete",
@@ -3738,6 +3772,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a static DNS record. Use unifi_list_dns_records to find record IDs. Requires confirmation.",
       "name": "unifi_delete_dns_record",
       "permission_action": "delete",
@@ -3838,6 +3873,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a Dynamic DNS entry. Use unifi_list_dynamic_dns to find entry IDs. Requires confirmation.",
       "name": "unifi_delete_dynamic_dns",
       "permission_action": "delete",
@@ -3938,6 +3974,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a firewall group. Requires confirmation. WARNING: Firewall policies referencing this group via ip_group_id or port_group_id may break.",
       "name": "unifi_delete_firewall_group",
       "permission_action": "delete",
@@ -4038,6 +4075,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a firewall policy by ID. Requires confirmation. WARNING: Removing an ALLOW rule may block traffic. Removing a BLOCK rule may open access.",
       "name": "unifi_delete_firewall_policy",
       "permission_action": "delete",
@@ -4138,7 +4176,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Delete a firewall zone by ID. System-defined zones cannot be deleted. Requires a UniFi API key (UNIFI_API_KEY). The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "auth_method": "both",
+      "description": "Delete a firewall zone by ID. System-defined zones cannot be deleted. Requires a UniFi API key (UNIFI_API_KEY) and session authentication. The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
       "name": "unifi_delete_firewall_zone",
       "permission_action": "delete",
       "permission_category": "firewall",
@@ -4238,6 +4277,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a LAN/VLAN network by ID. Requires confirmation. Only LAN-class networks (purpose corporate/guest/vlan-only) are deletable; WAN uplinks and VPN networkconf entries are refused. WARNING: dependent WLANs, clients, routes, and firewall policies may lose connectivity or become invalid.",
       "name": "unifi_delete_network",
       "permission_action": "delete",
@@ -4338,6 +4378,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete an OON policy. Requires confirmation. WARNING: This will remove the policy and all associated firewall rules that were auto-generated from it.",
       "name": "unifi_delete_oon_policy",
       "permission_action": "delete",
@@ -4438,6 +4479,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a port forwarding rule by ID. Requires confirmation. WARNING: This permanently removes the rule; external access to the forwarded service will stop. It cannot be undone - you must recreate the rule to restore it.",
       "name": "unifi_delete_port_forward",
       "permission_action": "delete",
@@ -4538,6 +4580,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a port profile. System profiles with attr_no_delete=true cannot be deleted. WARNING: Switch ports using this profile will revert to defaults. Requires confirmation.",
       "name": "unifi_delete_port_profile",
       "permission_action": "delete",
@@ -4638,6 +4681,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a VPN client configuration by ID. Requires confirmation.",
       "name": "unifi_delete_vpn_client",
       "permission_action": "delete",
@@ -4738,6 +4782,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete a WLAN/SSID by ID. Requires confirmation. WARNING: All devices using this SSID will be disconnected.",
       "name": "unifi_delete_wlan",
       "permission_action": "delete",
@@ -4838,6 +4883,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Execute a UniFi Network tool (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) by name for lazy/meta-only workflows.",
       "name": "unifi_execute",
       "schema": {
@@ -4874,6 +4920,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Force re-provision a device, pushing the current configuration from the controller to the device. Works on any UniFi device (switches, APs, gateways). Useful after manual changes or to resolve config drift. Requires confirmation.",
       "name": "unifi_force_provision_device",
       "permission_action": "update",
@@ -4974,6 +5021,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Force a client to reconnect to the network (kick) by MAC address",
       "name": "unifi_force_reconnect_client",
       "permission_action": "update",
@@ -5074,6 +5122,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Remove/forget a client from the controller's known client history by MAC address. This permanently deletes the client record including its name, notes, fixed IP settings, and historical stats. The client will reappear as a new unknown device if it reconnects.",
       "name": "unifi_forget_client",
       "permission_action": "update",
@@ -5172,6 +5221,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed configuration for a specific MAC ACL rule by ID. Returns the same field names as unifi_list_acl_rules.",
       "name": "unifi_get_acl_rule_details",
       "schema": {
@@ -5264,6 +5314,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get recent alerts from the Unifi Network controller",
       "name": "unifi_get_alerts",
       "schema": {
@@ -5357,6 +5408,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get network anomaly detection events.",
       "name": "unifi_get_anomalies",
       "schema": {
@@ -5446,6 +5498,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get details of a specific AP group by ID, including member APs and WLANs.",
       "name": "unifi_get_ap_group_details",
       "schema": {
@@ -5538,6 +5591,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get auto-backup settings (enabled state, schedule, retention count, cloud backup).",
       "name": "unifi_get_autobackup_settings",
       "schema": {
@@ -5622,6 +5676,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns client data for one client by MAC address. By default (summary=false) returns the full raw client object \u2014 all controller-reported fields, with the typed/normalized shape (ISO timestamps, derived status, null-safe name/hostname) layered on top of the merged live /stat/sta + /rest/user data. Set summary=true to trim to selected sections via include (basic, network, wireless, traffic, fingerprint, all). For a summary of all clients, use unifi_list_clients.",
       "name": "unifi_get_client_details",
       "schema": {
@@ -5722,6 +5777,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get per-client DPI traffic data by application or category. Note: requires Traffic Identification to be enabled on the controller, which is separate from Device Identification.",
       "name": "unifi_get_client_dpi_traffic",
       "schema": {
@@ -5818,6 +5874,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed configuration for a specific client group by ID.",
       "name": "unifi_get_client_group_details",
       "schema": {
@@ -5910,6 +5967,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get client session history. Note: this endpoint tracks hotspot/captive portal authorization sessions, not general WiFi connect/disconnect events. Returns empty without a guest portal configured. For WiFi roaming events, use the event log instead.",
       "name": "unifi_get_client_sessions",
       "schema": {
@@ -6007,6 +6065,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get statistics for a specific client/device",
       "name": "unifi_get_client_stats",
       "schema": {
@@ -6107,6 +6166,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed WiFi statistics for a single wireless client including signal, noise, satisfaction, tx/rx rates, retries, roam count, channel, radio, ESSID, and more.",
       "name": "unifi_get_client_wifi_details",
       "schema": {
@@ -6199,6 +6259,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed configuration for a specific content filtering profile by ID. Returns the full profile including categories, client MACs, network IDs, safe search settings, and allow/block lists.",
       "name": "unifi_get_content_filter_details",
       "schema": {
@@ -6291,6 +6352,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get the pre-aggregated site dashboard. Defaults to a compact summary that omits high-volume activity/history series; pass summary=false to preserve raw dashboard entries.",
       "name": "unifi_get_dashboard",
       "schema": {
@@ -6386,6 +6448,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns device data for one device by MAC address. By default (summary=false) returns the full raw device object \u2014 all controller-reported fields including radio tables, port tables, system stats, WAN info, firmware details. Set summary=true to trim to selected sections via include (basic, ports, radios, stats, uplink, lldp, all).\n\nPort fields (summary mode):\n- last_seen_mac: last MAC that sent traffic on port (may be wireless client traffic, not reliable)\n- lldp_neighbor: actual connected infrastructure device (from LLDP, reliable for switches/APs)\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,ports' (switches); summary=true,include='basic,radios' (APs).",
       "name": "unifi_get_device_details",
       "schema": {
@@ -6486,6 +6549,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get radio configuration and live statistics for a device with radios (AP, or UDM/gateway with built-in WiFi). Returns per-band config (channel, tx_power, channel width, min_rssi) and live stats (actual tx_power, channel utilization, client count, retries).",
       "name": "unifi_get_device_radio",
       "schema": {
@@ -6578,6 +6642,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns historical traffic time-series (rx/tx bytes, client counts) for one device by MAC or _id. Duration: hourly/daily/weekly/monthly. For APs, includes avg/max client counts and WiFi quality metrics. For current device status instead of stats, use unifi_get_device_details.",
       "name": "unifi_get_device_stats",
       "schema": {
@@ -6678,6 +6743,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get details for a specific DNS record by ID.",
       "name": "unifi_get_dns_record_details",
       "schema": {
@@ -6770,6 +6836,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get Deep Packet Inspection (DPI) statistics (applications and categories)",
       "name": "unifi_get_dpi_stats",
       "schema": {
@@ -6854,6 +6921,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get details for a specific Dynamic DNS entry by ID. The provider password/token is redacted.",
       "name": "unifi_get_dynamic_dns_entry_details",
       "schema": {
@@ -6946,6 +7014,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get recently observed exact event keys for filtering events.\n\nUse a returned key with the unifi_list_events event_type parameter. Keys are sampled from the 1,000 most recent events within the last 7 days, so event types absent from that sample are not included.",
       "name": "unifi_get_event_types",
       "schema": {
@@ -7030,6 +7099,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed configuration for a specific firewall group by ID.",
       "name": "unifi_get_firewall_group_details",
       "schema": {
@@ -7122,6 +7192,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed configuration for a specific firewall policy by ID.",
       "name": "unifi_get_firewall_policy_details",
       "schema": {
@@ -7214,7 +7285,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Get user-defined firewall policy ordering for a source/destination firewall zone pair. Returns policy IDs from the UniFi public integration API (UUIDs); these IDs are scoped to the ordering tool family \u2014 pass them ONLY to unifi_reorder_firewall_policies. They do NOT correspond to the policy IDs returned by unifi_list_firewall_policies or any other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY).",
+      "auth_method": "both",
+      "description": "Get user-defined firewall policy ordering for a source/destination firewall zone pair. Returns policy IDs from the UniFi public integration API (UUIDs); these IDs are scoped to the ordering tool family \u2014 pass them ONLY to unifi_reorder_firewall_policies. They do NOT correspond to the policy IDs returned by unifi_list_firewall_policies or any other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY) and session credentials. The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied.",
       "name": "unifi_get_firewall_policy_ordering",
       "schema": {
         "input": {
@@ -7311,6 +7383,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get the gateway (USG) settings: security (GeoIP filtering, SYN cookies, ICMP redirects, DNS verification), NAT/UPnP (UPnP, NAT-PMP, MSS clamp), connection-tracking ALG modules (FTP/GRE/H.323/PPTP/SIP/TFTP), hardware offloading, and conntrack timeouts. Read-only; use unifi_update_gateway_settings to change values.",
       "name": "unifi_get_gateway_settings",
       "schema": {
@@ -7395,6 +7468,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get gateway WAN/LAN performance history including bandwidth, CPU, and memory utilization.",
       "name": "unifi_get_gateway_stats",
       "schema": {
@@ -7488,6 +7562,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get IPS/IDS security events (intrusion detection/prevention alerts). Note: on newer UniFi OS / Network Application versions, IPS events may not populate this legacy endpoint. Check the controller's traffic flows for threat data instead.",
       "name": "unifi_get_ips_events",
       "schema": {
@@ -7581,6 +7656,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get LLDP neighbor discovery table for a switch. Shows what devices are connected to each port by their LLDP-advertised chassis ID and descriptions. Use unifi_list_devices to find switch MAC addresses.",
       "name": "unifi_get_lldp_neighbors",
       "schema": {
@@ -7673,6 +7749,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get the site's device management (mgmt) settings, read-only: device SSH state and user name, password-auth flag, authorised-key count, whether an SSH password, password hash, management key and API token are stored (presence only; values never returned), debug tools, auto-upgrade and its hour.",
       "name": "unifi_get_mgmt_settings",
       "schema": {
@@ -7757,6 +7834,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get details for a specific network by ID. By default (summary=false) returns the full raw network configuration. Set summary=true to trim to selected sections via include (basic, dhcp, ipv6, vpn, wan, all).\n\nmDNS field note: Whether mDNS is enabled for this network. Read-only and not authoritative: mDNS is configured site-wide on current UniFi Network versions, and this key only mirrors that site-wide scope \u2014 the mirror can go stale for hours, so treat the site-level setting as the source of truth (this server does not expose it). The controller accepts this field on the per-network write path but silently ignores it; unifi_update_network rejects it as read-only.\n\nExamples: <no args> (full raw); summary=true,include='basic' (minimal); summary=true,include='basic,dhcp' (adds DHCP server config); summary=true,include='all'.",
       "name": "unifi_get_network_details",
       "schema": {
@@ -7857,6 +7935,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns per-subsystem health status for WAN, LAN, WLAN, and VPN \u2014 each with status, number of gateways/switches/APs, and active user counts. Use to check WAN connectivity, see how many devices are online per subsystem, or detect degraded network segments. For controller-level info (version, uptime), use unifi_get_system_info.",
       "name": "unifi_get_network_health",
       "schema": {
@@ -7941,6 +8020,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get network statistics from the Unifi Network controller",
       "name": "unifi_get_network_stats",
       "schema": {
@@ -8034,6 +8114,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed configuration for a specific OON policy by ID. Returns the full policy object including secure, qos, route sections and targets.",
       "name": "unifi_get_oon_policy_details",
       "schema": {
@@ -8126,6 +8207,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Return per-outlet state for a UniFi Smart Power PDU (UP6 / USP-Strip). Combines the device's sensed outlet_table (live relay_state, cycle_enabled, has_relay, has_metering) with the controller's desired outlet_overrides so callers see both reported and intended state per outlet. Returns an error if the device is not a PDU.",
       "name": "unifi_get_pdu_outlets",
       "schema": {
@@ -8218,6 +8300,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get a specific port forwarding rule by ID from your Unifi Network controller.",
       "name": "unifi_get_port_forward",
       "schema": {
@@ -8310,6 +8393,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed configuration for a specific port profile by ID. Returns full profile including VLAN, isolation, PoE, STP, 802.1X, storm control, and QoS settings.",
       "name": "unifi_get_port_profile_details",
       "schema": {
@@ -8402,6 +8486,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get live port statistics for a switch. Returns per-port data including link speed, duplex, PoE draw (voltage/current/power), error counters, MAC table count, bytes per second, and enabled state. Use unifi_list_devices to find switch MAC addresses.",
       "name": "unifi_get_port_stats",
       "schema": {
@@ -8494,6 +8579,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get details for a specific QoS rule by ID.",
       "name": "unifi_get_qos_rule_details",
       "schema": {
@@ -8586,6 +8672,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get RF spectrum scan results for an access point. Returns per-channel interference levels (dBm), utilization (%), and BSS counts for each radio band. Trigger a scan first with unifi_trigger_rf_scan if no results are available. Scans take 5-10 minutes \u2014 if spectrum_scanning is true, the scan is still in progress.",
       "name": "unifi_get_rf_scan_results",
       "schema": {
@@ -8678,6 +8765,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed information about a specific static route by its ID",
       "name": "unifi_get_route_details",
       "schema": {
@@ -8770,6 +8858,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get actual DPI traffic data by application or category for the entire site. Shows real bandwidth usage per app/category, NOT restriction configuration. Use unifi_get_dpi_stats for restriction config instead. Note: requires Traffic Identification to be enabled on the controller, which is separate from Device Identification.",
       "name": "unifi_get_site_dpi_traffic",
       "schema": {
@@ -8859,6 +8948,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get current site settings: site identity, regulatory country code, timezone, connectivity monitor (enabled, uplink type) and NTP servers.",
       "name": "unifi_get_site_settings",
       "schema": {
@@ -8943,6 +9033,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get current SNMP settings for the site: v1/v2c enabled state and community string, SNMPv3 enabled state and user name. The two services are independent flags on one record. The community string and the v3 password are returned by the controller and always shown redacted by this tool.",
       "name": "unifi_get_snmp_settings",
       "schema": {
@@ -9027,6 +9118,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get historical speedtest results including download, upload (Mbps), and latency (ms).",
       "name": "unifi_get_speedtest_results",
       "schema": {
@@ -9116,6 +9208,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Check the status of a running speedtest on the gateway.",
       "name": "unifi_get_speedtest_status",
       "schema": {
@@ -9210,6 +9303,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Generate sanitized UniFi Network support evidence for user review. Summary is local/cache-only; live probes are bounded and explicitly allowlisted.",
       "name": "unifi_get_support_bundle",
       "schema": {
@@ -9259,6 +9353,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get switch hardware capabilities including max ACL rules, max VLANs, max aggregation sessions, max mirror sessions, STP config, and jumbo frame status. Use unifi_list_devices to find switch MAC addresses.",
       "name": "unifi_get_switch_capabilities",
       "schema": {
@@ -9351,6 +9446,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get port assignments for a specific switch. Shows which port profile is assigned to each port, port names, and PoE mode. Use unifi_list_devices to find switch MAC addresses.",
       "name": "unifi_get_switch_ports",
       "schema": {
@@ -9443,6 +9539,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns controller version, uptime, hostname, memory/CPU usage, and update availability. Use for basic 'is the controller healthy?' checks. For network subsystem status (WAN/LAN/WLAN), use unifi_get_network_health instead. For network subsystem details, use unifi_get_network_health.",
       "name": "unifi_get_system_info",
       "schema": {
@@ -9527,6 +9624,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get a list of top clients by usage (sorted by total bytes)",
       "name": "unifi_get_top_clients",
       "schema": {
@@ -9620,6 +9718,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Aggregated UniFi Traffic Flows summary (Insights > Flows 'Flow Summary'). Returns risk and region count breakdowns plus Top-Talker rankings for a preset period: top clients, top destinations, top applications (by bytes), top blocked clients, and top blocking policies. Risk bands are low/medium/high (the UI labels these Low/Suspicious/Concerning). Application entries include best-effort DPI application/category names resolved from the controller catalogue; names remain null when the catalogue is unavailable or has no matching entry. The returned application_id is the low V2 traffic-flow application ID, not the Integration API compound ID. These IDs are scoped to the V2 traffic-flow tool family \u2014 do not pass them to Integration API DPI tools. Read-only.",
       "name": "unifi_get_traffic_flow_statistics",
       "schema": {
@@ -9713,6 +9812,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Query historical UniFi Traffic Flows (Insights > Flows). Returns completed flow records \u2014 source/destination (incl. resolved destination domains), service, risk, action, bytes, and timestamps \u2014 for a time window, with server-side filtering and pagination. Supply both time_from and time_to (epoch ms) for an explicit window, or use within_hours. Read-only; one page per call (use page/total_page_count to paginate).",
       "name": "unifi_get_traffic_flows",
       "schema": {
@@ -9873,6 +9973,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed information for a specific traffic route by ID.",
       "name": "unifi_get_traffic_route_details",
       "schema": {
@@ -9965,6 +10066,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed information about a specific user group by its ID",
       "name": "unifi_get_usergroup_details",
       "schema": {
@@ -10057,6 +10159,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed information about a specific voucher by its ID",
       "name": "unifi_get_voucher_details",
       "schema": {
@@ -10149,6 +10252,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get details for a specific VPN client by ID.",
       "name": "unifi_get_vpn_client_details",
       "schema": {
@@ -10241,6 +10345,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get details for a specific VPN server by ID.",
       "name": "unifi_get_vpn_server_details",
       "schema": {
@@ -10333,6 +10438,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get details for a specific WLAN by ID.",
       "name": "unifi_get_wlan_details",
       "schema": {
@@ -10425,6 +10531,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List MAC ACL rules (Policy Engine) for Layer 2 access control. These rules control which devices can communicate at Layer 2 within a VLAN.",
       "name": "unifi_list_acl_rules",
       "schema": {
@@ -10514,6 +10621,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all active routes from the device routing table.\n\nIncludes both user-defined and system routes currently in effect.\nThis shows the actual routing table state on the gateway device.\n\nNote: This endpoint may not be available on all controller versions.\nReturns empty list if unavailable.",
       "name": "unifi_list_active_routes",
       "schema": {
@@ -10598,6 +10706,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns active alarms (security alerts, connectivity issues, firmware warnings). Each alarm includes type, message, timestamp, and related device/client MAC. By default shows only unresolved alarms; set include_archived=true for history. For general event logs (non-critical), use unifi_list_events.",
       "name": "unifi_list_alarms",
       "schema": {
@@ -10691,6 +10800,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all AP groups configured on the controller. AP groups control which access points broadcast which SSIDs. Returns group names, IDs, and associated AP/WLAN memberships.",
       "name": "unifi_list_ap_groups",
       "schema": {
@@ -10775,6 +10885,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List allowed RF channels for the site's regulatory domain. Returns per-band channel lists with DFS status and max power. Useful for planning channel assignments.",
       "name": "unifi_list_available_channels",
       "schema": {
@@ -10859,6 +10970,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List available backups on the controller. Returns filename, datetime, size, and version for each backup.",
       "name": "unifi_list_backups",
       "schema": {
@@ -10943,6 +11055,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Lists clients/devices currently blocked from the network. Each entry includes mac, hostname, name, last_seen, blocked. Pass an entry's mac to unifi_unblock_client as mac_address.",
       "name": "unifi_list_blocked_clients",
       "schema": {
@@ -11027,6 +11140,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List client groups (network member groups). Groups organize devices by MAC address for use in OON policies and firewall rules.",
       "name": "unifi_list_client_groups",
       "schema": {
@@ -11111,7 +11225,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, channel, radio. Filter by filter_type (all/wired/wireless), set include_offline=true for historical clients. Use search to filter by name/hostname/IP/MAC (case-insensitive). For a single client's full raw object, use unifi_get_client_details. For IP-to-client lookup, use unifi_lookup_by_ip. Pass an entry's mac to the client tools as mac_address (unifi_get_client_details, unifi_block_client, unifi_rename_client, ...), as client_mac (unifi_get_client_sessions, unifi_get_client_dpi_traffic, unifi_get_client_wifi_details) or as mac (unifi_recent_events); the parameter name differs per tool and each tool accepts only its own.",
+      "auth_method": "either",
+      "description": "Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, channel, radio. Filter by filter_type (all/wired/wireless), set include_offline=true for historical clients. Use search to filter by name/hostname/IP/MAC (case-insensitive). For a single client's full raw object, use unifi_get_client_details. For IP-to-client lookup, use unifi_lookup_by_ip. Pass an entry's mac to the client tools as mac_address (unifi_get_client_details, unifi_block_client, unifi_rename_client, ...), as client_mac (unifi_get_client_sessions, unifi_get_client_dpi_traffic, unifi_get_client_wifi_details) or as mac (unifi_recent_events); the parameter name differs per tool and each tool accepts only its own. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. include_offline=true requires session credentials for historical inventory. Full details and mutations can require session credentials.",
       "name": "unifi_list_clients",
       "schema": {
         "input": {
@@ -11216,6 +11331,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List content filtering profiles. Profiles control DNS-based category blocking, safe search enforcement (GOOGLE, YOUTUBE, BING), and domain allow/block lists. Profiles can target specific clients by MAC or entire networks by ID. NOTE: Profiles must be created in the UniFi UI \u2014 the API only supports list, update, and delete. Common categories: FAMILY, ADVERTISEMENT, MALWARE, PHISHING, BOTNETS, SPAM, SPYWARE, HACKING, ANONYMIZERS, DNS_TUNNELING, ADULT, ALCOHOL, DRUGS, GAMBLING, VIOLENCE, PORNOGRAPHY, NUDITY, WEAPONS, DATING, HATE_SPEECH_AND_EXTREMISM, CHILD_ABUSE, CIPA, EMPTY_DOMAINS, NEWLY_DISCOVERED_DOMAINS, PARKED_DOMAINS, UNREACHABLE_DOMAINS.",
       "name": "unifi_list_content_filters",
       "schema": {
@@ -11300,7 +11416,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). Note: device_type=ap correctly excludes USP Smart Power strips. Use search to filter by name, IP, or MAC (case-insensitive). Set include_details=true for additional per-device fields: by default (summary=true) compressed radio/port summaries; set summary=false to return the full raw tables (radio_table, port_table, network_table, system_stats, wan1/wan2). Pass an entry's MAC to the device tools as mac_address (unifi_get_device_details, unifi_reboot_device, unifi_rename_device, unifi_upgrade_device, ...), as device_mac (unifi_get_switch_ports, unifi_get_port_stats, unifi_set_switch_port_profile, unifi_locate_device, ...) or as ap_mac on the RF tools (unifi_trigger_rf_scan, unifi_get_rf_scan_results), which take the access point to scan from; the parameter name differs per tool and each tool accepts only its own.",
+      "auth_method": "either",
+      "description": "Returns adopted device inventory with MAC, name, model, IP, firmware version, uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), upgradable flag, connection_network, uplink topology, load_avg, mem_pct, and model_eol. Filter by device_type (ap/switch/gateway/pdu) and status (online/offline/pending/upgrading). Note: device_type=ap correctly excludes USP Smart Power strips. Use search to filter by name, IP, or MAC (case-insensitive). Set include_details=true for additional per-device fields: by default (summary=true) compressed radio/port summaries; set summary=false to return the full raw tables (radio_table, port_table, network_table, system_stats, wan1/wan2). Pass an entry's MAC to the device tools as mac_address (unifi_get_device_details, unifi_reboot_device, unifi_rename_device, unifi_upgrade_device, ...), as device_mac (unifi_get_switch_ports, unifi_get_port_stats, unifi_set_switch_port_profile, unifi_locate_device, ...) or as ap_mac on the RF tools (unifi_trigger_rf_scan, unifi_get_rf_scan_results), which take the access point to scan from; the parameter name differs per tool and each tool accepts only its own. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
       "name": "unifi_list_devices",
       "schema": {
         "input": {
@@ -11409,6 +11526,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all static DNS records configured on the controller. Returns hostname, value, record type, enabled state, and TTL for each record.",
       "name": "unifi_list_dns_records",
       "schema": {
@@ -11493,6 +11611,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "api_key_only",
       "description": "List DPI applications available for use in firewall rules and OON policies. Returns application names and their compound IDs. Supports name-based search. NOTE: The official API currently only returns categories 0-1 (IM, P2P). Streaming, social media, and other categories are not yet populated by Ubiquiti. For apps not found here, add via the UniFi UI and read back the IDs from the policy. Requires UNIFI_API_KEY or UNIFI_NETWORK_API_KEY.",
       "name": "unifi_list_dpi_applications",
       "schema": {
@@ -11590,6 +11709,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "api_key_only",
       "description": "List DPI application categories (e.g., 'Instant messengers', 'Peer-to-peer networks', 'Media streaming services'). Categories group applications for DPI classification. Requires UNIFI_API_KEY or UNIFI_NETWORK_API_KEY.",
       "name": "unifi_list_dpi_categories",
       "schema": {
@@ -11683,6 +11803,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all Dynamic DNS provider entries configured on the controller. Returns hostname, service/provider, WAN interface, login, and options for each entry. The provider password/token is redacted.",
       "name": "unifi_list_dynamic_dns",
       "schema": {
@@ -11767,6 +11888,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns timestamped event log entries (client connects/disconnects, device state changes, firmware updates, config changes) sorted newest-first. Filter by within_hours (default 24), an exact event_type key (use unifi_get_event_types for recently observed keys), categories (for example ['SECURITY']) and severities (for example ['HIGH', 'VERY_HIGH']) on v2 controllers, and paginate with start/limit. For critical alerts specifically, use unifi_list_alarms instead.",
       "name": "unifi_list_events",
       "schema": {
@@ -11876,6 +11998,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List firewall groups (address and port groups) used as reusable objects in firewall policies. Address groups contain IP addresses/CIDRs, port groups contain port numbers/ranges. These are referenced by firewall policies via ip_group_id and port_group_id fields.",
       "name": "unifi_list_firewall_groups",
       "schema": {
@@ -11960,6 +12083,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List firewall policies configured on the Unifi Network controller. Returns V2 zone-based targeting (zone_id, matching_target, matching_target_type, IPs, network IDs, client MACs, IP/port groups, port matching).\n\nFilters: search (name substring), action (ALLOW/BLOCK/REJECT), enabled_only, limit (default 50), include_predefined. By default (summary=true) returns a curated entry per policy (id, name, enabled, action, rule_index, description, protocol + source/destination targeting incl. port_matching_type/port/port_group_id when set). Set summary=false for the full fw_from_controller().model_dump() shape including schedule, logging, ip_version, connection_state_type, index, etc.",
       "name": "unifi_list_firewall_policies",
       "schema": {
@@ -12069,6 +12193,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List controller firewall zones (V2 API). Returned IDs are V2 controller ObjectIDs, not Integration API UUIDs; use them with the firewall-zone CRUD tools and network firewall_zone_id.",
       "name": "unifi_list_firewall_zones",
       "schema": {
@@ -12153,6 +12278,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List legacy pre-zone-based firewall rules from the UniFi controller. Use this on sites that still use the legacy firewall engine and return no V2 zone-based firewall policies. Returns ruleset, rule_index, action (lowercase accept/drop/reject), source and destination addresses, ports, networks and firewall groups, protocol, connection-state matching, logging, and enabled state.",
       "name": "unifi_list_legacy_firewall_rules",
       "schema": {
@@ -12237,7 +12363,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Returns configured networks (LAN, WAN, VLAN-only) with name, purpose, IP subnet, VLAN ID, DHCP settings, and enabled state. Use to understand network topology and VLAN layout. Filters: search (name/VLAN substring), purpose (corporate/guest/wan/vlan-only), limit (default 25), fields (comma-separated subset). For a single network's full config, use unifi_get_network_details. For wireless SSIDs, use unifi_list_wlans.",
+      "auth_method": "either",
+      "description": "Returns configured networks (LAN, WAN, VLAN-only) with name, purpose, IP subnet, VLAN ID, DHCP settings, and enabled state. Use to understand network topology and VLAN layout. Filters: search (name/VLAN substring), purpose (corporate/guest/wan/vlan-only), limit (default 25), fields (comma-separated subset). For a single network's full config, use unifi_get_network_details. For wireless SSIDs, use unifi_list_wlans. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
       "name": "unifi_list_networks",
       "schema": {
         "input": {
@@ -12338,6 +12465,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List OON (Object-Oriented Network) policies. These policies control internet access schedules (bedtime blackouts), application blocking (social media, streaming), QoS, and policy-based routing.",
       "name": "unifi_list_oon_policies",
       "schema": {
@@ -12422,6 +12550,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all port forwarding rules on your Unifi Network controller.",
       "name": "unifi_list_port_forwards",
       "schema": {
@@ -12506,6 +12635,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all port profiles (port configurations) on the controller. Port profiles define VLAN assignment, port isolation, PoE mode, STP, 802.1X, and storm control settings. Profiles are assigned to switch ports via port overrides.",
       "name": "unifi_list_port_profiles",
       "schema": {
@@ -12590,6 +12720,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all QoS rules on the Unifi Network controller for the current site.",
       "name": "unifi_list_qos_rules",
       "schema": {
@@ -12674,6 +12805,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List neighboring/rogue APs detected by your access points. Defaults to a compact 100-record page; pass summary=false for raw records in the selected page. Filters apply before pagination, limit is at most 500, and pagination metadata includes total_count, returned_count/count, limit, offset, next_offset, and has_more.",
       "name": "unifi_list_rogue_aps",
       "schema": {
@@ -12786,6 +12918,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all user-defined static routes for the current site.\n\nReturns route names, destination networks, next-hop addresses, and status.\nThese are manually configured routes, not dynamic or system routes.",
       "name": "unifi_list_routes",
       "schema": {
@@ -12870,6 +13003,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all traffic routes (policy-based routing rules) for the current site.\n\nTraffic routes define how specific traffic is routed based on domains,\nIP addresses, regions, or target devices. Often used for VPN routing.",
       "name": "unifi_list_traffic_routes",
       "schema": {
@@ -12954,6 +13088,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all user groups (bandwidth profiles) for the current site.\n\nUser groups define bandwidth limits that can be applied to clients.\nEach group specifies upload/download speed caps in Kbps.",
       "name": "unifi_list_usergroups",
       "schema": {
@@ -13038,6 +13173,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all hotspot vouchers for the current site.\n\nReturns voucher codes, expiration times, usage quotas, and bandwidth limits.\nVouchers are used for guest network access in captive portal setups.",
       "name": "unifi_list_vouchers",
       "schema": {
@@ -13122,6 +13258,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all configured VPN clients (Wireguard, OpenVPN, etc).",
       "name": "unifi_list_vpn_clients",
       "schema": {
@@ -13206,6 +13343,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc).",
       "name": "unifi_list_vpn_servers",
       "schema": {
@@ -13290,7 +13428,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\nFilters: search (SSID name substring), enabled_only, limit (default 25).",
+      "auth_method": "either",
+      "description": "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\nFilters: search (SSID name substring), enabled_only, limit (default 25). API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
       "name": "unifi_list_wlans",
       "schema": {
         "input": {
@@ -13389,6 +13528,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Load UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) for direct MCP access. Advanced lazy-mode extension that emits notifications/tools/list_changed when tools are loaded.",
       "name": "unifi_load_tools",
       "schema": {
@@ -13437,6 +13577,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Toggle device locate mode (LED blinking) to physically identify a device. Works on any UniFi device (switches, APs, gateways). Requires confirmation.",
       "name": "unifi_locate_device",
       "permission_action": "update",
@@ -13540,6 +13681,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Quick IP-to-client lookup. Returns essential fields (hostname, name, mac, is_online, last_seen) to minimize token usage.",
       "name": "unifi_lookup_by_ip",
       "schema": {
@@ -13634,6 +13776,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Power cycle PoE on a specific switch port. This briefly cuts power to the connected PoE device, causing it to reboot. Requires confirmation.",
       "name": "unifi_power_cycle_port",
       "permission_action": "update",
@@ -13739,6 +13882,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Reboot a specific device by MAC address",
       "name": "unifi_reboot_device",
       "permission_action": "update",
@@ -13837,6 +13981,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by exact event_type key, client/device mac, and limit. Use this for real-time monitoring; use unifi_list_events for historical queries. The response reports whether the listener is running (listening) and attached to the controller (attached, with last_error when not), the buffer occupancy (buffer_size) and its capacity (buffer_capacity); an empty buffer with attached=false is not 'no events'.",
       "name": "unifi_recent_events",
       "schema": {
@@ -13936,6 +14081,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Rename a client/device in the Unifi Network controller by MAC address",
       "name": "unifi_rename_client",
       "permission_action": "update",
@@ -14041,6 +14187,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Rename a device in the Unifi Network controller by MAC address",
       "name": "unifi_rename_device",
       "permission_action": "update",
@@ -14146,7 +14293,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Reorder user-defined firewall policies for a source/destination firewall zone pair. Pass the complete orderedFirewallPolicyIds object obtained from unifi_get_firewall_policy_ordering (beforeSystemDefined + afterSystemDefined arrays). These IDs are integration-API UUIDs scoped to the ordering tool family \u2014 they are NOT the policy IDs returned by unifi_list_firewall_policies. Requires confirmation and a UniFi API key (UNIFI_API_KEY).",
+      "auth_method": "both",
+      "description": "Reorder user-defined firewall policies for a source/destination firewall zone pair. Pass the complete orderedFirewallPolicyIds object obtained from unifi_get_firewall_policy_ordering (beforeSystemDefined + afterSystemDefined arrays). These IDs are integration-API UUIDs scoped to the ordering tool family \u2014 they are NOT the policy IDs returned by unifi_list_firewall_policies. Requires confirmation and a UniFi API key (UNIFI_API_KEY) and session credentials. The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied.",
       "name": "unifi_reorder_firewall_policies",
       "permission_action": "update",
       "permission_category": "firewall_policies",
@@ -14256,6 +14404,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Revoke/delete a hotspot voucher by its ID, preventing further use",
       "name": "unifi_revoke_voucher",
       "permission_action": "delete",
@@ -14356,6 +14505,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Set fixed IP address and/or local DNS record for a client device.\n\nAllows configuring:\n- Fixed IP: Assign a static IP address to a client (DHCP reservation)\n- Local DNS: Create a local DNS hostname for the client (UniFi Network 7.2+)\n\nEither setting can be enabled/disabled independently.",
       "name": "unifi_set_client_ip_settings",
       "permission_action": "update",
@@ -14472,6 +14622,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Set the LED override state on a specific device. Use 'on' to force LEDs on, 'off' to force them off, or 'default' to use site-wide setting. Requires confirmation.",
       "name": "unifi_set_device_led",
       "permission_action": "update",
@@ -14577,6 +14728,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Enable or disable jumbo frames on a switch. Note: the UniFi controller requires jumbo frames to be enabled via the UI at least once before the API can toggle it. If you get JumboFrameChangeNotAllowed, enable it in the UI first. Requires confirmation.",
       "name": "unifi_set_jumbo_frames",
       "permission_action": "update",
@@ -14682,6 +14834,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Set per-outlet relay state (on/off) and optionally cycle_enabled on a UniFi Smart Power PDU (UP6 / USP-Strip). The controller stores per-outlet desired state in the outlet_overrides array on the device document; this tool reads the existing array, replaces only the entry whose index matches outlet_index, and PUTs the full array back -- preserving all sibling outlets' overrides (name, relay_state, cycle_enabled) verbatim. If no override exists for the target outlet yet, one is created from the outlet's current sensed state. Use unifi_get_pdu_outlets first to inspect current state.",
       "name": "unifi_set_outlet_state",
       "permission_action": "update",
@@ -14796,6 +14949,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Toggle all device LEDs site-wide on or off. This sets the global LED policy for the site \u2014 individual device overrides take precedence. Requires confirmation.",
       "name": "unifi_set_site_leds",
       "permission_action": "update",
@@ -14896,6 +15050,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Assign a port profile to a specific switch port. IMPORTANT: This sends ALL port overrides as a full replacement. Fetch current overrides with unifi_get_switch_ports first, modify the target port, and send the complete array. Missing ports revert to defaults. Requires confirmation.",
       "name": "unifi_set_switch_port_profile",
       "permission_action": "update",
@@ -14999,6 +15154,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns a handle describing how to subscribe to live network events. Provides the MCP resource URI for the event stream and pointers to the buffered-event tool, plus whether the websocket listener is running (listening) and attached (attached, last_error) and the buffer occupancy and capacity. Use this to set up continuous event monitoring.",
       "name": "unifi_subscribe_events",
       "schema": {
@@ -15085,6 +15241,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Enable or disable a device without unadopting it. A disabled device remains adopted but stops passing traffic. Requires confirmation.",
       "name": "unifi_toggle_device",
       "permission_action": "update",
@@ -15190,6 +15347,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Enable or disable a specific firewall policy by ID.",
       "name": "unifi_toggle_firewall_policy",
       "permission_action": "update",
@@ -15290,6 +15448,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Toggle an OON policy on or off. Fetches the current state, flips the enabled flag, and sends the update. Requires confirmation.",
       "name": "unifi_toggle_oon_policy",
       "permission_action": "update",
@@ -15390,6 +15549,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Toggle a port forwarding rule on or off on your Unifi Network controller.",
       "name": "unifi_toggle_port_forward",
       "permission_action": "update",
@@ -15490,6 +15650,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Enable or disable a specific QoS rule by ID. Requires confirmation.",
       "name": "unifi_toggle_qos_rule_enabled",
       "permission_action": "update",
@@ -15590,6 +15751,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Toggle a traffic route on/off by ID.",
       "name": "unifi_toggle_traffic_route",
       "permission_action": "update",
@@ -15690,6 +15852,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Toggle a WLAN/SSID on or off. Requires confirmation.",
       "name": "unifi_toggle_wlan",
       "permission_action": "update",
@@ -15790,6 +15953,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Discover UniFi Network tools (WiFi networks, clients, devices, switches, APs, firewall, VPN, routing, and statistics) through the compact tool index. The catalog is manifest-backed in lazy mode; in meta-only mode it starts with registered meta-tools and expands after domain modules execute. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "unifi_tool_index",
       "schema": {
@@ -15845,6 +16009,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Trigger an RF spectrum scan on an access point. Requires confirmation. The scan takes 5-10 minutes to complete. Some APs have a dedicated scanning radio and scan without going offline; others briefly go off-channel which may cause momentary client disconnections. Poll unifi_get_rf_scan_results periodically \u2014 results appear only after the scan finishes. Returns per-channel interference levels and utilization across all bands.",
       "name": "unifi_trigger_rf_scan",
       "permission_action": "update",
@@ -15945,6 +16110,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Trigger a speedtest on the gateway device. Returns immediately; use unifi_get_speedtest_status to poll for results.",
       "name": "unifi_trigger_speedtest",
       "permission_action": "update",
@@ -16045,6 +16211,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Revoke authorization for a guest client by MAC address",
       "name": "unifi_unauthorize_guest",
       "permission_action": "update",
@@ -16145,6 +16312,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Unblock a previously blocked client/device by MAC address",
       "name": "unifi_unblock_client",
       "permission_action": "update",
@@ -16245,6 +16413,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing MAC ACL rule. Pass only the fields you want to change \u2014 current values are automatically preserved. Uses the same field names as unifi_list_acl_rules output: name, acl_index, action, enabled, network_id, source_macs, destination_macs, source_netmask, destination_netmask. To remove a netmask (widen a prefix rule back to an exact match), set clear_source_netmask / clear_destination_netmask = true (passing source_netmask=null is a no-op, not a clear). Requires confirmation.",
       "name": "unifi_update_acl_rule",
       "permission_action": "update",
@@ -16358,6 +16527,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing AP group's configuration. Pass only the fields you want to change \u2014 current values are automatically preserved. Requires confirmation.",
       "name": "unifi_update_ap_group",
       "permission_action": "update",
@@ -16463,6 +16633,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update auto-backup settings. Pass only the fields you want to change \u2014 current values are automatically preserved. Fields: autobackup_enabled (bool), autobackup_cron_expr (str, cron format), autobackup_days (int, retention days), autobackup_max_files (int, max backup files to keep), autobackup_timezone (str), autobackup_cloud_enabled (bool). Requires confirmation.",
       "name": "unifi_update_autobackup_settings",
       "permission_action": "update",
@@ -16563,6 +16734,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing client group. Pass only the fields you want to change \u2014 current values are automatically preserved. Requires confirmation.",
       "name": "unifi_update_client_group",
       "permission_action": "update",
@@ -16668,6 +16840,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing content filtering profile. Pass only the fields you want to change \u2014 current values are automatically preserved. client_macs and network_ids are additive \u2014 both can be set and the filter applies to all. Safe search valid values: GOOGLE, YOUTUBE, BING (only these three are supported). Requires confirmation.",
       "name": "unifi_update_content_filter",
       "permission_action": "update",
@@ -16773,6 +16946,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update radio settings for a specific band on a device with radios (AP, or UDM/gateway with built-in WiFi). Supports tx_power_mode, tx_power (custom dBm), channel, ht (channel width), min_rssi_enabled, min_rssi, assisted_roaming_enabled (802.11k/v), antenna_gain (dBi), vwire_enabled, sens_level_enabled, sens_level. Use unifi_get_device_radio first to see current settings.",
       "name": "unifi_update_device_radio",
       "permission_action": "update",
@@ -16922,6 +17096,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing DNS record. Pass only the fields you want to change \u2014 current values are automatically preserved. Fields: key (str), value (str), record_type ('A'/'AAAA'/'CNAME'/'MX'/'TXT'/'SRV'), enabled (bool), ttl (int), port (int), priority (int), weight (int). Requires confirmation.",
       "name": "unifi_update_dns_record",
       "permission_action": "update",
@@ -17027,6 +17202,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing Dynamic DNS entry. Pass only the fields you want to change \u2014 current values are automatically preserved. Fields: host_name (str), service (str), server (str), login (str), x_password (str), interface ('wan'/'wan2'), custom_service (str), options (list of strings). Requires confirmation.",
       "name": "unifi_update_dynamic_dns",
       "permission_action": "update",
@@ -17132,6 +17308,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing firewall group. Requires the full group object (PUT replaces entire resource). group_type cannot be changed. Requires confirmation.",
       "name": "unifi_update_firewall_group",
       "permission_action": "update",
@@ -17237,6 +17414,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update specific fields of an existing V2 zone-based firewall policy by ID. Accepts: name, action (ALLOW/BLOCK/REJECT), enabled, source, destination, protocol, ip_version, logging, connection_state_type, connection_states, schedule. source/destination are deep-merged with the current policy and accept the same targeting and port fields as create (matching_target, port_matching_type, port, port_group_id, client_macs); the merged result is checked for port shape and selector activation, while the zone/IP/NETWORK completeness rules are checked on create only. To change policy order use unifi_reorder_firewall_policies; index is rejected here.",
       "name": "unifi_update_firewall_policy",
       "permission_action": "update",
@@ -17342,7 +17520,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "description": "Rename an existing firewall zone by ID. Only the name is mutable; network membership is managed via firewall_zone_id on the network. Requires a UniFi API key (UNIFI_API_KEY). The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "auth_method": "both",
+      "description": "Rename an existing firewall zone by ID. Only the name is mutable; network membership is managed via firewall_zone_id on the network. Requires a UniFi API key (UNIFI_API_KEY) and session authentication. The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
       "name": "unifi_update_firewall_zone",
       "permission_action": "update",
       "permission_category": "firewall",
@@ -17447,6 +17626,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update gateway (USG) settings. Pass only the fields you want to change; current values (including nested sub-objects) are automatically preserved via deep-merge. Security: geo_ip_filtering_enabled (bool), geo_ip_filtering_block ('block'/'allow'), geo_ip_filtering_countries (CSV ISO codes), geo_ip_filtering_traffic_direction ('both'/'ingress'/'egress'), syn_cookies (bool), broadcast_ping (bool), receive_redirects (bool), send_redirects (bool), dns_verification (object). NAT/UPnP: upnp_enabled (bool), upnp_nat_pmp_enabled (bool), upnp_secure_mode (bool), upnp_wan_interface (str), mss_clamp ('auto'/'custom'/'disabled'). ALG modules: ftp_module, gre_module, h323_module, pptp_module, sip_module, tftp_module (bool). Offloading: offload_accounting (bool), offload_l2_blocking (bool), offload_sch (bool). Conntrack timeouts (int seconds): icmp_timeout, other_timeout, udp_stream_timeout, udp_other_timeout, tcp_established_timeout, tcp_close_timeout, tcp_close_wait_timeout, tcp_fin_wait_timeout, tcp_last_ack_timeout, tcp_syn_recv_timeout, tcp_syn_sent_timeout, tcp_time_wait_timeout, timeout_setting_preference ('auto'/'manual'). Misc: unbind_wan_monitors (bool), echo_server (str, connectivity-monitor echo server for WAN failover). WARNING: changing security/NAT settings (UPnP/NAT-PMP, GeoIP filtering, DNS verification, SYN cookies, broadcast-ping, ICMP redirects, MSS clamp, offloading, or conntrack timeouts) affects gateway-wide security/NAT/reachability. Requires confirmation.",
       "name": "unifi_update_gateway_settings",
       "permission_action": "update",
@@ -17547,6 +17727,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update specific fields of an existing network (LAN/VLAN). Pass only the fields you want to change \u2014 current values are automatically preserved. Every network field below is a key inside the update_data dict, not a top-level argument, e.g. update_data={'dhcpd_enabled': false}. Unknown keys are rejected. Basic: name, purpose ('corporate'/'vlan-only'), vlan_enabled (bool), vlan (str), ip_subnet (CIDR), enabled (bool), network_isolation_enabled (bool, corporate only), internet_access_enabled (bool), upnp_lan_enabled (bool), firewall_zone_id (str, V2 firewall-zone ID \u2014 assigns the network to a zone; these IDs are scoped to the V2 firewall/network tool family, so do not pass Integration API firewall-zone UUIDs). DHCP: dhcpd_enabled (bool), dhcpd_start (IP), dhcpd_stop (IP), dhcpd_leasetime (int seconds), auto_scale_enabled (bool), dhcpd_gateway (IP), dhcpd_gateway_enabled (bool), dhcp_relay_enabled (bool), dhcpd_conflict_checking (bool), dhcpguard_enabled (bool, requires dhcpd_ip_1), dhcpd_ip_1 (IP, trusted DHCP server for guard), dhcpd_boot_enabled (bool), dhcpd_boot_server (IP), dhcpd_boot_filename (str), dhcpd_tftp_server (str, DHCP opt 150). DHCP options: dhcpd_dns_1 (IP), dhcpd_dns_2 (IP), dhcpd_dns_enabled (bool), dhcpd_ntp_1 (IPv4), dhcpd_ntp_2 (IPv4), dhcpd_ntp_enabled (bool), dhcpd_wins_1 (IP), dhcpd_wins_2 (IP), dhcpd_wins_enabled (bool), dhcpd_unifi_controller (IP). DNS: domain_name (str). Multicast: igmp_snooping (bool), igmp_querier_switches (list of {switch_mac, querier_address}), igmp_flood_unknown_multicast (bool). WAN (gateway uplink, purpose='wan' networks): wan_type ('dhcp'/'static'/'pppoe'/'disabled'), wan_networkgroup ('WAN'/'WAN2'), wan_dns_preference ('auto'/'manual'), wan_load_balance_type ('failover-only'/'weighted'), wan_load_balance_weight (int 0-100), wan_failover_priority (int), wan_sla (str, controller WAN-SLA configuration ID), report_wan_event (bool), wan_smartq_enabled (bool), wan_vlan_enabled (bool), igmp_proxy_upstream (bool), igmp_proxy_for (JSON: 'none' or list of network refs), mac_override_enabled (bool), wan_ip_aliases (list). WAN IPv6 (dual-stack; does not affect IPv4 internet): ipv6_enabled (bool), wan_type_v6 (str), ipv6_setting_preference ('auto'/'manual'), ipv6_wan_delegation_type ('none'/'pd'/'single_network'/'static'), wan_dhcpv6_pd_size (int), wan_dhcpv6_pd_size_auto (bool), wan_ipv6_dns_preference ('auto'/'manual'), wan_ipv6_dns1 (str), wan_ipv6_dns2 (str). LAN IPv6 (per-network): ipv6_interface_type ('none'/'static'/'pd'), ipv6_aliases (list of CIDR strings, 'Additional IPs' \u2014 replaces the whole list), ipv6_ra_enabled (bool), ipv6_ra_priority ('high'/'medium'/'low'), ipv6_ra_preferred_lifetime (int seconds), ipv6_client_address_assignment ('slaac'/'dhcpv6'), ipv6_pd_interface (str), ipv6_pd_prefixid (hex str), ipv6_pd_auto_prefixid_enabled (bool), ipv6_pd_start (str), ipv6_pd_stop (str), dhcpdv6_enabled (bool), dhcpdv6_allow_slaac (bool), dhcpdv6_dns_auto (bool), dhcpdv6_leasetime (int seconds), dhcpdv6_start (str), dhcpdv6_stop (str). WARNING: changing wan_type/wan_networkgroup/DNS/VLAN/failover/load-balance/mac-override on a WAN can interrupt internet connectivity. WARNING: setting ipv6_interface_type='static' on a delegated ('pd') network releases its delegated prefix. Confirmed writes are read back exactly; responses list persisted, unchanged, dropped, and controller-coerced fields. A failed result may represent a partial write and is not a rollback. Requires confirmation.",
       "name": "unifi_update_network",
       "permission_action": "update",
@@ -17652,6 +17833,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing OON policy. Pass only the fields you want to change \u2014 current values are automatically preserved. Requires confirmation.",
       "name": "unifi_update_oon_policy",
       "permission_action": "update",
@@ -17757,6 +17939,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update specific fields of an existing port forwarding rule using schema validation. Pass only the fields you want to change \u2014 current values are automatically preserved. Requires confirmation.",
       "name": "unifi_update_port_forward",
       "permission_action": "update",
@@ -17862,6 +18045,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing port profile. Pass only the fields you want to change \u2014 current values are automatically preserved. Note: system profiles with attr_no_edit=true cannot be modified. Requires confirmation.",
       "name": "unifi_update_port_profile",
       "permission_action": "update",
@@ -17967,6 +18151,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update specific fields of an existing QoS rule. Requires confirmation.",
       "name": "unifi_update_qos_rule",
       "permission_action": "update",
@@ -18072,6 +18257,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing static route's properties.\n\nCan modify name, destination network, next-hop, distance, or enabled status.",
       "name": "unifi_update_route",
       "permission_action": "update",
@@ -18192,6 +18378,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update SNMP settings for the site: v1/v2c (enabled, community) and SNMPv3 (enabled_v3, username, x_password). The two services are independent; disabling one leaves the other listening. Pass only the fields you want to change \u2014 current values are automatically preserved. Requires confirm=true to apply changes.",
       "name": "unifi_update_snmp_settings",
       "permission_action": "update",
@@ -18305,6 +18492,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update STP (Spanning Tree Protocol) configuration for a switch. stp_priority valid values: 4096, 8192, 12288, ..., 61440 (default: 32768). stp_version: 'stp' or 'rstp' (default). Requires confirmation.",
       "name": "unifi_update_switch_stp",
       "permission_action": "update",
@@ -18413,6 +18601,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update a traffic route's settings.\n\nToggle fields:\n- enabled: Enable or disable the traffic route\n- kill_switch_enabled: Enable/disable the kill switch (blocks traffic if VPN is down)\n\nRouting-match fields (each REPLACES the whole existing list/value \u2014 read the route\nfirst with unifi_get_traffic_route_details, then send the full desired value):\n- target_devices: Which clients/networks the route applies to. List of objects, e.g.\n  [{\"type\": \"CLIENT\", \"client_mac\": \"aa:bb:cc:dd:ee:ff\"}],\n  [{\"type\": \"NETWORK\", \"network_id\": \"<id>\"}], or [{\"type\": \"ALL_CLIENTS\"}].\n- domains: List of domain objects, e.g. [{\"domain\": \"example.com\", \"ports\": [], \"port_ranges\": []}].\n- ip_addresses: List of IP/subnet objects (for matching_target=IP routes).\n- ip_ranges: List of IP-range objects.\n- regions: List of ISO country/region codes, e.g. [\"US\", \"CA\"].\n- next_hop: Next-hop IP address (string) for static next-hop routes.\n\nAt least one field must be provided.",
       "name": "unifi_update_traffic_route",
       "permission_action": "update",
@@ -18545,6 +18734,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update an existing user group's name or bandwidth limits.\n\nUse -1 for unlimited bandwidth. Changes affect all clients assigned to this group.",
       "name": "unifi_update_usergroup",
       "permission_action": "update",
@@ -18657,6 +18847,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Enable or disable a specific VPN client by ID. Requires confirmation.",
       "name": "unifi_update_vpn_client_state",
       "permission_action": "update",
@@ -18762,6 +18953,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Enable or disable a specific VPN server by ID. Requires confirmation.",
       "name": "unifi_update_vpn_server_state",
       "permission_action": "update",
@@ -18867,6 +19059,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update specific fields of an existing WLAN (SSID). Pass only the fields you want to change \u2014 current values are automatically preserved. Every WLAN field below is a key inside the update_data dict, not a top-level argument, e.g. update_data={'enabled': false, 'hide_ssid': true}. Unknown keys are rejected. Basic: name (str), security ('open'/'wpapsk'/'wpa2-psk'), x_passphrase (str), enabled (bool), hide_ssid (bool), guest_policy (controller-dependent bool; may be reported as dropped), usergroup_id (str), networkconf_id (str). Security: wpa3_support (bool), wpa3_transition (bool), pmf_mode ('disabled'/'optional'/'required'), fast_roaming_enabled (bool), group_rekey (int seconds, 0=disabled). Roaming: rrm_enabled (bool, 802.11k neighbour reports), roaming_assistant_na_enabled (bool), roaming_assistant_na_rssi (int dBm, 5GHz kick threshold e.g. -77), roaming_assistant_6e_enabled (bool), roaming_assistant_6e_rssi (int dBm, 6GHz kick threshold e.g. -88). Access control: mac_filter_enabled (bool), mac_filter_policy ('allow'/'deny'), mac_filter_list (list of MAC strings), l2_isolation (bool). Radio: wlan_band ('both'/'2g'/'5g'), multicast_enhance_enabled (bool), dtim_mode ('default'/'custom'), dtim_na (int 1-255), dtim_ng (int 1-255), minrate_setting_preference ('auto'/'manual'), minrate_ng_enabled (bool), minrate_ng_data_rate_kbps (int), minrate_na_enabled (bool), minrate_na_data_rate_kbps (int). Scheduling: schedule_enabled (bool), schedule_reversed (bool), schedule (list[str], e.g. 'mon-fri|0100-0700'), schedule_with_duration (list of objects with duration_minutes, optional name, start_days_of_week, start_hour, start_minute). Other: uapsd_enabled (bool), proxy_arp (bool), iapp_enabled (bool). Confirmed writes are read back exactly; responses list persisted, unchanged, dropped, and controller-coerced fields. A failed result may represent a partial write and is not a rollback. Requires confirmation.",
       "name": "unifi_update_wlan",
       "permission_action": "update",
@@ -18972,6 +19165,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Initiate a firmware upgrade for a device by MAC address (uses cached firmware by default)",
       "name": "unifi_upgrade_device",
       "permission_action": "update",

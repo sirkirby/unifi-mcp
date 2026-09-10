@@ -13,9 +13,9 @@ The Network server supports server-specific environment variables with the `UNIF
 | Server-specific variable | Shared fallback | Required | Default | Description |
 |--------------------------|-----------------|----------|---------|-------------|
 | `UNIFI_NETWORK_HOST` | `UNIFI_HOST` | Yes | -- | Controller IP or hostname |
-| `UNIFI_NETWORK_USERNAME` | `UNIFI_USERNAME` | Yes | -- | Local admin username |
-| `UNIFI_NETWORK_PASSWORD` | `UNIFI_PASSWORD` | Yes | -- | Admin password |
-| `UNIFI_NETWORK_API_KEY` | `UNIFI_API_KEY` | No | `""` | UniFi API key (experimental — read-only, subset of tools; username/password still required) |
+| `UNIFI_NETWORK_USERNAME` | `UNIFI_USERNAME` | For session tools | `""` | Local admin username; omit for API-key-only inventory |
+| `UNIFI_NETWORK_PASSWORD` | `UNIFI_PASSWORD` | For session tools | `""` | Admin password; omit for API-key-only inventory |
+| `UNIFI_NETWORK_API_KEY` | `UNIFI_API_KEY` | No | `""` | Inventory reads and explicit Integration API tools; legacy mutations/full details may still require username/password. Public fallback has limited fields and separate UUIDs; see the README authentication section. |
 | `UNIFI_NETWORK_PORT` | `UNIFI_PORT` | No | `443` | Controller HTTPS port |
 | `UNIFI_NETWORK_SITE` | `UNIFI_SITE` | No | `default` | UniFi site name |
 | `UNIFI_NETWORK_VERIFY_SSL` | `UNIFI_VERIFY_SSL` | No | `false` | SSL certificate verification |

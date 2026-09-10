@@ -89,6 +89,7 @@ async def protect_list_viewers() -> Dict[str, Any]:
 
 @server.tool(
     name="protect_update_viewer",
+    auth="both",
     description=(
         "Updates a UniFi Protect viewer name or liveview assignment. Get viewer_id values from "
         "protect_list_viewers and liveview_id values from protect_list_liveviews. These IDs are scoped "

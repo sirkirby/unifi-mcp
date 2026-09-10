@@ -162,6 +162,7 @@ async def protect_list_sensors() -> Dict[str, Any]:
 
 @server.tool(
     name="protect_update_sensor_settings",
+    auth="both",
     description=(
         "Updates UniFi Protect sensor settings. Get sensor_id values from protect_list_sensors. "
         "Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. "

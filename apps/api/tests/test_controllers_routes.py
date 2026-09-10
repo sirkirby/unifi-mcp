@@ -20,6 +20,59 @@ def _cfg(tmp_path: Path) -> ApiConfig:
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "credentials,products",
+    [
+        ({}, ["network"]),
+        ({"username": "u"}, ["network"]),
+        ({"password": "p"}, ["access"]),
+        ({"username": "u", "api_token": "synthetic"}, ["network"]),
+        ({"api_token": "synthetic"}, ["protect"]),
+        ({"api_token": "synthetic"}, ["network", "protect"]),
+    ],
+)
+async def test_invalid_credential_configuration_is_rejected_before_persistence(
+    tmp_path, monkeypatch, credentials, products
+):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app(tmp_path)
+    headers = {"Authorization": f"Bearer {key}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/controllers",
+            headers=headers,
+            json={
+                "name": "Synthetic",
+                "base_url": "https://controller.test",
+                "product_kinds": products,
+                **credentials,
+            },
+        )
+        assert response.status_code == 422
+        listed = await client.get("/v1/controllers", headers=headers)
+        assert listed.json() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("products", [["network"], ["access"], ["network", "access"]])
+async def test_complete_key_only_configuration_can_be_created(tmp_path, monkeypatch, products):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app(tmp_path)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/controllers",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "name": "Synthetic",
+                "base_url": "https://controller.test",
+                "product_kinds": products,
+                "api_token": "synthetic-key",
+            },
+        )
+        assert response.status_code == 201
+
+
 async def _bootstrap_app(tmp_path: Path, scopes: str = "admin"):
     app = create_app(_cfg(tmp_path))
     async with app.state.engine.begin() as conn:
@@ -39,6 +92,72 @@ async def _bootstrap_app(tmp_path: Path, scopes: str = "admin"):
         )
         await session.commit()
     return app, material.plaintext
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "credentials,changes",
+    [
+        ({"api_token": "synthetic"}, {"product_kinds": ["protect"]}),
+        ({"username": "u", "password": "p"}, {"username": ""}),
+        ({"username": "u", "password": "p"}, {"password": ""}),
+        ({"api_token": "synthetic"}, {"api_token": ""}),
+    ],
+)
+async def test_patch_rejects_invalid_merged_credentials(tmp_path, monkeypatch, credentials, changes):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app(tmp_path)
+    headers = {"Authorization": f"Bearer {key}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/controllers",
+            headers=headers,
+            json={
+                "name": "Original",
+                "base_url": "https://controller.test",
+                "product_kinds": ["network"],
+                **credentials,
+            },
+        )
+        assert response.status_code == 201
+        url = f"/v1/controllers/{response.json()['id']}"
+        before = (await client.get(url, headers=headers)).json()
+        patched = await client.patch(url, headers=headers, json={"name": "Must not persist", **changes})
+        assert patched.status_code == 422
+        assert (await client.get(url, headers=headers)).json() == before
+        # An unrelated subsequent update still succeeds: rejected credentials were not stored.
+        assert (
+            await client.patch(url, headers=headers, json={"product_kinds": ["network", "access"]})
+        ).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_patch_can_atomically_switch_authentication_modes(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app(tmp_path)
+    headers = {"Authorization": f"Bearer {key}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/controllers",
+            headers=headers,
+            json={
+                "name": "Synthetic",
+                "base_url": "https://controller.test",
+                "product_kinds": ["network"],
+                "api_token": "synthetic",
+            },
+        )
+        url = f"/v1/controllers/{response.json()['id']}"
+        assert (
+            await client.patch(
+                url, headers=headers, json={"product_kinds": ["protect"], "username": "u", "password": "p"}
+            )
+        ).status_code == 200
+        assert (
+            await client.patch(
+                url, headers=headers, json={"product_kinds": ["network"], "username": "", "password": ""}
+            )
+        ).status_code == 200
 
 
 @pytest.mark.asyncio

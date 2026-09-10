@@ -64,6 +64,7 @@ async def lookup_by_ip(
 
 @server.tool(
     name="unifi_list_clients",
+    auth="either",
     description=(
         "Returns connected clients with mac, name, hostname, ip, status (online/offline), "
         "connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, "
@@ -77,6 +78,11 @@ async def lookup_by_ip(
         "unifi_get_client_dpi_traffic, unifi_get_client_wifi_details) or as mac "
         "(unifi_recent_events); the parameter name differs per tool and each tool "
         "accepts only its own."
+        " API-key inventory uses legacy reads when supported, otherwise limited public inventory. "
+        "Public results include source_api=integration and integration_id; missing legacy fields are unknown. "
+        "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
+        "include_offline=true requires session credentials for historical inventory. "
+        "Full details and mutations can require session credentials."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )

@@ -126,6 +126,16 @@ class TestRegisterTool:
 class TestGetToolIndex:
     """Tests for get_tool_index."""
 
+    @pytest.mark.parametrize("mode", ["eager", "lazy", "meta_only"])
+    @pytest.mark.parametrize("include_schemas", [False, True])
+    @pytest.mark.parametrize("requirement", ["local_only", "api_key_only", "either", "both"])
+    def test_auth_requirement_survives_all_registration_modes(self, tmp_path, mode, requirement, include_schemas):
+        register_tool(name="credential_tool", description="test", auth_method=requirement)
+        manifest_path = tmp_path / "tools_manifest.json"
+        manifest_path.write_text(json.dumps({"tools": [TOOL_REGISTRY["credential_tool"].to_dict()]}))
+        result = get_tool_index(registration_mode=mode, manifest_path=manifest_path, include_schemas=include_schemas)
+        assert result["tools"][0]["auth_method"] == requirement
+
     def test_returns_registered_tools(self):
         register_tool(name="tool_a", description="Tool A")
         register_tool(name="tool_b", description="Tool B")

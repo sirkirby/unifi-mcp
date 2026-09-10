@@ -394,6 +394,7 @@ def render_catalog(
                 "category": category,
                 "permission_action": permission_action,
                 "read_only_hint": read_only_hint,
+                "auth_method": tool.get("auth_method", "local_only"),
                 "manager_attr": manager_attr,
                 "manager_method": manager_method,
                 "input_schema": _api_input_schema(tool, product=product, name=name, path=path),

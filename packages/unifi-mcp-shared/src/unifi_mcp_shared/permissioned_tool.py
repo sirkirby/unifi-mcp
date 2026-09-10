@@ -88,6 +88,8 @@ def create_permissioned_tool(
 
         # Default to local_only when auth is not specified (backward compatible)
         resolved_auth = auth_method if auth_method else "local_only"
+        if resolved_auth not in {"local_only", "api_key_only", "either", "both"}:
+            raise ValueError("Invalid tool authentication requirement")
 
         def decorator(func):
             """Inner decorator that always registers the tool with MCP."""

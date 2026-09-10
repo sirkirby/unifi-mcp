@@ -698,6 +698,18 @@
             ],
             "title": "Hostname"
           },
+          "integration_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public Integration inventory UUID, not a legacy resource ID. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to legacy resource tools.",
+            "title": "Integration Id"
+          },
           "ip": {
             "anyOf": [
               {
@@ -710,12 +722,26 @@
             "title": "Ip"
           },
           "is_guest": {
-            "title": "Is Guest",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Guest"
           },
           "is_wired": {
-            "title": "Is Wired",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Wired"
           },
           "last_seen": {
             "anyOf": [
@@ -760,6 +786,17 @@
               }
             ],
             "title": "Note"
+          },
+          "source_api": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Api"
           },
           "status": {
             "title": "Status",
@@ -893,6 +930,7 @@
             "type": "string"
           },
           "password": {
+            "default": "",
             "title": "Password",
             "type": "string"
           },
@@ -904,6 +942,7 @@
             "type": "array"
           },
           "username": {
+            "default": "",
             "title": "Username",
             "type": "string"
           },
@@ -916,8 +955,6 @@
         "required": [
           "name",
           "base_url",
-          "username",
-          "password",
           "product_kinds"
         ],
         "title": "ControllerIn",
@@ -1964,6 +2001,18 @@
       "DeviceModel": {
         "additionalProperties": true,
         "properties": {
+          "integration_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public Integration inventory UUID, not a legacy resource ID. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to legacy resource tools.",
+            "title": "Integration Id"
+          },
           "ip": {
             "anyOf": [
               {
@@ -2016,6 +2065,17 @@
               }
             ],
             "title": "Ports"
+          },
+          "source_api": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Api"
           },
           "state": {
             "anyOf": [
@@ -4440,8 +4500,15 @@
             "title": "Domain Name"
           },
           "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
           },
           "firewall_zone_id": {
             "anyOf": [
@@ -4516,6 +4583,18 @@
               }
             ],
             "title": "Igmp Snooping"
+          },
+          "integration_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public Integration inventory UUID, not a legacy resource ID. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to legacy resource tools.",
+            "title": "Integration Id"
           },
           "internet_access_enabled": {
             "anyOf": [
@@ -4762,6 +4841,17 @@
               }
             ],
             "title": "Report Wan Event"
+          },
+          "source_api": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Api"
           },
           "subnet": {
             "anyOf": [
@@ -8462,8 +8552,15 @@
             "title": "Dtim Ng"
           },
           "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
           },
           "fast_roaming_enabled": {
             "anyOf": [
@@ -8530,6 +8627,18 @@
               }
             ],
             "title": "Id"
+          },
+          "integration_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Public Integration inventory UUID, not a legacy resource ID. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to legacy resource tools.",
+            "title": "Integration Id"
           },
           "l2_isolation": {
             "anyOf": [
@@ -8814,6 +8923,17 @@
               }
             ],
             "title": "Setting Preference"
+          },
+          "source_api": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Api"
           },
           "uapsd_enabled": {
             "anyOf": [

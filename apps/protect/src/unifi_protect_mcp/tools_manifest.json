@@ -67,6 +67,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Acknowledge an event by marking it as a favorite on the NVR. This is the closest equivalent to 'marking as read' in the Protect system. Requires confirm=True to apply.",
       "name": "protect_acknowledge_event",
       "permission_action": "update",
@@ -167,6 +168,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Arms the UniFi Protect Alarm Manager. When profile_id is provided, the system first selects that profile (PATCH arm) and then activates it (POST arm/enable). When omitted, the currently selected profile is used. Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_arm",
       "permission_action": "update",
@@ -264,6 +266,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Creates a new alarm rule via POST. Body uses the canonical alarm rule shape returned by protect_alarm_list_rules/protect_alarm_get_rule: title, enabled, triggers, actions, and scope. The server assigns the rule id and returns the created rule. ``actions`` must be a non-empty list \u2014 the controller will accept an empty actions list but the resulting rule cannot be opened in the Protect UI. Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_create_rule",
       "permission_action": "create",
@@ -364,6 +367,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Deletes an alarm rule (automation) by id. Requires confirm=True to apply \u2014 otherwise returns a preview showing the rule that would be deleted. Destructive \u2014 the rule and its configured webhook actions cannot be recovered through the API.",
       "name": "protect_alarm_delete_rule",
       "permission_action": "delete",
@@ -464,6 +468,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Disarms the UniFi Protect Alarm Manager system-wide via POST arm/disable. No profile id is required (or accepted) by the disarm endpoint. Requires confirm=True to apply \u2014 otherwise returns a preview.",
       "name": "protect_alarm_disarm",
       "permission_action": "update",
@@ -555,6 +560,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Fetches a single UniFi Protect alarm rule by id (normalized: id, title, enabled, triggers, actions, scope, stats), including AI-powered alarms.",
       "name": "protect_alarm_get_rule",
       "schema": {
@@ -647,6 +653,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns the current armed/disarmed state of the UniFi Protect Alarm Manager, including the active profile, raw status string, armed-at timestamp, and any breach info. Use this to check whether the security system is currently active.",
       "name": "protect_alarm_get_status",
       "schema": {
@@ -731,6 +738,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Lists all configured UniFi Protect Alarm Manager profiles with their id, name, state, state_set_at timestamp, activation delay, schedule count, automation count, id_family, and arm_compatible flag. Alarm Manager v2 profile IDs are scoped to this read family and are not accepted by protect_alarm_arm; only profiles marked arm_compatible can be used with that legacy arm action. Requires Protect 6.1+ with Alarm Manager configured in the web UI. Legacy fallback responses include _meta with complete=false because v2-only fields are unavailable.",
       "name": "protect_alarm_list_profiles",
       "schema": {
@@ -815,6 +823,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Lists every UniFi Protect alarm rule, including AI-powered alarms (e.g. AI Natural Language). Each rule is normalized to id, title, enabled, triggers, actions, scope, and stats. Use protect_alarm_get_rule for a single rule.",
       "name": "protect_alarm_list_rules",
       "schema": {
@@ -901,6 +910,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Updates an alarm rule. Pass only the fields you want to change \u2014 current values are automatically preserved. Field keys use the canonical alarm rule shape returned by protect_alarm_list_rules/protect_alarm_get_rule: title, enabled, triggers, actions, and scope. Requires confirm=True to apply \u2014 otherwise returns a preview of the proposed changes.",
       "name": "protect_alarm_update_rule",
       "permission_action": "update",
@@ -1006,6 +1016,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Execute multiple UniFi Protect tools in parallel through the indirect execution wrapper. Returns job IDs; use protect_batch_status to check progress.",
       "name": "protect_batch",
       "schema": {
@@ -1077,6 +1088,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Check status of UniFi Protect batch operations. Returns status, result (if done), or error (if failed).",
       "name": "protect_batch_status",
       "schema": {
@@ -1130,6 +1142,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Validates input for creating a new liveview with the given name and camera IDs. Note: liveview creation is not directly supported by the uiprotect Python API; this tool validates camera IDs and returns a preview. Use the Protect web UI to create liveviews.",
       "name": "protect_create_liveview",
       "permission_action": "create",
@@ -1234,6 +1247,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete or remove a UniFi Protect face recognition group. This is destructive. Requires confirm=True to apply; otherwise returns a preview of the exact group.",
       "name": "protect_delete_known_face",
       "permission_action": "delete",
@@ -1333,6 +1347,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Delete or remove a UniFi Protect license-plate recognition group. This is destructive. Requires confirm=True to apply; otherwise returns a preview of the exact group.",
       "name": "protect_delete_known_license_plate",
       "permission_action": "delete",
@@ -1432,6 +1447,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Validates a liveview for deletion by ID. Note: liveview deletion is not directly supported by the uiprotect Python API; this tool returns information about the liveview. Use the Protect web UI to delete liveviews.",
       "name": "protect_delete_liveview",
       "permission_action": "delete",
@@ -1531,6 +1547,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Attempts to delete recordings for a camera in a time range. Note: Individual recording deletion is NOT supported by the uiprotect API. Recording retention is managed automatically by the NVR. This tool returns information about the limitation and alternative approaches.",
       "name": "protect_delete_recording",
       "permission_action": "delete",
@@ -1639,6 +1656,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List the detection-search filter vocabulary supported by this controller. Returns the legal label values (colors, vehicle types, smart detection types, event types, etc.) that the 'Find Anything' panel offers. Use the returned values as labels for protect_search_detections.",
       "name": "protect_detection_search_labels",
       "schema": {
@@ -1725,6 +1743,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Execute a UniFi Protect tool (security cameras, recordings, snapshots, motion events, live views, and NVR management) by name for lazy/meta-only workflows.",
       "name": "protect_execute",
       "schema": {
@@ -1759,6 +1778,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Exports a video clip from a camera for a specified time range. Returns metadata about the export (size, duration) but not the video data itself (too large for MCP responses). Maximum duration is 2 hours. For timelapse exports, pass fps (4=60x, 8=120x, 20=300x, 40=600x). Times must be ISO-8601 format (e.g., '2026-03-16T12:00:00Z').",
       "name": "protect_export_clip",
       "schema": {
@@ -1869,6 +1889,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns detailed information for a single camera including firmware, IP address, MAC, mic/speaker settings, IR/HDR mode, stream channels, smart detection types, and PTZ capability. Use to inspect one camera.",
       "name": "protect_get_camera",
       "schema": {
@@ -1961,6 +1982,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns motion and smart detection analytics for a camera including current detection state, last-detected timestamps for each type (person, vehicle, animal, etc.), and zone counts. For historical events, use the events API tools.",
       "name": "protect_get_camera_analytics",
       "schema": {
@@ -2053,6 +2075,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns RTSP/RTSPS stream URLs for a camera organized by channel (High, Medium, Low). Includes resolution, FPS, and bitrate for each stream. Use to connect a video player or integration to camera feeds.",
       "name": "protect_get_camera_streams",
       "schema": {
@@ -2145,6 +2168,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get detailed information for a single event by ID. Returns event type, camera, timestamps, score, smart detection types, thumbnail info, and recognized Known Face and license-plate (LPR) identity fields when Protect provides them.",
       "name": "protect_get_event",
       "schema": {
@@ -2241,6 +2265,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get the thumbnail image for an event. Returns a base64-encoded JPEG. Thumbnails are generated after an event ends; in-progress events may not have thumbnails yet. Optionally specify width/height to resize.",
       "name": "protect_get_event_thumbnail",
       "schema": {
@@ -2341,6 +2366,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns firmware update availability for the NVR and all adopted devices (cameras, lights, sensors, viewers, chimes, bridges, doorlocks). Use to check whether any device needs a firmware update.",
       "name": "protect_get_firmware_status",
       "schema": {
@@ -2425,6 +2451,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns NVR health summary including CPU load and temperature, memory usage, and storage utilization. Use to diagnose performance issues or storage pressure.",
       "name": "protect_get_health",
       "schema": {
@@ -2509,6 +2536,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns the current recording state for one or all cameras. Shows recording mode (always, never, detections), whether actively recording, and available recording time range from NVR stats. Pass a camera_id to check a single camera, or omit for all cameras.",
       "name": "protect_get_recording_status",
       "schema": {
@@ -2598,6 +2626,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Fetches a JPEG snapshot from a camera. When include_image is True, returns the image as a base64-encoded string. When False (default), returns a reference URL. Optionally specify width and height to resize.",
       "name": "protect_get_snapshot",
       "schema": {
@@ -2704,6 +2733,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Generate sanitized UniFi Protect support evidence for user review. Summary is local/cache-only; live probes are bounded and explicitly allowlisted.",
       "name": "protect_get_support_bundle",
       "schema": {
@@ -2753,6 +2783,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns NVR model, firmware version, uptime, storage usage, and connected device counts. Use for basic 'is the NVR healthy?' checks and capacity overview.",
       "name": "protect_get_system_info",
       "schema": {
@@ -2837,6 +2868,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Lists all cameras adopted by the Protect NVR with their name, model, connection state, recording mode, and whether they are currently recording. Use to get an overview of all cameras in the system.",
       "name": "protect_list_cameras",
       "schema": {
@@ -2921,6 +2953,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Lists all UniFi Protect chime devices with their name, connection state, volume, ring settings per camera, and available ringtones/tracks. Use to see chime configuration and which cameras trigger which chimes.",
       "name": "protect_list_chimes",
       "schema": {
@@ -3005,6 +3038,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Query events from the NVR with optional filters. Returns events from the Protect controller's database via REST API. Supports filtering by time range, event type (motion, smartDetectZone, ring, etc.), camera ID, and result limit. Face events include recognized Known Face identity fields, and license-plate (LPR) events include recognized plate identity fields, when Protect provides them. For real-time buffer events use protect_recent_events.",
       "name": "protect_list_events",
       "schema": {
@@ -3118,6 +3152,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List UniFi Protect face recognition groups, including assigned Known Faces by default and unlabeled groups when group_types includes unknown. Returns metadata and controller image references only; image bytes are not fetched.",
       "name": "protect_list_known_faces",
       "schema": {
@@ -3235,6 +3270,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List UniFi Protect license-plate identities (vehicle recognition groups), including named/known license plates by default and unlabeled plate groups when group_types includes unknown. Each entry's `id` is the value to use in a `license_plate_known` alarm-rule condition. Returns metadata (incl. color/vehicleType when Protect provides them) and controller image references only; image bytes are not fetched.",
       "name": "protect_list_known_license_plates",
       "schema": {
@@ -3352,6 +3388,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Lists all UniFi Protect floodlight devices with their name, connection state, brightness level, PIR motion sensitivity, and paired camera. Use to get an overview of all lights in the system.",
       "name": "protect_list_lights",
       "schema": {
@@ -3436,6 +3473,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Lists all liveview configurations from the Protect NVR. Each liveview defines a multi-camera layout with slots, camera assignments, and cycle settings. Shows name, layout grid size, slot count, camera count, and whether it is the default or global view.",
       "name": "protect_list_liveviews",
       "schema": {
@@ -3520,6 +3558,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns recording availability information for a camera within a time range. Shows the recording window and whether footage exists. UniFi Protect stores recordings as continuous streams, not discrete segments. Defaults to the last 24 hours if no time range is specified. Times should be ISO-8601 format (e.g., '2026-03-16T00:00:00Z').",
       "name": "protect_list_recordings",
       "schema": {
@@ -3620,6 +3659,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Lists all UniFi Protect sensor devices (motion, door/window, temperature, humidity, light level, leak detection). Shows connection state, battery status, current readings, and recent detection timestamps. Use to monitor environmental conditions and sensor health.",
       "name": "protect_list_sensors",
       "schema": {
@@ -3704,6 +3744,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "List smart detection events (person, vehicle, animal, package, etc.) with optional filters. Filters by detection type, camera, confidence score, and time range. Only returns events above the minimum confidence threshold (default 50, configurable via PROTECT_SMART_DETECTION_MIN_CONFIDENCE). Face detections include recognized Known Face identity fields, and license-plate (LPR) detections include recognized plate identity fields, when Protect provides them.",
       "name": "protect_list_smart_detections",
       "schema": {
@@ -3821,6 +3862,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Lists all connected Protect viewers (e.g., UP-Viewer, Viewport) with their connection state, firmware version, and assigned liveview.",
       "name": "protect_list_viewers",
       "schema": {
@@ -3907,6 +3949,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Load UniFi Protect tools (security cameras, recordings, snapshots, motion events, live views, and NVR management) for direct MCP access. Advanced lazy-mode extension that emits notifications/tools/list_changed when tools are loaded.",
       "name": "protect_load_tools",
       "schema": {
@@ -3955,6 +3998,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Merge one UniFi Protect face group into another. The target group survives and the source group is folded into it. Requires confirm=True to apply; otherwise returns a preview.",
       "name": "protect_merge_known_faces",
       "permission_action": "update",
@@ -4060,6 +4104,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Moves a PTZ camera using normalized pan/tilt speeds. Requires confirm=True to execute. Use protect_ptz_zoom for zoom movement. Only works on PTZ-capable cameras.",
       "name": "protect_ptz_move",
       "permission_action": "update",
@@ -4174,6 +4219,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Moves a PTZ camera to a saved preset position by slot number. Returns available presets for the camera. Requires confirm=True to execute. Only works on PTZ-capable cameras.",
       "name": "protect_ptz_preset",
       "permission_action": "update",
@@ -4279,6 +4325,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Zooms a PTZ camera using normalized zoom speed. Requires confirm=True to execute. This is separate from optical zoom settings.",
       "name": "protect_ptz_zoom",
       "permission_action": "update",
@@ -4390,6 +4437,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Reboots a camera. The camera will be temporarily unavailable during reboot. Requires confirm=True to execute. Use with caution \u2014 active recordings will be interrupted.",
       "name": "protect_reboot_camera",
       "permission_action": "update",
@@ -4488,6 +4536,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Get recent events from the in-memory websocket buffer. This is fast (no API call) and returns events received via the real-time websocket stream. Supports filtering by event_type, camera_id, min_confidence, and limit. Face events include recognized Known Face identity fields, and license-plate (LPR) events include recognized plate identity fields, when Protect provides them. Use this for real-time monitoring; use protect_list_events for historical queries.",
       "name": "protect_recent_events",
       "schema": {
@@ -4593,6 +4642,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Search detections across all cameras using Protect's 'Find Anything' filter vocabulary. Pass one or more labels of the form 'prefix:value' (e.g. 'vehicleType:truck', 'color:black', 'smartDetectType:vehicle'); labels are applied conjunctively. Call protect_detection_search_labels first to discover the legal labels for this controller. Returns matching smart detection events. excludeMotion defaults to true so plain motion events are filtered out.",
       "name": "protect_search_detections",
       "schema": {
@@ -4711,6 +4761,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Returns instructions for subscribing to real-time Protect events. Provides the MCP resource URI for the event stream and guidance on polling intervals. Use this to set up continuous event monitoring.",
       "name": "protect_subscribe_events",
       "schema": {
@@ -4795,6 +4846,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Enables or disables recording on a camera. When enabled, sets recording mode to 'always'. When disabled, sets to 'never'. Requires confirm=True to apply.",
       "name": "protect_toggle_recording",
       "permission_action": "update",
@@ -4900,6 +4952,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Enables or disables the RTSP/RTSPS stream on a camera channel. When enabled, the controller publishes the channel and assigns a stream alias; the RTSP/RTSPS URLs are returned. Choose the channel with quality (high, medium, low; default high). Requires confirm=True to apply.",
       "name": "protect_toggle_rtsp",
       "permission_action": "update",
@@ -5009,6 +5062,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
+      "auth_method": "local_only",
       "description": "Discover UniFi Protect tools (security cameras, recordings, snapshots, motion events, live views, and NVR management) through the compact tool index. The catalog is manifest-backed in lazy mode; in meta-only mode it starts with registered meta-tools and expands after domain modules execute. Standard MCP clients should prefer tools/list when it exposes the needed tools.",
       "name": "protect_tool_index",
       "schema": {
@@ -5062,6 +5116,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Plays the chime tone on a specific chime device. Optionally override volume (0-100) and repeat times (1-6) for this playback only. The chime's default settings are used if not specified. Requires confirm=True to play the chime; otherwise returns a preview.",
       "name": "protect_trigger_chime",
       "permission_action": "update",
@@ -5170,6 +5225,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Updates camera settings such as IR LED mode, HDR mode, mic/speaker volume, status light, and motion detection. Requires confirm=True to apply. HDR and microphone volume require UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Supported keys: ir_led_mode, hdr_mode, mic_enabled, mic_volume, status_light_on, speaker_volume, name, motion_detection.",
       "name": "protect_update_camera_settings",
       "permission_action": "update",
@@ -5275,6 +5331,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Updates chime settings. Without camera_id, updates global speaker volume (0-100), repeat times (1-6), or device name. With camera_id, updates that camera's ring volume or repeat_times while preserving other camera ring settings. Per-camera ring settings require a Protect API key configured via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Requires confirm=True to apply. Supported global keys: volume, repeat_times, name. Supported per-camera keys: camera_id, volume, repeat_times.",
       "name": "protect_update_chime",
       "permission_action": "update",
@@ -5380,6 +5437,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update UniFi Protect Known Face metadata. Pass only the fields you want to change; current values are automatically preserved. Supported fields: name, description, is_notification_enabled. Requires confirm=True to apply; otherwise returns a preview.",
       "name": "protect_update_known_face",
       "permission_action": "update",
@@ -5519,6 +5577,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Update UniFi Protect Known License Plate (license-plate identity) metadata. Pass only the fields you want to change; current values are automatically preserved. Supported fields: name, description, is_notification_enabled. Requires confirm=True to apply; otherwise returns a preview.",
       "name": "protect_update_known_license_plate",
       "permission_action": "update",
@@ -5658,6 +5717,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "local_only",
       "description": "Updates light settings such as on/off state, LED brightness level (1-6), PIR motion sensitivity (0-100), motion-triggered duration (15-900 seconds), status indicator light, and device name. Requires confirm=True to apply. Power, brightness, sensitivity and duration require UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Supported keys: light_on (alias is_light_on), led_level, sensitivity, duration_seconds, status_light, name.",
       "name": "protect_update_light",
       "permission_action": "update",
@@ -5763,6 +5823,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "both",
       "description": "Updates UniFi Protect sensor settings. Get sensor_id values from protect_list_sensors. Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Requires confirm=True to apply. Supported keys: name, light_settings, humidity_settings, temperature_settings, motion_settings, glass_break_settings, alarm_settings, schedule_mode, arm_profile_ids, has_custom_sensitivity_when_armed. Use snake_case inside nested settings, for example motion_settings.sensitivity_when_armed or light_settings.low_threshold.",
       "name": "protect_update_sensor_settings",
       "permission_action": "update",
@@ -5868,6 +5929,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
+      "auth_method": "both",
       "description": "Updates a UniFi Protect viewer name or liveview assignment. Get viewer_id values from protect_list_viewers and liveview_id values from protect_list_liveviews. These IDs are scoped to the Protect viewer/liveview tool family - do not pass them to camera, sensor, or chime tools. Requires a Protect public API key configured on the server via UNIFI_PROTECT_API_KEY or UNIFI_API_KEY. Requires confirm=True to apply. Pass only the fields you want to change - current values are automatically preserved. Supported keys: name, liveview_id, clear_liveview. Set clear_liveview=True to remove the current liveview assignment.",
       "name": "protect_update_viewer",
       "permission_action": "update",

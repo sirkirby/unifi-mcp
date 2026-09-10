@@ -28,6 +28,7 @@ def _device_key(obj) -> tuple:
 @router.get(
     "/sites/{site_id}/devices",
     response_model=Page[to_pydantic_model(Device)],
+    response_model_exclude_unset=True,
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/devices"],
 )
@@ -79,6 +80,7 @@ async def list_devices(
 @router.get(
     "/sites/{site_id}/devices/{mac}",
     response_model=Detail[to_pydantic_model(Device)],
+    response_model_exclude_unset=True,
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/devices"],
 )

@@ -1749,7 +1749,7 @@ def _device_key(d: Any) -> tuple:
 def _network_key(n: Any) -> tuple:
     raw = _raw(n)
     if isinstance(raw, dict):
-        nid = raw.get("_id") or raw.get("id")
+        nid = raw.get("_id") or raw.get("id") or raw.get("integration_id")
         name = raw.get("name")
     else:
         nid = getattr(raw, "_id", None) or getattr(raw, "id", None)
@@ -1771,7 +1771,7 @@ def _blocked_key(c: Any) -> tuple:
 def _id_key(obj: Any) -> tuple:
     raw = _raw(obj)
     if isinstance(raw, dict):
-        oid = raw.get("_id") or raw.get("id")
+        oid = raw.get("_id") or raw.get("id") or raw.get("integration_id")
     else:
         oid = getattr(raw, "_id", None) or getattr(raw, "id", None)
     return (0, str(oid or ""))

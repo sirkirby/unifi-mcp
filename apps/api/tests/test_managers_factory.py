@@ -148,6 +148,25 @@ async def test_factory_caches_connection_manager(tmp_path: Path, monkeypatch) ->
     await engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_network_factory_passes_key_before_initializing_without_session_credentials(tmp_path, monkeypatch):
+    _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    try:
+        async with sm() as session:
+            controller = await session.get(Controller, cid)
+            controller.credentials_blob = cipher.encrypt(json.dumps({"api_token": "synthetic-key"}).encode())
+            await session.commit()
+            cm = await factory.get_connection_manager(session, cid, "network")
+            assert cm.kwargs["username"] == cm.kwargs["password"] == ""
+            assert cm.kwargs["auth"].has_api_key
+            assert cm.init_calls == 1
+    finally:
+        await factory.invalidate_controller(cid)
+        await engine.dispose()
+
+
 def test_firewall_manager_builder_receives_connection_auth() -> None:
     auth = object()
     cm = _FakeCM()

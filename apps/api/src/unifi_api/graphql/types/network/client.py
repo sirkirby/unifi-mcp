@@ -85,13 +85,23 @@ class Client:
     ip: str | None
     hostname: str | None
     name: str | None
-    is_wired: bool
-    is_guest: bool
+    is_wired: bool | None
+    is_guest: bool | None
     status: str
     last_seen: str | None
     first_seen: str | None
     note: str | None
     usergroup_id: str | None
+
+    source_api: str | None = None
+    integration_id: strawberry.ID | None = strawberry.field(
+        default=None,
+        description=(
+            "Public Integration inventory UUID, not a legacy resource ID. "
+            "These IDs are scoped to the Integration inventory tool family — "
+            "do not pass them to legacy resource tools."
+        ),
+    )
 
     # Context for relationship edges — NOT in SDL, NOT in to_dict().
     # Set by the resolver after construction so edge resolvers can look up
@@ -113,12 +123,18 @@ class Client:
     def from_manager_output(cls, obj: Any) -> "Client":
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
         return cls(
+            source_api=raw.get("source_api"),
+            integration_id=raw.get("integration_id"),
             mac=raw.get("mac"),
             ip=raw.get("last_ip") or raw.get("ip"),
             hostname=raw.get("hostname") or None,
             name=raw.get("name") or None,
-            is_wired=bool(raw.get("is_wired", False)),
-            is_guest=bool(raw.get("is_guest", False)),
+            is_wired=raw.get("is_wired")
+            if raw.get("source_api") == "integration"
+            else bool(raw.get("is_wired", False)),
+            is_guest=raw.get("is_guest")
+            if raw.get("source_api") == "integration"
+            else bool(raw.get("is_guest", False)),
             status="online" if _is_online(raw) else "offline",
             last_seen=_iso(raw.get("last_seen")),
             first_seen=_iso(raw.get("first_seen")),
@@ -129,6 +145,9 @@ class Client:
 
     def to_dict(self) -> dict:
         out = asdict(self)
+        if self.source_api is None:
+            out.pop("source_api", None)
+            out.pop("integration_id", None)
         return {k: v for k, v in out.items() if not k.startswith("_") and not callable(v)}
 
     @strawberry.field(description="The AP or switch this client connects through.")

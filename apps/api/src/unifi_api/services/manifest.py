@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from importlib.resources import files
 from typing import Any
 
+from unifi_core.auth import AuthMethod
+
 CATALOG_RESOURCE = "action_catalog.json"
 SUPPORTED_SCHEMA_VERSION = 1
 PRODUCTS = frozenset({"network", "protect", "access"})
@@ -32,6 +34,7 @@ class ToolEntry:
     method: str
     permission_action: str = ""
     read_only_hint: bool | None = None
+    auth_method: str = "local_only"
     input_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object"})
 
     @property
@@ -128,6 +131,10 @@ def _parse_catalog(raw: str) -> dict[str, ToolEntry]:
                 f"(permission_action={permission_action!r}, read_only_hint={read_only_hint!r})"
             )
         manager_attr = _require_string(action, "manager_attr", index)
+        try:
+            auth_method = AuthMethod(action.get("auth_method", "local_only")).value
+        except (ValueError, TypeError):
+            raise CatalogLoadError(f"actions[{index}].auth_method is invalid") from None
         manager_method = _require_string(action, "manager_method", index)
         input_schema = action.get("input_schema")
         if not isinstance(input_schema, dict):
@@ -144,6 +151,7 @@ def _parse_catalog(raw: str) -> dict[str, ToolEntry]:
             category=category,
             permission_action=permission_action,
             read_only_hint=read_only_hint,
+            auth_method=auth_method,
             manager=manager_attr,
             method=manager_method,
             input_schema=input_schema,

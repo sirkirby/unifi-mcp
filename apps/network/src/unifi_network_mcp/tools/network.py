@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_networks",
+    auth="either",
     description=(
         "Returns configured networks (LAN, WAN, VLAN-only) with name, purpose, "
         "IP subnet, VLAN ID, DHCP settings, and enabled state. "
@@ -46,6 +47,10 @@ logger = logging.getLogger(__name__)
         "limit (default 25), fields (comma-separated subset). "
         "For a single network's full config, use unifi_get_network_details. "
         "For wireless SSIDs, use unifi_list_wlans."
+        " API-key inventory uses legacy reads when supported, otherwise limited public inventory. "
+        "Public results include source_api=integration and integration_id; missing legacy fields are unknown. "
+        "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
+        "Full details and mutations can require session credentials."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -688,9 +693,14 @@ async def create_network(
 
 @server.tool(
     name="unifi_list_wlans",
+    auth="either",
     description=(
         "List configured Wireless LANs (WLANs) on the Unifi Network controller.\n\n"
         "Filters: search (SSID name substring), enabled_only, limit (default 25)."
+        " API-key inventory uses legacy reads when supported, otherwise limited public inventory. "
+        "Public results include source_api=integration and integration_id; missing legacy fields are unknown. "
+        "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
+        "Full details and mutations can require session credentials."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )

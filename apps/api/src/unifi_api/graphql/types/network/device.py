@@ -63,6 +63,16 @@ class Device:
     ip: str | None
     ports: strawberry.scalars.JSON | None  # type: ignore[name-defined]
 
+    source_api: str | None = None
+    integration_id: strawberry.ID | None = strawberry.field(
+        default=None,
+        description=(
+            "Public Integration inventory UUID, not a legacy resource ID. "
+            "These IDs are scoped to the Integration inventory tool family — "
+            "do not pass them to legacy resource tools."
+        ),
+    )
+
     # Context for relationship edges — NOT in SDL, NOT in to_dict().
     _controller_id: strawberry.Private[str | None] = None
     _site: strawberry.Private[str | None] = None
@@ -81,19 +91,26 @@ class Device:
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
         state_raw = raw.get("state")
         return cls(
+            source_api=raw.get("source_api"),
+            integration_id=raw.get("integration_id"),
             mac=raw.get("mac"),
             name=raw.get("name"),
             model=raw.get("model"),
             type=raw.get("type"),
             version=raw.get("version"),
             uptime=raw.get("uptime"),
-            state=_STATE_MAP.get(state_raw, state_raw),
+            state=raw.get("public_state")
+            if raw.get("source_api") == "integration"
+            else _STATE_MAP.get(state_raw, state_raw),
             ip=raw.get("ip"),
             ports=raw.get("port_table") or raw.get("ports"),
         )
 
     def to_dict(self) -> dict:
         out = asdict(self)
+        if self.source_api is None:
+            out.pop("source_api", None)
+            out.pop("integration_id", None)
         return {k: v for k, v in out.items() if not k.startswith("_") and not callable(v)}
 
     @strawberry.field(description="Clients currently connected through this AP/switch.")
@@ -105,7 +122,7 @@ class Device:
         from unifi_api.graphql.resolvers.network import _fetch_clients
         from unifi_api.graphql.types.network.client import Client
 
-        if not self._controller_id:
+        if not self._controller_id or not self.mac:
             return []
         site = self._site or "default"
         raw_clients = await _fetch_clients(info.context, self._controller_id, site)

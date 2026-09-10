@@ -174,6 +174,7 @@ def get_connection_manager() -> ConnectionManager:
         port=cfg.port,
         site=cfg.site,
         verify_ssl=str(cfg.verify_ssl).lower() in ("true", "1", "yes"),
+        auth=get_auth(),
     )
 
 

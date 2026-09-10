@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_dpi_applications",
+    auth="api_key_only",
     description="List DPI applications available for use in firewall rules and OON policies. "
     "Returns application names and their compound IDs. Supports name-based search. "
     "NOTE: The official API currently only returns categories 0-1 (IM, P2P). "
@@ -94,6 +95,7 @@ async def list_dpi_applications(
 
 @server.tool(
     name="unifi_list_dpi_categories",
+    auth="api_key_only",
     description="List DPI application categories (e.g., 'Instant messengers', 'Peer-to-peer networks', "
     "'Media streaming services'). Categories group applications for DPI classification. "
     "Requires UNIFI_API_KEY or UNIFI_NETWORK_API_KEY.",

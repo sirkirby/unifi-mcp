@@ -30,6 +30,7 @@ async def get_tools(request: Request) -> dict:
                 "category": entry.category,
                 "manager": entry.manager,
                 "method": entry.method,
+                "auth_method": entry.auth_method,
                 "render_hint": render_hint,
             }
         )

@@ -139,6 +139,46 @@ async def test_controllers_create_round_trips(tmp_path: Path, monkeypatch) -> No
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "credentials,product",
+    [
+        ({}, "network"),
+        ({"username": "u"}, "network"),
+        ({"api_token": "synthetic"}, "protect"),
+    ],
+)
+async def test_admin_create_rejects_invalid_credentials(tmp_path, monkeypatch, credentials, product):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app_with_admin_key(tmp_path)
+    headers = {"Authorization": f"Bearer {key}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/admin/controllers/create",
+            headers=headers,
+            data={"name": "Invalid", "base_url": "https://controller.test", "product_kinds": [product], **credentials},
+        )
+        assert response.status_code == 422
+        assert (await client.get("/v1/controllers", headers=headers)).json() == []
+
+
+@pytest.mark.asyncio
+async def test_admin_update_rejects_key_only_protect_without_persistence(tmp_path, monkeypatch):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app_with_admin_key(tmp_path)
+    cid = await _seed_controller(app, username="", password="", api_token="synthetic")
+    headers = {"Authorization": f"Bearer {key}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        before = (await client.get(f"/v1/controllers/{cid}", headers=headers)).json()
+        response = await client.post(
+            f"/admin/controllers/{cid}/update",
+            headers=headers,
+            data={"name": "Invalid", "base_url": "https://controller.test", "product_kinds": ["protect"]},
+        )
+        assert response.status_code == 422
+        assert (await client.get(f"/v1/controllers/{cid}", headers=headers)).json() == before
+
+
+@pytest.mark.asyncio
 async def test_controllers_edit_with_blank_password_preserves_creds(tmp_path: Path, monkeypatch) -> None:
     """Edit form sent with blank password/username/api_token must NOT clobber existing credentials."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")

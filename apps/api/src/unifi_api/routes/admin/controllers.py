@@ -26,6 +26,7 @@ from unifi_api.routes.admin._common import render
 from unifi_api.services.controllers import (
     ControllerNotFound,
     CreateControllerPayload,
+    InvalidControllerCredentials,
     create_controller,
     delete_controller,
     get_controller,
@@ -143,7 +144,10 @@ async def controllers_create(
         is_default=_coerce_checkbox(is_default),
     )
     async with sm() as session:
-        await create_controller(session, cipher, payload)
+        try:
+            await create_controller(session, cipher, payload)
+        except InvalidControllerCredentials as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
         await session.commit()
     # Empty body — the form-slot is cleared; HX-Trigger refetches the table-body.
     return Response(
@@ -214,6 +218,8 @@ async def controllers_update(
             await session.commit()
         except ControllerNotFound:
             raise HTTPException(status_code=404, detail="controller not found")
+        except InvalidControllerCredentials as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
         await request.app.state.manager_factory.invalidate_controller(cid)
         request.app.state.capability_cache.invalidate(cid)
     return Response(

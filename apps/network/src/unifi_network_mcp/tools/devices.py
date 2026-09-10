@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 @server.tool(
     name="unifi_list_devices",
+    auth="either",
     description=(
         "Returns adopted device inventory with MAC, name, model, IP, firmware version, "
         "uptime, status (online/offline/upgrading/etc), device_category (ap/switch/gateway/pdu), "
@@ -52,6 +53,10 @@ logger = logging.getLogger(__name__)
         "or as ap_mac on the RF tools (unifi_trigger_rf_scan, unifi_get_rf_scan_results), "
         "which take the access point to scan from; the parameter name differs per tool "
         "and each tool accepts only its own."
+        " API-key inventory uses legacy reads when supported, otherwise limited public inventory. "
+        "Public results include source_api=integration and integration_id; missing legacy fields are unknown. "
+        "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
+        "Full details and mutations can require session credentials."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )

@@ -22,7 +22,7 @@ router = APIRouter()
 def _wlan_key(obj) -> tuple:
     """Sort by (0, id) — id-stable order, no time component."""
     raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
-    return (0, raw.get("_id") or raw.get("id") or "")
+    return (0, raw.get("_id") or raw.get("id") or raw.get("integration_id") or "")
 
 
 def _redact_sensitive(request: Request) -> bool:
@@ -32,6 +32,7 @@ def _redact_sensitive(request: Request) -> bool:
 @router.get(
     "/sites/{site_id}/wlans",
     response_model=Page[to_pydantic_model(Wlan)],
+    response_model_exclude_unset=True,
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/wlans"],
 )
@@ -85,6 +86,7 @@ async def list_wlans(
 @router.get(
     "/sites/{site_id}/wlans/{wlan_id}",
     response_model=Detail[to_pydantic_model(Wlan)],
+    response_model_exclude_unset=True,
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/wlans"],
 )

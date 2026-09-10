@@ -141,6 +141,7 @@ def test_render_catalog_is_deterministic_and_normalizes_reads(tmp_path: Path) ->
                 "read_only_hint": True,
                 "manager_attr": "widget_manager",
                 "manager_method": "get_widgets",
+                "auth_method": "local_only",
                 "input_schema": {"type": "object", "properties": {}, "additionalProperties": False},
             },
             {
@@ -151,6 +152,7 @@ def test_render_catalog_is_deterministic_and_normalizes_reads(tmp_path: Path) ->
                 "read_only_hint": True,
                 "manager_attr": "widget_manager",
                 "manager_method": "get_zebras",
+                "auth_method": "local_only",
                 "input_schema": {
                     "type": "object",
                     "properties": {"query": {"type": "string"}},

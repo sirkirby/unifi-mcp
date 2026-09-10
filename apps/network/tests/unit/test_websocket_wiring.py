@@ -7,8 +7,9 @@ production. These tests drive `main_async` and assert on what it awaits.
 
 import asyncio
 from contextlib import contextmanager
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, PropertyMock, patch
 
+from unifi_core.auth import AuthenticationStatus
 from unifi_network_mcp import main as network_main
 from unifi_network_mcp.runtime import config
 
@@ -20,6 +21,7 @@ def _startup(
     websocket_enabled: bool,
     listener: AsyncMock | None = None,
     transports: AsyncMock | None = None,
+    session_available: bool = True,
 ):
     events = dict(getattr(config.network, "events", {}) or {})
     events["websocket_enabled"] = websocket_enabled
@@ -27,6 +29,12 @@ def _startup(
         patch.object(config.network, "events", events),
         patch("unifi_mcp_shared.bootstrap.assert_credentials_configured"),
         patch.object(network_main.connection_manager, "initialize", AsyncMock(return_value=connected)),
+        patch.object(
+            type(network_main.connection_manager),
+            "authentication_status",
+            new_callable=PropertyMock,
+            return_value=AuthenticationStatus(session_available=connected and session_available),
+        ),
         patch.object(network_main.event_manager, "start_listening", listener or AsyncMock()) as started,
         patch.object(network_main.event_manager, "stop_listening", AsyncMock()) as stopped,
         patch("unifi_mcp_shared.tool_registration.register_tools_for_mode", AsyncMock()),
@@ -47,6 +55,13 @@ def test_the_listener_is_not_started_when_the_connection_fails() -> None:
     with _startup(connected=False, websocket_enabled=True) as (started, _, _):
         asyncio.run(network_main.main_async())
         started.assert_not_awaited()
+
+
+def test_key_only_startup_does_not_start_a_session_websocket() -> None:
+    with _startup(connected=True, websocket_enabled=True, session_available=False) as (started, _, ran):
+        asyncio.run(network_main.main_async())
+        started.assert_not_awaited()
+        assert ran.await_count == 1
 
 
 def test_the_listener_is_not_started_when_the_websocket_is_disabled() -> None:

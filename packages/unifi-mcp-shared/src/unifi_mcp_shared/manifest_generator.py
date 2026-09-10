@@ -153,6 +153,7 @@ def _generate_manifest(
         tool_data: dict[str, Any] = {
             "name": meta.name,
             "description": meta.description,
+            "auth_method": meta.auth_method,
             "schema": {"input": meta.input_schema},
         }
         if meta.title:

@@ -39,7 +39,7 @@ class ToolMetadata:
         description: Human-readable description of what the tool does
         input_schema: JSON Schema describing the tool's input parameters
         output_schema: Optional JSON Schema describing the tool's output structure
-        auth_method: Auth strategy hint -- "local_only" (default), "api_key_only", or "either"
+        auth_method: Credential requirement -- local_only, api_key_only, either, or both.
         annotations: MCP ToolAnnotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
     """
 
@@ -185,7 +185,7 @@ def register_tool(
         title: Optional human-readable display title
         input_schema: JSON Schema for input parameters (defaults to empty object)
         output_schema: Optional JSON Schema for output structure
-        auth_method: Auth strategy hint -- "local_only", "api_key_only", or "either"
+        auth_method: Credential requirement -- local_only, api_key_only, either, or both.
         annotations: MCP ToolAnnotations (readOnlyHint, destructiveHint, idempotentHint, openWorldHint)
         permission_category: Permission category (e.g., "networks", "devices")
         permission_action: Permission action (e.g., "create", "update", "delete")
@@ -271,6 +271,7 @@ def get_tool_index(
                 "name": t["name"],
                 **({"title": t["title"]} if t.get("title") else {}),
                 "description": t.get("description", ""),
+                "auth_method": t.get("auth_method", "local_only"),
             }
             for t in all_tools
         ]
@@ -346,6 +347,7 @@ def _tools_from_registry() -> list:
             "name": meta.name,
             **({"title": meta.title} if meta.title is not None else {}),
             "description": meta.description,
+            "auth_method": meta.auth_method,
             "schema": {
                 "input": meta.input_schema,
                 **({"output": meta.output_schema} if meta.output_schema else {}),

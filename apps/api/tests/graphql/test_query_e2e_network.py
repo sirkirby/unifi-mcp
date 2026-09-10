@@ -140,6 +140,123 @@ def _stub_managers(
 
 
 @pytest.mark.asyncio
+async def test_public_inventory_has_no_unverified_client_relationships(tmp_path, monkeypatch):
+    from unifi_core.network.models.integration import PublicInventoryItem
+
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_managers(
+        monkeypatch,
+        networks=[PublicInventoryItem(id="00000000-0000-0000-0000-000000000001").inventory_record("networks")],
+        devices=[PublicInventoryItem(id="00000000-0000-0000-0000-000000000003").inventory_record("devices")],
+        clients=[
+            PublicInventoryItem(id="00000000-0000-0000-0000-000000000002", macAddress="aa:01").inventory_record(
+                "clients"
+            )
+        ],
+    )
+    query = (
+        f'{{ network {{ networks(controller: "{cid}") {{ items {{ id clients {{ mac }} }} }} '
+        f'devices(controller: "{cid}") {{ items {{ mac portClients {{ mac }} }} }} }} }}'
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/v1/graphql", headers={"Authorization": f"Bearer {key}"}, json={"query": query})
+        assert response.status_code == 200
+    body = response.json()
+    assert "errors" not in body
+    assert body["data"]["network"]["networks"]["items"] == [{"id": None, "clients": []}]
+    assert body["data"]["network"]["devices"]["items"] == [{"mac": None, "portClients": []}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "resource,method,detail",
+    [
+        ("clients", "get_clients", "get_client_details"),
+        ("devices", "get_devices", "get_device_details"),
+        ("networks", "get_networks", "get_network_details"),
+        ("wlans", "get_wlans", "get_wlan_details"),
+    ],
+)
+async def test_legacy_rest_inventory_omits_public_provenance(tmp_path, monkeypatch, resource, method, detail):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    manager = MagicMock()
+    raw = {"_id": "legacy-id", "mac": "aa:01", "name": None}
+    setattr(manager, method, AsyncMock(return_value=[raw]))
+    setattr(manager, detail, AsyncMock(return_value=raw))
+    app.state.manager_factory.get_domain_manager = AsyncMock(return_value=manager)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        for suffix in ("", "/legacy-id"):
+            response = await client.get(
+                f"/v1/sites/default/{resource}{suffix}?controller={cid}", headers={"Authorization": f"Bearer {key}"}
+            )
+            assert response.status_code == 200
+            item = response.json()["data"] if suffix else response.json()["items"][0]
+            assert "source_api" not in item
+            assert "integration_id" not in item
+            assert "name" in item and item["name"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("resource,method", [("networks", "get_networks"), ("wlans", "get_wlans")])
+@pytest.mark.parametrize("surface", ["rest", "graphql"])
+async def test_public_inventory_cursor_uses_public_identity(tmp_path, monkeypatch, resource, method, surface):
+    from unifi_core.network.models.integration import PublicInventoryItem
+
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    manager = MagicMock()
+    public_ids = [
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000002",
+        "00000000-0000-0000-0000-000000000003",
+    ]
+    records = [PublicInventoryItem(id=public_id).inventory_record(resource) for public_id in public_ids]
+    setattr(manager, method, AsyncMock(return_value=records))
+    app.state.manager_factory.get_domain_manager = AsyncMock(return_value=manager)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        cursor = None
+        seen = []
+        for _ in range(3):
+            params = {"controller": cid, "limit": 1}
+            if cursor:
+                params["cursor"] = cursor
+            if surface == "rest":
+                response = await client.get(
+                    f"/v1/sites/default/{resource}", params=params, headers={"Authorization": f"Bearer {key}"}
+                )
+            else:
+                cursor_arg = f', cursor: "{cursor}"' if cursor else ""
+                query = (
+                    f'{{ network {{ {resource}(controller: "{cid}", limit: 1{cursor_arg}) '
+                    "{ items { id sourceApi integrationId } nextCursor } } }"
+                )
+                response = await client.post(
+                    "/v1/graphql", headers={"Authorization": f"Bearer {key}"}, json={"query": query}
+                )
+            assert response.status_code == 200
+            body = response.json()
+            if surface == "graphql":
+                assert "errors" not in body
+                body = body["data"]["network"][resource]
+                body = {
+                    "items": [
+                        {"id": item["id"], "source_api": item["sourceApi"], "integration_id": item["integrationId"]}
+                        for item in body["items"]
+                    ],
+                    "next_cursor": body["nextCursor"],
+                }
+            assert len(body["items"]) == 1
+            item = body["items"][0]
+            assert item["id"] is None and item["source_api"] == "integration"
+            seen.append(item["integration_id"])
+            cursor = body["next_cursor"]
+        assert set(seen) == set(public_ids)
+        assert cursor is None
+
+
+@pytest.mark.asyncio
 async def test_e2e_clients_flat_list(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
     app, key, cid = await _bootstrap(tmp_path)

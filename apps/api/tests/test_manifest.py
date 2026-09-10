@@ -49,6 +49,19 @@ def test_loads_packaged_catalog_with_manager_binding(monkeypatch) -> None:
     assert entry.input_schema == {"type": "object", "properties": {}, "additionalProperties": False}
 
 
+@pytest.mark.parametrize("requirement", ["local_only", "api_key_only", "either", "both"])
+def test_auth_requirements_survive_catalog_loading(monkeypatch, requirement):
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(_action(auth_method=requirement)))
+    assert ManifestRegistry.load().resolve("unifi_list_clients").auth_method == requirement
+
+
+@pytest.mark.parametrize("requirement", ["invalid", None, []])
+def test_invalid_auth_requirement_fails_catalog_loading(monkeypatch, requirement):
+    monkeypatch.setattr(manifest, "_read_catalog_resource", lambda: _catalog(_action(auth_method=requirement)))
+    with pytest.raises(CatalogLoadError, match="auth_method"):
+        ManifestRegistry.load()
+
+
 def test_real_packaged_catalog_has_all_product_sentinels() -> None:
     registry = ManifestRegistry.load()
 

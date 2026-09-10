@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -12,11 +12,13 @@ from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.services.controllers import (
     ControllerNotFound,
     CreateControllerPayload,
+    InvalidControllerCredentials,
     create_controller,
     delete_controller,
     get_controller,
     list_controllers,
     update_controller,
+    validate_controller_credentials,
 )
 
 router = APIRouter()
@@ -25,12 +27,17 @@ router = APIRouter()
 class ControllerIn(BaseModel):
     name: str
     base_url: str
-    username: str
-    password: str
+    username: str = ""
+    password: str = ""
     api_token: str | None = None
     product_kinds: list[str]
     verify_tls: bool = True
     is_default: bool = False
+
+    @model_validator(mode="after")
+    def validate_credentials(self) -> ControllerIn:
+        validate_controller_credentials(self.product_kinds, self.username, self.password, self.api_token)
+        return self
 
 
 class ControllerPatch(BaseModel):
@@ -130,6 +137,8 @@ async def patch_endpoint(request: Request, cid: str, body: ControllerPatch) -> C
             return _row_to_out(row)
         except ControllerNotFound:
             raise HTTPException(status_code=404, detail="controller not found")
+        except InvalidControllerCredentials as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 @router.delete(

@@ -426,13 +426,19 @@ type Client {
   ip: String
   hostname: String
   name: String
-  isWired: Boolean!
-  isGuest: Boolean!
+  isWired: Boolean
+  isGuest: Boolean
   status: String!
   lastSeen: String
   firstSeen: String
   note: String
   usergroupId: String
+  sourceApi: String
+
+  """
+  Public Integration inventory UUID, not a legacy resource ID. These IDs are scoped to the Integration inventory tool family — do not pass them to legacy resource tools.
+  """
+  integrationId: ID
 
   """The AP or switch this client connects through."""
   device: Device
@@ -557,6 +563,12 @@ type Device {
   state: String
   ip: String
   ports: JSON
+  sourceApi: String
+
+  """
+  Public Integration inventory UUID, not a legacy resource ID. These IDs are scoped to the Integration inventory tool family — do not pass them to legacy resource tools.
+  """
+  integrationId: ID
 
   """Clients currently connected through this AP/switch."""
   portClients: [Client!]!
@@ -1064,7 +1076,7 @@ type Network {
   id: ID
   name: String
   purpose: String
-  enabled: Boolean!
+  enabled: Boolean
   vlanEnabled: Boolean
   vlan: String
   ipSubnet: String
@@ -1153,6 +1165,12 @@ type Network {
   dhcpdv6Leasetime: Int
   dhcpdv6Start: String
   dhcpdv6Stop: String
+  sourceApi: String
+
+  """
+  Public Integration inventory UUID, not a legacy resource ID. These IDs are scoped to the Integration inventory tool family — do not pass them to legacy resource tools.
+  """
+  integrationId: ID
 
   """Clients on this network."""
   clients: [Client!]!
@@ -2231,7 +2249,7 @@ type Wlan {
   id: ID
   name: String
   settingPreference: String
-  enabled: Boolean!
+  enabled: Boolean
   security: String
   networkId: String
   hideSsid: Boolean
@@ -2272,6 +2290,12 @@ type Wlan {
   iappEnabled: Boolean
   apGroupIds: [String!]
   apGroupMode: String
+  sourceApi: String
+
+  """
+  Public Integration inventory UUID, not a legacy resource ID. These IDs are scoped to the Integration inventory tool family — do not pass them to legacy resource tools.
+  """
+  integrationId: ID
 }
 
 """Paginated page of WLAN/SSID configurations."""

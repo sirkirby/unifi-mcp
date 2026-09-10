@@ -54,7 +54,7 @@ class Wlan:
     id: strawberry.ID | None
     name: str | None
     setting_preference: str | None
-    enabled: bool
+    enabled: bool | None
     security: str | None
     network_id: str | None
     hide_ssid: bool | None
@@ -97,6 +97,16 @@ class Wlan:
     ap_group_ids: list[str] | None
     ap_group_mode: str | None
 
+    source_api: str | None = None
+    integration_id: strawberry.ID | None = strawberry.field(
+        default=None,
+        description=(
+            "Public Integration inventory UUID, not a legacy resource ID. "
+            "These IDs are scoped to the Integration inventory tool family — "
+            "do not pass them to legacy resource tools."
+        ),
+    )
+
     @classmethod
     def render_hint(cls, kind: str) -> dict:
         return {
@@ -111,10 +121,12 @@ class Wlan:
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
         schedule_windows = raw.get("schedule_with_duration")
         return cls(
+            source_api=raw.get("source_api"),
+            integration_id=raw.get("integration_id"),
             id=raw.get("_id") or raw.get("id"),
             name=raw.get("name"),
             setting_preference=raw.get("setting_preference"),
-            enabled=bool(raw.get("enabled", False)),
+            enabled=raw.get("enabled") if raw.get("source_api") == "integration" else bool(raw.get("enabled", False)),
             security=raw.get("security"),
             network_id=raw.get("networkconf_id") or raw.get("network_id"),
             hide_ssid=raw.get("hide_ssid"),
@@ -162,4 +174,8 @@ class Wlan:
         )
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        out = asdict(self)
+        if self.source_api is None:
+            out.pop("source_api", None)
+            out.pop("integration_id", None)
+        return out

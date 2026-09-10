@@ -73,7 +73,10 @@ async def main_async():
             ws_enabled_raw = (
                 config.network.events.get("websocket_enabled", True) if hasattr(config, "network") else True
             )
-            if parse_config_bool(ws_enabled_raw, default=True):
+            if (
+                parse_config_bool(ws_enabled_raw, default=True)
+                and connection_manager.authentication_status.session_available
+            ):
                 try:
                     await event_manager.start_listening()
                 except Exception as ws_exc:
@@ -83,7 +86,7 @@ async def main_async():
                         type(ws_exc).__name__,
                     )
             else:
-                logger.info("Network event websocket disabled via config.")
+                logger.info("Network event websocket disabled by config or unavailable session authentication.")
 
         # ---- Register tools ----
         await register_tools_for_mode(
