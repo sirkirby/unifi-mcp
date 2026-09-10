@@ -34,6 +34,7 @@ def _client_key(obj) -> tuple:
 @router.get(
     "/sites/{site_id}/clients",
     response_model=Page[to_pydantic_model(Client)],
+    response_model_exclude_unset=True,
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/clients"],
 )
@@ -85,6 +86,7 @@ async def list_clients(
 @router.get(
     "/sites/{site_id}/clients/{mac}",
     response_model=Detail[to_pydantic_model(Client)],
+    response_model_exclude_unset=True,
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/clients"],
 )

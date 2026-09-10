@@ -259,7 +259,7 @@ class Network:
         from unifi_api.graphql.resolvers.network import _fetch_clients
         from unifi_api.graphql.types.network.client import Client
 
-        if not self._controller_id:
+        if not self._controller_id or not self.id:
             return []
         site = self._site or "default"
         raw_clients = await _fetch_clients(info.context, self._controller_id, site)

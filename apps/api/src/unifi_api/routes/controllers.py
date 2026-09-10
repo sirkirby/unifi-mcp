@@ -12,11 +12,13 @@ from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.services.controllers import (
     ControllerNotFound,
     CreateControllerPayload,
+    InvalidControllerCredentials,
     create_controller,
     delete_controller,
     get_controller,
     list_controllers,
     update_controller,
+    validate_controller_credentials,
 )
 
 router = APIRouter()
@@ -34,13 +36,7 @@ class ControllerIn(BaseModel):
 
     @model_validator(mode="after")
     def validate_credentials(self) -> ControllerIn:
-        if bool(self.username) != bool(self.password):
-            raise ValueError("Provide both username and password, or omit both for API-key authentication.")
-        has_session = bool(self.username and self.password)
-        if "protect" in self.product_kinds and not has_session:
-            raise ValueError("Protect requires username and password for session bootstrap, even with an API token.")
-        if not has_session and not (self.api_token and self.api_token.strip()):
-            raise ValueError("Provide a complete username/password pair or an API token.")
+        validate_controller_credentials(self.product_kinds, self.username, self.password, self.api_token)
         return self
 
 
@@ -141,6 +137,8 @@ async def patch_endpoint(request: Request, cid: str, body: ControllerPatch) -> C
             return _row_to_out(row)
         except ControllerNotFound:
             raise HTTPException(status_code=404, detail="controller not found")
+        except InvalidControllerCredentials as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from None
 
 
 @router.delete(

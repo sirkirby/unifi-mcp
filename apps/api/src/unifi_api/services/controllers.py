@@ -25,6 +25,26 @@ class ControllerNotFound(Exception):
     pass
 
 
+class InvalidControllerCredentials(ValueError):
+    """The merged product/credential configuration cannot authenticate."""
+
+
+def validate_controller_credentials(
+    product_kinds: list[str], username: str, password: str, api_token: str | None
+) -> None:
+    if bool(username) != bool(password):
+        raise InvalidControllerCredentials(
+            "Provide both username and password, or omit both for API-key authentication."
+        )
+    has_session = bool(username and password)
+    if "protect" in product_kinds and not has_session:
+        raise InvalidControllerCredentials(
+            "Protect requires username and password for session bootstrap, even with an API token."
+        )
+    if not has_session and not (api_token and api_token.strip()):
+        raise InvalidControllerCredentials("Provide a complete username/password pair or an API token.")
+
+
 @dataclass(frozen=True)
 class CreateControllerPayload:
     name: str
@@ -102,6 +122,21 @@ async def update_controller(
     api_token: str | None = None,
 ) -> Controller:
     row = await get_controller(session, controller_id)
+    creds_changed = any(v is not None for v in (username, password, api_token))
+    if creds_changed or product_kinds is not None:
+        existing = json.loads(cipher.decrypt(row.credentials_blob))
+        if username is not None:
+            existing["username"] = username
+        if password is not None:
+            existing["password"] = password
+        if api_token is not None:
+            existing["api_token"] = api_token
+        validate_controller_credentials(
+            product_kinds if product_kinds is not None else row.product_kinds.split(","),
+            existing.get("username") or "",
+            existing.get("password") or "",
+            existing.get("api_token"),
+        )
     if name is not None:
         row.name = name
     if base_url is not None:
@@ -115,15 +150,7 @@ async def update_controller(
         row.is_default = True
     elif is_default is False:
         row.is_default = False
-    creds_changed = any(v is not None for v in (username, password, api_token))
     if creds_changed:
-        existing = json.loads(cipher.decrypt(row.credentials_blob))
-        if username is not None:
-            existing["username"] = username
-        if password is not None:
-            existing["password"] = password
-        if api_token is not None:
-            existing["api_token"] = api_token
         row.credentials_blob = cipher.encrypt(json.dumps(existing).encode("utf-8"))
     row.updated_at = datetime.now(timezone.utc)
     await session.flush()
