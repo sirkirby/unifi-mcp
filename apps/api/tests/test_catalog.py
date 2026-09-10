@@ -56,6 +56,8 @@ async def test_catalog_tools(tmp_path, monkeypatch) -> None:
     requirements = {item["name"]: item["auth_method"] for item in body["items"]}
     assert requirements["unifi_list_devices"] == "either"
     assert requirements["unifi_create_firewall_zone"] == "both"
+    assert requirements["unifi_get_firewall_policy_ordering"] == "both"
+    assert requirements["unifi_reorder_firewall_policies"] == "both"
     assert requirements["access_lock_door"] == "either"
 
 

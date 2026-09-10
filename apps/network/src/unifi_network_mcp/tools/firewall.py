@@ -635,14 +635,14 @@ async def update_firewall_policy(
 
 @server.tool(
     name="unifi_get_firewall_policy_ordering",
-    auth="api_key_only",
+    auth="both",
     description=(
         "Get user-defined firewall policy ordering for a source/destination firewall zone pair. "
         "Returns policy IDs from the UniFi public integration API (UUIDs); these IDs are scoped "
         "to the ordering tool family — pass them ONLY to unifi_reorder_firewall_policies. They "
         "do NOT correspond to the policy IDs returned by unifi_list_firewall_policies or any "
-        "other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY). "
-        "Resolving legacy zone IDs also requires session credentials."
+        "other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY) and session credentials. "
+        "The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied."
     ),
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
@@ -678,14 +678,15 @@ async def get_firewall_policy_ordering(
 
 @server.tool(
     name="unifi_reorder_firewall_policies",
-    auth="api_key_only",
+    auth="both",
     description=(
         "Reorder user-defined firewall policies for a source/destination firewall zone pair. "
         "Pass the complete orderedFirewallPolicyIds object obtained from "
         "unifi_get_firewall_policy_ordering (beforeSystemDefined + afterSystemDefined arrays). "
         "These IDs are integration-API UUIDs scoped to the ordering tool family — they are NOT "
         "the policy IDs returned by unifi_list_firewall_policies. Requires confirmation and a "
-        "UniFi API key (UNIFI_API_KEY). Resolving legacy zone IDs also requires session credentials."
+        "UniFi API key (UNIFI_API_KEY) and session credentials. "
+        "The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied."
     ),
     permission_category="firewall_policies",
     permission_action="update",

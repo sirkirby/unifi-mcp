@@ -4030,7 +4030,7 @@
       "category": "firewall",
       "permission_action": "read",
       "read_only_hint": true,
-      "auth_method": "api_key_only",
+      "auth_method": "both",
       "manager_attr": "firewall_manager",
       "manager_method": "get_firewall_policy_ordering",
       "input_schema": {
@@ -5715,7 +5715,7 @@
       "category": "firewall_policies",
       "permission_action": "update",
       "read_only_hint": false,
-      "auth_method": "api_key_only",
+      "auth_method": "both",
       "manager_attr": "firewall_manager",
       "manager_method": "reorder_firewall_policies",
       "input_schema": {

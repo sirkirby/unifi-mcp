@@ -7285,8 +7285,8 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "auth_method": "api_key_only",
-      "description": "Get user-defined firewall policy ordering for a source/destination firewall zone pair. Returns policy IDs from the UniFi public integration API (UUIDs); these IDs are scoped to the ordering tool family \u2014 pass them ONLY to unifi_reorder_firewall_policies. They do NOT correspond to the policy IDs returned by unifi_list_firewall_policies or any other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY). Resolving legacy zone IDs also requires session credentials.",
+      "auth_method": "both",
+      "description": "Get user-defined firewall policy ordering for a source/destination firewall zone pair. Returns policy IDs from the UniFi public integration API (UUIDs); these IDs are scoped to the ordering tool family \u2014 pass them ONLY to unifi_reorder_firewall_policies. They do NOT correspond to the policy IDs returned by unifi_list_firewall_policies or any other controller-API firewall tool. Requires a UniFi API key (UNIFI_API_KEY) and session credentials. The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied.",
       "name": "unifi_get_firewall_policy_ordering",
       "schema": {
         "input": {
@@ -11226,7 +11226,7 @@
         "readOnlyHint": true
       },
       "auth_method": "either",
-      "description": "Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, channel, radio. Filter by filter_type (all/wired/wireless), set include_offline=true for historical clients. Use search to filter by name/hostname/IP/MAC (case-insensitive). For a single client's full raw object, use unifi_get_client_details. For IP-to-client lookup, use unifi_lookup_by_ip. Pass an entry's mac to the client tools as mac_address (unifi_get_client_details, unifi_block_client, unifi_rename_client, ...), as client_mac (unifi_get_client_sessions, unifi_get_client_dpi_traffic, unifi_get_client_wifi_details) or as mac (unifi_recent_events); the parameter name differs per tool and each tool accepts only its own. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. Full details and mutations can require session credentials.",
+      "description": "Returns connected clients with mac, name, hostname, ip, status (online/offline), connection type (wired/wireless), and for wireless clients: ssid, signal_dbm, channel, radio. Filter by filter_type (all/wired/wireless), set include_offline=true for historical clients. Use search to filter by name/hostname/IP/MAC (case-insensitive). For a single client's full raw object, use unifi_get_client_details. For IP-to-client lookup, use unifi_lookup_by_ip. Pass an entry's mac to the client tools as mac_address (unifi_get_client_details, unifi_block_client, unifi_rename_client, ...), as client_mac (unifi_get_client_sessions, unifi_get_client_dpi_traffic, unifi_get_client_wifi_details) or as mac (unifi_recent_events); the parameter name differs per tool and each tool accepts only its own. API-key inventory uses legacy reads when supported, otherwise limited public inventory. Public results include source_api=integration and integration_id; missing legacy fields are unknown. These IDs are scoped to the Integration inventory tool family \u2014 do not pass them to other resource tools. include_offline=true requires session credentials for historical inventory. Full details and mutations can require session credentials.",
       "name": "unifi_list_clients",
       "schema": {
         "input": {
@@ -14293,8 +14293,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "auth_method": "api_key_only",
-      "description": "Reorder user-defined firewall policies for a source/destination firewall zone pair. Pass the complete orderedFirewallPolicyIds object obtained from unifi_get_firewall_policy_ordering (beforeSystemDefined + afterSystemDefined arrays). These IDs are integration-API UUIDs scoped to the ordering tool family \u2014 they are NOT the policy IDs returned by unifi_list_firewall_policies. Requires confirmation and a UniFi API key (UNIFI_API_KEY). Resolving legacy zone IDs also requires session credentials.",
+      "auth_method": "both",
+      "description": "Reorder user-defined firewall policies for a source/destination firewall zone pair. Pass the complete orderedFirewallPolicyIds object obtained from unifi_get_firewall_policy_ordering (beforeSystemDefined + afterSystemDefined arrays). These IDs are integration-API UUIDs scoped to the ordering tool family \u2014 they are NOT the policy IDs returned by unifi_list_firewall_policies. Requires confirmation and a UniFi API key (UNIFI_API_KEY) and session credentials. The current ordering path requires a legacy connection even when Integration zone UUIDs are supplied.",
       "name": "unifi_reorder_firewall_policies",
       "permission_action": "update",
       "permission_category": "firewall_policies",

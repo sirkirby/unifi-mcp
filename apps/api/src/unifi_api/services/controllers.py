@@ -76,6 +76,7 @@ async def create_controller(
     cipher: ColumnCipher,
     payload: CreateControllerPayload,
 ) -> Controller:
+    validate_controller_credentials(payload.product_kinds, payload.username, payload.password, payload.api_token)
     if payload.is_default:
         await _clear_default_flag(session)
     now = datetime.now(timezone.utc)
