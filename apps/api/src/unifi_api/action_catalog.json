@@ -543,7 +543,7 @@
       "category": "door",
       "permission_action": "update",
       "read_only_hint": false,
-      "auth_method": "local_only",
+      "auth_method": "either",
       "manager_attr": "door_manager",
       "manager_method": "apply_lock_door",
       "input_schema": {
@@ -2643,7 +2643,7 @@
       "category": "firewall",
       "permission_action": "create",
       "read_only_hint": false,
-      "auth_method": "local_only",
+      "auth_method": "both",
       "manager_attr": "firewall_manager",
       "manager_method": "create_firewall_zone",
       "input_schema": {
@@ -3276,7 +3276,7 @@
       "category": "firewall",
       "permission_action": "delete",
       "read_only_hint": false,
-      "auth_method": "local_only",
+      "auth_method": "both",
       "manager_attr": "firewall_manager",
       "manager_method": "delete_firewall_zone",
       "input_schema": {
@@ -6539,7 +6539,7 @@
       "category": "firewall",
       "permission_action": "update",
       "read_only_hint": false,
-      "auth_method": "local_only",
+      "auth_method": "both",
       "manager_attr": "firewall_manager",
       "manager_method": "update_firewall_zone",
       "input_schema": {

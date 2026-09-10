@@ -1905,8 +1905,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "auth_method": "local_only",
-      "description": "Create a new firewall zone. Zones group networks for zone-based firewall policy targeting. Network assignment happens separately via firewall_zone_id on unifi_update_network. Requires a UniFi API key (UNIFI_API_KEY). Returns a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "auth_method": "both",
+      "description": "Create a new firewall zone. Zones group networks for zone-based firewall policy targeting. Network assignment happens separately via firewall_zone_id on unifi_update_network. Requires a UniFi API key (UNIFI_API_KEY) and session authentication. Returns a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
       "name": "unifi_create_firewall_zone",
       "permission_action": "create",
       "permission_category": "firewall",
@@ -4176,8 +4176,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "auth_method": "local_only",
-      "description": "Delete a firewall zone by ID. System-defined zones cannot be deleted. Requires a UniFi API key (UNIFI_API_KEY). The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "auth_method": "both",
+      "description": "Delete a firewall zone by ID. System-defined zones cannot be deleted. Requires a UniFi API key (UNIFI_API_KEY) and session authentication. The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
       "name": "unifi_delete_firewall_zone",
       "permission_action": "delete",
       "permission_category": "firewall",
@@ -17520,8 +17520,8 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "auth_method": "local_only",
-      "description": "Rename an existing firewall zone by ID. Only the name is mutable; network membership is managed via firewall_zone_id on the network. Requires a UniFi API key (UNIFI_API_KEY). The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
+      "auth_method": "both",
+      "description": "Rename an existing firewall zone by ID. Only the name is mutable; network membership is managed via firewall_zone_id on the network. Requires a UniFi API key (UNIFI_API_KEY) and session authentication. The ID must come from unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
       "name": "unifi_update_firewall_zone",
       "permission_action": "update",
       "permission_category": "firewall",

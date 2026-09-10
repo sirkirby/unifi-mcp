@@ -2512,7 +2512,7 @@
         "openWorldHint": false,
         "readOnlyHint": false
       },
-      "auth_method": "local_only",
+      "auth_method": "either",
       "description": "Lock a door immediately. This is a physical real-world action. Requires confirm=true to execute. Uses the Access API client when available, with local proxy fallback.",
       "name": "access_lock_door",
       "permission_action": "update",

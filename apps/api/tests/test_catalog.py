@@ -50,6 +50,13 @@ async def test_catalog_tools(tmp_path, monkeypatch) -> None:
     assert len(body["items"]) > 0
     sample = body["items"][0]
     assert "name" in sample and "product" in sample and "render_hint" in sample
+    assert all(
+        item["auth_method"] == app.state.manifest_registry.resolve(item["name"]).auth_method for item in body["items"]
+    )
+    requirements = {item["name"]: item["auth_method"] for item in body["items"]}
+    assert requirements["unifi_list_devices"] == "either"
+    assert requirements["unifi_create_firewall_zone"] == "both"
+    assert requirements["access_lock_door"] == "either"
 
 
 @pytest.mark.asyncio

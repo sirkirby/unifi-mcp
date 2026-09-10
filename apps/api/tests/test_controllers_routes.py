@@ -20,6 +20,59 @@ def _cfg(tmp_path: Path) -> ApiConfig:
     )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "credentials,products",
+    [
+        ({}, ["network"]),
+        ({"username": "u"}, ["network"]),
+        ({"password": "p"}, ["access"]),
+        ({"username": "u", "api_token": "synthetic"}, ["network"]),
+        ({"api_token": "synthetic"}, ["protect"]),
+        ({"api_token": "synthetic"}, ["network", "protect"]),
+    ],
+)
+async def test_invalid_credential_configuration_is_rejected_before_persistence(
+    tmp_path, monkeypatch, credentials, products
+):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app(tmp_path)
+    headers = {"Authorization": f"Bearer {key}"}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/controllers",
+            headers=headers,
+            json={
+                "name": "Synthetic",
+                "base_url": "https://controller.test",
+                "product_kinds": products,
+                **credentials,
+            },
+        )
+        assert response.status_code == 422
+        listed = await client.get("/v1/controllers", headers=headers)
+        assert listed.json() == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("products", [["network"], ["access"], ["network", "access"]])
+async def test_complete_key_only_configuration_can_be_created(tmp_path, monkeypatch, products):
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key = await _bootstrap_app(tmp_path)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/controllers",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "name": "Synthetic",
+                "base_url": "https://controller.test",
+                "product_kinds": products,
+                "api_token": "synthetic-key",
+            },
+        )
+        assert response.status_code == 201
+
+
 async def _bootstrap_app(tmp_path: Path, scopes: str = "admin"):
     app = create_app(_cfg(tmp_path))
     async with app.state.engine.begin() as conn:

@@ -140,7 +140,7 @@ async def access_unlock_door(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False),
     permission_category="door",
     permission_action="update",
-    auth="local_only",
+    auth="either",
 )
 async def access_lock_door(
     door_id: Annotated[str, Field(description="Door UUID (from access_list_doors)")],

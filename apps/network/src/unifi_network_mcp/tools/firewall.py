@@ -826,11 +826,12 @@ async def list_firewall_zones() -> Dict[str, Any]:
     description="Create a new firewall zone. Zones group networks for zone-based "
     "firewall policy targeting. Network assignment happens separately via "
     "firewall_zone_id on unifi_update_network. Requires a UniFi API key "
-    "(UNIFI_API_KEY). Returns a V2 controller ObjectID, not an Integration API UUID. "
+    "(UNIFI_API_KEY) and session authentication. Returns a V2 controller ObjectID, not an Integration API UUID. "
     "Requires confirmation.",
     permission_category="firewall",
     permission_action="create",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+    auth="both",
 )
 async def create_firewall_zone(
     name: Annotated[str, Field(description="Name of the firewall zone (must be unique)")],
@@ -867,11 +868,12 @@ async def create_firewall_zone(
     name="unifi_update_firewall_zone",
     description="Rename an existing firewall zone by ID. Only the name is mutable; "
     "network membership is managed via firewall_zone_id on the network. Requires a "
-    "UniFi API key (UNIFI_API_KEY). The ID must come from unifi_list_firewall_zones; "
+    "UniFi API key (UNIFI_API_KEY) and session authentication. The ID must come from unifi_list_firewall_zones; "
     "it is a V2 controller ObjectID, not an Integration API UUID. Requires confirmation.",
     permission_category="firewall",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+    auth="both",
 )
 async def update_firewall_zone(
     zone_id: Annotated[
@@ -924,12 +926,13 @@ async def update_firewall_zone(
 @server.tool(
     name="unifi_delete_firewall_zone",
     description="Delete a firewall zone by ID. System-defined zones cannot be deleted. "
-    "Requires a UniFi API key (UNIFI_API_KEY). The ID must come from "
+    "Requires a UniFi API key (UNIFI_API_KEY) and session authentication. The ID must come from "
     "unifi_list_firewall_zones; it is a V2 controller ObjectID, not an Integration API UUID. "
     "Requires confirmation.",
     permission_category="firewall",
     permission_action="delete",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
+    auth="both",
 )
 async def delete_firewall_zone(
     zone_id: Annotated[

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
@@ -31,6 +31,17 @@ class ControllerIn(BaseModel):
     product_kinds: list[str]
     verify_tls: bool = True
     is_default: bool = False
+
+    @model_validator(mode="after")
+    def validate_credentials(self) -> ControllerIn:
+        if bool(self.username) != bool(self.password):
+            raise ValueError("Provide both username and password, or omit both for API-key authentication.")
+        has_session = bool(self.username and self.password)
+        if "protect" in self.product_kinds and not has_session:
+            raise ValueError("Protect requires username and password for session bootstrap, even with an API token.")
+        if not has_session and not (self.api_token and self.api_token.strip()):
+            raise ValueError("Provide a complete username/password pair or an API token.")
+        return self
 
 
 class ControllerPatch(BaseModel):
