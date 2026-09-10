@@ -140,7 +140,7 @@ def _stub_managers(
 
 
 @pytest.mark.asyncio
-async def test_public_network_has_no_unverified_client_relationship(tmp_path, monkeypatch):
+async def test_public_inventory_has_no_unverified_client_relationships(tmp_path, monkeypatch):
     from unifi_core.network.models.integration import PublicInventoryItem
 
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
@@ -148,19 +148,24 @@ async def test_public_network_has_no_unverified_client_relationship(tmp_path, mo
     _stub_managers(
         monkeypatch,
         networks=[PublicInventoryItem(id="00000000-0000-0000-0000-000000000001").inventory_record("networks")],
+        devices=[PublicInventoryItem(id="00000000-0000-0000-0000-000000000003").inventory_record("devices")],
         clients=[
             PublicInventoryItem(id="00000000-0000-0000-0000-000000000002", macAddress="aa:01").inventory_record(
                 "clients"
             )
         ],
     )
-    query = f'{{ network {{ networks(controller: "{cid}") {{ items {{ id clients {{ mac }} }} }} }} }}'
+    query = (
+        f'{{ network {{ networks(controller: "{cid}") {{ items {{ id clients {{ mac }} }} }} '
+        f'devices(controller: "{cid}") {{ items {{ mac portClients {{ mac }} }} }} }} }}'
+    )
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/v1/graphql", headers={"Authorization": f"Bearer {key}"}, json={"query": query})
         assert response.status_code == 200
     body = response.json()
     assert "errors" not in body
     assert body["data"]["network"]["networks"]["items"] == [{"id": None, "clients": []}]
+    assert body["data"]["network"]["devices"]["items"] == [{"mac": None, "portClients": []}]
 
 
 @pytest.mark.asyncio
