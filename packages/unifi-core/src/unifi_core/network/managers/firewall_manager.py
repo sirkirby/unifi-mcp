@@ -12,7 +12,7 @@ from aiounifi.models.port_forward import PortForward
 from aiounifi.models.traffic_route import TrafficRoute
 
 from unifi_core.auth import UniFiAuth
-from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
+from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.models.firewall import (
@@ -1285,6 +1285,17 @@ class FirewallManager:
         """Return one full V2 firewall-zone record by V2 ID."""
         return await self._resolve_zone_record(zone_id)
 
+    async def _require_zone_mutation_session(self) -> None:
+        """Verify the V2 read-back path before any Integration API zone write."""
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+        if not self._connection.authentication_status.session_available:
+            raise UniFiAuthError(
+                "Firewall zone mutations require Network session authentication and an API key. "
+                "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD before retrying. "
+                "No zone mutation was attempted."
+            )
+
     async def create_firewall_zone(self, name: str) -> Dict[str, Any]:
         """Create a firewall zone via the integration API.
 
@@ -1297,8 +1308,7 @@ class FirewallManager:
         if not name:
             raise ValueError("Firewall zone name cannot be empty")
         self._require_integration_api_key("Creating a firewall zone")
-        if not await self._connection.ensure_connected():
-            raise ConnectionError("Not connected to controller")
+        await self._require_zone_mutation_session()
         site_id = await self._get_integration_site_id()
         created = await self._request_integration_api(
             "post",
@@ -1317,8 +1327,7 @@ class FirewallManager:
         if not name:
             raise ValueError("Firewall zone name cannot be empty")
         self._require_integration_api_key("Renaming a firewall zone")
-        if not await self._connection.ensure_connected():
-            raise ConnectionError("Not connected to controller")
+        await self._require_zone_mutation_session()
         zone = await self._resolve_zone_record(zone_id)
         if zone.get("default_zone"):
             raise UniFiOperationError(f"Cannot rename system-defined firewall zone '{zone.get('name')}'")
@@ -1352,8 +1361,7 @@ class FirewallManager:
         ``SYSTEM_DEFINED`` zones (``default_zone`` in the V2 shape) are refused.
         """
         self._require_integration_api_key("Deleting a firewall zone")
-        if not await self._connection.ensure_connected():
-            raise ConnectionError("Not connected to controller")
+        await self._require_zone_mutation_session()
         zone = await self._resolve_zone_record(zone_id)
         if zone.get("default_zone"):
             raise UniFiOperationError(f"Cannot delete system-defined firewall zone '{zone.get('name')}'")
