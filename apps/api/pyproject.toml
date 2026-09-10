@@ -22,7 +22,8 @@ dependencies = [
     # Owned event listeners and controller-session cleanup require Core 0.4.49.
     # Global alarm status aggregation requires Core 0.4.50.
     # Controller credential redaction requires Core 0.4.51.
-    "unifi-core[network,protect,access]>=0.4.52,<0.5",
+    # Key-backed inventory, public projections and auth requirements need Core 0.4.53.
+    "unifi-core[network,protect,access]>=0.4.53,<0.5",
     # The API server is a deployable Network client too. Pin the authentication
     # transport exactly so a released API version has a reproducible login stack
     # even when installed from PyPI without the workspace uv.lock.
