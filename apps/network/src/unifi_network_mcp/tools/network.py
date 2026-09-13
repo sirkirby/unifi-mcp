@@ -23,7 +23,7 @@ from unifi_core.network.models.ap_group import (
     to_controller_update as ap_group_to_update,
 )
 from unifi_core.network.models.networks import DELETABLE_PURPOSES as NETWORK_DELETABLE_PURPOSES
-from unifi_core.network.models.networks import MDNS_ENABLED_DESCRIPTION
+from unifi_core.network.models.networks import MDNS_ENABLED_DESCRIPTION, validate_wan_dns_state
 from unifi_core.network.models.networks import validate_create as validate_network_create
 from unifi_core.network.models.networks import validate_update as validate_network_update
 from unifi_core.network.models.wlans import validate_create as validate_wlan_create
@@ -241,6 +241,8 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
         "wan_type",
         "wan_networkgroup",
         "wan_dns_preference",
+        "wan_dns1",
+        "wan_dns2",
         "wan_load_balance_type",
         "wan_load_balance_weight",
         "wan_failover_priority",
@@ -276,6 +278,7 @@ SECURITY_CRITICAL_NETWORK_FIELDS: frozenset[str] = frozenset({"firewall_zone_id"
     "igmp_flood_unknown_multicast (bool). "
     "WAN (gateway uplink, purpose='wan' networks): wan_type ('dhcp'/'static'/'pppoe'/'disabled'), "
     "wan_networkgroup ('WAN'/'WAN2'), wan_dns_preference ('auto'/'manual'), "
+    "wan_dns1 (IPv4, required for manual DNS), wan_dns2 (IPv4), "
     "wan_load_balance_type ('failover-only'/'weighted'), wan_load_balance_weight (int 0-100), "
     "wan_failover_priority (int), wan_sla (str, controller WAN-SLA configuration ID), "
     "report_wan_event (bool), wan_smartq_enabled (bool), wan_vlan_enabled (bool), "
@@ -366,6 +369,8 @@ async def update_network(
             - wan_type (string): WAN IPv4 type: 'dhcp', 'static', 'pppoe', 'disabled'.
             - wan_networkgroup (string): Physical WAN: 'WAN' (primary) or 'WAN2' (secondary).
             - wan_dns_preference (string): WAN DNS source: 'auto' or 'manual'.
+            - wan_dns1 (string): Primary WAN IPv4 DNS server; required for manual DNS.
+            - wan_dns2 (string): Secondary WAN IPv4 DNS server.
             - wan_load_balance_type (string): Dual-WAN mode: 'failover-only' or 'weighted'.
             - wan_load_balance_weight (integer): Load-balance weight (0-100, used when 'weighted').
             - wan_failover_priority (integer): Failover priority (lower = higher priority).
@@ -443,6 +448,10 @@ async def update_network(
         return {"success": False, "error": f"Failed to prepare network update for {network_id}: {e}"}
     if not current:
         return {"success": False, "error": "Network not found"}
+    try:
+        validate_wan_dns_state(current, validated_data)
+    except ValueError as e:
+        return {"success": False, "error": str(e)}
 
     if not confirm:
         wan_critical = sorted(set(validated_data) & CONNECTIVITY_CRITICAL_WAN_FIELDS)

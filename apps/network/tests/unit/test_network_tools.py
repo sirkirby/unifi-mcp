@@ -216,6 +216,8 @@ SAMPLE_WAN = {
     "wan_networkgroup": "WAN",
     "wan_type": "dhcp",
     "wan_dns_preference": "auto",
+    "wan_dns1": "",
+    "wan_dns2": "",
     "wan_smartq_enabled": False,
 }
 
@@ -282,6 +284,8 @@ class TestGetNetworkDetailsWanSummary:
         """summary=true,include='wan' exposes the curated WAN config section."""
         wan = {
             **SAMPLE_WAN,
+            "wan_dns1": "1.1.1.1",
+            "wan_dns2": "8.8.8.8",
             "wan_load_balance_type": "weighted",
             "wan_load_balance_weight": 50,
             "wan_failover_priority": 1,
@@ -311,6 +315,8 @@ class TestGetNetworkDetailsWanSummary:
         assert result["success"] is True
         assert result["summary_mode"] is True
         assert result["details"]["wan_type"] == "dhcp"
+        assert result["details"]["wan_dns1"] == "1.1.1.1"
+        assert result["details"]["wan_dns2"] == "8.8.8.8"
         assert result["details"]["wan_load_balance_weight"] == 50
         assert result["details"]["igmp_proxy_for"] == ["net-a"]
         # IPv6 WAN keys present in the curated summary section (guards key typos/drops)
@@ -461,7 +467,9 @@ class TestUpdateNetworkWanFields:
         valid_values = {
             "wan_type": "static",
             "wan_networkgroup": "WAN2",
-            "wan_dns_preference": "manual",
+            "wan_dns_preference": "auto",
+            "wan_dns1": "1.1.1.1",
+            "wan_dns2": "8.8.8.8",
             "wan_load_balance_type": "weighted",
             "wan_load_balance_weight": 50,
             "wan_failover_priority": 1,
@@ -478,6 +486,43 @@ class TestUpdateNetworkWanFields:
             warnings = result.get("warnings") or []
             assert any("interrupt internet" in w for w in warnings), f"{field}: no warning fired"
             assert any(field in w for w in warnings), f"{field}: not named in warning"
+
+    @pytest.mark.asyncio
+    async def test_wan_manual_dns_without_primary_is_not_confirmable(self):
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_WAN)
+            mock_mgr.update_network = AsyncMock()
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="wan001",
+                update_data={"wan_dns_preference": "manual"},
+                confirm=False,
+            )
+
+        assert result["success"] is False
+        assert "wan_dns1" in result["error"]
+        assert result.get("requires_confirmation") is not True
+        mock_mgr.update_network.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_wan_manual_dns_with_primary_is_previewed_and_warned(self):
+        with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+            mock_mgr.get_network_details = AsyncMock(return_value=SAMPLE_WAN)
+            mock_mgr.update_network = AsyncMock()
+            from unifi_network_mcp.tools.network import update_network
+
+            result = await update_network(
+                network_id="wan001",
+                update_data={"wan_dns_preference": "manual", "wan_dns1": "1.1.1.1"},
+                confirm=False,
+            )
+
+        assert result["success"] is True
+        assert result["requires_confirmation"] is True
+        assert result["preview"]["proposed"]["wan_dns1"] == "1.1.1.1"
+        assert any("interrupt internet" in warning for warning in result["warnings"])
+        mock_mgr.update_network.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_wan_preview_no_warning_for_non_wan_network(self):
