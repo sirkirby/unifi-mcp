@@ -4081,3 +4081,37 @@ async def test_firewall_group_rest_previews_preserve_public_member_fields(
     assert public_payload["members"]
     assert "group_members" not in public_payload
     factory.get_domain_manager.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_firewall_group_confirmed_update_reaches_mutation_with_controller_fields() -> None:
+    manager = MagicMock()
+    manager.update_firewall_group = AsyncMock(return_value=True)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    session = MagicMock()
+
+    await dispatch_action(
+        registry=PRODUCTION_REGISTRY,
+        factory=factory,
+        session=session,
+        tool_name="unifi_update_firewall_group",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"group_id": "g1", "update_data": {"members": ["80", "443"]}},
+        confirm=True,
+        dispatch_table=build_dispatch_table(),
+    )
+
+    factory.get_domain_manager.assert_awaited_once_with(
+        session=session,
+        controller_id="cid",
+        product="network",
+        attr_name="firewall_manager",
+        site="default",
+    )
+    manager.update_firewall_group.assert_awaited_once_with(
+        group_id="g1",
+        group_data={"group_members": ["80", "443"]},
+    )

@@ -1157,7 +1157,7 @@ async def update_firewall_group(
 ) -> Dict[str, Any]:
     """Updates an existing firewall group."""
     redact_sensitive = should_redact_sensitive_fields()
-    if not group_id:
+    if not isinstance(group_id, str) or not group_id.strip():
         return {"success": False, "error": "group_id is required"}
     try:
         controller_updates = validate_group_update(update_data)

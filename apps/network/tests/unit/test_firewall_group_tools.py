@@ -90,13 +90,14 @@ class TestCreateFirewallGroup:
 
 
 class TestUpdateFirewallGroup:
+    @pytest.mark.parametrize("group_id", ["", "   "])
     @pytest.mark.asyncio
-    async def test_rejects_empty_group_id_before_fetching(self) -> None:
+    async def test_rejects_blank_group_id_before_fetching(self, group_id: str) -> None:
         with patch("unifi_network_mcp.tools.firewall.firewall_manager") as manager:
             manager.get_firewall_group_by_id = AsyncMock()
             from unifi_network_mcp.tools.firewall import update_firewall_group
 
-            result = await update_firewall_group("", {"name": "Renamed"}, confirm=False)
+            result = await update_firewall_group(group_id, {"name": "Renamed"}, confirm=False)
 
         assert result == {"success": False, "error": "group_id is required"}
         manager.get_firewall_group_by_id.assert_not_awaited()
