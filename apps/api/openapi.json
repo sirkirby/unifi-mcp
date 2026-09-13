@@ -4919,6 +4919,28 @@
             ],
             "title": "Wan Dhcpv6 Pd Size Auto"
           },
+          "wan_dns1": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Dns1"
+          },
+          "wan_dns2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wan Dns2"
+          },
           "wan_dns_preference": {
             "anyOf": [
               {

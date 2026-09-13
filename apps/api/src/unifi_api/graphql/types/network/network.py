@@ -88,6 +88,8 @@ class Network:
     wan_type: str | None
     wan_networkgroup: str | None
     wan_dns_preference: str | None
+    wan_dns1: str | None
+    wan_dns2: str | None
     wan_load_balance_type: str | None
     wan_load_balance_weight: int | None
     wan_failover_priority: int | None
@@ -204,6 +206,8 @@ class Network:
             wan_type=raw.get("wan_type"),
             wan_networkgroup=raw.get("wan_networkgroup"),
             wan_dns_preference=raw.get("wan_dns_preference"),
+            wan_dns1=raw.get("wan_dns1"),
+            wan_dns2=raw.get("wan_dns2"),
             wan_load_balance_type=raw.get("wan_load_balance_type"),
             wan_load_balance_weight=raw.get("wan_load_balance_weight"),
             wan_failover_priority=raw.get("wan_failover_priority"),

@@ -85,9 +85,9 @@ def test_network_serializer_shape() -> None:
     assert out["enabled"] is True
 
 
-def test_network_serializer_wan_ipv6_fields() -> None:
-    """WAN IPv6 fields round-trip through the Strawberry from_manager_output -> to_dict.
-    Guards against a typo in any of the 9 raw.get() keys (which would silently null the
+def test_network_serializer_wan_dns_fields() -> None:
+    """WAN DNS fields round-trip through the Strawberry from_manager_output -> to_dict.
+    Guards against a typo in any raw.get() key (which would silently null the
     GraphQL/REST field; cross-layer symmetry checks the field name, not the .get() key)."""
     from unifi_api.graphql.types.network.network import Network
 
@@ -103,6 +103,8 @@ def test_network_serializer_wan_ipv6_fields() -> None:
             "ipv6_wan_delegation_type": "none",
             "wan_dhcpv6_pd_size": 64,
             "wan_dhcpv6_pd_size_auto": False,
+            "wan_dns1": "1.1.1.1",
+            "wan_dns2": "8.8.8.8",
             "wan_ipv6_dns_preference": "auto",
             "wan_ipv6_dns1": "2001:4860:4860::8888",
             "wan_ipv6_dns2": "2001:4860:4860::8844",
@@ -115,6 +117,8 @@ def test_network_serializer_wan_ipv6_fields() -> None:
     assert out["ipv6_wan_delegation_type"] == "none"
     assert out["wan_dhcpv6_pd_size"] == 64
     assert out["wan_dhcpv6_pd_size_auto"] is False
+    assert out["wan_dns1"] == "1.1.1.1"
+    assert out["wan_dns2"] == "8.8.8.8"
     assert out["wan_ipv6_dns_preference"] == "auto"
     assert out["wan_ipv6_dns1"] == "2001:4860:4860::8888"
     assert out["wan_ipv6_dns2"] == "2001:4860:4860::8844"

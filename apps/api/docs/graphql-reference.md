@@ -1126,6 +1126,8 @@ type Network {
   wanType: String
   wanNetworkgroup: String
   wanDnsPreference: String
+  wanDns1: String
+  wanDns2: String
   wanLoadBalanceType: String
   wanLoadBalanceWeight: Int
   wanFailoverPriority: Int
