@@ -243,13 +243,18 @@ class ArgTranslatorSpec:
 
     translate: ArgTranslator
     manager_parameters: frozenset[str]
+    preserve_public_preview: bool = False
 
     def __call__(self, args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
         return self.translate(args)
 
 
-def _spec(translate: ArgTranslator, *manager_parameters: str) -> ArgTranslatorSpec:
-    return ArgTranslatorSpec(translate, frozenset(manager_parameters))
+def _spec(
+    translate: ArgTranslator,
+    *manager_parameters: str,
+    preserve_public_preview: bool = False,
+) -> ArgTranslatorSpec:
+    return ArgTranslatorSpec(translate, frozenset(manager_parameters), preserve_public_preview)
 
 
 def _rename_and_drop(
@@ -1682,8 +1687,17 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_get_port_forward": _spec(_rename_and_drop(rename={"port_forward_id": "rule_id"}), "rule_id"),
     # Network create/update payload packing.
     "unifi_create_client_group": _spec(_translate_create_client_group, "group_data"),
-    "unifi_create_firewall_group": _spec(_translate_create_firewall_group, "group_data"),
-    "unifi_update_firewall_group": _spec(_translate_update_firewall_group, "group_id", "group_data"),
+    "unifi_create_firewall_group": _spec(
+        _translate_create_firewall_group,
+        "group_data",
+        preserve_public_preview=True,
+    ),
+    "unifi_update_firewall_group": _spec(
+        _translate_update_firewall_group,
+        "group_id",
+        "group_data",
+        preserve_public_preview=True,
+    ),
     "unifi_create_firewall_zone": _spec(_translate_firewall_zone_crud, "name"),
     "unifi_update_firewall_zone": _spec(_translate_firewall_zone_crud, "zone_id", "name"),
     "unifi_delete_firewall_zone": _spec(_translate_firewall_zone_crud, "zone_id"),

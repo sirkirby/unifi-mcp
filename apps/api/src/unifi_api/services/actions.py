@@ -290,7 +290,11 @@ async def dispatch_action(
         positional, keyword = (), manager_args
 
     if action_kind == "mutation" and not confirm:
-        preview_args = _effective_preview_args(entry, args, keyword)
+        preview_args = (
+            dict(args)
+            if translator is not None and translator.preserve_public_preview
+            else _effective_preview_args(entry, args, keyword)
+        )
         return _build_mutation_preview(entry, site, preview_args)
 
     direct_adapter = DISPATCH_DIRECT_RESULT_ADAPTERS.get(tool_name)
