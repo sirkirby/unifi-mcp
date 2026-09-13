@@ -159,7 +159,15 @@ def test_shape_network_list_applies_every_filter_and_projection() -> None:
 
 
 def test_shape_network_details_supports_sections_and_missing() -> None:
-    network = {"_id": "n1", "name": "LAN", "purpose": "corporate", "dhcpd_enabled": True, "wan_type": "dhcp"}
+    network = {
+        "_id": "n1",
+        "name": "LAN",
+        "purpose": "corporate",
+        "dhcpd_enabled": True,
+        "wan_type": "dhcp",
+        "wan_dns1": "1.1.1.1",
+        "wan_dns2": "8.8.8.8",
+    }
     result = shape_network_details(
         network,
         site="default",
@@ -170,6 +178,8 @@ def test_shape_network_details_supports_sections_and_missing() -> None:
 
     assert result["details"]["dhcpd_enabled"] is True
     assert result["details"]["wan_type"] == "dhcp"
+    assert result["details"]["wan_dns1"] == "1.1.1.1"
+    assert result["details"]["wan_dns2"] == "8.8.8.8"
     assert result["unknown_sections"] == ["typo"]
     assert shape_network_details(None, site="default", network_id="missing")["success"] is False
 

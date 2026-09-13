@@ -200,6 +200,9 @@ async def test_update_network_accepts_manual_dns_with_stored_primary():
 
     assert result.success is True
     assert result.persisted_fields == ("wan_dns_preference",)
+    submitted = conn.request.await_args_list[1].args[0].data
+    assert submitted["wan_dns_preference"] == "manual"
+    assert submitted["wan_dns1"] == "1.1.1.1"
 
 
 async def test_update_network_readback_failure_labels_before_state_explicitly():
