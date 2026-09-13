@@ -822,6 +822,37 @@ def test_live_smoke_protect_capability_preview_args_from_seeded_inventory():
     )
 
 
+def test_live_smoke_firewall_group_uses_public_contract() -> None:
+    import live_smoke
+
+    runner = object.__new__(live_smoke.LiveSmokeRunner)
+    runner.report = SimpleNamespace(created_resources=[], cleaned_resources=[], records=[])
+    runner.server_key = "network"
+    calls: list[tuple[str, dict, str]] = []
+
+    preview, reason = runner.preview_args("unifi_create_firewall_group")
+    assert reason == ""
+    assert preview is not None
+    assert set(preview) == {"group_data"}
+    assert preview["group_data"]["members"] == ["192.0.2.123"]
+
+    async def call(tool: str, args: dict, phase: str):
+        calls.append((tool, args, phase))
+        summary = {"resource_id": "firewall-group-smoke-1"} if tool == "unifi_create_firewall_group" else {}
+        return SimpleNamespace(summary=summary, success=True)
+
+    runner.call = call
+    runner.skip = lambda *_args: None
+    runner.record_check = lambda *_args: None
+
+    asyncio.run(runner.lifecycle_network_firewall_group())
+
+    assert calls[0][1]["group_data"]["members"] == ["192.0.2.123"]
+    assert calls[1][1]["update_data"]["members"] == ["192.0.2.124"]
+    assert calls[-1][1] == {"group_id": "firewall-group-smoke-1", "confirm": True}
+    assert runner.report.cleaned_resources == runner.report.created_resources
+
+
 def test_summarize_failed_applied_create_retains_cleanup_id() -> None:
     import live_smoke
 

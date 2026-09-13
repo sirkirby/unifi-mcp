@@ -744,8 +744,12 @@ def _translate_update_firewall_group(args: dict[str, Any]) -> tuple[tuple[Any, .
     """Validate and translate the public firewall-group partial update."""
     from unifi_core.network.models.firewall import validate_group_update
 
+    group_id = args.get("group_id")
+    if not isinstance(group_id, str) or not group_id.strip():
+        raise ValueError("group_id is required")
+
     return (), {
-        "group_id": args["group_id"],
+        "group_id": group_id,
         "group_data": validate_group_update(args.get("update_data") or {}),
     }
 

@@ -866,9 +866,11 @@ class LiveSmokeRunner:
             },
             "unifi_create_client_group": {"name": f"{RUN_PREFIX}-{stamp}", "members": []},
             "unifi_create_firewall_group": {
-                "name": f"{RUN_PREFIX}-{stamp}",
-                "group_type": "address-group",
-                "group_members": ["192.0.2.123"],
+                "group_data": {
+                    "name": f"{RUN_PREFIX}-{stamp}",
+                    "group_type": "address-group",
+                    "members": ["192.0.2.123"],
+                },
             },
             "access_create_visitor": self.visitor_args(stamp),
             # Every parameter on this tool is optional, so no argument is
@@ -1266,7 +1268,14 @@ class LiveSmokeRunner:
         name = f"{RUN_PREFIX}-fw-group-{stamp}"
         create = await self.call(
             "unifi_create_firewall_group",
-            {"name": name, "group_type": "address-group", "group_members": ["192.0.2.123"], "confirm": True},
+            {
+                "group_data": {
+                    "name": name,
+                    "group_type": "address-group",
+                    "members": ["192.0.2.123"],
+                },
+                "confirm": True,
+            },
             "lifecycle:create",
         )
         group_id = create.summary.get("resource_id")
@@ -1282,7 +1291,7 @@ class LiveSmokeRunner:
             "unifi_update_firewall_group",
             {
                 "group_id": group_id,
-                "group_data": {"name": f"{name}-updated", "group_members": ["192.0.2.124"]},
+                "update_data": {"name": f"{name}-updated", "members": ["192.0.2.124"]},
                 "confirm": True,
             },
             "lifecycle:update",

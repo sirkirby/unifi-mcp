@@ -4032,6 +4032,14 @@ def test_firewall_group_update_translator_rejects_type_changes() -> None:
         )
 
 
+@pytest.mark.parametrize("group_id", ["", "   "])
+def test_firewall_group_update_translator_rejects_blank_id(group_id: str) -> None:
+    with pytest.raises(ValueError, match="group_id is required"):
+        DISPATCH_ARG_TRANSLATORS["unifi_update_firewall_group"](
+            {"group_id": group_id, "update_data": {"name": "Renamed"}}
+        )
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("tool_name", "args", "preview_key"),
