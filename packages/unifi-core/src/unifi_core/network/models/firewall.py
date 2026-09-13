@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from unifi_core.mac import canonical_mac, looks_like_mac, normalize_mac
 from unifi_core.merge import deep_merge
@@ -189,6 +189,9 @@ FIREWALLGROUP_READ_ONLY_FIELDS: frozenset[str] = frozenset(
     for name, field in FirewallGroup.model_fields.items()
     if (field.json_schema_extra or {}).get("mutable", True) is False
 )
+
+FIREWALLGROUP_TYPES: frozenset[str] = frozenset({"address-group", "ipv6-address-group", "port-group"})
+FIREWALLGROUP_UPDATE_FIELDS: frozenset[str] = frozenset({"name", "members"})
 
 
 # ---------------------------------------------------------------------------
@@ -982,6 +985,61 @@ def to_group_create(model: FirewallGroup) -> Dict[str, Any]:
     if model.group_type is not None:
         payload["group_type"] = model.group_type
     payload["group_members"] = model.members
+    return payload
+
+
+def validate_group_create(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a public firewall-group create payload and return controller fields."""
+    if not isinstance(fields, dict):
+        raise ValueError("Firewall group data must be an object.")
+
+    unknown = sorted(set(fields) - FIREWALLGROUP_MUTABLE_FIELDS)
+    if unknown:
+        raise ValueError(f"Unknown or read-only firewall group field(s): {', '.join(unknown)}")
+
+    missing = [field for field in ("name", "group_type", "members") if field not in fields]
+    if missing:
+        raise ValueError(f"Missing required firewall group field(s): {', '.join(missing)}")
+
+    try:
+        model = FirewallGroup(**fields)
+    except ValidationError as error:
+        raise ValueError(f"Invalid firewall group data: {error.errors()[0]['msg']}") from None
+
+    if not model.name or not model.name.strip():
+        raise ValueError("Firewall group 'name' must not be empty.")
+    if model.group_type not in FIREWALLGROUP_TYPES:
+        allowed = ", ".join(sorted(FIREWALLGROUP_TYPES))
+        raise ValueError(f"Firewall group 'group_type' must be one of: {allowed}.")
+    return to_group_create(model)
+
+
+def validate_group_update(fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a public partial firewall-group update and return controller fields."""
+    if not isinstance(fields, dict):
+        raise ValueError("Firewall group update_data must be an object.")
+    if "group_type" in fields:
+        raise ValueError("Firewall group 'group_type' cannot be changed after creation.")
+
+    unknown = sorted(set(fields) - FIREWALLGROUP_UPDATE_FIELDS)
+    if unknown:
+        raise ValueError(f"Unknown or read-only firewall group update field(s): {', '.join(unknown)}")
+    if not fields:
+        raise ValueError("No firewall group fields provided for update.")
+
+    try:
+        model = FirewallGroup(**fields)
+    except ValidationError as error:
+        raise ValueError(f"Invalid firewall group update data: {error.errors()[0]['msg']}") from None
+
+    if "name" in fields and (not model.name or not model.name.strip()):
+        raise ValueError("Firewall group 'name' must not be empty.")
+
+    payload: Dict[str, Any] = {}
+    if "name" in fields:
+        payload["name"] = model.name
+    if "members" in fields:
+        payload["group_members"] = model.members
     return payload
 
 

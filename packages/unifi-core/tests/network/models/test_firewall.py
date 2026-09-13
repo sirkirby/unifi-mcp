@@ -6,6 +6,7 @@ import pytest
 from unifi_core.network.models.firewall import (
     FIREWALLGROUP_MUTABLE_FIELDS,
     FIREWALLGROUP_READ_ONLY_FIELDS,
+    FIREWALLGROUP_UPDATE_FIELDS,
     FIREWALLZONE_MUTABLE_FIELDS,
     FIREWALLZONE_READ_ONLY_FIELDS,
     LEGACY_ACTIONS,
@@ -32,6 +33,8 @@ from unifi_core.network.models.firewall import (
     to_group_create,
     to_zone_create,
     to_zone_update,
+    validate_group_create,
+    validate_group_update,
     validate_policy_port_targeting,
     validate_policy_selectors,
     validate_zone_targeting,
@@ -801,6 +804,48 @@ class TestToGroupCreate:
         payload = to_group_create(model)
         assert payload["group_members"] == ["80", "443"]
         assert "members" not in payload
+
+
+class TestFirewallGroupValidation:
+    def test_create_translates_public_members(self) -> None:
+        payload = validate_group_create({"name": "Web", "group_type": "port-group", "members": ["80", "443"]})
+
+        assert payload == {
+            "name": "Web",
+            "group_type": "port-group",
+            "group_members": ["80", "443"],
+        }
+
+    @pytest.mark.parametrize("missing", ["name", "group_type", "members"])
+    def test_create_requires_complete_public_shape(self, missing: str) -> None:
+        fields = {"name": "Web", "group_type": "port-group", "members": ["443"]}
+        fields.pop(missing)
+
+        with pytest.raises(ValueError, match="Missing required"):
+            validate_group_create(fields)
+
+    def test_create_rejects_controller_dialect(self) -> None:
+        with pytest.raises(ValueError, match="group_members"):
+            validate_group_create({"name": "Web", "group_type": "port-group", "group_members": ["443"]})
+
+    def test_create_rejects_unknown_group_type(self) -> None:
+        with pytest.raises(ValueError, match="group_type"):
+            validate_group_create({"name": "Web", "group_type": "ports", "members": ["443"]})
+
+    def test_update_fields_exclude_immutable_type(self) -> None:
+        assert FIREWALLGROUP_UPDATE_FIELDS == frozenset({"name", "members"})
+
+    def test_update_translates_only_submitted_fields(self) -> None:
+        assert validate_group_update({"members": []}) == {"group_members": []}
+        assert validate_group_update({"name": "Renamed"}) == {"name": "Renamed"}
+
+    def test_update_rejects_group_type(self) -> None:
+        with pytest.raises(ValueError, match="cannot be changed"):
+            validate_group_update({"group_type": "port-group"})
+
+    def test_update_rejects_empty_payload(self) -> None:
+        with pytest.raises(ValueError, match="No firewall group fields"):
+            validate_group_update({})
 
 
 class TestFirewallZoneFieldSets:

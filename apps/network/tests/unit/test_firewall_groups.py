@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from unifi_core.exceptions import UniFiNotFoundError
+
 
 class TestFirewallGroups:
     """Tests for firewall group methods in FirewallManager."""
@@ -175,15 +177,52 @@ class TestFirewallGroups:
 
     @pytest.mark.asyncio
     async def test_update_firewall_group_success(self, firewall_manager, mock_connection):
-        """Test update_firewall_group with valid data."""
-        mock_connection.request.return_value = {"meta": {"rc": "ok"}, "data": []}
+        """A partial update is merged into the complete stored group before PUT."""
+        current = {
+            "_id": "g1",
+            "name": "Original",
+            "group_type": "address-group",
+            "group_members": ["10.0.0.1"],
+            "site_id": "site1",
+        }
+        mock_connection.request.side_effect = [{"data": [current]}, {}]
 
-        result = await firewall_manager.update_firewall_group(
-            "g1", {"_id": "g1", "name": "Updated", "group_type": "address-group", "group_members": ["10.0.0.1"]}
-        )
+        result = await firewall_manager.update_firewall_group("g1", {"name": "Updated"})
 
         assert result is True
+        put_request = mock_connection.request.call_args_list[1].args[0]
+        assert put_request.data == {**current, "name": "Updated"}
         mock_connection._invalidate_cache.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_update_firewall_group_not_found(self, firewall_manager, mock_connection):
+        mock_connection.request.return_value = {"data": []}
+
+        with pytest.raises(UniFiNotFoundError, match="g1"):
+            await firewall_manager.update_firewall_group("g1", {"name": "Updated"})
+
+        assert mock_connection.request.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_update_firewall_group_empty_update_is_noop(self, firewall_manager, mock_connection):
+        mock_connection.request.return_value = {
+            "data": [{"_id": "g1", "name": "Original", "group_type": "address-group", "group_members": []}]
+        }
+
+        assert await firewall_manager.update_firewall_group("g1", {}) is True
+        assert mock_connection.request.await_count == 1
+        mock_connection._invalidate_cache.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_firewall_group_rejects_type_change(self, firewall_manager, mock_connection):
+        mock_connection.request.return_value = {
+            "data": [{"_id": "g1", "name": "Original", "group_type": "address-group", "group_members": []}]
+        }
+
+        with pytest.raises(ValueError, match="cannot be changed"):
+            await firewall_manager.update_firewall_group("g1", {"group_type": "port-group"})
+
+        assert mock_connection.request.await_count == 1
 
     @pytest.mark.asyncio
     async def test_update_firewall_group_not_connected(self, firewall_manager, mock_connection):
@@ -270,12 +309,14 @@ class TestFirewallGroups:
     @pytest.mark.asyncio
     async def test_update_uses_correct_path_and_method(self, firewall_manager, mock_connection):
         """Test update_firewall_group uses PUT to the correct endpoint."""
-        mock_connection.request.return_value = {}
+        mock_connection.request.side_effect = [
+            {"data": [{"_id": "g1", "name": "Original", "group_type": "address-group", "group_members": []}]},
+            {},
+        ]
 
         await firewall_manager.update_firewall_group("g1", {"name": "Updated"})
 
-        call_args = mock_connection.request.call_args
-        api_request = call_args[0][0]
+        api_request = mock_connection.request.call_args_list[1].args[0]
         assert api_request.path == "/rest/firewallgroup/g1"
         assert api_request.method == "put"
 

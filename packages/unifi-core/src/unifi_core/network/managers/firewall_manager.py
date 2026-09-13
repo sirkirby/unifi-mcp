@@ -1511,8 +1511,8 @@ class FirewallManager:
 
         Args:
             group_id: The ID of the group to update.
-            group_data: Complete group data (PUT replaces the entire object).
-                Note: group_type cannot be changed after creation.
+            group_data: Partial controller-dialect fields to merge into the
+                stored group. group_type cannot be changed after creation.
 
         Returns:
             True on success, False on failure.
@@ -1521,7 +1521,17 @@ class FirewallManager:
             raise ConnectionError("Not connected to controller")
 
         try:
-            api_request = ApiRequest(method="put", path=f"/rest/firewallgroup/{group_id}", data=group_data)
+            current = await self.get_firewall_group_by_id(group_id)
+            if current is None:
+                raise UniFiNotFoundError("firewall_group", group_id)
+
+            if "group_type" in group_data and group_data["group_type"] != current.get("group_type"):
+                raise ValueError("Firewall group 'group_type' cannot be changed after creation.")
+            if not group_data:
+                return True
+
+            merged = deep_merge(current, group_data)
+            api_request = ApiRequest(method="put", path=f"/rest/firewallgroup/{group_id}", data=merged)
             await self._connection.request(api_request)
 
             self._connection._invalidate_cache(CACHE_PREFIX_FIREWALL_GROUPS)
