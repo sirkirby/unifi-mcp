@@ -828,6 +828,7 @@ def test_live_smoke_firewall_group_uses_public_contract() -> None:
     runner = object.__new__(live_smoke.LiveSmokeRunner)
     runner.report = SimpleNamespace(created_resources=[], cleaned_resources=[], records=[])
     runner.server_key = "network"
+    runner.cache = live_smoke.ResourceCache()
     calls: list[tuple[str, dict, str]] = []
 
     preview, reason = runner.preview_args("unifi_create_firewall_group")
@@ -838,7 +839,23 @@ def test_live_smoke_firewall_group_uses_public_contract() -> None:
 
     async def call(tool: str, args: dict, phase: str):
         calls.append((tool, args, phase))
-        summary = {"resource_id": "firewall-group-smoke-1"} if tool == "unifi_create_firewall_group" else {}
+        if tool == "unifi_create_firewall_group":
+            summary = {"resource_id": "firewall-group-smoke-1"}
+        else:
+            summary = {}
+        if tool == "unifi_get_firewall_group_details":
+            runner.cache.remember(
+                tool,
+                {
+                    "success": True,
+                    "details": {
+                        "id": "firewall-group-smoke-1",
+                        "name": calls[1][1]["update_data"]["name"],
+                        "group_type": "address-group",
+                        "members": ["192.0.2.124"],
+                    },
+                },
+            )
         return SimpleNamespace(summary=summary, success=True)
 
     runner.call = call
@@ -849,6 +866,7 @@ def test_live_smoke_firewall_group_uses_public_contract() -> None:
 
     assert calls[0][1]["group_data"]["members"] == ["192.0.2.123"]
     assert calls[1][1]["update_data"]["members"] == ["192.0.2.124"]
+    assert calls[2][0] == "unifi_get_firewall_group_details"
     assert calls[-1][1] == {"group_id": "firewall-group-smoke-1", "confirm": True}
     assert runner.report.cleaned_resources == runner.report.created_resources
 

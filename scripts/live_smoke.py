@@ -1287,14 +1287,32 @@ class LiveSmokeRunner:
             )
             return
         self.report.created_resources.append({"type": "firewall_group", "id": group_id, "name": name})
+        updated_name = f"{name}-updated"
+        updated_members = ["192.0.2.124"]
         await self.call(
             "unifi_update_firewall_group",
             {
                 "group_id": group_id,
-                "update_data": {"name": f"{name}-updated", "members": ["192.0.2.124"]},
+                "update_data": {"name": updated_name, "members": updated_members},
                 "confirm": True,
             },
             "lifecycle:update",
+        )
+        await self.call(
+            "unifi_get_firewall_group_details",
+            {"group_id": group_id},
+            "lifecycle:get",
+        )
+        details_payload = self.cache.by_tool.get("unifi_get_firewall_group_details", {})
+        details = details_payload.get("details") if isinstance(details_payload, dict) else None
+        self.record_check(
+            "unifi_update_firewall_group",
+            "lifecycle:verify-update",
+            isinstance(details, dict)
+            and details.get("name") == updated_name
+            and details.get("members") == updated_members
+            and details.get("group_type") == "address-group",
+            "name and members persisted; group_type preserved",
         )
         preview = await self.call(
             "unifi_delete_firewall_group",
