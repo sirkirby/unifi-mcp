@@ -174,6 +174,34 @@ async def test_update_network_fails_when_not_persisted():
     assert result.error is not None and "igmp_snooping" in result.error
 
 
+async def test_update_network_rejects_manual_dns_without_primary_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.return_value = [
+        _network(purpose="wan", wan_dns_preference="auto", wan_dns1=""),
+    ]
+
+    result = await mgr.update_network(NETWORK_ID, {"wan_dns_preference": "manual"})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "wan_dns1" in result.error
+    assert conn.request.await_count == 1
+
+
+async def test_update_network_accepts_manual_dns_with_stored_primary():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="wan", wan_dns_preference="auto", wan_dns1="1.1.1.1")
+    after = {**before, "wan_dns_preference": "manual"}
+    conn.request.side_effect = [[before], {}, [after]]
+
+    result = await mgr.update_network(NETWORK_ID, {"wan_dns_preference": "manual"})
+
+    assert result.success is True
+    assert result.persisted_fields == ("wan_dns_preference",)
+
+
 async def test_update_network_readback_failure_labels_before_state_explicitly():
     conn = _make_connection()
     mgr = NetworkManager(conn)
@@ -211,6 +239,24 @@ async def test_create_network_rejects_unsafe_guest_before_write():
     assert result.success is False
     assert result.mutation_applied is False
     assert "Internal firewall zone" in result.error
+    conn.request.assert_not_called()
+
+
+async def test_create_network_rejects_manual_dns_without_primary_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.create_network(
+        {
+            "name": "WAN",
+            "purpose": "wan",
+            "wan_dns_preference": "manual",
+        }
+    )
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "wan_dns1" in result.error
     conn.request.assert_not_called()
 
 

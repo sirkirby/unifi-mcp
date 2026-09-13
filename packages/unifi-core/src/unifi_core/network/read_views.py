@@ -775,6 +775,8 @@ def shape_network_details(
             "wan_networkgroup",
             "wan_type",
             "wan_dns_preference",
+            "wan_dns1",
+            "wan_dns2",
             "wan_load_balance_type",
             "wan_load_balance_weight",
             "wan_failover_priority",

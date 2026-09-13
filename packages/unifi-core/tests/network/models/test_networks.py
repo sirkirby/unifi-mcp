@@ -12,6 +12,7 @@ from unifi_core.network.models.networks import (
     to_controller_update,
     validate_create,
     validate_update,
+    validate_wan_dns_state,
 )
 
 
@@ -41,6 +42,8 @@ class TestFieldSets:
             "wan_type",
             "wan_networkgroup",
             "wan_dns_preference",
+            "wan_dns1",
+            "wan_dns2",
             "wan_load_balance_type",
             "wan_load_balance_weight",
             "wan_failover_priority",
@@ -167,6 +170,8 @@ class TestFromController:
             "wan_networkgroup": "WAN",
             "wan_type": "dhcp",
             "wan_dns_preference": "auto",
+            "wan_dns1": "1.1.1.1",
+            "wan_dns2": "8.8.8.8",
             "wan_load_balance_type": "weighted",
             "wan_load_balance_weight": 99,
             "wan_failover_priority": 1,
@@ -183,6 +188,8 @@ class TestFromController:
         assert n.wan_networkgroup == "WAN"
         assert n.wan_type == "dhcp"
         assert n.wan_dns_preference == "auto"
+        assert n.wan_dns1 == "1.1.1.1"
+        assert n.wan_dns2 == "8.8.8.8"
         assert n.wan_load_balance_type == "weighted"
         assert n.wan_load_balance_weight == 99
         assert n.wan_failover_priority == 1
@@ -244,6 +251,41 @@ class TestStrictValidation:
             validate_update({"vlan": "bad"})
         with pytest.raises(ValueError, match="valid IPv4 or IPv6 CIDR"):
             validate_update({"ip_subnet": "bad"})
+
+    @pytest.mark.parametrize("field_name", ["wan_dns1", "wan_dns2"])
+    @pytest.mark.parametrize("value", ["dns.example.com", "2001:4860:4860::8888", "999.1.1.1"])
+    def test_update_rejects_invalid_wan_ipv4_dns(self, field_name: str, value: str) -> None:
+        with pytest.raises(ValueError, match="valid IPv4 address"):
+            validate_update({field_name: value})
+
+    def test_update_accepts_ipv4_wan_dns_and_empty_clear(self) -> None:
+        assert validate_update({"wan_dns1": "1.1.1.1", "wan_dns2": ""}) == {
+            "wan_dns1": "1.1.1.1",
+            "wan_dns2": "",
+        }
+
+    def test_manual_wan_dns_requires_primary_resolver(self) -> None:
+        with pytest.raises(ValueError, match="wan_dns1.*required"):
+            validate_wan_dns_state(
+                {"wan_dns_preference": "auto", "wan_dns1": ""},
+                {"wan_dns_preference": "manual"},
+            )
+
+    def test_manual_wan_dns_accepts_submitted_or_stored_primary_resolver(self) -> None:
+        validate_wan_dns_state(
+            {"wan_dns_preference": "auto", "wan_dns1": ""},
+            {"wan_dns_preference": "manual", "wan_dns1": "1.1.1.1"},
+        )
+        validate_wan_dns_state(
+            {"wan_dns_preference": "auto", "wan_dns1": "8.8.8.8"},
+            {"wan_dns_preference": "manual"},
+        )
+
+    def test_unrelated_update_does_not_reject_existing_manual_dns_state(self) -> None:
+        validate_wan_dns_state(
+            {"wan_dns_preference": "manual", "wan_dns1": ""},
+            {"name": "Renamed WAN"},
+        )
 
     @pytest.mark.parametrize("value", [True, False, 1.5, 99.9])
     def test_update_rejects_lossy_wan_load_balance_weight(self, value: object) -> None:
@@ -331,6 +373,18 @@ class TestStrictValidation:
         with pytest.raises(ValueError, match="dhcpd_start"):
             validate_create({"name": "LAN", "purpose": "corporate", "ip_subnet": "10.0.0.1/24"})
 
+    def test_create_rejects_manual_wan_dns_without_primary(self) -> None:
+        with pytest.raises(ValueError, match="wan_dns1.*required"):
+            validate_create(
+                {
+                    "name": "WAN",
+                    "purpose": "wan",
+                    "ip_subnet": "192.0.2.2/24",
+                    "dhcpd_enabled": False,
+                    "wan_dns_preference": "manual",
+                }
+            )
+
 
 class TestToControllerCreate:
     def test_full_model(self) -> None:
@@ -411,11 +465,15 @@ class TestToControllerUpdate:
         result = to_controller_update(
             {
                 "wan_type": "dhcp",
+                "wan_dns1": "1.1.1.1",
+                "wan_dns2": "8.8.8.8",
                 "wan_load_balance_weight": 50,
                 "igmp_proxy_for": "none",
             }
         )
         assert result["wan_type"] == "dhcp"
+        assert result["wan_dns1"] == "1.1.1.1"
+        assert result["wan_dns2"] == "8.8.8.8"
         assert result["wan_load_balance_weight"] == 50
         assert result["igmp_proxy_for"] == "none"
 

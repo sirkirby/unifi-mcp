@@ -8,7 +8,11 @@ from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.mac import normalize_mac_list
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
-from unifi_core.network.models.networks import DELETABLE_PURPOSES, UNSAFE_GUEST_PURPOSE_ERROR
+from unifi_core.network.models.networks import (
+    DELETABLE_PURPOSES,
+    UNSAFE_GUEST_PURPOSE_ERROR,
+    validate_wan_dns_state,
+)
 from unifi_core.network.models.wlans import apply_update_dependencies as apply_wlan_update_dependencies
 from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
 
@@ -151,6 +155,10 @@ class NetworkManager:
                     )
             if network_data.get("purpose") == "guest":
                 return failed_write(UNSAFE_GUEST_PURPOSE_ERROR, operation="create")
+            try:
+                validate_wan_dns_state({}, network_data)
+            except ValueError as error:
+                return failed_write(str(error), operation="create")
 
             api_request = ApiRequest(method="post", path="/rest/networkconf", data=network_data)
             response = await self._connection.request(api_request)
@@ -222,10 +230,16 @@ class NetworkManager:
             # 1. Existence check; raises UniFiNotFoundError on miss.
             existing_network = await self.get_network_details(network_id)
 
-            # 2. Merge updates into existing data (deep merge preserves nested sub-objects)
+            # 2. Validate cross-field state using stored values plus this partial update.
+            try:
+                validate_wan_dns_state(existing_network, update_data)
+            except ValueError as error:
+                return failed_write(str(error), operation="update", metadata={"network_id": network_id})
+
+            # 3. Merge updates into existing data (deep merge preserves nested sub-objects)
             merged_data = deep_merge(existing_network, update_data)
 
-            # 3. Send the full merged data
+            # 4. Send the full merged data
             api_request = ApiRequest(
                 method="put",
                 path=f"/rest/networkconf/{network_id}",

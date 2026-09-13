@@ -18,7 +18,7 @@ type must expose every field listed here.
 from __future__ import annotations
 
 import re
-from ipaddress import ip_interface
+from ipaddress import ip_address, ip_interface
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, ValidationError
@@ -240,6 +240,14 @@ class Network(BaseModel):
     wan_dns_preference: Optional[str] = Field(
         default=None,
         description="WAN DNS source: 'auto' (from ISP) or 'manual'",
+    )
+    wan_dns1: Optional[str] = Field(
+        default=None,
+        description="Primary WAN IPv4 DNS server (required when wan_dns_preference='manual')",
+    )
+    wan_dns2: Optional[str] = Field(
+        default=None,
+        description="Secondary WAN IPv4 DNS server (when wan_dns_preference='manual')",
     )
     wan_load_balance_type: Optional[str] = Field(
         default=None,
@@ -482,6 +490,8 @@ def from_controller(raw: Any) -> Network:
         wan_type=_get(raw, "wan_type"),
         wan_networkgroup=_get(raw, "wan_networkgroup"),
         wan_dns_preference=_get(raw, "wan_dns_preference"),
+        wan_dns1=_get(raw, "wan_dns1"),
+        wan_dns2=_get(raw, "wan_dns2"),
         wan_load_balance_type=_get(raw, "wan_load_balance_type"),
         wan_load_balance_weight=_get(raw, "wan_load_balance_weight"),
         wan_failover_priority=_get(raw, "wan_failover_priority"),
@@ -628,7 +638,31 @@ def _validate_payload(fields: Dict[str, Any], *, operation: str) -> Network:
             ip_interface(model.ip_subnet)
         except ValueError:
             raise ValueError("'ip_subnet' must be a valid IPv4 or IPv6 CIDR.") from None
+    for field_name in ("wan_dns1", "wan_dns2"):
+        value = getattr(model, field_name)
+        if not value:
+            continue
+        try:
+            address = ip_address(value)
+        except ValueError:
+            raise ValueError(f"'{field_name}' must be a valid IPv4 address or an empty string.") from None
+        if address.version != 4:
+            raise ValueError(f"'{field_name}' must be a valid IPv4 address or an empty string.")
     return model
+
+
+def validate_wan_dns_state(current: Dict[str, Any], updates: Dict[str, Any]) -> None:
+    """Reject a touched WAN DNS configuration with manual mode but no primary resolver."""
+    dns_fields = {"wan_dns_preference", "wan_dns1", "wan_dns2"}
+    if not dns_fields.intersection(updates):
+        return
+    preference = updates.get("wan_dns_preference", current.get("wan_dns_preference"))
+    primary = updates.get("wan_dns1", current.get("wan_dns1"))
+    if preference == "manual" and (not isinstance(primary, str) or not primary.strip()):
+        raise ValueError(
+            "'wan_dns1' is required when the effective 'wan_dns_preference' is 'manual'. "
+            "Provide a primary IPv4 resolver in the same update or switch the preference to 'auto'."
+        )
 
 
 def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
@@ -653,6 +687,7 @@ def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
     payload = to_controller_create(model)
     _normalize_vlan_payload(payload)
     payload.setdefault("enabled", True)
+    validate_wan_dns_state({}, payload)
     return payload
 
 
