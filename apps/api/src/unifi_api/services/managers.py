@@ -216,29 +216,50 @@ class ManagerFactory:
         controller_id, product, _attr_name, site_scope = domain_key
         return (controller_id, product, site_scope)
 
+    async def _stop_domain_manager(self, manager: Any) -> None:
+        if self._on_manager_discard is not None:
+            self._on_manager_discard(manager)
+        task = self._listener_tasks.pop(id(manager), None)
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        stop = getattr(manager, "stop_listening", None)
+        if stop is None:
+            return
+        try:
+            result = stop()
+            if inspect.isawaitable(result):
+                await result
+        except Exception as exc:
+            logger.warning("Failed to stop %s listener: %s", type(manager).__name__, type(exc).__name__)
+
     async def _stop_domain_managers(self, managers: list[Any]) -> None:
         """Stop any dropped domain manager that owns a background task.
 
         The Network EventManager runs a reconnecting websocket task; left
         running after its connection manager is discarded it would keep
         logging in with the old credentials.
+
+        A cancellation delivered while one manager is stopping must not
+        abandon the managers that are still to come. They have already been
+        popped from the cache, so nothing else will ever reach them, and each
+        one left running keeps reconnecting with the credentials this stop
+        exists to retire. Stop every manager, then let the cancellation
+        continue to the caller.
         """
+        cancelled: asyncio.CancelledError | None = None
         for manager in managers:
-            if self._on_manager_discard is not None:
-                self._on_manager_discard(manager)
-            task = self._listener_tasks.pop(id(manager), None)
-            if task is not None and not task.done():
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
-            stop = getattr(manager, "stop_listening", None)
-            if stop is None:
-                continue
             try:
-                result = stop()
-                if inspect.isawaitable(result):
-                    await result
-            except Exception as exc:
-                logger.warning("Failed to stop %s listener: %s", type(manager).__name__, type(exc).__name__)
+                await self._stop_domain_manager(manager)
+            except asyncio.CancelledError as error:
+                task = asyncio.current_task()
+                if task is None or not task.cancelling():
+                    # This task was not cancelled: the cancellation came from
+                    # the manager's own stop. Do not swallow it.
+                    raise
+                cancelled = error
+        if cancelled is not None:
+            raise cancelled
 
     async def _start_listener(self, manager: Any) -> None:
         try:

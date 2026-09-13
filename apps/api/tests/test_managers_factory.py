@@ -721,3 +721,58 @@ async def test_probe_heal_keeps_a_healthy_sibling_stream_delivering(tmp_path: Pa
     assert sub.queue.get_nowait() == {"id": "after"}
 
     await engine.dispose()
+
+
+class _Recorder:
+    def __init__(self, stopped: list, name: str, block: bool = False) -> None:
+        self._stopped = stopped
+        self.name = name
+        self.block = block
+        self.entered = asyncio.Event()
+
+    def stop_listening(self):
+        if not self.block:
+            self._stopped.append(self.name)
+            return None
+
+        async def _stop() -> None:
+            self.entered.set()
+            await asyncio.sleep(3600)
+
+        return _stop()
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_one_stop_still_stops_the_rest(tmp_path: Path) -> None:
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    try:
+        stopped: list = []
+        first = _Recorder(stopped, "first", block=True)
+        second = _Recorder(stopped, "second")
+
+        task = asyncio.create_task(factory._stop_domain_managers([first, second]))
+        await asyncio.wait_for(first.entered.wait(), 1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert task.cancelled()
+        assert "second" in stopped
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_stop_domain_managers_stops_both_in_order_without_cancellation(tmp_path: Path) -> None:
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    try:
+        stopped: list = []
+        first = _Recorder(stopped, "first")
+        second = _Recorder(stopped, "second")
+
+        await factory._stop_domain_managers([first, second])
+
+        assert stopped == ["first", "second"]
+    finally:
+        await engine.dispose()
