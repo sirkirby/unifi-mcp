@@ -3,7 +3,6 @@ import logging
 import re
 import time
 import time as _time
-import traceback
 from collections.abc import Iterable, Mapping
 from typing import Any, Dict, Optional
 
@@ -40,21 +39,36 @@ from unifi_core.support_transport import no_retry_support_request
 
 logger = logging.getLogger("unifi-network-mcp")
 
+
+def _silence_aiounifi_logs() -> None:
+    """Prevent dependency records from exposing controller data.
+
+    aiounifi logs raw event/message payloads and connection URLs.  Project-owned
+    log records preserve safe operation context, so dependency records are
+    discarded at their namespace boundary instead of being rendered.
+    """
+    dependency_logger = logging.getLogger("aiounifi")
+    dependency_logger.handlers.clear()
+    dependency_logger.addHandler(logging.NullHandler())
+    dependency_logger.propagate = False
+
+    # These current aiounifi loggers emit the known sensitive records. Disabling
+    # them also prevents an application-supplied child handler from rendering
+    # those records before they reach the namespace boundary above.
+    for logger_name in (
+        "aiounifi.interfaces.connectivity",
+        "aiounifi.models.event",
+        "aiounifi.models.message",
+    ):
+        logging.getLogger(logger_name).disabled = True
+
+
 # Auth-circuit cool-down: first terminal failure blocks reconnects for the base
 # interval, doubling per consecutive failure up to the cap. Rate-limit lockouts
 # clear on the controller in minutes, so the circuit half-opens instead of
 # requiring a process restart.
 _RECONNECT_BLOCK_BASE_SECONDS = 60.0
 _RECONNECT_BLOCK_MAX_SECONDS = 900.0
-
-# aiounifi v92 logs the complete login JSON (including password) at DEBUG.
-# Keep that dependency logger at INFO even when application diagnostics use DEBUG.
-_aiounifi_connectivity_logger = logging.getLogger("aiounifi.interfaces.connectivity")
-
-
-if _aiounifi_connectivity_logger.level == logging.NOTSET or _aiounifi_connectivity_logger.level < logging.INFO:
-    _aiounifi_connectivity_logger.setLevel(logging.INFO)
-
 
 # aiounifi's ResponseError carries no status attribute. Its message is built as
 # ``Call <url> received <status>[ <reason>|: <body>]`` (interfaces/connectivity.py),
@@ -317,6 +331,7 @@ class ConnectionManager:
         auth: UniFiAuth | None = None,
     ):
         """Initialize the Connection Manager."""
+        _silence_aiounifi_logs()
         self.host = host
         self.username = username
         self.password = password
@@ -1161,33 +1176,12 @@ class ConnectionManager:
         level: int,
         what: str,
         api_request: ApiRequest | ApiRequestV2,
-        detail: str,
-        *,
-        with_traceback: bool = False,
-        secrets: Mapping[str, bool] | Iterable[str] = (),
+        error: BaseException,
     ) -> None:
-        """Log a failed request with every address and credential masked.
-
-        ``/stat/user/<mac>`` carries the address in the path itself and
-        aiounifi repeats the URL in its error text, so the path, the detail and
-        the traceback all pass through :meth:`_sanitize_text`. The traceback is
-        rendered here so it passes the mask too; ``exc_info=True`` would append
-        it unmasked.
-        """
+        """Log operation context and exception class without controller data."""
         if not logger.isEnabledFor(level):
             return
-        if api_request.path.startswith(("/get/setting/", "/set/setting/")):
-            # Settings can contain controller-only secrets absent from the
-            # submitted payload. Neither redaction by key nor known-value
-            # scrubbing can make arbitrary response text safe to log.
-            logger.log(level, "%s: settings request failed", what)
-            return
-        message = f"{what}: %s %s - %s"
-        args = [api_request.method.upper(), mask_macs(api_request.path), self._sanitize_text(detail, secrets)]
-        if with_traceback:
-            message += "\n%s"
-            args.append(self._sanitize_text(traceback.format_exc(), secrets))
-        logger.log(level, message, *args)
+        logger.log(level, "%s: %s request failed: %s", what, api_request.method.upper(), type(error).__name__)
 
     @staticmethod
     def _rejection_level(api_request: ApiRequest | ApiRequestV2) -> int:
@@ -1285,14 +1279,12 @@ class ConnectionManager:
                         pass
                     return retry_response if return_raw else retry_response.get("data")
                 except Exception as retry_e:
-                    secrets = self._scrub_error(retry_e, api_request)
-                    retry_error = str(retry_e) or type(retry_e).__name__
+                    self._scrub_error(retry_e, api_request)
                     self._log_request_failure(
                         logging.ERROR,
                         "API request failed even after re-authentication",
                         api_request,
-                        retry_error,
-                        secrets=secrets,
+                        retry_e,
                     )
                     # A second LoginRequired means the refreshed session was not
                     # accepted. Treat it as terminal so later tool calls cannot
@@ -1311,15 +1303,13 @@ class ConnectionManager:
             # place, and a submitted value that collides with the status text
             # would otherwise change how the reply is read.
             status = response_status(e)
-            secrets = self._scrub_error(e, api_request)
+            self._scrub_error(e, api_request)
             if status == 404:
                 # The controller answered: it does not serve this path. That is
                 # a negative reply the caller interprets, not a transport fault.
-                self._log_request_failure(
-                    self._rejection_level(api_request), "Controller answered 404", api_request, str(e), secrets=secrets
-                )
+                self._log_request_failure(self._rejection_level(api_request), "Controller answered 404", api_request, e)
             else:
-                self._log_request_failure(logging.ERROR, "API request error", api_request, str(e), secrets=secrets)
+                self._log_request_failure(logging.ERROR, "API request error", api_request, e)
             try:
                 from unifi_core.diagnostics import diagnostics_enabled, log_api_request
 
@@ -1339,27 +1329,25 @@ class ConnectionManager:
         except Exception as e:
             # Classified before the scrub, for the same reason as above.
             code = controller_error_code(e)
-            secrets = self._scrub_error(e, api_request)
+            self._scrub_error(e, api_request)
             if code is not None:
                 # A controller-reported api.err.* is a negative reply, not an
                 # operator event: routine on a read (an unknown MAC on a
                 # per-MAC lookup), worth a warning on a write. The body can
-                # echo request values, so only the code is logged.
+                # echo request values, so the log keeps only operation context
+                # and the exception class.
                 self._log_request_failure(
                     self._rejection_level(api_request),
                     "Controller rejected request",
                     api_request,
-                    code,
-                    secrets=secrets,
+                    e,
                 )
             else:
                 self._log_request_failure(
                     logging.ERROR,
                     "Unexpected error during API request",
                     api_request,
-                    str(e),
-                    with_traceback=True,
-                    secrets=secrets,
+                    e,
                 )
             try:
                 from unifi_core.diagnostics import diagnostics_enabled, log_api_request

@@ -777,14 +777,22 @@ class TestPathDetection:
         controller.login.assert_awaited_once()
         await manager.cleanup()
 
-    def test_aiounifi_connectivity_debug_logging_is_disabled_for_credential_safety(self, caplog):
-        dependency_logger = logging.getLogger("aiounifi.interfaces.connectivity")
+    def test_aiounifi_logging_is_disabled_for_controller_data_safety(self, caplog):
+        ConnectionManager("controller.test", "admin", "secret")
+        event_logger = logging.getLogger("aiounifi.models.event")
+        message_logger = logging.getLogger("aiounifi.models.message")
+        connectivity_logger = logging.getLogger("aiounifi.interfaces.connectivity")
         caplog.set_level(logging.DEBUG)
 
-        dependency_logger.debug("sending login payload %s", {"username": "admin", "password": "secret"})
+        event_logger.warning("Unsupported event %s", {"ip": "event-ip-sentinel"})
+        message_logger.warning("Unsupported message %s", {"hostname": "message-hostname-sentinel"})
+        connectivity_logger.error("Cannot connect to host %s", "controller-address-sentinel")
+        logging.getLogger("unifi-network-mcp").warning("safe operation context sentinel")
 
-        assert "secret" not in caplog.text
-        assert dependency_logger.getEffectiveLevel() >= logging.INFO
+        assert "event-ip-sentinel" not in caplog.text
+        assert "message-hostname-sentinel" not in caplog.text
+        assert "controller-address-sentinel" not in caplog.text
+        assert "safe operation context sentinel" in caplog.text
 
     @pytest.mark.asyncio
     async def test_last_initialize_error_redacts_configured_secret(self, caplog):

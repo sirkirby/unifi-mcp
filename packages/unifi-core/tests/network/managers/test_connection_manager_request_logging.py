@@ -1,9 +1,8 @@
 """``ConnectionManager.request`` failure logging.
 
-Two rules meet here. Operators need permission denials, login lockouts and
-transport failures at ERROR with diagnostics. The privacy rule for the Network
-client and device paths says a MAC address never reaches a log line, and
-``/stat/user/<mac>`` puts the address in the request path itself.
+Operators need permission denials, login lockouts and transport failures at
+ERROR with diagnostics. Network manager logs carry only operation context and
+exception class; request paths and exception text can contain controller data.
 """
 
 import logging
@@ -61,10 +60,10 @@ def diagnostics_on(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_controller_reported_error_logs_the_code_only(caplog, diagnostics_on):
+async def test_controller_reported_error_logs_the_exception_class_only(caplog, diagnostics_on):
     """A controller ``api.err.*`` answer is a normal negative reply, not an
     operator event: no ERROR, no traceback, and the body (which echoes the
-    requested MAC) never reaches the log. The error code alone is logged."""
+    requested MAC) never reaches the log."""
     manager = _manager(_unknown_user())
 
     with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
@@ -74,7 +73,8 @@ async def test_controller_reported_error_logs_the_code_only(caplog, diagnostics_
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert all(r.exc_info is None for r in caplog.records)
     assert MAC not in caplog.text and "aabbccddeeff" not in caplog.text
-    assert "api.err.UnknownUser" in caplog.text
+    assert "AiounifiException" in caplog.text
+    assert "api.err.UnknownUser" not in caplog.text
     assert "'data'" not in caplog.text
 
 
@@ -89,7 +89,9 @@ async def test_other_aiounifi_errors_keep_error_logging_and_diagnostics(caplog, 
 
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert errors
-    assert "Traceback (most recent call last)" in caplog.text
+    assert "Traceback (most recent call last)" not in caplog.text
+    assert "denied" not in caplog.text
+    assert error_type.__name__ in caplog.text
     diagnostics_on.assert_called_once()
 
 
@@ -105,9 +107,8 @@ async def test_other_aiounifi_errors_keep_error_logging_and_diagnostics(caplog, 
         AiounifiException({"meta": {"rc": "error", "msg": f"bad station {MAC}"}, "data": []}),
     ],
 )
-async def test_failed_request_never_logs_a_mac_bearing_path(caplog, error):
-    """Transport and unexpected failures stay at ERROR, with the address
-    masked in the path and in the exception message (aiounifi quotes the URL)."""
+async def test_failed_request_logs_no_request_path_or_exception_text(caplog, error):
+    """Transport and unexpected failures expose only their exception class."""
     manager = _manager(error)
 
     with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
@@ -116,14 +117,15 @@ async def test_failed_request_never_logs_a_mac_bearing_path(caplog, error):
 
     assert [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert MAC not in caplog.text and "aabbccddeeff" not in caplog.text
-    assert "/stat/user/[redacted]" in caplog.text
+    assert "/stat/user" not in caplog.text
+    assert type(error).__name__ in caplog.text
 
 
 @pytest.mark.asyncio
 async def test_a_404_answer_on_a_read_is_not_an_operator_event(caplog):
     """A controller that does not serve a path answers 404; the caller decides
-    what that means, so the log line is INFO, masked, without a traceback."""
-    url = f"https://c/proxy/network/api/s/default/stat/user/{MAC}"
+    what that means, so the log line is INFO without controller data."""
+    url = f"https://controller-address-sentinel/proxy/network/api/s/default/stat/user/{MAC}"
     manager = _manager(ResponseError(f"Call {url} received 404 Not Found"))
 
     with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
@@ -132,7 +134,9 @@ async def test_a_404_answer_on_a_read_is_not_an_operator_event(caplog):
 
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert "Controller answered 404" in caplog.text
-    assert MAC not in caplog.text and "/stat/user/[redacted]" in caplog.text
+    assert "controller-address-sentinel" not in caplog.text
+    assert MAC not in caplog.text and "/stat/user" not in caplog.text
+    assert "ResponseError" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -146,11 +150,11 @@ async def test_failure_logs_mask_the_configured_credentials(caplog):
             await manager.request(ApiRequest(method="get", path="/stat/sta"))
 
     assert "secret" not in caplog.text
-    assert "<redacted>" in caplog.text
+    assert "RequestError" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_rejected_write_logs_the_code_at_warning(caplog):
+async def test_rejected_write_logs_the_exception_class_at_warning(caplog):
     """A controller api.err.* on a write is not a routine negative reply."""
     manager = _manager(AiounifiException({"meta": {"rc": "error", "msg": "api.err.InvalidPayload"}, "data": []}))
 
@@ -159,7 +163,8 @@ async def test_rejected_write_logs_the_code_at_warning(caplog):
             await manager.request(ApiRequest(method="post", path="/cmd/stamgr", data={"cmd": "block-sta"}))
 
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert warnings and "api.err.InvalidPayload" in warnings[0].getMessage()
+    assert warnings and "AiounifiException" in warnings[0].getMessage()
+    assert "api.err.InvalidPayload" not in caplog.text
     assert all(r.exc_info is None for r in caplog.records)
 
 
