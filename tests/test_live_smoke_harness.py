@@ -830,6 +830,7 @@ def test_live_smoke_firewall_group_uses_public_contract() -> None:
     runner.server_key = "network"
     runner.cache = live_smoke.ResourceCache()
     calls: list[tuple[str, dict, str]] = []
+    checks: list[tuple[str, str, bool, str]] = []
 
     preview, reason = runner.preview_args("unifi_create_firewall_group")
     assert reason == ""
@@ -860,13 +861,14 @@ def test_live_smoke_firewall_group_uses_public_contract() -> None:
 
     runner.call = call
     runner.skip = lambda *_args: None
-    runner.record_check = lambda *_args: None
+    runner.record_check = lambda *args: checks.append(args)
 
     asyncio.run(runner.lifecycle_network_firewall_group())
 
     assert calls[0][1]["group_data"]["members"] == ["192.0.2.123"]
     assert calls[1][1]["update_data"]["members"] == ["192.0.2.124"]
     assert calls[2][0] == "unifi_get_firewall_group_details"
+    assert ("unifi_update_firewall_group", "lifecycle:verify-update", True) == checks[0][:3]
     assert calls[-1][1] == {"group_id": "firewall-group-smoke-1", "confirm": True}
     assert runner.report.cleaned_resources == runner.report.created_resources
 
