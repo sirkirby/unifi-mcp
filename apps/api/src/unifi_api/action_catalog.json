@@ -2592,23 +2592,13 @@
       "manager_method": "create_firewall_group",
       "input_schema": {
         "properties": {
-          "group_members": {
-            "description": "List of IPs/CIDRs (for address groups) or port numbers/ranges (for port groups)",
-            "type": "array"
-          },
-          "group_type": {
-            "description": "Type: 'address-group' (IPv4), 'ipv6-address-group' (IPv6), or 'port-group'",
-            "type": "string"
-          },
-          "name": {
-            "description": "Name of the firewall group",
-            "type": "string"
+          "group_data": {
+            "description": "Firewall group fields: name, group_type, and members",
+            "type": "object"
           }
         },
         "required": [
-          "name",
-          "group_type",
-          "group_members"
+          "group_data"
         ],
         "type": "object",
         "additionalProperties": false
@@ -6488,18 +6478,18 @@
       "manager_method": "update_firewall_group",
       "input_schema": {
         "properties": {
-          "group_data": {
-            "description": "The complete updated group object with all fields",
-            "type": "object"
-          },
           "group_id": {
             "description": "The ID of the group to update",
             "type": "string"
+          },
+          "update_data": {
+            "description": "Fields to update: name and/or members",
+            "type": "object"
           }
         },
         "required": [
           "group_id",
-          "group_data"
+          "update_data"
         ],
         "type": "object",
         "additionalProperties": false

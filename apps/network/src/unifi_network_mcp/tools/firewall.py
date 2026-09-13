@@ -12,6 +12,7 @@ from pydantic import Field
 
 from unifi_core.confirmation import create_preview, delete_preview, toggle_preview, update_preview
 from unifi_core.network.models.firewall import (
+    FirewallGroup,
     firewall_group_from_controller,
     firewall_zone_from_controller,
     legacy_firewall_rule_from_controller,
@@ -19,6 +20,8 @@ from unifi_core.network.models.firewall import (
     normalize_policy_enums,
     normalize_policy_update,
     prepare_policy_update,
+    validate_group_create,
+    validate_group_update,
     validate_policy_port_targeting,
     validate_policy_selectors,
     validate_zone_targeting,
@@ -1070,7 +1073,7 @@ async def get_firewall_group_details(
             {
                 "success": True,
                 "group_id": group_id,
-                "details": json.loads(json.dumps(group, default=str)),
+                "details": firewall_group_from_controller(group).model_dump(exclude_none=True),
             },
             redact_sensitive=redact_sensitive,
         )
@@ -1084,21 +1087,16 @@ async def get_firewall_group_details(
     description="Create a new firewall group (address or port group). "
     "group_type must be 'address-group' (for IPs/CIDRs), 'ipv6-address-group', or 'port-group' (for port numbers/ranges). "
     "IMPORTANT: group_type cannot be changed after creation. "
-    "group_members format: addresses use ['10.0.0.1', '10.0.0.0/24'], ports use ['80', '443', '8080-8090']. "
+    "members format: addresses use ['10.0.0.1', '10.0.0.0/24'], ports use ['80', '443', '8080-8090']. "
     "Requires confirmation.",
     permission_category="firewall",
     permission_action="create",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
 )
 async def create_firewall_group(
-    name: Annotated[str, Field(description="Name of the firewall group")],
-    group_type: Annotated[
-        str,
-        Field(description="Type: 'address-group' (IPv4), 'ipv6-address-group' (IPv6), or 'port-group'"),
-    ],
-    group_members: Annotated[
-        list[str],
-        Field(description="List of IPs/CIDRs (for address groups) or port numbers/ranges (for port groups)"),
+    group_data: Annotated[
+        dict,
+        Field(description="Firewall group fields: name, group_type, and members"),
     ],
     confirm: Annotated[
         bool,
@@ -1107,30 +1105,28 @@ async def create_firewall_group(
 ) -> Dict[str, Any]:
     """Creates a new firewall group."""
     redact_sensitive = should_redact_sensitive_fields()
-    group_data = {
-        "name": name,
-        "group_type": group_type,
-        "group_members": group_members,
-    }
-
-    if not confirm:
-        return redact_sensitive_fields(
-            create_preview(
-                resource_type="firewall_group",
-                resource_data=group_data,
-                resource_name=name,
-            ),
-            redact_sensitive=redact_sensitive,
-        )
-
     try:
-        result = await firewall_manager.create_firewall_group(group_data)
+        controller_data = validate_group_create(group_data)
+        public_data = FirewallGroup(**group_data).model_dump(exclude_none=True)
+        name = public_data["name"]
+
+        if not confirm:
+            return redact_sensitive_fields(
+                create_preview(
+                    resource_type="firewall_group",
+                    resource_data=public_data,
+                    resource_name=name,
+                ),
+                redact_sensitive=redact_sensitive,
+            )
+
+        result = await firewall_manager.create_firewall_group(controller_data)
         if result:
             return redact_sensitive_fields(
                 {
                     "success": True,
                     "message": f"Firewall group '{name}' created successfully.",
-                    "group": json.loads(json.dumps(result, default=str)),
+                    "group": firewall_group_from_controller(result).model_dump(exclude_none=True),
                 },
                 redact_sensitive=redact_sensitive,
             )
@@ -1142,17 +1138,17 @@ async def create_firewall_group(
 
 @server.tool(
     name="unifi_update_firewall_group",
-    description="Update an existing firewall group. Requires the full group object "
-    "(PUT replaces entire resource). group_type cannot be changed. Requires confirmation.",
+    description="Update an existing firewall group. Pass only the fields you want to change — current values are "
+    "automatically preserved. Accepted fields are name and members; group_type cannot be changed. Requires confirmation.",
     permission_category="firewall",
     permission_action="update",
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def update_firewall_group(
     group_id: Annotated[str, Field(description="The ID of the group to update")],
-    group_data: Annotated[
+    update_data: Annotated[
         dict,
-        Field(description="The complete updated group object with all fields"),
+        Field(description="Fields to update: name and/or members"),
     ],
     confirm: Annotated[
         bool,
@@ -1161,18 +1157,29 @@ async def update_firewall_group(
 ) -> Dict[str, Any]:
     """Updates an existing firewall group."""
     redact_sensitive = should_redact_sensitive_fields()
-    if not confirm:
-        return redact_sensitive_fields(
-            create_preview(
-                resource_type="firewall_group",
-                resource_data=group_data,
-                resource_name=group_id,
-            ),
-            redact_sensitive=redact_sensitive,
-        )
-
+    if not group_id:
+        return {"success": False, "error": "group_id is required"}
     try:
-        success = await firewall_manager.update_firewall_group(group_id, group_data)
+        controller_updates = validate_group_update(update_data)
+        public_updates = FirewallGroup(**update_data).model_dump(include=set(update_data), exclude_none=True)
+
+        if not confirm:
+            current = await firewall_manager.get_firewall_group_by_id(group_id)
+            if current is None:
+                return {"success": False, "error": f"Firewall group '{group_id}' not found."}
+            public_current = firewall_group_from_controller(current).model_dump(exclude_none=True)
+            return redact_sensitive_fields(
+                update_preview(
+                    resource_type="firewall_group",
+                    resource_id=group_id,
+                    resource_name=public_current.get("name"),
+                    current_state=public_current,
+                    updates=public_updates,
+                ),
+                redact_sensitive=redact_sensitive,
+            )
+
+        success = await firewall_manager.update_firewall_group(group_id, controller_updates)
         if success:
             return {"success": True, "message": f"Firewall group '{group_id}' updated successfully."}
         return {"success": False, "error": f"Failed to update firewall group '{group_id}'."}

@@ -97,6 +97,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_toggle_firewall_policy": ("firewall_manager", "toggle_firewall_policy"),
     "unifi_get_firewall_policy_details": ("firewall_manager", "get_firewall_policy_by_id"),
     "unifi_update_firewall_policy": ("firewall_manager", "update_firewall_policy"),
+    "unifi_update_firewall_group": ("firewall_manager", "update_firewall_group"),
     "unifi_reorder_firewall_policies": ("firewall_manager", "reorder_firewall_policies"),
     "unifi_update_firewall_zone": ("firewall_manager", "update_firewall_zone"),
     "unifi_delete_firewall_zone": ("firewall_manager", "delete_firewall_zone"),
@@ -724,6 +725,23 @@ def _translate_update_firewall_policy(args: dict[str, Any]) -> tuple[tuple[Any, 
     return (), {
         "policy_id": args["policy_id"],
         "updates": normalize_policy_update(args.get("update_data") or {}),
+    }
+
+
+def _translate_create_firewall_group(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate and translate the public firewall-group create payload."""
+    from unifi_core.network.models.firewall import validate_group_create
+
+    return (), {"group_data": validate_group_create(args.get("group_data") or {})}
+
+
+def _translate_update_firewall_group(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate and translate the public firewall-group partial update."""
+    from unifi_core.network.models.firewall import validate_group_update
+
+    return (), {
+        "group_id": args["group_id"],
+        "group_data": validate_group_update(args.get("update_data") or {}),
     }
 
 
@@ -1664,9 +1682,8 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_get_port_forward": _spec(_rename_and_drop(rename={"port_forward_id": "rule_id"}), "rule_id"),
     # Network create/update payload packing.
     "unifi_create_client_group": _spec(_translate_create_client_group, "group_data"),
-    "unifi_create_firewall_group": _spec(
-        _pack_fields("group_data", frozenset({"name", "group_type", "group_members"})), "group_data"
-    ),
+    "unifi_create_firewall_group": _spec(_translate_create_firewall_group, "group_data"),
+    "unifi_update_firewall_group": _spec(_translate_update_firewall_group, "group_id", "group_data"),
     "unifi_create_firewall_zone": _spec(_translate_firewall_zone_crud, "name"),
     "unifi_update_firewall_zone": _spec(_translate_firewall_zone_crud, "zone_id", "name"),
     "unifi_delete_firewall_zone": _spec(_translate_firewall_zone_crud, "zone_id"),

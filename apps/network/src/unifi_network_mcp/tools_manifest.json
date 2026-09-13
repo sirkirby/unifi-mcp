@@ -1694,7 +1694,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Create a new firewall group (address or port group). group_type must be 'address-group' (for IPs/CIDRs), 'ipv6-address-group', or 'port-group' (for port numbers/ranges). IMPORTANT: group_type cannot be changed after creation. group_members format: addresses use ['10.0.0.1', '10.0.0.0/24'], ports use ['80', '443', '8080-8090']. Requires confirmation.",
+      "description": "Create a new firewall group (address or port group). group_type must be 'address-group' (for IPs/CIDRs), 'ipv6-address-group', or 'port-group' (for port numbers/ranges). IMPORTANT: group_type cannot be changed after creation. members format: addresses use ['10.0.0.1', '10.0.0.0/24'], ports use ['80', '443', '8080-8090']. Requires confirmation.",
       "name": "unifi_create_firewall_group",
       "permission_action": "create",
       "permission_category": "firewall",
@@ -1705,23 +1705,13 @@
               "description": "When true, creates the group. When false (default), returns a preview",
               "type": "boolean"
             },
-            "group_members": {
-              "description": "List of IPs/CIDRs (for address groups) or port numbers/ranges (for port groups)",
-              "type": "array"
-            },
-            "group_type": {
-              "description": "Type: 'address-group' (IPv4), 'ipv6-address-group' (IPv6), or 'port-group'",
-              "type": "string"
-            },
-            "name": {
-              "description": "Name of the firewall group",
-              "type": "string"
+            "group_data": {
+              "description": "Firewall group fields: name, group_type, and members",
+              "type": "object"
             }
           },
           "required": [
-            "name",
-            "group_type",
-            "group_members"
+            "group_data"
           ],
           "type": "object"
         },
@@ -17309,7 +17299,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Update an existing firewall group. Requires the full group object (PUT replaces entire resource). group_type cannot be changed. Requires confirmation.",
+      "description": "Update an existing firewall group. Pass only the fields you want to change \u2014 current values are automatically preserved. Accepted fields are name and members; group_type cannot be changed. Requires confirmation.",
       "name": "unifi_update_firewall_group",
       "permission_action": "update",
       "permission_category": "firewall",
@@ -17320,18 +17310,18 @@
               "description": "When true, updates the group. When false (default), returns a preview",
               "type": "boolean"
             },
-            "group_data": {
-              "description": "The complete updated group object with all fields",
-              "type": "object"
-            },
             "group_id": {
               "description": "The ID of the group to update",
               "type": "string"
+            },
+            "update_data": {
+              "description": "Fields to update: name and/or members",
+              "type": "object"
             }
           },
           "required": [
             "group_id",
-            "group_data"
+            "update_data"
           ],
           "type": "object"
         },

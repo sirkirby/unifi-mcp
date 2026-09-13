@@ -4008,3 +4008,25 @@ def test_snmp_update_translator_rejects_an_empty_update() -> None:
 def test_mgmt_get_translator_targets_the_mgmt_section() -> None:
     _, kwargs = DISPATCH_ARG_TRANSLATORS["unifi_get_mgmt_settings"]({})
     assert kwargs == {"section": "mgmt"}
+
+
+def test_firewall_group_translators_use_public_model_dialect() -> None:
+    _, create_kwargs = DISPATCH_ARG_TRANSLATORS["unifi_create_firewall_group"](
+        {"group_data": {"name": "Web", "group_type": "port-group", "members": ["443"]}}
+    )
+    _, update_kwargs = DISPATCH_ARG_TRANSLATORS["unifi_update_firewall_group"](
+        {"group_id": "g1", "update_data": {"members": ["80", "443"]}}
+    )
+
+    assert create_kwargs == {"group_data": {"name": "Web", "group_type": "port-group", "group_members": ["443"]}}
+    assert update_kwargs == {
+        "group_id": "g1",
+        "group_data": {"group_members": ["80", "443"]},
+    }
+
+
+def test_firewall_group_update_translator_rejects_type_changes() -> None:
+    with pytest.raises(ValueError, match="cannot be changed"):
+        DISPATCH_ARG_TRANSLATORS["unifi_update_firewall_group"](
+            {"group_id": "g1", "update_data": {"group_type": "address-group"}}
+        )
