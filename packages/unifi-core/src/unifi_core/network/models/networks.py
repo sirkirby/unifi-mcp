@@ -658,11 +658,21 @@ def validate_wan_dns_state(current: Dict[str, Any], updates: Dict[str, Any]) -> 
         return
     preference = updates.get("wan_dns_preference", current.get("wan_dns_preference"))
     primary = updates.get("wan_dns1", current.get("wan_dns1"))
-    if preference == "manual" and (not isinstance(primary, str) or not primary.strip()):
+    if preference != "manual":
+        return
+    if not isinstance(primary, str) or not primary.strip():
         raise ValueError(
             "'wan_dns1' is required when the effective 'wan_dns_preference' is 'manual'. "
             "Provide a primary IPv4 resolver in the same update or switch the preference to 'auto'."
         )
+    try:
+        address = ip_address(primary)
+    except ValueError:
+        raise ValueError(
+            "The effective 'wan_dns1' must be a valid IPv4 address when 'wan_dns_preference' is 'manual'."
+        ) from None
+    if address.version != 4:
+        raise ValueError("The effective 'wan_dns1' must be a valid IPv4 address when 'wan_dns_preference' is 'manual'.")
 
 
 def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:

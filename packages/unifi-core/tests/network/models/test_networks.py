@@ -281,6 +281,14 @@ class TestStrictValidation:
             {"wan_dns_preference": "manual"},
         )
 
+    @pytest.mark.parametrize("stored_primary", ["dns.example.com", "2001:4860:4860::8888", "999.1.1.1"])
+    def test_manual_wan_dns_rejects_invalid_stored_primary_resolver(self, stored_primary: str) -> None:
+        with pytest.raises(ValueError, match="effective 'wan_dns1'.*valid IPv4"):
+            validate_wan_dns_state(
+                {"wan_dns_preference": "auto", "wan_dns1": stored_primary},
+                {"wan_dns_preference": "manual"},
+            )
+
     def test_unrelated_update_does_not_reject_existing_manual_dns_state(self) -> None:
         validate_wan_dns_state(
             {"wan_dns_preference": "manual", "wan_dns1": ""},

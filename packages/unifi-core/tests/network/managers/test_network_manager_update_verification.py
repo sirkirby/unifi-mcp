@@ -205,6 +205,21 @@ async def test_update_network_accepts_manual_dns_with_stored_primary():
     assert submitted["wan_dns1"] == "1.1.1.1"
 
 
+async def test_update_network_rejects_manual_dns_with_invalid_stored_primary_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.return_value = [
+        _network(purpose="wan", wan_dns_preference="auto", wan_dns1="dns.example.com"),
+    ]
+
+    result = await mgr.update_network(NETWORK_ID, {"wan_dns_preference": "manual"})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "valid IPv4" in result.error
+    assert conn.request.await_count == 1
+
+
 async def test_update_network_readback_failure_labels_before_state_explicitly():
     conn = _make_connection()
     mgr = NetworkManager(conn)
