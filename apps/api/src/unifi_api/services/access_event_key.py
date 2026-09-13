@@ -27,18 +27,23 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from unifi_core.access.managers.event_manager import SYSTEM_LOG_TOPICS
 from unifi_core.access.models.events import event_identity
 
 from unifi_api.services.pagination import Cursor, InvalidCursor, paginate
 
 __all__ = [
     "InvalidAccessEventCursor",
+    "InvalidAccessEventTopic",
     "event_sort_key",
     "paginate_access_events",
+    "validate_access_event_topic",
 ]
 
 _CURSOR_RESOURCE = "access_events"
-_CURSOR_VERSION = 1
+_CURSOR_VERSION = 2
+_UNTOPICED_CURSOR_VERSION = 1
+_DEFAULT_TOPIC = "admin"
 
 # Not controller data: a process-local arrival stamp that changes every time a
 # websocket row is buffered, so including it would give one event a different
@@ -141,6 +146,19 @@ class InvalidAccessEventCursor(ValueError):
     """An Access-event cursor cannot be decoded or safely migrated."""
 
 
+class InvalidAccessEventTopic(ValueError):
+    """An Access-event topic is outside the controller's supported vocabulary."""
+
+
+def validate_access_event_topic(topic: str) -> str:
+    """Validate an API topic against the Access manager's canonical vocabulary."""
+    if topic not in SYSTEM_LOG_TOPICS:
+        raise InvalidAccessEventTopic(
+            f"Unsupported Access event topic {topic!r}. Choose one of: {', '.join(SYSTEM_LOG_TOPICS)}."
+        )
+    return topic
+
+
 def _decode_cursor_payload(encoded: str) -> dict[str, Any]:
     try:
         payload = json.loads(base64.urlsafe_b64decode(encoded.encode()).decode())
@@ -152,36 +170,60 @@ def _decode_cursor_payload(encoded: str) -> dict[str, Any]:
 
 
 def _validated_identity(payload: dict[str, Any]) -> str:
-    if (
-        "last_id" not in payload
-        or isinstance(payload["last_id"], bool)
-        or not isinstance(payload["last_id"], (str, int))
-    ):
+    if "last_id" not in payload:
         raise InvalidAccessEventCursor("invalid Access event cursor: last_id is required")
+    if isinstance(payload["last_id"], bool) or not isinstance(payload["last_id"], (str, int)):
+        raise InvalidAccessEventCursor("invalid Access event cursor: last_id must be a string or integer")
     identity = str(payload["last_id"])
     if not identity:
         raise InvalidAccessEventCursor("invalid Access event cursor: last_id must be a stable identity")
     return identity
 
 
-def _decode_access_event_cursor(encoded: str) -> tuple[Cursor, bool]:
+def _decode_access_event_cursor(encoded: str, *, topic: str = _DEFAULT_TOPIC) -> tuple[Cursor, bool]:
     """Return ``(cursor, is_legacy)`` after validating its resource format."""
+    validate_access_event_topic(topic)
     payload = _decode_cursor_payload(encoded)
     marker_keys = {"resource", "version"} & payload.keys()
     if marker_keys:
         if payload.get("resource") != _CURSOR_RESOURCE:
             raise InvalidAccessEventCursor("invalid Access event cursor: unknown resource format")
         version = payload.get("version")
-        if isinstance(version, bool) or not isinstance(version, int) or version != _CURSOR_VERSION:
+        if isinstance(version, bool) or not isinstance(version, int):
             raise InvalidAccessEventCursor(f"unsupported Access event cursor version: {version!r}")
-        if set(payload) != {"resource", "version", "last_id", "last_ts"}:
-            raise InvalidAccessEventCursor("invalid Access event cursor: unknown versioned format")
+
+        if version == _UNTOPICED_CURSOR_VERSION:
+            if set(payload) != {"resource", "version", "last_id", "last_ts"}:
+                raise InvalidAccessEventCursor("invalid Access event cursor: unknown versioned format")
+            if topic != _DEFAULT_TOPIC:
+                raise InvalidAccessEventCursor(
+                    "Access event cursor version 1 has no topic and can only resume the default 'admin' topic"
+                )
+        elif version == _CURSOR_VERSION:
+            if set(payload) != {"resource", "version", "topic", "last_id", "last_ts"}:
+                raise InvalidAccessEventCursor("invalid Access event cursor: unknown versioned format")
+            cursor_topic = payload.get("topic")
+            if not isinstance(cursor_topic, str) or cursor_topic not in SYSTEM_LOG_TOPICS:
+                raise InvalidAccessEventCursor("invalid Access event cursor: unsupported topic")
+            if cursor_topic != topic:
+                raise InvalidAccessEventCursor(
+                    f"Access event cursor is for topic {cursor_topic!r}, not requested topic {topic!r}"
+                )
+        else:
+            raise InvalidAccessEventCursor(f"unsupported Access event cursor version: {version!r}")
+
         identity = _validated_identity(payload)
         last_ts = payload.get("last_ts")
         if isinstance(last_ts, bool) or not isinstance(last_ts, int):
-            raise InvalidAccessEventCursor("invalid Access event cursor: version 1 requires epoch milliseconds")
+            raise InvalidAccessEventCursor(
+                f"invalid Access event cursor: version {version} requires epoch milliseconds"
+            )
         return Cursor(last_id=identity, last_ts=last_ts), False
 
+    if topic != _DEFAULT_TOPIC:
+        raise InvalidAccessEventCursor(
+            "Legacy Access event cursors have no topic and can only resume the default 'admin' topic"
+        )
     if set(payload) != {"last_id", "last_ts"}:
         raise InvalidAccessEventCursor("invalid Access event cursor: unknown legacy format")
     try:
@@ -219,11 +261,12 @@ def _migrate_legacy_cursor(
     return Cursor(last_id=cursor.last_id, last_ts=timestamp)
 
 
-def _encode_access_event_cursor(cursor: Cursor) -> str:
+def _encode_access_event_cursor(cursor: Cursor, *, topic: str) -> str:
     payload = json.dumps(
         {
             "resource": _CURSOR_RESOURCE,
             "version": _CURSOR_VERSION,
+            "topic": topic,
             "last_id": cursor.last_id,
             "last_ts": cursor.last_ts,
         }
@@ -237,13 +280,15 @@ def paginate_access_events(
     limit: int,
     cursor: str | None,
     key_fn: Callable[[Any], tuple[int, str]],
+    topic: str = _DEFAULT_TOPIC,
 ) -> tuple[list[Any], str | None]:
     """Paginate Access events with resource-specific cursor compatibility."""
+    validate_access_event_topic(topic)
     cursor_obj = None
     if cursor:
-        cursor_obj, is_legacy = _decode_access_event_cursor(cursor)
+        cursor_obj, is_legacy = _decode_access_event_cursor(cursor, topic=topic)
         if is_legacy:
             cursor_obj = _migrate_legacy_cursor(cursor_obj, items, key_fn)
 
     page, next_cursor = paginate(items, limit=limit, cursor=cursor_obj, key_fn=key_fn)
-    return page, _encode_access_event_cursor(next_cursor) if next_cursor else None
+    return page, _encode_access_event_cursor(next_cursor, topic=topic) if next_cursor else None

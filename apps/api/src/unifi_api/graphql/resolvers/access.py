@@ -40,7 +40,11 @@ from unifi_api.graphql.types.access.schedules import Schedule
 from unifi_api.graphql.types.access.system import AccessHealth, AccessSystemInfo
 from unifi_api.graphql.types.access.users import User
 from unifi_api.graphql.types.access.visitors import Visitor
-from unifi_api.services.access_event_key import event_sort_key, paginate_access_events
+from unifi_api.services.access_event_key import (
+    event_sort_key,
+    paginate_access_events,
+    validate_access_event_topic,
+)
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -329,8 +333,9 @@ async def _fetch_events(
     ctx: GraphQLContext,
     controller: str,
     list_limit: int,
+    topic: str,
 ) -> list:
-    key = f"access/events/{controller}/{list_limit}"
+    key = f"access/events/{controller}/{topic}/{list_limit}"
 
     async def _do() -> list:
         async with ctx.sessionmaker() as session:
@@ -345,7 +350,7 @@ async def _fetch_events(
                 controller,
                 "access",
             )
-            return list(await mgr.list_events(limit=list_limit))
+            return list(await mgr.list_events(topic=topic, limit=list_limit))
 
     return await ctx.cache.get_or_fetch(key, _do)
 
@@ -913,7 +918,11 @@ class AccessQuery:
 
     @strawberry.field(
         permission_classes=[IsRead],
-        description="List Access events (paginated, most recent first).",
+        description=(
+            "List Access events by system-log topic, paginated most recent first. "
+            "Use unlocks for door grants and open/close history, access_denial for refused attempts, "
+            "ring for doorbells, or updates, critical, admin, and admin_activity."
+        ),
     )
     async def events(
         self,
@@ -921,17 +930,20 @@ class AccessQuery:
         controller: strawberry.ID,
         limit: int = 50,
         cursor: str | None = None,
+        topic: str = "admin",
     ) -> AccessEventPage:
         ctx: GraphQLContext = info.context
+        topic = validate_access_event_topic(topic)
         # Mirror the REST route: pull a wider window from the manager so
         # paginate() has enough rows to cursor through.
-        raw = await _fetch_events(ctx, controller, max(limit, 100))
+        raw = await _fetch_events(ctx, controller, max(limit, 100), topic)
 
         page, next_cursor = paginate_access_events(
             list(raw),
             limit=limit,
             cursor=cursor,
             key_fn=_event_key,
+            topic=topic,
         )
         items: list[Event] = []
         for e in page:

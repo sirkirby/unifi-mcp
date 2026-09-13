@@ -10260,6 +10260,18 @@
             }
           },
           {
+            "description": "Access system-log topic: unlocks, access_denial, ring, updates, critical, admin, or admin_activity. Door history is under unlocks.",
+            "in": "query",
+            "name": "topic",
+            "required": false,
+            "schema": {
+              "default": "admin",
+              "description": "Access system-log topic: unlocks, access_denial, ring, updates, critical, admin, or admin_activity. Door history is under unlocks.",
+              "title": "Topic",
+              "type": "string"
+            }
+          },
+          {
             "description": "Controller UUID; omit to use default",
             "in": "query",
             "name": "controller",

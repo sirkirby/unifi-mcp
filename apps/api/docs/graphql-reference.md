@@ -142,8 +142,10 @@ type AccessQuery {
   """
   visitor(controller: ID!, id: ID!): Visitor
 
-  """List Access events (paginated, most recent first)."""
-  events(controller: ID!, limit: Int! = 50, cursor: String = null): AccessEventPage!
+  """
+  List Access events by system-log topic, paginated most recent first. Use unlocks for door grants and open/close history, access_denial for refused attempts, ring for doorbells, or updates, critical, admin, and admin_activity.
+  """
+  events(controller: ID!, limit: Int! = 50, cursor: String = null, topic: String! = "admin"): AccessEventPage!
 
   """Look up a single Access event by id."""
   event(controller: ID!, id: ID!): AccessEvent
@@ -2340,7 +2342,7 @@ Read-only access to UniFi Access resources.
 - `doorStatus: DoorStatus`  — Get the live status (lock state + last event) of a door.
 - `doors: DoorPage!`  — List doors on the Access controller (paginated).
 - `event: AccessEvent`  — Look up a single Access event by id.
-- `events: AccessEventPage!`  — List Access events (paginated, most recent first).
+- `events: AccessEventPage!`  — List Access events by system-log topic, paginated most recent first. Use unlocks for door grants and open/close history, access_denial for refused attempts, ring for doorbells, or updates, critical, admin, and admin_activity.
 - `health: AccessHealth`  — Get the Access health probe summary.
 - `policies: PolicyPage!`  — List Access policies (who-can-access-what bindings).
 - `policy: Policy`  — Look up a single Access policy by id.

@@ -154,6 +154,7 @@ DoorManager.get_door_status raises UniFiNotFoundError on miss → 404.
 - `site_id` (path) (required)
 - `limit` (query)
 - `cursor` (query)
+- `topic` (query)
 - `controller` (query)
 
 

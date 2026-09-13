@@ -165,7 +165,8 @@ async def test_access_events_encoded_cursor_traversal(tmp_path, monkeypatch):
 
         payload = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
         assert payload["resource"] == "access_events"
-        assert payload["version"] == 1
+        assert payload["version"] == 2
+        assert payload["topic"] == "admin"
 
     expected = [row["id"] for row in sorted(rows, key=event_sort_key, reverse=True)]
     assert cursor is None, "traversal did not terminate"

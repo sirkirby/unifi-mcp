@@ -29,8 +29,10 @@ from unifi_api.routes.resources._common import (
 )
 from unifi_api.services.access_event_key import (
     InvalidAccessEventCursor,
+    InvalidAccessEventTopic,
     event_sort_key,
     paginate_access_events,
+    validate_access_event_topic,
 )
 
 router = APIRouter()
@@ -77,8 +79,19 @@ async def list_access_events(
     controller=Depends(resolve_controller),
     limit: int = Query(50, ge=1, le=200),
     cursor: str | None = Query(None),
+    topic: str = Query(
+        "admin",
+        description=(
+            "Access system-log topic: unlocks, access_denial, ring, updates, critical, "
+            "admin, or admin_activity. Door history is under unlocks."
+        ),
+    ),
 ) -> dict:
     require_capability(controller, "access")
+    try:
+        topic = validate_access_event_topic(topic)
+    except InvalidAccessEventTopic as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     factory = request.app.state.manager_factory
     sm = request.app.state.sessionmaker
     async with sm() as session:
@@ -90,7 +103,7 @@ async def list_access_events(
         )
         cm = await factory.get_connection_manager(session, controller.id, "access")
         await _maybe_set_site(cm, site_id)
-        all_events = await mgr.list_events(limit=max(limit, 100))
+        all_events = await mgr.list_events(topic=topic, limit=max(limit, 100))
 
     try:
         page, next_cursor = paginate_access_events(
@@ -98,6 +111,7 @@ async def list_access_events(
             limit=limit,
             cursor=cursor,
             key_fn=_event_key,
+            topic=topic,
         )
     except InvalidAccessEventCursor as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

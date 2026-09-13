@@ -81,13 +81,13 @@ def _stub_access_managers(
     schedules: list[Any] | None = None,
     visitors: list[Any] | None = None,
     events: list[Any] | None = None,
-) -> dict[str, int]:
+) -> dict[str, Any]:
     """Patch ManagerFactory.get_domain_manager / get_connection_manager so
     access resolvers see preconfigured fixture data.
 
     Returns a per-method call counter dict for N+1 assertions.
     """
-    call_counts: dict[str, int] = {
+    call_counts: dict[str, Any] = {
         "list_doors": 0,
         "list_door_groups": 0,
         "list_devices": 0,
@@ -97,6 +97,7 @@ def _stub_access_managers(
         "list_schedules": 0,
         "list_visitors": 0,
         "list_events": 0,
+        "event_topics": [],
     }
 
     async def _stub_list_doors():
@@ -133,6 +134,7 @@ def _stub_access_managers(
 
     async def _stub_list_events(*args, **kwargs):
         call_counts["list_events"] += 1
+        call_counts["event_topics"].append(kwargs.get("topic"))
         return events or []
 
     fake_door_mgr = MagicMock()
@@ -314,6 +316,61 @@ async def test_e2e_cross_resource_query(tmp_path: Path, monkeypatch) -> None:
         assert access["doors"]["items"][0]["name"] == "Front Door"
         assert access["users"]["items"][0]["name"] == "Alice"
         assert access["visitors"]["items"][0]["name"] == "Bob"
+
+
+# ---------------------------------------------------------------------------
+# Access event topic routing and request-cache isolation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_e2e_event_topics_are_forwarded_and_cached_separately(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    calls = _stub_access_managers(monkeypatch, events=[])
+
+    query = f'''{{
+      access {{
+        doorHistory: events(controller: "{cid}", topic: "unlocks") {{ items {{ id }} }}
+        denials: events(controller: "{cid}", topic: "access_denial") {{ items {{ id }} }}
+      }}
+    }}'''
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/graphql",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"query": query},
+        )
+
+    body = response.json()
+    assert body.get("errors") is None, body
+    assert calls["list_events"] == 2
+    assert calls["event_topics"] == ["unlocks", "access_denial"]
+
+
+@pytest.mark.asyncio
+async def test_e2e_event_topic_rejects_unsupported_values_before_fetch(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    calls = _stub_access_managers(monkeypatch, events=[])
+
+    query = f'''{{
+      access {{
+        events(controller: "{cid}", topic: "door_openings") {{ items {{ id }} }}
+      }}
+    }}'''
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/graphql",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"query": query},
+        )
+
+    body = response.json()
+    assert body["data"] is None
+    assert body["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
+    assert "Unsupported Access event topic" in body["errors"][0]["message"]
+    assert calls["list_events"] == 0
 
 
 # ---------------------------------------------------------------------------

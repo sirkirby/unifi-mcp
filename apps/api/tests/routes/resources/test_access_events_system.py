@@ -164,6 +164,7 @@ async def test_list_access_events_happy_path(tmp_path, monkeypatch) -> None:
     ]
 
     async def fake(self, *a, **kw):
+        assert kw["topic"] == "admin"
         return fake_events
 
     from unifi_core.access.managers.event_manager import EventManager
@@ -179,6 +180,61 @@ async def test_list_access_events_happy_path(tmp_path, monkeypatch) -> None:
     body = r.json()
     assert len(body["items"]) == 3
     assert body["render_hint"]["kind"] == "event_log"
+
+
+@pytest.mark.asyncio
+async def test_list_access_events_forwards_each_supported_topic(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+    seen_topics: list[str] = []
+
+    async def fake(self, *a, **kw):
+        seen_topics.append(kw["topic"])
+        return []
+
+    from unifi_core.access.managers.event_manager import SYSTEM_LOG_TOPICS, EventManager
+
+    monkeypatch.setattr(EventManager, "list_events", fake)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        for topic in SYSTEM_LOG_TOPICS:
+            response = await client.get(
+                f"/v1/sites/default/access/events?controller={cid}",
+                params={"topic": topic},
+                headers={"Authorization": f"Bearer {key}"},
+            )
+            assert response.status_code == 200, response.text
+
+    assert seen_topics == list(SYSTEM_LOG_TOPICS)
+
+
+@pytest.mark.asyncio
+async def test_list_access_events_rejects_an_unsupported_topic_before_fetch(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path)
+    _stub_connection(app, cid)
+    called = False
+
+    async def fake(self, *a, **kw):
+        nonlocal called
+        called = True
+        return []
+
+    from unifi_core.access.managers.event_manager import EventManager
+
+    monkeypatch.setattr(EventManager, "list_events", fake)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(
+            f"/v1/sites/default/access/events?controller={cid}",
+            params={"topic": "door_openings"},
+            headers={"Authorization": f"Bearer {key}"},
+        )
+
+    assert response.status_code == 400
+    assert "Unsupported Access event topic" in response.json()["detail"]
+    assert called is False
 
 
 @pytest.mark.asyncio
@@ -270,7 +326,8 @@ async def test_list_access_events_issues_versioned_resource_cursor(tmp_path, mon
     assert response.status_code == 200, response.text
     payload = _cursor_payload(response.json()["next_cursor"])
     assert payload["resource"] == "access_events"
-    assert payload["version"] == 1
+    assert payload["version"] == 2
+    assert payload["topic"] == "admin"
 
 
 @pytest.mark.asyncio

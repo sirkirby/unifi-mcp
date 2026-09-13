@@ -16,9 +16,11 @@ from unifi_api.graphql.resolvers.access import _event_key as gql_event_key
 from unifi_api.routes.resources.access.events import _event_key as rest_event_key
 from unifi_api.services.access_event_key import (
     InvalidAccessEventCursor,
+    InvalidAccessEventTopic,
     _decode_access_event_cursor,
     event_sort_key,
     paginate_access_events,
+    validate_access_event_topic,
 )
 from unifi_api.services.pagination import Cursor
 
@@ -269,7 +271,7 @@ def test_legacy_cursor_accepts_exact_supported_contract(last_id, last_ts) -> Non
     assert cursor == Cursor(last_id=str(last_id), last_ts=last_ts)
 
 
-def test_versioned_access_cursor_is_not_treated_as_legacy() -> None:
+def test_version_1_access_cursor_remains_valid_for_default_admin_topic() -> None:
     encoded = _encode_cursor_payload(
         {
             "resource": "access_events",
@@ -283,6 +285,68 @@ def test_versioned_access_cursor_is_not_treated_as_legacy() -> None:
 
     assert is_legacy is False
     assert cursor == Cursor(last_id="event-id", last_ts=1787054400000)
+
+
+def test_version_2_access_cursor_is_bound_to_its_topic() -> None:
+    encoded = _encode_cursor_payload(
+        {
+            "resource": "access_events",
+            "version": 2,
+            "topic": "unlocks",
+            "last_id": "event-id",
+            "last_ts": 1787054400000,
+        }
+    )
+
+    cursor, is_legacy = _decode_access_event_cursor(encoded, topic="unlocks")
+
+    assert is_legacy is False
+    assert cursor == Cursor(last_id="event-id", last_ts=1787054400000)
+
+    with pytest.raises(InvalidAccessEventCursor, match="not requested topic 'access_denial'"):
+        _decode_access_event_cursor(encoded, topic="access_denial")
+
+
+def test_unscoped_cursors_only_resume_the_default_admin_topic() -> None:
+    version_1 = _encode_cursor_payload(
+        {
+            "resource": "access_events",
+            "version": 1,
+            "last_id": "event-id",
+            "last_ts": 1787054400000,
+        }
+    )
+    legacy = Cursor(last_id="event-id", last_ts=1787054400000).encode()
+
+    with pytest.raises(InvalidAccessEventCursor, match="version 1 has no topic"):
+        _decode_access_event_cursor(version_1, topic="unlocks")
+    with pytest.raises(InvalidAccessEventCursor, match="Legacy Access event cursors have no topic"):
+        _decode_access_event_cursor(legacy, topic="unlocks")
+
+
+def test_pagination_mints_a_version_2_cursor_with_the_topic() -> None:
+    rows = [
+        {"id": "newer", "timestamp": 1787054401},
+        {"id": "older", "timestamp": 1787054399},
+    ]
+
+    _, next_cursor = paginate_access_events(
+        rows,
+        limit=1,
+        cursor=None,
+        key_fn=event_sort_key,
+        topic="unlocks",
+    )
+
+    payload = json.loads(base64.urlsafe_b64decode(next_cursor.encode()).decode())
+    assert payload["version"] == 2
+    assert payload["topic"] == "unlocks"
+
+
+def test_topic_validation_uses_the_manager_vocabulary() -> None:
+    assert validate_access_event_topic("unlocks") == "unlocks"
+    with pytest.raises(InvalidAccessEventTopic, match="Unsupported Access event topic"):
+        validate_access_event_topic("door_openings")
 
 
 @pytest.mark.parametrize(
