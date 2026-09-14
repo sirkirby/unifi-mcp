@@ -132,7 +132,6 @@ class EventManager:
         self._last_error: str | None = None
         self._attach_failures = 0
         self._clock = time.monotonic  # injectable for tests; the loop's clock is untouched
-        self._last_reauth_attempt_at: float | None = None
         # The socket currently being attached: aiounifi's connectivity object
         # (it stamps ws_message_received on every frame) and the stamp it held
         # when this attempt began. None outside an attempt (backoff, stopped).
@@ -149,7 +148,6 @@ class EventManager:
     _BACKOFF_INITIAL = 1.0
     _BACKOFF_MAX = 60.0
     _STABLE_SECONDS = 5.0
-    _REAUTH_MIN_INTERVAL_SECONDS = 60.0
 
     @property
     def is_listening(self) -> bool:
@@ -362,16 +360,6 @@ class EventManager:
 
     async def _reauthenticate_quietly(self) -> None:
         """Rate-limit re-login after rejection; failures must not end the loop."""
-        now = self._clock()
-        if (
-            self._last_reauth_attempt_at is not None
-            and now - self._last_reauth_attempt_at < self._REAUTH_MIN_INTERVAL_SECONDS
-        ):
-            logger.debug("[network-event-mgr] re-authentication deferred by the login rate limit")
-            return
-        # Record the attempt before awaiting it so failures and slow logins are
-        # subject to the same floor as successful ones.
-        self._last_reauth_attempt_at = now
         try:
             ok = await self._cm.reauthenticate()
         except Exception as exc:

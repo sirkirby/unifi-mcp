@@ -557,7 +557,7 @@ class TestWebsocketLifecycle:
         cm.reauthenticate.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_repeated_rejected_handshakes_rate_limit_reauthentication(self, cm, monkeypatch):
+    async def test_repeated_rejected_handshakes_rate_limit_reauthentication(self, monkeypatch):
         """Socket retries keep their backoff schedule, but login attempts stay
         at least one minute apart so the listener cannot trip the controller's
         shared authentication limiter."""
@@ -566,21 +566,20 @@ class TestWebsocketLifecycle:
         import aiohttp
 
         from unifi_core.network.managers import event_manager as em
+        from unifi_core.network.managers.connection_manager import ConnectionManager
         from unifi_core.network.managers.event_manager import EventManager
 
         rejected = aiohttp.WSServerHandshakeError(
             request_info=MagicMock(), history=(), status=401, message="Unauthorized"
         )
-        cm.controller.start_websocket = AsyncMock(side_effect=rejected)
         now = {"value": 0.0}
         login_times: list[float] = []
         sleeps: list[float] = []
         reached = asyncio.Event()
         real_sleep = asyncio.sleep
 
-        async def _reauthenticate():
+        async def _login():
             login_times.append(now["value"])
-            return True
 
         async def _sleep(delay):
             sleeps.append(delay)
@@ -590,7 +589,17 @@ class TestWebsocketLifecycle:
                 await asyncio.Event().wait()
             await real_sleep(0)
 
-        cm.reauthenticate = AsyncMock(side_effect=_reauthenticate)
+        controller = self._controller()
+        controller.start_websocket = AsyncMock(side_effect=rejected)
+        controller.login = AsyncMock(side_effect=_login)
+        session = MagicMock(closed=False)
+        session.close = AsyncMock()
+        controller.connectivity.config.session = session
+        cm = ConnectionManager("controller.invalid", "admin", "secret")
+        cm.controller = controller
+        cm._aiohttp_session = session
+        cm._initialized = True
+        cm._reauthentication_clock = lambda: now["value"]
         monkeypatch.setattr(em.asyncio, "sleep", _sleep)
         mgr = EventManager(cm)
         mgr._clock = lambda: now["value"]
@@ -601,6 +610,7 @@ class TestWebsocketLifecycle:
 
         assert sleeps == [1, 2, 4, 8, 16, 32, 60]
         assert login_times == [0.0, 63.0]
+        await cm.cleanup()
 
     def test_buffer_capacity_comes_from_config(self, cm):
         from unifi_core.network.managers.event_manager import EventManager

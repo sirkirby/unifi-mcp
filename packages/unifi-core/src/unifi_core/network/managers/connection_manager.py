@@ -69,6 +69,7 @@ def _silence_aiounifi_logs() -> None:
 # requiring a process restart.
 _RECONNECT_BLOCK_BASE_SECONDS = 60.0
 _RECONNECT_BLOCK_MAX_SECONDS = 900.0
+_REAUTHENTICATION_MIN_INTERVAL_SECONDS = 60.0
 
 # aiounifi's ResponseError carries no status attribute. Its message is built as
 # ``Call <url> received <status>[ <reason>|: <body>]`` (interfaces/connectivity.py),
@@ -358,6 +359,8 @@ class ConnectionManager:
         self._last_cache_update: Dict[str, float] = {}
         self._last_connection_error: Optional[str] = None
         self._reconnect_block_error: Optional[str] = None
+        self._last_reauthentication_attempt_at: float | None = None
+        self._reauthentication_clock = _time.monotonic
         self._reconnect_block_until: float = 0.0
         self._reconnect_block_count: int = 0
         self._auth_generation = 0
@@ -834,17 +837,41 @@ class ConnectionManager:
         except Exception as error:
             raise UniFiAuthError(f"Invalid Network public inventory ({type(error).__name__}).") from None
 
-    async def _initialize_session(self) -> bool:
+    def _reauthentication_deferred(self) -> bool:
+        """Whether a listener-triggered login must wait for its safety floor."""
+        if self._last_reauthentication_attempt_at is None:
+            return False
+        return (
+            self._reauthentication_clock() - self._last_reauthentication_attempt_at
+            < _REAUTHENTICATION_MIN_INTERVAL_SECONDS
+        )
+
+    def _claim_reauthentication_attempt(self) -> bool:
+        """Reserve one controller login in the current reauthentication window."""
+        now = self._reauthentication_clock()
+        if (
+            self._last_reauthentication_attempt_at is not None
+            and now - self._last_reauthentication_attempt_at < _REAUTHENTICATION_MIN_INTERVAL_SECONDS
+        ):
+            return False
+        self._last_reauthentication_attempt_at = now
+        return True
+
+    async def _initialize_session(self, *, rate_limit_login: bool = False) -> bool:
         """Initialize the controller connection (correct for attached aiounifi version)."""
         blocked = self._reconnect_block_active()
         if blocked:
             logger.error("Automatic reconnect remains blocked after authentication failure; waiting for cooldown.")
+            return False
+        if rate_limit_login and self._reauthentication_deferred():
             return False
         if self._initialized and self.controller and self._aiohttp_session and not self._aiohttp_session.closed:
             return True
 
         async with self._connect_lock:
             if self._reconnect_block_active():
+                return False
+            if rate_limit_login and self._reauthentication_deferred():
                 return False
             if self._initialized and self.controller and self._aiohttp_session and not self._aiohttp_session.closed:
                 return True
@@ -922,6 +949,9 @@ class ConnectionManager:
                         self.controller.connectivity.is_unifi_os = self._unifi_os_override
                         logger.debug("Pre-login is_unifi_os set to: %s", self._unifi_os_override)
 
+                    if rate_limit_login and not self._claim_reauthentication_attempt():
+                        await self._discard_connection()
+                        return False
                     await self.controller.login()
                     # Core owns session-expiry retries so concurrent requests share
                     # the generation-locked _reauthenticate() path below.
@@ -1036,6 +1066,8 @@ class ConnectionManager:
             return False
         if auth_status.session_available:
             return await self.ensure_connected()
+        if self._last_reauthentication_attempt_at is not None and self._reauthentication_deferred():
+            return False
 
         async with self._initialize_lock:
             auth_status = self.authentication_status
@@ -1043,7 +1075,10 @@ class ConnectionManager:
                 return False
             if auth_status.session_available:
                 return True
-            return await self._initialize_session()
+            rate_limit_login = self._last_reauthentication_attempt_at is not None
+            if rate_limit_login and self._reauthentication_deferred():
+                return False
+            return await self._initialize_session(rate_limit_login=rate_limit_login)
 
     async def reauthenticate(self) -> bool:
         """Refresh the controller login for the current session generation.
@@ -1076,6 +1111,8 @@ class ConnectionManager:
             ):
                 return True
             if not self.controller or not self._aiohttp_session or self._aiohttp_session.closed:
+                return False
+            if not self._claim_reauthentication_attempt():
                 return False
 
             try:
@@ -1110,6 +1147,7 @@ class ConnectionManager:
             self._last_connection_error = None
             self._clear_reconnect_block()
             self._auth_generation = 0
+            self._last_reauthentication_attempt_at = None
             self._key_mode = False
             self._key_retry_until = 0.0
             self._integration_prefix = None
