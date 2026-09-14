@@ -17,7 +17,28 @@ async def test_reauthenticate_refreshes_the_current_session_generation():
 
     assert await manager.reauthenticate() is True
 
-    manager._reauthenticate.assert_awaited_once_with(3)
+    manager._reauthenticate.assert_awaited_once_with(3, rate_limit_login=True)
+
+
+@pytest.mark.asyncio
+async def test_listener_floor_does_not_throttle_foreground_reauthentication():
+    manager = ConnectionManager("controller.invalid", "admin", "secret")
+    session = MagicMock(closed=False)
+    session.close = AsyncMock()
+    controller = MagicMock()
+    controller.login = AsyncMock()
+    controller.connectivity.can_retry_login = True
+    manager.controller = controller
+    manager._aiohttp_session = session
+    manager._initialized = True
+    now = {"value": 0.0}
+    manager._reauthentication_clock = lambda: now["value"]
+
+    assert await manager.reauthenticate() is True
+    now["value"] = 1.0
+    assert await manager._reauthenticate(manager._auth_generation) is True
+
+    assert controller.login.await_count == 2
 
 
 @pytest.mark.asyncio

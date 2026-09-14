@@ -1087,9 +1087,9 @@ class ConnectionManager:
         their own, such as the event websocket after a rejected handshake.
         Honours the reconnect circuit like every other login path.
         """
-        return await self._reauthenticate(self._auth_generation)
+        return await self._reauthenticate(self._auth_generation, rate_limit_login=True)
 
-    async def _reauthenticate(self, expected_generation: int) -> bool:
+    async def _reauthenticate(self, expected_generation: int, *, rate_limit_login: bool = False) -> bool:
         """Refresh an expired controller login once, deduplicating concurrent attempts."""
         if self._key_mode:
             self._last_connection_error = (
@@ -1112,7 +1112,7 @@ class ConnectionManager:
                 return True
             if not self.controller or not self._aiohttp_session or self._aiohttp_session.closed:
                 return False
-            if not self._claim_reauthentication_attempt():
+            if rate_limit_login and not self._claim_reauthentication_attempt():
                 return False
 
             try:
