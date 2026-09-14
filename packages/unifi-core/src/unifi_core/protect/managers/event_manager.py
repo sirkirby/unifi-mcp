@@ -1038,17 +1038,12 @@ class EventManager:
         except Exception as exc:
             raise UniFiNotFoundError("event", event_id) from exc
 
-        # The Protect API uses is_favorite as the closest analog to
-        # "acknowledged".  We set it to True.
-        # Note: the exact mutation API depends on the uiprotect version.
-        # Some versions expose event.set_is_favorite() or similar.
-        # Fall back to a generic save approach.
-        try:
-            event.is_favorite = True
-            await event.save_device()
-        except AttributeError:
-            # Older API versions may not have save_device on events
-            logger.warning("[event-mgr] Event save_device not available; acknowledge may not persist.")
+        # Protect uses is_favorite as the closest analog to "acknowledged".
+        # Events are not SDK-updatable models, so use Protect's dedicated
+        # favorite endpoint. It returns an empty success body, which requires
+        # api_request_raw rather than the JSON-decoding api_request helper.
+        if event.is_favorite is not True:
+            await self._cm.client.api_request_raw(f"favorite-events/{event_id}", method="post")
 
         return {
             "event_id": event_id,

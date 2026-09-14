@@ -372,6 +372,25 @@ class TestProtectAcknowledgeEvent:
         assert result["data"]["acknowledged"] is True
 
     @pytest.mark.asyncio
+    async def test_confirm_reports_persistence_failure(self, mock_event_manager):
+        from unifi_protect_mcp.tools.events import protect_acknowledge_event
+
+        mock_event_manager.acknowledge_event = AsyncMock(
+            return_value={
+                "event_id": "evt-1",
+                "type": "motion",
+                "camera_id": "cam-001",
+                "current_is_favorite": False,
+                "proposed_is_favorite": True,
+            }
+        )
+        mock_event_manager.apply_acknowledge_event = AsyncMock(side_effect=RuntimeError("save rejected"))
+
+        result = await protect_acknowledge_event("evt-1", confirm=True)
+
+        assert result == {"success": False, "error": "Failed to acknowledge event: save rejected"}
+
+    @pytest.mark.asyncio
     async def test_not_found(self, mock_event_manager):
         from unifi_protect_mcp.tools.events import protect_acknowledge_event
 

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from uiprotect.data import EventType, ModelType, SmartDetectObjectType, WSAction
+from uiprotect.data import Event, EventType, ModelType, SmartDetectObjectType, WSAction
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.protect.managers.event_manager import EventManager
@@ -48,6 +48,7 @@ def _make_connection_manager(events=None) -> MagicMock:
     cm.client.get_event = AsyncMock()
     cm.client.get_event_thumbnail = AsyncMock()
     cm.client.api_request = AsyncMock(return_value={"groups": []})
+    cm.client.api_request_raw = AsyncMock(return_value=b"")
     cm.client.subscribe_websocket = MagicMock(return_value=MagicMock())  # unsub callable
     return cm
 
@@ -603,7 +604,39 @@ class TestEventManagerAcknowledgeEvent:
         result = await mgr.apply_acknowledge_event("evt-1")
         assert result["acknowledged"] is True
         assert result["is_favorite"] is True
-        event.save_device.assert_awaited_once()
+        cm.client.api_request_raw.assert_awaited_once_with("favorite-events/evt-1", method="post")
+
+    @pytest.mark.asyncio
+    async def test_apply_is_a_noop_when_already_acknowledged(self):
+        event = _make_event(id="evt-1", is_favorite=True)
+        cm = _make_connection_manager()
+        cm.client.get_event = AsyncMock(return_value=event)
+        mgr = EventManager(cm)
+
+        result = await mgr.apply_acknowledge_event("evt-1")
+
+        assert result["acknowledged"] is True
+        cm.client.api_request_raw.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_apply_does_not_use_unsupported_sdk_event_save(self):
+        event = Event(
+            id="evt-1",
+            type=EventType.MOTION,
+            start=datetime(2026, 3, 16, 12, 0, tzinfo=timezone.utc),
+            is_favorite=False,
+        )
+        cm = _make_connection_manager()
+        cm.client.get_event = AsyncMock(return_value=event)
+        mgr = EventManager(cm)
+
+        with patch.object(Event, "save_device", autospec=True) as save_device:
+            result = await mgr.apply_acknowledge_event("evt-1")
+
+        assert result["acknowledged"] is True
+        assert result["is_favorite"] is True
+        save_device.assert_not_awaited()
+        cm.client.api_request_raw.assert_awaited_once_with("favorite-events/evt-1", method="post")
 
     @pytest.mark.asyncio
     async def test_apply_not_found(self):
