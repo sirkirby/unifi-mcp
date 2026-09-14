@@ -178,6 +178,22 @@ def test_firewall_manager_builder_receives_connection_auth() -> None:
     assert manager._auth is auth
 
 
+@pytest.mark.asyncio
+async def test_network_factory_wires_cached_traffic_route_manager_into_firewall_manager(tmp_path, monkeypatch) -> None:
+    _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    try:
+        async with sm() as session:
+            firewall_manager = await factory.get_domain_manager(session, cid, "network", "firewall_manager")
+            traffic_route_manager = await factory.get_domain_manager(session, cid, "network", "traffic_route_manager")
+
+        assert firewall_manager._traffic_route_manager is traffic_route_manager
+    finally:
+        await factory.invalidate_controller(cid)
+        await engine.dispose()
+
+
 def test_traffic_flow_manager_builder_receives_dpi_catalog_with_connection_auth() -> None:
     auth = object()
     cm = _FakeCM()

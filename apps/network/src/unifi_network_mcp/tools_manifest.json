@@ -1,5 +1,5 @@
 {
-  "count": 194,
+  "count": 195,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -26,6 +26,7 @@
     "unifi_create_route": "unifi_network_mcp.tools.routing",
     "unifi_create_simple_port_forward": "unifi_network_mcp.tools.port_forwards",
     "unifi_create_simple_qos_rule": "unifi_network_mcp.tools.qos",
+    "unifi_create_traffic_route": "unifi_network_mcp.tools.traffic_routes",
     "unifi_create_usergroup": "unifi_network_mcp.tools.usergroups",
     "unifi_create_voucher": "unifi_network_mcp.tools.hotspot",
     "unifi_create_wlan": "unifi_network_mcp.tools.network",
@@ -2917,6 +2918,145 @@
         }
       },
       "title": "Create Simple QoS Rule"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Create a narrowly scoped Traffic Route (policy-based route). Requires confirmation.\n\nAn explicit matching_target and target network/VPN are required. DOMAIN routes\nrequire at least one domain. INTERNET routes are allowed only for one explicit\nCLIENT with a valid unicast MAC address when the target is a verified WAN network.",
+      "name": "unifi_create_traffic_route",
+      "permission_action": "create",
+      "permission_category": "traffic_routes",
+      "schema": {
+        "input": {
+          "properties": {
+            "confirm": {
+              "description": "When true, creates; when false, previews",
+              "type": "boolean"
+            },
+            "domains": {
+              "description": "DOMAIN entries, e.g. [{\"domain\": \"youtube.com\"}]",
+              "type": "array"
+            },
+            "enabled": {
+              "description": "Create enabled",
+              "type": "boolean"
+            },
+            "ip_addresses": {
+              "description": "IP route entries",
+              "type": "array"
+            },
+            "ip_ranges": {
+              "description": "IP-range route entries",
+              "type": "array"
+            },
+            "kill_switch_enabled": {
+              "description": "Block matched traffic if target VPN/network is unavailable",
+              "type": "boolean"
+            },
+            "matching_target": {
+              "description": "Destination match type: DOMAIN, IP, REGION, or INTERNET",
+              "type": "string"
+            },
+            "name": {
+              "description": "Human-readable route name (maximum 128 characters)",
+              "type": "string"
+            },
+            "network_id": {
+              "description": "Target network or VPN client ID",
+              "type": "string"
+            },
+            "regions": {
+              "description": "REGION route country codes",
+              "type": "array"
+            },
+            "target_devices": {
+              "description": "Source targets: CLIENT, NETWORK, or ALL_CLIENTS",
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "matching_target",
+            "network_id"
+          ],
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Create Traffic Route"
     },
     {
       "annotations": {
@@ -15742,7 +15882,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Toggle a traffic route on/off by ID.",
+      "description": "Toggle a traffic route on/off by ID.\n\nEnabling an INTERNET route requires one explicit CLIENT target with a valid unicast MAC\naddress and a verified WAN network.",
       "name": "unifi_toggle_traffic_route",
       "permission_action": "update",
       "permission_category": "traffic_routes",
@@ -18592,7 +18732,7 @@
         "readOnlyHint": false
       },
       "auth_method": "local_only",
-      "description": "Update a traffic route's settings.\n\nToggle fields:\n- enabled: Enable or disable the traffic route\n- kill_switch_enabled: Enable/disable the kill switch (blocks traffic if VPN is down)\n\nRouting-match fields (each REPLACES the whole existing list/value \u2014 read the route\nfirst with unifi_get_traffic_route_details, then send the full desired value):\n- target_devices: Which clients/networks the route applies to. List of objects, e.g.\n  [{\"type\": \"CLIENT\", \"client_mac\": \"aa:bb:cc:dd:ee:ff\"}],\n  [{\"type\": \"NETWORK\", \"network_id\": \"<id>\"}], or [{\"type\": \"ALL_CLIENTS\"}].\n- domains: List of domain objects, e.g. [{\"domain\": \"example.com\", \"ports\": [], \"port_ranges\": []}].\n- ip_addresses: List of IP/subnet objects (for matching_target=IP routes).\n- ip_ranges: List of IP-range objects.\n- regions: List of ISO country/region codes, e.g. [\"US\", \"CA\"].\n- next_hop: Next-hop IP address (string) for static next-hop routes.\n\nAt least one field must be provided.",
+      "description": "Update a traffic route's settings.\n\nPass only the fields you want to change \u2014 current values are automatically preserved.\n\nToggle fields:\n- enabled: Enable or disable the traffic route\n- kill_switch_enabled: Enable/disable the kill switch (blocks traffic if VPN is down)\n\nRouting-match fields (each REPLACES the whole existing list/value \u2014 read the route\nfirst with unifi_get_traffic_route_details, then send the full desired value):\n- target_devices: Which clients/networks the route applies to. For INTERNET routes, this must remain one explicit CLIENT target.\n  [{\"type\": \"CLIENT\", \"client_mac\": \"aa:bb:cc:dd:ee:ff\"}],\n  [{\"type\": \"NETWORK\", \"network_id\": \"<id>\"}], or [{\"type\": \"ALL_CLIENTS\"}].\n- domains: List of domain objects, e.g. [{\"domain\": \"example.com\", \"ports\": [], \"port_ranges\": []}].\n- ip_addresses: List of IP/subnet objects (for matching_target=IP routes).\n- ip_ranges: List of IP-range objects.\n- regions: List of ISO country/region codes, e.g. [\"US\", \"CA\"].\n- network_id: Replace the target network/VPN. INTERNET routes require a verified WAN target.\n- next_hop: Next-hop IP address (string) for static next-hop routes.\n\nFor INTERNET routes, a target update is allowed only when the resulting route still\nhas exactly one explicit CLIENT target with a valid unicast MAC address and a freshly\nverified WAN target. Broad targets and non-WAN targets are rejected.\n\nAt least one field must be provided.",
       "name": "unifi_update_traffic_route",
       "permission_action": "update",
       "permission_category": "traffic_routes",
@@ -18622,6 +18762,10 @@
             "kill_switch_enabled": {
               "description": "Enable (true) or disable (false) the kill switch, which blocks traffic if the VPN goes down",
               "type": "boolean"
+            },
+            "network_id": {
+              "description": "Replace the target network or VPN. INTERNET routes require a verified WAN network.",
+              "type": "string"
             },
             "next_hop": {
               "description": "Next-hop IP address (string) for static next-hop routes.",

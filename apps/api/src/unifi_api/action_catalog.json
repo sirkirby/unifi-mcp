@@ -6855,6 +6855,10 @@
             "description": "Enable (true) or disable (false) the kill switch, which blocks traffic if the VPN goes down",
             "type": "boolean"
           },
+          "network_id": {
+            "description": "Replace the target network or VPN. INTERNET routes require a verified WAN network.",
+            "type": "string"
+          },
           "next_hop": {
             "description": "Next-hop IP address (string) for static next-hop routes.",
             "type": "string"
@@ -7032,6 +7036,11 @@
       "name": "protect_subscribe_events",
       "product": "protect",
       "reason": "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
+    },
+    {
+      "name": "unifi_create_traffic_route",
+      "product": "network",
+      "reason": "requires controller-payload construction that the REST action dispatcher does not provide"
     },
     {
       "name": "unifi_subscribe_events",

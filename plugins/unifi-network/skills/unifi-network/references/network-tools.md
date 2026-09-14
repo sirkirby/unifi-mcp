@@ -1,4 +1,4 @@
-# Network Server Tool Reference (194 tools)
+# Network Server Tool Reference (195 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -276,12 +276,13 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## Traffic Routes
 
 <!-- AUTO:tools:traffic_routes -->
-4 tools.
+5 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
 | `unifi_get_traffic_route_details` | Read | Get detailed information for a specific traffic route by ID. |
 | `unifi_list_traffic_routes` | Read | List all traffic routes (policy-based routing rules) for the current site. |
+| `unifi_create_traffic_route` | Mutate | Create a narrowly scoped Traffic Route (policy-based route). |
 | `unifi_toggle_traffic_route` | Mutate | Toggle a traffic route on/off by ID. |
 | `unifi_update_traffic_route` | Mutate | Update a traffic route's settings. |
 <!-- /AUTO:tools:traffic_routes -->

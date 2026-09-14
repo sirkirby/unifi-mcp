@@ -329,7 +329,7 @@ def test_check_mode_does_not_write_stale_output(tmp_path: Path) -> None:
     assert output.read_text() == "stale\n"
 
 
-def test_repository_catalog_is_complete_with_only_streaming_exclusions() -> None:
+def test_repository_catalog_is_complete_with_documented_exclusions() -> None:
     generator = _load_generator()
 
     payload = json.loads(generator.render_catalog(REPO_ROOT))
@@ -338,8 +338,11 @@ def test_repository_catalog_is_complete_with_only_streaming_exclusions() -> None
     assert [item["name"] for item in payload["excluded"]] == [
         "access_subscribe_events",
         "protect_subscribe_events",
+        "unifi_create_traffic_route",
         "unifi_subscribe_events",
     ]
+    excluded_by_name = {item["name"]: item["reason"] for item in payload["excluded"]}
+    assert "controller-payload" in excluded_by_name["unifi_create_traffic_route"]
     by_name = {item["name"]: item for item in payload["actions"]}
     assert (by_name["unifi_list_events"]["manager_attr"], by_name["unifi_list_events"]["manager_method"]) == (
         "event_manager",

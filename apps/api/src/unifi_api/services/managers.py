@@ -53,7 +53,7 @@ class UnknownManager(Exception):
 # product-specific modules at startup unless the product is actually used.
 
 
-def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
+def _build_network_managers() -> dict[str, Callable[..., Any]]:
     from unifi_core.network.managers.acl_manager import AclManager
     from unifi_core.network.managers.client_group_manager import ClientGroupManager
     from unifi_core.network.managers.client_manager import ClientManager
@@ -95,7 +95,11 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
         # FirewallManager uses both V2 session auth and the public Integration
         # API. Pass the connection's UniFiAuth so zone CRUD and policy ordering
         # can supply X-API-Key when an API token is configured.
-        "firewall_manager": lambda cm: FirewallManager(cm, getattr(cm, "unifi_auth", None)),
+        "firewall_manager": lambda cm, *, traffic_route_manager=None: FirewallManager(
+            cm,
+            getattr(cm, "unifi_auth", None),
+            traffic_route_manager=traffic_route_manager,
+        ),
         "gateway_settings_manager": lambda cm: GatewaySettingsManager(cm),
         "hotspot_manager": lambda cm: HotspotManager(cm),
         "network_manager": lambda cm: NetworkManager(cm),
@@ -117,7 +121,7 @@ def _build_network_managers() -> dict[str, Callable[[Any], Any]]:
     }
 
 
-def _build_protect_managers() -> dict[str, Callable[[Any], Any]]:
+def _build_protect_managers() -> dict[str, Callable[..., Any]]:
     from unifi_core.protect.managers.alarm_facade import AlarmRulesFacade
     from unifi_core.protect.managers.alarm_manager import AlarmManager
     from unifi_core.protect.managers.camera_manager import CameraManager
@@ -145,7 +149,7 @@ def _build_protect_managers() -> dict[str, Callable[[Any], Any]]:
     }
 
 
-def _build_access_managers() -> dict[str, Callable[[Any], Any]]:
+def _build_access_managers() -> dict[str, Callable[..., Any]]:
     from unifi_core.access.managers.credential_manager import CredentialManager
     from unifi_core.access.managers.device_manager import DeviceManager
     from unifi_core.access.managers.door_manager import DoorManager
@@ -165,7 +169,7 @@ def _build_access_managers() -> dict[str, Callable[[Any], Any]]:
     }
 
 
-_PRODUCT_BUILDERS: dict[str, Callable[[], dict[str, Callable[[Any], Any]]]] = {
+_PRODUCT_BUILDERS: dict[str, Callable[[], dict[str, Callable[..., Any]]]] = {
     "network": _build_network_managers,
     "protect": _build_protect_managers,
     "access": _build_access_managers,
@@ -193,7 +197,7 @@ class ManagerFactory:
         self._connection_cache: dict[tuple[str, str, str | None], Any] = {}
         self._domain_cache: dict[tuple[str, str, str, str | None], Any] = {}
         self._locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self._builder_cache: dict[str, dict[str, Callable[[Any], Any]]] = {}
+        self._builder_cache: dict[str, dict[str, Callable[..., Any]]] = {}
         self._listener_tasks: dict[int, asyncio.Task[None]] = {}
         self._on_manager_discard = on_manager_discard
 
@@ -434,7 +438,7 @@ class ManagerFactory:
             return await self._require_initialized(cm, product)
         raise UnknownProduct(f"unknown product '{product}'")
 
-    def _builders_for(self, product: str) -> dict[str, Callable[[Any], Any]]:
+    def _builders_for(self, product: str) -> dict[str, Callable[..., Any]]:
         """Lazy-load (and cache) the per-product domain manager builder map."""
         cached = self._builder_cache.get(product)
         if cached is not None:
@@ -491,7 +495,25 @@ class ManagerFactory:
         cached = self._domain_cache.get(key)
         if cached is not None:
             return cached
-        instance = builder(cm)
+        if product == "network" and attr_name == "firewall_manager":
+            # Legacy firewall route methods delegate to the guarded manager. Reuse
+            # the factory-cached instance so its network dependency and cache policy
+            # match all other route entry points for this controller/site.
+            traffic_route_manager = await self.get_domain_manager(
+                session,
+                controller_id,
+                product,
+                "traffic_route_manager",
+                site=site_scope,
+            )
+            # Awaiting the dependency yielded, so another caller may now own this
+            # manager. Preserve the single-instance factory contract.
+            cached = self._domain_cache.get(key)
+            if cached is not None:
+                return cached
+            instance = builder(cm, traffic_route_manager=traffic_route_manager)
+        else:
+            instance = builder(cm)
         self._domain_cache[key] = instance
         if attr_name == "event_manager" and callable(getattr(instance, "start_listening", None)):
             self._listener_tasks[id(instance)] = asyncio.create_task(

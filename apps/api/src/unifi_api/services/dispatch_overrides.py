@@ -105,15 +105,15 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_toggle_port_forward": ("firewall_manager", "toggle_port_forward"),
     "unifi_toggle_qos_rule_enabled": ("qos_manager", "toggle_qos_rule_enabled"),
     "unifi_toggle_oon_policy": ("oon_manager", "toggle_oon_policy"),
-    "unifi_toggle_traffic_route": ("traffic_route_manager", "toggle_traffic_route"),
-    # update_traffic_route now pre-fetches the route via get_traffic_route_details
-    # to render a current-vs-proposed preview, so the AST walker captures the read
-    # method first. Pin dispatch to the mutation method.
-    "unifi_update_traffic_route": ("traffic_route_manager", "update_traffic_route"),
     # update_dynamic_dns pre-fetches the entry via get_dynamic_dns to render a
     # current-vs-proposed preview, so the AST walker captures the read method
     # first. Pin dispatch to the mutation method.
     "unifi_update_dynamic_dns": ("dynamic_dns_manager", "update_dynamic_dns"),
+    # Traffic-route update/toggle pre-fetch current state for the preview. The
+    # manager owns the authoritative Internet-route safety guard used by every
+    # write surface.
+    "unifi_update_traffic_route": ("traffic_route_manager", "update_traffic_route"),
+    "unifi_toggle_traffic_route": ("traffic_route_manager", "toggle_traffic_route"),
     # update_device_radio: tool needs current radio_table to identify target band.
     "unifi_update_device_radio": ("device_manager", "update_device_radio"),
     # PDU and port-forward updates both pre-fetch current state for preview.
@@ -221,9 +221,13 @@ DISPATCH_BINDING_OVERRIDES: dict[str, DispatchBindingOverride] = {
 _MCP_SUBSCRIPTION_EXCLUSION_REASON = (
     "returns MCP resource and polling instructions; API SSE and event resources are the authoritative streaming surface"
 )
+_TRAFFIC_ROUTE_CREATE_ACTION_EXCLUSION_REASON = (
+    "requires controller-payload construction that the REST action dispatcher does not provide"
+)
 API_ACTION_EXCLUSIONS: dict[str, ActionExclusion] = {
     "access_subscribe_events": ActionExclusion("access", _MCP_SUBSCRIPTION_EXCLUSION_REASON),
     "protect_subscribe_events": ActionExclusion("protect", _MCP_SUBSCRIPTION_EXCLUSION_REASON),
+    "unifi_create_traffic_route": ActionExclusion("network", _TRAFFIC_ROUTE_CREATE_ACTION_EXCLUSION_REASON),
     "unifi_subscribe_events": ActionExclusion("network", _MCP_SUBSCRIPTION_EXCLUSION_REASON),
 }
 

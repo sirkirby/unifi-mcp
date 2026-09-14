@@ -100,6 +100,14 @@ def test_every_catalog_action_can_invoke_its_core_manager_signature() -> None:
     assert failures == []
 
 
+def test_traffic_route_creation_is_excluded_from_rest_actions() -> None:
+    catalog = json.loads((REPO_ROOT / "apps/api/src/unifi_api/action_catalog.json").read_text())
+    excluded = {item["name"]: item["reason"] for item in catalog["excluded"]}
+
+    assert "unifi_create_traffic_route" in excluded
+    assert "controller-payload" in excluded["unifi_create_traffic_route"]
+
+
 def test_unsupported_action_parameters_are_real_public_contract_fields() -> None:
     manifests: dict[str, dict] = {}
     for product, package in PRODUCT_PACKAGES.items():
