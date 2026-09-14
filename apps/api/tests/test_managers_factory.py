@@ -641,6 +641,133 @@ async def test_invalidate_still_closes_the_connection_when_a_listener_fails_to_s
     await engine.dispose()
 
 
+@pytest.mark.asyncio
+async def test_invalidate_finishes_listener_and_connection_cleanup_before_propagating_cancellation() -> None:
+    factory = ManagerFactory(None, None)  # type: ignore[arg-type]
+    controller_id = "controller"
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    second_stopped = asyncio.Event()
+    connection_closed = asyncio.Event()
+
+    class _FirstListener:
+        async def stop_listening(self) -> None:
+            first_started.set()
+            await release_first.wait()
+
+    class _SecondListener:
+        async def stop_listening(self) -> None:
+            second_stopped.set()
+
+    class _Connection:
+        async def close(self) -> None:
+            connection_closed.set()
+
+    factory._domain_cache[(controller_id, "network", "first", "default")] = _FirstListener()
+    factory._domain_cache[(controller_id, "network", "second", "default")] = _SecondListener()
+    factory._connection_cache[(controller_id, "network", "default")] = _Connection()
+
+    invalidation = asyncio.create_task(factory.invalidate_controller(controller_id))
+    await first_started.wait()
+    invalidation.cancel()
+    await asyncio.sleep(0)
+    assert not invalidation.done()
+
+    release_first.set()
+    with pytest.raises(asyncio.CancelledError):
+        await invalidation
+
+    assert second_stopped.is_set()
+    assert connection_closed.is_set()
+
+
+@pytest.mark.asyncio
+async def test_manager_stop_cancellation_is_deferred_until_every_listener_stops() -> None:
+    factory = ManagerFactory(None, None)  # type: ignore[arg-type]
+    second_stopped = asyncio.Event()
+
+    class _CancelledListener:
+        async def stop_listening(self) -> None:
+            raise asyncio.CancelledError
+
+    class _SecondListener:
+        async def stop_listening(self) -> None:
+            second_stopped.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await factory._stop_domain_managers([_CancelledListener(), _SecondListener()])
+
+    assert second_stopped.is_set()
+
+
+@pytest.mark.asyncio
+async def test_invalidate_finishes_every_connection_close_before_propagating_cancellation() -> None:
+    factory = ManagerFactory(None, None)  # type: ignore[arg-type]
+    controller_id = "controller"
+    first_started = asyncio.Event()
+    release_first = asyncio.Event()
+    closed: list[str] = []
+
+    class _Connection:
+        def __init__(self, name: str, gate: asyncio.Event | None = None) -> None:
+            self.name = name
+            self.gate = gate
+
+        async def close(self) -> None:
+            if self.gate is not None:
+                first_started.set()
+                await self.gate.wait()
+            closed.append(self.name)
+
+    factory._connection_cache[(controller_id, "network", "site-a")] = _Connection("first", release_first)
+    factory._connection_cache[(controller_id, "network", "site-b")] = _Connection("second")
+
+    invalidation = asyncio.create_task(factory.invalidate_controller(controller_id))
+    await first_started.wait()
+    invalidation.cancel()
+    await asyncio.sleep(0)
+    assert not invalidation.done()
+
+    release_first.set()
+    with pytest.raises(asyncio.CancelledError):
+        await invalidation
+
+    assert closed == ["first", "second"]
+
+
+@pytest.mark.asyncio
+async def test_probe_heal_closes_removed_connection_when_listener_stop_is_cancelled() -> None:
+    factory = ManagerFactory(None, None)  # type: ignore[arg-type]
+    controller_id = "controller"
+    stop_started = asyncio.Event()
+    release_stop = asyncio.Event()
+    connection_closed = asyncio.Event()
+
+    class _Listener:
+        async def stop_listening(self) -> None:
+            stop_started.set()
+            await release_stop.wait()
+
+    class _Connection:
+        reconnect_blocked = True
+
+        async def close(self) -> None:
+            connection_closed.set()
+
+    factory._domain_cache[(controller_id, "network", "events", "default")] = _Listener()
+    factory._connection_cache[(controller_id, "network", "default")] = _Connection()
+
+    healing = asyncio.create_task(factory._heal_blocked_connections(controller_id, {"network": {"ok": True}}))
+    await stop_started.wait()
+    healing.cancel()
+    release_stop.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await healing
+
+    assert connection_closed.is_set()
+
+
 class _SiblingListener:
     """Domain manager that owns a subscription, for sibling-eviction tests."""
 

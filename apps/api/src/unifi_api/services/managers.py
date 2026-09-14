@@ -26,7 +26,7 @@ import logging
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, Callable, Coroutine
 from urllib.parse import urlparse
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -223,22 +223,31 @@ class ManagerFactory:
         running after its connection manager is discarded it would keep
         logging in with the old credentials.
         """
-        for manager in managers:
-            if self._on_manager_discard is not None:
-                self._on_manager_discard(manager)
-            task = self._listener_tasks.pop(id(manager), None)
-            if task is not None and not task.done():
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
-            stop = getattr(manager, "stop_listening", None)
-            if stop is None:
-                continue
-            try:
-                result = stop()
-                if inspect.isawaitable(result):
-                    await result
-            except Exception as exc:
-                logger.warning("Failed to stop %s listener: %s", type(manager).__name__, type(exc).__name__)
+
+        async def _stop_all() -> None:
+            deferred_cancellation: asyncio.CancelledError | None = None
+            for manager in managers:
+                if self._on_manager_discard is not None:
+                    self._on_manager_discard(manager)
+                task = self._listener_tasks.pop(id(manager), None)
+                if task is not None and not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                stop = getattr(manager, "stop_listening", None)
+                if stop is None:
+                    continue
+                try:
+                    result = stop()
+                    if inspect.isawaitable(result):
+                        await result
+                except asyncio.CancelledError as exc:
+                    deferred_cancellation = deferred_cancellation or exc
+                except Exception as exc:
+                    logger.warning("Failed to stop %s listener: %s", type(manager).__name__, type(exc).__name__)
+            if deferred_cancellation is not None:
+                raise deferred_cancellation
+
+        await self._finish_cleanup_before_cancellation(_stop_all())
 
     async def _start_listener(self, manager: Any) -> None:
         try:
@@ -254,6 +263,47 @@ class ManagerFactory:
         result = close()
         if asyncio.iscoroutine(result):
             await result
+
+    @staticmethod
+    async def _finish_cleanup_before_cancellation(cleanup: Coroutine[Any, Any, None]) -> None:
+        """Let cleanup finish, then preserve cancellation of its caller."""
+        cleanup_task = asyncio.create_task(cleanup)
+        caller_cancellation: asyncio.CancelledError | None = None
+        while not cleanup_task.done():
+            try:
+                await asyncio.shield(cleanup_task)
+            except asyncio.CancelledError as exc:
+                current_task = asyncio.current_task()
+                if current_task is not None and current_task.cancelling():
+                    caller_cancellation = caller_cancellation or exc
+                if cleanup_task.done():
+                    break
+
+        try:
+            cleanup_task.result()
+        except asyncio.CancelledError:
+            if caller_cancellation is not None:
+                raise caller_cancellation
+            raise
+        if caller_cancellation is not None:
+            raise caller_cancellation
+
+    async def _close_connection_managers(self, managers: list[Any], description: str) -> None:
+        """Close every removed connection before propagating cancellation."""
+
+        async def _close_all() -> None:
+            deferred_cancellation: asyncio.CancelledError | None = None
+            for cm in managers:
+                try:
+                    await self._close_connection_manager(cm)
+                except asyncio.CancelledError as exc:
+                    deferred_cancellation = deferred_cancellation or exc
+                except Exception as exc:
+                    logger.warning("Failed to close %s connection: %s", description, type(exc).__name__)
+            if deferred_cancellation is not None:
+                raise deferred_cancellation
+
+        await self._finish_cleanup_before_cancellation(_close_all())
 
     @classmethod
     async def _require_initialized(cls, cm: Any, product: str) -> Any:
@@ -558,17 +608,15 @@ class ManagerFactory:
                 for k in [k for k in self._domain_cache if self._connection_key_for(k) in healed]
             ]
             removed = [self._connection_cache.pop(k) for k in healable]
-            await self._stop_domain_managers(dropped)
+            try:
+                await self._stop_domain_managers(dropped)
+            finally:
+                await self._close_connection_managers(removed, "auth-blocked")
             logger.info(
                 "Probe succeeded; dropping %d auth-blocked cached connection(s) for controller %s",
                 len(removed),
                 controller_id,
             )
-            for cm in removed:
-                try:
-                    await self._close_connection_manager(cm)
-                except Exception as exc:
-                    logger.warning("Failed to close auth-blocked connection for controller %s: %s", controller_id, exc)
 
     async def invalidate_controller(self, controller_id: str) -> None:
         """Drop all cached managers for a controller and dispose their sessions."""
@@ -582,9 +630,7 @@ class ManagerFactory:
             removed = [
                 self._connection_cache.pop(k) for k in [k for k in self._connection_cache if k[0] == controller_id]
             ]
-            await self._stop_domain_managers(dropped)
-            for cm in removed:
-                try:
-                    await self._close_connection_manager(cm)
-                except Exception as exc:
-                    logger.warning("Failed to close invalidated controller connection %s: %s", controller_id, exc)
+            try:
+                await self._stop_domain_managers(dropped)
+            finally:
+                await self._close_connection_managers(removed, "invalidated controller")
