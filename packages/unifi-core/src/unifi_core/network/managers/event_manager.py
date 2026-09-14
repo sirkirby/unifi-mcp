@@ -20,6 +20,19 @@ from unifi_core.network.managers.connection_manager import ConnectionManager
 logger = logging.getLogger("unifi-network-mcp")
 
 
+def _positive_config_int(value: Any, env_var: str) -> int:
+    """Parse a positive integer while naming the operator-facing setting."""
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError(f"{env_var} must be a positive integer")
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise ValueError(f"{env_var} must be a positive integer") from None
+    if parsed <= 0:
+        raise ValueError(f"{env_var} must be a positive integer")
+    return parsed
+
+
 class _ListenerStateError(ConnectionError):
     """An internal listener diagnostic constructed only from fixed messages."""
 
@@ -120,8 +133,8 @@ class EventManager:
         # bare 404 from an endpoint the caller never asked for.
         self._v2_probe_error: str | None = None
         self._buffer = EventBuffer(
-            max_size=int(cfg.get("buffer_size", 100)),
-            ttl_seconds=int(cfg.get("buffer_ttl_seconds", 300)),
+            max_size=_positive_config_int(cfg.get("buffer_size", 100), "UNIFI_NETWORK_EVENT_BUFFER_SIZE"),
+            ttl_seconds=_positive_config_int(cfg.get("buffer_ttl_seconds", 300), "UNIFI_NETWORK_EVENT_BUFFER_TTL"),
         )
         self._subscribers: list[Callable[[dict], None]] = []
         self._ws_unsub: Callable[[], None] | None = None

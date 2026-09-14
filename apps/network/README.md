@@ -86,8 +86,8 @@ UNIFI_NETWORK_PASSWORD=your-password # Admin password
 # UNIFI_NETWORK_SITE=default         # UniFi site name
 # UNIFI_NETWORK_VERIFY_SSL=false     # SSL certificate verification
 # UNIFI_NETWORK_WEBSOCKET_ENABLED=true   # Real-time event listener feeding unifi_recent_events
-# UNIFI_NETWORK_EVENT_BUFFER_SIZE=100    # Ring buffer capacity for buffered events
-# UNIFI_NETWORK_EVENT_BUFFER_TTL=300     # Seconds a buffered event stays readable
+# UNIFI_NETWORK_EVENT_BUFFER_SIZE=100    # Positive ring buffer capacity; invalid values prevent startup
+# UNIFI_NETWORK_EVENT_BUFFER_TTL=300     # Positive lifetime in seconds; invalid values prevent startup
 ```
 
 **Fallback:** Existing `UNIFI_*` variables (e.g., `UNIFI_HOST`) continue to work. The server checks for `UNIFI_NETWORK_*` first and falls back to `UNIFI_*` if the server-specific variable is not set. For single-controller setups, the shared variables are all you need.
