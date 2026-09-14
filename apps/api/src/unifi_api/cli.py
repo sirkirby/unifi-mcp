@@ -23,6 +23,20 @@ app.add_typer(graphql_typer, name="graphql")
 _DEFAULT_CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
 
+def _alembic_config_path() -> Path:
+    """Return the packaged or source-tree Alembic configuration."""
+    package_dir = Path(__file__).resolve().parent
+    packaged_config = package_dir / "alembic.ini"
+    if packaged_config.is_file():
+        return packaged_config
+
+    source_config = package_dir.parent.parent / "alembic.ini"
+    if source_config.is_file():
+        return source_config
+
+    raise RuntimeError("Alembic migration assets are missing from the unifi-api-server installation")
+
+
 @app.command()
 def serve(
     host: str | None = typer.Option(None, help="Override config http.host"),
@@ -45,6 +59,7 @@ def migrate(
     import asyncio
     import os
     import subprocess
+    import sys
     import uuid
     from datetime import datetime, timezone
 
@@ -56,18 +71,24 @@ def migrate(
     from unifi_api.db.session import get_sessionmaker
 
     cfg = load_config(config_path)
-    ensure_db_encryption_key(cfg.db.path)
+    db_path = Path(cfg.db.path).expanduser().resolve()
+    ensure_db_encryption_key(str(db_path))
 
     env = dict(os.environ)
-    env["UNIFI_API_DB_PATH"] = cfg.db.path
-    alembic_cwd = Path(__file__).parent.parent.parent  # apps/api
-    result = subprocess.run(["alembic", "upgrade", "head"], env=env, cwd=alembic_cwd, check=False)
+    env["UNIFI_API_DB_PATH"] = str(db_path)
+    alembic_config_path = _alembic_config_path()
+    result = subprocess.run(
+        [sys.executable, "-E", "-P", "-m", "alembic", "-c", str(alembic_config_path), "upgrade", "head"],
+        env=env,
+        cwd=alembic_config_path.parent,
+        check=False,
+    )
     if result.returncode != 0:
         raise typer.Exit(code=result.returncode)
 
     # Bootstrap admin key if api_keys is empty
     async def _maybe_bootstrap() -> str | None:
-        engine = create_engine(cfg.db.path)
+        engine = create_engine(str(db_path))
         sm = get_sessionmaker(engine)
         try:
             async with sm() as session:
@@ -92,7 +113,7 @@ def migrate(
 
     plaintext = asyncio.run(_maybe_bootstrap())
     if plaintext:
-        bootstrap_file = Path(cfg.db.path).parent / "bootstrap-admin-key"
+        bootstrap_file = db_path.parent / "bootstrap-admin-key"
         try:
             bootstrap_file.parent.mkdir(parents=True, exist_ok=True)
             bootstrap_file.write_text(plaintext, encoding="utf-8")
