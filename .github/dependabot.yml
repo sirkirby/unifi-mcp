@@ -14,14 +14,17 @@ updates:
     labels:
       - "dependencies"
       - "python"
-    # Group minor/patch updates to reduce PR noise
+    # Avoid semver filters: requirement-only changes may lack a comparable version.
+    # Include all permitted updates; review major upgrades within the batch.
+    # Security updates are grouped separately by Dependabot.
     groups:
-      python-minor:
+      python-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
+      python-security:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -38,10 +41,16 @@ updates:
       actions:
         patterns:
           - "*"
+      actions-security:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
 
-  # Worker CLI dependencies
+  # Worker CLI and runtime dependencies share one npm update group.
   - package-ecosystem: "npm"
-    directory: "/apps/worker"
+    directories:
+      - "/apps/worker"
+      - "/apps/worker/worker"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -52,32 +61,13 @@ updates:
       - "javascript"
       - "worker"
     groups:
-      worker-cli:
+      worker-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
-
-  # Cloudflare Worker dependencies
-  - package-ecosystem: "npm"
-    directory: "/apps/worker/worker"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    commit-message:
-      prefix: "chore(deps)"
-    labels:
-      - "dependencies"
-      - "javascript"
-      - "worker"
-    groups:
-      worker-runtime:
+      worker-security:
+        applies-to: "security-updates"
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
     ignore:
       # Keep these majors explicit: they affect the compiler/test surface or
       # must match the Node version used by CI and the worker release workflow.
@@ -93,7 +83,12 @@ updates:
 
   # Docker base images
   - package-ecosystem: "docker"
-    directory: "/"
+    directories:
+      - "/apps/access"
+      - "/apps/api"
+      - "/apps/network"
+      - "/apps/protect"
+      - "/packages/unifi-mcp-relay"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -102,3 +97,11 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    groups:
+      docker-dependencies:
+        patterns:
+          - "*"
+      docker-security:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
