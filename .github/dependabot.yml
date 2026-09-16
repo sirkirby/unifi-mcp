@@ -81,7 +81,7 @@ updates:
         update-types:
           - "version-update:semver-major"
 
-  # Docker base images
+  # Docker base images (Dependabot supports version updates only).
   - package-ecosystem: "docker"
     directories:
       - "/apps/access"
@@ -99,9 +99,5 @@ updates:
       - "docker"
     groups:
       docker-dependencies:
-        patterns:
-          - "*"
-      docker-security:
-        applies-to: "security-updates"
         patterns:
           - "*"
