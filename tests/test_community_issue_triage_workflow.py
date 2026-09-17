@@ -1342,6 +1342,8 @@ def test_trusted_artifact_has_one_upload_and_two_independent_id_downloads():
     assert "--mount /opt/gh-aw-repository:/opt/gh-aw-repository:rw" not in compiled
     assert "GH_AW_OTLP_ENDPOINTS: '[]'" in agent
     assert "OTEL_EXPORTER_OTLP_HEADERS: x-redacted=1" in agent
+    assert "          OTEL_EXPORTER_OTLP_ENDPOINT:\n" in agent
+    assert "  - OTEL_EXPORTER_OTLP_ENDPOINT\n" in source
     assert "secrets.GH_AW_DEFAULT_OTLP_HEADERS" not in agent
     assert "/tmp/gh-aw/trusted-intake-context" not in source
     assert "retention-days: 1" in source
