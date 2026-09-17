@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from importlib.metadata import version
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 from unifi_mcp_relay.discovery import (
     LEGACY_MCP_PROTOCOL_REVISION,
@@ -49,7 +51,7 @@ class FakeResponse:
 
     def raise_for_status(self) -> None:
         if self.status >= 400:
-            raise RuntimeError(f"HTTP {self.status}")
+            raise aiohttp.ClientResponseError(MagicMock(), (), status=self.status)
 
     async def json(self) -> dict:
         return self._payload
@@ -677,3 +679,147 @@ async def test_discover_all_handles_failures(mock_mcp_client):
         results = await discover_all(["http://localhost:3000", "http://localhost:3001"])
 
     assert results == []
+
+
+def recovered_session_responses() -> list[FakeResponse]:
+    return [
+        FakeResponse(
+            {"result": {"protocolVersion": DEFAULT_MCP_PROTOCOL_REVISION}},
+            headers={"mcp-session-id": "fresh"},
+        ),
+        FakeResponse(status=202),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_http_client_recovers_expired_session_without_stale_headers():
+    session = FakeSession(
+        [
+            FakeResponse(status=404),
+            *recovered_session_responses(),
+            FakeResponse({"result": {"ok": True}}),
+        ]
+    )
+    client = McpHttpClient("http://localhost:3000", "expired", LEGACY_MCP_PROTOCOL_REVISION)
+    client._session = session
+
+    assert await client.request("tools/call", {"name": "mutate", "arguments": {"confirm": True}}) == {"ok": True}
+    assert [post["json"]["method"] for post in session.posts] == [
+        "tools/call",
+        "initialize",
+        "notifications/initialized",
+        "tools/call",
+    ]
+    assert "MCP-Session-Id" not in session.posts[1]["headers"]
+    assert "MCP-Protocol-Version" not in session.posts[1]["headers"]
+    assert session.posts[-1]["headers"]["MCP-Session-Id"] == "fresh"
+    assert session.posts[-1]["headers"]["MCP-Protocol-Version"] == DEFAULT_MCP_PROTOCOL_REVISION
+    assert session.posts[0]["json"]["params"] == session.posts[-1]["json"]["params"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [400, 401, 403, 429, 500, 503])
+async def test_http_client_does_not_replay_other_http_errors(status):
+    session = FakeSession([FakeResponse(status=status)])
+    client = McpHttpClient("http://localhost:3000", "existing", DEFAULT_MCP_PROTOCOL_REVISION)
+    client._session = session
+    with pytest.raises(aiohttp.ClientResponseError) as error:
+        await client.request("tools/call", {"name": "mutate"})
+    assert error.value.status == status
+    assert len(session.posts) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [asyncio.TimeoutError(), aiohttp.ServerDisconnectedError()])
+async def test_http_client_does_not_replay_uncertain_transport_failures(error):
+    client = McpHttpClient("http://localhost:3000", "existing", DEFAULT_MCP_PROTOCOL_REVISION)
+    with patch.object(client, "_request_once", AsyncMock(side_effect=error)) as send:
+        with pytest.raises(type(error)):
+            await client.request("tools/call", {"name": "mutate"})
+    send.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method,session_id", [("initialize", "existing"), ("tools/call", None)])
+async def test_http_client_does_not_recover_404_without_an_established_session(method, session_id):
+    session = FakeSession([FakeResponse(status=404)])
+    client = McpHttpClient("http://localhost:3000", session_id)
+    client._session = session
+    with pytest.raises(aiohttp.ClientResponseError):
+        await client.request(method)
+    assert len(session.posts) == 1
+
+
+@pytest.mark.asyncio
+async def test_http_client_retries_expired_request_at_most_once():
+    session = FakeSession([FakeResponse(status=404), *recovered_session_responses(), FakeResponse(status=404)])
+    client = McpHttpClient("http://localhost:3000", "expired", DEFAULT_MCP_PROTOCOL_REVISION)
+    client._session = session
+    with pytest.raises(aiohttp.ClientResponseError):
+        await client.request("tools/call", {"name": "mutate"})
+    assert len(session.posts) == 4
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail_notification", [False, True])
+async def test_http_client_can_recover_on_later_call_after_failed_handshake(fail_notification):
+    initial = recovered_session_responses()[:1] if fail_notification else []
+    session = FakeSession(
+        [
+            FakeResponse(status=404),
+            *initial,
+            FakeResponse(status=503),
+            FakeResponse(status=404),
+            *recovered_session_responses(),
+            FakeResponse({"result": {"ok": True}}),
+        ]
+    )
+    client = McpHttpClient("http://localhost:3000", "expired", LEGACY_MCP_PROTOCOL_REVISION)
+    client._session = session
+    with pytest.raises(aiohttp.ClientResponseError):
+        await client.request("tools/call", {"name": "mutate"})
+    assert client.session_id == "expired"
+    assert client.protocol_version == LEGACY_MCP_PROTOCOL_REVISION
+    assert await client.request("tools/call", {"name": "mutate"}) == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_concurrent_expired_requests_share_one_recovery():
+    client = McpHttpClient("http://localhost:3000", "expired", DEFAULT_MCP_PROTOCOL_REVISION)
+    expired_requests = 0
+    both_expired = asyncio.Event()
+    handshake_started = asyncio.Event()
+    finish_handshake = asyncio.Event()
+    initialized = 0
+
+    async def send(method, params, headers):
+        nonlocal expired_requests, initialized
+        if headers.get("MCP-Session-Id") == "expired":
+            expired_requests += 1
+            if expired_requests == 2:
+                both_expired.set()
+            await both_expired.wait()
+            raise aiohttp.ClientResponseError(MagicMock(), (), status=404)
+        if method == "initialize":
+            initialized += 1
+            handshake_started.set()
+            await finish_handshake.wait()
+            client._session_id = "fresh"
+            client._protocol_version = DEFAULT_MCP_PROTOCOL_REVISION
+            return {}
+        assert headers["MCP-Session-Id"] == "fresh"
+        return params
+
+    with patch.object(client, "_request_once", side_effect=send), patch.object(client, "notify", AsyncMock()) as notify:
+        async with asyncio.timeout(3):
+            first = asyncio.create_task(client.request("tools/call", {"n": 1}))
+            second = asyncio.create_task(client.request("tools/call", {"n": 2}))
+            await handshake_started.wait()
+            # New calls must not see the half-initialized session.
+            third = asyncio.create_task(client.request("tools/call", {"n": 3}))
+            await asyncio.sleep(0)
+            assert not third.done()
+            finish_handshake.set()
+            assert await asyncio.gather(first, second, third) == [{"n": 1}, {"n": 2}, {"n": 3}]
+    assert initialized == 1
+    notify.assert_awaited_once_with("notifications/initialized")

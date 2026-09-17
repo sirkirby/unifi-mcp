@@ -71,6 +71,7 @@ class McpHttpClient:
         self._session_id: str | None = session_id
         self._protocol_version: str | None = protocol_version
         self._request_id: int = 0
+        self._recovery_lock = asyncio.Lock()
 
     @property
     def session_id(self) -> str | None:
@@ -132,6 +133,44 @@ class McpHttpClient:
             RuntimeError: If the server returns a JSON-RPC error.
             aiohttp.ClientError: On transport-level failures.
         """
+        # Snapshot session state while no recovery handshake is in progress.
+        async with self._recovery_lock:
+            headers = self._headers(include_protocol_version=method != "initialize")
+        try:
+            return await self._request_once(method, params, headers)
+        except aiohttp.ClientResponseError as exc:
+            expired_id = headers.get("MCP-Session-Id")
+            if exc.status != 404 or not expired_id or method == "initialize":
+                raise
+
+        # MCP session 404 means the request was rejected before dispatch.
+        # Never replay a timeout, connection failure, or other HTTP error.
+        async with self._recovery_lock:
+            if self._session_id == expired_id:
+                old_protocol = self._protocol_version
+                self._session_id = None
+                self._protocol_version = None
+                try:
+                    await self._request_once(
+                        "initialize",
+                        {
+                            "protocolVersion": DEFAULT_MCP_PROTOCOL_REVISION,
+                            "capabilities": {},
+                            "clientInfo": _relay_client_info(),
+                        },
+                        self._headers(include_protocol_version=False),
+                    )
+                    await self.notify("notifications/initialized")
+                except BaseException:
+                    # Preserve the expired ID so a later call can recover again.
+                    self._session_id = expired_id
+                    self._protocol_version = old_protocol
+                    raise
+            headers = self._headers(include_protocol_version=True)
+        return await self._request_once(method, params, headers)
+
+    async def _request_once(self, method: str, params: dict | None, headers: dict[str, str]) -> dict:
+        """Send once using a fixed session snapshot; never retry transport errors."""
         session = await self._ensure_session()
         self._request_id += 1
 
@@ -143,13 +182,7 @@ class McpHttpClient:
         if params is not None:
             payload["params"] = params
 
-        headers = self._headers(include_protocol_version=method != "initialize")
-
         async with session.post(self._base_url, json=payload, headers=headers) as resp:
-            # Capture session ID from response
-            if "mcp-session-id" in resp.headers:
-                self._session_id = resp.headers["mcp-session-id"]
-
             resp.raise_for_status()
 
             # Handle both JSON and SSE response formats
@@ -175,6 +208,7 @@ class McpHttpClient:
         result = data.get("result", {})
         if method == "initialize":
             self._set_negotiated_protocol_version(result.get("protocolVersion"))
+            self._session_id = resp.headers.get("mcp-session-id")
 
         return result
 
@@ -192,10 +226,7 @@ class McpHttpClient:
         headers = self._headers(include_protocol_version=True)
 
         async with session.post(self._base_url, json=payload, headers=headers) as resp:
-            if "mcp-session-id" in resp.headers:
-                self._session_id = resp.headers["mcp-session-id"]
-            if resp.status >= 400:
-                logger.warning("[discovery] Notification '%s' got HTTP %d", method, resp.status)
+            resp.raise_for_status()
 
     async def close(self) -> None:
         """Close the underlying aiohttp session."""

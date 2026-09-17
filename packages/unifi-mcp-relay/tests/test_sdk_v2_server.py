@@ -18,7 +18,9 @@ from unifi_mcp_shared.protocol import DEFAULT_MCP_PROTOCOL_REVISION
 
 
 @asynccontextmanager
-async def running_sdk_v2_server() -> AsyncIterator[str]:
+async def running_sdk_v2_server(
+    *, idle_timeout: float | None = None, calls: list[str] | None = None
+) -> AsyncIterator[str]:
     mcp_server = MCPServer("relay-sdk-v2-test", version="2.1.1")
 
     @mcp_server.tool(
@@ -29,10 +31,13 @@ async def running_sdk_v2_server() -> AsyncIterator[str]:
     )
     async def relay_sdk_v2_echo(value: str) -> dict:
         """Echo a value through a structured MCP tool result."""
+        if calls is not None:
+            calls.append(value)
         return {"success": True, "data": {"value": value}}
 
     app = mcp_server.streamable_http_app(
         json_response=True,
+        session_idle_timeout=idle_timeout,
         transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
     )
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -78,3 +83,35 @@ async def test_relay_discovers_and_forwards_to_sdk_v2_server() -> None:
             await forwarder.close()
 
         assert result == {"success": True, "data": {"value": "ready"}}
+
+
+@pytest.mark.asyncio
+async def test_relay_recovers_after_sdk_idle_session_expiry() -> None:
+    calls: list[str] = []
+    async with running_sdk_v2_server(idle_timeout=0.2, calls=calls) as server_url:
+        info = await discover_tools(server_url)
+        assert info is not None
+        assert info.session_id is not None
+        forwarder = ToolForwarder([info])
+        client = forwarder._clients[server_url]
+        try:
+            # Let the real SDK reap the discovered legacy session.
+            await asyncio.sleep(0.4)
+            results = await asyncio.gather(
+                *(forwarder.forward("relay_sdk_v2_echo", {"value": str(i)}) for i in range(3))
+            )
+            assert client.session_id != info.session_id
+            assert results == [{"success": True, "data": {"value": str(i)}} for i in range(3)]
+            assert sorted(calls) == ["0", "1", "2"]
+
+            # Expiry can recur without reconnecting the relay.
+            previous_id = client.session_id
+            await asyncio.sleep(0.4)
+            assert await forwarder.forward("relay_sdk_v2_echo", {"value": "again"}) == {
+                "success": True,
+                "data": {"value": "again"},
+            }
+            assert client.session_id != previous_id
+            assert calls.count("again") == 1
+        finally:
+            await forwarder.close()
