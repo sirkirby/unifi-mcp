@@ -21,7 +21,8 @@ engine:
   id: copilot
   env:
     # gh-aw emits workflow-level OTLP credentials for trusted telemetry.
-    # Override them on the untrusted inference step and exclude them from AWF.
+    # Step overrides enforce the inference boundary. Keep excluded-env aligned
+    # for compiler support of the matching AWF denylist.
     GH_AW_OTLP_ENDPOINTS: "[]"
     OTEL_EXPORTER_OTLP_HEADERS: "x-redacted=1"
     OTEL_EXPORTER_OTLP_ENDPOINT: ""
