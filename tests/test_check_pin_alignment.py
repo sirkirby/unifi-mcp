@@ -78,6 +78,7 @@ def test_security_floor_check_accepts_explicit_safe_wheel_metadata(tmp_path: Pat
     wheel = _wheel_with_requirements(
         tmp_path,
         [
+            "anyio>=4.14.2",
             "cryptography>=50.0.0",
             "PyJWT>=2.13.0",
             "python-multipart>=0.0.31",
@@ -97,6 +98,7 @@ def test_security_floor_check_rejects_missing_or_vulnerable_floor(tmp_path: Path
     wheel = _wheel_with_requirements(
         tmp_path,
         [
+            "anyio>=4.12.0",
             "cryptography>=49.0.0",
             "PyJWT>=2.13.0",
             "python-multipart>=0.0.31",
@@ -107,6 +109,7 @@ def test_security_floor_check_rejects_missing_or_vulnerable_floor(tmp_path: Path
     ok, message = module.check_security_floors("unifi-api-server", wheel)
 
     assert ok is False
+    assert "anyio>=4.14.2" in message
     assert "cryptography>=50.0.0" in message
     assert "click>=8.3.3" in message
 
@@ -136,6 +139,7 @@ def test_security_floor_check_rejects_prerelease_below_final_floor(tmp_path: Pat
     wheel = _wheel_with_requirements(
         tmp_path,
         [
+            "anyio>=4.14.2",
             "cryptography>=50.0.0rc1",
             "PyJWT>=2.13.0",
             "python-multipart>=0.0.31",

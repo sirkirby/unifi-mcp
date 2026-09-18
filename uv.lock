@@ -218,14 +218,15 @@ sdist = { url = "https://files.pythonhosted.org/packages/3e/38/7859ff46355f76f8d
 
 [[package]]
 name = "anyio"
-version = "4.12.0"
+version = "4.15.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "idna" },
+    { name = "typing-extensions", marker = "python_full_version < '3.15'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/16/ce/8a777047513153587e5434fd752e89334ac33e379aa3497db860eeb60377/anyio-4.12.0.tar.gz", hash = "sha256:73c693b567b0c55130c104d0b43a9baf3aa6a31fc6110116509f27bf75e21ec0", size = 228266, upload-time = "2025-11-28T23:37:38.911Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a9/d2/f4d173e22df740bc37b1db102b386ba719b66e95b0f0d751f556b387e6d2/anyio-4.15.1.tar.gz", hash = "sha256:9f28306018cbd6d329e64a36d58256edff76dd996fe423bc957326e578b82a94", size = 276966, upload-time = "2026-09-05T10:42:39.44Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7f/9c/36c5c37947ebfb8c7f22e0eb6e4d188ee2d53aa3880f3f2744fb894f0cb1/anyio-4.12.0-py3-none-any.whl", hash = "sha256:dad2376a628f98eeca4881fc56cd06affd18f659b17a747d3ff0307ced94b1bb", size = 113362, upload-time = "2025-11-28T23:36:57.897Z" },
+    { url = "https://files.pythonhosted.org/packages/12/b8/4bd346e22b28902df4d651910f5242c28d84e4a5c2435ca5c3f797ed7e2e/anyio-4.15.1-py3-none-any.whl", hash = "sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101", size = 132079, upload-time = "2026-09-05T10:42:37.923Z" },
 ]
 
 [[package]]
@@ -1812,6 +1813,7 @@ name = "unifi-access-mcp"
 source = { editable = "apps/access" }
 dependencies = [
     { name = "aiohttp" },
+    { name = "anyio" },
     { name = "click" },
     { name = "cryptography" },
     { name = "jsonschema" },
@@ -1841,6 +1843,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.3" },
+    { name = "anyio", specifier = ">=4.14.2" },
     { name = "click", specifier = ">=8.3.3" },
     { name = "cryptography", specifier = ">=50.0.1" },
     { name = "jsonschema", specifier = ">=4.17.0" },
@@ -1875,6 +1878,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "aiounifi" },
     { name = "alembic" },
+    { name = "anyio" },
     { name = "argon2-cffi" },
     { name = "click" },
     { name = "cryptography" },
@@ -1910,6 +1914,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.20.0" },
     { name = "aiounifi", specifier = "==95" },
     { name = "alembic", specifier = ">=1.19.2" },
+    { name = "anyio", specifier = ">=4.14.2" },
     { name = "argon2-cffi", specifier = ">=23.1.0" },
     { name = "click", specifier = ">=8.3.3" },
     { name = "cryptography", specifier = ">=50.0.1" },
@@ -1998,6 +2003,7 @@ name = "unifi-mcp-relay"
 source = { editable = "packages/unifi-mcp-relay" }
 dependencies = [
     { name = "aiohttp" },
+    { name = "anyio" },
     { name = "click" },
     { name = "cryptography" },
     { name = "mcp", extra = ["cli"] },
@@ -2022,6 +2028,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.3" },
+    { name = "anyio", specifier = ">=4.14.2" },
     { name = "click", specifier = ">=8.3.3" },
     { name = "cryptography", specifier = ">=50.0.1" },
     { name = "mcp", extras = ["cli"], specifier = ">=2.2.0,<3" },
@@ -2047,6 +2054,7 @@ dev = [
 name = "unifi-mcp-shared"
 source = { editable = "packages/unifi-mcp-shared" }
 dependencies = [
+    { name = "anyio" },
     { name = "click" },
     { name = "cryptography" },
     { name = "jsonschema" },
@@ -2069,6 +2077,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.14.2" },
     { name = "click", specifier = ">=8.3.3" },
     { name = "cryptography", specifier = ">=50.0.1" },
     { name = "jsonschema", specifier = ">=4.0.0" },
@@ -2095,6 +2104,7 @@ source = { editable = "apps/network" }
 dependencies = [
     { name = "aiohttp" },
     { name = "aiounifi" },
+    { name = "anyio" },
     { name = "click" },
     { name = "cryptography" },
     { name = "jsonschema" },
@@ -2125,6 +2135,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = "==3.14.3" },
     { name = "aiounifi", specifier = "==95" },
+    { name = "anyio", specifier = ">=4.14.2" },
     { name = "click", specifier = ">=8.3.3" },
     { name = "cryptography", specifier = ">=50.0.1" },
     { name = "jsonschema", specifier = ">=4.17.0" },
@@ -2156,6 +2167,7 @@ name = "unifi-protect-mcp"
 source = { editable = "apps/protect" }
 dependencies = [
     { name = "aiohttp" },
+    { name = "anyio" },
     { name = "click" },
     { name = "cryptography" },
     { name = "jsonschema" },
@@ -2185,6 +2197,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.3" },
+    { name = "anyio", specifier = ">=4.14.2" },
     { name = "click", specifier = ">=8.3.3" },
     { name = "cryptography", specifier = ">=50.0.1" },
     { name = "jsonschema", specifier = ">=4.17.0" },

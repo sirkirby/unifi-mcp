@@ -72,6 +72,7 @@ UPSTREAM_PACKAGES: dict[str, Path] = {
 }
 
 MCP_SECURITY_FLOORS: dict[str, str] = {
+    "anyio": "4.14.2",
     "cryptography": "50.0.0",
     "pydantic-settings": "2.14.2",
     "pyjwt": "2.13.0",
@@ -88,6 +89,7 @@ SECURITY_FLOORS: dict[str, dict[str, str]] = {
     "unifi-access-mcp": MCP_SECURITY_FLOORS,
     "unifi-mcp-relay": MCP_SECURITY_FLOORS,
     "unifi-api-server": {
+        "anyio": "4.14.2",
         "cryptography": "50.0.0",
         "pyjwt": "2.13.0",
         "python-multipart": "0.0.31",
@@ -108,6 +110,7 @@ REPRODUCIBLE_RUNTIME_PINS: dict[str, tuple[str, ...]] = {
 # Preinstalling them proves a published wheel upgrades an existing environment,
 # rather than merely resolving safely in a fresh environment.
 VULNERABLE_BASELINES: dict[str, str] = {
+    "anyio": "4.12.0",
     "cryptography": "49.0.0",
     "pydantic-settings": "2.12.0",
     "pyjwt": "2.12.1",
