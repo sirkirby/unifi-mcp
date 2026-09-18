@@ -3,9 +3,10 @@ name: myco:monorepo-release-pipeline
 description: >-
   Covers the full release pipeline for the unifi-mcp monorepo: determining release scope by
   analyzing changed packages, scoping hatch-vcs version tag globs per Python package to prevent
-  sibling-tag contamination, pushing tags in strict dependency order (unifi-core → unifi-mcp-shared
-  → app servers → relay → worker when needed), configuring scripts/generate_release_notes.py
-  path scoping per package, wiring per-package publish workflows for OIDC trusted publishing,
+  sibling-tag contamination, batching independent release tags while preserving real dependency
+  edges, coordinating consolidated plugin-manifest writebacks, configuring
+  scripts/generate_release_notes.py path scoping per package, wiring per-package publish workflows
+  for OIDC trusted publishing,
   coordinating cross-package version bumps in pyproject.toml, understanding app vs. library
   versioning and writeback behavior, validating releases post-tag, and verifying shared package
   architecture constraints (DI-only rule, scope gate, relay sync) before releasing shared packages.
@@ -97,7 +98,7 @@ can lag or overstate changes.
 | `packages/unifi-mcp-shared/` only | `shared/v*` → then `network/v*`, `protect/v*`, `access/v*`, `relay/v*` |
 | `packages/unifi-core/` only | `core/v*` → then `shared/v*` → then all downstream packages, including `api/v*` |
 | One app only (e.g., `apps/protect/`) | `protect/v*` only |
-| Multiple apps | One tag per changed app, in dependency order |
+| Multiple apps | One tag per changed app; put independent tags in the same release batch |
 | Plugin-only changes (manifest/config updates) | Patch release for cache invalidation (e.g., `network/v0.14.13` → `network/v0.14.14`) |
 | Worker (`apps/worker/`) | `worker/v*` |
 
@@ -119,7 +120,9 @@ When only the plugin manifest changes with no code changes, a patch release must
 
 ### Shared package rule
 
-Any change to `packages/unifi-mcp-shared/` underpins all server apps. Tag `shared` first, then all server apps — even if their own code didn't change.
+Any change to `packages/unifi-mcp-shared/` underpins all server apps. Include `shared` and all affected
+server apps in the release scope even if their own code did not change. Whether those tags require
+separate batches depends on the metadata and API dependency checks in Procedure F.
 
 ### CVE / transitive dependency changes
 
@@ -250,30 +253,64 @@ The manifest bumper workflow (`bump-plugin-versions.yml`) must target `args[2]` 
 
 ---
 
-## Procedure F: Dependency-Ordered Tag Pushing
+## Procedure F: Dependency-Aware Release Batching
 
-**Critical rule:** Push each tag INDIVIDUALLY, one at a time. Wait for PyPI confirmation before pushing the next. Batch-pushing (`git push origin tag1 tag2`) causes GitHub Actions to silently skip all but the first workflow.
+Build a release graph before pushing tags. A package has a hard dependency edge on an upstream
+release when its wheel metadata must name the new upstream version, its code requires an API that
+exists only in that version, or its release workflow installs the new version from PyPI. Existing
+bounds that already accept the upstream release do not create an edge by themselves.
+
+Put every tag whose incoming edges are already satisfied into the same batch. Create the tags from
+the intended release commit, then push each tag in its own command back-to-back. Separate push
+commands reliably trigger every tag workflow; one multi-ref `git push` can omit triggers.
 
 ```bash
-# Step 1 — upstream foundation
-git tag core/v0.2.0
-git push origin core/v0.2.0
-# WAIT: confirm https://pypi.org/project/unifi-core/ shows 0.2.0 and CI is green
+# Include only packages in this batch. Each variable is the reviewed version without the v prefix.
+release_tags=(
+  "shared/v${SHARED_VERSION:?Set SHARED_VERSION}"
+  "network/v${NETWORK_VERSION:?Set NETWORK_VERSION}"
+  "protect/v${PROTECT_VERSION:?Set PROTECT_VERSION}"
+  "access/v${ACCESS_VERSION:?Set ACCESS_VERSION}"
+  "api/v${API_VERSION:?Set API_VERSION}"
+  "relay/v${RELAY_VERSION:?Set RELAY_VERSION}"
+)
 
-# Step 2 — shared layer
-git tag shared/v0.4.0
-git push origin shared/v0.4.0
-# WAIT: confirm PyPI and CI green
+# Each loop iteration is a separate push. Do not wait for its workflow before the next iteration.
+for tag in "${release_tags[@]}"; do
+  git tag "$tag"
+done
 
-# Step 3 — app servers (push individually, one per command)
-git tag network/v0.14.13
-git push origin network/v0.14.13
-# WAIT and repeat for protect, access, api
-
-# Step 4 — relay and worker last
-git tag relay/v0.1.0
-git push origin relay/v0.1.0
+for tag in "${release_tags[@]}"; do
+  git push origin "$tag" || exit 1
+done
 ```
+
+Monitor every workflow in the batch concurrently. Wait at a dependency boundary only: confirm the
+upstream workflow and PyPI artifact before pushing a later batch that consumes that artifact. If one
+workflow fails, let unrelated workflows finish, but hold every downstream batch that depends on the
+failure.
+
+### Consolidated plugin-manifest writebacks
+
+`bump-plugin-versions.yml` reads the current release tags and synchronizes all Network, Protect, and
+Access manifest copies. Its concurrency policy coalesces a burst of tags: earlier sync runs may be
+cancelled, and the last run writes one commit containing every app version visible at that point.
+Cancelled superseded runs are expected; the final run must succeed.
+
+After the batch:
+
+1. Wait for the last `bump-plugin-versions.yml` run to complete.
+2. Fetch `origin/main` and inspect the writeback commit.
+3. Verify `apps/<app>/server.json` and all three plugin manifest copies contain each released app
+   version.
+4. Start another batch from the writeback commit only when a later tag actually consumes those
+   committed manifests or a new dependency pin. Independent tags can share the original release
+   commit.
+
+For example, direct security floors added independently to Shared, Network, Protect, Access, API,
+and Relay form one batch when no cross-package floor changes. A new Core API plus downstream code
+that requires it forms at least two batches: publish Core first, then publish the downstream wheels
+after Core is available and their reviewed metadata floors are correct.
 
 > **Floor-bump sequencing gotcha:** Open downstream `pyproject.toml` floor-bump PRs (raising the minimum version bound on an upstream package) **only after** the upstream tag is confirmed on PyPI. Committing the floor-bump PR before the upstream version exists on PyPI causes the pin-alignment CI gate on that PR to fail — the gate tries to resolve the declared lower bound but the version does not yet exist.
 
@@ -305,13 +342,19 @@ All must exit 0 with zero failed/exception records before the first tag in the r
 
 ## Procedure H: Release Validation
 
-After pushing a tag:
+After pushing a release batch:
 
-1. **Check CI:** Confirm the version check job goes green.
-2. **Verify locally:** `cd apps/<app> && hatch version` — should print exactly the tagged version.
-3. **Confirm PyPI:** `pip index versions unifi-network-mcp`.
-4. **Install smoke test:** `pip install --upgrade unifi-network-mcp && python -c "import unifi_network_mcp; print(unifi_network_mcp.__version__)"`.
-5. **Post-Release Live Smoke Verification** (must run via `uv`, not system `python3`):
+1. **Check CI concurrently:** Capture every release workflow run and confirm all complete
+   successfully. Do not serialize independent workflow watches.
+2. **Verify the final manifest sync:** Confirm the last `bump-plugin-versions.yml` run succeeded and
+   inspect its commit on `main` for every app tag in the batch.
+3. **Verify local tag versions:** `cd apps/<app> && hatch version` should print exactly the tagged
+   version.
+4. **Confirm every registry artifact:** Query PyPI or npm for each exact version in the batch.
+5. **Install smoke test:** Install compatible releases together in one clean environment when
+   possible. Assert each installed distribution version, its import path under `site-packages`, and
+   any security or cross-package metadata floor that motivated the release.
+6. **Post-Release Live Smoke Verification** (must run via `uv`, not system `python3`):
    ```bash
    uv run python scripts/live_smoke.py --server network --phase safe
    uv run python scripts/live_smoke.py --server protect --phase safe
@@ -319,7 +362,10 @@ After pushing a tag:
    ```
    All three must exit 0 with zero failed/exception records. This is the final release validation gate.
    **Do not invoke with bare `python3 scripts/live_smoke.py`** — the system Python lacks the workspace dependencies and the harness will fail at import time.
-6. **Post-publish installed-wheel verification:** After PyPI confirms the new version, install it into a clean environment (`pip install --upgrade <pypi-name>==<version>`) and re-run the relevant `live_smoke.py --phase safe` invocation against the *installed* package, not the local worktree. This catches packaging defects that only manifest in the built wheel and are invisible when testing from source.
+7. **Post-publish installed-wheel verification:** After PyPI confirms the new versions, re-run the
+   relevant `live_smoke.py --phase safe` invocations against the packages installed in the clean
+   environment, not local workspace sources. This catches packaging defects that only manifest in
+   built wheels and validates the whole compatible batch with one environment.
 
 ---
 
@@ -406,7 +452,7 @@ PR checklist trigger: any PR modifying shared-package protocol must include a "r
 
 **PyPI pin masked by workspace source — failure mode the entire CI matrix cannot detect.** Workspace `[tool.uv.sources]` overrides mean `uv lock --check` passes with a stale pin. The pin only fails when pip resolves against PyPI on a user's machine. Run the wheel-metadata check in Procedure D before pushing tags.
 
-**Batch tag push silently skips releases.** `git push origin tag1 tag2 tag3` causes GitHub Actions to start only the first workflow. Push tags one at a time.
+**One multi-ref push silently skips releases.** `git push origin tag1 tag2 tag3` can start only the first workflow. Push each ref separately in a tight loop, then monitor the independent workflows concurrently.
 
 **Broken published wheels: remediation via PyPI yank (PEP 592).** Yank via the PyPI web UI — `twine` does not support the yank operation. Yanked versions are skipped during resolution but remain installable when explicitly pinned. Always follow a bulk yank with a corrected patch release.
 
