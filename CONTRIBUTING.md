@@ -224,8 +224,18 @@ Tests use `pytest-asyncio` for async support and `aioresponses` for HTTP mocking
 2. Determine release scope by package tag namespace (`core/v*`, `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, `api/v*`, `relay/v*`, `worker/v*`).
 3. If a downstream package needs code from a newly released upstream package, update its `pyproject.toml` dependency range before tagging. For example, Protect/API releases that require new `unifi-core` models must allow the new `unifi-core` line.
 4. Run `uv lock --check` and commit any dependency-bound changes before creating local tags.
-5. Push tags in dependency order: `core` first, then `shared`, then app/API packages, then `relay`, then `worker` if the worker needs the released relay behavior. Wait for each upstream package to appear on PyPI before pushing dependents.
-6. CI publishes to PyPI or npm, builds Docker images where applicable, and creates GitHub Releases.
+5. Build release batches from actual dependency edges. A downstream package must wait when its
+   wheel metadata names the new upstream version, its code requires a newly published upstream API,
+   or its release workflow installs that new version. Existing compatible bounds alone do not
+   require a wait.
+6. Within each batch, push every tag back-to-back using a separate `git push origin <tag>` command
+   for each ref, then monitor the workflows concurrently. Do not combine multiple refs in one push.
+   Before starting a dependent batch, confirm each required upstream artifact is available on PyPI
+   or npm and its release workflow passed.
+7. CI publishes to PyPI or npm, builds Docker images where applicable, and creates GitHub Releases.
+   When a batch includes a tag namespace configured in `bump-plugin-versions.yml`, wait for the final
+   version-sync run and verify its consolidated writeback to `main`. API-only and Worker-only batches
+   do not trigger that workflow.
 
 ## Questions?
 

@@ -297,7 +297,8 @@ Access manifest copies. Its concurrency policy coalesces a burst of tags: earlie
 cancelled, and the last run writes one commit containing every app version visible at that point.
 Cancelled superseded runs are expected; the final run must succeed.
 
-After the batch:
+After a batch containing at least one namespace configured under
+`bump-plugin-versions.yml`'s `on.push.tags`:
 
 1. Wait for the last `bump-plugin-versions.yml` run to complete.
 2. Fetch `origin/main` and inspect the writeback commit.
@@ -346,8 +347,10 @@ After pushing a release batch:
 
 1. **Check CI concurrently:** Capture every release workflow run and confirm all complete
    successfully. Do not serialize independent workflow watches.
-2. **Verify the final manifest sync:** Confirm the last `bump-plugin-versions.yml` run succeeded and
-   inspect its commit on `main` for every app tag in the batch.
+2. **Verify the final manifest sync when triggered:** If the batch contains a tag namespace listed
+   in `bump-plugin-versions.yml`, confirm its last run succeeded and inspect the commit on `main` for
+   every app tag in the batch. API-only and Worker-only batches skip this step because they do not
+   trigger the workflow.
 3. **Verify local tag versions:** `cd apps/<app> && hatch version` should print exactly the tagged
    version.
 4. **Confirm every registry artifact:** Query PyPI or npm for each exact version in the batch.
