@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 GUIDE = Path("docs/agent-install.md")
+RESEARCH = Path("docs/research/2026-09-19-agent-installation-options.md")
 README = Path("README.md")
 SETUP_SKILLS = (
     Path("plugins/unifi-network/skills/unifi-network-setup/SKILL.md"),
@@ -44,6 +45,14 @@ def test_current_manual_clients_are_named_accurately() -> None:
     assert "### Windsurf" not in guide
 
 
+def test_antigravity_paths_match_current_official_documentation() -> None:
+    research = RESEARCH.read_text(encoding="utf-8")
+
+    assert "`~/.gemini/config/mcp_config.json` globally" in research
+    assert "`.agents/mcp_config.json` per workspace" in research
+    assert "~/.gemini/antigravity-cli/mcp_config.json" not in research
+
+
 def test_agent_guardrails_preserve_secrets_and_confirmation_mode() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
 
@@ -77,6 +86,17 @@ def test_setup_skills_never_request_or_pass_plaintext_secrets() -> None:
         assert "_FILE=<absolute-path>" in skill
         for unsafe_text in forbidden:
             assert unsafe_text not in normalized_skill
+
+
+def test_claude_migrations_clear_every_credential_provider_spelling() -> None:
+    for product, skill_path in zip(("NETWORK", "PROTECT", "ACCESS"), SETUP_SKILLS, strict=True):
+        skill = skill_path.read_text(encoding="utf-8")
+        for secret in ("PASSWORD", "API_KEY"):
+            for suffix in ("", "_FILE", "_COMMAND"):
+                assert f"`UNIFI_{product}_{secret}{suffix}`" in skill
+
+    protect_skill = SETUP_SKILLS[1].read_text(encoding="utf-8")
+    assert "Before changing or skipping API-key setup" in protect_skill
 
 
 def test_guided_setup_defaults_to_read_only_policy_gates() -> None:
@@ -116,4 +136,3 @@ def test_protect_setup_refers_to_password_provider_not_raw_password() -> None:
 
     assert "username and password provider" in skill
     assert "After collecting username and password," not in skill
-    assert "plain `UNIFI_PROTECT_PASSWORD` or `UNIFI_PROTECT_API_KEY`" in skill

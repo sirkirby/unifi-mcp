@@ -77,9 +77,14 @@ prompt. If no indirect provider already exists, explain how to create one outsid
 the chat transcript or use a client-native masked secret UI, then wait.
 
 Set exactly one spelling per secret; the server refuses to start if two are set.
-On the Claude target `set-env.sh` only adds keys, so remove any previously saved
-plain `UNIFI_ACCESS_PASSWORD` or `UNIFI_ACCESS_API_KEY` entry before switching.
-The Codex and OpenClaw targets replace the whole server entry.
+On the Claude target `set-env.sh` only adds keys. Before changing or deselecting
+an authentication path, remove all of that path's existing product-scoped
+spellings: `UNIFI_ACCESS_PASSWORD`, `UNIFI_ACCESS_PASSWORD_FILE`, and
+`UNIFI_ACCESS_PASSWORD_COMMAND` for session authentication; and
+`UNIFI_ACCESS_API_KEY`, `UNIFI_ACCESS_API_KEY_FILE`, and
+`UNIFI_ACCESS_API_KEY_COMMAND` for API-key authentication. Then add only the
+provider the user selected. The Codex and OpenClaw targets replace the whole
+server entry.
 
 At least one auth path is required.
 
