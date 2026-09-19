@@ -282,7 +282,10 @@ git commit -m "chore: bump plugin version to 0.4.3 (fix UNIFI_MCP_HTTP_FORCE)"
 # 4. Follow monorepo-release-pipeline for tag ordering and PyPI publish
 ```
 
-The PyPI ordering gate (shared package published before consumers) applies even for no-op releases. Re-tagging an existing release is not an option — PyPI releases are immutable.
+Use the dependency-aware batching rules in `monorepo-release-pipeline`. A Shared release creates a
+wait boundary only when consumer metadata, code, or a release workflow requires that newly published
+version; consumers whose existing bounds remain compatible may publish in the same batch. Re-tagging
+an existing release is not an option because PyPI releases are immutable.
 
 ### Why not re-use the current tag?
 
