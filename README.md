@@ -104,8 +104,9 @@ whether I need Network, Protect, Access, or more than one, and show me the exact
 commands and configuration files you plan to change. Wait for my confirmation.
 Do not ask me to paste a password or API key into chat. Prefer an indirect
 credential provider or the client's secure secret prompt. Keep mutation
-permissions in confirm mode. After setup, reload the client, verify the MCP
-connection and tool list, and run one harmless read-only check.
+permissions in confirm mode and explicitly deny create, update, and delete
+unless I opt in. After setup, reload the client, verify the MCP connection and
+tool list, and run one harmless read-only check.
 ```
 
 The guide covers native plugins, product-scoped `npx skills add` installs,

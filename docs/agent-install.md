@@ -35,8 +35,10 @@ During setup:
   `*_API_KEY_COMMAND` setting where the selected server supports it. Otherwise,
   direct the user to the client's own sensitive-value prompt or configuration
   UI.
-- Keep the permission mode at its default, `confirm`. Do not enable mutation
-  policy gates unless the user separately requests write access.
+- Keep the permission mode at its default, `confirm`. Unless the user separately
+  requests write access, explicitly set the selected server's `CREATE`, `UPDATE`,
+  and `DELETE` policy gates to `false`; unset policy gates allow mutations after
+  confirmation.
 - Do not disable TLS verification without explaining the tradeoff. Many local
   UniFi consoles use a self-signed certificate, but a trusted certificate is
   preferred.
@@ -172,11 +174,13 @@ opencode mcp add unifi-network \
 opencode mcp list
 ```
 
-Use `--global` only when the user wants the server available in every OpenCode
-project. Substitute `unifi-protect-mcp` and `UNIFI_PROTECT_*`, or
-`unifi-access-mcp` and `UNIFI_ACCESS_*`, for the other products. OpenCode's
-[current MCP documentation](https://opencode.ai/v2/docs/mcp-servers) is the
-source of truth for its configuration schema and rollback commands.
+`opencode mcp add` writes to OpenCode's user-level configuration, so this server
+will be available across projects. There is no `--global` switch. If the user
+wants project-only access, add the equivalent local MCP entry to that project's
+`opencode.json` instead. Substitute `unifi-protect-mcp` and
+`UNIFI_PROTECT_*`, or `unifi-access-mcp` and `UNIFI_ACCESS_*`, for the other
+products. OpenCode's [current MCP documentation](https://opencode.ai/v2/docs/mcp-servers)
+is the source of truth for its configuration schema and rollback commands.
 
 An OpenCode npm plugin is worth a small packaging prototype after the native
 flow is proven. Keep it only if it reduces setup steps while preserving secure
@@ -239,7 +243,7 @@ Current first-party references:
 
 | Product | MCP name | Package | Minimum connection variables |
 |---|---|---|---|
-| Network | `unifi-network` | `unifi-network-mcp@latest` | `UNIFI_NETWORK_HOST`, `UNIFI_NETWORK_USERNAME`, one `UNIFI_NETWORK_PASSWORD*` provider |
+| Network | `unifi-network` | `unifi-network-mcp@latest` | `UNIFI_NETWORK_HOST`, plus an API-key provider for limited inventory or username and a password provider for session tools |
 | Protect | `unifi-protect` | `unifi-protect-mcp@latest` | `UNIFI_PROTECT_HOST`, `UNIFI_PROTECT_USERNAME`, one `UNIFI_PROTECT_PASSWORD*` provider |
 | Access | `unifi-access` | `unifi-access-mcp@latest` | `UNIFI_ACCESS_HOST`, plus a supported local credential or API-key provider |
 

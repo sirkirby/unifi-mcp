@@ -18,6 +18,7 @@ def test_readme_agent_prompt_points_to_canonical_guide() -> None:
     assert "https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md" in readme
     assert "Do not ask me to paste a password or API key into chat" in readme
     assert "Wait for my confirmation" in readme
+    assert "explicitly deny create, update, and delete" in readme
 
 
 def test_skills_install_examples_are_scoped_to_public_product_trees() -> None:
@@ -58,3 +59,35 @@ def test_setup_skills_handle_standalone_skills_installs() -> None:
         assert "standalone `npx skills`" in skill
         assert "docs/agent-install.md" in skill
         assert "does not install or register the MCP server" in skill
+
+
+def test_setup_skills_never_request_or_pass_plaintext_secrets() -> None:
+    forbidden = (
+        "ask for the API key",
+        "ask for the key",
+        "PASSWORD=<password>",
+        "API_KEY=<api-key>",
+    )
+
+    for skill_path in SETUP_SKILLS:
+        skill = skill_path.read_text(encoding="utf-8")
+        normalized_skill = " ".join(skill.split())
+        assert "Never ask the user to send" in normalized_skill
+        assert "_FILE=<absolute-path>" in skill
+        for unsafe_text in forbidden:
+            assert unsafe_text not in normalized_skill
+
+
+def test_guided_setup_defaults_to_read_only_policy_gates() -> None:
+    for product, skill_path in zip(("NETWORK", "PROTECT", "ACCESS"), SETUP_SKILLS, strict=True):
+        skill = skill_path.read_text(encoding="utf-8")
+        for action in ("CREATE", "UPDATE", "DELETE"):
+            assert f"UNIFI_POLICY_{product}_{action}=false" in skill
+
+
+def test_opencode_scope_and_network_auth_are_accurate() -> None:
+    guide = GUIDE.read_text(encoding="utf-8")
+
+    assert "There is no `--global` switch" in guide
+    assert "user-level configuration" in guide
+    assert "API-key provider for limited inventory" in guide
