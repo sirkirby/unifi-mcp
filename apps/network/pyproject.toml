@@ -23,7 +23,7 @@ dependencies = [
     # Controller credential redaction requires Core 0.4.51.
     # Key-backed inventory and authentication status require Core 0.4.53.
     # WAN DNS, firewall-group contracts, and session event recovery require Core 0.4.55.
-    "unifi-core[network]>=0.4.55,<0.5",
+    "unifi-core[network]>=0.4.56,<0.5",
     "aiounifi==95",
     "mcp[cli]>=2.2.0,<3",
     # Published wheels do not consume uv.lock; keep MCP transitive security

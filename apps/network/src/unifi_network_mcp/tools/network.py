@@ -26,6 +26,7 @@ from unifi_core.network.models.networks import DELETABLE_PURPOSES as NETWORK_DEL
 from unifi_core.network.models.networks import MDNS_ENABLED_DESCRIPTION, validate_wan_dns_state
 from unifi_core.network.models.networks import validate_create as validate_network_create
 from unifi_core.network.models.networks import validate_update as validate_network_update
+from unifi_core.network.models.vpn import is_vpn_network
 from unifi_core.network.models.wlans import validate_create as validate_wlan_create
 from unifi_core.network.models.wlans import validate_update as validate_wlan_update
 from unifi_core.network.read_views import shape_network_details, shape_network_list, shape_wlan_list
@@ -254,6 +255,11 @@ CONNECTIVITY_CRITICAL_WAN_FIELDS: frozenset[str] = frozenset(
 
 # Moving a network between firewall zones changes its security-policy scope.
 SECURITY_CRITICAL_NETWORK_FIELDS: frozenset[str] = frozenset({"firewall_zone_id"})
+VPN_FIREWALL_ZONE_WARNING = (
+    "WARNING: VPN networks can only use the system-defined Vpn firewall zone. "
+    "UniFi may persist a custom zone without enforcing its policies; confirmed assignments "
+    "to any other zone are rejected."
+)
 
 
 @server.tool(
@@ -267,6 +273,8 @@ SECURITY_CRITICAL_NETWORK_FIELDS: frozenset[str] = frozenset({"firewall_zone_id"
     "internet_access_enabled (bool), upnp_lan_enabled (bool), "
     "firewall_zone_id (str, V2 firewall-zone ID — assigns the network to a zone; these IDs are scoped "
     "to the V2 firewall/network tool family, so do not pass Integration API firewall-zone UUIDs). "
+    "VPN network entries—site-vpn, remote-user-vpn, vpn-client, and vpn-server—may only use the system-defined "
+    "Vpn zone; custom-zone assignments are rejected because UniFi persists them without enforcing their policies. "
     "DHCP: dhcpd_enabled (bool), dhcpd_start (IP), dhcpd_stop (IP), dhcpd_leasetime (int seconds), auto_scale_enabled (bool), "
     "dhcpd_gateway (IP), dhcpd_gateway_enabled (bool), dhcp_relay_enabled (bool), "
     "dhcpd_conflict_checking (bool), dhcpguard_enabled (bool, requires dhcpd_ip_1), dhcpd_ip_1 (IP, trusted DHCP server for guard), dhcpd_boot_enabled (bool), dhcpd_boot_server (IP), dhcpd_boot_filename (str), dhcpd_tftp_server (str, DHCP opt 150). "
@@ -336,6 +344,9 @@ async def update_network(
             - network_isolation_enabled (boolean): Enable network isolation (corporate networks only).
             - internet_access_enabled (boolean): Allow this network to access the internet.
             - upnp_lan_enabled (boolean): Enable UPnP on this network.
+            - firewall_zone_id (string): V2 firewall-zone ID. VPN network entries may only use the
+              system-defined Vpn zone; custom zones are rejected because the controller does not
+              apply their policies to tunnel interfaces.
             - dhcpd_enabled (boolean): Enable the DHCP server.
             - dhcpd_start (string): DHCP range start IP.
             - dhcpd_stop (string): DHCP range end IP.
@@ -416,6 +427,7 @@ async def update_network(
     Important Constraints:
         - Network isolation (network_isolation_enabled) is ONLY supported on networks with purpose="corporate".
         - Attempting to enable isolation on "guest" or other network types will fail with an API error.
+        - VPN network entries can only use the system-defined Vpn firewall zone; custom zones are not enforced.
         - Create or move guest networks to the Hotspot firewall zone in the UniFi UI; the legacy API cannot do this safely.
 
     Returns:
@@ -466,10 +478,14 @@ async def update_network(
                 "Verify the values before setting confirm=true."
             )
         if security_critical:
-            warnings.append(
-                "WARNING: Changing firewall_zone_id moves this network into a different V2 firewall zone and "
-                "changes which security policies apply. Verify the V2 zone ID before setting confirm=true."
-            )
+            effective_network = {**current, **validated_data}
+            if is_vpn_network(effective_network):
+                warnings.append(VPN_FIREWALL_ZONE_WARNING)
+            else:
+                warnings.append(
+                    "WARNING: Changing firewall_zone_id moves this network into a different V2 firewall zone and "
+                    "changes which security policies apply. Verify the V2 zone ID before setting confirm=true."
+                )
         if validated_data.get("ipv6_interface_type") == "static" and current.get("ipv6_interface_type") == "pd":
             warnings.append(
                 "WARNING: Switching ipv6_interface_type from 'pd' to 'static' releases this "
@@ -577,8 +593,9 @@ async def delete_network(
     name="unifi_create_network",
     description=(
         "Create a new network (LAN/VLAN) with schema validation. Guest-purpose creation is rejected because the "
-        "legacy API can silently place it in the Internal zone. Confirmed creates are read back and report exact "
-        "persisted, dropped, and coerced fields; a failed result may still identify a created resource for cleanup. "
+        "legacy API can silently place it in the Internal zone. VPN network entries may only specify the system-defined "
+        "Vpn firewall zone; custom zones are persisted without enforcement and therefore rejected. Confirmed creates are "
+        "read back and report exact persisted, dropped, and coerced fields; a failed result may still identify a created resource for cleanup. "
         "Requires confirmation."
     ),
     permission_category="networks",
@@ -589,7 +606,7 @@ async def create_network(
     network_data: Annotated[
         Dict[str, Any],
         Field(
-            description="Network configuration dict. Required: name (str), purpose (str: 'corporate', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). 'guest' is rejected because the legacy API can silently place it in the Internal firewall zone; create Hotspot-zone networks in the UniFi UI. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled, firewall_zone_id (V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs). See update_network for the full list of supported fields."
+            description="Network configuration dict. Required: name (str), purpose (str: 'corporate', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). 'guest' is rejected because the legacy API can silently place it in the Internal firewall zone; create Hotspot-zone networks in the UniFi UI. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled, firewall_zone_id (V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs; VPN entries may only specify the system-defined Vpn zone). See update_network for the full list of supported fields."
         ),
     ],
     confirm: Annotated[
@@ -626,13 +643,14 @@ async def create_network(
     - enabled (boolean): Whether the network is enabled (default: true)
     - network_isolation_enabled (boolean): Enable network isolation (IMPORTANT: Only works on networks with purpose="corporate")
     - upnp_lan_enabled (boolean): Enable UPnP on this network
-    - firewall_zone_id (string): V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs
+    - firewall_zone_id (string): V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs. VPN entries may only specify the system-defined Vpn zone.
     (see update_network for the full list of additional DHCP/DNS fields that can
     also be supplied at creation time)
 
     Important Constraints:
     - Network isolation (network_isolation_enabled) is ONLY supported on networks with purpose="corporate".
     - It cannot be enabled on "guest" networks.
+    - VPN network entries can only use the system-defined Vpn firewall zone; custom zones are not enforced.
     - All DHCP fields use the `dhcpd_*` prefix (the UniFi API field names); the
       legacy `dhcp_enabled`/`dhcp_start`/`dhcp_stop` names are NOT accepted.
 
@@ -662,12 +680,15 @@ async def create_network(
     purpose = validated_data["purpose"]
 
     if not confirm:
+        warnings = ["Creating a network may temporarily disrupt connectivity"]
+        if "firewall_zone_id" in validated_data and is_vpn_network(validated_data):
+            warnings.append(VPN_FIREWALL_ZONE_WARNING)
         return redact_sensitive_fields(
             create_preview(
                 resource_type="network",
                 resource_data=validated_data,
                 resource_name=validated_data.get("name"),
-                warnings=["Creating a network may temporarily disrupt connectivity"],
+                warnings=warnings,
             ),
             redact_sensitive=redact_sensitive,
         )
