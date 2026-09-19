@@ -38,8 +38,10 @@ def test_current_manual_clients_are_named_accurately() -> None:
     assert "## Native OpenCode MCP setup" in guide
     assert "OpenCode supports local MCP servers directly" in guide
     assert "Antigravity CLI / IDE" in guide
-    assert "Devin Desktop" in guide
+    assert "Devin Local in Devin Desktop / Devin CLI" in guide
+    assert "Cascade in Devin Desktop" in guide
     assert "devin mcp add unifi-network" in guide
+    assert "Devin Settings > Cascade > MCP Servers" in guide
     assert "OpenCode npm plugin is worth a small packaging prototype" in guide
     assert "### Gemini CLI" not in guide
     assert "### Windsurf" not in guide
@@ -61,6 +63,8 @@ def test_agent_guardrails_preserve_secrets_and_confirmation_mode() -> None:
     assert "product-scoped category overrides" in guide
     assert "wait for confirmation" in guide
     assert "No secret was printed" in guide
+    assert "When session authentication is selected" in guide
+    assert "API-key-only setup does not require that" in guide
 
 
 def test_setup_skills_handle_standalone_skills_installs() -> None:

@@ -16,7 +16,8 @@ For the newly reviewed clients:
 |---|---|---|
 | Google Antigravity | Google's primary consumer agent platform after the Gemini CLI transition | Build and test an Antigravity plugin. Document manual MCP setup first. |
 | Gemini CLI | Still released for enterprise customers and paid API-key users, but no longer serves individual accounts | Do not target it in the main install plan. Add compatibility guidance only if enterprise or API-key users request it. |
-| Devin Desktop | Current name and successor release of Windsurf; Devin Local is its primary local agent | Document Devin Desktop and current `devin mcp` setup. Keep Windsurf and Cascade names only for migration notes. |
+| Devin Local in Devin Desktop / Devin CLI | Devin Local is the primary Desktop agent and shares the Devin CLI harness and MCP configuration | Document the current `devin mcp` setup for Devin Local and CLI. |
+| Cascade in Devin Desktop | Legacy Desktop agent with a separate MCP settings UI and raw configuration | Keep a separate manual compatibility path while Cascade remains available. |
 | OpenCode | Native local and remote MCP support is sufficient for UniFi MCP | Document native MCP plus product skills. Do not build a wrapper plugin now. |
 
 ## Corrections to the earlier assessment
@@ -63,7 +64,11 @@ The README should use the label "Devin Desktop, formerly Windsurf." It should no
 - Devin Local is its primary local agent.
 - Cascade is a legacy agent retained for migration, not the current default.
 
-The current [Devin MCP configuration guide](https://docs.devin.ai/cli/extensibility/mcp/configuration) is the installation source of truth. It supports local stdio servers with:
+The current [Devin Local documentation](https://docs.devin.ai/desktop/devin-local)
+says that Devin Local inside Devin Desktop shares the Devin CLI agent harness
+and config-file mechanism. The [Devin MCP configuration guide](https://docs.devin.ai/cli/extensibility/mcp/configuration)
+is therefore the installation source of truth for Devin Local and Devin CLI. It
+supports local stdio servers with:
 
 ```text
 devin mcp add <name> -- <command> [args...]
@@ -71,7 +76,12 @@ devin mcp add <name> -- <command> [args...]
 
 Current configuration files are `~/.config/devin/mcp_config.json` for the user, `.devin/mcp_config.json` for a shared project entry, and `.devin/mcp_config.local.json` for a gitignored local entry. The guide recommends the local file for secrets. This supersedes a README recipe centered on `~/.codeium/windsurf/mcp_config.json`, though the [migration FAQ](https://docs.devin.ai/desktop/devin-desktop-faq) documents legacy compatibility paths.
 
-Document the current `devin mcp` route now. Keep a short legacy note that sends Cascade users to Cognition's [Cascade MCP guide](https://docs.devin.ai/desktop/cascade/mcp). Do not create a separate Windsurf marketplace plan.
+Document the current `devin mcp` route for Devin Local and Devin CLI. Cascade
+uses a separate Desktop configuration: **Devin Settings > Cascade > MCP
+Servers**, or its raw `mcp_config.json`, as documented in Cognition's
+[Cascade MCP guide](https://docs.devin.ai/desktop/cascade/mcp). Do not send a
+Cascade user through the Devin Local/CLI command, and do not create a separate
+Windsurf marketplace plan.
 
 ## OpenCode
 

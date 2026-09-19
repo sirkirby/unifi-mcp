@@ -29,7 +29,9 @@ Before changing anything:
 
 During setup:
 
-- Use a dedicated local UniFi account, not a Ubiquiti cloud SSO account.
+- When session authentication is selected, use a dedicated local UniFi account,
+  not a Ubiquiti cloud SSO account. API-key-only setup does not require that
+  account.
 - Do not ask the user to paste a password or API key into the chat. Prefer a
   `*_PASSWORD_FILE`, `*_PASSWORD_COMMAND`, `*_API_KEY_FILE`, or
   `*_API_KEY_COMMAND` setting where the selected server supports it. Otherwise,
@@ -66,7 +68,8 @@ documentation, stop and explain the mismatch instead of guessing.
 | OpenCode | Native `opencode mcp add`; optional standalone skills or plugin | Native MCP support verified; plugin packaging is a later convenience option |
 | Antigravity CLI / IDE | Native MCP configuration, Agent Skills, or plugin | Native formats verified; UniFi packaging under validation |
 | Cursor | Native MCP configuration; marketplace packaging planned | Manual setup under validation |
-| Devin Desktop | Native `devin mcp add`; optional standalone skills or plugin | Native MCP support verified; UniFi packaging under validation |
+| Devin Local in Devin Desktop / Devin CLI | Native `devin mcp add`; optional standalone skills or plugin | Shared harness and MCP config verified; UniFi packaging under validation |
+| Cascade in Devin Desktop | Devin Settings > Cascade > MCP Servers | Separate legacy Desktop path; manual setup only |
 
 Gemini CLI is not a recommended individual-user path. Google has moved that
 terminal experience to Antigravity CLI. Devin Desktop is the current name for
@@ -208,11 +211,12 @@ install validates its secret-entry and plugin-root behavior, use Antigravity's
 MCP management UI or current configuration documentation to add a local stdio
 server with the `uvx` command and the selected package from the table below.
 
-## Devin Desktop
+## Devin Local in Devin Desktop and Devin CLI
 
-Devin Desktop is the current name for Windsurf. Current Devin clients support
-MCP directly through `devin mcp`; legacy Cascade configuration should not be
-used for new setup.
+Devin Desktop is the current name for Windsurf. Its primary Devin Local agent
+shares the Devin CLI harness and MCP configuration, so the `devin mcp` flow
+below configures both Devin Local and Devin CLI. Cascade remains available as a
+separate legacy agent and does not use this registration path.
 
 Register the server first, without putting credentials on the command line:
 
@@ -228,6 +232,11 @@ policy gates to `false` unless the user opted into writes. Verify with
 `devin mcp list`; roll back with `devin mcp remove unifi-network`.
 
 See Devin's [current MCP configuration](https://docs.devin.ai/cli/extensibility/mcp/configuration).
+
+If the user explicitly uses Cascade, open **Devin Settings > Cascade > MCP
+Servers** and add the local stdio server there, or edit Cascade's raw
+`mcp_config.json`. Follow the separate [Cascade MCP guide](https://docs.devin.ai/desktop/cascade/mcp)
+instead of running the Devin Local/CLI commands above.
 
 ## Cursor and other native MCP clients
 
