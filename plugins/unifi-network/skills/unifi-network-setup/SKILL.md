@@ -131,7 +131,7 @@ On macOS/Linux, run the target-aware setup script with only values the user prov
 bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_NETWORK_HOST=<host> \
   UNIFI_NETWORK_USERNAME=<username> \
-  UNIFI_NETWORK_PASSWORD_FILE=<absolute-path> \
+  'UNIFI_NETWORK_PASSWORD_FILE=<absolute-path>' \
   UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm \
   UNIFI_POLICY_NETWORK_CREATE=false \
   UNIFI_POLICY_NETWORK_UPDATE=false \
@@ -145,7 +145,7 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_NETWORK_HOST=<host> \
   UNIFI_NETWORK_USERNAME=<username> \
   'UNIFI_NETWORK_PASSWORD_COMMAND=<absolute-argv>' \
-  UNIFI_NETWORK_API_KEY_FILE=<absolute-path> \
+  'UNIFI_NETWORK_API_KEY_FILE=<absolute-path>' \
   UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm \
   UNIFI_POLICY_NETWORK_CREATE=false \
   UNIFI_POLICY_NETWORK_UPDATE=false \

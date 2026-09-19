@@ -126,9 +126,9 @@ On macOS/Linux, run the target-aware setup script with only values the user prov
 ```bash
 bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_ACCESS_HOST=<host> \
-  UNIFI_ACCESS_API_KEY_FILE=<absolute-path> \
+  'UNIFI_ACCESS_API_KEY_FILE=<absolute-path>' \
   UNIFI_ACCESS_USERNAME=<username> \
-  UNIFI_ACCESS_PASSWORD_FILE=<absolute-path> \
+  'UNIFI_ACCESS_PASSWORD_FILE=<absolute-path>' \
   UNIFI_ACCESS_TOOL_PERMISSION_MODE=confirm \
   UNIFI_POLICY_ACCESS_CREATE=false \
   UNIFI_POLICY_ACCESS_UPDATE=false \

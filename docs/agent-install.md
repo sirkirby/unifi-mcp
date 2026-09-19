@@ -173,7 +173,7 @@ credential file rather than putting the password itself on the command line:
 opencode mcp add unifi-network \
   --env UNIFI_NETWORK_HOST=controller.example.local \
   --env UNIFI_NETWORK_USERNAME=unifi-mcp \
-  --env UNIFI_NETWORK_PASSWORD_FILE=/absolute/path/to/password-file \
+  --env 'UNIFI_NETWORK_PASSWORD_FILE=/absolute/path/to/password-file' \
   --env UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm \
   --env UNIFI_POLICY_NETWORK_CREATE=false \
   --env UNIFI_POLICY_NETWORK_UPDATE=false \

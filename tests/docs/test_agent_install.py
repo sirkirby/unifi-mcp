@@ -113,9 +113,14 @@ def test_command_provider_assignments_are_shell_quoted() -> None:
     for product, skill_path in zip(("NETWORK", "PROTECT", "ACCESS"), SETUP_SKILLS, strict=True):
         skill = skill_path.read_text(encoding="utf-8")
         assert f"'UNIFI_{product}_PASSWORD_COMMAND=<absolute-argv>'" in skill
+        assert f"'UNIFI_{product}_PASSWORD_FILE=<absolute-path>'" in skill
+        assert f"'UNIFI_{product}_API_KEY_FILE=<absolute-path>'" in skill
 
     access_skill = SETUP_SKILLS[2].read_text(encoding="utf-8")
     assert "'UNIFI_ACCESS_API_KEY_COMMAND=<absolute-argv>'" in access_skill
+
+    guide = GUIDE.read_text(encoding="utf-8")
+    assert "--env 'UNIFI_NETWORK_PASSWORD_FILE=/absolute/path/to/password-file'" in guide
 
 
 def test_opencode_scope_and_network_auth_are_accurate() -> None:
