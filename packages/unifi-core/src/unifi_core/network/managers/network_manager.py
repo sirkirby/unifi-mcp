@@ -80,16 +80,20 @@ class NetworkManager:
         """
         self._connection = connection_manager
 
-    async def get_networks(self) -> List[Dict[str, Any]]:
-        """Get list of networks (LAN/VLAN) for the current site."""
+    async def get_networks(self, *, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """Get the current site's networks, optionally bypassing the shared cache."""
         if getattr(self._connection, "has_api_key", False) is True:
             await self._connection.initialize()
             if self._connection.integration_inventory_only:
+                # Public inventory reads are not cached by ConnectionManager, so
+                # they are already fresh when a session-authenticated route is
+                # unavailable.
                 return await self._connection.public_inventory("networks")
         cache_key = f"{CACHE_PREFIX_NETWORKS}_{self._connection.site}"
-        cached_data = self._connection.get_cached(cache_key)
-        if cached_data is not None:
-            return cached_data
+        if not force_refresh:
+            cached_data = self._connection.get_cached(cache_key)
+            if cached_data is not None:
+                return cached_data
 
         try:
             # Revert back to V1 API endpoint for listing networks
@@ -107,18 +111,12 @@ class NetworkManager:
             elif isinstance(response, list):  # aiounifi might return the list directly
                 networks_data = response
             else:
-                logger.error(
-                    "Unexpected response format from /rest/networkconf: %s. Response: %s", type(response), response
-                )
+                logger.error("Network list response had an unexpected type (%s)", type(response).__name__)
                 raise RuntimeError("Controller returned an invalid network list response")
 
             # Basic check to ensure we got a list of dicts
             if not isinstance(networks_data, list) or not all(isinstance(item, dict) for item in networks_data):
-                logger.error(
-                    "Unexpected data structure in network list: %s. Expected list of dicts. Data: %s",
-                    type(networks_data),
-                    networks_data,
-                )
+                logger.error("Network list entries had an unexpected type (%s)", type(networks_data).__name__)
                 raise RuntimeError("Controller returned malformed entries in the network list response")
 
             # Return the list of network dictionaries
@@ -127,17 +125,17 @@ class NetworkManager:
             self._connection._update_cache(cache_key, networks)
             return networks
         except Exception as e:
-            # Log original error for V1 endpoint failure
-            logger.error("Error getting networks via V1 /rest/networkconf: %s", e, exc_info=True)
+            logger.error("Network list retrieval failed (%s)", type(e).__name__)
             raise
 
-    async def get_network_details(self, network_id: str) -> Dict[str, Any]:
-        """Get detailed information for a specific network.
-
-        Raises:
-            UniFiNotFoundError: If the network does not exist.
-        """
-        networks = await self.get_networks()
+    async def get_network_details(
+        self,
+        network_id: str,
+        *,
+        force_refresh: bool = False,
+    ) -> Dict[str, Any]:
+        """Get one network, optionally bypassing the shared network cache."""
+        networks = await self.get_networks(force_refresh=force_refresh)
         network = next((n for n in networks if n.get("_id") == network_id), None)
         if network is None:
             raise UniFiNotFoundError("network", network_id)

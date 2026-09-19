@@ -711,6 +711,20 @@ class ContentReconciliationTests(unittest.TestCase):
                         f"{path} must state the current {product} tool count",
                     )
 
+    def test_network_traffic_route_catalog_matches_manifest(self):
+        manifest = json.loads(MANIFESTS["network"].read_text(encoding="utf-8"))
+        expected = [
+            tool["name"]
+            for tool in manifest["tools"]
+            if manifest["module_map"].get(tool["name"]) == "unifi_network_mcp.tools.traffic_routes"
+        ]
+        content = Path("apps/network/docs/tools.md").read_text(encoding="utf-8")
+        section = content.split("## Traffic Routes", maxsplit=1)[1].split("\n## ", maxsplit=1)[0]
+        heading = f"## Traffic Routes{section.splitlines()[0]}"
+
+        self.assertEqual(heading, f"## Traffic Routes ({len(expected)} tools)")
+        self.assertCountEqual(re.findall(r"`(unifi_[a-z0-9_]+)`", section), expected)
+
     def test_server_status_table_matches_manifests_and_current_stability(self):
         readme = Path("README.md").read_text(encoding="utf-8")
         homepage = Path("docs/index.html").read_text(encoding="utf-8")

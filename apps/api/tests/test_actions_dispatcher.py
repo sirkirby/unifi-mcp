@@ -832,10 +832,6 @@ def test_dispatch_overrides_specific_targets() -> None:
     # Toggle that needs current state
     assert table["unifi_toggle_firewall_policy"].method == "toggle_firewall_policy"
     assert table["unifi_reorder_firewall_policies"].method == "reorder_firewall_policies"
-    # update_traffic_route pre-fetches the route for its preview, so the AST captures
-    # get_traffic_route_details; the override must pin it to the mutation method.
-    assert table["unifi_update_traffic_route"].manager_attr == "traffic_route_manager"
-    assert table["unifi_update_traffic_route"].method == "update_traffic_route"
     # Stats: list-returning method (was AST-captured as get_X_details, a dict)
     assert table["unifi_get_device_stats"].manager_attr == "stats_manager"
     assert table["unifi_get_device_stats"].method == "get_device_stats_for_identifier"
@@ -870,17 +866,19 @@ def test_dispatch_overrides_specific_targets() -> None:
     assert table["access_update_policy"].method == "apply_update_policy"
 
 
+def test_traffic_route_create_is_excluded_but_existing_mutations_are_dispatched() -> None:
+    table = build_dispatch_table()
+
+    assert "unifi_create_traffic_route" not in table
+    assert table["unifi_toggle_traffic_route"].manager_attr == "traffic_route_manager"
+    assert table["unifi_toggle_traffic_route"].method == "toggle_traffic_route"
+    assert table["unifi_update_traffic_route"].manager_attr == "traffic_route_manager"
+    assert table["unifi_update_traffic_route"].method == "update_traffic_route"
+
+
 @pytest.mark.asyncio
 async def test_dispatch_update_traffic_route_routes_to_mutation_with_widened_field() -> None:
-    """Regression: unifi_update_traffic_route pre-fetches the route via
-    get_traffic_route_details to render a current-vs-proposed preview, so the AST
-    dispatcher captures the READ method first. The DISPATCH_OVERRIDES entry must
-    redirect dispatch to the mutation method, and a widened match field
-    (target_devices) must reach the manager.
-
-    Uses the REAL build_dispatch_table() so this exercises the override wiring, not
-    just dispatch_action's arg forwarding.
-    """
+    """The REST action must route past the tool's preview lookup to the manager mutation."""
     entry = ToolEntry(
         name="unifi_update_traffic_route",
         product="network",
@@ -889,20 +887,14 @@ async def test_dispatch_update_traffic_route_routes_to_mutation_with_widened_fie
         method="",
     )
     registry = _registry_with(entry)
-
     domain_manager = MagicMock()
     domain_manager.update_traffic_route = AsyncMock(return_value=True)
-
-    conn_manager = MagicMock()
-    conn_manager.site = "default"
-    conn_manager.set_site = AsyncMock()
-
     factory = MagicMock()
     factory.get_domain_manager = AsyncMock(return_value=domain_manager)
-    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
-
+    factory.get_connection_manager = AsyncMock()
     session = MagicMock()
     target_devices = [{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:ff"}]
+
     await dispatch_action(
         registry=registry,
         factory=factory,
@@ -916,8 +908,6 @@ async def test_dispatch_update_traffic_route_routes_to_mutation_with_widened_fie
         dispatch_table=build_dispatch_table(),
     )
 
-    # Override resolved to the traffic_route_manager mutation, NOT the read method
-    # get_traffic_route_details the AST would otherwise capture.
     factory.get_domain_manager.assert_awaited_once_with(
         session=session,
         controller_id="cid",
@@ -925,9 +915,39 @@ async def test_dispatch_update_traffic_route_routes_to_mutation_with_widened_fie
         attr_name="traffic_route_manager",
         site="default",
     )
-    # The widened match field is forwarded to update_traffic_route as a kwarg
-    # (no arg translator — the manager takes **kwargs; confirm is a separate arg).
     domain_manager.update_traffic_route.assert_awaited_once_with(route_id="tr1", target_devices=target_devices)
+
+
+@pytest.mark.asyncio
+async def test_dispatch_toggle_traffic_route_routes_to_manager_mutation() -> None:
+    entry = ToolEntry(
+        name="unifi_toggle_traffic_route",
+        product="network",
+        category="traffic_routes",
+        manager="",
+        method="",
+    )
+    registry = _registry_with(entry)
+    domain_manager = MagicMock()
+    domain_manager.toggle_traffic_route = AsyncMock(return_value=True)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock()
+
+    await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_toggle_traffic_route",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"route_id": "tr1"},
+        confirm=True,
+        dispatch_table=build_dispatch_table(),
+    )
+
+    domain_manager.toggle_traffic_route.assert_awaited_once_with(route_id="tr1")
 
 
 @pytest.mark.asyncio
