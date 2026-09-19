@@ -13,6 +13,7 @@ from unifi_core.network.models.networks import (
     UNSAFE_GUEST_PURPOSE_ERROR,
     validate_wan_dns_state,
 )
+from unifi_core.network.models.vpn import is_vpn_network
 from unifi_core.network.models.wlans import apply_update_dependencies as apply_wlan_update_dependencies
 from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
 
@@ -25,6 +26,12 @@ CACHE_PREFIX_AP_GROUPS = "ap_groups"
 # Legacy configs omit default-true flags on persist: an absent 'enabled' key
 # on read-back means enabled, not that the write was dropped.
 _ABSENT_VALUE_DEFAULTS = {"enabled": True}
+
+_VPN_FIREWALL_ZONE_ERROR = (
+    "VPN networks can only use the built-in 'Vpn' zone. UniFi may persist a custom firewall_zone_id "
+    "on a VPN network without applying that zone to the tunnel interface, leaving its firewall policies ineffective. "
+    "Select the system-defined Vpn zone; no network mutation was attempted."
+)
 
 # Fields the controller never echoes back verbatim, so a re-read cannot confirm
 # them: write-only/redacted secrets, plus ap_group_mode, which the controller
@@ -143,6 +150,59 @@ class NetworkManager:
             raise UniFiNotFoundError("network", network_id)
         return network
 
+    async def _get_firewall_zone_record(self, zone_id: Any) -> Dict[str, Any]:
+        """Resolve a V2 firewall-zone ID using the full zone shape."""
+        candidate = str(zone_id or "").strip()
+        if not candidate:
+            raise UniFiNotFoundError("firewall_zone", str(zone_id or ""))
+
+        response = await self._connection.request(ApiRequestV2(method="get", path="/firewall/zone"))
+        if isinstance(response, list):
+            zones = response
+        elif isinstance(response, dict) and isinstance(response.get("data"), list):
+            zones = response["data"]
+        else:
+            raise RuntimeError("Controller returned an invalid firewall zone list response")
+
+        for zone in (item for item in zones if isinstance(item, dict)):
+            identifiers = {str(zone[key]) for key in ("_id", "id") if zone.get(key) is not None}
+            if candidate in identifiers:
+                return zone
+        raise UniFiNotFoundError("firewall_zone", candidate)
+
+    async def validate_firewall_zone_assignment(
+        self,
+        existing_network: Dict[str, Any],
+        update_data: Dict[str, Any],
+    ) -> None:
+        """Reject VPN updates unless their effective zone is the built-in Vpn zone."""
+        zone_is_changing = "firewall_zone_id" in update_data
+        purpose_is_changing = "purpose" in update_data and update_data.get("purpose") != existing_network.get("purpose")
+        if not zone_is_changing and not purpose_is_changing:
+            return
+
+        effective_network = deep_merge(existing_network, update_data)
+        if not is_vpn_network(effective_network):
+            return
+
+        effective_zone_id = effective_network.get("firewall_zone_id")
+        if effective_zone_id is None:
+            # An omitted zone lets the controller apply its built-in default.
+            return
+
+        try:
+            zone = await self._get_firewall_zone_record(effective_zone_id)
+        except Exception as error:
+            logger.error(
+                "Failed to validate VPN firewall-zone assignment (%s)",
+                type(error).__name__,
+            )
+            raise ValueError(_VPN_FIREWALL_ZONE_ERROR) from None
+
+        is_builtin_vpn = zone.get("default_zone") is True and str(zone.get("name") or "").strip().casefold() == "vpn"
+        if not is_builtin_vpn:
+            raise ValueError(_VPN_FIREWALL_ZONE_ERROR)
+
     async def create_network(self, network_data: Dict[str, Any]) -> WriteVerificationResult:
         """Create a network and verify its exact persisted field values."""
         try:
@@ -157,6 +217,8 @@ class NetworkManager:
                 return failed_write(UNSAFE_GUEST_PURPOSE_ERROR, operation="create")
             try:
                 validate_wan_dns_state({}, network_data)
+                if "firewall_zone_id" in network_data:
+                    await self.validate_firewall_zone_assignment({}, network_data)
             except ValueError as error:
                 return failed_write(str(error), operation="create")
 
@@ -233,6 +295,7 @@ class NetworkManager:
             # 2. Validate cross-field state using stored values plus this partial update.
             try:
                 validate_wan_dns_state(existing_network, update_data)
+                await self.validate_firewall_zone_assignment(existing_network, update_data)
             except ValueError as error:
                 return failed_write(str(error), operation="update", metadata={"network_id": network_id})
 

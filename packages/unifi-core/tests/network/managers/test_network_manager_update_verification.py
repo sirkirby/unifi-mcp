@@ -174,6 +174,181 @@ async def test_update_network_fails_when_not_persisted():
     assert result.error is not None and "igmp_snooping" in result.error
 
 
+@pytest.mark.parametrize("purpose", ["site-vpn", "remote-user-vpn", "vpn-client", "vpn-server"])
+async def test_update_network_rejects_custom_firewall_zone_for_vpn_before_put(purpose):
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose=purpose, firewall_zone_id="vpn-zone")
+    after = {**before, "firewall_zone_id": "custom-zone"}
+    conn.request.side_effect = [
+        [before],
+        {"data": [{"_id": "custom-zone", "name": "Restricted", "default_zone": False}]},
+        [after],
+    ]
+
+    result = await mgr.update_network(NETWORK_ID, {"firewall_zone_id": "custom-zone"})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "built-in 'Vpn' zone" in result.error
+    assert conn.request.await_count == 2
+
+
+async def test_update_network_allows_system_vpn_zone_for_vpn():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="site-vpn", firewall_zone_id="custom-zone")
+    after = {**before, "firewall_zone_id": "vpn-zone"}
+    conn.request.side_effect = [
+        [before],
+        {"data": [{"_id": "vpn-zone", "name": "Vpn", "default_zone": True}]},
+        {},
+        [after],
+    ]
+
+    result = await mgr.update_network(NETWORK_ID, {"firewall_zone_id": "vpn-zone"})
+
+    assert result.success is True
+    assert result.persisted_fields == ("firewall_zone_id",)
+    put_request = conn.request.await_args_list[2].args[0]
+    assert put_request.method == "put"
+    assert put_request.data["firewall_zone_id"] == "vpn-zone"
+
+
+@pytest.mark.parametrize(
+    "zone",
+    [
+        {"_id": "spoof-zone", "name": "Vpn", "default_zone": False},
+        {"_id": "other-default", "name": "Internal", "default_zone": True},
+    ],
+)
+async def test_update_network_rejects_zone_that_is_not_system_vpn(zone):
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="vpn-client", firewall_zone_id="vpn-zone")
+    conn.request.side_effect = [[before], {"data": [zone]}]
+
+    result = await mgr.update_network(NETWORK_ID, {"firewall_zone_id": zone["_id"]})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "built-in 'Vpn' zone" in result.error
+    assert conn.request.await_count == 2
+
+
+async def test_update_network_rejects_unknown_zone_for_vpn():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="remote-user-vpn", firewall_zone_id="vpn-zone")
+    conn.request.side_effect = [[before], {"data": []}]
+
+    result = await mgr.update_network(NETWORK_ID, {"firewall_zone_id": "missing-zone"})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "built-in 'Vpn' zone" in result.error
+    assert conn.request.await_count == 2
+
+
+async def test_vpn_zone_validation_refreshes_zone_record_for_each_assignment():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    existing = _network(purpose="vpn-client")
+    conn.request.side_effect = [
+        {"data": [{"_id": "zone", "name": "Vpn", "default_zone": True}]},
+        {"data": [{"_id": "zone", "name": "Restricted", "default_zone": False}]},
+    ]
+
+    await mgr.validate_firewall_zone_assignment(existing, {"firewall_zone_id": "zone"})
+    with pytest.raises(ValueError, match="built-in 'Vpn' zone"):
+        await mgr.validate_firewall_zone_assignment(existing, {"firewall_zone_id": "zone"})
+
+    assert conn.request.await_count == 2
+    assert all(call.args[0].path == "/firewall/zone" for call in conn.request.await_args_list)
+
+
+async def test_update_network_fails_closed_when_vpn_zone_cannot_be_verified():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="vpn-server", firewall_zone_id="vpn-zone")
+    conn.request.side_effect = [[before], RuntimeError("opaque controller detail")]
+
+    result = await mgr.update_network(NETWORK_ID, {"firewall_zone_id": "vpn-zone"})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "no network mutation was attempted" in result.error
+    assert "opaque controller detail" not in result.error
+    assert conn.request.await_count == 2
+
+
+async def test_update_network_rejects_purpose_change_that_retains_custom_zone():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="corporate", firewall_zone_id="custom-zone")
+    conn.request.side_effect = [
+        [before],
+        {"data": [{"_id": "custom-zone", "name": "Restricted", "default_zone": False}]},
+    ]
+
+    result = await mgr.update_network(NETWORK_ID, {"purpose": "vpn-client"})
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "built-in 'Vpn' zone" in result.error
+    assert conn.request.await_count == 2
+
+
+async def test_update_network_allows_purpose_change_when_controller_will_default_zone():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="corporate")
+    after = {**before, "purpose": "vpn-client", "firewall_zone_id": "vpn-zone"}
+    conn.request.side_effect = [[before], {}, [after]]
+
+    result = await mgr.update_network(NETWORK_ID, {"purpose": "vpn-client"})
+
+    assert result.success is True
+    assert result.persisted_fields == ("purpose",)
+    assert conn.request.await_count == 3
+
+
+@pytest.mark.parametrize(
+    "update_data",
+    [
+        {"name": "New"},
+        {"name": "New", "purpose": "site-vpn"},
+    ],
+)
+async def test_update_network_does_not_zone_validate_unrelated_vpn_update(update_data):
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="site-vpn", firewall_zone_id="custom-zone", name="Old")
+    after = {**before, "name": "New"}
+    conn.request.side_effect = [[before], {}, [after]]
+
+    result = await mgr.update_network(NETWORK_ID, update_data)
+
+    assert result.success is True
+    assert result.persisted_fields == ("name",)
+    assert result.unchanged_fields == (("purpose",) if "purpose" in update_data else ())
+    assert conn.request.await_count == 3
+
+
+async def test_update_network_allows_custom_firewall_zone_for_non_vpn():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    before = _network(purpose="corporate", firewall_zone_id="old-zone")
+    after = {**before, "firewall_zone_id": "custom-zone"}
+    conn.request.side_effect = [[before], {}, [after]]
+
+    result = await mgr.update_network(NETWORK_ID, {"firewall_zone_id": "custom-zone"})
+
+    assert result.success is True
+    assert result.persisted_fields == ("firewall_zone_id",)
+    assert conn.request.await_count == 3
+
+
 async def test_update_network_rejects_manual_dns_without_primary_before_write():
     conn = _make_connection()
     mgr = NetworkManager(conn)
@@ -258,6 +433,67 @@ async def test_create_network_rejects_unsafe_guest_before_write():
     assert result.mutation_applied is False
     assert "Internal firewall zone" in result.error
     conn.request.assert_not_called()
+
+
+async def test_create_network_rejects_custom_firewall_zone_for_vpn_before_write():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    conn.request.return_value = {
+        "data": [{"_id": "custom-zone", "name": "Restricted", "default_zone": False}],
+    }
+
+    result = await mgr.create_network(
+        {
+            "name": "VPN client",
+            "purpose": "vpn-client",
+            "firewall_zone_id": "custom-zone",
+        }
+    )
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert result.error is not None and "built-in 'Vpn' zone" in result.error
+    assert conn.request.await_count == 1
+    assert conn.request.await_args.args[0].method == "get"
+    assert conn.request.await_args.args[0].path == "/firewall/zone"
+
+
+async def test_create_network_allows_explicit_system_vpn_zone():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    requested = {
+        "name": "VPN client",
+        "purpose": "vpn-client",
+        "firewall_zone_id": "vpn-zone",
+    }
+    created = {"_id": NETWORK_ID, **requested}
+    conn.request.side_effect = [
+        {"data": [{"_id": "vpn-zone", "name": "Vpn", "default_zone": True}]},
+        [created],
+        [created],
+    ]
+
+    result = await mgr.create_network(requested)
+
+    assert result.success is True
+    assert result.metadata["network_id"] == NETWORK_ID
+    assert conn.request.await_count == 3
+    assert conn.request.await_args_list[1].args[0].method == "post"
+
+
+async def test_create_network_without_explicit_vpn_zone_uses_controller_default():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    requested = {"name": "VPN client", "purpose": "vpn-client"}
+    created = {"_id": NETWORK_ID, **requested, "firewall_zone_id": "vpn-zone"}
+    conn.request.side_effect = [[created], [created]]
+
+    result = await mgr.create_network(requested)
+
+    assert result.success is True
+    assert result.metadata["network_id"] == NETWORK_ID
+    assert conn.request.await_count == 2
+    assert conn.request.await_args_list[0].args[0].method == "post"
 
 
 async def test_create_network_rejects_manual_dns_without_primary_before_write():
