@@ -222,20 +222,23 @@ Tests use `pytest-asyncio` for async support and `aioresponses` for HTTP mocking
 
 1. Run `make pre-commit` from root.
 2. Determine release scope by package tag namespace (`core/v*`, `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, `api/v*`, `relay/v*`, `worker/v*`).
-3. If a downstream package needs code from a newly released upstream package, update its `pyproject.toml` dependency range before tagging. For example, Protect/API releases that require new `unifi-core` models must allow the new `unifi-core` line.
-4. Run `uv lock --check` and commit any dependency-bound changes before creating local tags.
-5. Build release batches from actual dependency edges. A downstream package must wait when its
+3. Build release batches from actual dependency edges. A downstream package must wait when its
    wheel metadata names the new upstream version, its code requires a newly published upstream API,
    or its release workflow installs that new version. Existing compatible bounds alone do not
    require a wait. Also keep Worker out of any batch containing a tag namespace configured in
    `bump-plugin-versions.yml`: both workflows push writebacks to `main` without shared concurrency
    or a non-fast-forward retry. Finish and fetch the plugin writeback before pushing Worker. An
    API-only tag may share the Worker batch because it does not trigger plugin sync.
-6. Within each batch, push every tag back-to-back using a separate `git push origin <tag>` command
+4. Prepare dependency-bound changes per batch. If a downstream floor names an upstream version that
+   is not published yet, publish and validate the upstream batch first. Then update the downstream
+   `pyproject.toml` range, run `uv lock --check`, land that change on `main`, and create the downstream
+   tags from the updated commit. Never make the upstream tag wait on a floor bump that cannot pass
+   pin alignment until that upstream version exists on PyPI.
+5. Within each batch, push every tag back-to-back using a separate `git push origin <tag>` command
    for each ref, then monitor the workflows concurrently. Do not combine multiple refs in one push.
    Before starting a dependent batch, confirm each required upstream artifact is available on PyPI
    or npm and its release workflow passed.
-7. CI publishes to PyPI or npm, builds Docker images where applicable, and creates GitHub Releases.
+6. CI publishes to PyPI or npm, builds Docker images where applicable, and creates GitHub Releases.
    When a batch includes a tag namespace configured in `bump-plugin-versions.yml`, wait for the final
    version-sync run. Network, Protect, or Access tags must produce the expected consolidated
    writeback to `main`. A Core-, Shared-, or Relay-only trigger may complete successfully with
