@@ -95,7 +95,7 @@ can lag or overstate changes.
 
 | What changed | Tags required |
 |---|---|
-| `packages/unifi-mcp-shared/` only | Scope includes `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, and `relay/v*`; Procedure F decides batch boundaries |
+| `packages/unifi-mcp-shared/` only | Always `shared/v*`; add affected downstream tags under the selectivity framework, then use Procedure F for batch boundaries |
 | `packages/unifi-core/` only | Scope includes `core/v*` and affected downstream packages, including `api/v*`; Procedure F decides batch boundaries |
 | One app only (e.g., `apps/protect/`) | `protect/v*` only |
 | Multiple apps | One tag per changed app; put independent tags in the same release batch |
@@ -120,9 +120,11 @@ When only the plugin manifest changes with no code changes, a patch release must
 
 ### Shared package rule
 
-Any change to `packages/unifi-mcp-shared/` underpins all server apps. Include `shared` and all affected
-server apps in the release scope even if their own code did not change. Whether those tags require
-separate batches depends on the metadata and API dependency checks in Procedure F.
+Any change to `packages/unifi-mcp-shared/` requires a Shared release. Add a downstream app or Relay
+tag when its own code changed, it needs the new Shared API or metadata floor, or the release plan
+explicitly selects Standard or Full coverage. Under the default Minimal strategy, unchanged
+dependents whose existing bounds accept the new Shared version do not need tags. Procedure F decides
+batch boundaries after scope is settled.
 
 ### CVE / transitive dependency changes
 
