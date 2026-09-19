@@ -1,6 +1,5 @@
 import asyncio
 import copy
-import json
 import logging
 from collections import Counter
 from typing import Any, Dict, List, Optional
@@ -24,6 +23,7 @@ from unifi_core.network.models.firewall import (
     validate_policy_selectors,
     validate_zone_targeting,
 )
+from unifi_core.network.models.traffic_routes import build_traffic_route_create_payload, validate_update
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -561,6 +561,9 @@ class FirewallManager:
 
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
+        get_cache_generation = getattr(self._connection, "_get_cache_generation", None)
+        update_cache_if_current = getattr(self._connection, "_update_cache_if_current", None)
+        cache_generation = get_cache_generation(cache_key) if callable(get_cache_generation) else None
         try:
             api_request = ApiRequestV2(method="get", path="/trafficroutes")
 
@@ -578,10 +581,13 @@ class FirewallManager:
 
             result = routes
 
-            self._connection._update_cache(cache_key, result)
+            if cache_generation is not None and callable(update_cache_if_current):
+                update_cache_if_current(cache_key, result, cache_generation)
+            else:
+                self._connection._update_cache(cache_key, result)
             return result
-        except Exception as e:
-            logger.error("Error getting traffic routes: %s", e)
+        except Exception:
+            logger.error("Traffic route listing failed")
             raise
 
     async def update_traffic_route(self, route_id: str, updates: Dict[str, Any]) -> bool:
@@ -597,7 +603,7 @@ class FirewallManager:
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
         if not updates:
-            logger.warning("No updates provided for traffic route %s.", route_id)
+            logger.warning("No traffic route update fields were supplied.")
             return True  # No action needed, considered success
 
         try:
@@ -612,19 +618,33 @@ class FirewallManager:
                 raise UniFiNotFoundError("traffic_route", route_id)
 
             if not hasattr(route_to_update_obj, "raw") or not isinstance(route_to_update_obj.raw, dict):
-                logger.error("Could not get raw data for traffic route %s. Update aborted.", route_id)
+                logger.error("Traffic route data was unavailable; update aborted.")
                 return False
+
+            # FirewallManager historically accepts controller-shaped `description`.
+            # Normalize it to the public model field so strict validation still
+            # owns the controller-payload mapping.
+            update_fields = dict(updates)
+            if "description" in update_fields:
+                if "name" in update_fields:
+                    raise ValueError("Traffic Route update cannot include both name and description.")
+                update_fields["name"] = update_fields.pop("description")
+
+            # Validate only caller-supplied replacements. Historical route fields
+            # remain permissive and are preserved verbatim in the full V2 payload.
+            validated_updates = validate_update(
+                update_fields,
+                matching_target=route_to_update_obj.raw.get("matching_target"),
+                current_fields=route_to_update_obj.raw,
+            )
 
             # Deep copy to avoid mutating the cached TrafficRoute.raw
             updated_data = copy.deepcopy(route_to_update_obj.raw)
-            for key, value in updates.items():
-                updated_data[key] = value
+            updated_data.update(validated_updates)
 
             api_path = f"/trafficroutes/{route_id}"
 
-            logger.info(
-                "Updating traffic route %s via V2 endpoint (%s) with data: %s", route_id, api_path, updated_data
-            )
+            logger.info("Submitting traffic route update")
 
             # Use ApiRequestV2 for the update
             api_request = ApiRequestV2(
@@ -633,17 +653,18 @@ class FirewallManager:
                 data=updated_data,  # V2 typically uses the 'data' field
             )
 
-            # The request method should handle potential V2 response structures
-            await self._connection.request(api_request)
-
-            # Invalidate cache
             cache_key = f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}"
-            self._connection._invalidate_cache(cache_key)
+            try:
+                await self._connection.request(api_request)
+            finally:
+                # A failed PUT may still have committed on the controller, so
+                # stale traffic-route state cannot be retained.
+                self._connection._invalidate_cache(cache_key)
 
-            logger.info("Successfully submitted V2 update for traffic route %s.", route_id)
+            logger.info("Traffic route update submitted")
             return True
-        except Exception as e:
-            logger.error("Error updating traffic route %s via V2: %s", route_id, e, exc_info=True)
+        except Exception:
+            logger.error("Traffic route update failed")
             raise
 
     async def toggle_traffic_route(self, route_id: str) -> bool:
@@ -666,92 +687,78 @@ class FirewallManager:
                 raise UniFiNotFoundError("traffic_route", route_id)
 
             if not hasattr(route, "raw") or not isinstance(route.raw, dict):
-                logger.error("Could not get raw data for traffic route %s. Toggle aborted.", route_id)
+                logger.error("Traffic route data was unavailable; toggle aborted.")
                 return False
 
             new_state = not route.enabled
-            logger.info("Toggling traffic route %s to %s", route_id, "enabled" if new_state else "disabled")
+            logger.info("Toggling traffic route")
 
             # Use the update method for consistency
             update_payload = {"enabled": new_state}
             return await self.update_traffic_route(route_id, update_payload)
 
-        except Exception as e:
-            logger.error("Error toggling traffic route %s: %s", route_id, e, exc_info=True)
+        except Exception:
+            logger.error("Traffic route toggle failed")
             raise
 
     async def create_traffic_route(self, route_data: Dict[str, Any]) -> Optional[Dict]:
         """Create a new traffic route. Returns the created route data dict or None.
 
         Args:
-            route_data: Dictionary containing the route configuration.
-                      Expected keys depend on route type (e.g., name, interface,
-                      domain_names or ip_addresses or network_ids, enabled, description).
+            route_data: Canonical traffic-route create fields.
 
         Returns:
             The created route data dict, or None if creation failed.
         """
-        if not route_data.get("name") or not route_data.get("interface"):
-            logger.error("Missing required keys for creating traffic route (name, interface)")
-            return None
+        if type(route_data) is not dict:
+            raise ValueError("Traffic Route create data must be an object.")
+        try:
+            payload = build_traffic_route_create_payload(**route_data)
+        except TypeError as error:
+            raise ValueError("Unknown or invalid Traffic Route create fields.") from error
 
         try:
-            logger.info("Attempting to create traffic route '%s'", route_data["name"])
             api_path = "/trafficroutes"  # V2 endpoint for creation
-            # Log the exact data being sent for easier debugging
-            logger.info(
-                "Attempting to create traffic route via V2 endpoint (%s) with payload: %s",
-                api_path,
-                json.dumps(route_data, indent=2),
-            )
+            logger.info("Submitting traffic route creation")
 
             # Use ApiRequestV2 for the creation
-            api_request = ApiRequestV2(method="post", path=api_path, data=route_data)
+            api_request = ApiRequestV2(method="post", path=api_path, data=payload)
             response = await self._connection.request(api_request)
+            if isinstance(response, dict) and "data" in response:
+                response = response["data"]
 
-            # Check response structure for success and ID (adjust based on actual V2 response)
-            # Example V2 success might be a 201 Created with the new object or ID in body/headers
-            if isinstance(response, dict) and response.get("_id"):  # Simple check if response is the new object
+            new_id: Any = None
+            if isinstance(response, dict):
                 new_id = response.get("_id")
-                logger.info("Successfully created traffic route via V2. New ID: %s", new_id)
-                self._connection._invalidate_cache(f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}")
-                # Return a clear success dictionary with the ID
-                return {"success": True, "route_id": new_id}
-            elif (
-                isinstance(response, list) and len(response) == 1 and response[0].get("_id")
-            ):  # Sometimes APIs return a list containing the single new item
+            elif isinstance(response, list) and len(response) == 1 and isinstance(response[0], dict):
                 new_id = response[0].get("_id")
-                logger.info("Successfully created traffic route via V2 (list response). New ID: %s", new_id)
-                self._connection._invalidate_cache(f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}")
-                # Return a clear success dictionary with the ID
+
+            if isinstance(new_id, str) and new_id.strip():
+                logger.info("Traffic route creation submitted")
                 return {"success": True, "route_id": new_id}
-            else:
-                # Handle unexpected non-error response
-                error_detail = f"Unexpected success response format: {str(response)}"
-                logger.error("Failed to create traffic route via V2. %s", error_detail)
-                return {"success": False, "error": error_detail}
 
-        except Exception as e:
-            # Log the exception details
-            logger.error("Exception during V2 traffic route creation: %s", e, exc_info=True)
+            # A malformed reply after POST is ambiguous: do not expose or
+            # encourage retry from controller response content.
+            error_detail = (
+                "Controller returned no created traffic route; the route may have been created. "
+                "List traffic routes before retrying."
+            )
+            logger.error("Failed to create traffic route via V2: no usable created route returned")
+            return {"success": False, "error": error_detail}
 
-            # Extract specific API error message if available
-            api_error_message = str(e)
-            if hasattr(e, "args") and e.args:
-                try:
-                    # Attempt to parse nested error structure seen in logs
-                    error_details = e.args[0]
-                    if isinstance(error_details, dict) and "message" in error_details:
-                        api_error_message = error_details["message"]
-                    elif isinstance(error_details, str):  # Fallback if it's just a string
-                        api_error_message = error_details
-                except Exception as parse_exc:
-                    logger.warning(
-                        "Could not parse specific API error from exception args: %s. Parse error: %s", e.args, parse_exc
-                    )
-
-            # Return a clear failure dictionary with the extracted error message
-            return {"success": False, "error": f"API Error: {api_error_message}"}
+        except Exception:
+            # A failed POST is ambiguous and its exception may contain raw
+            # controller data. Keep both logs and the public result payload-safe.
+            logger.error("Traffic route creation request failed")
+            return {
+                "success": False,
+                "error": "Controller returned no created traffic route; the route may have been created. "
+                "List traffic routes before retrying.",
+            }
+        finally:
+            # A POST whose reply or transport fails may still have committed on
+            # the controller, so stale traffic-route state cannot be retained.
+            self._connection._invalidate_cache(f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}")
 
     async def delete_traffic_route(self, route_id: str) -> bool:
         """Delete a traffic route by ID.
@@ -767,15 +774,16 @@ class FirewallManager:
         try:
             # Use V2 endpoint for deletion
             api_request = ApiRequestV2(method="delete", path=f"/trafficroutes/{route_id}")
-            await self._connection.request(api_request)
-
             cache_key = f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}"
-            self._connection._invalidate_cache(cache_key)
-            logger.info("Successfully deleted traffic route %s", route_id)
+            try:
+                await self._connection.request(api_request)
+            finally:
+                # A failed DELETE may still have committed on the controller.
+                self._connection._invalidate_cache(cache_key)
+            logger.info("Traffic route deletion submitted")
             return True
-        except Exception as e:
-            # Handle specific "not found" errors if possible?
-            logger.error("Error deleting traffic route %s: %s", route_id, e, exc_info=True)
+        except Exception:
+            logger.error("Traffic route deletion failed")
             raise
 
     async def get_port_forwards(self) -> List[PortForward]:

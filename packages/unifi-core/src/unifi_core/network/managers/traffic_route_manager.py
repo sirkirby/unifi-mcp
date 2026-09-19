@@ -11,6 +11,7 @@ from aiounifi.models.api import ApiRequestV2
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.models.traffic_routes import build_traffic_route_create_payload, validate_update
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -45,6 +46,9 @@ class TrafficRouteManager:
         cached_data = self._connection.get_cached(cache_key)
         if cached_data is not None:
             return cached_data
+        get_cache_generation = getattr(self._connection, "_get_cache_generation", None)
+        update_cache_if_current = getattr(self._connection, "_update_cache_if_current", None)
+        cache_generation = get_cache_generation(cache_key) if callable(get_cache_generation) else None
 
         try:
             api_request = ApiRequestV2(method="get", path="/trafficroutes", data=None)
@@ -58,10 +62,13 @@ class TrafficRouteManager:
                 else []
             )
 
-            self._connection._update_cache(cache_key, routes)
+            if cache_generation is not None and callable(update_cache_if_current):
+                update_cache_if_current(cache_key, routes, cache_generation)
+            else:
+                self._connection._update_cache(cache_key, routes)
             return routes
-        except Exception as e:
-            logger.error("Error getting traffic routes: %s", e)
+        except Exception:
+            logger.error("Traffic route listing failed")
             raise
 
     async def get_traffic_route_details(self, route_id: str) -> Dict[str, Any]:
@@ -75,6 +82,34 @@ class TrafficRouteManager:
         if route is None:
             raise UniFiNotFoundError("traffic_route", route_id)
         return route
+
+    async def create_traffic_route(self, route_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a traffic route from the canonical validated payload contract."""
+        if type(route_data) is not dict:
+            raise ValueError("Traffic Route create data must be an object.")
+        try:
+            payload = build_traffic_route_create_payload(**route_data)
+        except TypeError as error:
+            raise ValueError("Unknown or invalid Traffic Route create fields.") from error
+
+        api_request = ApiRequestV2(method="post", path="/trafficroutes", data=payload)
+        try:
+            response = await self._connection.request(api_request)
+            result = response.get("data", response) if isinstance(response, dict) else response
+            if isinstance(result, list):
+                result = result[0] if len(result) == 1 else None
+            if isinstance(result, dict):
+                route_id = result.get("_id")
+                if isinstance(route_id, str) and route_id.strip():
+                    return result
+            raise ValueError(
+                "Controller returned no created traffic route; the route may have been created. "
+                "List traffic routes before retrying."
+            )
+        finally:
+            # A malformed reply after POST is ambiguous: the controller may have
+            # committed the route, so cached route state must not be retained.
+            self._connection._invalidate_cache(f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}")
 
     async def update_traffic_route(self, route_id: str, enabled: Optional[bool] = None, **kwargs) -> bool:
         """Update a traffic route.
@@ -94,33 +129,44 @@ class TrafficRouteManager:
             # Existence check; raises UniFiNotFoundError on miss.
             current = await self.get_traffic_route_details(route_id)
 
-            # Start with full existing route and apply updates
-            payload: Dict[str, Any] = current.copy()
-
+            updates = dict(kwargs)
             if enabled is not None:
-                payload["enabled"] = enabled
+                updates["enabled"] = enabled
+            # Preserve the controller-shaped alias accepted by existing Core
+            # callers while validating through the canonical public field.
+            if "description" in updates:
+                if "name" in updates:
+                    raise ValueError("Traffic Route update cannot include both name and description.")
+                updates["name"] = updates.pop("description")
+            validated_updates = validate_update(
+                updates,
+                matching_target=current.get("matching_target"),
+                current_fields=current,
+            )
 
-            # Apply any additional updates
-            for key, value in kwargs.items():
-                if value is not None:
-                    payload[key] = value
+            # Preserve the full historical route after validating only caller
+            # replacements; legacy unsupplied selectors need not be parseable.
+            payload: Dict[str, Any] = current.copy()
+            payload.update(validated_updates)
 
             api_request = ApiRequestV2(
                 method="put",
                 path=f"/trafficroutes/{route_id}",
                 data=payload,
             )
-            await self._connection.request(api_request)
+            try:
+                await self._connection.request(api_request)
+            finally:
+                # A failed PUT may still have committed on the controller, so
+                # stale traffic-route state cannot be retained.
+                self._connection._invalidate_cache(f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}")
 
-            logger.info("Updated traffic route %s", route_id)
-
-            # Invalidate cache
-            self._connection._invalidate_cache(f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}")
+            logger.info("Traffic route update submitted")
 
             return True
 
-        except Exception as e:
-            logger.error("Error updating traffic route %s: %s", route_id, e, exc_info=True)
+        except Exception:
+            logger.error("Traffic route update failed")
             raise
 
     async def toggle_traffic_route(self, route_id: str) -> bool:
@@ -146,31 +192,4 @@ class TrafficRouteManager:
         Returns:
             True if successful, False otherwise.
         """
-        try:
-            # raises UniFiNotFoundError on miss
-            current = await self.get_traffic_route_details(route_id)
-
-            payload: Dict[str, Any] = current.copy()
-            payload["kill_switch_enabled"] = enabled
-
-            api_request = ApiRequestV2(
-                method="put",
-                path=f"/trafficroutes/{route_id}",
-                data=payload,
-            )
-            await self._connection.request(api_request)
-
-            logger.info("Traffic route %s kill switch %s", route_id, "enabled" if enabled else "disabled")
-
-            self._connection._invalidate_cache(f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}")
-
-            return True
-
-        except Exception as e:
-            logger.error(
-                "Error updating kill switch for traffic route %s: %s",
-                route_id,
-                e,
-                exc_info=True,
-            )
-            raise
+        return await self.update_traffic_route(route_id, kill_switch_enabled=enabled)

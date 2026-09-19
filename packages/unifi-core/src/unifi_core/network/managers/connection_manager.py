@@ -357,6 +357,7 @@ class ConnectionManager:
         self._connect_lock = asyncio.Lock()
         self._cache: Dict[str, Any] = {}
         self._last_cache_update: Dict[str, float] = {}
+        self._cache_generations: Dict[str, int] = {}
         self._last_connection_error: Optional[str] = None
         self._reconnect_block_error: Optional[str] = None
         self._last_reauthentication_attempt_at: float | None = None
@@ -1142,8 +1143,7 @@ class ConnectionManager:
             await self._discard_connection()
             if had_open_session:
                 logger.info("aiohttp session closed.")
-            self._cache = {}
-            self._last_cache_update = {}
+            self._invalidate_cache()
             self._last_connection_error = None
             self._clear_reconnect_block()
             self._auth_generation = 0
@@ -1420,6 +1420,24 @@ class ConnectionManager:
         self._last_cache_update[key] = time.time()
         logger.debug("Cache updated for key '%s' with timeout %ss", key, timeout or self.cache_timeout)
 
+    def _get_cache_generation(self, key: str) -> int:
+        """Return the generation that identifies the current contents of a cache key."""
+        return self._cache_generations.setdefault(key, 0)
+
+    def _update_cache_if_current(
+        self,
+        key: str,
+        data: Any,
+        generation: int,
+        timeout: Optional[int] = None,
+    ) -> bool:
+        """Store data only when no invalidation occurred since its fetch began."""
+        if self._get_cache_generation(key) != generation:
+            logger.debug("Discarded stale cache update for key '%s'", key)
+            return False
+        self._update_cache(key, data, timeout)
+        return True
+
     def _is_cache_valid(self, key: str, timeout: Optional[int] = None) -> bool:
         """Check if the cache for a given key is still valid."""
         if key not in self._cache or key not in self._last_cache_update:
@@ -1446,16 +1464,19 @@ class ConnectionManager:
     def _invalidate_cache(self, prefix: Optional[str] = None):
         """Invalidate cache entries, optionally by prefix."""
         if prefix:
-            keys_to_remove = [k for k in self._cache if k.startswith(prefix)]
-            for key in keys_to_remove:
-                del self._cache[key]
-                if key in self._last_cache_update:
-                    del self._last_cache_update[key]
+            keys_to_remove = {key for key in self._cache | self._last_cache_update if key.startswith(prefix)}
+            generation_keys = {key for key in self._cache_generations if key.startswith(prefix)}
             logger.debug("Invalidated cache for keys starting with '%s'", prefix)
         else:
-            self._cache = {}
-            self._last_cache_update = {}
+            keys_to_remove = self._cache.keys() | self._last_cache_update.keys()
+            generation_keys = self._cache_generations.keys()
             logger.debug("Invalidated entire cache")
+
+        for key in keys_to_remove:
+            self._cache.pop(key, None)
+            self._last_cache_update.pop(key, None)
+        for key in generation_keys:
+            self._cache_generations[key] = self._cache_generations[key] + 1
 
     async def set_site(self, site: str):
         """Update the target site and invalidate relevant cache.
