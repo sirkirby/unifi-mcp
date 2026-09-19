@@ -99,6 +99,13 @@ Ask whether to enable write permissions:
 - Enable all write permissions except delete operations
 - Custom categories
 
+Before writing policy values, inspect the selected client's existing
+`unifi-network` MCP environment. Remove every existing category-specific
+`UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>` entry, because those entries take
+precedence over server-level defaults. Do not remove unrelated variables. Set
+`UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm`, then add back only the
+category/action overrides the user selected.
+
 For read-only setup, explicitly configure:
 
 ```text
@@ -120,6 +127,7 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_NETWORK_HOST=<host> \
   UNIFI_NETWORK_USERNAME=<username> \
   UNIFI_NETWORK_PASSWORD_FILE=<absolute-path> \
+  UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm \
   UNIFI_POLICY_NETWORK_CREATE=false \
   UNIFI_POLICY_NETWORK_UPDATE=false \
   UNIFI_POLICY_NETWORK_DELETE=false
@@ -131,8 +139,9 @@ Add optional values and policy variables to the same command, for example:
 bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_NETWORK_HOST=<host> \
   UNIFI_NETWORK_USERNAME=<username> \
-  UNIFI_NETWORK_PASSWORD_COMMAND=<absolute-argv> \
+  'UNIFI_NETWORK_PASSWORD_COMMAND=<absolute-argv>' \
   UNIFI_NETWORK_API_KEY_FILE=<absolute-path> \
+  UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm \
   UNIFI_POLICY_NETWORK_CREATE=false \
   UNIFI_POLICY_NETWORK_UPDATE=false \
   UNIFI_POLICY_NETWORK_DELETE=false \

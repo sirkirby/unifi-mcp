@@ -48,7 +48,8 @@ def test_agent_guardrails_preserve_secrets_and_confirmation_mode() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
 
     assert "Do not ask the user to paste a password or API key into the chat" in guide
-    assert "Keep the permission mode at its default, `confirm`" in guide
+    assert "Explicitly set the selected server's permission mode to `confirm`" in guide
+    assert "product-scoped category overrides" in guide
     assert "wait for confirmation" in guide
     assert "No secret was printed" in guide
 
@@ -81,8 +82,20 @@ def test_setup_skills_never_request_or_pass_plaintext_secrets() -> None:
 def test_guided_setup_defaults_to_read_only_policy_gates() -> None:
     for product, skill_path in zip(("NETWORK", "PROTECT", "ACCESS"), SETUP_SKILLS, strict=True):
         skill = skill_path.read_text(encoding="utf-8")
+        assert f"UNIFI_{product}_TOOL_PERMISSION_MODE=confirm" in skill
+        assert f"UNIFI_POLICY_{product}_<CATEGORY>_<ACTION>" in skill
+        assert "Remove every existing category-specific" in skill
         for action in ("CREATE", "UPDATE", "DELETE"):
             assert f"UNIFI_POLICY_{product}_{action}=false" in skill
+
+
+def test_command_provider_assignments_are_shell_quoted() -> None:
+    for product, skill_path in zip(("NETWORK", "PROTECT", "ACCESS"), SETUP_SKILLS, strict=True):
+        skill = skill_path.read_text(encoding="utf-8")
+        assert f"'UNIFI_{product}_PASSWORD_COMMAND=<absolute-argv>'" in skill
+
+    access_skill = SETUP_SKILLS[2].read_text(encoding="utf-8")
+    assert "'UNIFI_ACCESS_API_KEY_COMMAND=<absolute-argv>'" in access_skill
 
 
 def test_opencode_scope_and_network_auth_are_accurate() -> None:
@@ -93,6 +106,7 @@ def test_opencode_scope_and_network_auth_are_accurate() -> None:
     assert "API-key provider for limited inventory" in guide
     for action in ("CREATE", "UPDATE", "DELETE"):
         assert f"--env UNIFI_POLICY_NETWORK_{action}=false" in guide
+    assert "--env UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm" in guide
     assert "For Network API-key-only setup" in guide
     assert "a mutation request is denied by policy" in guide
 

@@ -35,10 +35,13 @@ During setup:
   `*_API_KEY_COMMAND` setting where the selected server supports it. Otherwise,
   direct the user to the client's own sensitive-value prompt or configuration
   UI.
-- Keep the permission mode at its default, `confirm`. Unless the user separately
-  requests write access, explicitly set the selected server's `CREATE`, `UPDATE`,
-  and `DELETE` policy gates to `false`; unset policy gates allow mutations after
-  confirmation.
+- Explicitly set the selected server's permission mode to `confirm`. Before
+  applying policy defaults to an existing configuration, remove its
+  product-scoped category overrides (`UNIFI_POLICY_<SERVER>_<CATEGORY>_<ACTION>`),
+  because those take precedence over server-level gates. Unless the user
+  separately requests write access, set the server's `CREATE`, `UPDATE`, and
+  `DELETE` gates to `false`; then add back only the category/action overrides
+  the user selected.
 - Do not disable TLS verification without explaining the tradeoff. Many local
   UniFi consoles use a self-signed certificate, but a trusted certificate is
   preferred.
@@ -171,6 +174,7 @@ opencode mcp add unifi-network \
   --env UNIFI_NETWORK_HOST=controller.example.local \
   --env UNIFI_NETWORK_USERNAME=unifi-mcp \
   --env UNIFI_NETWORK_PASSWORD_FILE=/absolute/path/to/password-file \
+  --env UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm \
   --env UNIFI_POLICY_NETWORK_CREATE=false \
   --env UNIFI_POLICY_NETWORK_UPDATE=false \
   --env UNIFI_POLICY_NETWORK_DELETE=false \

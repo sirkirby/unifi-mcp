@@ -101,6 +101,13 @@ Options:
 - Enable all Access write permissions except delete operations
 - Custom categories
 
+Before writing policy values, inspect the selected client's existing
+`unifi-access` MCP environment. Remove every existing category-specific
+`UNIFI_POLICY_ACCESS_<CATEGORY>_<ACTION>` entry, because those entries take
+precedence over server-level defaults. Do not remove unrelated variables. Set
+`UNIFI_ACCESS_TOOL_PERMISSION_MODE=confirm`, then add back only the
+category/action overrides the user selected.
+
 For read-only setup, explicitly configure `UNIFI_POLICY_ACCESS_CREATE=false`,
 `UNIFI_POLICY_ACCESS_UPDATE=false`, and `UNIFI_POLICY_ACCESS_DELETE=false`. For
 requested writes, keep those server-level defaults and add only selected
@@ -117,6 +124,7 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_ACCESS_API_KEY_FILE=<absolute-path> \
   UNIFI_ACCESS_USERNAME=<username> \
   UNIFI_ACCESS_PASSWORD_FILE=<absolute-path> \
+  UNIFI_ACCESS_TOOL_PERMISSION_MODE=confirm \
   UNIFI_POLICY_ACCESS_CREATE=false \
   UNIFI_POLICY_ACCESS_UPDATE=false \
   UNIFI_POLICY_ACCESS_DELETE=false
@@ -127,9 +135,10 @@ Add optional values and policy variables to the same command, for example:
 ```bash
 bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_ACCESS_HOST=<host> \
-  UNIFI_ACCESS_API_KEY_COMMAND=<absolute-argv> \
+  'UNIFI_ACCESS_API_KEY_COMMAND=<absolute-argv>' \
   UNIFI_ACCESS_USERNAME=<username> \
-  UNIFI_ACCESS_PASSWORD_COMMAND=<absolute-argv> \
+  'UNIFI_ACCESS_PASSWORD_COMMAND=<absolute-argv>' \
+  UNIFI_ACCESS_TOOL_PERMISSION_MODE=confirm \
   UNIFI_POLICY_ACCESS_CREATE=false \
   UNIFI_POLICY_ACCESS_UPDATE=false \
   UNIFI_POLICY_ACCESS_DELETE=false \

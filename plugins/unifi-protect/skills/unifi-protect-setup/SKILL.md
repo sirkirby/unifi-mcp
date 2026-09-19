@@ -95,6 +95,13 @@ Options:
 - Enable all device management
 - Custom categories
 
+Before writing policy values, inspect the selected client's existing
+`unifi-protect` MCP environment. Remove every existing category-specific
+`UNIFI_POLICY_PROTECT_<CATEGORY>_<ACTION>` entry, because those entries take
+precedence over server-level defaults. Do not remove unrelated variables. Set
+`UNIFI_PROTECT_TOOL_PERMISSION_MODE=confirm`, then add back only the
+category/action overrides the user selected.
+
 For read-only setup, explicitly configure
 `UNIFI_POLICY_PROTECT_CREATE=false`, `UNIFI_POLICY_PROTECT_UPDATE=false`, and
 `UNIFI_POLICY_PROTECT_DELETE=false`. For requested writes, keep those server-level
@@ -110,6 +117,7 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_PROTECT_HOST=<host> \
   UNIFI_PROTECT_USERNAME=<username> \
   UNIFI_PROTECT_PASSWORD_FILE=<absolute-path> \
+  UNIFI_PROTECT_TOOL_PERMISSION_MODE=confirm \
   UNIFI_POLICY_PROTECT_CREATE=false \
   UNIFI_POLICY_PROTECT_UPDATE=false \
   UNIFI_POLICY_PROTECT_DELETE=false
@@ -121,8 +129,9 @@ Add optional values and policy variables to the same command, for example:
 bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_PROTECT_HOST=<host> \
   UNIFI_PROTECT_USERNAME=<username> \
-  UNIFI_PROTECT_PASSWORD_COMMAND=<absolute-argv> \
+  'UNIFI_PROTECT_PASSWORD_COMMAND=<absolute-argv>' \
   UNIFI_PROTECT_API_KEY_FILE=<absolute-path> \
+  UNIFI_PROTECT_TOOL_PERMISSION_MODE=confirm \
   UNIFI_POLICY_PROTECT_CREATE=false \
   UNIFI_POLICY_PROTECT_UPDATE=false \
   UNIFI_POLICY_PROTECT_DELETE=false \
