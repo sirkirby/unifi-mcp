@@ -79,7 +79,7 @@ replace the whole server entry.
 
 ### Optional API Key
 
-After collecting username and password, explain that a UniFi Protect API key enables selected capabilities implemented through the Protect Integration API, including sensor settings, per-camera chime ring settings, and viewer liveview assignment. Ask whether to configure an API key too.
+After collecting the username and password provider, explain that a UniFi Protect API key enables selected capabilities implemented through the Protect Integration API, including sensor settings, per-camera chime ring settings, and viewer liveview assignment. Ask whether to configure an API-key provider too.
 
 If yes, configure `UNIFI_PROTECT_API_KEY_FILE` or
 `UNIFI_PROTECT_API_KEY_COMMAND`; never ask for or pass the raw key. If no, skip it.

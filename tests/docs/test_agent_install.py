@@ -91,3 +91,14 @@ def test_opencode_scope_and_network_auth_are_accurate() -> None:
     assert "There is no `--global` switch" in guide
     assert "user-level configuration" in guide
     assert "API-key provider for limited inventory" in guide
+    for action in ("CREATE", "UPDATE", "DELETE"):
+        assert f"--env UNIFI_POLICY_NETWORK_{action}=false" in guide
+    assert "For Network API-key-only setup" in guide
+    assert "a mutation request is denied by policy" in guide
+
+
+def test_protect_setup_refers_to_password_provider_not_raw_password() -> None:
+    skill = SETUP_SKILLS[1].read_text(encoding="utf-8")
+
+    assert "username and password provider" in skill
+    assert "After collecting username and password," not in skill

@@ -45,10 +45,12 @@ During setup:
 - Do not edit shell startup files or machine-wide settings unless the user
   explicitly approves that separate change.
 
-After setup, reload the client, confirm that the MCP server connects, list its
-tools, and run one harmless read-only system-information or health request.
-If any step is unavailable or differs from the client's current documentation,
-stop and explain the mismatch instead of guessing.
+After setup, reload the client, confirm that the MCP server connects, and list
+its tools. With session credentials, run one harmless read-only
+system-information or health request. For Network API-key-only setup, use a
+supported inventory request such as listing devices, clients, networks, or
+WLANs instead. If any step is unavailable or differs from the client's current
+documentation, stop and explain the mismatch instead of guessing.
 
 ## Choose an installation path
 
@@ -169,6 +171,9 @@ opencode mcp add unifi-network \
   --env UNIFI_NETWORK_HOST=controller.example.local \
   --env UNIFI_NETWORK_USERNAME=unifi-mcp \
   --env UNIFI_NETWORK_PASSWORD_FILE=/absolute/path/to/password-file \
+  --env UNIFI_POLICY_NETWORK_CREATE=false \
+  --env UNIFI_POLICY_NETWORK_UPDATE=false \
+  --env UNIFI_POLICY_NETWORK_DELETE=false \
   -- uvx --python-preference system unifi-network-mcp@latest
 
 opencode mcp list
@@ -214,8 +219,9 @@ devin mcp add unifi-network -- \
 
 Then add product variables to `.devin/mcp_config.local.json`, which Devin keeps
 local and gitignored. Prefer a UniFi `*_PASSWORD_FILE` or `*_PASSWORD_COMMAND`
-provider. Verify with `devin mcp list`; roll back with
-`devin mcp remove unifi-network`.
+provider, and set the product's server-level `CREATE`, `UPDATE`, and `DELETE`
+policy gates to `false` unless the user opted into writes. Verify with
+`devin mcp list`; roll back with `devin mcp remove unifi-network`.
 
 See Devin's [current MCP configuration](https://docs.devin.ai/cli/extensibility/mcp/configuration).
 
@@ -231,7 +237,10 @@ publishes copy-and-paste configuration. For now:
    ending in `@latest`.
 4. Add the product-specific host, username, and indirect credential variables
    through the client's secure configuration flow.
-5. Reload the client and perform the read-only verification described above.
+5. Set the product's server-level `CREATE`, `UPDATE`, and `DELETE` policy gates
+   to `false` unless the user opted into writes.
+6. Reload the client and perform the authentication-appropriate read-only
+   verification described above.
 
 Current first-party references:
 
@@ -260,7 +269,10 @@ An installation is complete only when all applicable checks pass:
 
 - The selected client reports the MCP server as connected.
 - Tool discovery shows the chosen UniFi product and no unwanted products.
-- A read-only system-information or health request succeeds.
-- A mutation request, if attempted later, produces a preview and asks for
+- A read-only request supported by the configured authentication path succeeds.
+  For Network API-key-only setup, use device, client, network, or WLAN inventory;
+  use system information or health when session credentials are available.
+- With the default read-only gates, a mutation request is denied by policy. If
+  the user opted into that action, it produces a preview and asks for
   confirmation by default.
 - No secret was printed in a command log, chat transcript, or committed file.
