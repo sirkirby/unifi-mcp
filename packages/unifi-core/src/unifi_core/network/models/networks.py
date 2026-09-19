@@ -223,7 +223,9 @@ class Network(BaseModel):
         default=None,
         description=(
             "V2 firewall-zone ID this network belongs to. These IDs are scoped to the V2 "
-            "firewall/network tool family — do not pass Integration API firewall-zone UUIDs"
+            "firewall/network tool family — do not pass Integration API firewall-zone UUIDs. "
+            "VPN network entries may only use the system-defined Vpn zone; custom-zone assignments "
+            "are rejected because UniFi does not enforce their policies on tunnel interfaces"
         ),
     )
     # --- WAN uplink (gateway interface; networkconf entries with purpose=wan) ---
