@@ -227,7 +227,10 @@ Tests use `pytest-asyncio` for async support and `aioresponses` for HTTP mocking
 5. Build release batches from actual dependency edges. A downstream package must wait when its
    wheel metadata names the new upstream version, its code requires a newly published upstream API,
    or its release workflow installs that new version. Existing compatible bounds alone do not
-   require a wait.
+   require a wait. Also keep Worker out of any batch containing a tag namespace configured in
+   `bump-plugin-versions.yml`: both workflows push writebacks to `main` without shared concurrency
+   or a non-fast-forward retry. Finish and fetch the plugin writeback before pushing Worker. An
+   API-only tag may share the Worker batch because it does not trigger plugin sync.
 6. Within each batch, push every tag back-to-back using a separate `git push origin <tag>` command
    for each ref, then monitor the workflows concurrently. Do not combine multiple refs in one push.
    Before starting a dependent batch, confirm each required upstream artifact is available on PyPI

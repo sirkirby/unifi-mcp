@@ -95,8 +95,8 @@ can lag or overstate changes.
 
 | What changed | Tags required |
 |---|---|
-| `packages/unifi-mcp-shared/` only | `shared/v*` → then `network/v*`, `protect/v*`, `access/v*`, `relay/v*` |
-| `packages/unifi-core/` only | `core/v*` → then `shared/v*` → then all downstream packages, including `api/v*` |
+| `packages/unifi-mcp-shared/` only | Scope includes `shared/v*`, `network/v*`, `protect/v*`, `access/v*`, and `relay/v*`; Procedure F decides batch boundaries |
+| `packages/unifi-core/` only | Scope includes `core/v*` and affected downstream packages, including `api/v*`; Procedure F decides batch boundaries |
 | One app only (e.g., `apps/protect/`) | `protect/v*` only |
 | Multiple apps | One tag per changed app; put independent tags in the same release batch |
 | Plugin-only changes (manifest/config updates) | Patch release for cache invalidation (e.g., `network/v0.14.13` → `network/v0.14.14`) |
@@ -255,10 +255,16 @@ The manifest bumper workflow (`bump-plugin-versions.yml`) must target `args[2]` 
 
 ## Procedure F: Dependency-Aware Release Batching
 
-Build a release graph before pushing tags. A package has a hard dependency edge on an upstream
-release when its wheel metadata must name the new upstream version, its code requires an API that
-exists only in that version, or its release workflow installs the new version from PyPI. Existing
-bounds that already accept the upstream release do not create an edge by themselves.
+Build a dependency and writeback graph before pushing tags. A package has a hard dependency edge on
+an upstream release when its wheel metadata must name the new upstream version, its code requires
+an API that exists only in that version, or its release workflow installs the new version from
+PyPI. Existing bounds that already accept the upstream release do not create an edge by themselves.
+
+Add a writeback exclusion between Worker and any tag namespace configured in
+`bump-plugin-versions.yml`. The Worker release and plugin-version sync both checkout and push
+`main`, but they do not share a concurrency group or retry a non-fast-forward push. Keep Worker out
+of those batches. Wait for the plugin writeback to finish, fetch `main`, and then push Worker; an
+API-only tag may share the Worker batch because it does not start the plugin writeback.
 
 Put every tag whose incoming edges are already satisfied into the same batch. Create the tags from
 the intended release commit, then push each tag in its own command back-to-back. Separate push
@@ -277,7 +283,7 @@ release_tags=(
 
 # Each loop iteration is a separate push. Do not wait for its workflow before the next iteration.
 for tag in "${release_tags[@]}"; do
-  git tag "$tag"
+  git tag "$tag" || exit 1
 done
 
 for tag in "${release_tags[@]}"; do
@@ -366,9 +372,12 @@ After pushing a release batch:
    All three must exit 0 with zero failed/exception records. This is the final release validation gate.
    **Do not invoke with bare `python3 scripts/live_smoke.py`** — the system Python lacks the workspace dependencies and the harness will fail at import time.
 7. **Post-publish installed-wheel verification:** After PyPI confirms the new versions, re-run the
-   relevant `live_smoke.py --phase safe` invocations against the packages installed in the clean
-   environment, not local workspace sources. This catches packaging defects that only manifest in
-   built wheels and validates the whole compatible batch with one environment.
+   relevant `live_smoke.py --server <server> --phase safe` invocation separately for each server
+   with the isolated environment's Python executable, not `uv run` or `--server all`. Before each
+   run, assert `importlib.metadata.version(...)` is the released version and the imported module's
+   `__file__` resolves under that environment's `site-packages`, outside the repository. This
+   catches packaging defects that only manifest in built wheels and validates the whole compatible
+   batch with one environment.
 
 ---
 
