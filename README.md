@@ -90,6 +90,29 @@ The lazy-loading meta-tools remain content-only; they are not the pre-`2025-06-1
 
 ## Quick Start
 
+### Install with your agent
+
+Paste the block below into your coding agent. It points the agent at the
+canonical, versioned setup guide and limits what it may change:
+
+```text
+Install UniFi MCP for me using the official instructions at:
+https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md
+
+Before changing anything, identify my agent client and operating system, ask
+whether I need Network, Protect, Access, or more than one, and show me the exact
+commands and configuration files you plan to change. Wait for my confirmation.
+Do not ask me to paste a password or API key into chat. Prefer an indirect
+credential provider or the client's secure secret prompt. Keep mutation
+permissions in confirm mode. After setup, reload the client, verify the MCP
+connection and tool list, and run one harmless read-only check.
+```
+
+The guide covers native plugins, product-scoped `npx skills add` installs,
+OpenCode's built-in MCP support, and the current manual paths for Antigravity,
+Cursor, and Devin Desktop. A skills install adds agent guidance; it does not by
+itself register the MCP server.
+
 ### Claude Code (recommended)
 
 Install via the plugin marketplace — includes the MCP server, an agent skill, and guided setup:

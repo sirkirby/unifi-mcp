@@ -10,6 +10,10 @@ with the [`unifi-api-server` quickstart](apps/api/README.md#quickstart). If an
 MCP client needs remote access to local servers, use the Cloud Relay section
 below.
 
+For agent-guided setup, native plugin marketplaces, product-scoped
+`npx skills add` commands, OpenCode, Antigravity, Cursor, and Devin Desktop, see
+[Install UniFi MCP with an agent](docs/agent-install.md).
+
 ## Install A Server
 
 For the Network server:

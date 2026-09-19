@@ -1,6 +1,6 @@
 ---
 name: unifi-access-setup
-description: Configure the UniFi Access MCP server for Claude Code, Codex, or OpenClaw — set controller host, credentials, API key, and permissions
+description: Configure the UniFi Access MCP server for a supported MCP client — set controller host, credentials, API key, and permissions
 allowed-tools: Read, Bash, AskUserQuestion
 ---
 
@@ -16,6 +16,14 @@ Use the client target that matches the current agent runtime:
 - OpenClaw: `openclaw`
 
 If the runtime is unclear, ask which client to configure. For questions, use the platform's blocking question tool when available (`AskUserQuestion` in Claude Code, `request_user_input` in Codex). If no blocking question tool is available, ask in chat with numbered options and wait for the user's reply.
+
+This skill may come from a complete UniFi plugin or a standalone `npx skills`
+install. Before using a helper script, verify that the plugin's `scripts/`
+directory exists. If it does not, do not guess a relative path: follow the
+[canonical agent installation guide](https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md)
+for the client's native MCP registration path. That guide covers OpenCode,
+Antigravity, Devin Desktop, Cursor, and other manual clients. A standalone
+skill install does not install or register the MCP server by itself.
 
 On macOS and Linux, resolve setup scripts relative to this skill file:
 - `../../scripts/check-prereqs.sh`
