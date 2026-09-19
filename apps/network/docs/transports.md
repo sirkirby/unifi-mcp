@@ -139,6 +139,7 @@ Configure authentication and TLS on Nginx, Cloudflare, or the Kubernetes ingress
    ```bash
    export UNIFI_MCP_ALLOWED_HOSTS=localhost,127.0.0.1,unifi-mcp.example.com
    ```
+   Docker Compose preserves this operator allowlist and separately adds the container-service hosts it requires. Recreate the services after changing the value.
 
 2. Keep DNS rebinding protection enabled. Configure the proxy to forward an allowed Host header and configure allowed origins for browser clients. An allowed hostname does not replace authentication.
 

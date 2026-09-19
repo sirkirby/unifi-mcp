@@ -9,12 +9,43 @@ from mcp.server.mcpserver import Context
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel
-from unifi_mcp_shared.server import UniFiMCPServer
+from unifi_mcp_shared.server import UniFiMCPServer, resolve_allowed_hosts
 
 
 class NegotiatedResult(BaseModel):
     success: bool
     protocol_version: str
+
+
+def test_allowed_hosts_default_to_loopback() -> None:
+    assert resolve_allowed_hosts(None) == ["localhost", "127.0.0.1"]
+
+
+def test_allowed_hosts_union_operator_and_internal_values_without_duplicates() -> None:
+    assert resolve_allowed_hosts(
+        "localhost, proxy.example.com,localhost",
+        internal_hosts="unifi-network-mcp,proxy.example.com",
+    ) == ["localhost", "proxy.example.com", "unifi-network-mcp"]
+
+
+def test_deployment_override_replaces_operator_hosts_before_internal_union() -> None:
+    assert resolve_allowed_hosts(
+        "env-file.example.com",
+        override_hosts="shell.example.com",
+        internal_hosts="unifi-network-mcp",
+    ) == ["shell.example.com", "unifi-network-mcp"]
+
+
+def test_explicit_empty_override_clears_env_file_hosts() -> None:
+    assert resolve_allowed_hosts(
+        "env-file.example.com",
+        override_hosts="",
+        internal_hosts="unifi-network-mcp",
+    ) == ["unifi-network-mcp"]
+
+
+def test_explicit_empty_operator_allowlist_does_not_restore_defaults() -> None:
+    assert resolve_allowed_hosts("", internal_hosts="unifi-network-mcp") == ["unifi-network-mcp"]
 
 
 @pytest.mark.parametrize(

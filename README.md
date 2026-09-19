@@ -55,6 +55,8 @@ MCP HTTP is unauthenticated and intended for trusted local clients. HTTP is disa
 | `UNIFI_MCP_HTTP_ENABLED` | `false` | Opt into HTTP transport |
 | `UNIFI_MCP_HOST` | `127.0.0.1` | Bind address; Compose explicitly uses `0.0.0.0` inside containers |
 | `UNIFI_MCP_HTTP_FORCE` | `false` | Allow HTTP outside container PID 1 |
+| `UNIFI_MCP_ALLOWED_HOSTS` | `localhost,127.0.0.1` | Complete accepted Host-header list; Compose separately adds required internal hosts |
+| `UNIFI_MCP_ENABLE_DNS_REBINDING_PROTECTION` | `true` | Validate Host headers to prevent DNS-rebinding requests |
 
 ## MCP Discovery
 

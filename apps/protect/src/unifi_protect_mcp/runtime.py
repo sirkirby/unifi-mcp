@@ -28,7 +28,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from unifi_core.auth import UniFiAuth
 from unifi_mcp_shared.metadata import PROJECT_WEBSITE_URL, configure_mcp_server_metadata
 from unifi_mcp_shared.response_policy import resolve_mcp_content_mode, should_redact_response_sensitive_fields
-from unifi_mcp_shared.server import UniFiMCPServer
+from unifi_mcp_shared.server import UniFiMCPServer, resolve_allowed_hosts
 from unifi_mcp_shared.support_bundle import (
     SupportBundleService,
     configured_filter,
@@ -99,10 +99,17 @@ def _create_permissioned_tool_wrapper(original_tool_decorator):
 @lru_cache
 def get_server() -> UniFiMCPServer:
     """Create the FastMCP server instance exactly once."""
-    # Parse allowed hosts from environment variable for reverse proxy support
-    # Default to localhost only for backwards compatibility
-    allowed_hosts_str = os.getenv("UNIFI_MCP_ALLOWED_HOSTS", "localhost,127.0.0.1")
-    allowed_hosts = [h.strip() for h in allowed_hosts_str.split(",") if h.strip()]
+    # The operator owns the public allowlist. Deployments such as Docker Compose
+    # can add required internal service names without overriding that setting.
+    allowed_hosts = resolve_allowed_hosts(
+        os.getenv("UNIFI_MCP_ALLOWED_HOSTS"),
+        override_hosts=(
+            os.getenv("UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE")
+            if os.getenv("UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET") == "true"
+            else None
+        ),
+        internal_hosts=os.getenv("UNIFI_MCP_INTERNAL_ALLOWED_HOSTS"),
+    )
 
     # Allow disabling DNS rebinding protection entirely (default: enabled)
     # Set to "false" for Kubernetes/proxy deployments where allowed_hosts is insufficient

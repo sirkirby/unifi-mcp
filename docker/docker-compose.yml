@@ -10,7 +10,9 @@ services:
       - UNIFI_MCP_HTTP_TRANSPORT=streamable-http
       - UNIFI_MCP_HOST=0.0.0.0
       - UNIFI_MCP_PORT=3000
-      - UNIFI_MCP_ALLOWED_HOSTS=localhost,localhost:3000,127.0.0.1,127.0.0.1:3000,host.docker.internal,host.docker.internal:3000,unifi-network-mcp,unifi-network-mcp:3000
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE=${UNIFI_MCP_ALLOWED_HOSTS-}
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET=${UNIFI_MCP_ALLOWED_HOSTS+true}
+      - UNIFI_MCP_INTERNAL_ALLOWED_HOSTS=localhost,localhost:3000,127.0.0.1,127.0.0.1:3000,host.docker.internal,host.docker.internal:3000,unifi-network-mcp,unifi-network-mcp:3000
     ports:
       - "127.0.0.1:3000:3000"
     restart: unless-stopped
@@ -27,7 +29,9 @@ services:
       - UNIFI_MCP_HTTP_TRANSPORT=streamable-http
       - UNIFI_MCP_HOST=0.0.0.0
       - UNIFI_MCP_PORT=3001
-      - UNIFI_MCP_ALLOWED_HOSTS=localhost,localhost:3001,127.0.0.1,127.0.0.1:3001,host.docker.internal,host.docker.internal:3001,unifi-protect-mcp,unifi-protect-mcp:3001
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE=${UNIFI_MCP_ALLOWED_HOSTS-}
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET=${UNIFI_MCP_ALLOWED_HOSTS+true}
+      - UNIFI_MCP_INTERNAL_ALLOWED_HOSTS=localhost,localhost:3001,127.0.0.1,127.0.0.1:3001,host.docker.internal,host.docker.internal:3001,unifi-protect-mcp,unifi-protect-mcp:3001
     ports:
       - "127.0.0.1:3001:3001"
     restart: unless-stopped
@@ -44,7 +48,9 @@ services:
       - UNIFI_MCP_HTTP_TRANSPORT=streamable-http
       - UNIFI_MCP_HOST=0.0.0.0
       - UNIFI_MCP_PORT=3002
-      - UNIFI_MCP_ALLOWED_HOSTS=localhost,localhost:3002,127.0.0.1,127.0.0.1:3002,host.docker.internal,host.docker.internal:3002,unifi-access-mcp,unifi-access-mcp:3002
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE=${UNIFI_MCP_ALLOWED_HOSTS-}
+      - UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET=${UNIFI_MCP_ALLOWED_HOSTS+true}
+      - UNIFI_MCP_INTERNAL_ALLOWED_HOSTS=localhost,localhost:3002,127.0.0.1,127.0.0.1:3002,host.docker.internal,host.docker.internal:3002,unifi-access-mcp,unifi-access-mcp:3002
     ports:
       - "127.0.0.1:3002:3002"
     restart: unless-stopped

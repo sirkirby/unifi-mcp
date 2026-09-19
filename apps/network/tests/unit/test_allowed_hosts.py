@@ -39,6 +39,9 @@ class TestAllowedHostsParsing:
         # Remove UNIFI_MCP_ALLOWED_HOSTS if set in shell environment
         # (load_dotenv is mocked, so .env won't reload it during import)
         os.environ.pop("UNIFI_MCP_ALLOWED_HOSTS", None)
+        os.environ.pop("UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE", None)
+        os.environ.pop("UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET", None)
+        os.environ.pop("UNIFI_MCP_INTERNAL_ALLOWED_HOSTS", None)
         os.environ.pop("UNIFI_MCP_CONTENT_MODE", None)
         os.environ.pop("UNIFI_NETWORK_MCP_CONTENT_MODE", None)
 
@@ -107,6 +110,37 @@ class TestAllowedHostsParsing:
         """Test that empty string results in empty allowed hosts list."""
         self._test_get_server_with_env({"UNIFI_MCP_ALLOWED_HOSTS": ""}, [])
 
+    def test_internal_hosts_are_appended_without_duplicates(self):
+        self._test_get_server_with_env(
+            {
+                "UNIFI_MCP_ALLOWED_HOSTS": "localhost,example.com",
+                "UNIFI_MCP_INTERNAL_ALLOWED_HOSTS": "unifi-network-mcp,localhost",
+            },
+            ["localhost", "example.com", "unifi-network-mcp"],
+        )
+
+    def test_compose_override_replaces_env_file_hosts(self):
+        self._test_get_server_with_env(
+            {
+                "UNIFI_MCP_ALLOWED_HOSTS": "env-file.example.com",
+                "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE": "shell.example.com",
+                "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET": "true",
+                "UNIFI_MCP_INTERNAL_ALLOWED_HOSTS": "unifi-network-mcp",
+            },
+            ["shell.example.com", "unifi-network-mcp"],
+        )
+
+    def test_explicit_empty_compose_override_clears_env_file_hosts(self):
+        self._test_get_server_with_env(
+            {
+                "UNIFI_MCP_ALLOWED_HOSTS": "env-file.example.com",
+                "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE": "",
+                "UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET": "true",
+                "UNIFI_MCP_INTERNAL_ALLOWED_HOSTS": "unifi-network-mcp",
+            },
+            ["unifi-network-mcp"],
+        )
+
 
 class TestDnsRebindingProtection:
     """Test UNIFI_MCP_ENABLE_DNS_REBINDING_PROTECTION environment variable."""
@@ -134,6 +168,9 @@ class TestDnsRebindingProtection:
 
         # Remove env vars if set in shell environment
         os.environ.pop("UNIFI_MCP_ALLOWED_HOSTS", None)
+        os.environ.pop("UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE", None)
+        os.environ.pop("UNIFI_MCP_COMPOSE_ALLOWED_HOSTS_OVERRIDE_SET", None)
+        os.environ.pop("UNIFI_MCP_INTERNAL_ALLOWED_HOSTS", None)
         os.environ.pop("UNIFI_MCP_ENABLE_DNS_REBINDING_PROTECTION", None)
         os.environ.pop("UNIFI_MCP_CONTENT_MODE", None)
         os.environ.pop("UNIFI_NETWORK_MCP_CONTENT_MODE", None)

@@ -12,6 +12,8 @@ from unifi_mcp_shared.response_policy import MCPContentMode
 from unifi_mcp_shared.response_serialization import serialize_call_tool_result
 from unifi_mcp_shared.strict_dispatch import StrictKwargFastMCP
 
+_DEFAULT_ALLOWED_HOSTS = "localhost,127.0.0.1"
+
 
 class UniFiMCPServer(StrictKwargFastMCP):
     """Apply UniFi response policy after strict FastMCP dispatch."""
@@ -40,6 +42,21 @@ class UniFiMCPServer(StrictKwargFastMCP):
             protocol_revision=get_request_protocol_revision(context),
             tool_name=name,
         )
+
+
+def resolve_allowed_hosts(
+    configured_hosts: str | None,
+    *,
+    override_hosts: str | None = None,
+    internal_hosts: str | None = None,
+) -> list[str]:
+    """Resolve operator hosts, optional deployment override, and required internal hosts."""
+    operator_hosts = configured_hosts if override_hosts is None else override_hosts
+    configured = _DEFAULT_ALLOWED_HOSTS if operator_hosts is None else operator_hosts
+    values = configured.split(",")
+    if internal_hosts:
+        values.extend(internal_hosts.split(","))
+    return list(dict.fromkeys(value.strip() for value in values if value.strip()))
 
 
 def _normalize_transport_security(
