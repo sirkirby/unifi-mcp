@@ -1,6 +1,6 @@
 ---
 name: unifi-network-setup
-description: Configure the UniFi Network MCP server for Claude Code, Codex, or OpenClaw — set controller host, credentials, and permissions
+description: Configure the UniFi Network MCP server for a supported MCP client — set controller host, credentials, and permissions
 allowed-tools: Read, Bash, AskUserQuestion
 ---
 
@@ -16,6 +16,14 @@ Use the client target that matches the current agent runtime:
 - OpenClaw: `openclaw`
 
 If the runtime is unclear, ask which client to configure. For questions, use the platform's blocking question tool when available (`AskUserQuestion` in Claude Code, `request_user_input` in Codex). If no blocking question tool is available, ask in chat with numbered options and wait for the user's reply.
+
+This skill may come from a complete UniFi plugin or a standalone `npx skills`
+install. Before using a helper script, verify that the plugin's `scripts/`
+directory exists. If it does not, do not guess a relative path: follow the
+[canonical agent installation guide](https://github.com/sirkirby/unifi-mcp/blob/main/docs/agent-install.md)
+for the client's native MCP registration path. That guide covers OpenCode,
+Antigravity, Devin Desktop, Cursor, and other manual clients. A standalone
+skill install does not install or register the MCP server by itself.
 
 On macOS and Linux, resolve setup scripts relative to this skill file:
 - `../../scripts/check-prereqs.sh`
@@ -49,19 +57,33 @@ Ask: "What is your UniFi controller's IP address or hostname?" Example: `192.168
 
 ## Step 2: Credentials
 
-Ask for:
-1. Username, using a local admin account, not a Ubiquiti SSO account
-2. Password
+Ask which authentication path the user needs:
+- API key only for limited device, client, network, and WLAN inventory
+- Local username and password for session tools and full coverage
+- Both, so independently usable API-key reads remain available if the session fails
 
-Username and password are required.
+Ask for the local username when session authentication is selected. Never ask the
+user to send a password or API key in chat, and never place a raw secret in a tool
+call or command argument. Ask for exactly one indirect provider per secret:
+`UNIFI_NETWORK_PASSWORD_FILE=<absolute-path>` or
+`UNIFI_NETWORK_PASSWORD_COMMAND=<absolute argv>`, and
+`UNIFI_NETWORK_API_KEY_FILE=<absolute-path>` or
+`UNIFI_NETWORK_API_KEY_COMMAND=<absolute argv>`. A command provider can call a
+Keychain, `pass`, or 1Password helper; it is not run through a shell and must not
+prompt. If no indirect provider already exists, explain how to create one outside
+the chat transcript or use a client-native masked secret UI, then wait.
 
-If the user would rather not store the password in the client's settings (where every process the client spawns inherits it), offer the indirect form instead: `UNIFI_NETWORK_PASSWORD_FILE=<path>` for a file holding the password, or `UNIFI_NETWORK_PASSWORD_COMMAND=<absolute argv>` for a helper whose stdout is the password (for example a Keychain, `pass` or 1Password lookup; give the helper's absolute path, it is not run through a shell, and it must not prompt). Set exactly one of the three password variables; the server refuses to start if two are set. On the Claude target `set-env.sh` only adds keys, so if a plain `UNIFI_NETWORK_PASSWORD` was saved earlier, remove it from `.claude/settings.local.json` before switching; the Codex and OpenClaw targets replace the whole server entry.
+Set exactly one spelling per secret; the server refuses to start if two are set.
+On the Claude target `set-env.sh` only adds keys, so remove any previously saved
+plain `UNIFI_NETWORK_PASSWORD` or `UNIFI_NETWORK_API_KEY` entry before switching.
+The Codex and OpenClaw targets replace the whole server entry.
 
 ### Optional API Key
 
-After collecting username and password, explain that UniFi API key support is experimental and limited to read-only operations and a subset of tools. Ask whether to configure an API key too.
-
-If yes, ask for the API key and include `UNIFI_NETWORK_API_KEY`. If no, skip it.
+Explain that UniFi API-key support is limited to inventory reads and explicit
+Integration API tools; legacy mutations and full details may still require a local
+username and password provider. If selected, configure only an API-key file or
+command provider, never the raw key.
 
 ## Step 3: Optional Settings
 
@@ -77,7 +99,17 @@ Ask whether to enable write permissions:
 - Enable all write permissions except delete operations
 - Custom categories
 
-Collect any selected policy variables. Use the existing `UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>=true` format.
+For read-only setup, explicitly configure:
+
+```text
+UNIFI_POLICY_NETWORK_CREATE=false
+UNIFI_POLICY_NETWORK_UPDATE=false
+UNIFI_POLICY_NETWORK_DELETE=false
+```
+
+For requested writes, keep those server-level defaults and add only the selected
+category/action overrides using the existing
+`UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>=true` format.
 
 ## Step 5: Write Configuration
 
@@ -87,7 +119,10 @@ On macOS/Linux, run the target-aware setup script with only values the user prov
 bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_NETWORK_HOST=<host> \
   UNIFI_NETWORK_USERNAME=<username> \
-  UNIFI_NETWORK_PASSWORD=<password>
+  UNIFI_NETWORK_PASSWORD_FILE=<absolute-path> \
+  UNIFI_POLICY_NETWORK_CREATE=false \
+  UNIFI_POLICY_NETWORK_UPDATE=false \
+  UNIFI_POLICY_NETWORK_DELETE=false
 ```
 
 Add optional values and policy variables to the same command, for example:
@@ -96,8 +131,11 @@ Add optional values and policy variables to the same command, for example:
 bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_NETWORK_HOST=<host> \
   UNIFI_NETWORK_USERNAME=<username> \
-  UNIFI_NETWORK_PASSWORD=<password> \
-  UNIFI_NETWORK_API_KEY=<api-key> \
+  UNIFI_NETWORK_PASSWORD_COMMAND=<absolute-argv> \
+  UNIFI_NETWORK_API_KEY_FILE=<absolute-path> \
+  UNIFI_POLICY_NETWORK_CREATE=false \
+  UNIFI_POLICY_NETWORK_UPDATE=false \
+  UNIFI_POLICY_NETWORK_DELETE=false \
   UNIFI_POLICY_NETWORK_FIREWALL_POLICIES_UPDATE=true
 ```
 
