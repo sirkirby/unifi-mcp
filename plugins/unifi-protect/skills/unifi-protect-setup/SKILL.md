@@ -71,9 +71,10 @@ prompt. If no indirect provider already exists, explain how to create one outsid
 the chat transcript or use a client-native masked secret UI, then wait.
 
 Set exactly one password spelling; the server refuses to start if two are set. On
-the Claude target `set-env.sh` only adds keys, so remove any previously saved plain
-`UNIFI_PROTECT_PASSWORD` entry before switching. The Codex and OpenClaw targets
-replace the whole server entry.
+the Claude target `set-env.sh` only adds keys, so remove any previously saved
+plain `UNIFI_PROTECT_PASSWORD` or `UNIFI_PROTECT_API_KEY` entry before switching
+to an indirect provider or skipping API-key setup. The Codex and OpenClaw
+targets replace the whole server entry.
 
 > **AI-powered alarms need SuperAdmin.** The alarm-rule tools (`protect_alarm_list_rules` / `protect_alarm_get_rule`) surface AI-powered alarms from the UniFi-OS Alarm Manager only when the account is **SuperAdmin**; otherwise they return the classic automations view (with a `_meta` notice that AI alarms need SuperAdmin). A standard local admin runs every Protect tool fine. Mention SuperAdmin only if the user asks about AI alarms; don't require it for normal setup. On a combined UDM console, SuperAdmin also grants Network/UniFi-OS control — call that out so the user can decide.
 

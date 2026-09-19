@@ -116,3 +116,4 @@ def test_protect_setup_refers_to_password_provider_not_raw_password() -> None:
 
     assert "username and password provider" in skill
     assert "After collecting username and password," not in skill
+    assert "plain `UNIFI_PROTECT_PASSWORD` or `UNIFI_PROTECT_API_KEY`" in skill
