@@ -361,9 +361,11 @@ After pushing a release batch:
    tags, inspect the consolidated commit on `main`; for a Core-, Shared-, or Relay-only trigger,
    accept a successful `No version changes to commit` result. API-only and Worker-only batches skip
    this step because they do not trigger the workflow.
-3. **Verify local tag versions:** `cd apps/<app> && hatch version` should print exactly the tagged
-   version.
-4. **Confirm every registry artifact:** Query PyPI or npm for each exact version in the batch.
+3. **Verify local tag versions:** For each Python tag, change to its directory from the Package Map
+   and run `hatch version`; it must print exactly the tagged version. Worker is not a Hatch project,
+   so verify its version from the exact npm artifact in the next step.
+4. **Confirm every registry artifact:** Query PyPI for each exact Python version and run
+   `npm view unifi-mcp-worker@<version> version` for a Worker tag.
 5. **Install smoke test:** Install compatible releases together in one clean environment when
    possible. Assert each installed distribution version, its import path under `site-packages`, and
    any security or cross-package metadata floor that motivated the release.
@@ -375,13 +377,13 @@ After pushing a release batch:
    ```
    All three must exit 0 with zero failed/exception records. This is the final release validation gate.
    **Do not invoke with bare `python3 scripts/live_smoke.py`** — the system Python lacks the workspace dependencies and the harness will fail at import time.
-7. **Post-publish installed-wheel verification:** After PyPI confirms the new versions, re-run the
-   relevant `live_smoke.py --server <server> --phase safe` invocation separately for each server
-   with the isolated environment's Python executable, not `uv run` or `--server all`. Before each
-   run, assert `importlib.metadata.version(...)` is the released version and the imported module's
-   `__file__` resolves under that environment's `site-packages`, outside the repository. This
-   catches packaging defects that only manifest in built wheels and validates the whole compatible
-   batch with one environment.
+7. **Post-publish installed-wheel verification:** After PyPI confirms the new versions, use the
+   clean environment from step 5 to verify every released Python distribution. For released server
+   apps, run `live_smoke.py --server <server> --phase safe` separately with that environment's
+   Python executable, not `uv run` or `--server all`. Core, Shared, API, and Relay have no standalone
+   live-smoke target, so their installed version and `site-packages` import-path assertions from
+   step 5 are their packaging gate. Worker uses the exact npm-artifact check from step 4. This
+   catches packaging defects that local workspace sources can hide.
 
 ---
 
