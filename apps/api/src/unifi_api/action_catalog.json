@@ -2662,7 +2662,7 @@
       "input_schema": {
         "properties": {
           "network_data": {
-            "description": "Network configuration dict. Required: name (str), purpose (str: 'corporate', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). 'guest' is rejected because the legacy API can silently place it in the Internal firewall zone; create Hotspot-zone networks in the UniFi UI. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled, firewall_zone_id (V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs). See update_network for the full list of supported fields.",
+            "description": "Network configuration dict. Required: name (str), purpose (str: 'corporate', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). 'guest' is rejected because the legacy API can silently place it in the Internal firewall zone; create Hotspot-zone networks in the UniFi UI. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled, firewall_zone_id (V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs; VPN entries may only specify the system-defined Vpn zone). See update_network for the full list of supported fields.",
             "type": "object"
           }
         },

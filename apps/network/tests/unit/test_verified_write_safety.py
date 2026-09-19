@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from unifi_core.write_verification import verify_write
+from unifi_core.write_verification import failed_write, verify_write
 
 os.environ.setdefault("UNIFI_HOST", "127.0.0.1")
 os.environ.setdefault("UNIFI_USERNAME", "test")
@@ -34,6 +34,27 @@ async def test_create_guest_network_is_rejected_before_controller_call() -> None
 
 
 @pytest.mark.asyncio
+async def test_create_vpn_with_firewall_zone_warns_that_only_system_vpn_is_allowed() -> None:
+    network_data = {
+        "name": "VPN client",
+        "purpose": "vpn-client",
+        "ip_subnet": "192.0.2.1/24",
+        "dhcpd_enabled": False,
+        "firewall_zone_id": "custom-zone",
+    }
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        mock_mgr.create_network = AsyncMock()
+        from unifi_network_mcp.tools.network import create_network
+
+        result = await create_network(network_data, confirm=False)
+
+    assert result["success"] is True
+    assert result["requires_confirmation"] is True
+    assert any("confirmed assignments to any other zone are rejected" in warning for warning in result["warnings"])
+    mock_mgr.create_network.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_update_guest_purpose_is_rejected_before_controller_call() -> None:
     with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
         mock_mgr.update_network = AsyncMock()
@@ -44,6 +65,57 @@ async def test_update_guest_purpose_is_rejected_before_controller_call() -> None
     assert result["success"] is False
     assert "Hotspot zone" in result["error"]
     mock_mgr.update_network.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_vpn_firewall_zone_preview_warns_that_only_system_vpn_is_allowed() -> None:
+    current = {
+        "_id": "vpn001",
+        "name": "Site tunnel",
+        "purpose": "site-vpn",
+        "firewall_zone_id": "vpn-zone",
+    }
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        mock_mgr.get_network_details = AsyncMock(return_value=current)
+        mock_mgr.update_network = AsyncMock()
+        from unifi_network_mcp.tools.network import update_network
+
+        result = await update_network(
+            "vpn001",
+            {"firewall_zone_id": "custom-zone"},
+            confirm=False,
+        )
+
+    assert result["success"] is True
+    assert result["requires_confirmation"] is True
+    assert any("confirmed assignments to any other zone are rejected" in warning for warning in result["warnings"])
+    mock_mgr.update_network.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_vpn_custom_firewall_zone_manager_rejection_is_formatted_on_confirm() -> None:
+    current = {
+        "_id": "vpn001",
+        "name": "Site tunnel",
+        "purpose": "site-vpn",
+        "firewall_zone_id": "vpn-zone",
+    }
+    error = "VPN networks can only use the built-in 'Vpn' zone; no network update was attempted."
+    with patch("unifi_network_mcp.tools.network.network_manager") as mock_mgr:
+        mock_mgr._connection.site = "default"
+        mock_mgr.get_network_details = AsyncMock(return_value=current)
+        mock_mgr.update_network = AsyncMock(return_value=failed_write(error, operation="update"))
+        from unifi_network_mcp.tools.network import update_network
+
+        result = await update_network(
+            "vpn001",
+            {"firewall_zone_id": "custom-zone"},
+            confirm=True,
+        )
+
+    assert result["success"] is False
+    assert result["mutation_applied"] is False
+    assert result["error"] == f"Failed to update network (vpn001): {error}"
 
 
 @pytest.mark.asyncio

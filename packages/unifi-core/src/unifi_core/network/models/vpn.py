@@ -20,6 +20,22 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+VPN_NETWORK_PURPOSES: frozenset[str] = frozenset({"site-vpn", "remote-user-vpn", "vpn-client", "vpn-server"})
+
+
+def is_vpn_network(network: Dict[str, Any]) -> bool:
+    """Return whether a networkconf record represents any VPN configuration."""
+    purpose = str(network.get("purpose") or "").strip().casefold()
+    vpn_type = str(network.get("vpn_type") or "").strip().casefold()
+    return (
+        purpose in VPN_NETWORK_PURPOSES
+        or purpose.startswith("vpn")
+        or "vpn" in vpn_type
+        or "wireguard" in vpn_type
+        or "openvpn" in vpn_type
+    )
+
+
 # ---------------------------------------------------------------------------
 # VpnClient — mutable (create + update)
 # ---------------------------------------------------------------------------
