@@ -16,33 +16,13 @@ from aiounifi.models.api import ApiRequest
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.models.vpn import is_vpn_network
 from unifi_core.write_verification import WriteVerificationResult, failed_write, verify_write
 
 logger = logging.getLogger("unifi-network-mcp")
 
 CACHE_PREFIX_VPN_CONFIGS = "vpn_configs"
 CACHE_PREFIX_NETWORKS = "networks"
-
-
-def is_vpn_network(network: Dict[str, Any]) -> bool:
-    """Check if a network configuration represents a VPN entity.
-
-    Args:
-        network: Network configuration dictionary
-
-    Returns:
-        True if this is a VPN configuration
-    """
-    purpose = str(network.get("purpose", "")).lower()
-    vpn_type = str(network.get("vpn_type", "")).lower()
-
-    return (
-        purpose.startswith("vpn")
-        or purpose in {"remote-user-vpn", "vpn-client", "vpn-server"}
-        or "vpn" in vpn_type
-        or "wireguard" in vpn_type
-        or "openvpn" in vpn_type
-    )
 
 
 def classify_vpn_type(purpose: str, vpn_type: str) -> Tuple[bool, bool]:
