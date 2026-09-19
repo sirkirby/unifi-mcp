@@ -136,6 +136,20 @@ def test_opencode_scope_and_network_auth_are_accurate() -> None:
     assert "a mutation request is denied by policy" in guide
 
 
+def test_setup_skills_describe_auth_by_tool_family() -> None:
+    network_skill = SETUP_SKILLS[0].read_text(encoding="utf-8")
+    access_skill = SETUP_SKILLS[2].read_text(encoding="utf-8")
+
+    assert "legacy and session-backed tool families" in network_skill
+    assert "Both for the widest tool coverage" in network_skill
+    assert "session tools and full coverage" not in network_skill
+
+    assert "Access Developer API visitor family" in access_skill
+    assert "including visitor reads,\n  creation, and deletion" in access_skill
+    assert "local-only management tool" in access_skill
+    assert "read-oriented Access API calls" not in access_skill
+
+
 def test_protect_setup_refers_to_password_provider_not_raw_password() -> None:
     skill = SETUP_SKILLS[1].read_text(encoding="utf-8")
 

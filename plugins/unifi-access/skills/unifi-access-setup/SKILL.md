@@ -60,10 +60,13 @@ If another UniFi MCP server is already configured, ask whether Access is on the 
 ## Step 2: Authentication
 
 Access supports two auth paths:
-- API key for read-oriented Access API calls
-- Local proxy session with username and password for mutations and broader tool coverage
+- API key for the Access Developer API visitor family, including visitor reads,
+  creation, and deletion, plus tool families that accept either credential
+- Local proxy session with username and password for local-only management tool
+  families and tool families that accept either credential
 
-Ask whether the user wants API key only, username/password only, or both. Recommend both when they want full Access management.
+Ask whether the user wants API key only, username/password only, or both.
+Recommend both for the widest Access tool coverage.
 
 For username/password, ask only for the local username. Never ask the user to send
 a password or API key in chat, and never place a raw secret in a tool call or

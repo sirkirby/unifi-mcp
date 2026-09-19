@@ -58,9 +58,11 @@ Ask: "What is your UniFi controller's IP address or hostname?" Example: `192.168
 ## Step 2: Credentials
 
 Ask which authentication path the user needs:
-- API key only for limited device, client, network, and WLAN inventory
-- Local username and password for session tools and full coverage
-- Both, so independently usable API-key reads remain available if the session fails
+- API key only for supported device, client, network, and WLAN inventory plus
+  API-key-only Integration API lookups
+- Local username and password for legacy and session-backed tool families
+- Both for the widest tool coverage and independently usable API-key reads if
+  the session fails
 
 Ask for the local username when session authentication is selected. Never ask the
 user to send a password or API key in chat, and never place a raw secret in a tool
