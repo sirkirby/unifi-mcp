@@ -10,10 +10,24 @@ from unifi_core.network.models.vpn import (
     VpnClient,
     VpnServer,
     from_controller,
+    is_vpn_network,
     to_controller_create,
     to_controller_update,
     vpn_server_from_controller,
 )
+
+
+class TestVpnClassification:
+    def test_recognizes_all_networkconf_vpn_purposes(self) -> None:
+        for purpose in ("site-vpn", "remote-user-vpn", "vpn-client", "vpn-server"):
+            assert is_vpn_network({"purpose": purpose}) is True
+
+    def test_recognizes_vpn_type_fallbacks(self) -> None:
+        assert is_vpn_network({"purpose": "corporate", "vpn_type": "wireguard-client"}) is True
+        assert is_vpn_network({"purpose": "corporate", "vpn_type": "openvpn-server"}) is True
+
+    def test_rejects_non_vpn_network(self) -> None:
+        assert is_vpn_network({"purpose": "corporate"}) is False
 
 
 class TestVpnClientFieldSets:
