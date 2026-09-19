@@ -359,7 +359,7 @@ async def smoke_server(
 
     params = StdioServerParameters(
         command="uv",
-        args=["run", "--package", spec.package, spec.command],
+        args=["run", "--no-sync", "--package", spec.package, spec.command],
         cwd=REPO_ROOT,
         env=env,
     )
@@ -421,6 +421,49 @@ async def smoke_server(
         )
 
 
+async def run_smoke_matrix(
+    server_names: list[str],
+    registration_modes: list[str],
+    client_modes: list[str],
+    *,
+    use_current_env: bool,
+) -> list[str]:
+    """Run smoke cases and return summaries in case order.
+
+    Offline cases run concurrently because they only target loopback. Live cases
+    stay serial to avoid an authentication burst against real controllers.
+    """
+    cases = [
+        (SERVER_SPECS[server_name], registration_mode, client_mode)
+        for server_name in server_names
+        for registration_mode in registration_modes
+        for client_mode in client_modes
+    ]
+    results: dict[int, str] = {}
+    concurrency = 1 if use_current_env else len(cases)
+    limiter = anyio.CapacityLimiter(concurrency)
+
+    async def run_case(index: int, spec: ServerSpec, registration_mode: str, client_mode: str) -> None:
+        async with limiter:
+            try:
+                results[index] = await smoke_server(
+                    spec,
+                    registration_mode=registration_mode,
+                    client_mode=client_mode,
+                    use_current_env=use_current_env,
+                )
+            except Exception as exc:
+                raise MetadataSmokeError(
+                    f"{spec.expected_name}: metadata smoke failed for mode={registration_mode} client={client_mode}"
+                ) from exc
+
+    async with anyio.create_task_group() as task_group:
+        for index, (spec, registration_mode, client_mode) in enumerate(cases):
+            task_group.start_soon(run_case, index, spec, registration_mode, client_mode)
+
+    return [results[index] for index in range(len(cases))]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -457,17 +500,14 @@ async def main_async() -> None:
     server_names = selected_server_names(server=args.server, use_current_env=args.use_current_env)
     registration_modes = list(REGISTRATION_MODES) if args.registration_mode == "all" else [args.registration_mode]
     client_modes = list(CLIENT_MODES) if args.client_mode == "all" else [args.client_mode]
-    for server_name in server_names:
-        for registration_mode in registration_modes:
-            for client_mode in client_modes:
-                print(
-                    await smoke_server(
-                        SERVER_SPECS[server_name],
-                        registration_mode=registration_mode,
-                        client_mode=client_mode,
-                        use_current_env=args.use_current_env,
-                    )
-                )
+    summaries = await run_smoke_matrix(
+        server_names,
+        registration_modes,
+        client_modes,
+        use_current_env=args.use_current_env,
+    )
+    for summary in summaries:
+        print(summary)
 
 
 def main() -> None:

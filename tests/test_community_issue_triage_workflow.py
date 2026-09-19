@@ -122,9 +122,9 @@ def _snapshot_payload(
 
 NODE_HARNESS = r"""
 import * as contract from __MODULE__;
-import fs from "node:fs";
+import readline from "node:readline";
 
-const payload = JSON.parse(fs.readFileSync(0, "utf8"));
+const runContract = async (payload) => {
 const calls = {labels: [], get: [], comments: [], timeline: [], graphql: 0};
 const issues = new Map(Object.entries(payload.issues || {}).map(([key, value]) => [Number(key), value]));
 const github = {
@@ -238,24 +238,75 @@ try {
   } else {
     throw new Error("unknown harness operation");
   }
-  process.stdout.write(JSON.stringify(result));
+  return {returncode: 0, stdout: JSON.stringify(result), stderr: ""};
 } catch (error) {
-  process.stdout.write(JSON.stringify({calls}));
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
+  return {
+    returncode: 1,
+    stdout: JSON.stringify({calls}),
+    stderr: error instanceof Error ? error.message : String(error),
+  };
+}
+};
+
+const lines = readline.createInterface({input: process.stdin, crlfDelay: Infinity});
+for await (const line of lines) {
+  if (!line) continue;
+  const result = await runContract(JSON.parse(line));
+  process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 """
 
 
-def _run_contract(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
+_CONTRACT_WORKER: subprocess.Popen[str] | None = None
+
+
+@pytest.fixture(scope="module", autouse=True)
+def contract_worker():
+    global _CONTRACT_WORKER
     script = NODE_HARNESS.replace("__MODULE__", json.dumps(CONTRACT.as_uri()))
-    return subprocess.run(
+    _CONTRACT_WORKER = subprocess.Popen(
         ["node", "--input-type=module", "-e", script],
-        input=json.dumps(payload),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        capture_output=True,
-        check=False,
+        bufsize=1,
         cwd=ROOT,
+    )
+    try:
+        yield
+    finally:
+        worker = _CONTRACT_WORKER
+        _CONTRACT_WORKER = None
+        if worker is None:
+            return
+        if worker.stdin is not None:
+            worker.stdin.close()
+        try:
+            worker.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            worker.terminate()
+            worker.wait(timeout=5)
+
+
+def _run_contract(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    worker = _CONTRACT_WORKER
+    if worker is None or worker.poll() is not None:
+        raise RuntimeError("community triage contract worker is not running")
+    assert worker.stdin is not None
+    assert worker.stdout is not None
+    worker.stdin.write(json.dumps(payload) + "\n")
+    worker.stdin.flush()
+    output = worker.stdout.readline()
+    if not output:
+        stderr = worker.stderr.read() if worker.stderr is not None else ""
+        raise RuntimeError(f"community triage contract worker exited unexpectedly: {stderr}")
+    result = json.loads(output)
+    return subprocess.CompletedProcess(
+        args=["node", "--input-type=module", "-e", "<persistent worker>"],
+        returncode=result["returncode"],
+        stdout=result["stdout"],
+        stderr=result["stderr"],
     )
 
 

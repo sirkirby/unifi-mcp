@@ -1,8 +1,9 @@
 .PHONY: help sync build check test lint format format-check format-fix manifest generate api-action-catalog \
        check-api-action-catalog server-manifests skill-references check-skill-references check-generated \
        support-skills check-support-skills pre-commit ci core-test shared-test catalog-test protocol-smoke \
-       docs-test relay-test worker-install worker-test worker-typecheck worker-build worker-check docker-relay \
-       docker-build docker-up docker-down docker-logs
+       protocol-smoke-no-sync docs-test relay-test network-test protect-test access-test test-parallel \
+       worker-install worker-test worker-typecheck worker-build worker-check docker-relay docker-build \
+       docker-up docker-down docker-logs
 
 help:
 	@echo "UniFi MCP Ecosystem — Top-Level Commands"
@@ -60,11 +61,22 @@ catalog-test:
 docs-test:
 	uv run python -m unittest discover -s tests/docs -p 'test_*.py' -v
 
-test: core-test shared-test catalog-test docs-test relay-test protocol-smoke worker-test
-	$(MAKE) -C apps/network test
-	$(MAKE) -C apps/protect test
-	$(MAKE) -C apps/access test
+test:
+	uv sync --all-packages
+	UV_NO_SYNC=1 $(MAKE) -j4 test-parallel
 	$(MAKE) -C apps/api test
+
+test-parallel: core-test shared-test catalog-test docs-test relay-test protocol-smoke-no-sync worker-test \
+               network-test protect-test access-test
+
+network-test:
+	$(MAKE) -C apps/network test
+
+protect-test:
+	$(MAKE) -C apps/protect test
+
+access-test:
+	$(MAKE) -C apps/access test
 
 lint:
 	uv run ruff check .
@@ -118,7 +130,11 @@ relay-test:
 	uv run --package unifi-mcp-relay pytest packages/unifi-mcp-relay/tests -v
 
 protocol-smoke:
-	uv run --package unifi-network-mcp python scripts/smoke_mcp_metadata.py --server all --registration-mode all --client-mode all
+	uv sync --all-packages
+	UV_NO_SYNC=1 $(MAKE) protocol-smoke-no-sync
+
+protocol-smoke-no-sync:
+	uv run --no-sync --package unifi-network-mcp python scripts/smoke_mcp_metadata.py --server all --registration-mode all --client-mode all
 
 worker-install:
 	npm ci --prefix apps/worker

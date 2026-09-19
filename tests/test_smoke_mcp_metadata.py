@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import anyio
 import pytest
 
 _script_path = Path(__file__).parent.parent / "scripts" / "smoke_mcp_metadata.py"
@@ -24,6 +25,7 @@ validate_server_metadata = _mod.validate_server_metadata
 validate_meta_tool_surface = _mod.validate_meta_tool_surface
 smoke_env = _mod.smoke_env
 selected_server_names = _mod.selected_server_names
+run_smoke_matrix = _mod.run_smoke_matrix
 
 NETWORK_SPEC = SERVER_SPECS["network"]
 
@@ -34,6 +36,7 @@ EXPECTED_SURFACE = frozenset(
         "SERVER_SPECS",
         "ServerSpec",
         "parse_meta_tool_result",
+        "run_smoke_matrix",
         "selected_server_names",
         "smoke_env",
         "smoke_server",
@@ -177,3 +180,101 @@ def test_selected_server_names_includes_access_with_current_env() -> None:
 def test_selected_server_names_rejects_access_without_current_env() -> None:
     with pytest.raises(MetadataSmokeError, match="requires --use-current-env"):
         selected_server_names(server="access", use_current_env=False)
+
+
+def test_run_smoke_matrix_runs_cases_concurrently_and_preserves_order(monkeypatch) -> None:
+    async def exercise() -> tuple[int, list[str]]:
+        started = 0
+        max_active = 0
+        release = anyio.Event()
+
+        async def fake_smoke_server(spec, *, registration_mode, client_mode, use_current_env=False):
+            nonlocal started, max_active
+            started += 1
+            max_active = max(max_active, started)
+            if started == 4:
+                release.set()
+            await release.wait()
+            started -= 1
+            return f"{spec.expected_name}:{registration_mode}:{client_mode}:{use_current_env}"
+
+        monkeypatch.setattr(_mod, "smoke_server", fake_smoke_server)
+        with anyio.fail_after(1):
+            results = await run_smoke_matrix(
+                ["network", "protect"],
+                ["lazy"],
+                ["auto", "legacy"],
+                use_current_env=False,
+            )
+        return max_active, results
+
+    max_active, results = anyio.run(exercise)
+
+    assert max_active == 4
+    assert results == [
+        "unifi-network-mcp:lazy:auto:False",
+        "unifi-network-mcp:lazy:legacy:False",
+        "unifi-protect-mcp:lazy:auto:False",
+        "unifi-protect-mcp:lazy:legacy:False",
+    ]
+
+
+def test_run_smoke_matrix_serializes_live_controller_cases(monkeypatch) -> None:
+    async def exercise() -> tuple[int, list[str]]:
+        active = 0
+        max_active = 0
+
+        async def fake_smoke_server(spec, *, registration_mode, client_mode, use_current_env=False):
+            nonlocal active, max_active
+            active += 1
+            max_active = max(max_active, active)
+            await anyio.sleep(0)
+            active -= 1
+            return f"{spec.expected_name}:{registration_mode}:{client_mode}:{use_current_env}"
+
+        monkeypatch.setattr(_mod, "smoke_server", fake_smoke_server)
+        results = await run_smoke_matrix(
+            ["network", "protect", "access"],
+            ["lazy"],
+            ["auto", "legacy"],
+            use_current_env=True,
+        )
+        return max_active, results
+
+    max_active, results = anyio.run(exercise)
+
+    assert max_active == 1
+    assert len(results) == 6
+
+
+def test_run_smoke_matrix_identifies_failed_case_and_cancels_siblings(monkeypatch) -> None:
+    async def exercise() -> None:
+        sibling_started = anyio.Event()
+        sibling_cancelled = anyio.Event()
+
+        async def fake_smoke_server(spec, *, registration_mode, client_mode, use_current_env=False):
+            if spec is NETWORK_SPEC:
+                sibling_started.set()
+                try:
+                    await anyio.sleep_forever()
+                finally:
+                    sibling_cancelled.set()
+            await sibling_started.wait()
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(_mod, "smoke_server", fake_smoke_server)
+        with pytest.raises(ExceptionGroup) as exc_info:
+            await run_smoke_matrix(
+                ["network", "protect"],
+                ["eager"],
+                ["legacy"],
+                use_current_env=False,
+            )
+
+        assert sibling_cancelled.is_set()
+        assert any(
+            "unifi-protect-mcp: metadata smoke failed for mode=eager client=legacy" in str(error)
+            for error in exc_info.value.exceptions
+        )
+
+    anyio.run(exercise)
