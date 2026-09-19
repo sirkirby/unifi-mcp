@@ -275,12 +275,14 @@ commands reliably trigger every tag workflow; one multi-ref `git push` can omit 
 ```bash
 # Include only packages in this batch. Each variable is the reviewed version without the v prefix.
 release_tags=(
+  "core/v${CORE_VERSION:?Set CORE_VERSION}"
   "shared/v${SHARED_VERSION:?Set SHARED_VERSION}"
   "network/v${NETWORK_VERSION:?Set NETWORK_VERSION}"
   "protect/v${PROTECT_VERSION:?Set PROTECT_VERSION}"
   "access/v${ACCESS_VERSION:?Set ACCESS_VERSION}"
   "api/v${API_VERSION:?Set API_VERSION}"
   "relay/v${RELAY_VERSION:?Set RELAY_VERSION}"
+  "worker/v${WORKER_VERSION:?Set WORKER_VERSION}"
 )
 
 # Each loop iteration is a separate push. Do not wait for its workflow before the next iteration.
