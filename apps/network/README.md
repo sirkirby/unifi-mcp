@@ -5,7 +5,17 @@
   <img src="../../assets/hero-network.svg" alt="UniFi Network MCP Server" width="720">
 </p>
 
-MCP server exposing 194 UniFi Network Controller tools for LLMs, agents, and automation platforms. Query clients, devices, firewall rules, VLANs, VPNs, Traffic Flows, stats, and more — with safe-by-default permissions and preview-before-confirm for all mutations.
+MCP server exposing 194 UniFi Network Controller tools for AI assistants and
+other MCP-capable clients. Query clients, devices, firewall rules, VLANs, VPNs,
+Traffic Flows, stats, and more with safe-by-default permissions and
+preview-before-confirm for all mutations.
+
+Use this server when an existing AI assistant or other MCP-capable client needs
+UniFi Network tools. Software integrating over HTTP, including automation
+services, code-execution runtimes, and MCP adapters, should use
+[`unifi-api-server`](../api/) for REST and GraphQL reads, actions, and SSE
+events. The calling application must sandbox generated code and enforce its
+resource limits.
 
 ## Install
 

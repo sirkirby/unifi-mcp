@@ -1,8 +1,8 @@
 # unifi-api-server
 
-REST + GraphQL HTTP API for UniFi controllers — a standalone HTTP service for
-desktop apps, web dashboards, Pi extensions, and any consumer that wants typed
-read access to UniFi Network, Protect, and Access without speaking MCP.
+REST + GraphQL HTTP API for UniFi controllers. Run it as a standalone HTTP
+service for desktop apps, web dashboards, Pi extensions, automation services,
+and MCP adapters that need typed access to UniFi Network, Protect, and Access.
 
 ## Quickstart
 
@@ -125,6 +125,30 @@ The REST action surface is loaded from the packaged
 inputs only when that catalog is generated in a repository checkout; at
 runtime the API depends on the shared managers and models in `unifi-core`, not
 on the Network, Protect, or Access MCP app packages.
+
+### Custom orchestration and MCP adapters
+
+Use the API server as the backend when an application needs dependent calls,
+joins, filtering, loops, branching, or an isolated code-execution runtime:
+
+1. Use GraphQL for typed, paginated reads when the application needs field
+   selection, or use REST for typed resource reads.
+2. Process intermediate results inside the application's own runtime and
+   resource limits.
+3. Call `POST /v1/actions/{tool_name}` for supported controller operations.
+4. Subscribe to the SSE endpoints for live events instead of polling an MCP
+   event resource.
+
+An MCP adapter can expose its own tools while using `unifi-api-server` as its
+backend. The API and MCP applications share the `unifi-core` manager behavior,
+but the adapter defines its outward tool contract. The API server does not
+sandbox generated code or set CPU, memory, or execution-time limits for caller
+logic. The application must enforce those limits.
+
+Keep mutation approval as two requests. First send the JSON request body with
+`"confirm": false` and present the returned preview to the user. After approval,
+resend the same body with `"confirm": true`. Do not preview and execute a mutation
+inside one code-execution request.
 
 Regenerate all product manifests and the API projection together:
 

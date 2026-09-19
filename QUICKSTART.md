@@ -1,6 +1,14 @@
 # Quick Start
 
-UniFi MCP ships independent MCP servers for Network, Protect, and Access, plus optional cloud relay components for cloud-hosted agents.
+UniFi MCP ships independent MCP servers for Network, Protect, and Access, an
+HTTP API for custom applications, and optional Cloud Relay components for
+remote MCP clients.
+
+This guide starts with the MCP servers. If you are building software that
+integrates over HTTP, including an automation service or MCP adapter, start
+with the [`unifi-api-server` quickstart](apps/api/README.md#quickstart). If an
+MCP client needs remote access to local servers, use the Cloud Relay section
+below.
 
 ## Install A Server
 

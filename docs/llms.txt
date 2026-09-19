@@ -20,7 +20,7 @@ UniFi uses separate API families whose authentication, field schemas, and IDs ar
 
 ## API Server
 
-- [API server README](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/README.md): Independent non-MCP HTTP service with typed REST resources, read-only GraphQL, REST actions, SSE streams, scoped keys, and administration.
+- [API server README](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/README.md): Independent HTTP service for custom applications and MCP adapters, with typed REST resources, read-only GraphQL, REST actions, SSE streams, scoped keys, and administration.
 - [OpenAPI reference](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/docs/openapi-reference.md): Generated REST endpoint reference.
 - [GraphQL reference](https://github.com/sirkirby/unifi-mcp/blob/main/apps/api/docs/graphql-reference.md): Generated query and type reference.
 

@@ -5,7 +5,15 @@
   <img src="../../assets/hero-protect.svg" alt="UniFi Protect MCP Server" width="720">
 </p>
 
-MCP server exposing UniFi Protect tools for LLMs, agents, and automation platforms. Query cameras, events, smart detections, Find Anything detection search, recordings, lights, sensors, chimes, Known Faces, license plates, and the Alarm Manager -- with safe-by-default permissions and preview-before-confirm for all mutations.
+MCP server exposing UniFi Protect tools for AI assistants and other MCP-capable
+clients. Query cameras, events, smart detections, Find Anything detection
+search, recordings, lights, sensors, chimes, Known Faces, license plates, and
+the Alarm Manager with safe-by-default permissions and preview-before-confirm
+for all mutations.
+
+Software integrating over HTTP, including automation services and MCP adapters,
+should use [`unifi-api-server`](../api/) for REST and GraphQL reads, actions,
+and SSE events.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)

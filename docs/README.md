@@ -9,6 +9,7 @@ Complete documentation for the UniFi MCP ecosystem.
 - **[Main README](../README.md)** - Project overview and installation
 - **[Quick Start](../QUICKSTART.md)** - Get started in 5 minutes
 - **[Architecture](ARCHITECTURE.md)** - Monorepo layout and package responsibilities
+- **[API Server](../apps/api/)** - REST, GraphQL, actions, and SSE for custom applications and MCP adapters
 - **[Worker Gateway](../apps/worker/)** - Cloudflare Worker gateway and npm CLI
 - **[Relay Sidecar](../packages/unifi-mcp-relay/)** - Local sidecar for cloud relay mode
 - **[Sponsor UniFi MCP](sponsor/)** - Support maintenance, AI costs, compatibility testing, and releases
@@ -93,7 +94,9 @@ Complete guide to the permission system:
 → See [Main README - Configuration](../README.md#configuration)
 
 **...build automation scripts**
-→ See [examples/python/](../examples/python/)
+→ For a custom application or service, use [`unifi-api-server`](../apps/api/).
+For scripts driven by an existing MCP client, see
+[examples/python/](../examples/python/).
 
 **...use with Claude Desktop**
 → See [examples/CLAUDE_DESKTOP.md](../examples/CLAUDE_DESKTOP.md)

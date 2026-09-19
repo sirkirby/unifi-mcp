@@ -138,6 +138,15 @@ Prefer the standard MCP path whenever it is enough. Add or depend on UniFi
 extensions only when they solve a concrete catalog-size, lazy-loading, or relay
 workflow constraint.
 
+If you are building a custom application, code-execution runtime, or MCP adapter
+that needs dependent calls, joins, loops, or branching, build it against
+[`unifi-api-server`](../apps/api/README.md). Use GraphQL for field-selective
+reads, REST for typed resource reads, `POST /v1/actions/{tool_name}` for
+supported operations, and SSE for live events. An MCP adapter can expose tools
+to its clients while using the API as its backend. The calling application must
+sandbox generated code and enforce its resource limits. Existing MCP clients
+can continue to process tool results in client-side code.
+
 When adopting new MCP spec features:
 
 - keep `tools/list` and `tools/call` behavior standard

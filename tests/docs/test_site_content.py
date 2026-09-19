@@ -738,10 +738,63 @@ class ContentReconciliationTests(unittest.TestCase):
                 with self.subTest(path=path, product=product):
                     self.assertIn(url, content)
 
-    def test_readme_describes_api_as_independent_non_mcp_service(self):
+    def test_discovery_docs_route_custom_apps_and_mcp_adapters_to_api(self):
         readme = Path("README.md").read_text(encoding="utf-8")
-        self.assertRegex(readme, r"(?i)API[^\n]*(?:non-MCP|non MCP)")
-        self.assertRegex(readme, r"(?i)independent(?:ly)?[^\n]*MCP servers")
+        chooser = readme.split("## Choose an integration", 1)[1].split("\n## ", 1)[0]
+        api_section = readme.split("## REST + GraphQL API", 1)[1].split("\n## ", 1)[0]
+
+        self.assertRegex(
+            chooser,
+            r"(?is)custom application.*MCP adapter.*unifi-api-server",
+        )
+        self.assertRegex(chooser, r"(?is)MCP adapter.*expose.*tools.*backend")
+        self.assertIn("independent HTTP service", api_section)
+        self.assertIn("does not proxy or require them", api_section)
+
+        discovery_docs = {
+            Path("apps/api/README.md"): Path("apps/api/README.md").read_text(encoding="utf-8"),
+            Path("QUICKSTART.md"): Path("QUICKSTART.md").read_text(encoding="utf-8"),
+            Path("docs/index.html"): Path("docs/index.html").read_text(encoding="utf-8"),
+            Path("docs/llms.txt"): Path("docs/llms.txt").read_text(encoding="utf-8"),
+        }
+        for path, content in discovery_docs.items():
+            with self.subTest(path=path):
+                self.assertIn("MCP adapter", content)
+                self.assertNotRegex(content, r"(?i)non-MCP|without speaking MCP")
+
+        for product in ("network", "protect", "access"):
+            product_readme = Path(f"apps/{product}/README.md").read_text(encoding="utf-8")
+            with self.subTest(product=product):
+                self.assertIn("MCP-capable", product_readme)
+                self.assertIn("unifi-api-server", product_readme)
+
+        tool_index = Path("docs/tool-index.md").read_text(encoding="utf-8")
+        normalized_tool_index = " ".join(tool_index.split())
+        self.assertRegex(
+            normalized_tool_index,
+            r"custom application, code-execution runtime, or MCP adapter.*unifi-api-server",
+        )
+        self.assertIn("Existing MCP clients can continue", normalized_tool_index)
+
+    def test_api_orchestration_docs_preserve_interface_and_safety_boundaries(self):
+        api_readme = Path("apps/api/README.md").read_text(encoding="utf-8")
+        section = api_readme.split("### Custom orchestration and MCP adapters", 1)[1].split("\n### ", 1)[0]
+        normalized_section = " ".join(section.split())
+
+        self.assertIn("GraphQL for typed, paginated reads", normalized_section)
+        self.assertIn("field selection", normalized_section)
+        self.assertIn("REST for typed resource reads", normalized_section)
+        self.assertIn('`"confirm": false`', normalized_section)
+        self.assertIn('`"confirm": true`', normalized_section)
+        self.assertIn("resend the same body", normalized_section)
+        self.assertIn("does not sandbox generated code", normalized_section)
+        self.assertIn("The application must enforce those limits", normalized_section)
+
+        examples = Path("examples/README.md").read_text(encoding="utf-8")
+        normalized_examples = " ".join(examples.split())
+        self.assertNotIn("server's code-execution features", examples)
+        self.assertIn("Code-based processing runs in the calling client", normalized_examples)
+        self.assertIn("(direct MCP", examples)
 
     def test_worker_readme_uses_current_relay_contract(self):
         readme = Path("apps/worker/README.md").read_text(encoding="utf-8")

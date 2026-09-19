@@ -1,6 +1,8 @@
 # UniFi Network MCP Examples
 
-This directory contains practical examples demonstrating how to use the UniFi Network MCP server's code-execution features.
+These examples show MCP clients using the UniFi Network server's tool index,
+batch execution, and async jobs. Code-based processing runs in the calling
+client, not inside the MCP server.
 
 ## What's Here
 
@@ -156,7 +158,7 @@ top_10 = sorted(wireless, key=lambda c: c["tx_bytes"])[:10]
 │   Claude   │  │    Python     │
 │  Desktop   │  │   Scripts     │
 └────────────┘  └───────────────┘
-(uses features    (direct API
+(uses features    (direct MCP
  automatically)    access)
 ```
 
@@ -168,14 +170,23 @@ top_10 = sorted(wireless, key=lambda c: c["tx_bytes"])[:10]
 
 **Long version:**
 
-The original plan included TypeScript examples with `isolated-vm` for sandboxed code execution. However:
+The original plan included TypeScript examples with `isolated-vm` for sandboxed
+code execution. They were removed for four reasons:
 
-1. **Compatibility issues**: Node.js v25.x broke `isolated-vm` compilation
-2. **Unnecessary complexity**: Claude Desktop already has code execution built-in
-3. **Limited audience**: Who's building their own code execution environment?
-4. **Better alternatives**: Python examples are simpler, work today, and more useful
+- Node.js v25.x broke `isolated-vm` compilation.
+- Claude Desktop already has code execution built in.
+- A custom code-execution runtime belongs to the application, not every MCP
+  server deployment.
+- Python examples are simpler for existing MCP clients. Custom applications can
+  use [`unifi-api-server`](../apps/api/) directly.
 
 The **server features** (tool index, async jobs) work with ANY MCP client - you don't need our TypeScript examples to use them.
+
+For a custom runtime, use GraphQL for field-selective reads or REST for typed
+resource reads. Process the results inside the application's own isolation
+boundary, invoke supported operations through `POST /v1/actions/{tool_name}`,
+and use SSE for live events. If the final client requires MCP, an MCP adapter
+can expose tools while using `unifi-api-server` as its backend.
 
 ---
 

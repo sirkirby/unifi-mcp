@@ -23,6 +23,18 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 | [Protect](apps/protect/) | Stable | 62 | [`unifi-protect-mcp`](https://pypi.org/project/unifi-protect-mcp/) |
 | [Access](apps/access/) | Stable | 37 | [`unifi-access-mcp`](https://pypi.org/project/unifi-access-mcp/) |
 
+## Choose an integration
+
+| What you are building | Use | Why |
+|-----------------------|-----|-----|
+| An AI assistant or another existing MCP client | [Network](apps/network/), [Protect](apps/protect/), or [Access](apps/access/) MCP server | Standard MCP discovery, tool calls, permissions, and confirmation flows |
+| A custom application, automation service, code-execution runtime, or MCP adapter | [`unifi-api-server`](apps/api/) | Your code controls call sequencing, data joins, resource limits, and approval flow |
+| Remote access for an MCP client | [Cloud Relay](packages/unifi-mcp-relay/) | Authenticated remote MCP routing without exposing the local servers directly |
+
+An MCP adapter can expose a small set of tools while using `unifi-api-server`
+as its backend. This keeps application-specific joins, branching, loops, and
+code isolation out of the general-purpose MCP servers.
+
 ## Cloud Relay
 
 | Component | Status | Package |
@@ -32,13 +44,17 @@ Leverage agents and agentic AI workflows to manage your UniFi deployment.
 
 Cloud Relay pairs the Cloudflare-hosted Worker gateway with the Relay sidecar on your LAN. The Worker provides the authenticated edge MCP endpoint, Durable Object broker, multi-location routing, token boundary, and deployment/management CLI. The Relay sidecar is a local MCP HTTP client and forwarder: it discovers configured local MCP servers over HTTP and maintains an outbound WebSocket to the Worker. Remote requests follow `MCP client → Worker gateway → outbound WebSocket → Relay sidecar → local MCP servers over HTTP`; the API server is not in this path. Read-only tools support annotation-based multi-location fan-out, while writes require explicit location targeting. Deploy the Worker with `npm install -g unifi-mcp-worker && unifi-mcp-worker install`, then see the [Relay sidecar README](packages/unifi-mcp-relay/) to connect local servers.
 
-## REST + GraphQL API (non-MCP)
+## REST + GraphQL API
 
 | Component | Status | Package |
 |-----------|--------|---------|
 | [API Server](https://github.com/sirkirby/unifi-mcp/tree/main/apps/api) | Beta | [`unifi-api-server`](https://pypi.org/project/unifi-api-server/) · [GHCR image](https://github.com/sirkirby/unifi-mcp/pkgs/container/unifi-api-server) |
 
-`unifi-api-server` is an independent HTTP service for consumers that do not speak MCP. It provides typed REST resources, read-only GraphQL queries, SSE streams, scoped API keys and administration, plus a REST action endpoint for supported controller operations. It shares `unifi-core` managers with the MCP servers but does not proxy or require them.
+`unifi-api-server` is an independent HTTP service for custom applications,
+automation, and adapters. It provides typed REST resources, read-only GraphQL
+queries, SSE streams, scoped API keys and administration, plus a REST action
+endpoint for supported controller operations. It shares `unifi-core` managers
+with the MCP servers but does not proxy or require them.
 
 See [`apps/api/README.md`](apps/api/README.md) for quick-start and deployment patterns.
 

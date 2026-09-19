@@ -105,7 +105,12 @@ The UniFi Access MCP server. 37 tools across 7 categories covering doors, polici
 
 ### apps/api
 
-The independent `unifi-api-server` HTTP service for applications and automation that do not speak MCP. It provides typed REST resources, read-only GraphQL queries, a REST action endpoint for supported controller operations, SSE streams, scoped API keys, encrypted controller credentials, audit records, and an administrative control plane.
+The independent `unifi-api-server` HTTP service for custom applications,
+automation, and adapters. It provides typed REST resources, read-only GraphQL
+queries, a REST action endpoint for supported controller operations, SSE
+streams, scoped API keys, encrypted controller credentials, audit records, and
+an administrative control plane. An MCP adapter can expose tools to its clients
+while using the API server as its backend.
 
 The API app and the MCP apps independently consume the manager layer from `unifi-core`; the API does not proxy or require the MCP servers. It is also not part of the Cloud Relay request path.
 
