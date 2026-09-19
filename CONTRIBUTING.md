@@ -237,8 +237,10 @@ Tests use `pytest-asyncio` for async support and `aioresponses` for HTTP mocking
    or npm and its release workflow passed.
 7. CI publishes to PyPI or npm, builds Docker images where applicable, and creates GitHub Releases.
    When a batch includes a tag namespace configured in `bump-plugin-versions.yml`, wait for the final
-   version-sync run and verify its consolidated writeback to `main`. API-only and Worker-only batches
-   do not trigger that workflow.
+   version-sync run. Network, Protect, or Access tags must produce the expected consolidated
+   writeback to `main`. A Core-, Shared-, or Relay-only trigger may complete successfully with
+   `No version changes to commit`; do not require a nonexistent writeback. API-only and Worker-only
+   batches do not trigger that workflow.
 
 ## Questions?
 

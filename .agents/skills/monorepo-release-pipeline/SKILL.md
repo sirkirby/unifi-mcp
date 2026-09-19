@@ -307,12 +307,15 @@ After a batch containing at least one namespace configured under
 `bump-plugin-versions.yml`'s `on.push.tags`:
 
 1. Wait for the last `bump-plugin-versions.yml` run to complete.
-2. Fetch `origin/main` and inspect the writeback commit.
-3. Verify `apps/<app>/server.json` and all three plugin manifest copies contain each released app
-   version.
-4. Start another batch from the writeback commit only when a later tag actually consumes those
-   committed manifests or a new dependency pin. Independent tags can share the original release
-   commit.
+2. For a batch with Network, Protect, or Access tags, fetch `origin/main`, inspect the consolidated
+   writeback commit, and verify `apps/<app>/server.json` plus all three plugin manifest copies contain
+   each released app version.
+3. For a library-only trigger batch containing Core, Shared, or Relay, require the sync run to
+   succeed but allow `No version changes to commit`. Inspect a commit only if the run found an
+   outstanding app-version change.
+4. Start another batch from a writeback commit only when one was created and a later tag actually
+   consumes those committed manifests or a new dependency pin. Independent tags can share the
+   original release commit.
 
 For example, direct security floors added independently to Shared, Network, Protect, Access, API,
 and Relay form one batch when no cross-package floor changes. A new Core API plus downstream code
@@ -354,9 +357,10 @@ After pushing a release batch:
 1. **Check CI concurrently:** Capture every release workflow run and confirm all complete
    successfully. Do not serialize independent workflow watches.
 2. **Verify the final manifest sync when triggered:** If the batch contains a tag namespace listed
-   in `bump-plugin-versions.yml`, confirm its last run succeeded and inspect the commit on `main` for
-   every app tag in the batch. API-only and Worker-only batches skip this step because they do not
-   trigger the workflow.
+   in `bump-plugin-versions.yml`, confirm its last run succeeded. For Network, Protect, or Access
+   tags, inspect the consolidated commit on `main`; for a Core-, Shared-, or Relay-only trigger,
+   accept a successful `No version changes to commit` result. API-only and Worker-only batches skip
+   this step because they do not trigger the workflow.
 3. **Verify local tag versions:** `cd apps/<app> && hatch version` should print exactly the tagged
    version.
 4. **Confirm every registry artifact:** Query PyPI or npm for each exact version in the batch.
