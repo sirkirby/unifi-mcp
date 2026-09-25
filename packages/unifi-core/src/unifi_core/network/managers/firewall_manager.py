@@ -1,6 +1,5 @@
 import asyncio
 import copy
-import json
 import logging
 from collections import Counter
 from typing import Any, Dict, List, Optional
@@ -15,6 +14,12 @@ from unifi_core.auth import UniFiAuth
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.managers.network_manager import NetworkManager
+from unifi_core.network.managers.traffic_route_manager import (
+    CACHE_PREFIX_LEGACY_TRAFFIC_ROUTES,
+    TrafficRouteManager,
+    invalidate_traffic_route_caches,
+)
 from unifi_core.network.models.firewall import (
     RETIRABLE_SELECTORS,
     _normalize_endpoint_macs,
@@ -30,7 +35,6 @@ logger = logging.getLogger("unifi-network-mcp")
 CACHE_PREFIX_FIREWALL_POLICIES = "firewall_policies"
 CACHE_PREFIX_FIREWALL_POLICY_ORDERING = "firewall_policy_ordering"
 CACHE_PREFIX_INTEGRATION_FIREWALL_ZONES = "integration_firewall_zones"
-CACHE_PREFIX_TRAFFIC_ROUTES = "traffic_routes"
 CACHE_PREFIX_PORT_FORWARDS = "port_forwards"
 CACHE_PREFIX_FIREWALL_ZONES = "firewall_zones"
 CACHE_PREFIX_FIREWALL_GROUPS = "firewall_groups"
@@ -43,14 +47,29 @@ INTEGRATION_API_PAGE_SIZE = 200
 class FirewallManager:
     """Manages Firewall Policies, Traffic Routes, and Port Forwards on the Unifi Controller."""
 
-    def __init__(self, connection_manager: ConnectionManager, auth: UniFiAuth | None = None):
+    def __init__(
+        self,
+        connection_manager: ConnectionManager,
+        auth: UniFiAuth | None = None,
+        traffic_route_manager: TrafficRouteManager | None = None,
+    ):
         """Initialize the Firewall Manager.
 
         Args:
             connection_manager: The shared ConnectionManager instance.
+            auth: Optional integration API authentication.
+            traffic_route_manager: Shared guarded route manager for legacy route methods.
         """
         self._connection = connection_manager
         self._auth = auth
+        self._traffic_route_manager = (
+            traffic_route_manager
+            if traffic_route_manager is not None
+            else TrafficRouteManager(
+                connection_manager,
+                network_manager=NetworkManager(connection_manager),
+            )
+        )
 
     async def get_firewall_policy_by_id(self, policy_id: str) -> FirewallPolicy:
         """Return one V2 firewall policy from the complete policy inventory."""
@@ -554,10 +573,13 @@ class FirewallManager:
         Returns:
             List of TrafficRoute objects.
         """
-        cache_key = f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}"
+        cache_key = f"{CACHE_PREFIX_LEGACY_TRAFFIC_ROUTES}_{self._connection.site}"
         cached_data: Optional[List[TrafficRoute]] = self._connection.get_cached(cache_key)
         if cached_data is not None:
             return cached_data
+        get_cache_generation = getattr(self._connection, "_get_cache_generation", None)
+        update_cache_if_current = getattr(self._connection, "_update_cache_if_current", None)
+        cache_generation = get_cache_generation(cache_key) if callable(get_cache_generation) else None
 
         if not await self._connection.ensure_connected():
             raise ConnectionError("Not connected to controller")
@@ -578,180 +600,40 @@ class FirewallManager:
 
             result = routes
 
-            self._connection._update_cache(cache_key, result)
+            if cache_generation is not None and callable(update_cache_if_current):
+                update_cache_if_current(cache_key, result, cache_generation)
+            else:
+                self._connection._update_cache(cache_key, result)
             return result
         except Exception as e:
-            logger.error("Error getting traffic routes: %s", e)
+            logger.error("Traffic route list failed (%s)", type(e).__name__)
             raise
 
     async def update_traffic_route(self, route_id: str, updates: Dict[str, Any]) -> bool:
-        """Update specific fields of a traffic route using the V2 API.
-
-        Args:
-            route_id: ID of the route to update.
-            updates: Dictionary of fields and new values to apply.
-
-        Returns:
-            bool: True if successful, False otherwise.
-        """
-        if not await self._connection.ensure_connected():
-            raise ConnectionError("Not connected to controller")
+        """Update through the guarded TrafficRouteManager compatibility path."""
         if not updates:
-            logger.warning("No updates provided for traffic route %s.", route_id)
-            return True  # No action needed, considered success
-
-        try:
-            # Fetch existing route data using the V2-based method
-            routes = await self.get_traffic_routes()
-            route_to_update_obj: Optional[TrafficRoute] = next(
-                (r for r in routes if isinstance(r.raw, dict) and r.raw.get("_id") == route_id),
-                None,
-            )
-
-            if route_to_update_obj is None:
-                raise UniFiNotFoundError("traffic_route", route_id)
-
-            if not hasattr(route_to_update_obj, "raw") or not isinstance(route_to_update_obj.raw, dict):
-                logger.error("Could not get raw data for traffic route %s. Update aborted.", route_id)
-                return False
-
-            # Deep copy to avoid mutating the cached TrafficRoute.raw
-            updated_data = copy.deepcopy(route_to_update_obj.raw)
-            for key, value in updates.items():
-                updated_data[key] = value
-
-            api_path = f"/trafficroutes/{route_id}"
-
-            logger.info(
-                "Updating traffic route %s via V2 endpoint (%s) with data: %s", route_id, api_path, updated_data
-            )
-
-            # Use ApiRequestV2 for the update
-            api_request = ApiRequestV2(
-                method="put",
-                path=api_path,
-                data=updated_data,  # V2 typically uses the 'data' field
-            )
-
-            # The request method should handle potential V2 response structures
-            await self._connection.request(api_request)
-
-            # Invalidate cache
-            cache_key = f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}"
-            self._connection._invalidate_cache(cache_key)
-
-            logger.info("Successfully submitted V2 update for traffic route %s.", route_id)
+            logger.warning("No traffic route updates supplied")
             return True
-        except Exception as e:
-            logger.error("Error updating traffic route %s via V2: %s", route_id, e, exc_info=True)
-            raise
+        return await self._traffic_route_manager.update_traffic_route(route_id, **updates)
 
     async def toggle_traffic_route(self, route_id: str) -> bool:
-        """Toggle a traffic route on/off.
+        """Toggle through the guarded TrafficRouteManager compatibility path."""
+        return await self._traffic_route_manager.toggle_traffic_route(route_id)
 
-        Args:
-            route_id: ID of the route to toggle.
-
-        Returns:
-            bool: True if successful, False otherwise.
-        """
+    async def create_traffic_route(self, route_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create through the guarded manager while preserving the legacy envelope."""
         try:
-            routes = await self.get_traffic_routes()
-            route: Optional[TrafficRoute] = next(
-                (r for r in routes if isinstance(r.raw, dict) and r.raw.get("_id") == route_id),
-                None,
-            )
-
-            if route is None:
-                raise UniFiNotFoundError("traffic_route", route_id)
-
-            if not hasattr(route, "raw") or not isinstance(route.raw, dict):
-                logger.error("Could not get raw data for traffic route %s. Toggle aborted.", route_id)
-                return False
-
-            new_state = not route.enabled
-            logger.info("Toggling traffic route %s to %s", route_id, "enabled" if new_state else "disabled")
-
-            # Use the update method for consistency
-            update_payload = {"enabled": new_state}
-            return await self.update_traffic_route(route_id, update_payload)
-
-        except Exception as e:
-            logger.error("Error toggling traffic route %s: %s", route_id, e, exc_info=True)
-            raise
-
-    async def create_traffic_route(self, route_data: Dict[str, Any]) -> Optional[Dict]:
-        """Create a new traffic route. Returns the created route data dict or None.
-
-        Args:
-            route_data: Dictionary containing the route configuration.
-                      Expected keys depend on route type (e.g., name, interface,
-                      domain_names or ip_addresses or network_ids, enabled, description).
-
-        Returns:
-            The created route data dict, or None if creation failed.
-        """
-        if not route_data.get("name") or not route_data.get("interface"):
-            logger.error("Missing required keys for creating traffic route (name, interface)")
-            return None
-
-        try:
-            logger.info("Attempting to create traffic route '%s'", route_data["name"])
-            api_path = "/trafficroutes"  # V2 endpoint for creation
-            # Log the exact data being sent for easier debugging
-            logger.info(
-                "Attempting to create traffic route via V2 endpoint (%s) with payload: %s",
-                api_path,
-                json.dumps(route_data, indent=2),
-            )
-
-            # Use ApiRequestV2 for the creation
-            api_request = ApiRequestV2(method="post", path=api_path, data=route_data)
-            response = await self._connection.request(api_request)
-
-            # Check response structure for success and ID (adjust based on actual V2 response)
-            # Example V2 success might be a 201 Created with the new object or ID in body/headers
-            if isinstance(response, dict) and response.get("_id"):  # Simple check if response is the new object
-                new_id = response.get("_id")
-                logger.info("Successfully created traffic route via V2. New ID: %s", new_id)
-                self._connection._invalidate_cache(f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}")
-                # Return a clear success dictionary with the ID
-                return {"success": True, "route_id": new_id}
-            elif (
-                isinstance(response, list) and len(response) == 1 and response[0].get("_id")
-            ):  # Sometimes APIs return a list containing the single new item
-                new_id = response[0].get("_id")
-                logger.info("Successfully created traffic route via V2 (list response). New ID: %s", new_id)
-                self._connection._invalidate_cache(f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}")
-                # Return a clear success dictionary with the ID
-                return {"success": True, "route_id": new_id}
-            else:
-                # Handle unexpected non-error response
-                error_detail = f"Unexpected success response format: {str(response)}"
-                logger.error("Failed to create traffic route via V2. %s", error_detail)
-                return {"success": False, "error": error_detail}
-
-        except Exception as e:
-            # Log the exception details
-            logger.error("Exception during V2 traffic route creation: %s", e, exc_info=True)
-
-            # Extract specific API error message if available
-            api_error_message = str(e)
-            if hasattr(e, "args") and e.args:
-                try:
-                    # Attempt to parse nested error structure seen in logs
-                    error_details = e.args[0]
-                    if isinstance(error_details, dict) and "message" in error_details:
-                        api_error_message = error_details["message"]
-                    elif isinstance(error_details, str):  # Fallback if it's just a string
-                        api_error_message = error_details
-                except Exception as parse_exc:
-                    logger.warning(
-                        "Could not parse specific API error from exception args: %s. Parse error: %s", e.args, parse_exc
-                    )
-
-            # Return a clear failure dictionary with the extracted error message
-            return {"success": False, "error": f"API Error: {api_error_message}"}
+            created = await self._traffic_route_manager.create_traffic_route(route_data)
+            route_id = created.get("_id") if isinstance(created, dict) else None
+            if not isinstance(route_id, str) or not route_id.strip():
+                raise ValueError("Controller returned an invalid traffic route create response")
+            return {"success": True, "route_id": route_id}
+        except Exception as exc:
+            logger.error("Traffic route create failed (%s)", type(exc).__name__)
+            return {
+                "success": False,
+                "error": "Failed to create traffic route; it may have been created. List routes before retrying.",
+            }
 
     async def delete_traffic_route(self, route_id: str) -> bool:
         """Delete a traffic route by ID.
@@ -767,15 +649,16 @@ class FirewallManager:
         try:
             # Use V2 endpoint for deletion
             api_request = ApiRequestV2(method="delete", path=f"/trafficroutes/{route_id}")
-            await self._connection.request(api_request)
+            # A DELETE may commit before its response is lost; never retain a stale route cache.
+            try:
+                await self._connection.request(api_request)
+            finally:
+                invalidate_traffic_route_caches(self._connection)
 
-            cache_key = f"{CACHE_PREFIX_TRAFFIC_ROUTES}_{self._connection.site}"
-            self._connection._invalidate_cache(cache_key)
-            logger.info("Successfully deleted traffic route %s", route_id)
+            logger.info("Traffic route deleted")
             return True
         except Exception as e:
-            # Handle specific "not found" errors if possible?
-            logger.error("Error deleting traffic route %s: %s", route_id, e, exc_info=True)
+            logger.error("Traffic route delete failed (%s)", type(e).__name__)
             raise
 
     async def get_port_forwards(self) -> List[PortForward]:
