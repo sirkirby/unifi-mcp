@@ -18,6 +18,7 @@ from unifi_core.network.managers.network_manager import NetworkManager
 from unifi_core.network.managers.traffic_route_manager import (
     CACHE_PREFIX_LEGACY_TRAFFIC_ROUTES,
     TrafficRouteManager,
+    TrafficRoutePreflightError,
     invalidate_traffic_route_caches,
 )
 from unifi_core.network.models.firewall import (
@@ -628,6 +629,8 @@ class FirewallManager:
             if not isinstance(route_id, str) or not route_id.strip():
                 raise ValueError("Controller returned an invalid traffic route create response")
             return {"success": True, "route_id": route_id}
+        except TrafficRoutePreflightError as exc:
+            return {"success": False, "error": f"Failed to create traffic route: {exc}"}
         except Exception as exc:
             logger.error("Traffic route create failed (%s)", type(exc).__name__)
             return {

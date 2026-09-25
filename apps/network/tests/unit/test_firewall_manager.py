@@ -252,6 +252,23 @@ class TestLegacyTrafficRouteSafety:
         }
 
     @pytest.mark.asyncio
+    async def test_create_preflight_rejection_does_not_claim_an_uncertain_write(
+        self, firewall_manager, mock_connection
+    ):
+        result = await firewall_manager.create_traffic_route(
+            {
+                "matching_target": "INTERNET",
+                "network_id": "wan-target",
+                "target_devices": [{"type": "ALL_CLIENTS"}],
+            }
+        )
+
+        assert result["success"] is False
+        assert "exactly one explicit CLIENT" in result["error"]
+        assert "may have been created" not in result["error"]
+        mock_connection.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_update_invalidates_both_route_cache_representations(self, firewall_manager, mock_connection):
         cache = _seed_both_traffic_route_caches(mock_connection)
         route = {"_id": "route-update", "matching_target": "DOMAIN", "enabled": True}

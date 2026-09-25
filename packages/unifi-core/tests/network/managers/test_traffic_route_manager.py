@@ -3,6 +3,9 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from unifi_core.auth import UniFiAuth
+from unifi_core.exceptions import UniFiAuthError
+from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager
 
 VALID_TARGET = [{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:ff"}]
@@ -34,6 +37,23 @@ def _seed_both_traffic_route_caches(connection: MagicMock) -> dict[str, object]:
 
     connection._invalidate_cache.side_effect = invalidate
     return cache
+
+
+@pytest.mark.asyncio
+async def test_internet_wan_validation_requires_session_before_public_inventory_lookup() -> None:
+    connection = ConnectionManager("controller.invalid", "", "", auth=UniFiAuth(api_key="test-key"))
+    connection._initialized = True
+    connection._key_mode = True
+    network_manager = MagicMock()
+    network_manager.get_network_details = AsyncMock(
+        return_value={"source_api": "integration", "integration_id": "public-uuid", "_id": None}
+    )
+    manager = TrafficRouteManager(connection, network_manager=network_manager)
+
+    with pytest.raises(UniFiAuthError, match="Network session authentication"):
+        await manager.validate_internet_route_target(VALID_TARGET, "legacy-wan-id")
+
+    network_manager.get_network_details.assert_not_awaited()
 
 
 @pytest.mark.asyncio

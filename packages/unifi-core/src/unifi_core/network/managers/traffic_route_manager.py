@@ -10,7 +10,8 @@ from typing import Any, Dict, List, Optional
 
 from aiounifi.models.api import ApiRequestV2
 
-from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.auth import AuthenticationStatus
+from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.network_manager import NetworkManager
 
@@ -36,6 +37,10 @@ def invalidate_traffic_route_caches(connection: ConnectionManager) -> None:
     """Clear every cached representation of traffic routes for the active site."""
     for cache_prefix in (CACHE_PREFIX_TRAFFIC_ROUTES, CACHE_PREFIX_LEGACY_TRAFFIC_ROUTES):
         connection._invalidate_cache(f"{cache_prefix}_{connection.site}")
+
+
+class TrafficRoutePreflightError(ValueError):
+    """A create was rejected before any controller POST was attempted."""
 
 
 class TrafficRouteManager:
@@ -76,6 +81,14 @@ class TrafficRouteManager:
 
         if not isinstance(network_id, str) or not network_id:
             raise ValueError("INTERNET Traffic Routes require a target WAN network")
+
+        auth_status = getattr(self._connection, "authentication_status", None)
+        if isinstance(auth_status, AuthenticationStatus) and not auth_status.session_available:
+            if not await self._connection.ensure_session_connected():
+                raise UniFiAuthError(
+                    "INTERNET Traffic Routes require Network session authentication. "
+                    "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD."
+                )
 
         target_network = await self._network_manager.get_network_details(network_id, force_refresh=True)
         if not isinstance(target_network, dict) or str(target_network.get("purpose", "")).lower() != "wan":
@@ -168,7 +181,14 @@ class TrafficRouteManager:
 
     async def create_traffic_route(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Create a traffic route using POST /trafficroutes (V2 API)."""
-        await self._validate_internet_route_payload(payload)
+        try:
+            await self._validate_internet_route_payload(payload)
+        except UniFiAuthError as exc:
+            raise TrafficRoutePreflightError(str(exc)) from None
+        except UniFiNotFoundError:
+            raise TrafficRoutePreflightError("Target network was not found.") from None
+        except ValueError as exc:
+            raise TrafficRoutePreflightError(str(exc)) from None
         api_request = ApiRequestV2(method="post", path="/trafficroutes", data=payload)
         # A POST may commit before its response is lost. Clear both cache
         # representations after every request attempt, before validating a returned body.
