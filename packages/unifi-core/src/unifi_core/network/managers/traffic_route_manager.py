@@ -189,6 +189,11 @@ class TrafficRouteManager:
             raise TrafficRoutePreflightError("Target network was not found.") from None
         except ValueError as exc:
             raise TrafficRoutePreflightError(str(exc)) from None
+        except Exception:
+            raise TrafficRoutePreflightError(
+                "Could not verify the target WAN network before creating the route. "
+                "Check controller connectivity and session authentication."
+            ) from None
         api_request = ApiRequestV2(method="post", path="/trafficroutes", data=payload)
         # A POST may commit before its response is lost. Clear both cache
         # representations after every request attempt, before validating a returned body.

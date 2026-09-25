@@ -269,6 +269,26 @@ class TestLegacyTrafficRouteSafety:
         mock_connection.request.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_create_wan_lookup_failure_does_not_claim_an_uncertain_write(self, firewall_manager, mock_connection):
+        firewall_manager._traffic_route_manager._network_manager.get_network_details = AsyncMock(
+            side_effect=RuntimeError("controller response with sensitive text")
+        )
+
+        result = await firewall_manager.create_traffic_route(
+            {
+                "matching_target": "INTERNET",
+                "network_id": "wan-target",
+                "target_devices": [{"type": "CLIENT", "client_mac": "02:11:22:33:44:55"}],
+            }
+        )
+
+        assert result["success"] is False
+        assert "Could not verify the target WAN network" in result["error"]
+        assert "may have been created" not in result["error"]
+        assert "sensitive text" not in result["error"]
+        mock_connection.request.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_update_invalidates_both_route_cache_representations(self, firewall_manager, mock_connection):
         cache = _seed_both_traffic_route_caches(mock_connection)
         route = {"_id": "route-update", "matching_target": "DOMAIN", "enabled": True}
