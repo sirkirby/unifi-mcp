@@ -12,9 +12,7 @@ volume and assumed agent use do not decide whether a reported problem is valid.
 
 ## Start with scope and a pinned inventory
 
-Read the [runbook](../../../docs/community-review-batches.md) when starting a batch
-or resolving evidence, isolation or integration questions. It contains dispatch
-and report templates. Record whether the user authorized triage, review, fixes,
+Record whether the user authorized triage, review, fixes,
 or delivery. Carry that authorization across waves; do not ask again per PR.
 Review authorization alone does not authorize contributor messages or merges.
 
@@ -59,8 +57,7 @@ and adjudicates consequential findings rather than rereading all diffs.
 
 Inspect executable/build/workflow changes before running fork code. Use isolated
 source and dependencies, without host credentials or shared writable state;
-a worktree alone is not a sandbox. For concrete container lessons from the pilot,
-read [pilot lessons](references/pilot-lessons.md). Record actual import origins,
+a worktree alone is not a sandbox. Record actual import origins,
 runtime/dependencies, command, code revision, configuration and exit status.
 
 Share context and baseline observations, not verdicts or passing-test claims across

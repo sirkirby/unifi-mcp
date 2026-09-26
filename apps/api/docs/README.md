@@ -19,8 +19,6 @@ drift-gated by CI — `openapi.json`, `openapi-reference.md`, and
 ## Operations
 
 - [`graphql-versioning.md`](./graphql-versioning.md) — schema versioning policy (Phase 6)
-- [`release-smoke-checklist.md`](./release-smoke-checklist.md) — manual smoke checklist (Phase 8 — added in PR3)
-- [`release-coverage.md`](./release-coverage.md) — release coverage matrix (Phase 8 — added in PR3)
 - [`docker-compose.example.yml`](./docker-compose.example.yml) — deployment patterns (Phase 8 — added in PR4)
 
 ## Deployment

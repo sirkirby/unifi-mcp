@@ -222,10 +222,6 @@ This is the same constraint the MCP servers (`unifi-network-mcp`,
   - **Live exploration:** Swagger UI at `/v1/docs`, GraphiQL at `/v1/graphql`
 - [`docs/README.md`](docs/README.md) — index linking all artifacts plus
   deployment patterns
-- [`docs/release-smoke-checklist.md`](docs/release-smoke-checklist.md) — manual
-  release smoke checks
-- [`docs/release-coverage.md`](docs/release-coverage.md) — coverage matrix
-  (live smoke / fixture e2e / known gaps)
 - [`docs/graphql-versioning.md`](docs/graphql-versioning.md) — schema
   versioning policy
 

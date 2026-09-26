@@ -1,5 +1,13 @@
 # Project Rules
 
+## Documentation scope
+
+Commit user-facing documentation and maintained contributor/agent instructions only.
+Keep internal plans, research notes, review/audit reports, execution records, and
+release checklists in Myco or private storage outside the checkout. These working
+documents MUST NOT be committed to Git. Before committing documentation, check its
+audience and remove references to any working documents moved out of the repository.
+
 ## Non-Goals
 
 This project is **not**:

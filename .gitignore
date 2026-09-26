@@ -99,6 +99,19 @@ docs/plans/
 docs/specs/
 .superpowers/
 
+# Internal working documents belong in private storage, not Git
+docs/internal/
+docs/research/
+docs/reviews/
+docs/audits/
+docs/issue-backlog-plan.md
+docs/community-review-batches.md
+docs/security/code-scanning-*.md
+apps/api/docs/release-coverage.md
+apps/api/docs/release-smoke-checklist.md
+.github/copilot-review-calibration.md
+.agents/skills/community-pr-batch-review/references/pilot-lessons.md
+
 .mcpregistry_*
 
 # Myco managed (machine-specific)

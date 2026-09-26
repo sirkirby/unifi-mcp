@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 GUIDE = Path("docs/agent-install.md")
-RESEARCH = Path("docs/research/2026-09-19-agent-installation-options.md")
 README = Path("README.md")
 SETUP_SKILLS = (
     Path("plugins/unifi-network/skills/unifi-network-setup/SKILL.md"),
@@ -45,14 +44,6 @@ def test_current_manual_clients_are_named_accurately() -> None:
     assert "OpenCode npm plugin is worth a small packaging prototype" in guide
     assert "### Gemini CLI" not in guide
     assert "### Windsurf" not in guide
-
-
-def test_antigravity_paths_match_current_official_documentation() -> None:
-    research = RESEARCH.read_text(encoding="utf-8")
-
-    assert "`~/.gemini/config/mcp_config.json` globally" in research
-    assert "`.agents/mcp_config.json` per workspace" in research
-    assert "~/.gemini/antigravity-cli/mcp_config.json" not in research
 
 
 def test_agent_guardrails_preserve_secrets_and_confirmation_mode() -> None:
