@@ -21,6 +21,7 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
         "unifi_rename_client": {"kind": RenderKind.DETAIL},
         "unifi_force_reconnect_client": {"kind": RenderKind.DETAIL},
         "unifi_set_client_ip_settings": {"kind": RenderKind.DETAIL},
+        "unifi_set_client_fixed_ap": {"kind": RenderKind.DETAIL},
         "unifi_authorize_guest": {"kind": RenderKind.DETAIL},
         "unifi_unauthorize_guest": {"kind": RenderKind.DETAIL},
     },

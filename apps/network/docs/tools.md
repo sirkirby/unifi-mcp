@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 195 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 206 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -38,15 +38,49 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_get_gateway_settings` — Read gateway settings: GeoIP filtering, SYN cookies, ICMP redirects, DNS verification, UPnP/NAT-PMP, MSS clamp, ALG modules, hardware offloading, conntrack timeouts
 - `unifi_update_gateway_settings` — Update gateway settings (confirm-gated; deep-merges a partial update, preserving nested sub-objects and untouched keys)
 
-## Content Filtering (4 tools)
+## Content Filtering (5 tools)
 
 - `unifi_list_content_filters` — List content filtering profiles with category/targeting summary
 - `unifi_get_content_filter_details` — Get full profile config (categories, MACs, networks, safe search)
-- `unifi_update_content_filter` — Update an existing profile (full object replacement)
+- `unifi_create_content_filter` — Create a scoped profile, disabled by default
+- `unifi_update_content_filter` — Update profile fields and schedules while preserving other settings
 - `unifi_delete_content_filter` — Delete a profile (requires delete permission)
 
-> **Note:** The UniFi API does not support creating content filtering profiles (POST returns 405).
-> Profiles must be created in the UniFi UI first, then managed via these tools.
+Profiles can be created through these tools. New profiles are disabled by default and require a client or network scope.
+
+## NAT Rules (6 tools)
+
+- `unifi_list_nat_rules` — List V2 NAT rules with explicit nulls for unknown fields
+- `unifi_get_nat_rule` — Get one V2 NAT rule by its scoped ID
+- `unifi_create_nat_rule` — Create an IPv4 rule, disabled by default, and verify persistence
+- `unifi_update_nat_rule` — Merge partial changes into a manual rule and verify persistence
+- `unifi_toggle_nat_rule` — Set a manual rule's enabled state explicitly
+- `unifi_delete_nat_rule` — Delete a manual rule and verify its absence
+
+These tools require Network session credentials. NAT rule IDs cannot be used with port-forward or Integration API tools. Mutations require confirmation and support verified IPv4 DNAT, SNAT, and MASQUERADE fields; see the [NAT write guidance](../README.md#v2-nat-rules). A successful readback confirms stored configuration, not traffic enforcement.
+
+## mDNS Settings (2 tools)
+
+- `unifi_get_mdns_settings` — Read site-wide mDNS service settings and network scope
+- `unifi_update_mdns_settings` — Update service mode and service lists, then verify persistence
+
+The update preserves network scope. Each supplied service list replaces the entire list; changes require confirmation and may affect service discovery. An uncertain write returns `mutation_applied: null`; read settings before retrying.
+
+Mode `all` requires both service lists to be empty. Mode `custom` requires at least one predefined or custom service; provide the mode and lists together when switching between these modes.
+
+## Threat Management Settings (1 tool)
+
+- `unifi_get_threat_management_settings` — Read site-wide threat management (IDS/IPS) and traffic identification (DPI) settings
+
+Returns current intrusion detection/prevention configuration and traffic identification flags:
+- `ips_mode`: raw controller mode code (`disabled`, `ids`, `ips`, `ipsInline`, or unknown raw string)
+- `enabled`: normalized boolean (`true` for active modes `ids`/`ips`/`ipsInline`, `false` for `disabled`, `null` if mode is unknown or missing)
+- `enabled_categories`: list of raw threat category codes (`null` when absent from controller)
+- `enabled_networks`: list of protected network IDs (`null` when absent from controller)
+- `traffic_identification_enabled`: DPI traffic identification flag (strict boolean, `null` if missing or malformed)
+- `device_fingerprinting_enabled`: device fingerprinting flag (strict boolean, `null` if missing or malformed)
+
+This tool is read-only. Controller secrets (such as `utm_token`) and unverified fields are excluded.
 
 ## OON Policies (6 tools)
 
@@ -178,7 +212,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_locate_device` — Toggle LED blinking to locate any device
 - `unifi_force_provision_device` — Force re-provision device configuration
 
-## Clients (11 tools)
+## Clients (12 tools)
 
 - `unifi_list_clients` — List connected clients
 - `unifi_get_client_details` — Get full client object by MAC
@@ -191,6 +225,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 - `unifi_authorize_guest` — Authorize a guest client
 - `unifi_unauthorize_guest` — Revoke guest authorization
 - `unifi_set_client_ip_settings` — Set fixed IP / local DNS record
+- `unifi_set_client_fixed_ap` — Pin a wireless client to an adopted AP or disable the pin with persisted-state verification
 
 ## Events & Alarms (7 tools)
 
@@ -212,7 +247,7 @@ Gateway-wide security / NAT / connection-tracking settings (the controller's `us
 
 ## Hotspot / Vouchers (4 tools)
 
-- `unifi_list_vouchers` — List all hotspot vouchers
+- `unifi_list_vouchers` — List vouchers with optional pagination, code/note search, and field projection
 - `unifi_get_voucher_details` — Get voucher details by ID
 - `unifi_create_voucher` — Create guest network voucher(s)
 - `unifi_revoke_voucher` — Revoke a voucher (requires delete permission)

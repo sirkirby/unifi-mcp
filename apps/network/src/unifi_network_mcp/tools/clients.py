@@ -11,12 +11,19 @@ from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
 
 from unifi_core.confirmation import toggle_preview, update_preview
+from unifi_core.network.managers.client_manager import (
+    FixedApAuthError,
+    FixedApNotFoundError,
+    FixedApOperationError,
+    FixedApValidationError,
+)
 from unifi_core.network.models._actions import (
     AuthorizeGuestInput,
     BlockClientInput,
     ForceReconnectClientInput,
     ForgetClientInput,
     RenameClientInput,
+    SetClientFixedApInput,
     SetClientIpSettingsInput,
     UnauthorizeGuestInput,
     UnblockClientInput,
@@ -74,10 +81,9 @@ async def lookup_by_ip(
         "object, use unifi_get_client_details. For IP-to-client lookup, use "
         "unifi_lookup_by_ip. Pass an entry's mac to the client tools as "
         "mac_address (unifi_get_client_details, unifi_block_client, "
-        "unifi_rename_client, ...), as client_mac (unifi_get_client_sessions, "
-        "unifi_get_client_dpi_traffic, unifi_get_client_wifi_details) or as mac "
-        "(unifi_recent_events); the parameter name differs per tool and each tool "
-        "accepts only its own."
+        "unifi_rename_client, unifi_get_client_sessions, "
+        "unifi_get_client_dpi_traffic, unifi_get_client_wifi_details, "
+        "unifi_recent_events)."
         " API-key inventory uses legacy reads when supported, otherwise limited public inventory. "
         "Public results include source_api=integration and integration_id; missing legacy fields are unknown. "
         "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
@@ -830,3 +836,72 @@ async def set_client_ip_settings(
     except Exception as e:
         logger.error("Error setting IP settings for [redacted]: %s", type(e).__name__)
         return {"success": False, "error": f"Failed to set IP settings for client {mac_address}: {e}"}
+
+
+@server.tool(
+    name="unifi_set_client_fixed_ap",
+    auth="local_only",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+    description=(
+        "Enable or disable a wireless client's fixed access-point association. "
+        "Enabling requires the MAC address of an adopted access point. "
+        "Disabling preserves the controller's inactive AP MAC. "
+        "This legacy write requires Network session authentication."
+    ),
+    permission_category="clients",
+    permission_action="update",
+)
+async def set_client_fixed_ap(
+    mac_address: Annotated[str, Field(description="MAC address of the wireless client")],
+    fixed_ap_enabled: Annotated[bool, Field(description="Whether to enable fixed access-point association")],
+    fixed_ap_mac: Annotated[
+        Optional[str],
+        Field(description="MAC address of the adopted access point; required when enabling, ignored when disabling"),
+    ] = None,
+    confirm: Annotated[bool, Field(description="When true, apply the change; otherwise return a preview")] = False,
+) -> Dict[str, Any]:
+    """Set a wireless client's fixed access-point association."""
+    try:
+        validated = SetClientFixedApInput(
+            mac_address=mac_address,
+            fixed_ap_enabled=fixed_ap_enabled,
+            fixed_ap_mac=fixed_ap_mac,
+        )
+    except ValidationError as exc:
+        return {"success": False, "error": f"Invalid fixed AP settings: {exc.errors()[0]['msg']}"}
+
+    mac_address = validated.mac_address
+    fixed_ap_enabled = validated.fixed_ap_enabled
+    fixed_ap_mac = validated.fixed_ap_mac
+    try:
+        client_obj = await client_manager.get_client_details(mac_address)
+        client = client_obj.raw if hasattr(client_obj, "raw") else client_obj
+        if not isinstance(client, dict):
+            return {"success": False, "error": "Failed to retrieve client fixed AP settings"}
+        if not confirm:
+            updates = {"fixed_ap_enabled": fixed_ap_enabled}
+            if fixed_ap_enabled:
+                updates["fixed_ap_mac"] = fixed_ap_mac
+            return update_preview(
+                resource_type="client",
+                resource_id=mac_address,
+                resource_name=client.get("name") or client.get("hostname"),
+                current_state={
+                    "fixed_ap_enabled": client.get("fixed_ap_enabled", False),
+                    "fixed_ap_mac": client.get("fixed_ap_mac"),
+                },
+                updates=updates,
+            )
+        persisted = await client_manager.set_client_fixed_ap(
+            client_mac=mac_address,
+            fixed_ap_enabled=fixed_ap_enabled,
+            fixed_ap_mac=fixed_ap_mac,
+        )
+        if persisted:
+            return {"success": True, "message": "Client fixed AP settings updated.", "settings": persisted}
+        return {"success": False, "error": "Failed to update client fixed AP settings"}
+    except (FixedApAuthError, FixedApNotFoundError, FixedApOperationError, FixedApValidationError) as exc:
+        return {"success": False, "error": str(exc)}
+    except Exception as exc:
+        logger.error("Failed to set client fixed AP: %s", type(exc).__name__)
+        return {"success": False, "error": "Failed to set client fixed AP settings"}

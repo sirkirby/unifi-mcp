@@ -132,6 +132,10 @@ from unifi_api.graphql.types.network.firewall import (
 from unifi_api.graphql.types.network.gateway_settings import (
     GatewaySettings as NetworkGatewaySettingsType,
 )
+from unifi_api.graphql.types.network.mdns import MdnsSettings as NetworkMdnsSettingsType
+from unifi_api.graphql.types.network.nat import (
+    NatRule as NetworkNatRuleType,
+)
 from unifi_api.graphql.types.network.network import (
     Network as NetworkNetworkType,
 )
@@ -209,6 +213,9 @@ from unifi_api.graphql.types.network.system import (
 )
 from unifi_api.graphql.types.network.system import (
     TopClient as NetworkTopClientType,
+)
+from unifi_api.graphql.types.network.threat_management import (
+    ThreatManagementSettings as NetworkThreatManagementSettingsType,
 )
 from unifi_api.graphql.types.network.traffic_flow import (
     TrafficFlow as NetworkTrafficFlowType,
@@ -502,6 +509,10 @@ def build_type_registry() -> TypeRegistry:
     )
     reg.register_tool_type("unifi_get_port_forward", NetworkPortForwardType, "detail")
 
+    # network/nat (V2 controller ID family)
+    reg.register_tool_type("unifi_list_nat_rules", NetworkNatRuleType, "list")
+    reg.register_tool_type("unifi_get_nat_rule", NetworkNatRuleType, "detail")
+
     # network/vouchers (tool-keyed only)
     reg.register_tool_type("unifi_list_vouchers", NetworkVoucherType, "list")
     reg.register_tool_type("unifi_get_voucher_details", NetworkVoucherType, "detail")
@@ -548,6 +559,12 @@ def build_type_registry() -> TypeRegistry:
     )
     reg.register_tool_type("unifi_get_site_settings", NetworkSiteSettingsType, "detail")
     reg.register_tool_type("unifi_get_snmp_settings", NetworkSnmpSettingsType, "detail")
+    reg.register_tool_type("unifi_get_mdns_settings", NetworkMdnsSettingsType, "detail")
+    reg.register_tool_type(
+        "unifi_get_threat_management_settings",
+        NetworkThreatManagementSettingsType,
+        "detail",
+    )
     reg.register_tool_type("unifi_get_mgmt_settings", NetworkMgmtSettingsType, "detail")
     reg.register_tool_type("unifi_get_event_types", NetworkEventTypesType, "detail")
     reg.register_tool_type(

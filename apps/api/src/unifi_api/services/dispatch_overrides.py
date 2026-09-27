@@ -55,6 +55,7 @@ from unifi_core.network.read_views import (
     shape_network_details,
     shape_network_list,
     shape_rogue_ap_list,
+    shape_voucher_list,
     shape_wlan_list,
 )
 
@@ -62,6 +63,10 @@ from unifi_api.services.action_results import ShapedReadResult
 
 # Format: tool_name -> (manager_attr, method_name)
 DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
+    "unifi_create_nat_rule": ("nat_manager", "create_nat_rule_verified"),
+    "unifi_update_nat_rule": ("nat_manager", "update_nat_rule_verified"),
+    "unifi_delete_nat_rule": ("nat_manager", "delete_nat_rule_verified"),
+    "unifi_toggle_nat_rule": ("nat_manager", "toggle_nat_rule_verified"),
     # =========================================================================
     # Network — lookup-then-act tools whose preview needs current state
     # =========================================================================
@@ -75,6 +80,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_authorize_guest": ("client_manager", "authorize_guest"),
     "unifi_unauthorize_guest": ("client_manager", "unauthorize_guest"),
     "unifi_set_client_ip_settings": ("client_manager", "set_client_ip_settings"),
+    "unifi_set_client_fixed_ap": ("client_manager", "set_client_fixed_ap"),
     "unifi_forget_client": ("client_manager", "forget_client"),
     # list_clients branches between get_all_clients (offline+history) and
     # get_clients (online only) on the include_offline parameter. Default path
@@ -91,6 +97,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # Gateway/SNMP settings updates pre-fetch current state for previews.
     "unifi_update_gateway_settings": ("gateway_settings_manager", "update_gateway_settings"),
     "unifi_update_snmp_settings": ("system_manager", "update_settings"),
+    "unifi_update_mdns_settings": ("system_manager", "update_mdns_settings"),
     # Auto-backup update pre-fetches get_autobackup_settings for the preview.
     "unifi_update_autobackup_settings": ("system_manager", "update_autobackup_settings"),
     # Firewall: tool layer pre-fetches list to find policy by id.
@@ -109,6 +116,9 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # current-vs-proposed preview, so the AST walker captures the read method
     # first. Pin dispatch to the mutation method.
     "unifi_update_dynamic_dns": ("dynamic_dns_manager", "update_dynamic_dns"),
+    # Content-filter update now reads the current profile for its preview;
+    # the source scanner otherwise binds the action to that first read.
+    "unifi_update_content_filter": ("content_filter_manager", "update_content_filter"),
     # Traffic-route update/toggle pre-fetch current state for the preview. The
     # manager owns the authoritative Internet-route safety guard used by every
     # write surface.
@@ -871,6 +881,16 @@ def _translate_client_ip_settings(args: dict[str, Any]) -> tuple[tuple[Any, ...]
     return (), {"client_mac": client_mac, **public}
 
 
+def _translate_client_fixed_ap(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """Validate the shared fixed-AP action input and rename its client MAC."""
+    from unifi_core.network.models._actions import SetClientFixedApInput
+
+    # None means no AP argument when disabling, not a null controller write.
+    public = SetClientFixedApInput(**args).model_dump()
+    public["client_mac"] = public.pop("mac_address")
+    return (), public
+
+
 def _translate_authorize_guest(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     from unifi_core.network.models._actions import AuthorizeGuestInput
 
@@ -990,9 +1010,15 @@ def _translate_snmp_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[
     return (), {"section": "snmp", "settings_data": settings_data}
 
 
+def _translate_mdns_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.mdns import mdns_to_controller_update
+
+    return (), {"update_data": mdns_to_controller_update(dict(args["update_data"]))}
+
+
 def _translate_switch_stp(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     return (), {
-        "device_mac": args["device_mac"],
+        "device_mac": args["mac_address"],
         "config_data": {
             "stp_priority": str(args.get("stp_priority", 32768)),
             "stp_version": args.get("stp_version", "rstp"),
@@ -1002,7 +1028,7 @@ def _translate_switch_stp(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[s
 
 def _translate_jumbo_frames(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
     return (), {
-        "device_mac": args["device_mac"],
+        "device_mac": args["mac_address"],
         "config_data": {"jumboframe_enabled": args["enabled"]},
     }
 
@@ -1031,6 +1057,10 @@ def _translate_update_port_forward(args: dict[str, Any]) -> tuple[tuple[Any, ...
 
     model = PortForwardUpdateInput(**(args.get("update_data") or {}))
     public = model.model_dump(exclude_none=True)
+    if "src_ip" in model.model_fields_set:
+        public["src_ip"] = model.src_ip
+    if "destination_ip" in model.model_fields_set:
+        public["destination_ip"] = model.destination_ip
     if "protocol" in public:
         public["fwd_protocol"] = public.pop("protocol")
     if "src_ip" in public:
@@ -1071,6 +1101,7 @@ def _port_forward_payload(model: Any) -> dict[str, Any]:
         dst_port=model.dst_port,
         fwd_port=model.fwd_port,
         fwd_ip=model.fwd_ip,
+        destination_ip=model.destination_ip,
         fwd_protocol=model.protocol,
         enabled=model.enabled,
         src=model.src_ip or None,
@@ -1176,7 +1207,11 @@ def _translate_model_update(
 
 
 def _translate_content_filter_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    from unifi_core.network.models.content_filter import to_controller_update
+    from unifi_core.network.models.content_filter import MUTABLE_FIELDS, to_controller_update
+
+    unknown = set(args.get("filter_data") or {}) - MUTABLE_FIELDS - {"categories"}
+    if unknown:
+        raise ValueError(f"Unknown or read-only content filter fields: {sorted(unknown)}")
 
     return _translate_model_update(
         args,
@@ -1186,6 +1221,14 @@ def _translate_content_filter_update(args: dict[str, Any]) -> tuple[tuple[Any, .
         payload_target="update_data",
         converter=to_controller_update,
     )
+
+
+def _translate_content_filter_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.content_filter import to_controller_create, with_create_defaults
+
+    # The manager validates again so direct Core callers obey the same scope rule.
+    to_controller_create(args.get("filter_data") or {})
+    return (), {"filter_data": with_create_defaults(args["filter_data"])}
 
 
 def _translate_client_group_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -1323,7 +1366,7 @@ def _translate_device_led(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[s
     valid_states = ("on", "off", "default")
     if led_state not in valid_states:
         raise ValueError(f"Invalid led_state '{led_state}'. Must be one of: {', '.join(valid_states)}")
-    return (), {"device_mac": args["device_mac"], "led_override": led_state}
+    return (), {"device_mac": args["mac_address"], "led_override": led_state}
 
 
 def _snapshot_direct_result(args: dict[str, Any]) -> tuple[bool, Any]:
@@ -1461,6 +1504,7 @@ def _list_devices_result(result: Any, args: dict[str, Any], manager: Any) -> Sha
         limit=args.get("limit"),
         include_details=args.get("include_details", False),
         summary=args.get("summary", True),
+        fields=args.get("fields"),
     )
     return ShapedReadResult(
         payload,
@@ -1559,6 +1603,40 @@ def _wlans_result(result: Any, args: dict[str, Any], manager: Any) -> ShapedRead
     )
 
 
+def _vouchers_result(result: Any, args: dict[str, Any], manager: Any) -> Any:
+    limit = args.get("limit")
+    offset = args.get("offset") or 0
+    search = args.get("search")
+    fields = args.get("fields")
+
+    shaping_requested = (
+        limit is not None
+        or (isinstance(offset, int) and offset > 0)
+        or bool(search and search.strip())
+        or bool(fields and any(field.strip() for field in fields.split(",")))
+    )
+    if not shaping_requested:
+        return result
+
+    payload = shape_voucher_list(
+        result,
+        site=_manager_site(manager),
+        search=search,
+        limit=limit,
+        offset=offset,
+        fields=fields,
+    )
+    return ShapedReadResult(
+        payload,
+        "vouchers",
+        {
+            "primary_key": "id",
+            "display_columns": ["code", "duration", "status", "quota", "used", "note"],
+            "sort_default": "created_at:desc",
+        },
+    )
+
+
 UNSUPPORTED_ACTION_PARAMETERS: dict[str, frozenset[str]] = {}
 
 DirectResultAdapter = Callable[[dict[str, Any]], tuple[bool, Any]]
@@ -1586,6 +1664,7 @@ DISPATCH_RESULT_ADAPTERS: dict[str, ResultAdapter] = {
     "unifi_list_firewall_policies": _firewall_policies_result,
     "unifi_list_networks": _list_networks_result,
     "unifi_list_rogue_aps": _rogue_aps_result,
+    "unifi_list_vouchers": _vouchers_result,
     "unifi_list_wlans": _wlans_result,
 }
 
@@ -1597,7 +1676,42 @@ def _translate_access_users(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict
     return (), out
 
 
+def _translate_nat_create(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.nat import normalize_nat_verified_write
+
+    return (), {"rule_data": normalize_nat_verified_write(args["rule_data"], create=True)}
+
+
+def _translate_nat_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.nat import normalize_nat_verified_write
+
+    _, ident = _translate_nat_id(args)
+    return (), {
+        "rule_id": ident["rule_id"],
+        "update_data": normalize_nat_verified_write(args["update_data"]),
+    }
+
+
+def _translate_nat_id(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    rule_id = args.get("rule_id")
+    if not isinstance(rule_id, str) or not rule_id.strip():
+        raise ValueError("rule_id must be a nonempty V2 NAT rule ID.")
+    return (), {"rule_id": rule_id}
+
+
+def _translate_nat_toggle(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    _, keyword = _translate_nat_id(args)
+    if type(args.get("enabled")) is not bool:
+        raise ValueError("enabled must be a boolean.")
+    keyword["enabled"] = args["enabled"]
+    return (), keyword
+
+
 DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
+    "unifi_create_nat_rule": _spec(_translate_nat_create, "rule_data"),
+    "unifi_update_nat_rule": _spec(_translate_nat_update, "rule_id", "update_data"),
+    "unifi_delete_nat_rule": _spec(_translate_nat_id, "rule_id"),
+    "unifi_toggle_nat_rule": _spec(_translate_nat_toggle, "rule_id", "enabled"),
     "unifi_create_acl_rule": _spec(_translate_acl_create, "rule_data"),
     "unifi_update_acl_rule": _spec(_translate_acl_update, "rule_id", "update_data"),
     "unifi_update_gateway_settings": _spec(_translate_gateway_settings_update, "update_data"),
@@ -1658,6 +1772,12 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         "local_dns_record_enabled",
         "local_dns_record",
     ),
+    "unifi_set_client_fixed_ap": _spec(
+        _translate_client_fixed_ap,
+        "client_mac",
+        "fixed_ap_enabled",
+        "fixed_ap_mac",
+    ),
     "unifi_forget_client": _spec(_rename_mac_address_to_client_mac, "client_mac"),
     # Network — list clients: Core selects online or all/historical clients.
     "unifi_list_clients": _spec(_translate_list_clients, "include_offline"),
@@ -1695,6 +1815,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_get_port_forward": _spec(_rename_and_drop(rename={"port_forward_id": "rule_id"}), "rule_id"),
     # Network create/update payload packing.
     "unifi_create_client_group": _spec(_translate_create_client_group, "group_data"),
+    "unifi_create_content_filter": _spec(_translate_content_filter_create, "filter_data"),
     "unifi_create_firewall_group": _spec(
         _translate_create_firewall_group,
         "group_data",
@@ -1751,13 +1872,16 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         _rename_and_drop(rename={"mac_address": "client_mac"}, drop=frozenset({"include", "summary"})),
         "client_mac",
     ),
-    "unifi_get_client_dpi_traffic": _spec(_rename_and_drop(rename={"group_by": "by"}), "client_mac", "by"),
+    "unifi_get_client_dpi_traffic": _spec(
+        _rename_and_drop(rename={"mac_address": "client_mac", "group_by": "by"}), "client_mac", "by"
+    ),
     "unifi_get_client_sessions": _spec(
-        lambda args: _translate_duration(args, default_hours=24),
+        lambda args: _translate_duration(args, default_hours=24, rename={"mac_address": "client_mac"}),
         "client_mac",
         "duration_hours",
         "limit",
     ),
+    "unifi_get_client_wifi_details": _spec(_rename_and_drop(rename={"mac_address": "client_mac"}), "client_mac"),
     "unifi_get_client_stats": _spec(
         lambda args: _translate_duration(args, default_hours=1),
         "client_id",
@@ -1779,6 +1903,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         lambda args: _translate_duration(args, default_hours=24), "duration_hours", "granularity"
     ),
     "unifi_get_ips_events": _spec(lambda args: _translate_duration(args, default_hours=24), "duration_hours", "limit"),
+    "unifi_recent_events": _spec(_rename_and_drop(rename={"mac_address": "mac"}), "event_type", "mac", "limit"),
     "unifi_get_network_details": _spec(_rename_and_drop(drop=frozenset({"include", "summary"})), "network_id"),
     "unifi_get_network_stats": _spec(
         lambda args: _translate_duration(args, default_hours=1), "duration_hours", "granularity"
@@ -1789,7 +1914,9 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_get_speedtest_results": _spec(lambda args: _translate_duration(args, default_hours=24), "duration_hours"),
     "unifi_get_traffic_flows": _spec(_translate_traffic_flows, "query"),
     "unifi_list_devices": _spec(
-        _rename_and_drop(drop=frozenset({"device_type", "status", "search", "limit", "include_details", "summary"}))
+        _rename_and_drop(
+            drop=frozenset({"device_type", "status", "search", "limit", "include_details", "summary", "fields"})
+        )
     ),
     "unifi_list_firewall_policies": _spec(
         _rename_and_drop(drop=frozenset({"search", "action", "enabled_only", "limit", "summary"})),
@@ -1800,6 +1927,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         _rename_and_drop(drop=frozenset({"channel", "limit", "min_signal", "offset", "summary"})),
         "within_hours",
     ),
+    "unifi_list_vouchers": _spec(_rename_and_drop(drop=frozenset({"fields", "limit", "offset", "search"}))),
     "unifi_list_wlans": _spec(_rename_and_drop(drop=frozenset({"enabled_only", "limit", "search"}))),
     # Network mutation payload transforms.
     "unifi_create_network": _spec(_translate_network_create, "network_data"),
@@ -1807,6 +1935,23 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     "unifi_create_wlan": _spec(_translate_wlan_create, "wlan_data"),
     "unifi_update_wlan": _spec(_translate_wlan_update, "wlan_id", "update_data"),
     "unifi_set_device_led": _spec(_translate_device_led, "device_mac", "led_override"),
+    "unifi_locate_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "enabled"),
+    "unifi_force_provision_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_toggle_device": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "disabled"),
+    "unifi_get_switch_ports": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_get_port_stats": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_get_lldp_neighbors": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_get_switch_capabilities": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac"),
+    "unifi_set_switch_port_profile": _spec(
+        _rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_overrides"
+    ),
+    "unifi_power_cycle_port": _spec(_rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_idx"),
+    "unifi_configure_port_mirror": _spec(
+        _rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_overrides"
+    ),
+    "unifi_configure_port_aggregation": _spec(
+        _rename_and_drop(rename={"mac_address": "device_mac"}), "device_mac", "port_overrides"
+    ),
     "unifi_set_jumbo_frames": _spec(_translate_jumbo_frames, "device_mac", "config_data"),
     "unifi_set_outlet_state": _spec(
         _rename_and_drop(rename={"mac_address": "device_mac"}),
@@ -1816,5 +1961,6 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
         "cycle_enabled",
     ),
     "unifi_update_snmp_settings": _spec(_translate_snmp_update, "section", "settings_data"),
+    "unifi_update_mdns_settings": _spec(_translate_mdns_update, "update_data"),
     "unifi_update_switch_stp": _spec(_translate_switch_stp, "device_mac", "config_data"),
 }

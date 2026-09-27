@@ -183,7 +183,7 @@ async def unifi_recent_events(
             description="Filter by an exact event key (for example 'CLIENT_CONNECTED_WIRELESS_2'). Use unifi_get_event_types for recently observed keys."
         ),
     ] = None,
-    mac: Annotated[
+    mac_address: Annotated[
         Optional[str],
         Field(description="Filter events to a specific client or device by MAC address. Omit to include all."),
     ] = None,
@@ -197,9 +197,9 @@ async def unifi_recent_events(
     """Return recent events from the websocket ring buffer."""
     if limit is not None and limit < 0:
         return {"success": False, "error": "Failed to get recent events: limit must be zero or greater"}
-    logger.info("unifi_recent_events called (type=%s, mac=%s)", event_type, mac)
+    logger.info("unifi_recent_events called (type=%s, mac=%s)", event_type, mac_address)
     mgr = _get_event_manager()
-    events = mgr.get_recent_from_buffer(event_type=event_type, mac=mac, limit=limit)
+    events = mgr.get_recent_from_buffer(event_type=event_type, mac=mac_address, limit=limit)
     shaped = [event_log_from_controller(e).model_dump(exclude_none=True) for e in events]
     return {"success": True, "events": shaped, "count": len(shaped), **_listener_state(mgr)}
 

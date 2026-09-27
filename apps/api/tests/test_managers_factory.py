@@ -178,6 +178,29 @@ def test_firewall_manager_builder_receives_connection_auth() -> None:
     assert manager._auth is auth
 
 
+def test_nat_manager_builder_receives_shared_connection() -> None:
+    cm = _FakeCM()
+    manager = _build_network_managers()["nat_manager"](cm)
+    assert manager._connection is cm
+
+
+@pytest.mark.asyncio
+async def test_nat_manager_factory_reuses_manager_and_connection(tmp_path, monkeypatch) -> None:
+    _patch_network_cm(monkeypatch)
+    engine, sm, cipher, cid = await _seed(tmp_path)
+    factory = ManagerFactory(sm, cipher)
+    try:
+        async with sm() as session:
+            first = await factory.get_domain_manager(session, cid, "network", "nat_manager")
+            second = await factory.get_domain_manager(session, cid, "network", "nat_manager")
+            connection = await factory.get_connection_manager(session, cid, "network")
+        assert first is second
+        assert first._connection is connection
+    finally:
+        await factory.invalidate_controller(cid)
+        await engine.dispose()
+
+
 @pytest.mark.asyncio
 async def test_network_factory_wires_cached_traffic_route_manager_into_firewall_manager(tmp_path, monkeypatch) -> None:
     _patch_network_cm(monkeypatch)

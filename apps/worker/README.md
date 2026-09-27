@@ -176,13 +176,15 @@ Response includes `connected: true/false` indicating whether the relay client We
 
 ## Connecting Cloud Agents
 
-Point any MCP-compatible client at the worker URL:
+Use a client that supports MCP JSON-RPC over HTTP POST and a custom bearer authorization header:
 
 - **Endpoint:** `https://your-worker.workers.dev/mcp`
 - **Auth:** `Authorization: Bearer <agent-token>`
 - **Transport:** HTTP POST (standard MCP JSON-RPC)
 
-Compatible clients include Claude connectors, ChatGPT plugins, n8n MCP nodes, and any platform that supports the MCP protocol over HTTP.
+Configure the bearer header explicitly in your client. MCP support alone does not establish compatibility with this relay's authentication and transport.
+
+ChatGPT cannot connect to this authenticated relay as currently implemented: it requires OAuth for authenticated MCP servers and cannot send a custom API key. The Worker currently uses a static bearer token and does not implement OAuth. See [OpenAI's authentication requirements](https://developers.openai.com/plugins/build/auth) and [the relay OAuth tracking issue](https://github.com/sirkirby/unifi-mcp/issues/256).
 
 ### Multi-Location Writes
 

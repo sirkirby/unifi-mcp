@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   buildToolIndexEntries,
+  buildToolIndexResponse,
   MAX_TOOL_SEARCH_RESULTS,
   rankToolsBySearch,
   TOOL_INDEX_META_TOOL,
@@ -95,7 +96,70 @@ describe("buildToolIndexEntries", () => {
   });
 });
 
+describe("buildToolIndexResponse", () => {
+  const locationTools = new Map([["location-1", fixture.tools]]);
+  const toolToLocations = new Map(fixture.tools.map((tool) => [tool.name, ["location-1"]]));
+  const toolNames = (response: Record<string, unknown>) =>
+    ((response.data as Record<string, unknown>).tools as Array<Record<string, unknown>>).map((tool) => tool.name);
+
+  it("returns exactly the named tool", () => {
+    const response = buildToolIndexResponse(locationTools, toolToLocations, { name: "unifi_update_device_radio" });
+
+    expect(response.success).toBe(true);
+    expect(toolNames(response)).toEqual(["unifi_update_device_radio"]);
+    expect((response.data as Record<string, unknown>).total).toBe(1);
+  });
+
+  it.each(["UNIFI_UPDATE_DEVICE_RADIO", "unifi_update_device", "unifi_update_device_radio ", "no_such_tool", ""])(
+    "returns an empty index for inexact or unknown name %j",
+    (name) => {
+      const response = buildToolIndexResponse(locationTools, toolToLocations, { name });
+
+      expect(response.success).toBe(true);
+      expect(toolNames(response)).toEqual([]);
+      expect((response.data as Record<string, unknown>).total).toBe(0);
+    },
+  );
+
+  it.each([{ category: "devices" }, { search: "radio" }, { category: "" }, { search: "" }])(
+    "rejects name combined with %j",
+    (filter) => {
+      expect(
+        buildToolIndexResponse(locationTools, toolToLocations, { name: "unifi_update_device_radio", ...filter }),
+      ).toEqual({ success: false, error: "Tool index name cannot be combined with category or search." });
+    },
+  );
+
+  it("treats a null name as omitted", () => {
+    const response = buildToolIndexResponse(locationTools, toolToLocations, { name: null, search: "" });
+
+    expect(toolNames(response)).toHaveLength(fixture.tools.length);
+  });
+
+  it("keeps the unnamed index unchanged", () => {
+    expect(toolNames(buildToolIndexResponse(locationTools, toolToLocations, {}))).toEqual(
+      fixture.tools.map((tool) => tool.name),
+    );
+    expect(toolNames(buildToolIndexResponse(locationTools, toolToLocations, { search: "update tx power" }))).toEqual([
+      "unifi_update_device_radio",
+      "unifi_get_device_radio",
+    ]);
+  });
+});
+
 describe("TOOL_INDEX_META_TOOL", () => {
+  it("advertises exact name lookup in its public schema", () => {
+    const properties = TOOL_INDEX_META_TOOL.inputSchema?.properties as Record<
+      string,
+      Record<string, unknown>
+    >;
+
+    expect(properties.name.type).toBe("string");
+    expect(properties.name.description).toContain("Exact, case-sensitive");
+    expect(properties.name.description).toContain("Cannot be combined with category or search");
+    expect(TOOL_INDEX_META_TOOL.inputSchema?.required).toBeUndefined();
+  });
+
   it("describes ranked token search in its public schema", () => {
     const properties = TOOL_INDEX_META_TOOL.inputSchema?.properties as Record<
       string,

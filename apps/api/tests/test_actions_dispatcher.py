@@ -2512,6 +2512,91 @@ async def test_dispatch_translates_set_client_ip_settings_mac_address_to_client_
     )
 
 
+@pytest.mark.asyncio
+async def test_dispatch_translates_set_client_fixed_ap_to_mutation_manager() -> None:
+    """Fixed-AP action uses its mutation manager binding, never the preview lookup."""
+    entry = ToolEntry(
+        name="unifi_set_client_fixed_ap",
+        product="network",
+        category="clients",
+        manager="",
+        method="",
+        permission_action="update",
+        read_only_hint=False,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "mac_address": {"type": "string"},
+                "fixed_ap_enabled": {"type": "boolean"},
+                "fixed_ap_mac": {"type": "string"},
+            },
+            "required": ["mac_address", "fixed_ap_enabled"],
+        },
+    )
+    domain_manager = MagicMock()
+    domain_manager.set_client_fixed_ap = AsyncMock(return_value=True)
+    conn_manager = MagicMock()
+    conn_manager.site = "default"
+    conn_manager.set_site = AsyncMock()
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=domain_manager)
+    factory.get_connection_manager = AsyncMock(return_value=conn_manager)
+
+    await dispatch_action(
+        registry=_registry_with(entry),
+        factory=factory,
+        session=MagicMock(),
+        tool_name=entry.name,
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"mac_address": "aa:bb:cc:dd:ee:ff", "fixed_ap_enabled": True, "fixed_ap_mac": "11:22:33:44:55:66"},
+        confirm=True,
+        dispatch_table={entry.name: DispatchEntry(manager_attr="client_manager", method="set_client_fixed_ap")},
+    )
+
+    domain_manager.set_client_fixed_ap.assert_awaited_once_with(
+        client_mac="aa:bb:cc:dd:ee:ff", fixed_ap_enabled=True, fixed_ap_mac="11:22:33:44:55:66"
+    )
+
+
+@pytest.mark.asyncio
+async def test_fixed_ap_disable_preview_normalizes_empty_access_point() -> None:
+    entry = ToolEntry(
+        name="unifi_set_client_fixed_ap",
+        product="network",
+        category="clients",
+        manager="",
+        method="",
+        permission_action="update",
+        read_only_hint=False,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "mac_address": {"type": "string"},
+                "fixed_ap_enabled": {"type": "boolean"},
+                "fixed_ap_mac": {"type": "string"},
+            },
+            "required": ["mac_address", "fixed_ap_enabled"],
+        },
+    )
+
+    preview = await dispatch_action(
+        registry=_registry_with(entry),
+        factory=MagicMock(),
+        session=MagicMock(),
+        tool_name=entry.name,
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"mac_address": "aa:bb:cc:dd:ee:ff", "fixed_ap_enabled": False, "fixed_ap_mac": ""},
+        confirm=False,
+        dispatch_table={entry.name: DispatchEntry(manager_attr="client_manager", method="set_client_fixed_ap")},
+    )
+
+    assert preview.payload["preview"]["proposed"]["fixed_ap_mac"] is None
+
+
 # ---------------------------------------------------------------------------
 # Network — update_firewall_policy: update_data → updates rename
 # ---------------------------------------------------------------------------
@@ -3247,6 +3332,7 @@ async def test_reviewed_catalog_mutations_preserve_wrapper_semantics(
                 "limit": 1,
                 "include_details": True,
                 "summary": False,
+                "fields": "mac,ports",
             },
             "get_devices",
             [{"mac": "cc", "name": "Office", "type": "usw", "state": 1, "port_table": []}],
@@ -3258,6 +3344,7 @@ async def test_reviewed_catalog_mutations_preserve_wrapper_semantics(
                 "search": "office",
                 "limit": 1,
                 "returned_count": 1,
+                "devices": [{"mac": "cc", "ports": []}],
             },
         ),
         (
@@ -3350,6 +3437,81 @@ async def test_read_action_non_default_parameters_share_core_view_contract(
         assert "essid" in result.render_hint["display_columns"]
         assert "ssid" not in result.render_hint["display_columns"]
     method.assert_awaited_once_with(**expected_manager_kwargs)
+
+
+@pytest.mark.asyncio
+async def test_list_vouchers_action_dispatch_shares_core_view_contract() -> None:
+    base_entry = PRODUCTION_REGISTRY.resolve("unifi_list_vouchers")
+    custom_schema = {
+        "type": "object",
+        "properties": {
+            "limit": {"type": "integer"},
+            "offset": {"type": "integer"},
+            "search": {"type": "string"},
+            "fields": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
+    entry = replace(base_entry, input_schema=custom_schema)
+    registry = _registry_with(entry)
+
+    manager = MagicMock()
+    manager._connection.site = "default"
+    manager.get_vouchers = AsyncMock(
+        return_value=[
+            {"_id": "v1", "code": "ABC-1", "note": "Guest pass", "duration": 120, "create_time": 1000},
+            {"_id": "v2", "code": "DEF-2", "note": "Staff pass", "duration": 240, "create_time": 2000},
+            {"_id": "v3", "code": "GHI-3", "note": "Guest VIP", "duration": 360, "create_time": 3000},
+        ]
+    )
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+
+    # 1. Shaped dispatch returns ShapedReadResult sorted created_at desc
+    args = {"search": "guest", "limit": 1, "offset": 0, "fields": "code,note"}
+    result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_list_vouchers",
+        controller_id="cid",
+        controller_products=[entry.product],
+        site="default",
+        args=args,
+        confirm=False,
+    )
+
+    assert isinstance(result, ShapedReadResult)
+    assert result.data_key == "vouchers"
+    assert result.payload["success"] is True
+    assert result.payload["count"] == 1
+    assert result.payload["total_count"] == 2
+    assert result.payload["limit"] == 1
+    assert result.payload["offset"] == 0
+    assert len(result.payload["vouchers"]) == 1
+    voucher = result.payload["vouchers"][0]
+    assert voucher["code"] == "GHI-3"
+    assert voucher["note"] == "Guest VIP"
+    assert "duration" not in voucher
+    manager.get_vouchers.assert_awaited_once_with()
+
+    # 2. No-arg dispatch returns raw manager result directly (preserving route-level Strawberry type pipeline)
+    manager.get_vouchers.reset_mock()
+    no_arg_result = await dispatch_action(
+        registry=registry,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_list_vouchers",
+        controller_id="cid",
+        controller_products=[entry.product],
+        site="default",
+        args={},
+        confirm=False,
+    )
+    assert not isinstance(no_arg_result, ShapedReadResult)
+    assert isinstance(no_arg_result, list)
+    assert len(no_arg_result) == 3
+    manager.get_vouchers.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio
@@ -3652,7 +3814,7 @@ async def test_semantic_translator_rejects_physical_mutation_before_manager() ->
         ),
         (
             "unifi_set_device_led",
-            {"device_mac": "aa:bb:cc:dd:ee:ff", "led_state": "blink"},
+            {"mac_address": "aa:bb:cc:dd:ee:ff", "led_state": "blink"},
             "Invalid led_state",
         ),
         (
@@ -4140,3 +4302,43 @@ async def test_firewall_group_confirmed_update_reaches_mutation_with_controller_
         group_id="g1",
         group_data={"group_members": ["80", "443"]},
     )
+
+
+@pytest.mark.parametrize("extra", [{}, {"enabled": False}])
+def test_port_forward_action_preserves_explicit_null_source(extra):
+    from unifi_api.services.dispatch_overrides import _translate_update_port_forward
+
+    positional, kwargs = _translate_update_port_forward(
+        {"port_forward_id": "pf-1", "update_data": {"src_ip": None, **extra}}
+    )
+    assert positional == ()
+    assert kwargs == {
+        "rule_id": "pf-1",
+        "updates": {"src": "any", "src_limiting_enabled": False, **extra},
+    }
+
+
+def test_port_forward_action_destination_create_and_clear():
+    from unifi_api.services.dispatch_overrides import (
+        _translate_create_port_forward,
+        _translate_update_port_forward,
+    )
+
+    _, create = _translate_create_port_forward(
+        {
+            "port_forward_data": {
+                "name": "Web",
+                "dst_port": "443",
+                "fwd_port": "8443",
+                "fwd_ip": "192.168.1.10",
+                "destination_ip": "198.51.100.69",
+                "enabled": False,
+            }
+        }
+    )
+    assert create["rule_data"]["destination_ip"] == "198.51.100.69"
+
+    _, update = _translate_update_port_forward({"port_forward_id": "pf-1", "update_data": {"destination_ip": None}})
+    assert update == {"rule_id": "pf-1", "updates": {"destination_ip": "any"}}
+    _, unrelated = _translate_update_port_forward({"port_forward_id": "pf-1", "update_data": {"enabled": False}})
+    assert unrelated["updates"] == {"enabled": False}

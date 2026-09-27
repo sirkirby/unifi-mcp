@@ -748,6 +748,20 @@ Returns the user-defined firewall policy ordering for a source/destination zone 
 **Returns:** `object`
 
 
+## network/mdns
+
+### `GET /v1/sites/{site_id}/mdns-settings` — Get Mdns Settings
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_MdnsSettingsModel_`
+
+
 ## network/mgmt
 
 ### `GET /v1/sites/{site_id}/mgmt-settings` — Get Mgmt Settings
@@ -760,6 +774,40 @@ Returns the user-defined firewall policy ordering for a source/destination zone 
 
 
 **Returns:** `object`
+
+
+## network/nat
+
+### `GET /v1/sites/{site_id}/nat-rules` — List Nat Rules
+
+
+List V2 NAT rules in descending controller ID order. These IDs are scoped to the V2 NAT tool family — do not pass them to port-forward or Integration API tools.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `limit` (query)
+- `cursor` (query)
+- `controller` (query)
+
+
+**Returns:** `Page_NatRuleModel_`
+
+### `GET /v1/sites/{site_id}/nat-rules/{rule_id}` — Get Nat Rule
+
+
+Get a NAT rule by its V2 NAT-family ID; port-forward and Integration API IDs are not portable.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `rule_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_NatRuleModel_`
 
 
 ## network/networks
@@ -1353,6 +1401,20 @@ LIST kind per Phase 4A — manager returns multi-element list of subsystems.
 
 
 **Returns:** `object`
+
+
+## network/threat_management
+
+### `GET /v1/sites/{site_id}/threat-management-settings` — Get Threat Management Settings
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `controller` (query)
+
+
+**Returns:** `Detail_ThreatManagementSettingsModel_`
 
 
 ## network/traffic-flows
@@ -1999,7 +2061,7 @@ List configured alarm profiles, including each profile's state and state_set_at 
 ### `POST /v1/actions/{tool_name}` — Preview or execute a catalog action
 
 
-Read actions execute immediately. Mutations with `confirm=false` validate the request and return a non-mutating preview with `requires_confirmation=true`; no mutation manager is invoked. Send the same request with `confirm=true` to execute it. Capability and argument checks apply to both paths.
+Read actions execute immediately. Mutations with `confirm=false` validate the request and return a non-mutating partial request preview with `requires_confirmation=true`; no mutation manager is invoked. It does not show freshly merged controller state. Send the same request with `confirm=true` to execute it; Manager-level validation runs during execution. Capability and argument checks apply to both paths.
 
 
 **Parameters:**

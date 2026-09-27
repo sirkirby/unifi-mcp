@@ -50,6 +50,21 @@ can include those loaded domain tools. By default the index returns compact name
 and description entries. It can be filtered by `category` or `search`, and can
 include input/output schemas with `include_schemas=true`.
 
+Once you know a tool's name, use `name` to retrieve exactly that entry:
+
+```json
+{"name": "unifi_tool_index", "arguments": {"name": "unifi_list_clients", "include_schemas": true}}
+```
+
+`name` matches the complete, case-sensitive tool name. Unknown names, including
+an empty string, return `tools: []` and `count: 0` in the usual index response.
+Do not combine `name` with `category` or `search`; the index returns an error for
+that combination, even when the other filter is an empty string. Omitting `name`
+preserves the existing category and ranked-search behavior. In `meta_only` mode,
+exact lookup covers the currently registered catalog; it does not load a domain
+module. The same contract applies to Network, Protect, and Access, including
+when their index tools are called through the relay.
+
 Example:
 
 ```json

@@ -270,7 +270,7 @@ async def create_port_forward(
     port_forward_data: Annotated[
         Dict[str, Any],
         Field(
-            description="Port forward configuration dict. Required: name (str), dst_port (external port, e.g. '80' or '10000-10010'), fwd_port (internal port), fwd_ip (internal IP, e.g. '192.168.1.100'). Optional: protocol ('tcp'/'udp'/'tcp_udp', default 'tcp_udp'), enabled (bool, default true), src_ip (source IP/CIDR), log (bool)"
+            description="Port forward configuration dict. Required: name (str), dst_port (external port, e.g. '80' or '10000-10010'), fwd_port (internal port), fwd_ip (internal IP, e.g. '192.168.1.100'). Optional: protocol ('tcp'/'udp'/'tcp_udp', default 'tcp_udp'), enabled (bool, default true), src_ip (source IP/CIDR), destination_ip (WAN destination IPv4 or 'any'), log (bool)"
         ),
     ],
     confirm: Annotated[
@@ -290,6 +290,7 @@ async def create_port_forward(
     - protocol (string): Network protocol - "tcp", "udp", or "tcp_udp" (default: "tcp_udp")
     - enabled (boolean): Whether rule is enabled initially (default: true)
     - src_ip (string): Source IP/CIDR to match (default: any)
+    - destination_ip (string): WAN destination IPv4 address or 'any' (omit for controller default)
     - log (boolean): Whether to log rule matches (default: false)
 
     Example:
@@ -322,6 +323,7 @@ async def create_port_forward(
                 dst_port=validated.dst_port,
                 fwd_port=validated.fwd_port,
                 fwd_ip=validated.fwd_ip,
+                destination_ip=validated.destination_ip,
                 fwd_protocol=validated.protocol,
                 enabled=validated.enabled,
                 src=validated.src_ip or None,
@@ -402,7 +404,7 @@ async def update_port_forward(
     update_data: Annotated[
         Dict[str, Any],
         Field(
-            description="Dictionary of fields to update. Allowed keys: name, dst_port (external port), fwd_port (internal port), fwd_ip (internal IP), protocol ('tcp'/'udp'/'tcp_udp'), enabled (bool), src_ip (source IP/CIDR, empty string to remove), log (bool)"
+            description="Dictionary of fields to update. Allowed keys: name, dst_port (external port), destination_ip (WAN destination IPv4 or 'any'; null/empty sets 'any'), fwd_port (internal port), fwd_ip (internal IP), protocol ('tcp'/'udp'/'tcp_udp'), enabled (bool), src_ip (source IP/CIDR, empty string to remove), log (bool)"
         ),
     ],
     confirm: Annotated[
@@ -422,6 +424,7 @@ async def update_port_forward(
             Allowed fields (all optional):
             - name (string): New name for the rule.
             - dst_port (string): New destination/external port or range.
+            - destination_ip (string): WAN destination IPv4 address or "any" (null or empty sets "any").
             - fwd_port (string): New internal port or range.
             - fwd_ip (string): New internal IP address.
             - protocol (string): New protocol ("tcp", "udp", or "tcp_udp").
@@ -472,6 +475,10 @@ async def update_port_forward(
 
     # Build validated_data dict from the model (exclude unset/None values)
     validated_data = validated_obj.model_dump(exclude_none=True)
+    if "src_ip" in validated_obj.model_fields_set:
+        validated_data["src_ip"] = validated_obj.src_ip or "any"
+    if "destination_ip" in validated_obj.model_fields_set:
+        validated_data["destination_ip"] = validated_obj.destination_ip or "any"
 
     if not validated_data:
         logger.warning("Port forward update data for ID %s is empty after validation.", port_forward_id)

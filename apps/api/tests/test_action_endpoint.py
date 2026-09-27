@@ -1,6 +1,7 @@
 """Action endpoint tests (with mocked dispatcher)."""
 
 import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -13,6 +14,7 @@ from unifi_api.config import ApiConfig, DbConfig, HttpConfig, LoggingConfig, Pol
 from unifi_api.db.crypto import ColumnCipher, derive_key
 from unifi_api.db.models import ApiKey, AuditLog, Base, Controller
 from unifi_api.server import create_app
+from unifi_api.services.manifest import ManifestRegistry
 
 
 def _cfg(tmp_path: Path, *, redact_sensitive_fields: bool = True) -> ApiConfig:
@@ -889,3 +891,158 @@ async def test_action_exception_details_are_not_exposed(tmp_path, monkeypatch, e
         assert len(actions) == 1
         assert actions[0].outcome == "error"
         assert actions[0].error_kind
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "args",
+    [
+        {},
+        {"limit": None, "offset": 0, "search": None, "fields": None},
+        {"fields": " , "},
+    ],
+)
+async def test_action_endpoint_list_vouchers_no_arg_and_explicit_defaults_preserve_baseline(
+    tmp_path, monkeypatch, args
+) -> None:
+    """Baseline API action returns 7-key items with explicit nulls and unchanged envelope."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="network")
+
+    entry = app.state.manifest_registry.resolve("unifi_list_vouchers")
+    custom_schema = {
+        "type": "object",
+        "properties": {
+            "limit": {"type": ["integer", "null"]},
+            "offset": {"type": "integer"},
+            "search": {"type": ["string", "null"]},
+            "fields": {"type": ["string", "null"]},
+        },
+        "additionalProperties": False,
+    }
+    updated_entry = replace(entry, input_schema=custom_schema)
+    app.state.manifest_registry = ManifestRegistry(
+        {**app.state.manifest_registry._entries, "unifi_list_vouchers": updated_entry}
+    )
+
+    manager = MagicMock()
+    manager._connection.site = "default"
+    manager.get_vouchers = AsyncMock(
+        return_value=[
+            {
+                "_id": "voucher-1",
+                "code": "1234567890",
+                "create_time": 1700000000,
+                "duration": 1440,
+                "status": "VALID_ONE",
+                "note": "Guest pass",
+            }
+        ]
+    )
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/actions/unifi_list_vouchers",
+            headers={"Authorization": f"Bearer {key}"},
+            json={"site": "default", "controller": cid, "args": args, "confirm": False},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert "count" not in body
+    assert "site" not in body
+    assert "render_hint" in body
+    assert body["render_hint"]["display_columns"] == ["code", "status", "duration", "created_at"]
+    assert body["render_hint"]["sort_default"] == "created_at:desc"
+    assert "data" in body
+    assert len(body["data"]) == 1
+    voucher = body["data"][0]
+    expected_keys = {"id", "code", "status", "duration", "qos_overwrite", "created_at", "used_at"}
+    assert set(voucher.keys()) == expected_keys
+    assert voucher["id"] == "voucher-1"
+    assert voucher["code"] == "1234567890"
+    assert voucher["status"] == "VALID_ONE"
+    assert voucher["duration"] == 1440
+    assert voucher["qos_overwrite"] is False
+    assert voucher["created_at"] == 1700000000
+    assert voucher["used_at"] is None  # explicit null
+    manager.get_vouchers.assert_awaited_once_with()
+    await app.state.engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_action_endpoint_list_vouchers_shaped_uses_shared_view(tmp_path, monkeypatch) -> None:
+    """Shaped API action call routes through shared Core read view."""
+    monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
+    app, key, cid = await _bootstrap(tmp_path, product_kinds="network")
+
+    entry = app.state.manifest_registry.resolve("unifi_list_vouchers")
+    custom_schema = {
+        "type": "object",
+        "properties": {
+            "limit": {"type": ["integer", "null"]},
+            "offset": {"type": "integer"},
+            "search": {"type": ["string", "null"]},
+            "fields": {"type": ["string", "null"]},
+        },
+        "additionalProperties": False,
+    }
+    updated_entry = replace(entry, input_schema=custom_schema)
+    app.state.manifest_registry = ManifestRegistry(
+        {**app.state.manifest_registry._entries, "unifi_list_vouchers": updated_entry}
+    )
+
+    manager = MagicMock()
+    manager._connection.site = "default"
+    manager.get_vouchers = AsyncMock(
+        return_value=[
+            {
+                "_id": "v1",
+                "code": "1234567890",
+                "create_time": 1700000000,
+                "duration": 1440,
+                "status": "VALID_ONE",
+                "note": "Guest voucher",
+            },
+            {
+                "_id": "v2",
+                "code": "9876543210",
+                "create_time": 1700000500,
+                "duration": 2880,
+                "status": "VALID_MULTI",
+                "note": "Staff voucher",
+            },
+        ]
+    )
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    app.state.manager_factory = factory
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/actions/unifi_list_vouchers",
+            headers={"Authorization": f"Bearer {key}"},
+            json={
+                "site": "default",
+                "controller": cid,
+                "args": {"search": "12345-67890", "limit": 1, "fields": "code,note"},
+                "confirm": False,
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert "meta" in body
+    assert body["meta"]["count"] == 1
+    assert body["meta"]["total_count"] == 1
+    assert body["meta"]["limit"] == 1
+    assert body["meta"]["offset"] == 0
+    assert len(body["data"]) == 1
+    assert body["data"][0] == {"code": "1234567890", "note": "Guest voucher"}
+    manager.get_vouchers.assert_awaited_once_with()
+    await app.state.engine.dispose()

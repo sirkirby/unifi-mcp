@@ -40,12 +40,11 @@ class PortForward:
     enabled: bool
     fwd_protocol: str | None
     dst_port: str | None
+    destination_ip: str | None
     fwd_port: str | None
     fwd_ip: str | None
     src: str | None
     log: bool
-
-    destination_ip: str | None = None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -71,6 +70,7 @@ class PortForward:
             enabled=bool(_get(obj, "enabled", False)),
             fwd_protocol=_get(obj, "fwd_protocol") or _get(obj, "proto") or _get(obj, "protocol"),
             dst_port=_get(obj, "dst_port"),
+            destination_ip=_get(obj, "destination_ip"),
             fwd_port=_get(obj, "fwd_port"),
             fwd_ip=_get(obj, "fwd_ip") or _get(obj, "fwd"),
             src=_get(obj, "src"),

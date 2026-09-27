@@ -48,11 +48,10 @@ logger = logging.getLogger(__name__)
         "(radio_table, port_table, network_table, system_stats, wan1/wan2). "
         "Pass an entry's MAC to the device tools as mac_address "
         "(unifi_get_device_details, unifi_reboot_device, unifi_rename_device, "
-        "unifi_upgrade_device, ...), as device_mac (unifi_get_switch_ports, "
-        "unifi_get_port_stats, unifi_set_switch_port_profile, unifi_locate_device, ...) "
-        "or as ap_mac on the RF tools (unifi_trigger_rf_scan, unifi_get_rf_scan_results), "
-        "which take the access point to scan from; the parameter name differs per tool "
-        "and each tool accepts only its own."
+        "unifi_upgrade_device, unifi_get_switch_ports, unifi_get_port_stats, "
+        "unifi_set_switch_port_profile, unifi_locate_device, ...). "
+        "RF scan tools (unifi_trigger_rf_scan, unifi_get_rf_scan_results) use ap_mac "
+        "for the access point to scan from."
         " API-key inventory uses legacy reads when supported, otherwise limited public inventory. "
         "Public results include source_api=integration and integration_id; missing legacy fields are unknown. "
         "These IDs are scoped to the Integration inventory tool family — do not pass them to other resource tools. "
@@ -98,6 +97,14 @@ async def list_devices(
             )
         ),
     ] = True,
+    fields: Annotated[
+        Optional[str],
+        Field(
+            description="Optional comma-separated top-level response fields, e.g. 'mac,name,status'. "
+            "Projection applies after include_details and summary; fields absent from a device's shaped response "
+            "are omitted. Omit or pass an empty string to keep all fields."
+        ),
+    ] = None,
 ) -> Dict[str, Any]:
     """Implementation for listing devices."""
     try:
@@ -111,6 +118,7 @@ async def list_devices(
             limit=limit,
             include_details=include_details,
             summary=summary,
+            fields=fields,
         )
         return redact_sensitive_fields(result, redact_sensitive=should_redact_sensitive_fields())
     except Exception as e:
@@ -591,7 +599,7 @@ async def update_device_radio(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def locate_device(
-    device_mac: Annotated[str, Field(description="MAC address of the device (from unifi_list_devices)")],
+    mac_address: Annotated[str, Field(description="MAC address of the device (from unifi_list_devices)")],
     enabled: Annotated[bool, Field(description="True to start blinking, False to stop")],
     confirm: Annotated[
         bool,
@@ -600,7 +608,7 @@ async def locate_device(
 ) -> Dict[str, Any]:
     """Toggles device locate mode (LED blinking)."""
     try:
-        LocateDeviceInput(device_mac=device_mac, enabled=enabled)
+        LocateDeviceInput(device_mac=mac_address, enabled=enabled)
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
@@ -608,20 +616,20 @@ async def locate_device(
         action = "start" if enabled else "stop"
         return create_preview(
             resource_type="device_locate",
-            resource_data={"device_mac": device_mac, "enabled": enabled},
-            resource_name=device_mac,
-            warnings=[f"Will {action} LED blinking on device {device_mac}."],
+            resource_data={"mac_address": mac_address, "enabled": enabled},
+            resource_name=mac_address,
+            warnings=[f"Will {action} LED blinking on device {mac_address}."],
         )
 
     try:
-        success = await device_manager.locate_device(device_mac, enabled)
+        success = await device_manager.locate_device(mac_address, enabled)
         if success:
             state = "enabled" if enabled else "disabled"
-            return {"success": True, "message": f"Locate mode {state} on device '{device_mac}'."}
-        return {"success": False, "error": f"Failed to set locate mode on '{device_mac}'."}
+            return {"success": True, "message": f"Locate mode {state} on device '{mac_address}'."}
+        return {"success": False, "error": f"Failed to set locate mode on '{mac_address}'."}
     except Exception as e:
         logger.error("Error setting locate mode on [redacted]: %s", type(e).__name__)
-        return {"success": False, "error": f"Failed to set locate mode on {device_mac}: {e}"}
+        return {"success": False, "error": f"Failed to set locate mode on {mac_address}: {e}"}
 
 
 @server.tool(
@@ -634,7 +642,7 @@ async def locate_device(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def force_provision_device(
-    device_mac: Annotated[str, Field(description="MAC address of the device (from unifi_list_devices)")],
+    mac_address: Annotated[str, Field(description="MAC address of the device (from unifi_list_devices)")],
     confirm: Annotated[
         bool,
         Field(description="When true, force provisions the device. When false (default), returns a preview"),
@@ -642,25 +650,25 @@ async def force_provision_device(
 ) -> Dict[str, Any]:
     """Force re-provisions a device."""
     try:
-        ForceProvisionDeviceInput(device_mac=device_mac)
+        ForceProvisionDeviceInput(device_mac=mac_address)
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
     if not confirm:
         return create_preview(
             resource_type="force_provision",
-            resource_data={"device_mac": device_mac},
-            resource_name=device_mac,
+            resource_data={"mac_address": mac_address},
+            resource_name=mac_address,
         )
 
     try:
-        success = await device_manager.force_provision(device_mac)
+        success = await device_manager.force_provision(mac_address)
         if success:
-            return {"success": True, "message": f"Force provision initiated for device '{device_mac}'."}
-        return {"success": False, "error": f"Failed to force provision device '{device_mac}'."}
+            return {"success": True, "message": f"Force provision initiated for device '{mac_address}'."}
+        return {"success": False, "error": f"Failed to force provision device '{mac_address}'."}
     except Exception as e:
         logger.error("Error force provisioning [redacted]: %s", type(e).__name__)
-        return {"success": False, "error": f"Failed to force provision device {device_mac}: {e}"}
+        return {"success": False, "error": f"Failed to force provision device {mac_address}: {e}"}
 
 
 # ---- Speedtest Commands ----
@@ -907,7 +915,7 @@ async def list_available_channels() -> Dict[str, Any]:
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def set_device_led(
-    device_mac: Annotated[str, Field(description="MAC address of the device (from unifi_list_devices)")],
+    mac_address: Annotated[str, Field(description="MAC address of the device (from unifi_list_devices)")],
     led_state: Annotated[
         str,
         Field(description="LED override state: 'on' (force on), 'off' (force off), or 'default' (use site setting)"),
@@ -919,7 +927,7 @@ async def set_device_led(
 ) -> Dict[str, Any]:
     """Set LED override state on a device."""
     try:
-        SetDeviceLedInput(device_mac=device_mac, led_state=led_state)
+        SetDeviceLedInput(device_mac=mac_address, led_state=led_state)
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
@@ -933,18 +941,18 @@ async def set_device_led(
     if not confirm:
         return create_preview(
             resource_type="device_led",
-            resource_data={"device_mac": device_mac, "led_override": led_state},
-            resource_name=device_mac,
+            resource_data={"mac_address": mac_address, "led_override": led_state},
+            resource_name=mac_address,
         )
 
     try:
-        success = await device_manager.set_device_led_override(device_mac, led_state)
+        success = await device_manager.set_device_led_override(mac_address, led_state)
         if success:
-            return {"success": True, "message": f"LED override set to '{led_state}' on device '{device_mac}'."}
-        return {"success": False, "error": f"Failed to set LED override on '{device_mac}'."}
+            return {"success": True, "message": f"LED override set to '{led_state}' on device '{mac_address}'."}
+        return {"success": False, "error": f"Failed to set LED override on '{mac_address}'."}
     except Exception as e:
         logger.error("Error setting LED override on [redacted]: %s", type(e).__name__)
-        return {"success": False, "error": f"Failed to set LED override on {device_mac}: {e}"}
+        return {"success": False, "error": f"Failed to set LED override on {mac_address}: {e}"}
 
 
 @server.tool(
@@ -959,7 +967,7 @@ async def set_device_led(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def toggle_device(
-    device_mac: Annotated[str, Field(description="MAC address of the device (from unifi_list_devices)")],
+    mac_address: Annotated[str, Field(description="MAC address of the device (from unifi_list_devices)")],
     disabled: Annotated[bool, Field(description="True to disable the device, False to enable it")],
     confirm: Annotated[
         bool,
@@ -971,20 +979,20 @@ async def toggle_device(
         action = "disable" if disabled else "enable"
         return create_preview(
             resource_type="device_toggle",
-            resource_data={"device_mac": device_mac, "disabled": disabled},
-            resource_name=device_mac,
-            warnings=[f"Will {action} device {device_mac}. A disabled device stops passing traffic."],
+            resource_data={"mac_address": mac_address, "disabled": disabled},
+            resource_name=mac_address,
+            warnings=[f"Will {action} device {mac_address}. A disabled device stops passing traffic."],
         )
 
     try:
-        success = await device_manager.set_device_disabled(device_mac, disabled)
+        success = await device_manager.set_device_disabled(mac_address, disabled)
         if success:
             state = "disabled" if disabled else "enabled"
-            return {"success": True, "message": f"Device '{device_mac}' has been {state}."}
-        return {"success": False, "error": f"Failed to set disabled state on '{device_mac}'."}
+            return {"success": True, "message": f"Device '{mac_address}' has been {state}."}
+        return {"success": False, "error": f"Failed to set disabled state on '{mac_address}'."}
     except Exception as e:
         logger.error("Error toggling device [redacted]: %s", type(e).__name__)
-        return {"success": False, "error": f"Failed to toggle device {device_mac}: {e}"}
+        return {"success": False, "error": f"Failed to toggle device {mac_address}: {e}"}
 
 
 @server.tool(

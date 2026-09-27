@@ -448,7 +448,9 @@
             "type": "string"
           },
           "limit": {
-            "description": "Maximum number of events to return; must be zero or greater (default 30).",
+            "description": "Maximum number of events to return (0-5000, default 30).",
+            "maximum": 5000,
+            "minimum": 0,
             "type": "integer"
           },
           "start": {
@@ -2366,7 +2368,7 @@
       "manager_method": "set_port_overrides",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the switch",
             "type": "string"
           },
@@ -2376,7 +2378,7 @@
           }
         },
         "required": [
-          "device_mac",
+          "mac_address",
           "port_overrides"
         ],
         "type": "object",
@@ -2394,7 +2396,7 @@
       "manager_method": "set_port_overrides",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the switch",
             "type": "string"
           },
@@ -2404,7 +2406,7 @@
           }
         },
         "required": [
-          "device_mac",
+          "mac_address",
           "port_overrides"
         ],
         "type": "object",
@@ -2536,6 +2538,29 @@
       }
     },
     {
+      "name": "unifi_create_content_filter",
+      "product": "network",
+      "category": "content_filter",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "content_filter_manager",
+      "manager_method": "create_content_filter",
+      "input_schema": {
+        "properties": {
+          "filter_data": {
+            "description": "Profile fields: non-empty name and blocked_categories list; exactly one non-empty client_macs or network_ids list; optional enabled, safe_search, and flattened schedule fields",
+            "type": "object"
+          }
+        },
+        "required": [
+          "filter_data"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_create_dns_record",
       "product": "network",
       "category": "dns",
@@ -2651,6 +2676,396 @@
       }
     },
     {
+      "name": "unifi_create_nat_rule",
+      "product": "network",
+      "category": "nat",
+      "permission_action": "create",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "nat_manager",
+      "manager_method": "create_nat_rule_verified",
+      "input_schema": {
+        "properties": {
+          "rule_data": {
+            "additionalProperties": false,
+            "description": "Strict public write schema; reads retain the tolerant NatRule model.",
+            "properties": {
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "destination_filter": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "description": "Closed schema for caller supplied IPv4 filter fields only.",
+                    "properties": {
+                      "address": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Address"
+                      },
+                      "filter_type": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Filter Type"
+                      },
+                      "firewall_group_ids": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Firewall Group Ids"
+                      },
+                      "invert_address": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Invert Address"
+                      },
+                      "invert_port": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Invert Port"
+                      },
+                      "network_conf_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Network Conf Id"
+                      },
+                      "port": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Port"
+                      }
+                    },
+                    "title": "NatFilterWriteInput",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "enabled": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Enabled"
+              },
+              "exclude": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Exclude"
+              },
+              "in_interface": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "In Interface"
+              },
+              "ip_address": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ip Address"
+              },
+              "ip_version": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ip Version"
+              },
+              "logging": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Logging"
+              },
+              "out_interface": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Out Interface"
+              },
+              "port": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Port"
+              },
+              "pppoe_use_base_interface": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Pppoe Use Base Interface"
+              },
+              "protocol": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Protocol"
+              },
+              "rule_index": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Rule Index"
+              },
+              "source_filter": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "description": "Closed schema for caller supplied IPv4 filter fields only.",
+                    "properties": {
+                      "address": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Address"
+                      },
+                      "filter_type": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Filter Type"
+                      },
+                      "firewall_group_ids": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Firewall Group Ids"
+                      },
+                      "invert_address": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Invert Address"
+                      },
+                      "invert_port": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Invert Port"
+                      },
+                      "network_conf_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Network Conf Id"
+                      },
+                      "port": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Port"
+                      }
+                    },
+                    "title": "NatFilterWriteInput",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "type": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Type"
+              }
+            },
+            "title": "NatRuleWriteInput",
+            "type": "object"
+          }
+        },
+        "required": [
+          "rule_data"
+        ],
+        "title": "NatCreateToolInput",
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_create_network",
       "product": "network",
       "category": "networks",
@@ -2734,7 +3149,7 @@
       "input_schema": {
         "properties": {
           "port_forward_data": {
-            "description": "Port forward configuration dict. Required: name (str), dst_port (external port, e.g. '80' or '10000-10010'), fwd_port (internal port), fwd_ip (internal IP, e.g. '192.168.1.100'). Optional: protocol ('tcp'/'udp'/'tcp_udp', default 'tcp_udp'), enabled (bool, default true), src_ip (source IP/CIDR), log (bool)",
+            "description": "Port forward configuration dict. Required: name (str), dst_port (external port, e.g. '80' or '10000-10010'), fwd_port (internal port), fwd_ip (internal IP, e.g. '192.168.1.100'). Optional: protocol ('tcp'/'udp'/'tcp_udp', default 'tcp_udp'), enabled (bool, default true), src_ip (source IP/CIDR), destination_ip (WAN destination IPv4 or 'any'), log (bool)",
             "type": "object"
           }
         },
@@ -3284,6 +3699,29 @@
       }
     },
     {
+      "name": "unifi_delete_nat_rule",
+      "product": "network",
+      "category": "nat",
+      "permission_action": "delete",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "nat_manager",
+      "manager_method": "delete_nat_rule_verified",
+      "input_schema": {
+        "properties": {
+          "rule_id": {
+            "description": "V2 NAT rule ID from unifi_list_nat_rules; scoped to this NAT family",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_delete_network",
       "product": "network",
       "category": "networks",
@@ -3432,13 +3870,13 @@
       "manager_method": "force_provision",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the device (from unifi_list_devices)",
             "type": "string"
           }
         },
         "required": [
-          "device_mac"
+          "mac_address"
         ],
         "type": "object",
         "additionalProperties": false
@@ -3637,17 +4075,17 @@
       "manager_method": "get_client_dpi_traffic",
       "input_schema": {
         "properties": {
-          "client_mac": {
-            "description": "Client MAC address",
-            "type": "string"
-          },
           "group_by": {
             "description": "Group results: 'by_app' (default) for per-application or 'by_cat' for per-category",
+            "type": "string"
+          },
+          "mac_address": {
+            "description": "Client MAC address",
             "type": "string"
           }
         },
         "required": [
-          "client_mac"
+          "mac_address"
         ],
         "type": "object",
         "additionalProperties": false
@@ -3687,10 +4125,6 @@
       "manager_method": "get_client_sessions",
       "input_schema": {
         "properties": {
-          "client_mac": {
-            "description": "Client MAC address. If omitted, returns sessions for all clients.",
-            "type": "string"
-          },
           "duration": {
             "description": "Time period: 'hourly' (1h, default), 'daily' (24h), 'weekly' (7d), or 'monthly' (30d)",
             "type": "string"
@@ -3698,6 +4132,10 @@
           "limit": {
             "description": "Maximum number of sessions to return (default 50)",
             "type": "integer"
+          },
+          "mac_address": {
+            "description": "Client MAC address. If omitted, returns sessions for all clients.",
+            "type": "string"
           }
         },
         "type": "object",
@@ -3746,13 +4184,13 @@
       "manager_method": "get_client_wifi_details",
       "input_schema": {
         "properties": {
-          "client_mac": {
+          "mac_address": {
             "description": "Client MAC address",
             "type": "string"
           }
         },
         "required": [
-          "client_mac"
+          "mac_address"
         ],
         "type": "object",
         "additionalProperties": false
@@ -4116,14 +4554,29 @@
       "manager_method": "get_lldp_neighbors",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the switch (from unifi_list_devices)",
             "type": "string"
           }
         },
         "required": [
-          "device_mac"
+          "mac_address"
         ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_get_mdns_settings",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "system_manager",
+      "manager_method": "get_mdns_settings",
+      "input_schema": {
+        "properties": {},
         "type": "object",
         "additionalProperties": false
       }
@@ -4139,6 +4592,29 @@
       "manager_method": "get_settings",
       "input_schema": {
         "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_get_nat_rule",
+      "product": "network",
+      "category": "nat",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "nat_manager",
+      "manager_method": "get_nat_rule",
+      "input_schema": {
+        "properties": {
+          "rule_id": {
+            "description": "V2 NAT rule ID returned by unifi_list_nat_rules; not a port-forward or Integration API ID",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id"
+        ],
         "type": "object",
         "additionalProperties": false
       }
@@ -4316,13 +4792,13 @@
       "manager_method": "get_port_stats",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the switch (from unifi_list_devices)",
             "type": "string"
           }
         },
         "required": [
-          "device_mac"
+          "mac_address"
         ],
         "type": "object",
         "additionalProperties": false
@@ -4501,13 +4977,13 @@
       "manager_method": "get_switch_capabilities",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the switch (from unifi_list_devices)",
             "type": "string"
           }
         },
         "required": [
-          "device_mac"
+          "mac_address"
         ],
         "type": "object",
         "additionalProperties": false
@@ -4524,13 +5000,13 @@
       "manager_method": "get_switch_ports",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the switch (from unifi_list_devices)",
             "type": "string"
           }
         },
         "required": [
-          "device_mac"
+          "mac_address"
         ],
         "type": "object",
         "additionalProperties": false
@@ -4545,6 +5021,21 @@
       "auth_method": "local_only",
       "manager_attr": "system_manager",
       "manager_method": "get_system_info",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_get_threat_management_settings",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "system_manager",
+      "manager_method": "get_threat_management_settings",
       "input_schema": {
         "properties": {},
         "type": "object",
@@ -5028,6 +5519,10 @@
             "description": "Filter by device type: 'all' (default), 'ap' (access points), 'switch', 'gateway', or 'pdu'",
             "type": "string"
           },
+          "fields": {
+            "description": "Optional comma-separated top-level response fields, e.g. 'mac,name,status'. Projection applies after include_details and summary; fields absent from a device's shaped response are omitted. Omit or pass an empty string to keep all fields.",
+            "type": "string"
+          },
           "include_details": {
             "description": "When true, includes additional per-device details (shape controlled by summary). Default false",
             "type": "boolean"
@@ -5261,6 +5756,21 @@
       }
     },
     {
+      "name": "unifi_list_nat_rules",
+      "product": "network",
+      "category": "nat",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "nat_manager",
+      "manager_method": "list_nat_rules",
+      "input_schema": {
+        "properties": {},
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_list_networks",
       "product": "network",
       "category": "network",
@@ -5450,7 +5960,27 @@
       "manager_attr": "hotspot_manager",
       "manager_method": "get_vouchers",
       "input_schema": {
-        "properties": {},
+        "properties": {
+          "fields": {
+            "description": "Optional comma-separated list of fields to include in each voucher. Available fields: id, code, status, duration, qos_overwrite, created_at, used_at, quota, used, note, up_limit_kbps, down_limit_kbps, data_limit_mb.",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Optional maximum number of vouchers to return (1-1000). None preserves returning all vouchers.",
+            "maximum": 1000,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "offset": {
+            "description": "Zero-based offset into the vouchers collection (default 0).",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "search": {
+            "description": "Optional case-insensitive substring search over voucher note and code (including UI hyphenated codes).",
+            "type": "string"
+          }
+        },
         "type": "object",
         "additionalProperties": false
       }
@@ -5524,17 +6054,17 @@
       "manager_method": "locate_device",
       "input_schema": {
         "properties": {
-          "device_mac": {
-            "description": "MAC address of the device (from unifi_list_devices)",
-            "type": "string"
-          },
           "enabled": {
             "description": "True to start blinking, False to stop",
             "type": "boolean"
+          },
+          "mac_address": {
+            "description": "MAC address of the device (from unifi_list_devices)",
+            "type": "string"
           }
         },
         "required": [
-          "device_mac",
+          "mac_address",
           "enabled"
         ],
         "type": "object",
@@ -5575,7 +6105,7 @@
       "manager_method": "power_cycle_port",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the switch",
             "type": "string"
           },
@@ -5585,7 +6115,7 @@
           }
         },
         "required": [
-          "device_mac",
+          "mac_address",
           "port_idx"
         ],
         "type": "object",
@@ -5634,7 +6164,7 @@
             "description": "Maximum number of events to return from the buffer; must be zero or greater. Omit to return all buffered events.",
             "type": "integer"
           },
-          "mac": {
+          "mac_address": {
             "description": "Filter events to a specific client or device by MAC address. Omit to include all.",
             "type": "string"
           }
@@ -5756,6 +6286,38 @@
       }
     },
     {
+      "name": "unifi_set_client_fixed_ap",
+      "product": "network",
+      "category": "clients",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "client_manager",
+      "manager_method": "set_client_fixed_ap",
+      "input_schema": {
+        "properties": {
+          "fixed_ap_enabled": {
+            "description": "Whether to enable fixed access-point association",
+            "type": "boolean"
+          },
+          "fixed_ap_mac": {
+            "description": "MAC address of the adopted access point; required when enabling, ignored when disabling",
+            "type": "string"
+          },
+          "mac_address": {
+            "description": "MAC address of the wireless client",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mac_address",
+          "fixed_ap_enabled"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_set_client_ip_settings",
       "product": "network",
       "category": "clients",
@@ -5805,17 +6367,17 @@
       "manager_method": "set_device_led_override",
       "input_schema": {
         "properties": {
-          "device_mac": {
-            "description": "MAC address of the device (from unifi_list_devices)",
-            "type": "string"
-          },
           "led_state": {
             "description": "LED override state: 'on' (force on), 'off' (force off), or 'default' (use site setting)",
+            "type": "string"
+          },
+          "mac_address": {
+            "description": "MAC address of the device (from unifi_list_devices)",
             "type": "string"
           }
         },
         "required": [
-          "device_mac",
+          "mac_address",
           "led_state"
         ],
         "type": "object",
@@ -5833,17 +6395,17 @@
       "manager_method": "update_device_config",
       "input_schema": {
         "properties": {
-          "device_mac": {
-            "description": "MAC address of the switch",
-            "type": "string"
-          },
           "enabled": {
             "description": "True to enable jumbo frames, False to disable",
             "type": "boolean"
+          },
+          "mac_address": {
+            "description": "MAC address of the switch",
+            "type": "string"
           }
         },
         "required": [
-          "device_mac",
+          "mac_address",
           "enabled"
         ],
         "type": "object",
@@ -5921,7 +6483,7 @@
       "manager_method": "set_port_overrides",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the switch",
             "type": "string"
           },
@@ -5931,7 +6493,7 @@
           }
         },
         "required": [
-          "device_mac",
+          "mac_address",
           "port_overrides"
         ],
         "type": "object",
@@ -5949,17 +6511,17 @@
       "manager_method": "set_device_disabled",
       "input_schema": {
         "properties": {
-          "device_mac": {
-            "description": "MAC address of the device (from unifi_list_devices)",
-            "type": "string"
-          },
           "disabled": {
             "description": "True to disable the device, False to enable it",
             "type": "boolean"
+          },
+          "mac_address": {
+            "description": "MAC address of the device (from unifi_list_devices)",
+            "type": "string"
           }
         },
         "required": [
-          "device_mac",
+          "mac_address",
           "disabled"
         ],
         "type": "object",
@@ -5984,6 +6546,33 @@
         },
         "required": [
           "policy_id"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_toggle_nat_rule",
+      "product": "network",
+      "category": "nat",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "nat_manager",
+      "manager_method": "toggle_nat_rule_verified",
+      "input_schema": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "rule_id": {
+            "description": "V2 NAT rule ID from unifi_list_nat_rules; scoped to this NAT family",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "enabled"
         ],
         "type": "object",
         "additionalProperties": false
@@ -6323,7 +6912,7 @@
       "input_schema": {
         "properties": {
           "filter_data": {
-            "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, enabled (bool), blocked_categories (list), safe_search (list: 'GOOGLE'/'YOUTUBE'/'BING'), client_macs (list of MACs), network_ids (list), schedule_mode ('ALWAYS'/'EVERY_DAY'/'EVERY_WEEK'/'CUSTOM'/'ONE_TIME_ONLY')",
+            "description": "Dictionary of fields to update. Pass only the fields you want to change \u2014 current values are automatically preserved. Allowed keys: name, enabled (bool), blocked_categories (list), safe_search (list: 'GOOGLE'/'YOUTUBE'/'BING'), client_macs (list of MACs), network_ids (list), schedule_mode ('ALWAYS'/'EVERY_DAY'/'EVERY_WEEK'/'CUSTOM'/'ONE_TIME_ONLY'), schedule_days (lowercase mon..sun), schedule_time_all_day (bool), schedule_time_start/end (HH:MM), schedule_date_start/end (YYYY-MM-DD)",
             "type": "object"
           },
           "filter_id": {
@@ -6575,6 +7164,424 @@
       }
     },
     {
+      "name": "unifi_update_mdns_settings",
+      "product": "network",
+      "category": "system",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "system_manager",
+      "manager_method": "update_mdns_settings",
+      "input_schema": {
+        "properties": {
+          "update_data": {
+            "description": "Partial mDNS service settings: mode, predefined_services, custom_services only",
+            "type": "object"
+          }
+        },
+        "required": [
+          "update_data"
+        ],
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_update_nat_rule",
+      "product": "network",
+      "category": "nat",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "nat_manager",
+      "manager_method": "update_nat_rule_verified",
+      "input_schema": {
+        "properties": {
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "update_data": {
+            "additionalProperties": false,
+            "description": "Strict public write schema; reads retain the tolerant NatRule model.",
+            "properties": {
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "destination_filter": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "description": "Closed schema for caller supplied IPv4 filter fields only.",
+                    "properties": {
+                      "address": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Address"
+                      },
+                      "filter_type": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Filter Type"
+                      },
+                      "firewall_group_ids": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Firewall Group Ids"
+                      },
+                      "invert_address": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Invert Address"
+                      },
+                      "invert_port": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Invert Port"
+                      },
+                      "network_conf_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Network Conf Id"
+                      },
+                      "port": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Port"
+                      }
+                    },
+                    "title": "NatFilterWriteInput",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "enabled": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Enabled"
+              },
+              "exclude": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Exclude"
+              },
+              "in_interface": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "In Interface"
+              },
+              "ip_address": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ip Address"
+              },
+              "ip_version": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ip Version"
+              },
+              "logging": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Logging"
+              },
+              "out_interface": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Out Interface"
+              },
+              "port": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Port"
+              },
+              "pppoe_use_base_interface": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Pppoe Use Base Interface"
+              },
+              "protocol": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Protocol"
+              },
+              "rule_index": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Rule Index"
+              },
+              "source_filter": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "description": "Closed schema for caller supplied IPv4 filter fields only.",
+                    "properties": {
+                      "address": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Address"
+                      },
+                      "filter_type": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Filter Type"
+                      },
+                      "firewall_group_ids": {
+                        "anyOf": [
+                          {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Firewall Group Ids"
+                      },
+                      "invert_address": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Invert Address"
+                      },
+                      "invert_port": {
+                        "anyOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Invert Port"
+                      },
+                      "network_conf_id": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Network Conf Id"
+                      },
+                      "port": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": "Port"
+                      }
+                    },
+                    "title": "NatFilterWriteInput",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "type": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Type"
+              }
+            },
+            "title": "NatRuleWriteInput",
+            "type": "object"
+          }
+        },
+        "required": [
+          "rule_id",
+          "update_data"
+        ],
+        "title": "NatUpdateToolInput",
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_update_network",
       "product": "network",
       "category": "networks",
@@ -6646,7 +7653,7 @@
             "type": "string"
           },
           "update_data": {
-            "description": "Dictionary of fields to update. Allowed keys: name, dst_port (external port), fwd_port (internal port), fwd_ip (internal IP), protocol ('tcp'/'udp'/'tcp_udp'), enabled (bool), src_ip (source IP/CIDR, empty string to remove), log (bool)",
+            "description": "Dictionary of fields to update. Allowed keys: name, dst_port (external port), destination_ip (WAN destination IPv4 or 'any'; null/empty sets 'any'), fwd_port (internal port), fwd_ip (internal IP), protocol ('tcp'/'udp'/'tcp_udp'), enabled (bool), src_ip (source IP/CIDR, empty string to remove), log (bool)",
             "type": "object"
           }
         },
@@ -6804,7 +7811,7 @@
       "manager_method": "update_device_config",
       "input_schema": {
         "properties": {
-          "device_mac": {
+          "mac_address": {
             "description": "MAC address of the switch",
             "type": "string"
           },
@@ -6818,7 +7825,7 @@
           }
         },
         "required": [
-          "device_mac"
+          "mac_address"
         ],
         "type": "object",
         "additionalProperties": false

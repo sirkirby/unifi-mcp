@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import type { RelayStub } from "./mcp-handler";
 import { handleMcpRequest } from "./mcp-handler";
 import { hashToken, generateToken, extractBearerToken } from "./auth";
-import { buildToolIndexEntries, TOOL_INDEX_META_TOOL, toolInputSchema, toolServerOrigin } from "./tool-info";
+import { buildToolIndexResponse, TOOL_INDEX_META_TOOL, toolInputSchema, toolServerOrigin } from "./tool-info";
 import type {
   Env,
   ToolInfo,
@@ -739,23 +739,7 @@ export class RelayObject extends DurableObject<Env> implements RelayStub {
   // -------------------------------------------------------------------------
 
   private handleToolIndex(args: Record<string, unknown>): Record<string, unknown> {
-    const category = args.category as string | undefined;
-    const search = args.search as string | undefined;
-    const includeSchemas = Boolean(args.include_schemas);
-    const filtered = buildToolIndexEntries(this.locationTools, this.toolToLocations, {
-      category,
-      search,
-      includeSchemas,
-    });
-
-    return {
-      success: true,
-      data: {
-        tools: filtered,
-        total: filtered.length,
-        multi_location: this.locationTools.size > 1,
-      },
-    };
+    return buildToolIndexResponse(this.locationTools, this.toolToLocations, args);
   }
 
   private async handleExecute(args: Record<string, unknown>): Promise<Record<string, unknown> | AggregatedResponse> {

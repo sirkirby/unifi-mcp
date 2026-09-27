@@ -18,12 +18,14 @@ exposes the same dict contract the REST routes return today.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Annotated, Any
 
 import strawberry
 from strawberry.types import Info
 from unifi_core.network.models.devices import normalize_radio_channel, normalize_radio_ht
+from unifi_core.redaction import redact_sensitive_fields
 
 if TYPE_CHECKING:
     from unifi_api.graphql.types.network.client import Client
@@ -51,6 +53,16 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     return getattr(obj, key, default)
 
 
+def _temperature(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        return None
+    try:
+        parsed = float(value)
+    except (ValueError, OverflowError):
+        return None
+    return parsed if math.isfinite(parsed) else None
+
+
 @strawberry.type(description="A UniFi network device (AP, switch, gateway).")
 class Device:
     mac: strawberry.ID | None
@@ -62,6 +74,11 @@ class Device:
     state: str | None
     ip: str | None
     ports: strawberry.scalars.JSON | None  # type: ignore[name-defined]
+
+    system_stats: strawberry.scalars.JSON | None = None  # type: ignore[name-defined]
+    general_temperature: float | None = None
+    temperatures: strawberry.scalars.JSON | None = None  # type: ignore[name-defined]
+    uptime_stats: strawberry.scalars.JSON | None = None  # type: ignore[name-defined]
 
     source_api: str | None = None
     integration_id: strawberry.ID | None = strawberry.field(
@@ -87,9 +104,12 @@ class Device:
         }
 
     @classmethod
-    def from_manager_output(cls, obj: Any) -> "Device":
+    def from_manager_output(cls, obj: Any, *, redact_sensitive: bool = True) -> "Device":
         raw = getattr(obj, "raw", obj if isinstance(obj, dict) else {})
         state_raw = raw.get("state")
+        stats = raw.get("system-stats", raw.get("system_stats"))
+        temperatures = raw.get("temperatures")
+        uptime_stats = raw.get("uptime_stats")
         return cls(
             source_api=raw.get("source_api"),
             integration_id=raw.get("integration_id"),
@@ -104,6 +124,16 @@ class Device:
             else _STATE_MAP.get(state_raw, state_raw),
             ip=raw.get("ip"),
             ports=raw.get("port_table") or raw.get("ports"),
+            system_stats=redact_sensitive_fields(stats, redact_sensitive=redact_sensitive)
+            if isinstance(stats, dict)
+            else None,
+            general_temperature=_temperature(raw.get("general_temperature")),
+            temperatures=redact_sensitive_fields(temperatures, redact_sensitive=redact_sensitive)
+            if isinstance(temperatures, list)
+            else None,
+            uptime_stats=redact_sensitive_fields(uptime_stats, redact_sensitive=redact_sensitive)
+            if isinstance(uptime_stats, dict)
+            else None,
         )
 
     def to_dict(self) -> dict:

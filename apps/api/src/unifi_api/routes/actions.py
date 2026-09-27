@@ -151,8 +151,9 @@ class ActionIn(BaseModel):
     summary="Preview or execute a catalog action",
     description=(
         "Read actions execute immediately. Mutations with `confirm=false` validate the request and return a "
-        "non-mutating preview with `requires_confirmation=true`; no mutation manager is invoked. Send the same "
-        "request with `confirm=true` to execute it. Capability and argument checks apply to both paths."
+        "non-mutating partial request preview with `requires_confirmation=true`; no mutation manager is invoked. "
+        "It does not show freshly merged controller state. Send the same request with `confirm=true` to execute it; "
+        "Manager-level validation runs during execution. Capability and argument checks apply to both paths."
     ),
 )
 async def post_action(request: Request, tool_name: str, body: ActionIn) -> dict:

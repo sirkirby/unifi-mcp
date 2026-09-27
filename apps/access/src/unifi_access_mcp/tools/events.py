@@ -12,6 +12,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_access_mcp.runtime import event_manager, server
+from unifi_core.access.managers.event_manager import MAX_EVENT_QUERY_LIMIT
 from unifi_core.access.models.events import (
     activity_summary_from_controller,
     event_from_controller,
@@ -64,7 +65,7 @@ async def access_list_events(
     ] = None,
     limit: Annotated[
         int,
-        Field(description="Maximum number of events to return; must be zero or greater (default 30)."),
+        Field(ge=0, le=MAX_EVENT_QUERY_LIMIT, description="Maximum number of events to return (0-5000, default 30)."),
     ] = 30,
 ) -> Dict[str, Any]:
     """List access events."""

@@ -150,6 +150,10 @@ Keep mutation approval as two requests. First send the JSON request body with
 resend the same body with `"confirm": true`. Do not preview and execute a mutation
 inside one code-execution request.
 
+For V2 NAT actions, the generic API preview shows the validated partial
+request, without a fresh merged controller document. Confirmation performs
+the fresh merge and persistence check in Core. NAT GraphQL remains read-only.
+
 Regenerate all product manifests and the API projection together:
 
 ```bash
@@ -212,6 +216,8 @@ This is the same constraint the MCP servers (`unifi-network-mcp`,
 `unifi-protect-mcp`, `unifi-access-mcp`) inherit. See issue #150 for context.
 
 ## Documentation
+
+- [MAC parameter migration](../network/docs/mac-parameter-migration.md) for Network MCP and API action calls.
 
 - **Reference docs** are auto-generated and drift-gated. Browse them in-repo or
   via the live exploration UIs:

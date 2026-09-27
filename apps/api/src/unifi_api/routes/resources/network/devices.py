@@ -67,7 +67,12 @@ async def list_devices(
     )
 
     type_class = request.app.state.type_registry.lookup("network", "devices")
-    items = [type_class.from_manager_output(d).to_dict() for d in page]
+    items = [
+        type_class.from_manager_output(
+            d, redact_sensitive=request.app.state.config.policy.response.redact_sensitive_fields
+        ).to_dict()
+        for d in page
+    ]
     hint = type_class.render_hint("list")
 
     return {
@@ -109,7 +114,9 @@ async def get_device(
         raise HTTPException(status_code=404, detail="device not found")
 
     type_class = request.app.state.type_registry.lookup("network", "devices/{mac}")
-    data = type_class.from_manager_output(device).to_dict()
+    data = type_class.from_manager_output(
+        device, redact_sensitive=request.app.state.config.policy.response.redact_sensitive_fields
+    ).to_dict()
     hint = type_class.render_hint("detail")
     return {"data": data, "render_hint": hint}
 

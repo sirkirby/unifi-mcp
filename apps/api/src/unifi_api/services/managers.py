@@ -66,6 +66,7 @@ def _build_network_managers() -> dict[str, Callable[..., Any]]:
     from unifi_core.network.managers.firewall_manager import FirewallManager
     from unifi_core.network.managers.gateway_settings_manager import GatewaySettingsManager
     from unifi_core.network.managers.hotspot_manager import HotspotManager
+    from unifi_core.network.managers.nat_manager import NatManager
     from unifi_core.network.managers.network_manager import NetworkManager
     from unifi_core.network.managers.oon_manager import OonManager
     from unifi_core.network.managers.qos_manager import QosManager
@@ -103,6 +104,7 @@ def _build_network_managers() -> dict[str, Callable[..., Any]]:
         "gateway_settings_manager": lambda cm: GatewaySettingsManager(cm),
         "hotspot_manager": lambda cm: HotspotManager(cm),
         "network_manager": lambda cm: NetworkManager(cm),
+        "nat_manager": lambda cm: NatManager(cm),
         "oon_manager": lambda cm: OonManager(cm),
         "qos_manager": lambda cm: QosManager(cm),
         "routing_manager": lambda cm: RoutingManager(cm),

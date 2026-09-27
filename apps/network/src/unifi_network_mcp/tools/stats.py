@@ -427,7 +427,7 @@ async def get_site_dpi_traffic(
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_client_dpi_traffic(
-    client_mac: Annotated[str, Field(description="Client MAC address")],
+    mac_address: Annotated[str, Field(description="Client MAC address")],
     group_by: Annotated[
         str,
         Field(description="Group results: 'by_app' (default) for per-application or 'by_cat' for per-category"),
@@ -435,17 +435,17 @@ async def get_client_dpi_traffic(
 ) -> Dict[str, Any]:
     """Implementation for getting per-client DPI traffic data."""
     try:
-        traffic = await stats_manager.get_client_dpi_traffic(client_mac=client_mac, by=group_by)
+        traffic = await stats_manager.get_client_dpi_traffic(client_mac=mac_address, by=group_by)
         return {
             "success": True,
             "site": stats_manager._connection.site,
-            "client_mac": client_mac,
+            "client_mac": mac_address,
             "group_by": group_by,
             "traffic": traffic,
         }
     except Exception as e:
-        logger.error("Error getting client DPI traffic for %s: %s", client_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get client DPI traffic for {client_mac}: {e}"}
+        logger.error("Error getting client DPI traffic for %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to get client DPI traffic for {mac_address}: {e}"}
 
 
 @server.tool(
@@ -492,7 +492,7 @@ async def get_ips_events(
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_client_sessions(
-    client_mac: Annotated[
+    mac_address: Annotated[
         Optional[str],
         Field(description="Client MAC address. If omitted, returns sessions for all clients."),
     ] = None,
@@ -506,7 +506,7 @@ async def get_client_sessions(
     try:
         duration_hours = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 720}.get(duration, 24)
         sessions = await stats_manager.get_client_sessions(
-            client_mac=client_mac, duration_hours=duration_hours, limit=limit
+            client_mac=mac_address, duration_hours=duration_hours, limit=limit
         )
         shaped = [client_session_from_controller(s).model_dump(exclude_none=True) for s in sessions]
         result: Dict[str, Any] = {
@@ -517,8 +517,8 @@ async def get_client_sessions(
             "count": len(shaped),
             "sessions": shaped,
         }
-        if client_mac:
-            result["client_mac"] = client_mac
+        if mac_address:
+            result["client_mac"] = mac_address
         return result
     except Exception as e:
         logger.error("Error getting client sessions: %s", e, exc_info=True)
@@ -593,21 +593,21 @@ async def get_anomalies(
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_client_wifi_details(
-    client_mac: Annotated[str, Field(description="Client MAC address")],
+    mac_address: Annotated[str, Field(description="Client MAC address")],
 ) -> Dict[str, Any]:
     """Implementation for getting detailed WiFi stats for a wireless client."""
     try:
-        wifi_details = await stats_manager.get_client_wifi_details(client_mac)
+        wifi_details = await stats_manager.get_client_wifi_details(mac_address)
         if not wifi_details:
-            return {"success": False, "error": f"Client '{client_mac}' not found or is not wireless."}
+            return {"success": False, "error": f"Client '{mac_address}' not found or is not wireless."}
 
         shaped = client_wifi_details_from_controller(wifi_details)
         return {
             "success": True,
             "site": stats_manager._connection.site,
-            "client_mac": client_mac,
+            "client_mac": mac_address,
             "wifi_details": shaped.model_dump(exclude_none=True),
         }
     except Exception as e:
-        logger.error("Error getting WiFi details for %s: %s", client_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get WiFi details for {client_mac}: {e}"}
+        logger.error("Error getting WiFi details for %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to get WiFi details for {mac_address}: {e}"}

@@ -37,6 +37,7 @@ server:
   #     - oon            # OON policies (internet scheduling, app blocking, QoS, routing)
   #     - hotspot        # Vouchers for guest network
   #     - network        # Network/VLAN management
+  #     - nat            # V2 NAT rule reads
   #     - port_forwards  # Port forwarding rules
   #     - qos            # QoS/traffic shaping rules
   #     - routing        # Static routes (V1 API)

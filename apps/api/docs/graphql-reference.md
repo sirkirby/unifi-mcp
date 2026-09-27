@@ -549,6 +549,11 @@ type CredentialPage {
   nextCursor: String
 }
 
+type CustomService {
+  name: String
+  address: String
+}
+
 """Detection-search filter vocabulary (the 'Find Anything' label groups)."""
 type DetectionSearchLabels {
   colors: JSON
@@ -571,6 +576,10 @@ type Device {
   state: String
   ip: String
   ports: JSON
+  systemStats: JSON
+  generalTemperature: Float
+  temperatures: JSON
+  uptimeStats: JSON
   sourceApi: String
 
   """
@@ -1057,6 +1066,17 @@ type LldpRow {
   capabilities: [String!]!
 }
 
+"""Site-wide mDNS services; network scope is read-only."""
+type MdnsSettings {
+  id: ID
+  siteId: String
+  mode: String
+  predefinedServices: [PredefinedService!]!
+  customServices: [CustomService!]!
+  enabledFor: String
+  enabledForNetworkIds: [String!]!
+}
+
 """
 Read-only device management (mgmt) posture: device SSH state, key and credential presence. No credential, hash or key material is ever returned.
 """
@@ -1077,6 +1097,36 @@ type MgmtSettings {
   advancedFeatureEnabled: Boolean
   unifiIdpEnabled: Boolean
   wifimanEnabled: Boolean
+}
+
+"""
+A V2 controller NAT rule. Its ID is scoped to the NAT tool family; do not pass it to port-forward or Integration API tools.
+"""
+type NatRule {
+  id: ID
+  isPredefined: Boolean
+  settingPreference: String
+  type: String
+  description: String
+  enabled: Boolean
+  ruleIndex: Int
+  protocol: String
+  ipVersion: String
+  inInterface: String
+  outInterface: String
+  ipAddress: String
+  port: String
+  logging: Boolean
+  exclude: Boolean
+  pppoeUseBaseInterface: Boolean
+  sourceFilter: JSON
+  destinationFilter: JSON
+}
+
+"""Paginated page of V2 NAT rules."""
+type NatRulePage {
+  items: [NatRule!]!
+  nextCursor: String
 }
 
 """A UniFi LAN/VLAN network configuration."""
@@ -1361,6 +1411,16 @@ type NetworkQuery {
   """Look up a single OON policy by id."""
   oonPolicy(controller: ID!, id: ID!, site: String! = "default"): OonPolicy
 
+  """
+  List V2 NAT rules in descending controller ID order. These IDs are scoped to the V2 NAT tool family — do not pass them to port-forward or Integration API tools.
+  """
+  natRules(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): NatRulePage!
+
+  """
+  Get a V2 NAT rule by its NAT-family ID; do not use port-forward or Integration API IDs.
+  """
+  natRule(controller: ID!, id: ID!, site: String! = "default"): NatRule
+
   """List port forwards on the given controller/site (paginated)."""
   portForwards(controller: ID!, site: String! = "default", limit: Int! = 50, cursor: String = null): PortForwardPage!
 
@@ -1414,6 +1474,14 @@ type NetworkQuery {
 
   """Get SNMP settings."""
   snmpSettings(controller: ID!, site: String! = "default"): SnmpSettings
+
+  """Get site-wide mDNS service settings and read-only network scope."""
+  mdnsSettings(controller: ID!, site: String! = "default"): MdnsSettings
+
+  """
+  Get site-wide threat management (IDS/IPS) and traffic identification settings.
+  """
+  threatManagementSettings(controller: ID!, site: String! = "default"): ThreatManagementSettings
 
   """
   Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.
@@ -1566,11 +1634,11 @@ type PortForward {
   enabled: Boolean!
   fwdProtocol: String
   dstPort: String
+  destinationIp: String
   fwdPort: String
   fwdIp: String
   src: String
   log: Boolean!
-  destinationIp: String
 }
 
 """Paginated page of port forwards."""
@@ -1642,6 +1710,10 @@ type PortStats {
   name: String
   model: String
   portTable: [PortStatRow!]!
+}
+
+type PredefinedService {
+  code: String
 }
 
 """UniFi Protect NVR health snapshot (pass-through)."""
@@ -2022,6 +2094,37 @@ type SystemInfo {
   uptime: Int
   numDevices: Int
   numClients: Int
+}
+
+"""
+Site-wide threat management (IDS/IPS) and traffic identification settings.
+"""
+type ThreatManagementSettings {
+  """
+  Raw IPS operation mode string from controller (e.g. 'disabled', 'ids', 'ips', 'ipsInline').
+  """
+  ipsMode: String
+
+  """
+  Normalized enabled state: true for known active modes, false for disabled, null for unknown/missing.
+  """
+  enabled: Boolean
+
+  """Enabled threat category codes (null when absent from controller)."""
+  enabledCategories: [String!]
+
+  """Protected network IDs (null when absent from controller)."""
+  enabledNetworks: [String!]
+
+  """
+  Traffic identification (DPI) enabled state (strict boolean, null if missing/malformed).
+  """
+  trafficIdentificationEnabled: Boolean
+
+  """
+  Device fingerprinting enabled state (strict boolean, null if missing/malformed).
+  """
+  deviceFingerprintingEnabled: Boolean
 }
 
 """A top-traffic client entry."""
@@ -2429,7 +2532,10 @@ Read-only access to UniFi Network resources.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).
 - `legacyFirewallRules: [LegacyFirewallRule!]!`  — List legacy (pre-zone-based) firewall rules. Sites still running the legacy engine return no zone-based policies or zones, so an empty firewallPolicies result does not mean no firewall rules are configured — check here as well.
 - `lldpNeighbors: LldpNeighbors`  — Get LLDP neighbors reported by a switch.
+- `mdnsSettings: MdnsSettings`  — Get site-wide mDNS service settings and read-only network scope.
 - `mgmtSettings: MgmtSettings`  — Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.
+- `natRule: NatRule`  — Get a V2 NAT rule by its NAT-family ID; do not use port-forward or Integration API IDs.
+- `natRules: NatRulePage!`  — List V2 NAT rules in descending controller ID order. These IDs are scoped to the V2 NAT tool family — do not pass them to port-forward or Integration API tools.
 - `networkDetail: Network`  — Look up a single LAN/VLAN network by id. (Named ``networkDetail`` because ``network`` is reserved for the namespace.)
 - `networkHealth: [NetworkHealth!]!`  — Get the controller's network-health subsystems list.
 - `networkStats: [StatPoint!]!`  — Network-wide stats timeseries.
@@ -2456,6 +2562,7 @@ Read-only access to UniFi Network resources.
 - `switchCapabilities: SwitchCapabilities`  — Get switch capabilities (caps dict + STP / dot1x flags).
 - `switchPorts: SwitchPorts`  — Get the port-override wrapper for a switch (name/model + per-port overrides).
 - `systemInfo: SystemInfo`  — Get controller system info (build, uptime, hardware).
+- `threatManagementSettings: ThreatManagementSettings`  — Get site-wide threat management (IDS/IPS) and traffic identification settings.
 - `topClients: [TopClient!]!`  — List top-traffic clients within a window.
 - `trafficFlowStatistics: TrafficFlowStatistics!`  — Aggregated Insights > Flows summary (risk/region counts + Top-Talkers).
 - `trafficFlows: TrafficFlowPage!`  — Query historical traffic flows (Insights > Flows), paginated.

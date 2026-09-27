@@ -11,6 +11,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import create_preview, delete_preview, update_preview
+from unifi_core.network.models.mdns import mdns_to_controller_update, validate_mdns_service_selection
 from unifi_core.network.models.system import (
     autobackup_to_controller_update,
     backup_from_controller,
@@ -22,6 +23,7 @@ from unifi_core.network.models.system import (
     system_info_from_controller,
 )
 from unifi_core.redaction import redact_sensitive_fields
+from unifi_core.write_verification import format_tool_payload
 from unifi_network_mcp.runtime import server, should_redact_sensitive_fields, system_manager
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,109 @@ logger = logging.getLogger(__name__)
 
 # Explicitly retrieve and log the server instance to confirm it's being used
 logger.info("System tools module loaded, server instance: %s", server)
+
+
+@server.tool(
+    name="unifi_get_mdns_settings",
+    auth="local_only",
+    description="Get site-wide mDNS service settings and read-only network scope.",
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def get_mdns_settings() -> Dict[str, Any]:
+    try:
+        settings = await system_manager.get_mdns_settings()
+        return redact_sensitive_fields(
+            {"success": True, "site": system_manager._connection.site, "mdns_settings": settings.model_dump()},
+            redact_sensitive=should_redact_sensitive_fields(),
+        )
+    except Exception as exc:
+        logger.error("Failed to get mDNS settings: %s", type(exc).__name__)
+        return {"success": False, "error": "Failed to get mDNS settings"}
+
+
+@server.tool(
+    name="unifi_update_mdns_settings",
+    auth="local_only",
+    description=(
+        "Update site-wide mDNS service mode, predefined services, or custom services. "
+        "Pass only the fields you want to change — current values are automatically preserved. "
+        "Each provided service list replaces the entire list. "
+        "Mode 'all' requires both service lists empty; mode 'custom' requires at least one service. "
+        "Network scope (enabled_for and enabled_for_network_ids) is read-only and preserved. "
+        "Changes may affect service discovery. Requires confirmation."
+    ),
+    permission_category="system",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def update_mdns_settings(
+    update_data: Annotated[
+        Dict[str, Any],
+        Field(description="Partial mDNS service settings: mode, predefined_services, custom_services only"),
+    ],
+    confirm: Annotated[bool, Field(description="Apply update when true; preview when false")] = False,
+) -> Dict[str, Any]:
+    try:
+        updates = mdns_to_controller_update(update_data)
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+    if not confirm:
+        try:
+            current = (await system_manager.get_mdns_settings()).model_dump()
+            try:
+                validate_mdns_service_selection({**current, **updates})
+            except ValueError as exc:
+                return {"success": False, "error": str(exc)}
+            return redact_sensitive_fields(
+                update_preview(
+                    resource_type="mdns_settings",
+                    resource_id=current.get("id") or "mdns",
+                    resource_name="mDNS Settings",
+                    current_state=current,
+                    updates=updates,
+                    warnings=["Changes may affect service discovery; network scope is preserved."],
+                ),
+                redact_sensitive=should_redact_sensitive_fields(),
+            )
+        except Exception as exc:
+            logger.error("Failed to prepare mDNS preview: %s", type(exc).__name__)
+            return {"success": False, "error": "Failed to prepare mDNS settings preview"}
+    try:
+        result = await system_manager.update_mdns_settings(updates)
+        return redact_sensitive_fields(
+            format_tool_payload(
+                result,
+                site=system_manager._connection.site,
+                success_message="mDNS settings updated and verified.",
+            ),
+            redact_sensitive=should_redact_sensitive_fields(),
+        )
+    except Exception as exc:
+        logger.error("Failed to update mDNS settings: %s", type(exc).__name__)
+        return {"success": False, "error": "Failed to update mDNS settings"}
+
+
+@server.tool(
+    name="unifi_get_threat_management_settings",
+    auth="local_only",
+    description="Get site-wide threat management (IDS/IPS) and traffic identification settings. Requires Network session credentials.",
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def get_threat_management_settings() -> Dict[str, Any]:
+    """Get site-wide threat management (IDS/IPS) and traffic identification settings."""
+    try:
+        settings = await system_manager.get_threat_management_settings()
+        return redact_sensitive_fields(
+            {
+                "success": True,
+                "site": system_manager._connection.site,
+                "threat_management_settings": settings.model_dump(),
+            },
+            redact_sensitive=should_redact_sensitive_fields(),
+        )
+    except Exception as exc:
+        logger.error("Failed to get threat management settings: %s", type(exc).__name__)
+        return {"success": False, "error": "Failed to get threat management settings"}
 
 
 @server.tool(

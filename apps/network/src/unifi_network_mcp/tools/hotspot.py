@@ -14,50 +14,108 @@ from unifi_core.confirmation import create_preview, preview_response
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models._actions import CreateVoucherInput, RevokeVoucherInput
 from unifi_core.network.models.vouchers import voucher_from_controller
-from unifi_network_mcp.runtime import hotspot_manager, server
+from unifi_core.network.read_views import VOUCHER_ALLOWED_FIELDS, shape_voucher_list
+from unifi_core.redaction import redact_sensitive_fields
+from unifi_network_mcp.runtime import hotspot_manager, server, should_redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
 
 
 @server.tool(
     name="unifi_list_vouchers",
-    description="""List all hotspot vouchers for the current site.
+    description="""List hotspot vouchers for the current site.
 
 Returns voucher codes, expiration times, usage quotas, and bandwidth limits.
-Vouchers are used for guest network access in captive portal setups.""",
+Vouchers are used for guest network access in captive portal setups. Supports
+optional limit, offset, case-insensitive search by code or note (including UI
+hyphenated codes), and strict fields projection. Deterministic pagination sorts
+by created_at descending with id descending tie-break for shaped calls;
+unshaped calls preserve controller return order for backward compatibility.""",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
-async def list_vouchers() -> Dict[str, Any]:
-    """List all hotspot vouchers."""
+async def list_vouchers(
+    limit: Annotated[
+        Optional[int],
+        Field(
+            default=None,
+            ge=1,
+            le=1000,
+            description="Optional maximum number of vouchers to return (1-1000). None preserves returning all vouchers.",
+        ),
+    ] = None,
+    offset: Annotated[
+        int,
+        Field(
+            default=0,
+            ge=0,
+            description="Zero-based offset into the vouchers collection (default 0).",
+        ),
+    ] = 0,
+    search: Annotated[
+        Optional[str],
+        Field(
+            default=None,
+            description="Optional case-insensitive substring search over voucher note and code (including UI hyphenated codes).",
+        ),
+    ] = None,
+    fields: Annotated[
+        Optional[str],
+        Field(
+            default=None,
+            description=(
+                "Optional comma-separated list of fields to include in each voucher. "
+                "Available fields: id, code, status, duration, qos_overwrite, created_at, "
+                "used_at, quota, used, note, up_limit_kbps, down_limit_kbps, data_limit_mb."
+            ),
+        ),
+    ] = None,
+) -> Dict[str, Any]:
+    """List hotspot vouchers with optional shaping."""
+    if limit is not None:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1 or limit > 1000:
+            return {
+                "success": False,
+                "error": f"Invalid limit: {limit}. Must be an integer between 1 and 1000.",
+            }
+
+    if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+        return {
+            "success": False,
+            "error": f"Invalid offset: {offset}. Must be a non-negative integer.",
+        }
+
+    if fields is not None:
+        if not isinstance(fields, str):
+            return {
+                "success": False,
+                "error": f"Invalid fields parameter type: {type(fields).__name__}. Expected comma-separated string.",
+            }
+        field_items = [f.strip() for f in fields.split(",") if f.strip()]
+        if field_items:
+            unknown_fields = set(field_items) - VOUCHER_ALLOWED_FIELDS
+            if unknown_fields:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Unknown projection fields: {sorted(unknown_fields)}. "
+                        f"Allowed fields: {sorted(VOUCHER_ALLOWED_FIELDS)}"
+                    ),
+                }
+
     try:
         vouchers = await hotspot_manager.get_vouchers()
-
-        formatted_vouchers = []
-        for v in vouchers:
-            shaped = voucher_from_controller(v)
-            formatted = shaped.model_dump(exclude_none=True)
-            # Preserve extra fields not captured by the base shape
-            raw = v if isinstance(v, dict) else {}
-            if raw.get("quota") is not None:
-                formatted["quota"] = raw.get("quota", 1)
-            if raw.get("used") is not None:
-                formatted["used"] = raw.get("used", 0)
-            if raw.get("note"):
-                formatted["note"] = raw.get("note")
-            if raw.get("qos_rate_max_up"):
-                formatted["up_limit_kbps"] = raw.get("qos_rate_max_up")
-            if raw.get("qos_rate_max_down"):
-                formatted["down_limit_kbps"] = raw.get("qos_rate_max_down")
-            if raw.get("qos_usage_quota"):
-                formatted["data_limit_mb"] = raw.get("qos_usage_quota")
-            formatted_vouchers.append(formatted)
-
-        return {
-            "success": True,
-            "site": hotspot_manager._connection.site,
-            "count": len(formatted_vouchers),
-            "vouchers": formatted_vouchers,
-        }
+        response = shape_voucher_list(
+            vouchers,
+            site=hotspot_manager._connection.site,
+            search=search,
+            limit=limit,
+            offset=offset,
+            fields=fields,
+        )
+        if not response.get("success", True):
+            return response
+        redact_sensitive = should_redact_sensitive_fields()
+        return redact_sensitive_fields(response, redact_sensitive=redact_sensitive)
     except Exception as e:
         logger.error("Error listing vouchers: %s", e, exc_info=True)
         return {"success": False, "error": f"Failed to list vouchers: {e}"}

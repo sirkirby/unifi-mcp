@@ -366,25 +366,25 @@ async def delete_port_profile(
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_switch_ports(
-    device_mac: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
 ) -> Dict[str, Any]:
     """Gets port override assignments for a switch."""
     try:
-        if not device_mac:
-            return {"success": False, "error": "device_mac is required"}
+        if not mac_address:
+            return {"success": False, "error": "mac_address is required"}
 
-        result = await switch_manager.get_switch_ports(device_mac)
+        result = await switch_manager.get_switch_ports(mac_address)
         if not result:
-            return {"success": False, "error": f"Switch '{device_mac}' not found or has no port data."}
+            return {"success": False, "error": f"Switch '{mac_address}' not found or has no port data."}
 
         return {
             "success": True,
-            "device_mac": device_mac,
+            "device_mac": mac_address,
             "details": json.loads(json.dumps(result, default=str)),
         }
     except Exception as e:
-        logger.error("Error getting switch ports for %s: %s", device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get switch ports for {device_mac}: {e}"}
+        logger.error("Error getting switch ports for %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to get switch ports for {mac_address}: {e}"}
 
 
 @server.tool(
@@ -395,25 +395,25 @@ async def get_switch_ports(
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_port_stats(
-    device_mac: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
 ) -> Dict[str, Any]:
     """Gets live port table statistics for a switch."""
     try:
-        if not device_mac:
-            return {"success": False, "error": "device_mac is required"}
+        if not mac_address:
+            return {"success": False, "error": "mac_address is required"}
 
-        result = await switch_manager.get_port_stats(device_mac)
+        result = await switch_manager.get_port_stats(mac_address)
         if not result:
-            return {"success": False, "error": f"Switch '{device_mac}' not found or has no port data."}
+            return {"success": False, "error": f"Switch '{mac_address}' not found or has no port data."}
 
         return {
             "success": True,
-            "device_mac": device_mac,
+            "device_mac": mac_address,
             "details": json.loads(json.dumps(result, default=str)),
         }
     except Exception as e:
-        logger.error("Error getting port stats for %s: %s", device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get port stats for {device_mac}: {e}"}
+        logger.error("Error getting port stats for %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to get port stats for {mac_address}: {e}"}
 
 
 @server.tool(
@@ -424,25 +424,25 @@ async def get_port_stats(
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_lldp_neighbors(
-    device_mac: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
 ) -> Dict[str, Any]:
     """Gets LLDP neighbor table for a switch."""
     try:
-        if not device_mac:
-            return {"success": False, "error": "device_mac is required"}
+        if not mac_address:
+            return {"success": False, "error": "mac_address is required"}
 
-        result = await switch_manager.get_lldp_neighbors(device_mac)
+        result = await switch_manager.get_lldp_neighbors(mac_address)
         if not result:
-            return {"success": False, "error": f"Switch '{device_mac}' not found or has no LLDP data."}
+            return {"success": False, "error": f"Switch '{mac_address}' not found or has no LLDP data."}
 
         return {
             "success": True,
-            "device_mac": device_mac,
+            "device_mac": mac_address,
             "details": json.loads(json.dumps(result, default=str)),
         }
     except Exception as e:
-        logger.error("Error getting LLDP neighbors for %s: %s", device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get LLDP neighbors for {device_mac}: {e}"}
+        logger.error("Error getting LLDP neighbors for %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to get LLDP neighbors for {mac_address}: {e}"}
 
 
 @server.tool(
@@ -453,25 +453,25 @@ async def get_lldp_neighbors(
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
 )
 async def get_switch_capabilities(
-    device_mac: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch (from unifi_list_devices)")],
 ) -> Dict[str, Any]:
     """Gets switch hardware capabilities."""
     try:
-        if not device_mac:
-            return {"success": False, "error": "device_mac is required"}
+        if not mac_address:
+            return {"success": False, "error": "mac_address is required"}
 
-        result = await switch_manager.get_switch_capabilities(device_mac)
+        result = await switch_manager.get_switch_capabilities(mac_address)
         if not result:
-            return {"success": False, "error": f"Switch '{device_mac}' not found or has no capability data."}
+            return {"success": False, "error": f"Switch '{mac_address}' not found or has no capability data."}
 
         return {
             "success": True,
-            "device_mac": device_mac,
+            "device_mac": mac_address,
             "details": json.loads(json.dumps(result, default=str)),
         }
     except Exception as e:
-        logger.error("Error getting switch capabilities for %s: %s", device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get switch capabilities for {device_mac}: {e}"}
+        logger.error("Error getting switch capabilities for %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to get switch capabilities for {mac_address}: {e}"}
 
 
 # ---- Switch Port Write Operations ----
@@ -488,7 +488,7 @@ async def get_switch_capabilities(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def set_switch_port_profile(
-    device_mac: Annotated[str, Field(description="MAC address of the switch")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch")],
     port_overrides: Annotated[
         List[Dict],
         Field(
@@ -504,25 +504,25 @@ async def set_switch_port_profile(
 ) -> Dict[str, Any]:
     """Sets port overrides for a switch."""
     try:
-        SetSwitchPortProfileInput(device_mac=device_mac, port_overrides=port_overrides)
+        SetSwitchPortProfileInput(device_mac=mac_address, port_overrides=port_overrides)
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
     if not confirm:
         return create_preview(
             resource_type="switch_port_assignment",
-            resource_data={"device_mac": device_mac, "port_overrides": port_overrides},
-            resource_name=device_mac,
+            resource_data={"mac_address": mac_address, "port_overrides": port_overrides},
+            resource_name=mac_address,
         )
 
     try:
-        success = await switch_manager.set_port_overrides(device_mac, port_overrides)
+        success = await switch_manager.set_port_overrides(mac_address, port_overrides)
         if success:
-            return {"success": True, "message": f"Port overrides updated for switch '{device_mac}'."}
-        return {"success": False, "error": f"Failed to set port overrides for '{device_mac}'."}
+            return {"success": True, "message": f"Port overrides updated for switch '{mac_address}'."}
+        return {"success": False, "error": f"Failed to set port overrides for '{mac_address}'."}
     except Exception as e:
-        logger.error("Error setting port overrides for %s: %s", device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to set port overrides for {device_mac}: {e}"}
+        logger.error("Error setting port overrides for %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to set port overrides for {mac_address}: {e}"}
 
 
 @server.tool(
@@ -534,7 +534,7 @@ async def set_switch_port_profile(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=False),
 )
 async def power_cycle_port(
-    device_mac: Annotated[str, Field(description="MAC address of the switch")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch")],
     port_idx: Annotated[int, Field(description="1-based port number to power cycle")],
     confirm: Annotated[
         bool,
@@ -545,19 +545,19 @@ async def power_cycle_port(
     if not confirm:
         return create_preview(
             resource_type="poe_power_cycle",
-            resource_data={"device_mac": device_mac, "port_idx": port_idx},
-            resource_name=f"{device_mac}:port{port_idx}",
+            resource_data={"mac_address": mac_address, "port_idx": port_idx},
+            resource_name=f"{mac_address}:port{port_idx}",
             warnings=[f"This will briefly cut PoE power to port {port_idx}, rebooting any connected PoE device."],
         )
 
     try:
-        success = await switch_manager.power_cycle_port(device_mac, port_idx)
+        success = await switch_manager.power_cycle_port(mac_address, port_idx)
         if success:
-            return {"success": True, "message": f"Power cycled port {port_idx} on switch '{device_mac}'."}
-        return {"success": False, "error": f"Failed to power cycle port {port_idx} on '{device_mac}'."}
+            return {"success": True, "message": f"Power cycled port {port_idx} on switch '{mac_address}'."}
+        return {"success": False, "error": f"Failed to power cycle port {port_idx} on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error power cycling port %s on %s: %s", port_idx, device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to power cycle port {port_idx} on {device_mac}: {e}"}
+        logger.error("Error power cycling port %s on %s: %s", port_idx, mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to power cycle port {port_idx} on {mac_address}: {e}"}
 
 
 # ---- Advanced Switch Configuration ----
@@ -574,7 +574,7 @@ async def power_cycle_port(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def configure_port_mirror(
-    device_mac: Annotated[str, Field(description="MAC address of the switch")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch")],
     port_overrides: Annotated[
         List[Dict],
         Field(
@@ -589,25 +589,25 @@ async def configure_port_mirror(
 ) -> Dict[str, Any]:
     """Configures port mirroring."""
     try:
-        ConfigurePortMirrorInput(device_mac=device_mac, port_overrides=port_overrides)
+        ConfigurePortMirrorInput(device_mac=mac_address, port_overrides=port_overrides)
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
     if not confirm:
         return create_preview(
             resource_type="port_mirror",
-            resource_data={"device_mac": device_mac, "port_overrides": port_overrides},
-            resource_name=device_mac,
+            resource_data={"mac_address": mac_address, "port_overrides": port_overrides},
+            resource_name=mac_address,
         )
 
     try:
-        success = await switch_manager.set_port_overrides(device_mac, port_overrides)
+        success = await switch_manager.set_port_overrides(mac_address, port_overrides)
         if success:
-            return {"success": True, "message": f"Port mirror configured on switch '{device_mac}'."}
-        return {"success": False, "error": f"Failed to configure port mirror on '{device_mac}'."}
+            return {"success": True, "message": f"Port mirror configured on switch '{mac_address}'."}
+        return {"success": False, "error": f"Failed to configure port mirror on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error configuring port mirror on %s: %s", device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to configure port mirror on {device_mac}: {e}"}
+        logger.error("Error configuring port mirror on %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to configure port mirror on {mac_address}: {e}"}
 
 
 @server.tool(
@@ -623,7 +623,7 @@ async def configure_port_mirror(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def configure_port_aggregation(
-    device_mac: Annotated[str, Field(description="MAC address of the switch")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch")],
     port_overrides: Annotated[
         List[Dict],
         Field(
@@ -639,25 +639,25 @@ async def configure_port_aggregation(
 ) -> Dict[str, Any]:
     """Configures link aggregation."""
     try:
-        ConfigurePortAggregationInput(device_mac=device_mac, port_overrides=port_overrides)
+        ConfigurePortAggregationInput(device_mac=mac_address, port_overrides=port_overrides)
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
     if not confirm:
         return create_preview(
             resource_type="port_aggregation",
-            resource_data={"device_mac": device_mac, "port_overrides": port_overrides},
-            resource_name=device_mac,
+            resource_data={"mac_address": mac_address, "port_overrides": port_overrides},
+            resource_name=mac_address,
         )
 
     try:
-        success = await switch_manager.set_port_overrides(device_mac, port_overrides)
+        success = await switch_manager.set_port_overrides(mac_address, port_overrides)
         if success:
-            return {"success": True, "message": f"Link aggregation configured on switch '{device_mac}'."}
-        return {"success": False, "error": f"Failed to configure aggregation on '{device_mac}'."}
+            return {"success": True, "message": f"Link aggregation configured on switch '{mac_address}'."}
+        return {"success": False, "error": f"Failed to configure aggregation on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error configuring port aggregation on %s: %s", device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to configure port aggregation on {device_mac}: {e}"}
+        logger.error("Error configuring port aggregation on %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to configure port aggregation on {mac_address}: {e}"}
 
 
 @server.tool(
@@ -670,7 +670,7 @@ async def configure_port_aggregation(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def update_switch_stp(
-    device_mac: Annotated[str, Field(description="MAC address of the switch")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch")],
     stp_priority: Annotated[
         int,
         Field(description="STP bridge priority (4096-61440 in steps of 4096, default 32768)"),
@@ -690,18 +690,18 @@ async def update_switch_stp(
     if not confirm:
         return create_preview(
             resource_type="switch_stp",
-            resource_data={"device_mac": device_mac, **config},
-            resource_name=device_mac,
+            resource_data={"mac_address": mac_address, **config},
+            resource_name=mac_address,
         )
 
     try:
-        success = await switch_manager.update_device_config(device_mac, config)
+        success = await switch_manager.update_device_config(mac_address, config)
         if success:
-            return {"success": True, "message": f"STP config updated on switch '{device_mac}'."}
-        return {"success": False, "error": f"Failed to update STP config on '{device_mac}'."}
+            return {"success": True, "message": f"STP config updated on switch '{mac_address}'."}
+        return {"success": False, "error": f"Failed to update STP config on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error updating STP on %s: %s", device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to update STP on {device_mac}: {e}"}
+        logger.error("Error updating STP on %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to update STP on {mac_address}: {e}"}
 
 
 @server.tool(
@@ -715,7 +715,7 @@ async def update_switch_stp(
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
 )
 async def set_jumbo_frames(
-    device_mac: Annotated[str, Field(description="MAC address of the switch")],
+    mac_address: Annotated[str, Field(description="MAC address of the switch")],
     enabled: Annotated[bool, Field(description="True to enable jumbo frames, False to disable")],
     confirm: Annotated[
         bool,
@@ -724,23 +724,23 @@ async def set_jumbo_frames(
 ) -> Dict[str, Any]:
     """Enables or disables jumbo frames on a switch."""
     try:
-        SetJumboFramesInput(device_mac=device_mac, enabled=enabled)
+        SetJumboFramesInput(device_mac=mac_address, enabled=enabled)
     except ValidationError as e:
         return {"success": False, "error": f"Invalid input: {e.errors()[0]['msg']}"}
 
     if not confirm:
         return create_preview(
             resource_type="jumbo_frames",
-            resource_data={"device_mac": device_mac, "jumboframe_enabled": enabled},
-            resource_name=device_mac,
+            resource_data={"mac_address": mac_address, "jumboframe_enabled": enabled},
+            resource_name=mac_address,
         )
 
     try:
-        success = await switch_manager.update_device_config(device_mac, {"jumboframe_enabled": enabled})
+        success = await switch_manager.update_device_config(mac_address, {"jumboframe_enabled": enabled})
         if success:
             state = "enabled" if enabled else "disabled"
-            return {"success": True, "message": f"Jumbo frames {state} on switch '{device_mac}'."}
-        return {"success": False, "error": f"Failed to set jumbo frames on '{device_mac}'."}
+            return {"success": True, "message": f"Jumbo frames {state} on switch '{mac_address}'."}
+        return {"success": False, "error": f"Failed to set jumbo frames on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error setting jumbo frames on %s: %s", device_mac, e, exc_info=True)
-        return {"success": False, "error": f"Failed to set jumbo frames on {device_mac}: {e}"}
+        logger.error("Error setting jumbo frames on %s: %s", mac_address, e, exc_info=True)
+        return {"success": False, "error": f"Failed to set jumbo frames on {mac_address}: {e}"}

@@ -39,10 +39,11 @@ from tests.graphql.fixtures._helpers import bootstrap, graphql_query, stub_manag
 
 
 @pytest.mark.asyncio
-async def test_edge_client_device(tmp_path, monkeypatch):
+@pytest.mark.parametrize("redact", [True, False])
+async def test_edge_client_device(tmp_path, monkeypatch, redact):
     """Client.device — client resolves to its connected AP via ap_mac lookup."""
     monkeypatch.setenv("UNIFI_API_DB_KEY", "k")
-    app, key, cid = await bootstrap(tmp_path, product="network")
+    app, key, cid = await bootstrap(tmp_path, product="network", redact_sensitive_fields=redact)
     stub_managers(
         monkeypatch,
         {
@@ -50,7 +51,12 @@ async def test_edge_client_device(tmp_path, monkeypatch):
                 {"mac": "aa:bb:cc:dd:ee:01", "ap_mac": "ap:01:02:03:04:05"},
             ],
             ("network", "device_manager", "get_devices"): [
-                {"mac": "ap:01:02:03:04:05", "name": "Living Room AP", "model": "U7PRO"},
+                {
+                    "mac": "ap:01:02:03:04:05",
+                    "name": "Living Room AP",
+                    "model": "U7PRO",
+                    "system-stats": {"cpu": "12", "api_key": "secret"},
+                },
             ],
         },
     )
@@ -59,7 +65,7 @@ async def test_edge_client_device(tmp_path, monkeypatch):
         key,
         f'''{{
         network {{ clients(controller: "{cid}") {{
-            items {{ mac device {{ name model }} }}
+            items {{ mac device {{ name model systemStats }} }}
         }} }}
     }}''',
     )
@@ -68,6 +74,7 @@ async def test_edge_client_device(tmp_path, monkeypatch):
     assert item["device"] is not None
     assert item["device"]["name"] == "Living Room AP"
     assert item["device"]["model"] == "U7PRO"
+    assert item["device"]["systemStats"] == {"cpu": "12", "api_key": "***REDACTED***" if redact else "secret"}
 
 
 # ---------------------------------------------------------------------------

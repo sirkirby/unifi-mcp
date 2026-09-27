@@ -42,7 +42,7 @@ class TestUnifiRecentEvents:
         mock_event_manager.get_recent_from_buffer.return_value = []
         mock_event_manager.buffer_size = 0
 
-        await unifi_recent_events(event_type="EVT_WU_", mac="aa:bb:cc:dd:ee:ff", limit=5)
+        await unifi_recent_events(event_type="EVT_WU_", mac_address="aa:bb:cc:dd:ee:ff", limit=5)
 
         mock_event_manager.get_recent_from_buffer.assert_called_once_with(
             event_type="EVT_WU_",

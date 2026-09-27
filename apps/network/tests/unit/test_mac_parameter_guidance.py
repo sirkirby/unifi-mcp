@@ -1,9 +1,4 @@
-"""The MAC parameter is spelled four ways across the Network tools.
-
-The canonical names are not changed and no alias is accepted. Instead the list
-tools that hand a caller a MAC say which parameter the next call takes, so the
-spelling is chosen from the description rather than guessed and rejected.
-"""
+"""Network subject MACs use mac_address; the distinct RF scan AP uses ap_mac."""
 
 from __future__ import annotations
 
@@ -24,8 +19,8 @@ def descriptions() -> dict[str, str]:
 @pytest.mark.parametrize(
     ("tool", "expected"),
     [
-        ("unifi_list_clients", ("mac_address", "client_mac", "unifi_get_client_details")),
-        ("unifi_list_devices", ("mac_address", "device_mac", "unifi_get_device_details")),
+        ("unifi_list_clients", ("mac_address", "unifi_get_client_sessions", "unifi_get_client_details")),
+        ("unifi_list_devices", ("mac_address", "ap_mac", "unifi_get_switch_ports")),
         ("unifi_list_blocked_clients", ("mac_address", "unifi_unblock_client")),
     ],
 )
@@ -41,8 +36,8 @@ def test_list_description_names_the_next_call_parameter(
     ("tool", "parameter"),
     [
         ("unifi_get_client_details", "mac_address"),
-        ("unifi_get_client_sessions", "client_mac"),
-        ("unifi_get_switch_ports", "device_mac"),
+        ("unifi_get_client_sessions", "mac_address"),
+        ("unifi_get_switch_ports", "mac_address"),
         ("unifi_unblock_client", "mac_address"),
         ("unifi_get_device_details", "mac_address"),
     ],
@@ -91,4 +86,5 @@ def test_every_mac_spelling_in_use_is_named_by_one_of_the_descriptions(descripti
     missing = sorted(name for name in in_use if name not in named)
 
     assert in_use, "no MAC parameters found at all; the manifest fixture is wrong"
+    assert in_use == {"mac_address", "ap_mac"}
     assert not missing, f"no list description names {missing}"

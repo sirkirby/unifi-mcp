@@ -5,7 +5,7 @@
   <img src="../../assets/hero-network.svg" alt="UniFi Network MCP Server" width="720">
 </p>
 
-MCP server exposing 195 UniFi Network Controller tools for AI assistants and
+MCP server exposing 206 UniFi Network Controller tools for AI assistants and
 other MCP-capable clients. Query clients, devices, firewall rules, VLANs, VPNs,
 Traffic Flows, stats, and more with safe-by-default permissions and
 preview-before-confirm for all mutations.
@@ -63,6 +63,9 @@ cd unifi-mcp && uv sync
 
 ## Usage Examples
 
+For the approved breaking MAC argument rename in the next minor release, see the
+[MAC parameter migration guide](docs/mac-parameter-migration.md).
+
 Once connected, just ask your AI agent in natural language:
 
 > "Show me all clients on the Guest VLAN with their signal strength and data usage"
@@ -80,6 +83,34 @@ Once connected, just ask your AI agent in natural language:
 > "Show me the largest traffic flows from the last hour and summarize who talked to what."
 
 All mutations (firewall rules, device changes, client blocking) use a **preview-then-confirm** flow — you see exactly what will change before anything is applied.
+
+### V2 NAT rules
+
+`unifi_list_nat_rules` and `unifi_get_nat_rule` read V2 NAT rules. The create,
+update, delete, and toggle tools require Network session credentials and use
+V2 NAT rule IDs; port-forward and Integration API IDs are different. Public
+writes cover DNAT, SNAT, and MASQUERADE with IPv4, `tcp_udp` or `all`, and
+`NONE` or `ADDRESS_AND_PORT` filters. Creates default to `enabled=false`.
+Created rules are marked manual and non-predefined, and both values are checked
+on readback. Existing rules with missing or non-manual origin are not editable
+through these tools.
+SNAT rules with a translated `port` require `source_filter.port`; the controller
+validates port correspondence. Existing rules missing that source port must be
+corrected in the same update before they can be edited through these tools.
+Toggle takes an explicit `enabled` boolean, so repeating the same request is
+a no-op. IPv6, PPPoE, inverted/excluded matching, and other filter variants
+are not verified for public writes.
+Selector edits on a stored rule with an unverified type are refused, even when
+the same request changes its type to a verified one.
+
+The MCP update preview shows a fresh before/after merge. Confirmation reads
+fresh state again, sends at most one full replacement, then checks persistence;
+delete checks fresh absence. If the controller reply or readback is uncertain,
+list rules before retrying. A concurrent controller edit between fetch and PUT
+can be overwritten because V2 NAT has no conditional replacement. These checks
+prove stored configuration, not packet-level enforcement. Existing Core NAT
+methods retain their return shapes; controller mutation exceptions now carry
+safe fixed guidance instead of raw response text.
 
 ## Configure
 
@@ -271,7 +302,7 @@ Each device record now includes additional fields alongside the existing MAC, na
 
 - [Configuration](docs/configuration.md) — Full env var reference, YAML config, controller type detection
 - [Permissions](docs/permissions.md) — Permission system, category defaults, how to enable high-risk tools
-- [Tool Catalog](docs/tools.md) — All 195 tools organized by category
+- [Tool Catalog](docs/tools.md) — All 206 tools organized by category
 - [Transports](docs/transports.md) — stdio, Streamable HTTP, and SSE setup
 - [Troubleshooting and support bundles](docs/troubleshooting.md) — Reviewed support evidence, connection issues, SSL, missing tools
 

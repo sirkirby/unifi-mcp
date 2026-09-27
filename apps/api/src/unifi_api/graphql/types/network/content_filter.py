@@ -9,8 +9,7 @@ Phase 6 PR2 Task 22 migration target. One read shape that used to live in
                       manager — both LIST and DETAIL receive the same shape)
 
 The mutation ack serializer (``ContentFilterMutationAckSerializer``) stays
-in the original module for update + delete dispatch (no create — UniFi ships
-a fixed set of profiles).
+in the original module for create, update, and delete dispatch.
 
 Each type's ``from_manager_output(raw)`` classmethod replaces the dict-shaping
 logic that used to live in serializers/network/content_filter.py.
@@ -46,12 +45,12 @@ class ContentFilter:
     client_macs: list[str]
     network_ids: list[str]
     schedule_mode: str | None
-    schedule_days: list[str] | None = None
-    schedule_time_all_day: bool | None = None
-    schedule_time_start: str | None = None
-    schedule_time_end: str | None = None
-    schedule_date_start: str | None = None
-    schedule_date_end: str | None = None
+    schedule_days: list[str] | None
+    schedule_time_all_day: bool | None
+    schedule_time_start: str | None
+    schedule_time_end: str | None
+    schedule_date_start: str | None
+    schedule_date_end: str | None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -70,6 +69,7 @@ class ContentFilter:
         safe_search = _get(obj, "safe_search") or []
         schedule = _get(obj, "schedule") or {}
         schedule_mode = schedule.get("mode") if isinstance(schedule, dict) else _get(obj, "schedule_mode")
+        schedule = schedule if isinstance(schedule, dict) else {}
         return cls(
             id=_get(obj, "_id") or _get(obj, "id"),
             name=_get(obj, "name"),
@@ -81,6 +81,12 @@ class ContentFilter:
             client_macs=list(client_macs) if isinstance(client_macs, list) else [],
             network_ids=list(network_ids) if isinstance(network_ids, list) else [],
             schedule_mode=schedule_mode,
+            schedule_days=schedule.get("repeat_on_days"),
+            schedule_time_all_day=schedule.get("time_all_day"),
+            schedule_time_start=schedule.get("time_range_start"),
+            schedule_time_end=schedule.get("time_range_end"),
+            schedule_date_start=schedule.get("date_start"),
+            schedule_date_end=schedule.get("date_end"),
         )
 
     def to_dict(self) -> dict:

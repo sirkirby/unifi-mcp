@@ -19,7 +19,47 @@ os.environ.setdefault("UNIFI_PASSWORD", "test")
 
 class TestCreatePortForward:
     @pytest.mark.asyncio
-    async def test_full_create_maps_to_controller_fields(self):
+    async def test_full_create_destination_preview_and_payload(self):
+        data = {
+            "name": "Web",
+            "dst_port": "443",
+            "fwd_port": "8443",
+            "fwd_ip": "192.168.1.10",
+            "destination_ip": "198.51.100.69",
+            "enabled": False,
+        }
+        with patch("unifi_network_mcp.tools.port_forwards.firewall_manager") as manager:
+            manager.create_port_forward = AsyncMock(return_value={"_id": "pf_001"})
+            from unifi_network_mcp.tools.port_forwards import create_port_forward
+
+            preview = await create_port_forward(data)
+            assert preview["preview"]["will_create"]["destination_ip"] == "198.51.100.69"
+            manager.create_port_forward.assert_not_called()
+            result = await create_port_forward(data, confirm=True)
+        assert result["success"] is True
+        assert manager.create_port_forward.await_args.args[0]["destination_ip"] == "198.51.100.69"
+
+    @pytest.mark.asyncio
+    async def test_full_create_rejects_invalid_destination(self):
+        with patch("unifi_network_mcp.tools.port_forwards.firewall_manager") as manager:
+            from unifi_network_mcp.tools.port_forwards import create_port_forward
+
+            result = await create_port_forward(
+                {
+                    "name": "Web",
+                    "dst_port": "443",
+                    "fwd_port": "8443",
+                    "fwd_ip": "192.168.1.10",
+                    "destination_ip": "2001:db8::1",
+                },
+                confirm=True,
+            )
+        assert result["success"] is False
+        manager.create_port_forward.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("protocol", [None, "tcp", "udp", "tcp_udp"])
+    async def test_full_create_maps_to_controller_fields(self, protocol):
         created = {"_id": "pf_001", "name": "Web Server", "fwd": "192.168.1.10"}
         with patch("unifi_network_mcp.tools.port_forwards.firewall_manager") as mock_fm:
             mock_fm.create_port_forward = AsyncMock(return_value=created)
@@ -32,7 +72,7 @@ class TestCreatePortForward:
                     "dst_port": "443",
                     "fwd_port": "8443",
                     "fwd_ip": "192.168.1.10",
-                    "protocol": "tcp_udp",
+                    **({"protocol": protocol} if protocol is not None else {}),
                 },
                 confirm=True,
             )
@@ -40,7 +80,7 @@ class TestCreatePortForward:
         assert result["success"] is True
         payload = mock_fm.create_port_forward.await_args.args[0]
         assert payload["fwd"] == "192.168.1.10"
-        assert payload["proto"] == "tcp_udp"
+        assert payload["proto"] == (protocol or "tcp_udp")
         assert "fwd_ip" not in payload
         assert "fwd_protocol" not in payload
 
@@ -140,6 +180,42 @@ class TestCreatePortForward:
 
 
 class TestUpdatePortForward:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("value, expected", [("198.51.100.70", "198.51.100.70"), (None, "any"), ("", "any")])
+    async def test_destination_update_and_clear(self, value, expected):
+        current = MagicMock(
+            raw={
+                "_id": "pf_001",
+                "destination_ip": "198.51.100.69",
+                "enabled": False,
+                "src": "203.0.113.8",
+                "src_limiting_enabled": True,
+            }
+        )
+        with patch("unifi_network_mcp.tools.port_forwards.firewall_manager") as manager:
+            manager.get_port_forward_by_id = AsyncMock(return_value=current)
+            manager.update_port_forward = AsyncMock(return_value=True)
+            from unifi_network_mcp.tools.port_forwards import update_port_forward
+
+            preview = await update_port_forward("pf_001", {"destination_ip": value}, confirm=False)
+            assert preview["preview"]["current"]["destination_ip"] == "198.51.100.69"
+            assert preview["preview"]["proposed"]["destination_ip"] == expected
+            manager.update_port_forward.assert_not_called()
+            result = await update_port_forward("pf_001", {"destination_ip": value}, confirm=True)
+        assert result["success"] is True
+        manager.update_port_forward.assert_awaited_once_with("pf_001", {"destination_ip": expected})
+
+    @pytest.mark.asyncio
+    async def test_unrelated_update_does_not_clear_destination(self):
+        current = MagicMock(raw={"_id": "pf_001", "destination_ip": "198.51.100.69"})
+        with patch("unifi_network_mcp.tools.port_forwards.firewall_manager") as manager:
+            manager.get_port_forward_by_id = AsyncMock(return_value=current)
+            manager.update_port_forward = AsyncMock(return_value=True)
+            from unifi_network_mcp.tools.port_forwards import update_port_forward
+
+            await update_port_forward("pf_001", {"enabled": False}, confirm=True)
+        manager.update_port_forward.assert_awaited_once_with("pf_001", {"enabled": False})
+
     @pytest.mark.asyncio
     async def test_preview_uses_normalized_current_state(self):
         current = MagicMock(
@@ -373,3 +449,19 @@ class TestDeletePortForward:
         assert result["success"] is False
         assert "required" in result["error"]
         mock_fm.delete_port_forward.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("extra", [{}, {"enabled": False}])
+async def test_explicit_null_source_removes_restriction(extra):
+    current = MagicMock(raw={"_id": "pf_001", "src": "203.0.113.8", "src_limiting_enabled": True})
+    with patch("unifi_network_mcp.tools.port_forwards.firewall_manager") as manager:
+        manager.get_port_forward_by_id = AsyncMock(return_value=current)
+        manager.update_port_forward = AsyncMock(return_value=True)
+        from unifi_network_mcp.tools.port_forwards import update_port_forward
+
+        result = await update_port_forward("pf_001", {"src_ip": None, **extra}, confirm=True)
+    assert result["success"] is True
+    manager.update_port_forward.assert_awaited_once_with(
+        "pf_001", {"src": "any", "src_limiting_enabled": False, **extra}
+    )

@@ -5,9 +5,7 @@ Content filtering uses DNS-based category blocking and safe search
 enforcement. Profiles can target specific clients (by MAC address)
 or entire networks (by network ID).
 
-NOTE: The UniFi API does not support creating content filtering profiles
-via POST (returns 405). Profiles must be created through the UniFi UI
-first, then managed (list, update, delete) via these tools.
+Creation uses the Network UI's /content-filtering/create endpoint.
 """
 
 import json
@@ -15,9 +13,9 @@ import logging
 from typing import Annotated, Any, Dict
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, ValidationError
 
-from unifi_core.confirmation import delete_preview, update_preview
+from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.network.models.content_filter import (
     MUTABLE_FIELDS as CF_MUTABLE_FIELDS,
@@ -25,10 +23,13 @@ from unifi_core.network.models.content_filter import (
 from unifi_core.network.models.content_filter import (
     from_controller as cf_from_controller,
 )
+from unifi_core.network.models.content_filter import to_controller_create as cf_to_create
 from unifi_core.network.models.content_filter import (
     to_controller_update as cf_to_update,
 )
-from unifi_network_mcp.runtime import content_filter_manager, server
+from unifi_core.network.models.content_filter import with_create_defaults
+from unifi_core.redaction import redact_sensitive_fields
+from unifi_network_mcp.runtime import content_filter_manager, server, should_redact_sensitive_fields
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,6 @@ logger = logging.getLogger(__name__)
     "Profiles control DNS-based category blocking, safe search enforcement "
     "(GOOGLE, YOUTUBE, BING), and domain allow/block lists. "
     "Profiles can target specific clients by MAC or entire networks by ID. "
-    "NOTE: Profiles must be created in the UniFi UI — the API only supports list, update, and delete. "
     "Common categories: FAMILY, ADVERTISEMENT, MALWARE, PHISHING, BOTNETS, SPAM, SPYWARE, "
     "HACKING, ANONYMIZERS, DNS_TUNNELING, ADULT, ALCOHOL, DRUGS, GAMBLING, VIOLENCE, "
     "PORNOGRAPHY, NUDITY, WEAPONS, DATING, HATE_SPEECH_AND_EXTREMISM, CHILD_ABUSE, CIPA, "
@@ -107,6 +107,54 @@ async def get_content_filter_details(
 
 
 @server.tool(
+    name="unifi_create_content_filter",
+    description="Create a content filtering profile with a non-empty blocked_categories list and exactly one "
+    "non-empty client_macs or network_ids scope. Profiles start disabled with an ALWAYS all-day schedule unless "
+    "those fields are explicitly set. "
+    "Requires confirmation.",
+    permission_category="content_filter",
+    permission_action="create",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False),
+)
+async def create_content_filter(
+    filter_data: Annotated[
+        dict,
+        Field(
+            description="Profile fields: non-empty name and blocked_categories list; exactly one non-empty "
+            "client_macs or network_ids list; optional enabled, safe_search, and flattened schedule fields"
+        ),
+    ],
+    confirm: Annotated[
+        bool, Field(description="When true, creates the profile. When false, returns a preview")
+    ] = False,
+) -> Dict[str, Any]:
+    """Validate and preview or create a scoped content filter."""
+    try:
+        cf_to_create(filter_data)
+    except ValidationError as exc:
+        fields = sorted({str(error["loc"][0]) for error in exc.errors() if error["loc"]})
+        return {"success": False, "error": f"Invalid content filter creation fields: {fields}"}
+    except ValueError as exc:
+        return {"success": False, "error": f"Invalid content filter creation: {exc}"}
+    if not confirm:
+        preview_data = with_create_defaults(filter_data)
+        return create_preview(
+            resource_type="content_filter", resource_data=preview_data, resource_name=filter_data["name"].strip()
+        )
+    try:
+        result = await content_filter_manager.create_content_filter(filter_data)
+        if result.get("uncertain") is True:
+            return result
+        return redact_sensitive_fields(
+            {"success": True, "data": cf_from_controller(result).model_dump(exclude_none=True)},
+            redact_sensitive=should_redact_sensitive_fields(),
+        )
+    except Exception as exc:
+        logger.error("Failed to create content filter: %s", type(exc).__name__)
+        return {"success": False, "error": f"Failed to create content filter: {type(exc).__name__}"}
+
+
+@server.tool(
     name="unifi_update_content_filter",
     description="Update an existing content filtering profile. Pass only the fields you want to change — "
     "current values are automatically preserved. "
@@ -127,7 +175,9 @@ async def update_content_filter(
             "Allowed keys: name, enabled (bool), blocked_categories (list), "
             "safe_search (list: 'GOOGLE'/'YOUTUBE'/'BING'), "
             "client_macs (list of MACs), network_ids (list), "
-            "schedule_mode ('ALWAYS'/'EVERY_DAY'/'EVERY_WEEK'/'CUSTOM'/'ONE_TIME_ONLY')"
+            "schedule_mode ('ALWAYS'/'EVERY_DAY'/'EVERY_WEEK'/'CUSTOM'/'ONE_TIME_ONLY'), "
+            "schedule_days (lowercase mon..sun), schedule_time_all_day (bool), "
+            "schedule_time_start/end (HH:MM), schedule_date_start/end (YYYY-MM-DD)"
         ),
     ],
     confirm: Annotated[
@@ -143,21 +193,42 @@ async def update_content_filter(
 
     # Keep the preview in the caller-facing dialect; translate to the controller
     # dialect only on the write path.
-    public_updates = {k: v for k, v in filter_data.items() if k in CF_MUTABLE_FIELDS and v is not None}
+    unknown = set(filter_data) - CF_MUTABLE_FIELDS - {"categories"}
+    if unknown:
+        return {"success": False, "error": f"Unknown or read-only content filter fields: {sorted(unknown)}"}
+    public_updates = {k: v for k, v in filter_data.items() if k in CF_MUTABLE_FIELDS | {"categories"} and v is not None}
     if not public_updates:
         return {"success": False, "error": "Update data is effectively empty or invalid."}
+    try:
+        controller_updates = cf_to_update(public_updates)
+    except ValidationError as exc:
+        fields = sorted({str(error["loc"][0]) for error in exc.errors() if error["loc"]})
+        return {"success": False, "error": f"Invalid content filter update fields: {fields}"}
+    except ValueError as exc:
+        return {"success": False, "error": f"Invalid content filter update: {exc}"}
 
     if not confirm:
-        return update_preview(
-            resource_type="content_filter",
-            resource_id=filter_id,
-            resource_name=filter_id,
-            current_state={},
-            updates=public_updates,
-        )
+        try:
+            existing = await content_filter_manager.get_content_filter_by_id(filter_id)
+            current = cf_from_controller(existing).model_dump(exclude_none=True)
+            if "categories" in public_updates:
+                current["categories"] = current["blocked_categories"]
+            preview = update_preview(
+                resource_type="content_filter",
+                resource_id=filter_id,
+                resource_name=current.get("name") or filter_id,
+                current_state=current,
+                updates=public_updates,
+            )
+            return redact_sensitive_fields(preview, redact_sensitive=should_redact_sensitive_fields())
+        except UniFiNotFoundError:
+            return {"success": False, "error": "Failed to preview content filter update: profile not found"}
+        except Exception as exc:
+            logger.error("Failed to read content filter for update preview: %s", type(exc).__name__)
+            return {"success": False, "error": f"Failed to preview content filter update: {type(exc).__name__}"}
 
     try:
-        merged = await content_filter_manager.update_content_filter(filter_id, cf_to_update(public_updates))
+        merged = await content_filter_manager.update_content_filter(filter_id, controller_updates)
         return {
             "success": True,
             "message": f"Content filter '{merged.get('name', filter_id)}' updated successfully.",

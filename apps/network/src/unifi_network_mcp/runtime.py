@@ -52,6 +52,7 @@ from unifi_core.network.managers.event_manager import EventManager
 from unifi_core.network.managers.firewall_manager import FirewallManager
 from unifi_core.network.managers.gateway_settings_manager import GatewaySettingsManager
 from unifi_core.network.managers.hotspot_manager import HotspotManager
+from unifi_core.network.managers.nat_manager import NatManager
 from unifi_core.network.managers.network_manager import NetworkManager
 from unifi_core.network.managers.oon_manager import OonManager
 from unifi_core.network.managers.qos_manager import QosManager
@@ -101,6 +102,7 @@ def _create_permissioned_tool_wrapper(original_tool_decorator):
         kwargs.pop("permission_category", None)
         kwargs.pop("permission_action", None)
         kwargs.pop("auth", None)
+        kwargs.pop("input_schema", None)
         return original_tool_decorator(*args, **kwargs)
 
     return wrapper
@@ -301,6 +303,11 @@ def get_routing_manager() -> RoutingManager:
 
 
 @lru_cache
+def get_nat_manager() -> NatManager:
+    return NatManager(get_connection_manager())
+
+
+@lru_cache
 def get_traffic_flow_manager() -> TrafficFlowManager:
     return TrafficFlowManager(get_connection_manager(), get_dpi_manager())
 
@@ -374,6 +381,7 @@ event_manager = get_event_manager()
 hotspot_manager = get_hotspot_manager()
 usergroup_manager = get_usergroup_manager()
 routing_manager = get_routing_manager()
+nat_manager = get_nat_manager()
 traffic_flow_manager = get_traffic_flow_manager()
 traffic_route_manager = get_traffic_route_manager()
 tool_registry = get_tool_registry()

@@ -59,6 +59,8 @@ from unifi_api.graphql.types.network.firewall import (
     LegacyFirewallRule,
 )
 from unifi_api.graphql.types.network.gateway_settings import GatewaySettings
+from unifi_api.graphql.types.network.mdns import MdnsSettings
+from unifi_api.graphql.types.network.nat import NatRule
 from unifi_api.graphql.types.network.network import Network
 from unifi_api.graphql.types.network.oon import OonPolicy
 from unifi_api.graphql.types.network.port_forward import PortForward
@@ -92,6 +94,7 @@ from unifi_api.graphql.types.network.system import (
     SystemInfo,
     TopClient,
 )
+from unifi_api.graphql.types.network.threat_management import ThreatManagementSettings
 from unifi_api.graphql.types.network.traffic_flow import (
     TrafficFlow,
     TrafficFlowPage,
@@ -855,6 +858,22 @@ async def _fetch_port_forwards(
     return await ctx.cache.get_or_fetch(key, _do)
 
 
+async def _fetch_nat_rules(ctx: GraphQLContext, controller: str, site: str) -> list:
+    key = f"network/nat-rules/{controller}/{site}"
+
+    async def _do() -> list:
+        try:
+            async with ctx.sessionmaker() as session:
+                mgr = await ctx.manager_factory.get_domain_manager(
+                    session, controller, "network", "nat_manager", site=site
+                )
+                return list(await mgr.list_nat_rules())
+        except Exception as exc:
+            raise RuntimeError(f"Failed to list NAT rules ({type(exc).__name__}).") from None
+
+    return await ctx.cache.get_or_fetch(key, _do)
+
+
 # ---- Cluster D fetch helpers (stats / events / system / vouchers / sessions) ---
 
 
@@ -1234,6 +1253,16 @@ async def _fetch_snmp_settings(
         "get_settings",
         "snmp",
     )
+
+
+async def _fetch_mdns_settings(ctx: GraphQLContext, controller: str, site: str) -> Any:
+    key = f"network/mdns-settings/{controller}/{site}"
+    return await _system_mgr_fetch(ctx, controller, site, key, "get_mdns_settings")
+
+
+async def _fetch_threat_management_settings(ctx: GraphQLContext, controller: str, site: str) -> Any:
+    key = f"network/threat-management-settings/{controller}/{site}"
+    return await _system_mgr_fetch(ctx, controller, site, key, "get_threat_management_settings")
 
 
 async def _fetch_mgmt_settings(
@@ -1647,6 +1676,12 @@ class PortForwardPage:
     next_cursor: str | None
 
 
+@strawberry.type(description="Paginated page of V2 NAT rules.")
+class NatRulePage:
+    items: list[NatRule]
+    next_cursor: str | None
+
+
 @strawberry.type(description="Paginated page of event-log entries.")
 class EventLogPage:
     items: list[EventLog]
@@ -2027,7 +2062,7 @@ class NetworkQuery:
         )
         items = []
         for d in page:
-            inst = Device.from_manager_output(d)
+            inst = Device.from_manager_output(d, redact_sensitive=ctx.redact_sensitive_fields)
             inst._controller_id = controller
             inst._site = site
             items.append(inst)
@@ -2053,7 +2088,7 @@ class NetworkQuery:
             r = _raw(d)
             d_mac = r.get("mac") if isinstance(r, dict) else getattr(r, "mac", None)
             if mac_equal(d_mac, mac):
-                inst = Device.from_manager_output(d)
+                inst = Device.from_manager_output(d, redact_sensitive=ctx.redact_sensitive_fields)
                 inst._controller_id = controller
                 inst._site = site
                 return inst
@@ -3109,6 +3144,64 @@ class NetworkQuery:
                 return OonPolicy.from_manager_output(p)
         return None
 
+    # ---- NAT rules (V2 controller ID family) -----------------------------
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=(
+            "List V2 NAT rules in descending controller ID order. "
+            "These IDs are scoped to the V2 NAT tool family — "
+            "do not pass them to port-forward or Integration API tools."
+        ),
+    )
+    async def nat_rules(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> NatRulePage:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_nat_rules(ctx, controller, site)
+
+        from unifi_api.services.pagination import paginate
+
+        page, next_cursor = paginate(list(raw), limit=limit, cursor=_decode_cursor(cursor), key_fn=_id_key)
+        try:
+            return NatRulePage(
+                items=[
+                    NatRule.from_manager_output(rule, redact_sensitive=ctx.redact_sensitive_fields) for rule in page
+                ],
+                next_cursor=next_cursor.encode() if next_cursor else None,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Failed to project NAT rule list ({type(exc).__name__}).") from None
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description=("Get a V2 NAT rule by its NAT-family ID; do not use port-forward or Integration API IDs."),
+    )
+    async def nat_rule(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        id: strawberry.ID,
+        site: str = "default",
+    ) -> NatRule | None:
+        ctx: GraphQLContext = info.context
+        if not str(id).strip():
+            return None
+        raw = await _fetch_nat_rules(ctx, controller, site)
+        for rule in raw:
+            obj = _raw(rule)
+            if (obj.get("_id") or obj.get("id")) == id:
+                try:
+                    return NatRule.from_manager_output(rule, redact_sensitive=ctx.redact_sensitive_fields)
+                except Exception as exc:
+                    raise RuntimeError(f"Failed to project NAT rule ({type(exc).__name__}).") from None
+        return None
+
     # ---- Port forward domain --------------------------------------------
 
     @strawberry.field(
@@ -3483,6 +3576,38 @@ class NetworkQuery:
         if raw is None:
             return None
         return SnmpSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Get site-wide mDNS service settings and read-only network scope.",
+    )
+    async def mdns_settings(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+    ) -> MdnsSettings | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_mdns_settings(ctx, controller, site)
+        if raw is None:
+            return None
+        return MdnsSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Get site-wide threat management (IDS/IPS) and traffic identification settings.",
+    )
+    async def threat_management_settings(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+    ) -> ThreatManagementSettings | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_threat_management_settings(ctx, controller, site)
+        if raw is None:
+            return None
+        return ThreatManagementSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
 
     @strawberry.field(
         permission_classes=[IsRead],

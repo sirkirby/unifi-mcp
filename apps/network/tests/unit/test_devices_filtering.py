@@ -439,3 +439,19 @@ def test_rogue_ap_pagination_bounds_are_in_schema_and_validate_inputs():
             limit_adapter.validate_python(invalid_limit)
     with pytest.raises(ValidationError):
         offset_adapter.validate_python(-1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("redact", [True, False])
+async def test_device_projection_preserves_nested_response_policy(monkeypatch, redact):
+    monkeypatch.setenv("UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS", str(redact).lower())
+    raw = {**deepcopy(SWITCH_RAW), "port_table": [{"port_idx": 1, "x_password": "synthetic-port-secret"}]}
+    with patch("unifi_network_mcp.tools.devices.device_manager") as manager:
+        manager.get_devices = AsyncMock(return_value=[raw])
+        manager._connection = _mock_conn()
+        from unifi_network_mcp.tools.devices import list_devices
+
+        result = await list_devices(fields="mac,ports", include_details=True, summary=False)
+    assert result["success"] is True
+    assert set(result["devices"][0]) == {"mac", "ports"}
+    assert result["devices"][0]["ports"][0]["x_password"] == (REDACTED if redact else "synthetic-port-secret")

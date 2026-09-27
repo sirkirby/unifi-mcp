@@ -1,4 +1,4 @@
-# Network Server Tool Reference (195 tools)
+# Network Server Tool Reference (206 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -11,6 +11,7 @@ Complete reference for `unifi_*` tools. All read tools are always available. Mut
 - [Networks & WLANs](#networks--wlans)
 - [DNS Records](#dns-records)
 - [Port Forwarding](#port-forwarding)
+- [NAT Rules](#nat-rules)
 - [QoS / Traffic Shaping](#qos--traffic-shaping)
 - [Traffic Flows](#traffic-flows)
 - [Traffic Routes](#traffic-routes)
@@ -42,7 +43,7 @@ Always available, regardless of registration mode.
 ## Clients
 
 <!-- AUTO:tools:clients -->
-12 tools.
+13 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -55,6 +56,7 @@ Always available, regardless of registration mode.
 | `unifi_force_reconnect_client` | Mutate | Force a client to reconnect to the network (kick) by MAC address |
 | `unifi_forget_client` | Mutate | Remove/forget a client from the controller's known client history by MAC address. |
 | `unifi_rename_client` | Mutate | Rename a client/device in the Unifi Network controller by MAC address |
+| `unifi_set_client_fixed_ap` | Mutate | Enable or disable a wireless client's fixed access-point association. |
 | `unifi_set_client_ip_settings` | Mutate | Set fixed IP address and/or local DNS record for a client device. |
 | `unifi_unauthorize_guest` | Mutate | Revoke authorization for a guest client by MAC address |
 | `unifi_unblock_client` | Mutate | Unblock a previously blocked client/device by MAC address |
@@ -225,6 +227,21 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 
 ---
 
+## NAT Rules
+
+<!-- AUTO:tools:nat -->
+6 tools.
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `unifi_get_nat_rule` | Read | Get a NAT rule from the V2 controller API. |
+| `unifi_list_nat_rules` | Read | List NAT rules from the V2 controller API. |
+| `unifi_create_nat_rule` | Mutate | Create an IPv4 V2 NAT rule (DNAT, SNAT or MASQUERADE) with verified readback; disabled by default. |
+| `unifi_delete_nat_rule` | Mutate | Delete a manual V2 NAT rule and verify its absence. |
+| `unifi_toggle_nat_rule` | Mutate | Set a manual V2 NAT rule's enabled state explicitly; setting its current state is a no-op. |
+| `unifi_update_nat_rule` | Mutate | Update a manual V2 NAT rule with verified fresh readback. |
+<!-- /AUTO:tools:nat -->
+
 ## Port Forwarding
 
 <!-- AUTO:tools:port_forwards -->
@@ -349,12 +366,13 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## Content Filtering
 
 <!-- AUTO:tools:content_filtering -->
-4 tools.
+5 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
 | `unifi_get_content_filter_details` | Read | Get detailed configuration for a specific content filtering profile by ID. |
 | `unifi_list_content_filters` | Read | List content filtering profiles. |
+| `unifi_create_content_filter` | Mutate | Create a content filtering profile with a non-empty blocked_categories list and exactly one non-empty client_macs or network_ids scope. |
 | `unifi_delete_content_filter` | Mutate | Delete a content filtering profile. |
 | `unifi_update_content_filter` | Mutate | Update an existing content filtering profile. |
 <!-- /AUTO:tools:content_filtering -->
@@ -522,7 +540,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | Tool | Type | Description |
 |------|------|-------------|
 | `unifi_get_voucher_details` | Read | Get detailed information about a specific voucher by its ID |
-| `unifi_list_vouchers` | Read | List all hotspot vouchers for the current site. |
+| `unifi_list_vouchers` | Read | List hotspot vouchers for the current site. |
 | `unifi_create_voucher` | Mutate | Create hotspot voucher(s) for guest network access. |
 | `unifi_revoke_voucher` | Mutate | Revoke/delete a hotspot voucher by its ID, preventing further use |
 <!-- /AUTO:tools:hotspot -->
@@ -551,20 +569,23 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## System
 
 <!-- AUTO:tools:system,config -->
-11 tools.
+14 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
 | `unifi_get_autobackup_settings` | Read | Get auto-backup settings (enabled state, schedule, retention count, cloud backup). |
+| `unifi_get_mdns_settings` | Read | Get site-wide mDNS service settings and read-only network scope. |
 | `unifi_get_mgmt_settings` | Read | Get the site's device management (mgmt) settings, read-only: device SSH state and user name, password-auth flag, authorised-key count, wh... |
 | `unifi_get_network_health` | Read | Returns per-subsystem health status for WAN, LAN, WLAN, and VPN — each with status, number of gateways/switches/APs, and active user counts. |
 | `unifi_get_site_settings` | Read | Get current site settings: site identity, regulatory country code, timezone, connectivity monitor (enabled, uplink type) and NTP servers. |
 | `unifi_get_snmp_settings` | Read | Get current SNMP settings for the site: v1/v2c enabled state and community string, SNMPv3 enabled state and user name. |
 | `unifi_get_system_info` | Read | Returns controller version, uptime, hostname, memory/CPU usage, and update availability. |
+| `unifi_get_threat_management_settings` | Read | Get site-wide threat management (IDS/IPS) and traffic identification settings. |
 | `unifi_list_backups` | Read | List available backups on the controller. |
 | `unifi_create_backup` | Mutate | Create a new backup of the controller configuration. |
 | `unifi_delete_backup` | Mutate | Delete a backup file from the controller. |
 | `unifi_update_autobackup_settings` | Mutate | Update auto-backup settings. |
+| `unifi_update_mdns_settings` | Mutate | Update site-wide mDNS service mode, predefined services, or custom services. |
 | `unifi_update_snmp_settings` | Mutate | Update SNMP settings for the site: v1/v2c (enabled, community) and SNMPv3 (enabled_v3, username, x_password). |
 <!-- /AUTO:tools:system,config -->
 

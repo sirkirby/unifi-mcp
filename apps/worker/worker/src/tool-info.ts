@@ -6,11 +6,17 @@ export const TOOL_INDEX_META_TOOL: ToolInfo = {
   description:
     "Discover available UniFi tools. Returns names and descriptions by default. " +
     "Use 'category' to filter by area (e.g. clients, firewall, devices), " +
-    "'search' for keyword matching, or 'include_schemas' for full parameter schemas. " +
+    "'search' for keyword matching, 'name' for exact lookup, or 'include_schemas' for full parameter schemas. " +
     "Use this to discover tools before calling unifi_execute.",
   inputSchema: {
     type: "object",
     properties: {
+      name: {
+        type: "string",
+        description:
+          "Exact, case-sensitive tool name. Cannot be combined with category or search. " +
+          "Unknown names return an empty index.",
+      },
       category: {
         type: "string",
         description: "Optional category filter (e.g., 'clients', 'devices', 'firewall')",
@@ -28,7 +34,7 @@ export const TOOL_INDEX_META_TOOL: ToolInfo = {
         type: "boolean",
         description:
           "Include full input schemas per tool. Defaults to false. " +
-          "Set true with a category or search filter to get parameter details for specific tools.",
+          "Set true with a name, category or search filter to get parameter details for specific tools.",
         default: false,
       },
     },
@@ -117,6 +123,7 @@ export function rankToolsBySearch<T extends Pick<ToolInfo, "name" | "description
 }
 
 export interface ToolIndexOptions {
+  name?: string;
   category?: string;
   search?: string;
   includeSchemas?: boolean;
@@ -162,6 +169,10 @@ export function buildToolIndexEntries(
   }
 
   let filtered = entries;
+  if (options.name !== undefined) {
+    const name = options.name;
+    filtered = filtered.filter((tool) => tool.name === name);
+  }
   if (options.category) {
     const category = options.category.toLowerCase();
     filtered = filtered.filter(
@@ -173,6 +184,35 @@ export function buildToolIndexEntries(
     filtered = rankToolsBySearch(filtered, options.search);
   }
   return filtered;
+}
+
+export const TOOL_INDEX_NAME_CONFLICT_ERROR = "Tool index name cannot be combined with category or search.";
+
+function suppliedArg(value: unknown): boolean {
+  return value !== undefined && value !== null;
+}
+
+/** Answer a unifi_tool_index call; mirrors the Python index contract for `name`. */
+export function buildToolIndexResponse(
+  locationTools: Map<string, ToolInfo[]>,
+  toolToLocations: Map<string, string[]>,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const hasName = suppliedArg(args.name);
+  // An empty-string category or search still counts as supplied.
+  if (hasName && (suppliedArg(args.category) || suppliedArg(args.search))) {
+    return { success: false, error: TOOL_INDEX_NAME_CONFLICT_ERROR };
+  }
+  const tools = buildToolIndexEntries(locationTools, toolToLocations, {
+    name: hasName ? (args.name as string) : undefined,
+    category: args.category as string | undefined,
+    search: args.search as string | undefined,
+    includeSchemas: Boolean(args.include_schemas),
+  });
+  return {
+    success: true,
+    data: { tools, total: tools.length, multi_location: locationTools.size > 1 },
+  };
 }
 
 export function toolInputSchema(tool: ToolInfo): Record<string, unknown> | undefined {

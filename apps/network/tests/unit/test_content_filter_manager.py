@@ -1,7 +1,7 @@
 """Tests for the ContentFilterManager class.
 
 This module tests content filtering profile operations.
-Note: The UniFi API does not support POST (create) or GET /{id}.
+Note: create uses the UI endpoint; GET /{id} is unsupported.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -122,6 +122,67 @@ class TestContentFilterManager:
             await content_filter_manager.get_content_filter_by_id("f1")
 
     # ---- update_content_filter ----
+
+    @pytest.mark.asyncio
+    async def test_create_uses_ui_path_and_validated_payload(self, content_filter_manager, mock_connection):
+        mock_connection.request.return_value = [{"_id": "cf-new"}]
+        result = await content_filter_manager.create_content_filter(
+            {
+                "name": "Kids",
+                "client_macs": ["AA:BB:CC:DD:EE:FF"],
+                "blocked_categories": ["FAMILY"],
+                "schedule_days": ["mon"],
+            }
+        )
+        request = mock_connection.request.call_args.args[0]
+        assert result == {"_id": "cf-new"}
+        assert request.method == "post"
+        assert request.path == "/content-filtering/create"
+        assert request.data == {
+            "name": "Kids",
+            "client_macs": ["aa:bb:cc:dd:ee:ff"],
+            "categories": ["FAMILY"],
+            "schedule": {"mode": "ALWAYS", "repeat_on_days": ["mon"], "time_all_day": True},
+            "enabled": False,
+        }
+        mock_connection._invalidate_cache.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_mixed_scope_before_connection(self, content_filter_manager, mock_connection):
+        with pytest.raises(ValueError, match="Exactly one"):
+            await content_filter_manager.create_content_filter(
+                {
+                    "name": "Kids",
+                    "client_macs": ["aa:bb:cc:dd:ee:ff"],
+                    "network_ids": ["net"],
+                    "blocked_categories": ["FAMILY"],
+                }
+            )
+        mock_connection.ensure_connected.assert_not_called()
+        mock_connection.request.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("categories", [None, []])
+    async def test_create_requires_categories_before_connection(
+        self, content_filter_manager, mock_connection, categories
+    ):
+        fields = {"name": "Kids", "network_ids": ["net"]}
+        if categories is not None:
+            fields["blocked_categories"] = categories
+        with pytest.raises(ValueError, match="blocked_categories"):
+            await content_filter_manager.create_content_filter(fields)
+        mock_connection.ensure_connected.assert_not_called()
+        mock_connection.request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_unknown_response_reports_uncertainty(self, content_filter_manager, mock_connection):
+        mock_connection.request.return_value = [{}]
+        result = await content_filter_manager.create_content_filter(
+            {"name": "Kids", "network_ids": ["net"], "blocked_categories": ["FAMILY"]}
+        )
+        assert result["success"] is False
+        assert result["uncertain"] is True
+        assert "List profiles before retrying" in result["error"]
 
     @pytest.mark.asyncio
     async def test_update_content_filter_success(self, content_filter_manager, mock_connection):

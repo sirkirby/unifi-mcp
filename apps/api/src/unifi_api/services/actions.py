@@ -168,6 +168,22 @@ def _validate_action_args(entry: ToolEntry, args: dict[str, Any]) -> None:
     if not errors:
         return
     error = errors[0]
+    if entry.name in {
+        "unifi_create_nat_rule",
+        "unifi_update_nat_rule",
+        "unifi_delete_nat_rule",
+        "unifi_toggle_nat_rule",
+    }:
+        from unifi_core.network.models.nat import NatFilterWriteInput, NatRuleWriteInput
+
+        allowed = (
+            set(NatRuleWriteInput.model_fields)
+            | set(NatFilterWriteInput.model_fields)
+            | {"rule_data", "update_data", "rule_id", "enabled"}
+        )
+        path = ".".join(str(part) for part in error.absolute_path if str(part) in allowed)
+        location = f" at args.{path}" if path else ""
+        raise ValueError(f"Invalid NAT action arguments{location}: field is missing, invalid or unsupported.")
     path = ".".join(str(part) for part in error.absolute_path)
     location = f" at args.{path}" if path else ""
     # ``error.message`` embeds the submitted instance, so an operator value —

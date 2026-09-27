@@ -165,6 +165,59 @@ def test_render_catalog_is_deterministic_and_normalizes_reads(tmp_path: Path) ->
     }
 
 
+def test_content_filter_update_override_wins_over_preview_read(tmp_path: Path) -> None:
+    generator = _load_generator()
+    _write_synthetic_repo(tmp_path)
+    manifest_path, manifest = _manifest(tmp_path)
+    manifest["tools"].append(
+        {
+            "name": "unifi_update_content_filter",
+            "permission_category": "content_filter",
+            "permission_action": "update",
+            "annotations": {"readOnlyHint": False},
+            "schema": {
+                "input": {
+                    "type": "object",
+                    "properties": {"filter_id": {"type": "string"}, "filter_data": {"type": "object"}},
+                }
+            },
+        }
+    )
+    manifest["module_map"]["unifi_update_content_filter"] = "unifi_network_mcp.tools.widgets"
+    manifest["count"] = len(manifest["tools"])
+    manifest_path.write_text(json.dumps(manifest))
+    source = tmp_path / "apps/network/src/unifi_network_mcp/tools/widgets.py"
+    source.write_text(
+        source.read_text().replace("server, widget_manager", "server, widget_manager, content_filter_manager")
+        + '\n@server.tool(name="unifi_update_content_filter")\n'
+        + "async def update_content_filter():\n"
+        + '    await content_filter_manager.get_content_filter_by_id("cf")\n'
+        + '    return await content_filter_manager.update_content_filter("cf", {})\n'
+    )
+    managers = tmp_path / "apps/api/src/unifi_api/services/managers.py"
+    managers.write_text(
+        managers.read_text().replace(
+            '"widget_manager": lambda cm: object()',
+            '"widget_manager": lambda cm: object(), "content_filter_manager": lambda cm: object()',
+        )
+    )
+
+    discovered = generator._source_bindings(source, "unifi_network_mcp")
+    assert discovered["unifi_update_content_filter"] == ("content_filter_manager", "get_content_filter_by_id")
+    overrides, _, _ = generator._load_api_configuration(REPO_ROOT)
+    override = overrides["unifi_update_content_filter"]
+    assert (override.manager_attr, override.manager_method) == ("content_filter_manager", "update_content_filter")
+    catalog = json.loads(
+        generator.render_catalog(
+            tmp_path,
+            binding_overrides={"unifi_update_content_filter": overrides["unifi_update_content_filter"]},
+            exclusions={},
+        )
+    )
+    action = next(action for action in catalog["actions"] if action["name"] == "unifi_update_content_filter")
+    assert (action["manager_attr"], action["manager_method"]) == ("content_filter_manager", "update_content_filter")
+
+
 def test_generator_meta_tool_suffixes_match_shared_contract() -> None:
     generator = _load_generator()
     source = REPO_ROOT / "packages/unifi-mcp-shared/src/unifi_mcp_shared/meta_tools.py"
@@ -334,7 +387,7 @@ def test_repository_catalog_is_complete_with_documented_exclusions() -> None:
 
     payload = json.loads(generator.render_catalog(REPO_ROOT))
 
-    assert len(payload["actions"]) == 272
+    assert len(payload["actions"]) == 283
     assert [item["name"] for item in payload["excluded"]] == [
         "access_subscribe_events",
         "protect_subscribe_events",
