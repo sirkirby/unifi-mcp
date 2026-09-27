@@ -517,6 +517,12 @@ type ContentFilter {
   clientMacs: [String!]!
   networkIds: [String!]!
   scheduleMode: String
+  scheduleDays: [String!]
+  scheduleTimeAllDay: Boolean
+  scheduleTimeStart: String
+  scheduleTimeEnd: String
+  scheduleDateStart: String
+  scheduleDateEnd: String
 }
 
 """Paginated page of content filters."""
@@ -1564,6 +1570,7 @@ type PortForward {
   fwdIp: String
   src: String
   log: Boolean!
+  destinationIp: String
 }
 
 """Paginated page of port forwards."""
@@ -2240,6 +2247,8 @@ type VpnServer {
   enabled: Boolean!
   listenPort: Int
   allowedSubnets: [String!]
+  alternateAddressEnabled: Boolean
+  alternateAddress: String
 }
 
 """Paginated page of VPN servers."""

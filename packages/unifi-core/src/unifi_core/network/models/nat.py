@@ -5,7 +5,8 @@
 The controller stores these under the V2 ``/nat`` collection (see
 ``managers/nat_manager.py`` for the endpoint table). Field names map 1:1 to the
 controller keys; ``_id``, ``is_predefined`` and ``setting_preference`` are
-controller-assigned read-only keys.
+read-only to callers. Verified creation assigns manual, non-predefined origin
+using the same fields as the controller UI; the controller assigns the ID.
 
 Values observed on a Network 10.6 controller (rules of every UI variant created
 through the endpoint and read back; the controller's 400 bodies enumerate the
@@ -24,7 +25,8 @@ closed sets):
   controller's default (``duplicate rule_index``).
 - Controller-side rules the validator mirrors: a DNAT needs ``in_interface``,
   ``ip_address`` and a ``destination_filter`` other than ``NONE``; an SNAT needs
-  ``out_interface`` and ``ip_address``; a MASQUERADE needs ``out_interface`` and
+  ``out_interface`` and ``ip_address``. Verified SNAT writes with a translated
+  ``port`` also need ``source_filter.port``; a MASQUERADE needs ``out_interface`` and
   may not carry ``ip_address`` or ``port``; a selector under a filter type other
   than the one that uses it is rejected.
 
@@ -51,9 +53,10 @@ Factory helpers:
 from __future__ import annotations
 
 import re
+from ipaddress import IPv4Address, IPv4Network
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from unifi_core.merge import deep_merge
 
@@ -115,6 +118,51 @@ class NatRule(BaseModel):
         default=None,
         description="Destination match: filter_type, invert_address, invert_port plus the selector the type uses",
     )
+
+
+class NatFilterWriteInput(BaseModel):
+    """Closed schema for caller supplied IPv4 filter fields only."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    filter_type: str | None = None
+    address: str | None = None
+    port: str | None = None
+    invert_address: bool | None = None
+    invert_port: bool | None = None
+    firewall_group_ids: list[str] | None = None
+    network_conf_id: str | None = None
+
+
+class NatRuleWriteInput(BaseModel):
+    """Strict public write schema; reads retain the tolerant NatRule model."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    type: str | None = None
+    description: str | None = None
+    enabled: bool | None = None
+    rule_index: int | None = None
+    protocol: str | None = None
+    ip_version: str | None = None
+    in_interface: str | None = None
+    out_interface: str | None = None
+    ip_address: str | None = None
+    port: str | None = None
+    logging: bool | None = None
+    exclude: bool | None = None
+    pppoe_use_base_interface: bool | None = None
+    source_filter: NatFilterWriteInput | None = None
+    destination_filter: NatFilterWriteInput | None = None
+
+
+class NatCreateToolInput(BaseModel):
+    rule_data: NatRuleWriteInput
+    confirm: bool = False
+
+
+class NatUpdateToolInput(BaseModel):
+    rule_id: str
+    update_data: NatRuleWriteInput
+    confirm: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -462,3 +510,124 @@ def nat_update_error(current: Dict[str, Any], merged: Dict[str, Any]) -> str | N
         (message for key, message in _rule_problems(merged) if key in touched or (key, message) not in preexisting),
         None,
     )
+
+
+_UNVERIFIED_WRITE = (
+    "This NAT variant has not been verified for public writes; use DNAT, SNAT or MASQUERADE "
+    "with IPv4 and NONE or ADDRESS_AND_PORT filters."
+)
+
+
+def _safe_problem(key: str) -> str:
+    return f"{key} has an invalid or incompatible NAT value."
+
+
+def _verified_snat_source_port_error(fields: Dict[str, Any]) -> str | None:
+    """A translated SNAT port needs a corresponding source port on the effective rule."""
+    if fields.get("type") == "SNAT" and fields.get("port") and not _get(fields.get("source_filter"), "port"):
+        return "source_filter.port is required when SNAT translates a port."
+    return None
+
+
+def normalize_nat_verified_write(fields: Dict[str, Any], *, create: bool = False) -> Dict[str, Any]:
+    """Validate only submitted public fields, with value-free diagnostics."""
+    if not isinstance(fields, dict):
+        raise ValueError("NAT write input must be an object.")
+    normalized = normalize_nat_enums(fields)
+    try:
+        model = NatRuleWriteInput.model_validate(normalized, strict=True)
+    except ValidationError as error:
+        issue = error.errors(include_input=False, include_context=False)[0]
+        path = ".".join(str(part) for part in issue["loc"])
+        if issue["type"] == "extra_forbidden":
+            raise ValueError("NAT write input contains an unknown or read-only field.") from None
+        raise ValueError(_safe_problem(path)) from None
+    payload = model.model_dump(exclude_unset=True, exclude_none=True)
+    if any(value is None for value in normalized.values()):
+        raise ValueError("NAT write input cannot contain null fields.")
+    for key in ("type", "protocol", "ip_version"):
+        if (
+            key in payload
+            and payload[key]
+            not in {
+                "type": OBSERVED_RULE_TYPES,
+                "protocol": {"tcp_udp", "all"},
+                "ip_version": {"IPV4"},
+            }[key]
+        ):
+            raise ValueError(_UNVERIFIED_WRITE)
+    for key in ("exclude", "pppoe_use_base_interface"):
+        if payload.get(key) is True:
+            raise ValueError(_UNVERIFIED_WRITE)
+    for key in ("in_interface", "out_interface"):
+        if key in payload and not payload[key].strip():
+            raise ValueError(_safe_problem(key))
+    if "ip_address" in payload:
+        try:
+            IPv4Address(payload["ip_address"])
+        except ValueError:
+            raise ValueError(_safe_problem("ip_address")) from None
+    if "port" in payload and _port_error("port", payload["port"]):
+        raise ValueError(_safe_problem("port"))
+    if "rule_index" in payload and payload["rule_index"] < 0:
+        raise ValueError(_safe_problem("rule_index"))
+    for side in _FILTER_SIDES:
+        flt = payload.get(side)
+        if flt is None:
+            continue
+        if any(value is None for value in normalized[side].values()):
+            raise ValueError(_safe_problem(side))
+        if "filter_type" in flt and flt["filter_type"] not in {"NONE", "ADDRESS_AND_PORT"}:
+            raise ValueError(_UNVERIFIED_WRITE)
+        if flt.get("invert_address") is True or flt.get("invert_port") is True:
+            raise ValueError(_UNVERIFIED_WRITE)
+        if flt.get("firewall_group_ids") or "network_conf_id" in flt:
+            raise ValueError(_UNVERIFIED_WRITE)
+        if "address" in flt:
+            try:
+                if "/" in flt["address"]:
+                    IPv4Network(flt["address"], strict=False)
+                else:
+                    IPv4Address(flt["address"])
+            except ValueError:
+                raise ValueError(_safe_problem(f"{side}.address")) from None
+        if "port" in flt and _port_error(f"{side}.port", flt["port"]):
+            raise ValueError(_safe_problem(f"{side}.port"))
+    if create:
+        payload.setdefault("enabled", False)
+        for key, _ in _rule_problems(payload):
+            raise ValueError(_safe_problem(key))
+        if error := _verified_snat_source_port_error(payload):
+            raise ValueError(error)
+    return payload
+
+
+def nat_write_input_schema(model_type: type[BaseModel] = NatRuleWriteInput) -> Dict[str, Any]:
+    """Inline model-generated nested definitions for FastMCP's WithJsonSchema."""
+    schema = model_type.model_json_schema()
+    definitions = schema.pop("$defs", {})
+
+    def inline(node: Any) -> Any:
+        if isinstance(node, list):
+            return [inline(value) for value in node]
+        if isinstance(node, dict):
+            ref = node.get("$ref")
+            if isinstance(ref, str) and ref.startswith("#/$defs/"):
+                definition = definitions[ref.removeprefix("#/$defs/")]
+                overrides = {key: value for key, value in node.items() if key != "$ref"}
+                return inline({**definition, **overrides})
+            return {key: inline(value) for key, value in node.items()}
+        return node
+
+    return inline(schema)
+
+
+def nat_verified_update_error(current: Dict[str, Any], merged: Dict[str, Any]) -> str | None:
+    """Report introduced legacy problems and the verified SNAT port requirement."""
+    touched = _touched_keys(current, merged)
+    preexisting = {key for key, _ in _rule_problems(current)}
+    error = next(
+        (_safe_problem(key) for key, _ in _rule_problems(merged) if key in touched or key not in preexisting),
+        None,
+    )
+    return error or _verified_snat_source_port_error(merged)

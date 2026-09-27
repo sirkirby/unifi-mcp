@@ -7,6 +7,7 @@ Tests both the v2 system-log API (modern controllers) and the legacy
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from aiounifi.errors import ResponseError
 
 
 class TestEventManagerV2:
@@ -299,21 +300,26 @@ class TestEventManagerCommon:
 
     @pytest.mark.asyncio
     async def test_auto_detect_legacy(self, event_manager, mock_connection):
-        """Test that legacy API is used when system-log/count fails."""
-        mock_connection.request.side_effect = Exception("404")
+        """A controller response establishing an absent v2 endpoint selects legacy."""
+        mock_connection.request.side_effect = ResponseError(
+            "Call https://controller.example/system-log/count received 404"
+        )
         await event_manager._ensure_api_version()
         assert event_manager._use_v2 is False
 
     @pytest.mark.asyncio
-    async def test_failed_probe_is_logged_with_the_actual_error(self, event_manager, mock_connection, caplog):
-        """The probe error must reach the log, or a later 404 is undiagnosable."""
+    async def test_failed_probe_logs_retry_without_caching_legacy(self, event_manager, mock_connection, caplog):
+        """An inconclusive failure logs its class and retry, while preserving diagnostics."""
         mock_connection.request.side_effect = Exception("Bad Request: unknown severity LOW")
 
         with caplog.at_level("WARNING"):
             await event_manager._ensure_api_version()
 
-        assert event_manager._use_v2 is False
-        assert "unknown severity LOW" in caplog.text
+        assert event_manager._use_v2 is None
+        assert "probe failed (Exception)" in caplog.text
+        assert "retrying in" in caplog.text
+        assert "unknown severity LOW" not in caplog.text
+        assert "unknown severity LOW" in event_manager._v2_probe_error
 
     @pytest.mark.asyncio
     async def test_failed_probe_is_recorded_for_later_diagnosis(self, event_manager, mock_connection):

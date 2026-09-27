@@ -4,13 +4,13 @@ Content filtering uses DNS-based category blocking and safe search
 enforcement. Profiles can be applied per-client (by MAC address)
 or per-network (by network ID).
 
-NOTE: The UniFi API does not support creating content filtering profiles
-via POST. Profiles must be created through the UniFi UI first, then
-managed (list, update, delete) via the API.
+Creation uses the UI's /content-filtering/create endpoint. The collection
+POST endpoint returns 405.
 
 API endpoint: /proxy/network/v2/api/site/{site}/content-filtering
 Supported methods:
   GET  /content-filtering        — list all profiles
+  POST /content-filtering/create — create a profile
   PUT  /content-filtering/{id}   — update a profile
   DELETE /content-filtering/{id} — delete a profile
 Not supported:
@@ -26,6 +26,7 @@ from aiounifi.models.api import ApiRequestV2
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.models.content_filter import to_controller_create
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -83,6 +84,28 @@ class ContentFilterManager:
         if match is None:
             raise UniFiNotFoundError("content_filter", filter_id)
         return match
+
+    async def create_content_filter(self, filter_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a scoped profile using the Network UI's V2 endpoint."""
+        payload = to_controller_create(filter_data)
+        if not await self._connection.ensure_connected():
+            raise ConnectionError("Not connected to controller")
+        request = ApiRequestV2(method="post", path="/content-filtering/create", data=payload)
+        result = await self._connection.request(request)
+        self._invalidate_cache()
+        # The V2 create endpoint returns a one-item list on the observed
+        # controller. A missing ID leaves the mutation outcome uncertain;
+        # callers must not report success or retry blindly.
+        created = result[0] if isinstance(result, list) and len(result) == 1 else result
+        created_id = (created.get("_id") or created.get("id")) if isinstance(created, dict) else None
+        if not isinstance(created_id, str) or not created_id.strip():
+            return {
+                "success": False,
+                "uncertain": True,
+                "error": "Content filter create response had no single profile ID; creation may have succeeded. "
+                "List profiles before retrying.",
+            }
+        return created
 
     async def update_content_filter(self, filter_id: str, update_data: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing content filtering profile by merging updates with current state.

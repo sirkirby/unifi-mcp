@@ -22,12 +22,53 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 
-from unifi_core.access.models.events import event_identity, with_event_identity
-from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError
+from unifi_core.access.models.events import event_from_controller, event_identity, with_event_identity
+from unifi_core.exceptions import UniFiConnectionError, UniFiNotFoundError, UniFiOperationError
 
 logger = logging.getLogger(__name__)
 
 _GET_EVENT_PAGE_SIZE = 100
+_MAX_SCAN_PAGES = 10
+MAX_EVENT_QUERY_LIMIT = 5000
+
+
+def _parse_iso_timestamp(value: str | None, name: str) -> tuple[datetime, str] | tuple[None, None]:
+    """Convert an ISO 8601 string into a UTC datetime and RFC 3339 string with fractional seconds preserved.
+
+    Raises ValueError on invalid timestamps.
+    """
+    if value is None:
+        return None, None
+    if not isinstance(value, str):
+        raise ValueError(f"Invalid timestamp {value!r} for {name}: expected ISO 8601 string")
+    text = value.strip()
+    if not text:
+        return None, None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception as exc:
+        raise ValueError(f"Invalid timestamp {value!r} for {name}: expected ISO 8601 string") from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt, dt.isoformat().replace("+00:00", "Z")
+
+
+def _matches_filters(event: Any, door_id: str | None, user_id: str | None) -> bool:
+    """Check if an event matches the specified door_id and user_id filters.
+
+    Uses typed event identity from event_from_controller, ensuring hub actors
+    (type != 'user') and non-door devices (e.g. readers) are excluded from matches.
+    """
+    if not door_id and not user_id:
+        return True
+    norm = event_from_controller(event)
+    if door_id and norm.door_id != door_id:
+        return False
+    if user_id and norm.user_id != user_id:
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -353,15 +394,19 @@ class EventManager:
             door history (grants plus open/close), ``access_denial`` the
             refused attempts. Anything else is rejected with ``no such topic``.
         start:
-            ISO 8601 start time filter.
+            ISO 8601 start time filter (e.g. '2026-09-19T00:00:00Z').
+            Translated to UTC RFC 3339 ``since`` parameter for the controller.
         end:
-            ISO 8601 end time filter.
+            ISO 8601 end time filter (e.g. '2026-09-19T23:59:59Z').
+            Translated to UTC RFC 3339 ``until`` parameter for the controller.
         door_id:
-            Filter events by door UUID.
+            Filter events by door UUID. Enforced client-side using typed event
+            models, excluding non-door devices (e.g. readers).
         user_id:
-            Filter events by user UUID.
+            Filter events by user UUID. Enforced client-side using typed event
+            models, excluding hub actors from user matches.
         limit:
-            Maximum number of events to return (page size).
+            Maximum number of matching events to return (0-5000, default 30).
         """
         if topic not in SYSTEM_LOG_TOPICS:
             raise ValueError(
@@ -370,39 +415,121 @@ class EventManager:
                 "is under 'unlocks'; denied attempts are under 'access_denial'."
             )
 
+        if limit < 0:
+            raise ValueError("limit must be zero or greater")
+        if limit > MAX_EVENT_QUERY_LIMIT:
+            raise ValueError(
+                f"limit must not exceed {MAX_EVENT_QUERY_LIMIT}; narrow the time range for larger histories"
+            )
+
         if not self._cm.has_proxy:
             raise UniFiConnectionError("No proxy session available for list_events")
 
         if limit == 0:
             return []
 
+        since_dt, since_rfc = _parse_iso_timestamp(start, "start")
+        until_dt, until_rfc = _parse_iso_timestamp(end, "end")
+        if since_dt is not None and until_dt is not None and since_dt > until_dt:
+            raise ValueError(f"start time ({since_rfc}) must not be after end time ({until_rfc})")
+
+        door_id_filter = door_id.strip() if isinstance(door_id, str) and door_id.strip() else None
+        user_id_filter = user_id.strip() if isinstance(user_id, str) and user_id.strip() else None
+        has_client_filters = bool(door_id_filter or user_id_filter)
+
         try:
-            # The system_log/search endpoint requires a ``topic`` field.
             body: dict[str, Any] = {"topic": topic}
-            if start:
-                body["start"] = start
-            if end:
-                body["end"] = end
-            if door_id:
-                body["door_id"] = door_id
-            if user_id:
-                body["user_id"] = user_id
+            if since_rfc is not None:
+                body["since"] = since_rfc
+            if until_rfc is not None:
+                body["until"] = until_rfc
 
-            page_size = limit
-            path = f"insights/system_log/search?page_size={page_size}&page_num=1&isAccess"
+            collected: list[dict[str, Any]] = []
+            page_num = 1
+            page_size = _GET_EVENT_PAGE_SIZE if has_client_filters else min(limit, _GET_EVENT_PAGE_SIZE)
+            page_budget = (
+                _MAX_SCAN_PAGES if has_client_filters else (limit + page_size - 1) // page_size + _MAX_SCAN_PAGES
+            )
+            scanned_pages = 0
+            scanned_events = 0
+            seen_identities: set[str] = set()
+            seen_page_signatures: set[tuple[str, ...]] = set()
+            exhausted = False
 
-            data = await self._cm.proxy_request("POST", path, json=body)
+            while len(collected) < limit:
+                if scanned_pages >= page_budget:
+                    break
 
-            inner = self._cm.extract_data(data)
-            # Response wraps events in {"events": [...], "versions": {...}}
-            if isinstance(inner, dict):
-                events = inner.get("events", [])
-            elif isinstance(inner, list):
-                events = inner
-            else:
-                events = []
-            return [with_event_identity(event) if isinstance(event, dict) else event for event in events]
-        except UniFiConnectionError:
+                path = f"insights/system_log/search?page_size={page_size}&page_num={page_num}&isAccess"
+                data = await self._cm.proxy_request("POST", path, json=body)
+                scanned_pages += 1
+
+                inner = self._cm.extract_data(data)
+                # Response wraps events in {"events": [...], "versions": {...}}
+                if isinstance(inner, dict):
+                    events = inner.get("events", [])
+                elif isinstance(inner, list):
+                    events = inner
+                else:
+                    events = []
+
+                if not isinstance(events, list):
+                    events = []
+
+                if not events:
+                    exhausted = True
+                    break
+
+                page_sig = tuple(str(event_identity(e) or id(e)) for e in events)
+                if page_sig in seen_page_signatures:
+                    raise UniFiOperationError(
+                        f"Cannot establish completeness for access events: controller returned repeated page "
+                        f"data on page {page_num}. Narrow the date range using start and end filters."
+                    )
+                seen_page_signatures.add(page_sig)
+
+                scanned_events += len(events)
+
+                for event in events:
+                    if not isinstance(event, dict):
+                        continue
+                    ident = event_identity(event) or str(event)
+                    if ident in seen_identities:
+                        continue
+                    seen_identities.add(ident)
+
+                    if _matches_filters(event, door_id_filter, user_id_filter):
+                        collected.append(with_event_identity(event))
+                        if len(collected) >= limit:
+                            break
+
+                total = data.get("total") if isinstance(data, dict) else None
+                if total is None and isinstance(inner, dict):
+                    total = inner.get("total")
+                try:
+                    total_count = int(total) if total is not None else None
+                except (TypeError, ValueError):
+                    total_count = None
+
+                if total_count is not None:
+                    if len(seen_identities) >= total_count:
+                        exhausted = True
+                        break
+                elif len(events) < page_size:
+                    exhausted = True
+                    break
+
+                page_num += 1
+
+            if len(collected) < limit and not exhausted:
+                raise UniFiOperationError(
+                    f"Cannot establish completeness for access events: scanned {scanned_pages} pages "
+                    f"({scanned_events} events) and found {len(collected)} matching events, but more events remain "
+                    "on the controller. Narrow the date range using start and end filters."
+                )
+
+            return collected[:limit]
+        except (UniFiConnectionError, UniFiOperationError, ValueError):
             raise
         except Exception as e:
             logger.error("Failed to list events: %s", e, exc_info=True)

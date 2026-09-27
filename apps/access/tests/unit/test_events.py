@@ -190,7 +190,7 @@ class TestEventManagerREST:
 
     @pytest.mark.asyncio
     async def test_list_events_with_filters(self, event_mgr_proxy, cm_proxy):
-        """list_events passes filters and topic in the POST body."""
+        """list_events translates start/end to since/until RFC3339 and omits ignored keys."""
         with patch.object(cm_proxy, "proxy_request", new_callable=AsyncMock) as mock_req:
             mock_req.return_value = {"data": {"events": []}}
             await event_mgr_proxy.list_events(
@@ -205,11 +205,13 @@ class TestEventManagerREST:
         call_args = mock_req.call_args
         body = call_args[1]["json"]
         assert body["topic"] == "admin_activity"
-        assert body["door_id"] == "d1"
-        assert body["user_id"] == "u1"
-        assert body["start"] == "2026-03-01"
-        assert body["end"] == "2026-03-17"
-        assert "page_size=10" in call_args[0][1]
+        assert body["since"] == "2026-03-01T00:00:00Z"
+        assert body["until"] == "2026-03-17T00:00:00Z"
+        assert "door_id" not in body
+        assert "user_id" not in body
+        assert "start" not in body
+        assert "end" not in body
+        assert "page_size=100" in call_args[0][1]
 
     @pytest.mark.asyncio
     async def test_list_events_limit_zero_returns_empty_without_calling_controller(self, event_mgr_proxy, cm_proxy):

@@ -1,13 +1,26 @@
 import asyncio
 import logging
+from copy import deepcopy
+from dataclasses import replace
 from typing import Any, Dict, List, Optional
 
 import aiohttp
 from aiounifi.models.api import ApiRequest
 from aiounifi.models.site import Site  # Import Site model
 
-from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.managers.connection_manager import ConnectionManager, SettingsControllerRejection
+from unifi_core.network.models.mdns import (
+    MdnsSettings,
+    mdns_from_controller,
+    mdns_to_controller_update,
+    validate_mdns_service_selection,
+)
+from unifi_core.network.models.threat_management import (
+    ThreatManagementSettings,
+    threat_management_from_controller,
+)
 from unifi_core.redaction import collect_secret_values, sanitize_exception
+from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -200,6 +213,110 @@ class SystemManager:
         except Exception as e:
             logger.error("Error updating auto-backup settings: %s", type(e).__name__)
             raise
+
+    async def _fresh_mdns_record(self) -> Dict[str, Any]:
+        """Fetch the singleton record without the generic settings cache."""
+        try:
+            response = await self._connection.request(ApiRequest(method="get", path="/get/setting/mdns"))
+            if (
+                not isinstance(response, list)
+                or len(response) != 1
+                or not isinstance(response[0], dict)
+                or not isinstance(response[0].get("_id"), str)
+                or not response[0]["_id"]
+            ):
+                raise ValueError("invalid singleton")
+            return response[0]
+        except Exception as exc:
+            logger.error("Failed to read mDNS settings: %s", type(exc).__name__)
+            raise RuntimeError("Failed to read mDNS settings") from None
+
+    async def get_mdns_settings(self) -> MdnsSettings:
+        """Read site-wide mDNS services and read-only network scope."""
+        record = await self._fresh_mdns_record()
+        try:
+            return mdns_from_controller(record)
+        except Exception as exc:
+            logger.error("Failed to shape mDNS settings: %s", type(exc).__name__)
+            raise RuntimeError("Failed to read mDNS settings") from None
+
+    async def update_mdns_settings(self, update_data: Dict[str, Any]) -> WriteVerificationResult:
+        """Merge service fields into a fresh full record and verify the write."""
+        updates = mdns_to_controller_update(update_data)
+        try:
+            session_ready = await self._connection.ensure_session_connected()
+        except Exception as exc:
+            logger.error("Failed to prepare mDNS session: %s", type(exc).__name__)
+            raise RuntimeError("Updating mDNS settings requires Network session authentication") from None
+        if not session_ready:
+            raise RuntimeError("Updating mDNS settings requires Network session authentication")
+        before = await self._fresh_mdns_record()
+        merged = deepcopy(before)
+        merged.update(updates)
+        try:
+            validate_mdns_service_selection(merged)
+        except ValueError as exc:
+            return failed_write(str(exc), operation="update_mdns_settings")
+        try:
+            public_before = mdns_from_controller(before).model_dump()
+        except Exception as exc:
+            logger.error("Failed to shape mDNS settings: %s", type(exc).__name__)
+            raise RuntimeError("Failed to read mDNS settings") from None
+        if all(before.get(key) == value for key, value in updates.items()):
+            return noop_write(operation="update_mdns_settings", resource=public_before)
+
+        cache_key = f"{CACHE_PREFIX_SETTINGS}_mdns_{self._connection.site}"
+        try:
+            await self._connection.request(ApiRequest(method="put", path="/set/setting/mdns", data=merged))
+        except Exception as exc:
+            logger.error("Failed to update mDNS settings: %s", type(exc).__name__)
+            if isinstance(exc, SettingsControllerRejection):
+                return failed_write(
+                    f"Controller rejected mDNS settings update ({exc.code})",
+                    operation="update_mdns_settings",
+                )
+            return failed_write(
+                "mDNS write outcome uncertain; inspect settings before another update",
+                operation="update_mdns_settings",
+                mutation_applied=None,
+                metadata={"outcome_uncertain": True},
+            )
+        finally:
+            self._connection._invalidate_cache(cache_key)
+
+        # ConnectionManager unwraps V1 responses to body["data"]. Even [] is
+        # a returned write; only the fresh readback can establish persistence.
+        try:
+            after = await self._fresh_mdns_record()
+            public_after = mdns_from_controller(after).model_dump()
+        except Exception:
+            return failed_write(
+                "mDNS write outcome uncertain; readback failed",
+                operation="update_mdns_settings",
+                mutation_applied=None,
+                metadata={"outcome_uncertain": True},
+            )
+
+        scope = {key: before[key] for key in ("enabled_for", "enabled_for_network_ids") if key in before}
+        result = verify_write(
+            operation="update_mdns_settings",
+            requested={**updates, **scope},
+            before=before,
+            after=after,
+        )
+        return replace(result, resource=public_after)
+
+    async def get_threat_management_settings(self) -> ThreatManagementSettings:
+        """Read site-wide threat management (IPS/IDS) and traffic identification (DPI) settings."""
+        try:
+            ips_list = await self.get_settings("ips")
+            dpi_list = await self.get_settings("dpi")
+            ips = ips_list[0] if ips_list and isinstance(ips_list[0], dict) else {}
+            dpi = dpi_list[0] if dpi_list and isinstance(dpi_list[0], dict) else {}
+            return threat_management_from_controller(ips, dpi)
+        except Exception as exc:
+            logger.error("Failed to read threat management settings: %s", type(exc).__name__)
+            raise RuntimeError("Failed to read threat management settings") from None
 
     async def check_firmware_updates(self) -> Dict[str, Any]:
         """Check for firmware updates for devices."""

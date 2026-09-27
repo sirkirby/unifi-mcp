@@ -13,9 +13,12 @@ via ``ToolInput(**kwargs)`` at the top of the body.
 
 from __future__ import annotations
 
+from ipaddress import IPv4Address
 from typing import ClassVar, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+
+from unifi_core.mac import looks_like_mac
 
 # ---------------------------------------------------------------------------
 # Client actions
@@ -98,6 +101,39 @@ class SetClientIpSettingsInput(BaseModel):
         default=None,
         description="Local DNS hostname (only used when local_dns_record_enabled=True)",
     )
+
+
+class SetClientFixedApInput(BaseModel):
+    """Input for ``unifi_set_client_fixed_ap``."""
+
+    __action_input__: ClassVar[bool] = True
+
+    mac_address: str = Field(description="MAC address of the wireless client (AA:BB:CC:DD:EE:FF)")
+    fixed_ap_enabled: bool = Field(description="Enable or disable association to a specific access point")
+    fixed_ap_mac: Optional[str] = Field(
+        default=None,
+        description=(
+            "MAC address of the access point, required when fixed_ap_enabled is true. "
+            "Ignored when disabling; the controller retains the inactive AP MAC."
+        ),
+    )
+
+    @field_validator("mac_address", "fixed_ap_mac")
+    @classmethod
+    def validate_mac(cls, value: Optional[str], info: ValidationInfo) -> Optional[str]:
+        if value == "" and info.field_name == "fixed_ap_mac":
+            return None
+        if value is not None and not looks_like_mac(value):
+            raise ValueError("must be a valid MAC address")
+        return value
+
+    @model_validator(mode="after")
+    def require_access_point_when_enabled(self) -> "SetClientFixedApInput":
+        if self.fixed_ap_enabled and not self.fixed_ap_mac:
+            raise ValueError("fixed_ap_mac is required when fixed_ap_enabled is true")
+        if not self.fixed_ap_enabled:
+            self.fixed_ap_mac = None
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +333,16 @@ class QosRuleSimpleInput(BaseModel):
     )
 
 
+def _validate_port_forward_destination(value: Optional[str], *, allow_empty: bool) -> Optional[str]:
+    if value is None or value == "any" or (allow_empty and value == ""):
+        return value
+    try:
+        IPv4Address(value)
+    except ValueError as exc:
+        raise ValueError("destination_ip must be an IPv4 address or 'any'") from exc
+    return value
+
+
 class PortForwardCreateInput(BaseModel):
     """Input for the full port-forward create path (``unifi_create_port_forward``)."""
 
@@ -308,12 +354,20 @@ class PortForwardCreateInput(BaseModel):
 
     name: str = Field(description="Descriptive name for the port-forward rule")
     dst_port: str = Field(description="External (destination) port or range")
+    destination_ip: Optional[str] = Field(
+        default=None, description="WAN destination IPv4 address, or 'any'; omit for controller default"
+    )
     fwd_port: str = Field(description="Internal (forward-to) port or range")
     fwd_ip: str = Field(description="Internal IP address to forward traffic to")
     protocol: str = Field(default="tcp_udp", description="Protocol: tcp, udp, or tcp_udp")
     enabled: bool = Field(default=True, description="Whether the rule is enabled initially")
     src_ip: Optional[str] = Field(default=None, description="Source IP/CIDR to match (empty = any)")
     log: bool = Field(default=False, description="Log rule matches")
+
+    @field_validator("destination_ip")
+    @classmethod
+    def validate_destination_ip(cls, value: Optional[str]) -> Optional[str]:
+        return _validate_port_forward_destination(value, allow_empty=False)
 
 
 class PortForwardUpdateInput(BaseModel):
@@ -330,12 +384,20 @@ class PortForwardUpdateInput(BaseModel):
 
     name: Optional[str] = Field(default=None, description="New name for the rule")
     dst_port: Optional[str] = Field(default=None, description="New external port or range")
+    destination_ip: Optional[str] = Field(
+        default=None, description="WAN destination IPv4 address, or 'any'; null/empty clears to any"
+    )
     fwd_port: Optional[str] = Field(default=None, description="New internal port or range")
     fwd_ip: Optional[str] = Field(default=None, description="New internal IP address")
     protocol: Optional[str] = Field(default=None, description="New protocol: tcp, udp, or tcp_udp")
     enabled: Optional[bool] = Field(default=None, description="New enabled state")
     src_ip: Optional[str] = Field(default=None, description="New source IP/CIDR (empty string to remove)")
     log: Optional[bool] = Field(default=None, description="New logging state")
+
+    @field_validator("destination_ip")
+    @classmethod
+    def validate_destination_ip(cls, value: Optional[str]) -> Optional[str]:
+        return _validate_port_forward_destination(value, allow_empty=True)
 
 
 class PortForwardSimpleInput(BaseModel):

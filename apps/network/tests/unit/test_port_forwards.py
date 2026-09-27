@@ -40,7 +40,7 @@ class TestCreatePortForward:
         assert result["success"] is True
         payload = mock_fm.create_port_forward.await_args.args[0]
         assert payload["fwd"] == "192.168.1.10"
-        assert payload["proto"] == "tcp/udp"
+        assert payload["proto"] == "tcp_udp"
         assert "fwd_ip" not in payload
         assert "fwd_protocol" not in payload
 
@@ -128,8 +128,9 @@ class TestCreatePortForward:
             "dst_port": "443",
             "fwd_port": "8443",
             "fwd": "192.168.1.10",
-            "proto": "tcp/udp",
+            "proto": "tcp_udp",
             "enabled": False,
+            "src_limiting_enabled": False,
         }
 
 

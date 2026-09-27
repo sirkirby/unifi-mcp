@@ -15,9 +15,16 @@ from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.message import MessageKey
 
 from unifi_core.mac import mac_equal
-from unifi_core.network.managers.connection_manager import ConnectionManager
+from unifi_core.network.managers.connection_manager import ConnectionManager, response_status
 
 logger = logging.getLogger("unifi-network-mcp")
+
+_monotonic = time.monotonic
+# Statuses meaning "this controller has no such endpoint"; anything else is inconclusive.
+_V2_UNSUPPORTED_STATUSES = frozenset({404, 405, 501})
+_V2_PROBE_BACKOFF_BASE = 30.0
+_V2_PROBE_BACKOFF_MAX = 300.0
+_V2_PROBE_MAX_FAILURES = 32
 
 
 def _positive_config_int(value: Any, env_var: str) -> int:
@@ -132,6 +139,11 @@ class EventManager:
         # legacy paths this falls back to, so a failed probe resurfaces later as a
         # bare 404 from an endpoint the caller never asked for.
         self._v2_probe_error: str | None = None
+        # A transient probe failure leaves ``_use_v2`` unset and schedules the next
+        # probe; only success (True) or a definitive "no such endpoint" (False) is cached.
+        self._v2_probe_failures = 0
+        self._v2_next_probe_at = 0.0
+        self._v2_probe_lock = asyncio.Lock()
         self._buffer = EventBuffer(
             max_size=_positive_config_int(cfg.get("buffer_size", 100), "UNIFI_NETWORK_EVENT_BUFFER_SIZE"),
             ttl_seconds=_positive_config_int(cfg.get("buffer_ttl_seconds", 300), "UNIFI_NETWORK_EVENT_BUFFER_TTL"),
@@ -470,10 +482,21 @@ class EventManager:
     def buffer_capacity(self) -> int:
         return self._buffer.capacity
 
-    async def _detect_api_version(self) -> bool:
-        """Detect whether the controller supports the v2 system-log API.
+    @staticmethod
+    def _is_v2_unsupported(error: Exception) -> bool:
+        """True only when the controller answered that the v2 endpoint does not exist.
 
-        Returns True for v2, False for legacy.
+        aiounifi's ResponseError exposes no status attribute; ``response_status``
+        reads it from the message. Auth, rate-limit, timeout and transport errors
+        say nothing about support and are never treated as unsupported.
+        """
+        return response_status(error) in _V2_UNSUPPORTED_STATUSES
+
+    async def _detect_api_version(self) -> bool | None:
+        """Probe for the v2 system-log API.
+
+        Returns True (v2), False (definitively unsupported), or None when the
+        probe failed for a reason that does not establish support either way.
         """
         try:
             now_ms = int(time.time() * 1000)
@@ -493,18 +516,33 @@ class EventManager:
             await self._connection.request(api_request)
             logger.info("[events] Using v2 system-log API")
             self._v2_probe_error = None
+            self._v2_probe_failures = 0
             return True
+        except asyncio.CancelledError:
+            raise
         except Exception as probe_error:
-            # Log why, not just that. A probe that fails for a reason other than
-            # "this controller predates v2" sends every later call down a legacy
-            # path that modern controllers answer with 404, and without this the
-            # only visible symptom is that 404.
+            # Log why, not just that: a legacy fallback that modern controllers
+            # answer with 404 would otherwise hide the real cause.
+            if self._is_v2_unsupported(probe_error):
+                # Established: this controller has no v2 API, so there is no failed
+                # probe to blame for a later legacy error.
+                self._v2_probe_error = None
+                logger.warning(
+                    "[events] v2 system-log endpoint not available, using legacy /stat/event API: %s",
+                    probe_error,
+                )
+                return False
             self._v2_probe_error = f"{type(probe_error).__name__}: {probe_error}"
+            # Saturate the counter so the exponent stays small however long the outage lasts.
+            self._v2_probe_failures = min(self._v2_probe_failures + 1, _V2_PROBE_MAX_FAILURES)
+            delay = min(_V2_PROBE_BACKOFF_BASE * 2 ** (self._v2_probe_failures - 1), _V2_PROBE_BACKOFF_MAX)
+            self._v2_next_probe_at = _monotonic() + delay
             logger.warning(
-                "[events] v2 system-log probe failed, falling back to legacy /stat/event API: %s",
-                probe_error,
+                "[events] v2 system-log probe failed (%s); using legacy /stat/event API for now, retrying in %ds",
+                type(probe_error).__name__,
+                delay,
             )
-            return False
+            return None
 
     def _explain_legacy_failure(self, endpoint: str, error: Exception) -> Exception:
         """Attach the v2 probe failure to a legacy error, when it caused the fallback.
@@ -521,10 +559,20 @@ class EventManager:
             "underlying problem is the failed v2 probe, not the missing legacy path."
         )
 
-    async def _ensure_api_version(self) -> None:
-        """Detect API version on first call."""
-        if self._use_v2 is None:
+    async def _ensure_api_version(self) -> bool:
+        """Return True to use v2, False for legacy; probes on first use and after a transient failure."""
+        if self._use_v2 is not None:
+            return self._use_v2
+        if _monotonic() < self._v2_next_probe_at:
+            return False
+        async with self._v2_probe_lock:
+            # Concurrent callers share one probe: recheck once the lock is ours.
+            if self._use_v2 is not None:
+                return self._use_v2
+            if _monotonic() < self._v2_next_probe_at:
+                return False
             self._use_v2 = await self._detect_api_version()
+            return bool(self._use_v2)
 
     async def get_events(
         self,
@@ -551,9 +599,9 @@ class EventManager:
         Returns:
             List of event objects.
         """
-        await self._ensure_api_version()
+        use_v2 = await self._ensure_api_version()
 
-        if self._use_v2:
+        if use_v2:
             return await self._get_events_v2(within, limit, start, event_type, categories, severities)
         return await self._get_events_legacy(within, limit, start, event_type)
 
@@ -672,9 +720,9 @@ class EventManager:
         Uses v2 system-log/critical on modern controllers,
         falls back to legacy /stat/alarm for older versions.
         """
-        await self._ensure_api_version()
+        use_v2 = await self._ensure_api_version()
 
-        if self._use_v2:
+        if use_v2:
             return await self._get_alarms_v2(archived, limit)
         return await self._get_alarms_legacy(archived, limit)
 

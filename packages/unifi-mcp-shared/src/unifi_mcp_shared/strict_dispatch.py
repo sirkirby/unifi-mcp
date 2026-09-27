@@ -29,12 +29,9 @@ from unifi_core.redaction import redaction_marker_paths
 
 logger = logging.getLogger(__name__)
 
-# The same value — the MAC of the thing the call is about — is spelled four ways
-# across the Network tools (``mac_address``, ``client_mac``, ``device_mac``,
-# ``mac``), so a caller that carries the spelling from one tool to the next gets a
-# bare "unknown argument" and no way to tell which one this tool wants. The
-# canonical contract does not change: the call still fails, the message just says
-# what to send instead.
+# Network tools take the subject MAC as ``mac_address``. Older callers may still
+# send ``client_mac``, ``device_mac``, or ``mac``; reject them and name the current
+# parameter in the error. This remains guidance, not an alias.
 #
 # ``ap_mac`` is deliberately absent. It names a different thing — the access point
 # to scan from, not the subject of the call — so telling a caller holding a client

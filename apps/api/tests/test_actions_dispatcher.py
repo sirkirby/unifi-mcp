@@ -3043,10 +3043,11 @@ async def test_reviewed_catalog_mutations_reach_the_intended_core_signature(
                     "dst_port": "443",
                     "fwd_port": "8443",
                     "fwd": "192.168.1.20",
-                    "proto": "tcp/udp",
+                    "proto": "tcp_udp",
                     "enabled": True,
                     "log": False,
                     "protocol_match_excepted": False,
+                    "src_limiting_enabled": False,
                 }
             },
         ),
@@ -3060,10 +3061,11 @@ async def test_reviewed_catalog_mutations_reach_the_intended_core_signature(
                     "dst_port": "80",
                     "fwd_port": "80",
                     "fwd": "192.168.1.21",
-                    "proto": "tcp/udp",
+                    "proto": "tcp_udp",
                     "enabled": True,
                     "log": False,
                     "protocol_match_excepted": False,
+                    "src_limiting_enabled": False,
                 }
             },
         ),
@@ -3097,7 +3099,10 @@ async def test_reviewed_catalog_mutations_reach_the_intended_core_signature(
                 "update_data": {"protocol": "udp", "src_ip": "", "enabled": False},
             },
             "update_port_forward",
-            {"rule_id": "pf-1", "updates": {"proto": "udp", "src": None, "enabled": False}},
+            {
+                "rule_id": "pf-1",
+                "updates": {"proto": "udp", "src": "any", "enabled": False, "src_limiting_enabled": False},
+            },
         ),
         (
             "unifi_update_firewall_policy",
@@ -3802,7 +3807,7 @@ async def test_port_forward_preview_uses_effective_translated_payload_and_reject
 
     preview = result.payload["preview"]["will_create"]["port_forward_data"]
     assert preview["enabled"] is True
-    assert preview["proto"] == "tcp/udp"
+    assert preview["proto"] == "tcp_udp"
     assert preview["dst_port"] == "443"
 
     typo_args = {"port_forward_data": {**args["port_forward_data"], "enable": False}}
@@ -3863,7 +3868,7 @@ def test_simple_port_forward_matches_wrapper_empty_port_and_unknown_protocol_fal
 
     assert positional == ()
     assert kwargs["rule_data"]["fwd_port"] == ""
-    assert kwargs["rule_data"]["proto"] == "tcp/udp"
+    assert kwargs["rule_data"]["proto"] == "tcp_udp"
 
 
 def test_omitted_public_defaults_are_injected_before_required_manager_calls() -> None:

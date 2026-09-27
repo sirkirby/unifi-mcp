@@ -96,10 +96,26 @@ class TestList:
             await manager.list_nat_rules()
         assert NAT_UNAVAILABLE_HINT in str(exc.value)
 
-    async def test_other_controller_errors_surface_unchanged(self) -> None:
-        manager, _ = _manager(error=ResponseError("Call https://host/nat received 429: b''"))
-        with pytest.raises(ResponseError):
+    async def test_other_controller_errors_are_safe(self) -> None:
+        private = "https://host/nat password=private"
+        manager, _ = _manager(error=ResponseError(private))
+        with pytest.raises(UniFiOperationError) as exc:
             await manager.list_nat_rules()
+        assert "ResponseError" in str(exc.value)
+        assert private not in str(exc.value)
+        assert exc.value.__cause__ is None and exc.value.__suppress_context__
+
+    async def test_disconnected_session_has_fixed_guidance(self) -> None:
+        manager, connection = _manager()
+
+        async def disconnected() -> bool:
+            return False
+
+        connection.ensure_connected = disconnected
+        with pytest.raises(UniFiOperationError) as exc:
+            await manager.list_nat_rules()
+        assert "Check Network session access and permissions" in str(exc.value)
+        assert connection.requests == []
 
 
 class TestGet:
@@ -112,6 +128,8 @@ class TestGet:
         with pytest.raises(UniFiNotFoundError) as exc:
             await manager.get_nat_rule("rule-9")
         assert exc.value.resource_type == "nat_rule"
+        assert "rule-9" not in str(exc.value)
+        assert exc.value.identifier == ""
 
 
 class TestCreate:
@@ -249,18 +267,20 @@ class TestDeleteAndToggle:
 
 class TestLogging:
     @pytest.mark.parametrize(
-        "call",
+        ("call", "expected"),
         [
-            lambda m: m.delete_nat_rule(RULE_ID),
-            lambda m: m.list_nat_rules(),
-            lambda m: m.create_nat_rule(dnat()),
+            (lambda m: m.delete_nat_rule(RULE_ID), UniFiOperationError),
+            (lambda m: m.list_nat_rules(), UniFiOperationError),
+            (lambda m: m.create_nat_rule(dnat()), UniFiOperationError),
         ],
     )
-    async def test_failure_logs_carry_no_values_or_exception_text(self, caplog: pytest.LogCaptureFixture, call) -> None:
+    async def test_failure_logs_carry_no_values_or_exception_text(
+        self, caplog: pytest.LogCaptureFixture, call, expected
+    ) -> None:
         private = f"192.0.2.53 secret-name password=private {RULE_ID}"
         manager, _ = _manager(error=RuntimeError(private))
         with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
-            with pytest.raises(RuntimeError):
+            with pytest.raises(expected):
                 await call(manager)
         assert caplog.records
         for value in ("192.0.2.53", "secret-name", "private", RULE_ID):
@@ -275,7 +295,7 @@ class TestLogging:
         await manager.list_nat_rules()  # prime the cache so the PUT is the failing request
         connection._error = RuntimeError("192.0.2.53 password=private")
         with caplog.at_level(logging.DEBUG, logger="unifi-network-mcp"):
-            with pytest.raises(RuntimeError):
+            with pytest.raises(UniFiOperationError):
                 await manager.update_nat_rule(RULE_ID, {"enabled": False})
         assert "192.0.2.53" not in caplog.text and "private" not in caplog.text
         assert all(record.exc_info is None for record in caplog.records)
@@ -302,7 +322,7 @@ class TestReviewFindings:
         manager, connection = _manager([STORED])
         await manager.list_nat_rules()
         connection._error = RuntimeError("controller said no")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(UniFiOperationError):
             await manager.create_nat_rule(dnat())
         assert CACHE_PREFIX_NAT in connection.invalidated
 
@@ -335,6 +355,9 @@ class TestReviewFindings:
         with pytest.raises(type(error)) as exc:
             await manager.list_nat_rules()
         assert NAT_UNAVAILABLE_HINT not in str(exc.value)
+        assert "Check Network session access and permissions" in str(exc.value)
+        assert "https://host" not in str(exc.value)
+        assert exc.value.__cause__ is None and exc.value.__suppress_context__
 
     async def test_missing_endpoint_is_logged_by_class_only(self, caplog: pytest.LogCaptureFixture) -> None:
         manager, _ = _manager(error=ResponseError("Call https://host/nat received 404 Not Found"))
@@ -419,7 +442,7 @@ class TestCachePreservation:
     async def test_put_with_an_ambiguous_outcome_invalidates_the_cache(self, error: Exception) -> None:
         manager, connection = self._failing_on("put", error)
         await manager.list_nat_rules()
-        with pytest.raises(type(error)):
+        with pytest.raises(UniFiOperationError):
             await manager.update_nat_rule(RULE_ID, {"description": "Renamed"})
         assert CACHE_PREFIX_NAT in connection.invalidated
         assert not [k for k in connection.cache if k.startswith(CACHE_PREFIX_NAT)]
@@ -428,7 +451,7 @@ class TestCachePreservation:
     async def test_delete_with_an_ambiguous_outcome_invalidates_the_cache(self, error: Exception) -> None:
         manager, connection = self._failing_on("delete", error)
         await manager.list_nat_rules()
-        with pytest.raises(type(error)):
+        with pytest.raises(UniFiOperationError):
             await manager.delete_nat_rule(RULE_ID)
         assert CACHE_PREFIX_NAT in connection.invalidated
         assert not [k for k in connection.cache if k.startswith(CACHE_PREFIX_NAT)]
@@ -436,7 +459,7 @@ class TestCachePreservation:
     async def test_next_read_after_a_failed_put_goes_to_the_controller(self) -> None:
         manager, connection = self._failing_on("put", TimeoutError("reply timeout"))
         await manager.list_nat_rules()
-        with pytest.raises(TimeoutError):
+        with pytest.raises(UniFiOperationError):
             await manager.toggle_nat_rule(RULE_ID)
         gets_before = [r for r in connection.requests if r.method == "get"]
         await manager.get_nat_rule(RULE_ID)

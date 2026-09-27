@@ -5,7 +5,7 @@ from typing import Any, List, Optional
 from aiounifi.models.api import ApiRequest
 from aiounifi.models.client import Client
 
-from unifi_core.exceptions import UniFiNotFoundError, UniFiOperationError
+from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError, UniFiOperationError
 from unifi_core.mac import canonical_mac, mac_equal, normalize_mac
 from unifi_core.network.managers.connection_manager import (
     ConnectionManager,
@@ -22,6 +22,22 @@ CACHE_PREFIX_CLIENTS = "clients"
 # so get_client_details falls back to the per-MAC GET /stat/user/<mac>.
 REST_USER_ROW_CAP = 3000
 UNKNOWN_USER_CODE = "api.err.UnknownUser"
+
+
+class FixedApValidationError(ValueError):
+    """Value-free validation failure safe to surface to fixed-AP callers."""
+
+
+class FixedApAuthError(UniFiAuthError):
+    """Fixed guidance for the session-only fixed-AP mutation."""
+
+
+class FixedApNotFoundError(UniFiOperationError):
+    """Identifier-free category for an unavailable fixed-AP target."""
+
+
+class FixedApOperationError(UniFiOperationError):
+    """Identifier-free fixed-AP operation or readback failure."""
 
 
 class ClientManager:
@@ -578,3 +594,113 @@ class ClientManager:
         except Exception as e:
             logger.error("Error setting IP settings for [redacted]: %s", type(e).__name__)
             raise
+
+    @staticmethod
+    def _is_access_point(raw: dict[str, Any]) -> bool:
+        """Return whether an adopted legacy device record is an access point."""
+        if raw.get("adopted") is not True:
+            return False
+        if raw.get("is_access_point") is True:
+            return True
+        device_type = raw.get("type", "")
+        if not isinstance(device_type, str) or not device_type.startswith("uap"):
+            return False
+        return raw.get("is_access_point") is not False
+
+    async def set_client_fixed_ap(
+        self,
+        client_mac: str,
+        fixed_ap_enabled: bool,
+        fixed_ap_mac: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Pin a wireless client to an access point through its legacy user record.
+
+        The controller accepts this only through the session-authenticated
+        ``/rest/user/{id}`` surface. The write starts from a freshly read user
+        record, preserving unrelated settings, and verifies the persisted
+        fixed-AP state rather than trusting the PUT acknowledgement.
+        """
+        client_mac = canonical_mac(client_mac)
+        ap_mac = canonical_mac(fixed_ap_mac) if fixed_ap_mac is not None else None
+        if client_mac is None or (fixed_ap_mac is not None and ap_mac is None):
+            raise FixedApValidationError("Client and access point MAC addresses must be valid")
+        if fixed_ap_enabled and ap_mac is None:
+            raise FixedApValidationError("An access point MAC address is required when enabling fixed AP")
+
+        # API-key-only legacy inventory must never be promoted into a write.
+        # ``ensure_connected`` rejects an already-active key route, but can
+        # initialize before that check; this dedicated guard never treats a
+        # key route as session-authenticated.
+        if not await self._connection.ensure_session_connected():
+            raise FixedApAuthError(
+                "Fixed AP updates require Network session authentication. No client mutation was attempted."
+            )
+
+        try:
+            client = await self.get_client_details(client_mac)
+            initial = self._raw_of(client)
+            if initial.get("is_wired") is not False:
+                raise FixedApValidationError("Fixed AP requires a client whose wireless connection is verified")
+
+            # /stat/user is the authoritative user record for the legacy PUT;
+            # do not mutate a cache or a merged live-client snapshot.
+            persisted = await self._get_user_by_mac(client_mac)
+            if persisted is None:
+                raise UniFiNotFoundError("client", client_mac)
+            client_id = persisted.get("_id")
+            if not client_id:
+                raise FixedApNotFoundError("Fixed AP update requires a persisted client record with an identifier.")
+
+            if fixed_ap_enabled:
+                await self._connection.refresh_handler("devices")
+                devices = list(self._connection.controller.devices.values())
+                access_point = next(
+                    (self._raw_of(device) for device in devices if mac_equal(self._mac_of(device), ap_mac)),
+                    None,
+                )
+                if access_point is None or not self._is_access_point(access_point):
+                    raise UniFiNotFoundError("access point", ap_mac)
+
+            # A not-yet-noted client must be made known first. Re-read before
+            # the final full-record PUT so that it cannot undo the note.
+            if not persisted.get("noted"):
+                noted = dict(persisted)
+                noted["noted"] = True
+                await self._connection.request(ApiRequest(method="put", path=f"/rest/user/{client_id}", data=noted))
+                persisted = await self._get_user_by_mac(client_mac)
+                if persisted is None or not persisted.get("noted"):
+                    raise FixedApOperationError("Controller did not persist the client note before fixed AP update")
+
+            update = dict(persisted)
+            update["fixed_ap_enabled"] = fixed_ap_enabled
+            # The controller retains the inactive AP when disabling the pin.
+            # Empty-string and null MAC values are rejected on Network 10.6.
+            if fixed_ap_enabled:
+                update["fixed_ap_mac"] = ap_mac
+            await self._connection.request(ApiRequest(method="put", path=f"/rest/user/{client_id}", data=update))
+            self._connection._invalidate_cache(f"{CACHE_PREFIX_CLIENTS}")
+
+            readback = await self._get_user_by_mac(client_mac)
+            if readback is None:
+                raise FixedApOperationError("Controller did not return the client after fixed AP update")
+            enabled_matches = readback.get("fixed_ap_enabled") is fixed_ap_enabled
+            ap_matches = not fixed_ap_enabled or mac_equal(readback.get("fixed_ap_mac"), ap_mac)
+            if not enabled_matches or not ap_matches:
+                raise FixedApOperationError("Controller did not persist the requested fixed AP settings")
+            logger.info("Fixed AP setting updated for client [redacted]")
+            return {
+                "success": True,
+                "fixed_ap_enabled": readback.get("fixed_ap_enabled"),
+                "fixed_ap_mac": readback.get("fixed_ap_mac") or None,
+            }
+        except FixedApNotFoundError:
+            raise
+        except UniFiNotFoundError:
+            raise FixedApNotFoundError(
+                "Fixed AP update target was not found. Confirm the client and adopted access point are in this site."
+            ) from None
+        except (FixedApAuthError, FixedApValidationError, FixedApOperationError):
+            raise
+        except Exception as exc:
+            logger.error("Failed to set fixed AP for client [redacted]: %s", type(exc).__name__)
+            raise FixedApOperationError(f"Fixed AP update failed ({type(exc).__name__}).") from None

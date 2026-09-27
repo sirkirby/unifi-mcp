@@ -29,6 +29,7 @@ async def tool_index_handler(args=None):
     """Handler for the protect_tool_index tool."""
     args = args or {}
     return get_tool_index(
+        name=args.get("name"),
         category=args.get("category"),
         search=args.get("search"),
         include_schemas=bool(args.get("include_schemas", False)),

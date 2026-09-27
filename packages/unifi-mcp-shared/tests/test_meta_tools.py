@@ -516,3 +516,27 @@ class TestRegisterLoadTools:
         description = registered["unifi_load_tools"]["description"]
         assert "tools/list" in description
         assert "notifications/tools/list_changed" in description
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("prefix", ["unifi", "protect", "access"])
+async def test_tool_index_forwards_exact_name_and_schemas(prefix):
+    captured, decorator = _capture_tools()
+    handler = AsyncMock(return_value={"tools": [], "count": 0, "categories": [], "filtered": True})
+    registry = Mock()
+    register_meta_tools(
+        server=SimpleNamespace(),
+        tool_decorator=decorator,
+        tool_index_handler=handler,
+        start_async_tool=AsyncMock(),
+        get_job_status=AsyncMock(),
+        register_tool=registry,
+        support_bundle_handler=AsyncMock(),
+        prefix=prefix,
+    )
+    name = f"{prefix}_list_devices"
+    result = await captured[f"{prefix}_tool_index"]["handler"](name=name, include_schemas=True)
+    handler.assert_awaited_once_with({"name": name, "include_schemas": True})
+    assert result["count"] == 0
+    registration = next(c for c in registry.call_args_list if c.kwargs["name"] == f"{prefix}_tool_index")
+    assert registration.kwargs["input_schema"]["properties"]["name"]["type"] == "string"

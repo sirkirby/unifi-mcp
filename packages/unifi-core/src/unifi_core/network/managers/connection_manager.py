@@ -79,6 +79,16 @@ _REAUTHENTICATION_MIN_INTERVAL_SECONDS = 60.0
 _RESPONSE_STATUS_RE = re.compile(r"^Call \S+ received (\d{3})(?!\d)")
 
 
+class SettingsControllerRejection(RequestError):
+    """Safe settings failure carrying only a validated controller error code."""
+
+    def __init__(self, code: str):
+        if not isinstance(code, str) or not code.startswith("api.err.") or not code.replace(".", "").isalnum():
+            raise ValueError("Invalid controller error code")
+        self.code = code
+        super().__init__("Controller settings request rejected.")
+
+
 def response_status(exc: BaseException) -> Optional[int]:
     """Return the HTTP status a :class:`ResponseError` reports, else ``None``.
 
@@ -1231,6 +1241,8 @@ class ConnectionManager:
         try:
             return await self._request_with_reauthentication(api_request, return_raw=return_raw)
         except Exception as error:
+            if isinstance(error, SettingsControllerRejection):
+                raise
             if api_request.path.startswith(("/get/setting/", "/set/setting/")):
                 # Domain managers and tools may log the returned error and its
                 # traceback. An opaque exception cannot reliably be rewritten,
@@ -1260,6 +1272,7 @@ class ConnectionManager:
 
         auth_generation = self._auth_generation
         request_method = self.controller.connectivity._request if return_raw else self.controller.request
+        safe_rejection: SettingsControllerRejection | None = None
 
         try:
             # Diagnostics: capture timing and payloads without leaking secrets
@@ -1317,6 +1330,7 @@ class ConnectionManager:
                         pass
                     return retry_response if return_raw else retry_response.get("data")
                 except Exception as retry_e:
+                    retry_code = controller_error_code(retry_e)
                     self._scrub_error(retry_e, api_request)
                     self._log_request_failure(
                         logging.ERROR,
@@ -1331,7 +1345,10 @@ class ConnectionManager:
                     if isinstance(retry_e, LoginRequired):
                         self._block_automatic_reconnect(retry_e)
                         await self._discard_connection()
-                    raise retry_e from None
+                    if retry_code is not None and api_request.path.startswith(("/get/setting/", "/set/setting/")):
+                        safe_rejection = SettingsControllerRejection(retry_code)
+                    else:
+                        raise retry_e from None
             else:
                 # The original LoginRequired may quote controller-only secrets.
                 # Callers that log tracebacks must see only the safe auth summary.
@@ -1402,7 +1419,10 @@ class ConnectionManager:
                     )
             except Exception:
                 pass
-            raise
+            if code is not None and api_request.path.startswith(("/get/setting/", "/set/setting/")):
+                safe_rejection = SettingsControllerRejection(code)
+            else:
+                raise
         finally:
             # Always restore original value (FR-003: maintain session state)
             if (
@@ -1411,6 +1431,10 @@ class ConnectionManager:
                 and self.controller is not None
             ):
                 original_controller.connectivity.is_unifi_os = original_is_unifi_os
+        if safe_rejection is not None:
+            # This runs outside the exception handler, leaving no controller
+            # exception as the new error's cause or context.
+            raise safe_rejection
 
     # --- Cache Management ---
 

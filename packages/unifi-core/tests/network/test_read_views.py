@@ -16,6 +16,7 @@ from unifi_core.network.read_views import (
     shape_network_details,
     shape_network_list,
     shape_rogue_ap_list,
+    shape_voucher_list,
     shape_wlan_list,
 )
 
@@ -512,3 +513,134 @@ def test_shape_firewall_policy_list_summary_gates_the_inversion_flags(endpoint: 
     entry = shape_firewall_policy_list(policies, site="default", summary=True)["policies"][0]
 
     assert (flag in entry["destination"]) is shown
+
+
+def test_shape_voucher_list_applies_filtering_paging_and_projection() -> None:
+    vouchers = [
+        {"_id": "v1", "code": "ABC1", "note": "Conf", "duration": 1440, "quota": 1, "create_time": 1000},
+        {"_id": "v2", "code": "ABC2", "note": "Lounge", "duration": 2880, "quota": 0, "create_time": 2000},
+        {"_id": "v3", "code": "XYZ3", "note": "Speaker", "duration": 720, "quota": 1, "create_time": 3000},
+    ]
+
+    # No args -> legacy envelope, controller order preserved
+    unshaped = shape_voucher_list(vouchers, site="default")
+    assert unshaped["success"] is True
+    assert set(unshaped.keys()) == {"success", "site", "count", "vouchers"}
+    assert unshaped["count"] == 3
+    assert [v["id"] for v in unshaped["vouchers"]] == ["v1", "v2", "v3"]
+
+    # Search + limit + offset + projection
+    # search="abc" matches v1 (1000) and v2 (2000).
+    # Sorted by created_at desc: v2 (2000) at index 0, v1 (1000) at index 1.
+    shaped = shape_voucher_list(
+        vouchers,
+        site="default",
+        search="abc",
+        limit=1,
+        offset=1,
+        fields="id,code",
+    )
+    assert shaped["success"] is True
+    assert shaped["total_count"] == 2
+    assert shaped["count"] == 1
+    assert shaped["limit"] == 1
+    assert shaped["offset"] == 1
+    assert "total" not in shaped
+    assert "returned_count" not in shaped
+    assert len(shaped["vouchers"]) == 1
+    assert shaped["vouchers"][0] == {"id": "v1", "code": "ABC1"}
+
+
+def test_shape_voucher_list_deterministic_sort_and_tie_break() -> None:
+    """Shaped calls sort created_at desc with id desc tie-break; unshaped preserves input order."""
+    vouchers = [
+        {"_id": "id_beta", "code": "BETA", "create_time": 1000},
+        {"_id": "id_alpha", "code": "ALPHA", "create_time": 1000},
+        {"_id": "id_newest", "code": "NEWEST", "create_time": 2000},
+        {"_id": "id_oldest", "code": "OLDEST", "create_time": 500},
+    ]
+
+    # Unshaped: preserves controller input order
+    unshaped = shape_voucher_list(vouchers, site="default")
+    assert [v["id"] for v in unshaped["vouchers"]] == ["id_beta", "id_alpha", "id_newest", "id_oldest"]
+
+    # Shaped (limit=10): sorts created_at desc, ties broken by id desc
+    shaped = shape_voucher_list(vouchers, site="default", limit=10)
+    assert [v["id"] for v in shaped["vouchers"]] == [
+        "id_newest",  # 2000
+        "id_beta",  # 1000, id_beta > id_alpha
+        "id_alpha",  # 1000, id_alpha
+        "id_oldest",  # 500
+    ]
+
+
+def test_shape_voucher_list_ui_hyphenated_digit_search() -> None:
+    """Search matches UI hyphenated digit codes against stored digit codes."""
+    vouchers = [
+        {"_id": "v1", "code": "1234567890", "note": "Standard guest", "create_time": 1000},
+        {"_id": "v2", "code": "9876543210", "note": "VIP guest-pass", "create_time": 2000},
+    ]
+
+    # Full UI hyphenated search
+    res1 = shape_voucher_list(vouchers, site="default", search="12345-67890")
+    assert res1["count"] == 1
+    assert res1["vouchers"][0]["code"] == "1234567890"
+
+    # Partial UI hyphenated search
+    res2 = shape_voucher_list(vouchers, site="default", search="12345-6")
+    assert res2["count"] == 1
+    assert res2["vouchers"][0]["code"] == "1234567890"
+
+    # Exact hyphenated note match
+    res3 = shape_voucher_list(vouchers, site="default", search="guest-pass")
+    assert res3["count"] == 1
+    assert res3["vouchers"][0]["code"] == "9876543210"
+
+    # Arbitrary punctuation like dot is NOT stripped / generalized
+    res4 = shape_voucher_list(vouchers, site="default", search="123.456")
+    assert res4["count"] == 0
+
+
+def test_shape_voucher_list_validates_bounds_and_fields() -> None:
+    vouchers = [{"_id": "v1", "code": "ABC1"}]
+
+    assert shape_voucher_list(vouchers, site="default", limit=0)["success"] is False
+    assert shape_voucher_list(vouchers, site="default", limit=1001)["success"] is False
+    assert shape_voucher_list(vouchers, site="default", offset=-1)["success"] is False
+    assert shape_voucher_list(vouchers, site="default", fields="unknown")["success"] is False
+    assert shape_voucher_list(vouchers, site="default", fields=["id"])["success"] is False
+
+
+@pytest.mark.parametrize("fields", [None, "", " , "])
+def test_device_projection_empty_preserves_existing_contract(fields) -> None:
+    raw = [{"mac": "aa", "name": "Switch", "type": "usw"}]
+    assert shape_device_list(raw, site="default", fields=fields) == shape_device_list(raw, site="default")
+
+
+def test_device_projection_runs_after_filtering_and_detail_controls() -> None:
+    raw = [
+        {"mac": "aa", "name": "Switch", "type": "usw", "state": 1, "port_table": [{"port_idx": 1}]},
+        {"mac": "bb", "name": "AP", "type": "uap", "state": 1},
+    ]
+    result = shape_device_list(raw, site="default", device_type="switch", fields=" mac, ports,mac ")
+    assert result["devices"] == [{"mac": "aa"}]
+    assert result["total_count"] == result["count"] == 1
+    detailed = shape_device_list(
+        raw, site="default", device_type="switch", fields="mac,ports", include_details=True, summary=False
+    )
+    assert detailed["devices"] == [{"mac": "aa", "ports": [{"port_idx": 1}]}]
+
+
+@pytest.mark.parametrize("fields", [["name"], 1, "unknown-private-value"])
+def test_device_projection_rejects_invalid_fields_even_for_empty_inventory(fields) -> None:
+    result = shape_device_list([], site="default", fields=fields)
+    assert result["success"] is False
+    assert "unknown-private-value" not in result["error"]
+
+
+def test_device_projection_preserves_public_inventory_provenance_and_unknown_values() -> None:
+    raw = [{"source_api": "integration", "integration_id": "public-id", "mac": "aa"}]
+    result = shape_device_list(raw, site="default", fields="mac,uptime")
+    assert result["devices"] == [{"mac": "aa", "uptime": None}]
+    assert result["_meta"]["source_api"] == "integration"
+    assert result["_meta"]["complete"] is False

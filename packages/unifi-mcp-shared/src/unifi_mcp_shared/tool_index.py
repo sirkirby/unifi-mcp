@@ -215,6 +215,7 @@ def get_tool_index(
     category: str | None = None,
     search: str | None = None,
     include_schemas: bool = False,
+    name: str | None = None,
 ) -> Dict[str, Any]:
     """Get the tool index, optionally filtered to reduce response size.
 
@@ -231,10 +232,13 @@ def get_tool_index(
                   Derived from the last segment of the tool's module path.
         search: Case-insensitive token search ranked over tool name and description.
         include_schemas: If True, include full input/output schemas per tool.
+        name: Exact, case-sensitive tool name. Cannot be combined with category or search.
 
     Returns:
         Dictionary with "tools", "count", and "categories" keys.
     """
+    if name is not None and (category is not None or search is not None):
+        return {"success": False, "error": "Tool index name cannot be combined with category or search."}
     module_map: Dict[str, str] = {}
 
     if registration_mode == "lazy" and manifest_path is not None:
@@ -264,6 +268,9 @@ def get_tool_index(
     if search:
         all_tools = _rank_tools_by_search(all_tools, search)
 
+    if name is not None:
+        all_tools = [tool for tool in all_tools if tool.get("name") == name]
+
     # Strip schemas unless explicitly requested
     if not include_schemas:
         tools_out = [
@@ -283,7 +290,7 @@ def get_tool_index(
         "count": len(tools_out),
         "categories": all_categories,
     }
-    if category or search:
+    if category or search or name is not None:
         result["filtered"] = True
     return result
 
@@ -380,6 +387,7 @@ async def tool_index_handler(args: Dict[str, Any] | None = None) -> Dict[str, An
     """
     args = args or {}
     return get_tool_index(
+        name=args.get("name"),
         category=args.get("category"),
         search=args.get("search"),
         include_schemas=bool(args.get("include_schemas", False)),

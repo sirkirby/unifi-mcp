@@ -21,6 +21,7 @@ from unifi_core.network.models._actions import (
     RenameClientInput,
     RenameDeviceInput,
     RevokeVoucherInput,
+    SetClientFixedApInput,
     SetClientIpSettingsInput,
     SetDeviceLedInput,
     SetJumboFramesInput,
@@ -225,6 +226,29 @@ class TestSetClientIpSettingsInput:
             local_dns_record="mydevice.local",
         )
         assert m.local_dns_record == "mydevice.local"
+
+
+class TestSetClientFixedApInput:
+    def test_requires_access_point_when_enabling(self):
+        with pytest.raises(ValidationError, match="fixed_ap_mac is required"):
+            SetClientFixedApInput(mac_address="AA:BB:CC:DD:EE:FF", fixed_ap_enabled=True)
+
+    def test_rejects_invalid_mac_addresses(self):
+        with pytest.raises(ValidationError, match="valid MAC"):
+            SetClientFixedApInput(mac_address="not-a-mac", fixed_ap_enabled=False)
+
+    def test_accepts_disable_without_access_point(self):
+        model = SetClientFixedApInput(mac_address="AA:BB:CC:DD:EE:FF", fixed_ap_enabled=False)
+        assert model.fixed_ap_mac is None
+
+    @pytest.mark.parametrize("ap_mac", ["", "11:22:33:44:55:66"])
+    def test_normalizes_disable_access_point_to_none(self, ap_mac):
+        model = SetClientFixedApInput(mac_address="AA:BB:CC:DD:EE:FF", fixed_ap_enabled=False, fixed_ap_mac=ap_mac)
+        assert model.fixed_ap_mac is None
+
+    def test_rejects_empty_client_mac(self):
+        with pytest.raises(ValidationError, match="valid MAC"):
+            SetClientFixedApInput(mac_address="", fixed_ap_enabled=False)
 
 
 # ---------------------------------------------------------------------------
@@ -636,6 +660,20 @@ class TestQosRuleSimpleInput:
 
 
 class TestPortForwardCreateInput:
+    @pytest.mark.parametrize("destination", ["198.51.100.69", "any"])
+    def test_destination_ip_accepted(self, destination):
+        m = PortForwardCreateInput(
+            name="Web", dst_port="80", fwd_port="8080", fwd_ip="192.168.1.10", destination_ip=destination
+        )
+        assert m.destination_ip == destination
+
+    @pytest.mark.parametrize("destination", ["", "2001:db8::1", "198.51.100.0/24", "bad"])
+    def test_invalid_destination_ip_rejected(self, destination):
+        with pytest.raises(ValidationError):
+            PortForwardCreateInput(
+                name="Web", dst_port="80", fwd_port="8080", fwd_ip="192.168.1.10", destination_ip=destination
+            )
+
     def test_action_input_flag(self):
         assert PortForwardCreateInput.__action_input__ is True
 
@@ -678,6 +716,16 @@ class TestPortForwardCreateInput:
 
 
 class TestPortForwardUpdateInput:
+    @pytest.mark.parametrize("destination", ["2001:db8::1", "198.51.100.0/24", "bad"])
+    def test_invalid_destination_ip_rejected(self, destination):
+        with pytest.raises(ValidationError):
+            PortForwardUpdateInput(destination_ip=destination)
+
+    def test_destination_ip_explicit_null_is_distinct_from_omitted(self):
+        assert "destination_ip" not in PortForwardUpdateInput().model_fields_set
+        m = PortForwardUpdateInput(destination_ip=None)
+        assert "destination_ip" in m.model_fields_set
+
     def test_action_input_flag(self):
         assert PortForwardUpdateInput.__action_input__ is True
 

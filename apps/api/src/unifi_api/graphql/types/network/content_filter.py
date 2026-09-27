@@ -46,6 +46,12 @@ class ContentFilter:
     client_macs: list[str]
     network_ids: list[str]
     schedule_mode: str | None
+    schedule_days: list[str] | None = None
+    schedule_time_all_day: bool | None = None
+    schedule_time_start: str | None = None
+    schedule_time_end: str | None = None
+    schedule_date_start: str | None = None
+    schedule_date_end: str | None = None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:

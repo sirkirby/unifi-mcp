@@ -888,6 +888,42 @@
             "title": "Safe Search",
             "type": "array"
           },
+          "schedule_date_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Date End"
+          },
+          "schedule_date_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Date Start"
+          },
+          "schedule_days": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Days"
+          },
           "schedule_mode": {
             "anyOf": [
               {
@@ -898,6 +934,39 @@
               }
             ],
             "title": "Schedule Mode"
+          },
+          "schedule_time_all_day": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Time All Day"
+          },
+          "schedule_time_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Time End"
+          },
+          "schedule_time_start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule Time Start"
           }
         },
         "title": "ContentFilterModel",
@@ -6783,6 +6852,17 @@
       "PortForwardModel": {
         "additionalProperties": true,
         "properties": {
+          "destination_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Ip"
+          },
           "dst_port": {
             "anyOf": [
               {
@@ -8459,6 +8539,28 @@
               }
             ],
             "title": "Allowed Subnets"
+          },
+          "alternate_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternate Address"
+          },
+          "alternate_address_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternate Address Enabled"
           },
           "enabled": {
             "title": "Enabled",

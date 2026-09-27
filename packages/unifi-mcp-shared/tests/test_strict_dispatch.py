@@ -279,12 +279,12 @@ def test_loader_treats_tools_without_input_schema_as_zero_arg(
 
 @pytest.fixture
 def mac_manifest(tmp_path: pathlib.Path) -> pathlib.Path:
-    """Tools whose MAC parameter is spelled four different ways across the server."""
+    """Network tools use mac_address for the subject MAC."""
     tools = [
         _make_tool("unifi_get_client_details", {"mac_address": {"type": "string"}}),
-        _make_tool("unifi_get_client_sessions", {"client_mac": {"type": "string"}, "limit": {"type": "integer"}}),
-        _make_tool("unifi_get_switch_ports", {"device_mac": {"type": "string"}}),
-        _make_tool("unifi_recent_events", {"mac": {"type": "string"}}),
+        _make_tool("unifi_get_client_sessions", {"mac_address": {"type": "string"}, "limit": {"type": "integer"}}),
+        _make_tool("unifi_get_switch_ports", {"mac_address": {"type": "string"}}),
+        _make_tool("unifi_recent_events", {"mac_address": {"type": "string"}}),
         _make_tool("unifi_list_networks", {"site": {"type": "string"}}),
         _make_tool("unifi_trigger_rf_scan", {"ap_mac": {"type": "string"}}),
         _make_tool("unifi_two_macs", {"client_mac": {"type": "string"}, "device_mac": {"type": "string"}}),
@@ -298,9 +298,9 @@ def mac_manifest(tmp_path: pathlib.Path) -> pathlib.Path:
         ("unifi_get_client_details", "client_mac", "mac_address"),
         ("unifi_get_client_details", "device_mac", "mac_address"),
         ("unifi_get_client_details", "mac", "mac_address"),
-        ("unifi_get_client_sessions", "mac_address", "client_mac"),
-        ("unifi_get_switch_ports", "mac_address", "device_mac"),
-        ("unifi_recent_events", "mac_address", "mac"),
+        ("unifi_get_client_sessions", "client_mac", "mac_address"),
+        ("unifi_get_switch_ports", "device_mac", "mac_address"),
+        ("unifi_recent_events", "mac", "mac_address"),
     ],
 )
 async def test_mac_spelling_error_names_the_canonical_parameter(
@@ -366,12 +366,12 @@ async def test_mac_hint_is_absent_when_the_tool_has_no_mac_parameter(mac_manifes
 async def test_mac_hint_does_not_disturb_the_rest_of_the_message(mac_manifest: pathlib.Path) -> None:
     server = StrictKwargFastMCP("test", tools_manifest_path=mac_manifest)
     with pytest.raises(ToolError) as excinfo:
-        await server.call_tool("unifi_get_client_sessions", {"mac_address": "aa:bb:cc:dd:ee:ff", "bogus": 1})
+        await server.call_tool("unifi_get_client_sessions", {"client_mac": "aa:bb:cc:dd:ee:ff", "bogus": 1})
     assert str(excinfo.value) == (
         "Invalid params for 'unifi_get_client_sessions': "
-        "unknown arguments {bogus, mac_address}. "
-        "Valid arguments: [client_mac, limit]. "
-        "'unifi_get_client_sessions' takes the MAC address as 'client_mac'."
+        "unknown arguments {bogus, client_mac}. "
+        "Valid arguments: [limit, mac_address]. "
+        "'unifi_get_client_sessions' takes the MAC address as 'mac_address'."
     )
 
 

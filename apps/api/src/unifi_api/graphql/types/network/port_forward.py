@@ -45,6 +45,8 @@ class PortForward:
     src: str | None
     log: bool
 
+    destination_ip: str | None = None
+
     @classmethod
     def render_hint(cls, kind: str) -> dict:
         return {

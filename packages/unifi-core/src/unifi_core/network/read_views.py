@@ -17,6 +17,7 @@ from unifi_core.network.models.devices import normalize_radio_channel
 from unifi_core.network.models.firewall import SELECTOR_ACTIVATORS, _activator_matches, activator_is_known
 from unifi_core.network.models.firewall import from_controller as firewall_policy_from_controller
 from unifi_core.network.models.networks import from_controller as network_from_controller
+from unifi_core.network.models.vouchers import voucher_from_controller
 
 LEGACY_ENGINE_HINT = (
     "No zone-based firewall configuration was returned. This site may still be running the "
@@ -456,6 +457,16 @@ def _add_device_details(device: dict[str, Any], target: dict[str, Any], *, summa
         )
 
 
+DEVICE_LIST_FIELDS = frozenset(
+    "mac name model type device_category ip status uptime last_seen firmware upgradable adopted "
+    "connection_network uplink load_avg_1 mem_pct model_eol _id source_api integration_id "
+    "serial hw_revision model_display clients radio_count radios vap_count wifi_bands experience_score "
+    "num_clients total_ports ports_up ports_poe_enabled poe_power poe_voltage wan1_ip wan1_up wan2_ip "
+    "wan2_up network_count cpu_usage mem_usage radio_table vap_table ports poe_info wan1 wan2 "
+    "network_table system_stats speedtest_status".split()
+)
+
+
 def shape_device_list(
     devices: list[Any],
     *,
@@ -466,8 +477,17 @@ def shape_device_list(
     limit: int | None = None,
     include_details: bool = False,
     summary: bool = True,
+    fields: str | None = None,
 ) -> dict[str, Any]:
     """Apply device inventory filters and compact/raw detail shaping."""
+    if fields is not None and not isinstance(fields, str):
+        return {"success": False, "error": "Invalid fields: expected a comma-separated string."}
+    requested_fields = {field.strip() for field in (fields or "").split(",") if field.strip()}
+    if requested_fields - DEVICE_LIST_FIELDS:
+        return {
+            "success": False,
+            "error": "Unknown device projection field. Supported fields: " + ", ".join(sorted(DEVICE_LIST_FIELDS)),
+        }
     devices_raw = [_raw(device) for device in devices]
     if device_type != "all":
         devices_raw = [device for device in devices_raw if classify_device(device) == device_type]
@@ -492,7 +512,9 @@ def shape_device_list(
         item = _device_base(device)
         if include_details:
             _add_device_details(device, item, summary=summary)
-        formatted.append(item)
+        formatted.append(
+            {key: value for key, value in item.items() if key in requested_fields} if requested_fields else item
+        )
     return _with_inventory_source(
         {
             "success": True,
@@ -1077,4 +1099,151 @@ def shape_dashboard(
         "history_seconds": history_seconds,
         "omitted_sections": omitted,
         "dashboard": formatted,
+    }
+
+
+VOUCHER_ALLOWED_FIELDS: frozenset[str] = frozenset(
+    {
+        "id",
+        "code",
+        "status",
+        "duration",
+        "qos_overwrite",
+        "created_at",
+        "used_at",
+        "quota",
+        "used",
+        "note",
+        "up_limit_kbps",
+        "down_limit_kbps",
+        "data_limit_mb",
+    }
+)
+
+
+def _matches_voucher_search(v: dict[str, Any], search_lower: str) -> bool:
+    """Match search query against voucher code and note, including UI hyphenated codes."""
+    code = (v.get("code") or "").lower()
+    note = (v.get("note") or "").lower()
+    if search_lower in code or search_lower in note:
+        return True
+    if "-" in search_lower:
+        search_digits = search_lower.replace("-", "")
+        if search_digits.isdigit() and search_digits in code.replace("-", ""):
+            return True
+    return False
+
+
+def shape_voucher_list(
+    vouchers: list[Any],
+    *,
+    site: str,
+    search: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+    fields: str | None = None,
+) -> dict[str, Any]:
+    """Apply voucher filtering, deterministic paging, and strict field projection.
+
+    Deterministic pagination for shaped requests sorts by created_at descending with
+    id descending tie-break. Unshaped calls preserve controller return order for
+    backward compatibility. Search matches case-insensitively over note and code,
+    including UI hyphenated digit codes.
+    """
+    if limit is not None:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1 or limit > 1000:
+            return {
+                "success": False,
+                "error": f"Invalid limit: {limit}. Must be an integer between 1 and 1000.",
+            }
+
+    if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+        return {
+            "success": False,
+            "error": f"Invalid offset: {offset}. Must be a non-negative integer.",
+        }
+
+    requested_fields: set[str] | None = None
+    if fields is not None:
+        if not isinstance(fields, str):
+            return {
+                "success": False,
+                "error": f"Invalid fields parameter type: {type(fields).__name__}. Expected comma-separated string.",
+            }
+        field_items = [f.strip() for f in fields.split(",") if f.strip()]
+        if field_items:
+            unknown_fields = set(field_items) - VOUCHER_ALLOWED_FIELDS
+            if unknown_fields:
+                return {
+                    "success": False,
+                    "error": (
+                        f"Unknown projection fields: {sorted(unknown_fields)}. "
+                        f"Allowed fields: {sorted(VOUCHER_ALLOWED_FIELDS)}"
+                    ),
+                }
+            requested_fields = set(field_items)
+
+    formatted_vouchers = []
+    for v in vouchers:
+        shaped = voucher_from_controller(v)
+        formatted = shaped.model_dump(exclude_none=True)
+        raw = _raw(v)
+        if raw.get("quota") is not None:
+            formatted["quota"] = raw.get("quota", 1)
+        if raw.get("used") is not None:
+            formatted["used"] = raw.get("used", 0)
+        if raw.get("note"):
+            formatted["note"] = raw.get("note")
+        if raw.get("qos_rate_max_up"):
+            formatted["up_limit_kbps"] = raw.get("qos_rate_max_up")
+        if raw.get("qos_rate_max_down"):
+            formatted["down_limit_kbps"] = raw.get("qos_rate_max_down")
+        if raw.get("qos_usage_quota"):
+            formatted["data_limit_mb"] = raw.get("qos_usage_quota")
+        formatted_vouchers.append(formatted)
+
+    shaping_requested = (
+        limit is not None
+        or (isinstance(offset, int) and offset > 0)
+        or bool(search and search.strip())
+        or bool(requested_fields)
+    )
+
+    if search and search.strip():
+        search_lower = search.strip().lower()
+        formatted_vouchers = [v for v in formatted_vouchers if _matches_voucher_search(v, search_lower)]
+
+    if shaping_requested:
+        formatted_vouchers.sort(
+            key=lambda v: (v.get("created_at") or 0, v.get("id") or ""),
+            reverse=True,
+        )
+
+    total_count = len(formatted_vouchers)
+
+    if offset >= total_count:
+        paged_vouchers = []
+    elif limit is not None:
+        paged_vouchers = formatted_vouchers[offset : offset + limit]
+    else:
+        paged_vouchers = formatted_vouchers[offset:]
+
+    if requested_fields is not None:
+        paged_vouchers = [{k: v for k, v in voucher.items() if k in requested_fields} for voucher in paged_vouchers]
+
+    if shaping_requested:
+        return {
+            "success": True,
+            "site": site,
+            "count": len(paged_vouchers),
+            "total_count": total_count,
+            "limit": limit,
+            "offset": offset,
+            "vouchers": paged_vouchers,
+        }
+    return {
+        "success": True,
+        "site": site,
+        "count": len(paged_vouchers),
+        "vouchers": paged_vouchers,
     }

@@ -222,7 +222,7 @@ def register_meta_tools(
             "been executed. "
             f"Returns names and descriptions by default. "
             f"Use 'category' to filter by area (e.g. clients, firewall, devices), "
-            f"'search' for keyword matching, or 'include_schemas' for full parameter schemas. "
+            f"'search' for keyword matching, 'name' for exact lookup, or 'include_schemas' for full schemas. "
             f"After finding the right tool, use {exec_name} to run it."
         ),
         annotations=read_annotations,
@@ -231,8 +231,11 @@ def register_meta_tools(
         category: str | None = None,
         search: str | None = None,
         include_schemas: bool = False,
+        name: str | None = None,
     ) -> dict:
         args = {}
+        if name is not None:
+            args["name"] = name
         if category is not None:
             args["category"] = category
         if search is not None:
@@ -253,6 +256,13 @@ def register_meta_tools(
         input_schema={
             "type": "object",
             "properties": {
+                "name": {
+                    "type": "string",
+                    "description": (
+                        "Exact, case-sensitive tool name. Cannot be combined with category or search. "
+                        "Unknown names return an empty index."
+                    ),
+                },
                 "category": {
                     "type": "string",
                     "description": (
@@ -273,7 +283,7 @@ def register_meta_tools(
                     "type": "boolean",
                     "description": (
                         "Include full input/output schemas per tool. "
-                        "Defaults to false — set true with a category or search filter "
+                        "Defaults to false — set true with a name, category or search filter "
                         "to get parameter details for specific tools."
                     ),
                     "default": False,
@@ -293,7 +303,7 @@ def register_meta_tools(
                     "items": {"type": "string"},
                     "description": "All available category names (use as values for the category filter)",
                 },
-                "filtered": {"type": "boolean", "description": "True when category or search filter was applied"},
+                "filtered": {"type": "boolean", "description": "True when name, category or search filter was applied"},
             },
         },
         annotations=normalize_tool_annotations(read_annotations),

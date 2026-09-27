@@ -9,15 +9,26 @@ This implementation uses the networkconf endpoint which is the reliable approach
 """
 
 import logging
+import re
+from copy import deepcopy
+from dataclasses import replace
 from typing import Any, Dict, List, Tuple
 
+from aiounifi.errors import Forbidden, NoPermission, TwoFaTokenRequired, Unauthorized
 from aiounifi.models.api import ApiRequest
 
 from unifi_core.exceptions import UniFiNotFoundError
 from unifi_core.merge import deep_merge
-from unifi_core.network.managers.connection_manager import ConnectionManager
-from unifi_core.network.models.vpn import is_vpn_network
-from unifi_core.write_verification import WriteVerificationResult, failed_write, verify_write
+from unifi_core.network.managers.connection_manager import ConnectionManager, controller_error_code, response_status
+from unifi_core.network.models.vpn import (
+    ALTERNATE_ADDRESS_KEYS,
+    VpnAlternateAddressError,
+    alternate_address_to_controller_update,
+    alternate_address_view,
+    is_vpn_network,
+    validate_alternate_address_update,
+)
+from unifi_core.write_verification import WriteVerificationResult, failed_write, noop_write, verify_write
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -280,6 +291,127 @@ class VpnManager:
         if result.success:
             logger.info("VPN server %s %s", server.get("name", server_id), "enabled" if enabled else "disabled")
         return result
+
+    async def _fresh_alternate_address_server(self, server_id: str) -> Dict[str, Any]:
+        """Uncached full record, with safe errors and a verified server-type boundary."""
+        if not isinstance(server_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", server_id):
+            raise VpnAlternateAddressError("Invalid VPN server identifier")
+        try:
+            response = await self._connection.request(ApiRequest(method="get", path="/rest/networkconf"))
+            records = response.get("data") if isinstance(response, dict) else response
+            if not isinstance(records, list) or not all(isinstance(record, dict) for record in records):
+                raise ValueError("Malformed network configuration response")
+            matches = [record for record in records if record.get("_id") == server_id]
+        except Exception as exc:
+            logger.error("Failed to read VPN alternate-address configuration: %s", type(exc).__name__)
+            raise VpnAlternateAddressError("Failed to read VPN alternate-address configuration") from None
+        if len(matches) != 1:
+            raise VpnAlternateAddressError("VPN alternate-address target was not found or is ambiguous")
+        record = matches[0]
+        is_client, is_server = classify_vpn_type(record.get("purpose"), record.get("vpn_type"))
+        # Other server forms exist in the UI, but their exact type discriminators
+        # have not been verified for this operation. Do not widen by substring.
+        if is_client or not is_server or record.get("vpn_type") != "wireguard-server":
+            raise VpnAlternateAddressError("VPN alternate-address updates require a WireGuard VPN server")
+        return record
+
+    async def _prepare_alternate_address_update(
+        self, server_id: str, update_data: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
+        updates = alternate_address_to_controller_update(update_data)
+        try:
+            session_ready = await self._connection.ensure_session_connected()
+        except Exception as exc:
+            logger.error("Failed to prepare VPN alternate-address session: %s", type(exc).__name__)
+            raise VpnAlternateAddressError(
+                "VPN alternate-address update requires Network session authentication"
+            ) from None
+        if not session_ready:
+            raise VpnAlternateAddressError("VPN alternate-address update requires Network session authentication")
+        before = await self._fresh_alternate_address_server(server_id)
+        merged = deepcopy(before)
+        merged.update(updates)
+        if merged.get(ALTERNATE_ADDRESS_KEYS["alternate_address_enabled"]) is True:
+            try:
+                validate_alternate_address_update(
+                    {"alternate_address": merged.get(ALTERNATE_ADDRESS_KEYS["alternate_address"])}
+                )
+            except VpnAlternateAddressError:
+                raise VpnAlternateAddressError(
+                    "Enabling the alternate address requires a valid alternate_address (supplied or already stored)."
+                ) from None
+        return before, merged, updates
+
+    async def prepare_vpn_server_alternate_address(
+        self, server_id: str, update_data: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """Validate a real preview and expose only the public alternate-address fields."""
+        before, merged, _ = await self._prepare_alternate_address_update(server_id, update_data)
+        return alternate_address_view(before), alternate_address_view(merged)
+
+    async def update_vpn_server_alternate_address(
+        self, server_id: str, update_data: Dict[str, Any]
+    ) -> WriteVerificationResult:
+        """Fresh fetch, merge two verified fields, PUT once, and verify persistence.
+
+        This method never retries or selects another credential after an uncertain
+        write. API callers receive the same validation as MCP callers.
+        """
+        try:
+            before, merged, updates = await self._prepare_alternate_address_update(server_id, update_data)
+        except VpnAlternateAddressError as exc:
+            return failed_write(str(exc), operation="update", mutation_applied=False)
+        except Exception as exc:
+            logger.error("Failed to prepare VPN alternate-address update: %s", type(exc).__name__)
+            return failed_write(
+                "Failed to prepare VPN alternate-address update; no changes were applied",
+                operation="update",
+                mutation_applied=False,
+            )
+        if all(
+            key in before and type(before[key]) is type(value) and before[key] == value
+            for key, value in updates.items()
+        ):
+            return noop_write(resource=alternate_address_view(before))
+        try:
+            await self._connection.request(ApiRequest(method="put", path=f"/rest/networkconf/{server_id}", data=merged))
+        except Exception as exc:
+            logger.error("Failed to update VPN alternate-address configuration: %s", type(exc).__name__)
+            if (
+                isinstance(exc, (Forbidden, NoPermission, TwoFaTokenRequired, Unauthorized))
+                or controller_error_code(exc) is not None
+                or response_status(exc) in {400, 401, 403, 404, 405, 409, 422, 429}
+            ):
+                return failed_write("Controller rejected VPN alternate-address update", operation="update")
+            return failed_write(
+                "VPN alternate-address write outcome uncertain; inspect the server before another update",
+                operation="update",
+                mutation_applied=None,
+            )
+        finally:
+            self._invalidate_vpn_caches()
+        try:
+            after = await self._fresh_alternate_address_server(server_id)
+        except Exception:
+            return failed_write(
+                "VPN alternate-address write outcome uncertain; readback failed",
+                operation="update",
+                mutation_applied=None,
+            )
+
+        # Compare the actual types/values, not the tolerant public projection.
+        def canonical(record: Dict[str, Any]) -> Dict[str, Any]:
+            return {public: record[key] for public, key in ALTERNATE_ADDRESS_KEYS.items() if key in record}
+
+        result = verify_write(
+            operation="update",
+            # Also verify stored alternate fields promised to be preserved,
+            # especially the saved address when disabling the override.
+            requested=canonical(merged),
+            before=canonical(before),
+            after=canonical(after),
+        )
+        return replace(result, resource=alternate_address_view(after))
 
     async def toggle_vpn_config(self, config_id: str) -> WriteVerificationResult:
         """Toggle a VPN configuration's enabled state.

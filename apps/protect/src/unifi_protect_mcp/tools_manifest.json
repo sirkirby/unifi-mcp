@@ -5074,8 +5074,12 @@
             },
             "include_schemas": {
               "default": false,
-              "description": "Include full input/output schemas per tool. Defaults to false \u2014 set true with a category or search filter to get parameter details for specific tools.",
+              "description": "Include full input/output schemas per tool. Defaults to false \u2014 set true with a name, category or search filter to get parameter details for specific tools.",
               "type": "boolean"
+            },
+            "name": {
+              "description": "Exact, case-sensitive tool name. Cannot be combined with category or search. Unknown names return an empty index.",
+              "type": "string"
             },
             "search": {
               "description": "Case-insensitive token search over tool names and descriptions. Ignores common words and one-character terms; multi-word queries require at least half of usable terms (minimum two). Terms of four or more characters also match token prefixes. Results are ranked by exact phrase and name matches, with at most 20 returned. An empty string applies no filter; a non-empty query with no usable terms returns no tools.",
@@ -5098,7 +5102,7 @@
               "type": "integer"
             },
             "filtered": {
-              "description": "True when category or search filter was applied",
+              "description": "True when name, category or search filter was applied",
               "type": "boolean"
             },
             "tools": {

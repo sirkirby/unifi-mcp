@@ -512,3 +512,39 @@ class TestToolMetadataAnnotations:
             input_schema={"type": "object"},
         )
         assert meta.annotations is None
+
+
+@pytest.mark.parametrize("mode", ["lazy", "eager", "meta_only"])
+@pytest.mark.parametrize("include_schemas", [False, True])
+def test_exact_name_lookup(mode, include_schemas, tmp_path):
+    schema = {"type": "object", "properties": {"limit": {"type": "integer"}}}
+    register_tool("unifi_list_clients", "List clients", input_schema=schema, output_schema={"type": "object"})
+    register_tool("unifi_list_clients_extra", "List clients extra")
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(get_tool_index(registration_mode="eager", include_schemas=True)))
+    result = get_tool_index(mode, manifest, name="unifi_list_clients", include_schemas=include_schemas)
+    assert result["count"] == 1
+    assert result["filtered"] is True
+    assert [tool["name"] for tool in result["tools"]] == ["unifi_list_clients"]
+    assert ("schema" in result["tools"][0]) is include_schemas
+    if include_schemas:
+        assert result["tools"][0]["schema"] == {"input": schema, "output": {"type": "object"}}
+
+
+@pytest.mark.parametrize("name", ["", "unifi_list", "UNIFI_LIST_CLIENTS", " unifi_list_clients", "missing"])
+def test_exact_name_unknown_returns_empty_index(name):
+    register_tool("unifi_list_clients", "List clients")
+    assert get_tool_index(registration_mode="eager", name=name) == {
+        "tools": [],
+        "count": 0,
+        "categories": [],
+        "filtered": True,
+    }
+
+
+@pytest.mark.parametrize("filters", [{"search": "client"}, {"category": "clients"}, {"search": ""}, {"category": ""}])
+def test_exact_name_rejects_other_filters(filters):
+    result = get_tool_index(name="unifi_list_clients", **filters)
+    assert result["success"] is False
+    assert "name" in result["error"]
+    assert "category" in result["error"] and "search" in result["error"]

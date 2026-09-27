@@ -15,10 +15,14 @@ _MISSING = object()
 
 @dataclass(frozen=True)
 class WriteVerificationResult:
-    """Outcome of a controller mutation and its post-write read-back."""
+    """Outcome of a controller mutation and its post-write read-back.
+
+    ``mutation_applied=None`` means a transport or readback failure left the
+    outcome unknown; callers must not interpret it as a confirmed no-op.
+    """
 
     success: bool
-    mutation_applied: bool
+    mutation_applied: bool | None
     operation: str
     resource: dict[str, Any] | None = None
     error: str | None = None
@@ -211,7 +215,7 @@ def failed_write(
     error: str,
     *,
     operation: str = "write",
-    mutation_applied: bool = False,
+    mutation_applied: bool | None = False,
     resource: Mapping[str, Any] | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> WriteVerificationResult:
