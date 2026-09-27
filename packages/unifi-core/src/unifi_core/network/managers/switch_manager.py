@@ -14,6 +14,7 @@ API endpoints:
 import logging
 from typing import Any, Dict, List, Optional
 
+from aiounifi.errors import RequestError
 from aiounifi.models.api import ApiRequest
 
 from unifi_core.exceptions import UniFiNotFoundError
@@ -235,8 +236,8 @@ class SwitchManager:
             )
             return data[0] if data else None
         except Exception as e:
-            logger.error("Error getting device stat for %s: %s", device_mac, e)
-            raise
+            logger.error("Device statistics read failed: %s", type(e).__name__)
+            raise RequestError(f"Device statistics read failed ({type(e).__name__}).") from None
 
     async def _get_device_id(self, device_mac: str) -> Optional[str]:
         """Get the device _id from its MAC address (needed for REST writes)."""
