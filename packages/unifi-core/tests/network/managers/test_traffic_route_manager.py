@@ -4,11 +4,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from unifi_core.auth import UniFiAuth
-from unifi_core.exceptions import UniFiAuthError
+from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError
 from unifi_core.network.managers.connection_manager import ConnectionManager
-from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager
+from unifi_core.network.managers.traffic_route_manager import TrafficRouteManager, TrafficRoutePreflightError
 
 VALID_TARGET = [{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:ff"}]
+VALID_DOMAIN_ROUTE = {
+    "description": "Domain route",
+    "matching_target": "DOMAIN",
+    "network_id": "vpn-target",
+    "domains": [{"domain": "example.com"}],
+}
 
 
 def _manager(*, purpose: str = "wan") -> tuple[TrafficRouteManager, MagicMock, MagicMock]:
@@ -37,6 +43,276 @@ def _seed_both_traffic_route_caches(connection: MagicMock) -> dict[str, object]:
 
     connection._invalidate_cache.side_effect = invalidate
     return cache
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"domains": [{"domain": " "}]},
+        {"domains": [{"domain": "example.com", "ports": [True]}]},
+        {"domains": [{"domain": "example.com", "port_ranges": [{"port_start": 900, "port_stop": 100}]}]},
+        {"target_devices": [{"type": "CLIENT", "client_mac": "not-a-mac"}]},
+        {"target_devices": [{"type": "ALL_CLIENTS"}, {"type": "NETWORK", "network_id": "n"}]},
+        {"enabled": "false"},
+        {"unknown_field": True},
+        {"unknown_field": None},
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_rejects_invalid_domain_write_before_post(changes: dict) -> None:
+    manager, connection, _ = _manager()
+    with pytest.raises(ValueError):
+        await manager.create_traffic_route({**VALID_DOMAIN_ROUTE, **changes})
+    connection.request.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        {"matching_target": "IP", "ip_addresses": [{"ip_or_subnet": "2001:db8::1", "ip_version": "IPV4"}]},
+        {
+            "matching_target": "IP",
+            "ip_ranges": [{"ip_start": "203.0.113.9", "ip_stop": "203.0.113.1", "ip_version": "IPV4"}],
+        },
+        {"matching_target": "REGION", "regions": [""]},
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_rejects_invalid_other_selector_before_post(route: dict) -> None:
+    manager, connection, _ = _manager()
+    with pytest.raises(ValueError):
+        await manager.create_traffic_route({"description": "Route", "network_id": "vpn-target", **route})
+    connection.request.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        {"matching_target": "IP", "ip_addresses": [{"ip_or_subnet": "2001:db8::1", "ip_version": "IPV6"}]},
+        {"matching_target": "REGION", "regions": ["US"]},
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_accepts_valid_ip_and_region_selectors(route: dict) -> None:
+    manager, connection, _ = _manager()
+    created = await manager.create_traffic_route({"description": "Route", "network_id": "vpn-target", **route})
+    assert created == {"_id": "route-new"}
+    sent = connection.request.await_args.args[0].data
+    assert sent["matching_target"] == route["matching_target"]
+    assert "target_devices" not in sent
+
+
+@pytest.mark.parametrize(
+    ("field", "item"),
+    [
+        ("ip_addresses", {"ip_or_subnet": "203.0.113.10", "ip_version": "v4", "ports": [], "port_ranges": []}),
+        ("ip_ranges", {"ip_start": "2001:db8::1", "ip_stop": "2001:db8::9", "ip_version": "v6"}),
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_posts_controller_ip_versions(field: str, item: dict) -> None:
+    manager, connection, _ = _manager()
+    await manager.create_traffic_route(
+        {
+            "description": "IP route",
+            "matching_target": "IP",
+            "network_id": "vpn-target",
+            field: [item],
+        }
+    )
+    sent = connection.request.await_args.args[0].data
+    assert sent[field][0]["ip_version"] == item["ip_version"]
+    assert "ip_version" not in sent
+
+
+@pytest.mark.asyncio
+async def test_unrelated_update_preserves_fetched_ip_selector_spelling() -> None:
+    manager, connection, _ = _manager()
+    current = {
+        "_id": "route-1",
+        "description": "Older IP route",
+        "matching_target": "IP",
+        "network_id": "vpn-target",
+        "ip_addresses": [{"ip_or_subnet": "203.0.113.10", "ip_version": "IPV4", "legacy": True}],
+    }
+    manager.get_traffic_route_details = AsyncMock(return_value=current)
+    assert await manager.update_traffic_route("route-1", description="Renamed") is True
+    assert connection.request.await_args.args[0].data == {**current, "description": "Renamed"}
+
+
+@pytest.mark.asyncio
+async def test_submitted_ip_range_alias_normalizes_without_rewriting_fetched_selector() -> None:
+    manager, connection, _ = _manager()
+    current = {
+        "_id": "route-1",
+        "description": "IP route",
+        "matching_target": "IP",
+        "network_id": "vpn-target",
+        "ip_addresses": [{"ip_or_subnet": "203.0.113.10", "ip_version": "IPV4", "legacy": True}],
+        "ip_ranges": [],
+    }
+    manager.get_traffic_route_details = AsyncMock(return_value=current)
+    assert (
+        await manager.update_traffic_route(
+            "route-1", ip_ranges=[{"ip_start": "2001:db8::1", "ip_stop": "2001:db8::9", "ip_version": "IPV6"}]
+        )
+        is True
+    )
+    sent = connection.request.await_args.args[0].data
+    assert sent["ip_addresses"] == current["ip_addresses"]
+    assert sent["ip_ranges"] == [{"ip_start": "2001:db8::1", "ip_stop": "2001:db8::9", "ip_version": "v6"}]
+
+
+@pytest.mark.asyncio
+async def test_create_normalizes_explicit_client_target_without_changing_scope() -> None:
+    manager, connection, _ = _manager()
+    await manager.create_traffic_route(
+        {
+            **VALID_DOMAIN_ROUTE,
+            "target_devices": [{"type": "CLIENT", "client_mac": "AA-BB-CC-DD-EE-FE"}],
+        }
+    )
+    assert connection.request.await_args.args[0].data["target_devices"] == [
+        {"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:fe"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_update_rejects_unknown_immutable_and_invalid_submissions_before_put() -> None:
+    manager, connection, _ = _manager()
+    manager.get_traffic_route_details = AsyncMock(return_value={**VALID_DOMAIN_ROUTE, "_id": "route-1", "legacy": 42})
+    for changes in (
+        {"unknown_field": True},
+        {"unknown_field": None},
+        {"_id": "replacement"},
+        {"matching_target": "IP"},
+        {"enabled": "false"},
+        {"domains": [{"domain": " "}]},
+    ):
+        with pytest.raises(ValueError):
+            await manager.update_traffic_route("route-1", **changes)
+    connection.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_preserves_existing_imperfect_fields_when_disabling() -> None:
+    manager, connection, _ = _manager()
+    current = {**VALID_DOMAIN_ROUTE, "_id": "route-1", "domains": [{"legacy": True}], "opaque": {"keep": True}}
+    manager.get_traffic_route_details = AsyncMock(return_value=current)
+    assert await manager.update_traffic_route("route-1", enabled=False) is True
+    assert connection.request.await_args.args[0].data == {**current, "enabled": False}
+
+
+@pytest.mark.asyncio
+async def test_update_can_rename_imperfect_existing_route() -> None:
+    manager, connection, _ = _manager()
+    current = {**VALID_DOMAIN_ROUTE, "_id": "route-1", "domains": [{"legacy": True}]}
+    manager.get_traffic_route_details = AsyncMock(return_value=current)
+    assert await manager.update_traffic_route("route-1", description="Safer name") is True
+    assert connection.request.await_args.args[0].data == {**current, "description": "Safer name"}
+
+
+@pytest.mark.asyncio
+async def test_update_accepts_empty_inactive_selectors_and_preserves_fetched_fields() -> None:
+    manager, connection, _ = _manager()
+    current = {**VALID_DOMAIN_ROUTE, "_id": "route-1", "legacy": {"keep": True}}
+    manager.get_traffic_route_details = AsyncMock(return_value=current)
+    assert await manager.update_traffic_route("route-1", regions=[], ip_addresses=[]) is True
+    assert connection.request.await_args.args[0].data == {**current, "regions": [], "ip_addresses": []}
+
+
+@pytest.mark.asyncio
+async def test_update_uses_normalized_known_target_and_safe_unknown_target_error() -> None:
+    manager, connection, _ = _manager()
+    current = {**VALID_DOMAIN_ROUTE, "_id": "route-1", "matching_target": "domain"}
+    manager.get_traffic_route_details = AsyncMock(return_value=current)
+    assert await manager.update_traffic_route("route-1", domains=[{"domain": "example.org"}]) is True
+    connection.request.reset_mock()
+    current["matching_target"] = "secret-controller-value"
+    with pytest.raises(ValueError, match="matching_target") as error:
+        await manager.update_traffic_route("route-1", domains=[{"domain": "example.org"}])
+    assert "secret-controller-value" not in str(error.value)
+    connection.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_disabling_internet_route_with_equivalent_mac_does_not_lookup_wan() -> None:
+    manager, connection, network_manager = _manager()
+    current = {
+        "_id": "route-1",
+        "description": "Internet route",
+        "matching_target": "INTERNET",
+        "network_id": "legacy-vpn",
+        "enabled": True,
+        "target_devices": [{"type": "CLIENT", "client_mac": "AA-BB-CC-DD-EE-FE"}],
+    }
+    manager.get_traffic_route_details = AsyncMock(return_value=current)
+    assert (
+        await manager.update_traffic_route(
+            "route-1",
+            enabled=False,
+            target_devices=[{"type": "CLIENT", "client_mac": "aa:bb:cc:dd:ee:fe"}],
+        )
+        is True
+    )
+    network_manager.get_network_details.assert_not_awaited()
+    assert connection.request.await_args.args[0].data["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_internet_create_rejects_extra_target_key_before_wan_lookup_or_post() -> None:
+    manager, connection, network_manager = _manager()
+    with pytest.raises(TrafficRoutePreflightError, match="no network_id"):
+        await manager.create_traffic_route(
+            {
+                "description": "Internet route",
+                "matching_target": "INTERNET",
+                "network_id": "wan-target",
+                "target_devices": [
+                    {
+                        "type": "CLIENT",
+                        "client_mac": "02:11:22:33:44:55",
+                        "network_id": {"bad": True},
+                    }
+                ],
+            }
+        )
+    network_manager.get_network_details.assert_not_awaited()
+    connection.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_missing_wan_preflight_is_not_route_not_found() -> None:
+    manager, connection, network_manager = _manager()
+    manager.get_traffic_route_details = AsyncMock(
+        return_value={
+            "_id": "route-1",
+            "description": "Internet route",
+            "matching_target": "INTERNET",
+            "network_id": "wan-old",
+            "target_devices": VALID_TARGET,
+            "enabled": True,
+        }
+    )
+    network_manager.get_network_details = AsyncMock(side_effect=UniFiNotFoundError("network", "wan-gone"))
+    with pytest.raises(TrafficRoutePreflightError, match="Target network was not found"):
+        await manager.update_traffic_route("route-1", network_id="wan-gone")
+    connection.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_update_ip_selector_retains_existing_other_selector() -> None:
+    manager, connection, _ = _manager()
+    current = {
+        "_id": "route-1",
+        "matching_target": "IP",
+        "network_id": "vpn-target",
+        "ip_addresses": [{"ip_or_subnet": "203.0.113.1", "ip_version": "IPV4"}],
+        "ip_ranges": [{"legacy": True}],
+    }
+    manager.get_traffic_route_details = AsyncMock(return_value=current)
+    assert await manager.update_traffic_route("route-1", ip_addresses=[]) is True
+    assert connection.request.await_args.args[0].data == {**current, "ip_addresses": []}
 
 
 @pytest.mark.asyncio
@@ -387,7 +663,7 @@ async def test_create_rejects_ambiguous_response_without_route_id(response: obje
     connection.request = AsyncMock(return_value=response)
 
     with pytest.raises(ValueError, match="traffic route create response"):
-        await manager.create_traffic_route({"matching_target": "DOMAIN"})
+        await manager.create_traffic_route(VALID_DOMAIN_ROUTE)
 
     assert cache == {}
 
@@ -400,7 +676,7 @@ class TestTrafficRouteCacheCoherence:
         manager, connection, _ = _manager()
         cache = _seed_both_traffic_route_caches(connection)
 
-        await manager.create_traffic_route({"matching_target": "DOMAIN"})
+        await manager.create_traffic_route(VALID_DOMAIN_ROUTE)
 
         assert cache == {}
 
@@ -411,7 +687,7 @@ class TestTrafficRouteCacheCoherence:
         connection.request = AsyncMock(side_effect=RuntimeError("response lost"))
 
         with pytest.raises(RuntimeError, match="response lost"):
-            await manager.create_traffic_route({"matching_target": "DOMAIN"})
+            await manager.create_traffic_route(VALID_DOMAIN_ROUTE)
 
         assert cache == {}
 

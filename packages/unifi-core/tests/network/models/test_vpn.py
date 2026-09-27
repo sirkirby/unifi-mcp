@@ -51,12 +51,12 @@ class TestVpnClientFieldSets:
 
 
 class TestVpnServerFieldSets:
-    def test_server_has_no_mutable_fields(self) -> None:
-        assert VPNSERVER_MUTABLE_FIELDS == frozenset()
+    def test_server_has_only_alternate_address_mutable_fields(self) -> None:
+        assert VPNSERVER_MUTABLE_FIELDS == frozenset({"alternate_address_enabled", "alternate_address"})
 
-    def test_all_server_fields_are_read_only(self) -> None:
+    def test_remaining_server_fields_are_read_only(self) -> None:
         all_fields = frozenset(VpnServer.model_fields.keys())
-        assert VPNSERVER_READ_ONLY_FIELDS == all_fields
+        assert VPNSERVER_READ_ONLY_FIELDS == all_fields - VPNSERVER_MUTABLE_FIELDS
 
 
 class TestFromControllerVpnClient:

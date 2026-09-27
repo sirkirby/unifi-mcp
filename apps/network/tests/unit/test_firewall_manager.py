@@ -224,7 +224,14 @@ class TestLegacyTrafficRouteSafety:
         cache = _seed_both_traffic_route_caches(mock_connection)
         mock_connection.request = AsyncMock(return_value={"data": {"_id": "route-create"}})
 
-        assert await firewall_manager.create_traffic_route({"matching_target": "DOMAIN"}) == {
+        assert await firewall_manager.create_traffic_route(
+            {
+                "description": "Domain route",
+                "matching_target": "DOMAIN",
+                "network_id": "vpn-target",
+                "domains": [{"domain": "example.com"}],
+            }
+        ) == {
             "success": True,
             "route_id": "route-create",
         }
@@ -257,6 +264,7 @@ class TestLegacyTrafficRouteSafety:
     ):
         result = await firewall_manager.create_traffic_route(
             {
+                "description": "Internet route",
                 "matching_target": "INTERNET",
                 "network_id": "wan-target",
                 "target_devices": [{"type": "ALL_CLIENTS"}],
@@ -276,6 +284,7 @@ class TestLegacyTrafficRouteSafety:
 
         result = await firewall_manager.create_traffic_route(
             {
+                "description": "Internet route",
                 "matching_target": "INTERNET",
                 "network_id": "wan-target",
                 "target_devices": [{"type": "CLIENT", "client_mac": "02:11:22:33:44:55"}],

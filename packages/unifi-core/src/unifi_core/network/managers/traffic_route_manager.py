@@ -12,8 +12,14 @@ from aiounifi.models.api import ApiRequestV2
 
 from unifi_core.auth import AuthenticationStatus
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError
+from unifi_core.mac import canonical_mac
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.network_manager import NetworkManager
+from unifi_core.network.models.traffic_routes import (
+    TrafficRouteValidationError,
+    validate_create_payload,
+    validate_update_fields,
+)
 
 logger = logging.getLogger("unifi-network-mcp")
 
@@ -40,7 +46,39 @@ def invalidate_traffic_route_caches(connection: ConnectionManager) -> None:
 
 
 class TrafficRoutePreflightError(ValueError):
-    """A create was rejected before any controller POST was attempted."""
+    """A route write was rejected before a controller mutation was attempted."""
+
+
+def _same_client_scope(left: Any, right: Any) -> bool:
+    if left == right:
+        return True
+    if not all(isinstance(value, list) and len(value) == 1 for value in (left, right)):
+        return False
+    first, second = left[0], right[0]
+    if not all(isinstance(value, dict) and set(value) == {"type", "client_mac"} for value in (first, second)):
+        return False
+    if first["type"] != "CLIENT" or second["type"] != "CLIENT":
+        return False
+    first_mac, second_mac = canonical_mac(first["client_mac"]), canonical_mac(second["client_mac"])
+    return first_mac is not None and first_mac == second_mac
+
+
+def internet_route_requires_target_validation(
+    payload: Dict[str, Any], existing_payload: Optional[Dict[str, Any]]
+) -> bool:
+    """Return whether a new or changed INTERNET scope needs fresh WAN verification."""
+    target = payload.get("matching_target")
+    if type(target) is not str or target.strip().upper() != "INTERNET":
+        return False
+    if payload.get("enabled") is not False or existing_payload is None:
+        return True
+    old_target = existing_payload.get("matching_target")
+    return (
+        type(old_target) is not str
+        or old_target.strip().upper() != "INTERNET"
+        or existing_payload.get("network_id") != payload.get("network_id")
+        or not _same_client_scope(existing_payload.get("target_devices"), payload.get("target_devices"))
+    )
 
 
 class TrafficRouteManager:
@@ -69,18 +107,18 @@ class TrafficRouteManager:
     async def validate_internet_route_target(self, target_devices: Any, network_id: Any) -> None:
         """Require an Internet route to target one explicit client via a WAN."""
         if not isinstance(target_devices, list) or len(target_devices) != 1:
-            raise ValueError("INTERNET Traffic Routes require exactly one explicit CLIENT target")
+            raise TrafficRouteValidationError("INTERNET Traffic Routes require exactly one explicit CLIENT target")
 
         target = target_devices[0]
         if not isinstance(target, dict) or target.get("type") != "CLIENT":
-            raise ValueError("INTERNET Traffic Routes require exactly one explicit CLIENT target")
+            raise TrafficRouteValidationError("INTERNET Traffic Routes require exactly one explicit CLIENT target")
 
         client_mac = target.get("client_mac")
         if not is_unicast_client_mac(client_mac):
-            raise ValueError("INTERNET Traffic Routes require a valid unicast client MAC address")
+            raise TrafficRouteValidationError("INTERNET Traffic Routes require a valid unicast client MAC address")
 
         if not isinstance(network_id, str) or not network_id:
-            raise ValueError("INTERNET Traffic Routes require a target WAN network")
+            raise TrafficRouteValidationError("INTERNET Traffic Routes require a target WAN network")
 
         auth_status = getattr(self._connection, "authentication_status", None)
         if isinstance(auth_status, AuthenticationStatus) and not auth_status.session_available:
@@ -90,9 +128,17 @@ class TrafficRouteManager:
                     "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD."
                 )
 
-        target_network = await self._network_manager.get_network_details(network_id, force_refresh=True)
+        try:
+            target_network = await self._network_manager.get_network_details(network_id, force_refresh=True)
+        except UniFiNotFoundError:
+            raise
+        except Exception:
+            raise TrafficRoutePreflightError(
+                "Could not verify the target WAN network before writing the route. "
+                "Check controller connectivity and session authentication."
+            ) from None
         if not isinstance(target_network, dict) or str(target_network.get("purpose", "")).lower() != "wan":
-            raise ValueError("INTERNET Traffic Routes can target only a verified WAN network")
+            raise TrafficRouteValidationError("INTERNET Traffic Routes can target only a verified WAN network")
 
     async def _validate_internet_route_payload(
         self,
@@ -101,28 +147,11 @@ class TrafficRouteManager:
         existing_payload: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Validate Internet routes, retaining only an unchanged disabled legacy scope."""
-        matching_target = payload.get("matching_target")
-        is_internet_route = isinstance(matching_target, str) and matching_target.upper() == "INTERNET"
-        if not is_internet_route:
-            return
-
-        if payload.get("enabled") is not False:
-            await self.validate_internet_route_target(payload.get("target_devices"), payload.get("network_id"))
-            return
-
-        existing_target = existing_payload.get("matching_target") if existing_payload else None
-        existing_is_internet_route = isinstance(existing_target, str) and existing_target.upper() == "INTERNET"
-        scope_changed = (
-            (
-                not existing_is_internet_route
-                or existing_payload.get("target_devices") != payload.get("target_devices")
-                or existing_payload.get("network_id") != payload.get("network_id")
-            )
-            if existing_payload
-            else True
-        )
-        if scope_changed:
-            await self.validate_internet_route_target(payload.get("target_devices"), payload.get("network_id"))
+        if internet_route_requires_target_validation(payload, existing_payload):
+            try:
+                await self.validate_internet_route_target(payload.get("target_devices"), payload.get("network_id"))
+            except UniFiNotFoundError:
+                raise TrafficRoutePreflightError("Target network was not found.") from None
 
     async def get_traffic_routes(self, *, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """Get all traffic routes for the current site.
@@ -182,12 +211,15 @@ class TrafficRouteManager:
     async def create_traffic_route(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Create a traffic route using POST /trafficroutes (V2 API)."""
         try:
+            payload = validate_create_payload(payload)
             await self._validate_internet_route_payload(payload)
+        except TrafficRoutePreflightError:
+            raise
         except UniFiAuthError as exc:
             raise TrafficRoutePreflightError(str(exc)) from None
         except UniFiNotFoundError:
             raise TrafficRoutePreflightError("Target network was not found.") from None
-        except ValueError as exc:
+        except TrafficRouteValidationError as exc:
             raise TrafficRoutePreflightError(str(exc)) from None
         except Exception:
             raise TrafficRoutePreflightError(
@@ -225,17 +257,17 @@ class TrafficRouteManager:
         try:
             # Existence check; raises UniFiNotFoundError on miss.
             current = await self.get_traffic_route_details(route_id, force_refresh=True)
+            submitted = kwargs.copy()
+            if enabled is not None:
+                submitted["enabled"] = enabled
+            try:
+                updates = validate_update_fields(submitted, current=current)
+            except TrafficRouteValidationError as exc:
+                raise TrafficRoutePreflightError(str(exc)) from None
 
             # Start with full existing route and apply updates
             payload: Dict[str, Any] = current.copy()
-
-            if enabled is not None:
-                payload["enabled"] = enabled
-
-            # Apply any additional updates
-            for key, value in kwargs.items():
-                if value is not None:
-                    payload[key] = value
+            payload.update(updates)
 
             await self._validate_internet_route_payload(payload, existing_payload=current)
 
@@ -285,7 +317,10 @@ class TrafficRouteManager:
             current = await self.get_traffic_route_details(route_id, force_refresh=True)
 
             payload: Dict[str, Any] = current.copy()
-            payload["kill_switch_enabled"] = enabled
+            try:
+                payload.update(validate_update_fields({"kill_switch_enabled": enabled}, current=current))
+            except TrafficRouteValidationError as exc:
+                raise TrafficRoutePreflightError(str(exc)) from None
 
             await self._validate_internet_route_payload(payload, existing_payload=current)
 

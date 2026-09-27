@@ -17,9 +17,12 @@ type must expose every field listed here.
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+
+from unifi_core.mac import canonical_mac
 
 # ---------------------------------------------------------------------------
 # Pydantic domain model
@@ -119,6 +122,269 @@ def _get(obj: Any, key: str, default: Any = None) -> Any:
     if isinstance(raw, dict):
         return raw.get(key, default)
     return getattr(obj, key, default)
+
+
+_SELECTORS = frozenset({"domains", "ip_addresses", "ip_ranges", "regions"})
+_WRITE_FIELDS = frozenset(TrafficRoute.model_fields) - {"id", "name"} | {"description"}
+_UPDATE_FIELDS = _WRITE_FIELDS - {"matching_target"}
+
+
+class TrafficRouteValidationError(ValueError):
+    """Invalid traffic-route fields submitted by a caller."""
+
+
+def _nonempty(value: Any) -> bool:
+    return type(value) is str and bool(value.strip())
+
+
+def _object(value: Any, *, label: str, required: set[str], allowed: set[str]) -> Dict[str, Any]:
+    if type(value) is not dict:
+        raise ValueError(f"Each {label} entry must be an object.")
+    missing, unknown = required - value.keys(), value.keys() - allowed
+    if missing or unknown:
+        raise ValueError(f"Each {label} entry has invalid field(s): {', '.join(sorted(map(str, missing | unknown)))}.")
+    return value
+
+
+def _ports(value: Any, *, label: str) -> List[int]:
+    if type(value) is not list or any(type(port) is not int or not 1 <= port <= 65535 for port in value):
+        raise ValueError(f"{label} must contain integer ports from 1 through 65535.")
+    return value
+
+
+def _port_ranges(value: Any, *, label: str) -> List[Dict[str, int]]:
+    if type(value) is not list:
+        raise ValueError(f"{label} must be a list.")
+    for item in value:
+        _object(item, label=label, required={"port_start", "port_stop"}, allowed={"port_start", "port_stop"})
+        start, stop = item["port_start"], item["port_stop"]
+        if type(start) is not int or type(stop) is not int or not 1 <= start <= stop <= 65535:
+            raise ValueError(f"{label} entries must contain ordered ports from 1 through 65535.")
+    return value
+
+
+def _domains(value: Any) -> List[Dict[str, Any]]:
+    if type(value) is not list or not value:
+        raise ValueError("DOMAIN Traffic Routes require a non-empty domains list.")
+    result = []
+    for item in value:
+        _object(item, label="domains", required={"domain"}, allowed={"domain", "ports", "port_ranges"})
+        if not _nonempty(item["domain"]):
+            raise ValueError("Each domains entry must contain a non-empty domain.")
+        result.append(
+            {
+                "domain": item["domain"],
+                "ports": _ports(item.get("ports", []), label="domains.ports"),
+                "port_ranges": _port_ranges(item.get("port_ranges", []), label="domains.port_ranges"),
+            }
+        )
+    return result
+
+
+def _ip_version(value: Any, *, version: int, label: str) -> str:
+    """Use the Network controller's v4/v6 enum for submitted IP selectors."""
+    controller_value = f"v{version}"
+    if type(value) is str and value in {controller_value, f"IPV{version}"}:
+        return controller_value
+    raise ValueError(f"Each {label} ip_version must match its address family (v4 or v6).")
+
+
+def _ip_addresses(value: Any) -> List[Dict[str, Any]]:
+    if type(value) is not list:
+        raise ValueError("ip_addresses must be a list.")
+    result = []
+    for item in value:
+        _object(
+            item,
+            label="ip_addresses",
+            required={"ip_or_subnet", "ip_version"},
+            allowed={"ip_or_subnet", "ip_version", "ports", "port_ranges"},
+        )
+        if not _nonempty(item["ip_or_subnet"]):
+            raise ValueError("Each ip_addresses entry must contain a non-empty ip_or_subnet.")
+        try:
+            address = ipaddress.ip_network(item["ip_or_subnet"], strict=False)
+        except ValueError:
+            raise ValueError("Each ip_addresses ip_or_subnet must be a valid IP address or subnet.") from None
+        result.append(
+            {
+                "ip_or_subnet": item["ip_or_subnet"],
+                "ip_version": _ip_version(item["ip_version"], version=address.version, label="ip_addresses"),
+                "ports": _ports(item.get("ports", []), label="ip_addresses.ports"),
+                "port_ranges": _port_ranges(item.get("port_ranges", []), label="ip_addresses.port_ranges"),
+            }
+        )
+    return result
+
+
+def _ip_ranges(value: Any) -> List[Dict[str, Any]]:
+    if type(value) is not list:
+        raise ValueError("ip_ranges must be a list.")
+    result = []
+    for item in value:
+        _object(
+            item,
+            label="ip_ranges",
+            required={"ip_start", "ip_stop", "ip_version"},
+            allowed={"ip_start", "ip_stop", "ip_version"},
+        )
+        if not _nonempty(item["ip_start"]) or not _nonempty(item["ip_stop"]):
+            raise ValueError("Each ip_ranges entry must contain non-empty ip_start and ip_stop.")
+        try:
+            start, stop = ipaddress.ip_address(item["ip_start"]), ipaddress.ip_address(item["ip_stop"])
+        except ValueError:
+            raise ValueError("Each ip_ranges entry must contain valid IP addresses.") from None
+        if start.version != stop.version or start > stop:
+            raise ValueError("Each ip_ranges entry must be an ordered range in one address family.")
+        result.append(
+            {
+                "ip_start": item["ip_start"],
+                "ip_stop": item["ip_stop"],
+                "ip_version": _ip_version(item["ip_version"], version=start.version, label="ip_ranges"),
+            }
+        )
+    return result
+
+
+def _regions(value: Any) -> List[str]:
+    if type(value) is not list or not value or any(not _nonempty(item) for item in value):
+        raise ValueError("REGION Traffic Routes require non-empty region strings.")
+    return value
+
+
+def _target_devices(value: Any) -> List[Dict[str, str]]:
+    if type(value) is not list or not value:
+        raise ValueError("target_devices must be a non-empty list when supplied.")
+    result = []
+    for item in value:
+        _object(item, label="target_devices", required={"type"}, allowed={"type", "client_mac", "network_id"})
+        kind = item["type"]
+        if kind == "ALL_CLIENTS":
+            if len(value) != 1 or set(item) != {"type"}:
+                raise ValueError("ALL_CLIENTS must appear alone without client_mac or network_id.")
+            result.append({"type": kind})
+        elif kind == "CLIENT":
+            mac = canonical_mac(item.get("client_mac"))
+            if set(item) != {"type", "client_mac"} or mac is None:
+                raise ValueError("CLIENT target_devices entries require a valid client_mac and no network_id.")
+            result.append({"type": kind, "client_mac": mac})
+        elif kind == "NETWORK":
+            if set(item) != {"type", "network_id"} or not _nonempty(item["network_id"]):
+                raise ValueError("NETWORK target_devices entries require a non-empty network_id and no client_mac.")
+            result.append({"type": kind, "network_id": item["network_id"]})
+        else:
+            raise ValueError("target_devices type must be ALL_CLIENTS, CLIENT, or NETWORK.")
+    return result
+
+
+def _validate_create_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate submitted controller fields without adding an implicit client scope."""
+    if type(payload) is not dict:
+        raise ValueError("Traffic Route create payload must be an object.")
+    unknown = payload.keys() - _WRITE_FIELDS
+    if unknown:
+        raise ValueError(f"Unknown Traffic Route field(s): {', '.join(sorted(unknown))}.")
+    raw_target = payload.get("matching_target")
+    target = raw_target.strip().upper() if type(raw_target) is str else None
+    if target not in {"DOMAIN", "IP", "REGION", "INTERNET"}:
+        raise ValueError("matching_target must be DOMAIN, IP, REGION, or INTERNET.")
+    if not _nonempty(payload.get("description")) or len(payload["description"]) > 128:
+        raise ValueError("description is required and must be at most 128 characters.")
+    if not _nonempty(payload.get("network_id")):
+        raise ValueError("network_id is required.")
+    result = payload.copy()
+    result["matching_target"] = target
+    for field in ("enabled", "kill_switch_enabled"):
+        if field in result and type(result[field]) is not bool:
+            raise ValueError(f"{field} must be a boolean.")
+    if "next_hop" in result and type(result["next_hop"]) is not str:
+        raise ValueError("next_hop must be a string.")
+    allowed = {"DOMAIN": {"domains"}, "IP": {"ip_addresses", "ip_ranges"}, "REGION": {"regions"}, "INTERNET": set()}[
+        target
+    ]
+    for field in _SELECTORS - allowed:
+        if result.get(field) not in (None, []):
+            raise ValueError(f"{target} Traffic Routes do not accept selector field(s): {field}.")
+    if target == "DOMAIN":
+        result["domains"] = _domains(result.get("domains"))
+    elif target == "IP":
+        result["ip_addresses"] = _ip_addresses(result.get("ip_addresses", []))
+        result["ip_ranges"] = _ip_ranges(result.get("ip_ranges", []))
+        if not (result["ip_addresses"] or result["ip_ranges"]):
+            raise ValueError("IP Traffic Routes require ip_addresses or ip_ranges.")
+    elif target == "REGION":
+        result["regions"] = _regions(result.get("regions"))
+    if "target_devices" in result:
+        result["target_devices"] = _target_devices(result["target_devices"])
+    return result
+
+
+def validate_create_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a complete create payload and mark only deliberate input failures."""
+    try:
+        return _validate_create_payload(payload)
+    except ValueError as exc:
+        raise TrafficRouteValidationError(str(exc)) from None
+
+
+def _validate_update_fields(fields: Dict[str, Any], *, current: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate only submitted replacements; fetched legacy values remain untouched."""
+    if type(fields) is not dict:
+        raise ValueError("Traffic Route update data must be an object.")
+    immutable = fields.keys() & {"_id", "id", "matching_target"}
+    if immutable:
+        raise ValueError(f"Traffic Route field(s) are immutable: {', '.join(sorted(immutable))}.")
+    unknown = fields.keys() - _UPDATE_FIELDS
+    if unknown:
+        raise ValueError(f"Unknown Traffic Route field(s): {', '.join(sorted(unknown))}.")
+    result = {key: value for key, value in fields.items() if value is not None}
+    for field in ("enabled", "kill_switch_enabled"):
+        if field in result and type(result[field]) is not bool:
+            raise ValueError(f"{field} must be a boolean.")
+    if "description" in result and (not _nonempty(result["description"]) or len(result["description"]) > 128):
+        raise ValueError("description must be a non-empty string with at most 128 characters.")
+    if "network_id" in result and not _nonempty(result["network_id"]):
+        raise ValueError("network_id must be a non-empty string.")
+    if "next_hop" in result and type(result["next_hop"]) is not str:
+        raise ValueError("next_hop must be a string.")
+    raw_target = current.get("matching_target")
+    target = raw_target.strip().upper() if isinstance(raw_target, str) else None
+    allowed = {
+        "DOMAIN": {"domains"},
+        "IP": {"ip_addresses", "ip_ranges"},
+        "REGION": {"regions"},
+        "INTERNET": set(),
+    }.get(target, set())
+    for field in result.keys() & (_SELECTORS - allowed):
+        if result[field] == []:
+            continue
+        if target in {"DOMAIN", "IP", "REGION", "INTERNET"}:
+            raise ValueError(f"{target} Traffic Routes do not accept selector field(s): {field}.")
+        raise ValueError("Current Traffic Route matching_target does not permit selector updates.")
+    if "domains" in result and target == "DOMAIN":
+        result["domains"] = _domains(result["domains"])
+    if "ip_addresses" in result and target == "IP":
+        result["ip_addresses"] = _ip_addresses(result["ip_addresses"])
+    if "ip_ranges" in result and target == "IP":
+        result["ip_ranges"] = _ip_ranges(result["ip_ranges"])
+    if target == "IP" and result.keys() & {"ip_addresses", "ip_ranges"}:
+        if not (
+            result.get("ip_addresses", current.get("ip_addresses")) or result.get("ip_ranges", current.get("ip_ranges"))
+        ):
+            raise ValueError("IP Traffic Routes require ip_addresses or ip_ranges.")
+    if "regions" in result and target == "REGION":
+        result["regions"] = _regions(result["regions"])
+    if "target_devices" in result:
+        result["target_devices"] = _target_devices(result["target_devices"])
+    return result
+
+
+def validate_update_fields(fields: Dict[str, Any], *, current: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate submitted replacements without parsing fetched controller fields."""
+    try:
+        return _validate_update_fields(fields, current=current)
+    except ValueError as exc:
+        raise TrafficRouteValidationError(str(exc)) from None
 
 
 # ---------------------------------------------------------------------------
