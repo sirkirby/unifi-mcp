@@ -444,8 +444,8 @@ async def get_client_dpi_traffic(
             "traffic": traffic,
         }
     except Exception as e:
-        logger.error("Error getting client DPI traffic for %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get client DPI traffic for {mac_address}: {e}"}
+        logger.error("Error getting client DPI traffic: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get client DPI traffic: {type(e).__name__}"}
 
 
 @server.tool(
@@ -609,5 +609,5 @@ async def get_client_wifi_details(
             "wifi_details": shaped.model_dump(exclude_none=True),
         }
     except Exception as e:
-        logger.error("Error getting WiFi details for %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get WiFi details for {mac_address}: {e}"}
+        logger.error("Error getting WiFi details: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get WiFi details: {type(e).__name__}"}

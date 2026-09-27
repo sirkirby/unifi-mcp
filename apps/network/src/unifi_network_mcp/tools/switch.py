@@ -383,8 +383,8 @@ async def get_switch_ports(
             "details": json.loads(json.dumps(result, default=str)),
         }
     except Exception as e:
-        logger.error("Error getting switch ports for %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get switch ports for {mac_address}: {e}"}
+        logger.error("Error getting switch ports: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get switch ports: {type(e).__name__}"}
 
 
 @server.tool(
@@ -412,8 +412,8 @@ async def get_port_stats(
             "details": json.loads(json.dumps(result, default=str)),
         }
     except Exception as e:
-        logger.error("Error getting port stats for %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get port stats for {mac_address}: {e}"}
+        logger.error("Error getting port stats: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get port stats: {type(e).__name__}"}
 
 
 @server.tool(
@@ -441,8 +441,8 @@ async def get_lldp_neighbors(
             "details": json.loads(json.dumps(result, default=str)),
         }
     except Exception as e:
-        logger.error("Error getting LLDP neighbors for %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get LLDP neighbors for {mac_address}: {e}"}
+        logger.error("Error getting LLDP neighbors: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get LLDP neighbors: {type(e).__name__}"}
 
 
 @server.tool(
@@ -470,8 +470,8 @@ async def get_switch_capabilities(
             "details": json.loads(json.dumps(result, default=str)),
         }
     except Exception as e:
-        logger.error("Error getting switch capabilities for %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to get switch capabilities for {mac_address}: {e}"}
+        logger.error("Error getting switch capabilities: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get switch capabilities: {type(e).__name__}"}
 
 
 # ---- Switch Port Write Operations ----
@@ -521,8 +521,8 @@ async def set_switch_port_profile(
             return {"success": True, "message": f"Port overrides updated for switch '{mac_address}'."}
         return {"success": False, "error": f"Failed to set port overrides for '{mac_address}'."}
     except Exception as e:
-        logger.error("Error setting port overrides for %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to set port overrides for {mac_address}: {e}"}
+        logger.error("Error setting port overrides: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to set port overrides: {type(e).__name__}"}
 
 
 @server.tool(
@@ -556,8 +556,8 @@ async def power_cycle_port(
             return {"success": True, "message": f"Power cycled port {port_idx} on switch '{mac_address}'."}
         return {"success": False, "error": f"Failed to power cycle port {port_idx} on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error power cycling port %s on %s: %s", port_idx, mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to power cycle port {port_idx} on {mac_address}: {e}"}
+        logger.error("Error power cycling port: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to power cycle port: {type(e).__name__}"}
 
 
 # ---- Advanced Switch Configuration ----
@@ -606,8 +606,8 @@ async def configure_port_mirror(
             return {"success": True, "message": f"Port mirror configured on switch '{mac_address}'."}
         return {"success": False, "error": f"Failed to configure port mirror on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error configuring port mirror on %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to configure port mirror on {mac_address}: {e}"}
+        logger.error("Error configuring port mirror: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to configure port mirror: {type(e).__name__}"}
 
 
 @server.tool(
@@ -656,8 +656,8 @@ async def configure_port_aggregation(
             return {"success": True, "message": f"Link aggregation configured on switch '{mac_address}'."}
         return {"success": False, "error": f"Failed to configure aggregation on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error configuring port aggregation on %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to configure port aggregation on {mac_address}: {e}"}
+        logger.error("Error configuring port aggregation: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to configure port aggregation: {type(e).__name__}"}
 
 
 @server.tool(
@@ -700,8 +700,8 @@ async def update_switch_stp(
             return {"success": True, "message": f"STP config updated on switch '{mac_address}'."}
         return {"success": False, "error": f"Failed to update STP config on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error updating STP on %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to update STP on {mac_address}: {e}"}
+        logger.error("Error updating STP: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to update STP: {type(e).__name__}"}
 
 
 @server.tool(
@@ -742,5 +742,5 @@ async def set_jumbo_frames(
             return {"success": True, "message": f"Jumbo frames {state} on switch '{mac_address}'."}
         return {"success": False, "error": f"Failed to set jumbo frames on '{mac_address}'."}
     except Exception as e:
-        logger.error("Error setting jumbo frames on %s: %s", mac_address, e, exc_info=True)
-        return {"success": False, "error": f"Failed to set jumbo frames on {mac_address}: {e}"}
+        logger.error("Error setting jumbo frames: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to set jumbo frames: {type(e).__name__}"}

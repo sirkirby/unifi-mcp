@@ -120,3 +120,79 @@ async def test_optional_client_and_event_filters_preserve_omission() -> None:
         manager.get_recent_from_buffer.assert_called_with(event_type=None, mac=None, limit=None)
         assert (await unifi_recent_events(mac_address=MAC))["success"] is True
         manager.get_recent_from_buffer.assert_called_with(event_type=None, mac=MAC, limit=None)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("module", "function", "method", "kwargs"),
+    [
+        ("switch", "get_switch_ports", "get_switch_ports", {}),
+        ("switch", "get_port_stats", "get_port_stats", {}),
+        ("switch", "get_lldp_neighbors", "get_lldp_neighbors", {}),
+        ("switch", "get_switch_capabilities", "get_switch_capabilities", {}),
+        (
+            "switch",
+            "set_switch_port_profile",
+            "set_port_overrides",
+            {"port_overrides": [{"port_idx": 1}], "confirm": True},
+        ),
+        ("switch", "power_cycle_port", "power_cycle_port", {"port_idx": 1, "confirm": True}),
+        (
+            "switch",
+            "configure_port_mirror",
+            "set_port_overrides",
+            {"port_overrides": [{"port_idx": 1, "op_mode": "mirror", "mirror_port_idx": 2}], "confirm": True},
+        ),
+        (
+            "switch",
+            "configure_port_aggregation",
+            "set_port_overrides",
+            {
+                "port_overrides": [{"port_idx": 1, "op_mode": "aggregate", "aggregate_members": [1, 2], "lag_idx": 1}],
+                "confirm": True,
+            },
+        ),
+        ("switch", "update_switch_stp", "update_device_config", {"confirm": True}),
+        ("switch", "set_jumbo_frames", "update_device_config", {"enabled": True, "confirm": True}),
+        ("stats", "get_client_dpi_traffic", "get_client_dpi_traffic", {}),
+        ("stats", "get_client_wifi_details", "get_client_wifi_details", {}),
+    ],
+)
+async def test_mac_tool_failures_keep_private_values_out_of_diagnostics(
+    module: str, function: str, method: str, kwargs: dict, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Raw manager exceptions must not reintroduce MACs or controller secrets."""
+    import logging
+
+    target = importlib.import_module(f"unifi_network_mcp.tools.{module}")
+    canary = "private-controller-canary"
+    manager = MagicMock()
+    failing = AsyncMock(side_effect=RuntimeError(f"{MAC} {canary}"))
+    setattr(manager, method, failing)
+    with patch.object(target, f"{module}_manager", manager), caplog.at_level(logging.DEBUG):
+        result = await getattr(target, function)(mac_address=MAC, **kwargs)
+    failing.assert_awaited_once()
+    assert result["success"] is False
+    assert "Failed to" in result["error"] and "RuntimeError" in result["error"]
+    for value in (MAC, canary):
+        assert value not in caplog.text
+        assert value not in result["error"]
+    assert all(record.exc_info is None for record in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_recent_event_filter_is_not_logged(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    from unifi_network_mcp.tools.events import unifi_recent_events
+
+    manager = MagicMock()
+    manager.get_recent_from_buffer.return_value = []
+    with (
+        patch("unifi_network_mcp.tools.events._get_event_manager", return_value=manager),
+        caplog.at_level(logging.INFO),
+    ):
+        result = await unifi_recent_events(mac_address=MAC, event_type="private-filter-canary")
+    assert result["success"] is True
+    assert MAC not in caplog.text
+    assert "private-filter-canary" not in caplog.text
