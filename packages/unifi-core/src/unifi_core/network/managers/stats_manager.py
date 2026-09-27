@@ -535,8 +535,8 @@ class StatsManager:
             self._connection._update_cache(cache_key, result, timeout=900)
             return result
         except Exception as e:
-            logger.error("Error getting DPI traffic for client %s: %s", client_mac, e)
-            raise
+            logger.error("Client DPI traffic read failed: %s", type(e).__name__)
+            raise RequestError(f"Client DPI traffic read failed ({type(e).__name__}).") from None
 
     async def get_ips_events(self, duration_hours: int = 24, limit: int = 50) -> List[Dict[str, Any]]:
         """Get IPS/IDS events.
@@ -657,8 +657,8 @@ class StatsManager:
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
         except Exception as e:
-            logger.error("Error getting client sessions: %s", e)
-            raise
+            logger.error("Client sessions read failed: %s", type(e).__name__)
+            raise RequestError(f"Client sessions read failed ({type(e).__name__}).") from None
 
     async def get_dashboard(self, history_seconds: int = 86400) -> List[Dict[str, Any]]:
         """Get the site dashboard aggregate (health, WiFi standards, ISP metrics).
@@ -780,5 +780,5 @@ class StatsManager:
             self._connection._update_cache(cache_key, result, timeout=300)
             return result
         except Exception as e:
-            logger.error("Error getting WiFi details for client %s: %s", client_mac, e)
-            raise
+            logger.error("Client WiFi details read failed: %s", type(e).__name__)
+            raise RequestError(f"Client WiFi details read failed ({type(e).__name__}).") from None

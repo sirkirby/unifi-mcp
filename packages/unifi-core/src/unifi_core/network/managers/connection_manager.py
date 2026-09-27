@@ -1442,7 +1442,7 @@ class ConnectionManager:
         """Update the cache with new data."""
         self._cache[key] = data
         self._last_cache_update[key] = time.time()
-        logger.debug("Cache updated for key '%s' with timeout %ss", key, timeout or self.cache_timeout)
+        logger.debug("Cache entry updated with timeout %ss", timeout or self.cache_timeout)
 
     def _get_cache_generation(self, key: str) -> int:
         """Return the generation that identifies the current contents of a cache key."""
@@ -1457,7 +1457,7 @@ class ConnectionManager:
     ) -> bool:
         """Store data only when no invalidation occurred since its fetch began."""
         if self._get_cache_generation(key) != generation:
-            logger.debug("Discarded stale cache update for key '%s'", key)
+            logger.debug("Discarded stale cache update")
             return False
         self._update_cache(key, data, timeout)
         return True
@@ -1472,17 +1472,15 @@ class ConnectionManager:
         last_update = self._last_cache_update[key]
 
         is_valid = (current_time - last_update) < effective_timeout
-        logger.debug(
-            "Cache check for key '%s': %s (Timeout: %ss)", key, "Valid" if is_valid else "Expired", effective_timeout
-        )
+        logger.debug("Cache check: %s (Timeout: %ss)", "Valid" if is_valid else "Expired", effective_timeout)
         return is_valid
 
     def get_cached(self, key: str, timeout: Optional[int] = None) -> Optional[Any]:
         """Get data from cache if valid."""
         if self._is_cache_valid(key, timeout):
-            logger.debug("Cache hit for key '%s'", key)
+            logger.debug("Cache hit")
             return self._cache[key]
-        logger.debug("Cache miss for key '%s'", key)
+        logger.debug("Cache miss")
         return None
 
     def _invalidate_cache(self, prefix: Optional[str] = None):
@@ -1490,7 +1488,7 @@ class ConnectionManager:
         if prefix:
             keys_to_remove = {key for key in self._cache | self._last_cache_update if key.startswith(prefix)}
             generation_keys = {key for key in self._cache_generations if key.startswith(prefix)}
-            logger.debug("Invalidated cache for keys starting with '%s'", prefix)
+            logger.debug("Invalidated matching cache entries")
         else:
             keys_to_remove = self._cache.keys() | self._last_cache_update.keys()
             generation_keys = self._cache_generations.keys()
