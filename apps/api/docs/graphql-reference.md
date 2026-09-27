@@ -2350,6 +2350,8 @@ type VpnServer {
   enabled: Boolean!
   listenPort: Int
   allowedSubnets: [String!]
+  alternateAddressEnabled: Boolean
+  alternateAddress: String
 }
 
 """Paginated page of VPN servers."""

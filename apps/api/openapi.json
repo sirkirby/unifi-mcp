@@ -9098,6 +9098,28 @@
             ],
             "title": "Allowed Subnets"
           },
+          "alternate_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternate Address"
+          },
+          "alternate_address_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alternate Address Enabled"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
