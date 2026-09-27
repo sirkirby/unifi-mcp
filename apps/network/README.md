@@ -5,7 +5,7 @@
   <img src="../../assets/hero-network.svg" alt="UniFi Network MCP Server" width="720">
 </p>
 
-MCP server exposing 206 UniFi Network Controller tools for AI assistants and
+MCP server exposing 207 UniFi Network Controller tools for AI assistants and
 other MCP-capable clients. Query clients, devices, firewall rules, VLANs, VPNs,
 Traffic Flows, stats, and more with safe-by-default permissions and
 preview-before-confirm for all mutations.
@@ -112,6 +112,8 @@ prove stored configuration, not packet-level enforcement. Existing Core NAT
 methods retain their return shapes; controller mutation exceptions now carry
 safe fixed guidance instead of raw response text.
 
+For an approved packet test, use the [IPv4 DNS redirect recipe](../../plugins/unifi-network/skills/firewall-auditor/references/dns-redirect.md). It covers a single client and synthetic destination, including same-subnet return traffic and cleanup.
+
 ## Configure
 
 Set these variables in the server's process environment. If you used `/unifi-network:setup`, this is already done. The server does not automatically load `.env` or working-directory YAML files; load a trusted env file explicitly in your launcher (Docker `env_file:` is supported), or select custom YAML with an absolute `CONFIG_PATH`. See [configuration](docs/configuration.md) for migration examples.
@@ -175,6 +177,10 @@ Network also bounds two large source responses by default: `unifi_get_dashboard`
 Network tools redact known secret-bearing fields by default before returning data to MCP clients. This includes WLAN passphrases, VPN key material, whole VPN config blobs, SNMP community strings, SNMPv3 passwords, and device-SSH credentials and the management key in raw/detail responses and mutation previews. Disable redaction for a trusted local administration process with `UNIFI_NETWORK_REDACT_SENSITIVE_FIELDS=false` or the global `UNIFI_REDACT_SENSITIVE_FIELDS=false` policy flag when raw values are required.
 
 Confirmed Network/WLAN and VPN-state writes are re-read from the controller and report exact `persisted_fields`, `unchanged_fields`, `dropped_fields`, and `coerced_fields`. Already-satisfied no-op fields appear under `unchanged_fields` and do not make a failed write partially successful. A response with `success: false` and `mutation_applied: true` means the controller accepted the mutation but did not persist it exactly; it may be a partial write, not a rollback. Inspect `partial_success` and `details_after_attempt` before retrying or applying a compensating change.
+
+`unifi_update_vpn_server_alternate_address` updates a WireGuard server's advertised address using `server_id`, a partial `update_data` object, and `confirm` (default `false`). The accepted fields are `alternate_address_enabled` (boolean) and `alternate_address` (hostname or IPv4 address, without a URI, port, or path). Enabling requires a valid address in the merged configuration. Disabling preserves the stored address unless you also supply a replacement. Null and unknown fields are rejected. Server reads expose these same names, with `null` for absent controller values.
+
+This operation requires Network session credentials and the `VPN_SERVERS` UPDATE policy gate. MCP previews show fresh before/after values; API action previews show only submitted arguments, with effective-state validation at execution. The confirmed update fetches the full record again, preserves unrelated fields, and verifies the requested fields after writing. Full-record PUTs can still race with concurrent edits. An uncertain transport or readback outcome returns `mutation_applied: null`; inspect the server before trying again. Previews and results contain only the two public alternate-address fields. Other VPN server types are outside this verified write scope.
 
 ## Run
 
@@ -302,7 +308,7 @@ Each device record now includes additional fields alongside the existing MAC, na
 
 - [Configuration](docs/configuration.md) — Full env var reference, YAML config, controller type detection
 - [Permissions](docs/permissions.md) — Permission system, category defaults, how to enable high-risk tools
-- [Tool Catalog](docs/tools.md) — All 206 tools organized by category
+- [Tool Catalog](docs/tools.md) — All 207 tools organized by category
 - [Transports](docs/transports.md) — stdio, Streamable HTTP, and SSE setup
 - [Troubleshooting and support bundles](docs/troubleshooting.md) — Reviewed support evidence, connection issues, SSL, missing tools
 

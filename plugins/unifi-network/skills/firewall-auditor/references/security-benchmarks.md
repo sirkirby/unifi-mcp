@@ -257,45 +257,23 @@ unifi_create_firewall_policy:
 
 ### EGR-02: DNS Forced Through Approved Resolvers
 
-**Name:** DNS traffic redirected to approved resolvers
+**Name:** DNS forced through approved resolvers
 
-**What to check:** Verify a LAN-in or LAN-local rule exists that intercepts DNS traffic (UDP/TCP port 53) from client VLANs and either blocks external DNS or redirects to an approved resolver IP. Check that no rule explicitly allows port 53 to arbitrary destinations before such a rule.
+**What to check:** Map the intended client networks, approved resolver addresses, and unauthorized DNS destinations. Inspect V2 zone policies and NAT rules for UDP/TCP port 53 coverage, resolver exemptions, and conflicting rule order. Configuration readback establishes persistence; client-side queries establish enforcement.
 
 **MCP tools needed:**
-- `unifi_list_firewall_policies` — check for port 53 rules in LAN_IN and LAN_LOCAL rulesets
-- `unifi_list_networks` — enumerate client-facing VLANs
+- `unifi_list_firewall_policies` and `unifi_list_firewall_zones` — inspect zone-based port matching and coverage
+- `unifi_list_networks` — resolve client and resolver networks
+- `unifi_list_nat_rules` and `unifi_get_nat_rule` — inspect native DNS translation and its source/destination scope
+- `unifi_create_nat_rule`, `unifi_update_nat_rule`, `unifi_delete_nat_rule` — preview, apply and clean up an approved scoped test
 
 **Severity:** warning
 
-**How to fix:** V2 zone-based policies *can* match on port (`port_matching_type` `SPECIFIC` with a `port` string, or `OBJECT` with a `port_group_id`), so a "block UDP/TCP 53 except to approved resolvers" rule is expressible at this layer on Network 9.0+ with a UniFi gateway. A full DNS-egress recipe built on that is **not yet published here**: it has not been verified against live traffic on an isolated client, so this benchmark still splits into a **partial firewall fix** (below) and a **manual UniFi UI step** (the rest):
+**How to fix:** For native IPv4 redirection, follow the [tested DNS redirect recipe](dns-redirect.md). It provides disabled DNAT/SNAT previews, explicit enable approval, same-subnet return-path handling, resolver source exclusion, UDP/TCP packet checks and cleanup. Start with the documented single-client/synthetic-destination scope; obtain approval and verify traffic again before expanding a policy.
 
-**Part 1 — partial firewall fix (programmatic):** Allow client traffic to reach approved resolver IPs externally. This handles the legitimate-DNS path but does not block port-53 traffic to other destinations.
+V2 zone policies also support port matching (`SPECIFIC` with `port`, or `OBJECT` with `port_group_id`). An allow rule for approved resolver IPs alone does not enforce DNS egress. Blocking policies and NAT redirection have different packet paths; verify the chosen policy's actual coverage and ordering.
 
-```yaml
-# Security intent: clients may reach the approved DNS resolver IPs externally.
-# This is the firewall-layer half of the benchmark.
-unifi_create_firewall_policy:
-  name: "EGR-02 Allow approved DNS resolvers"
-  action: ALLOW
-  enabled: true
-  source:
-    zone_id: <client zone ID>
-    matching_target: ANY
-  destination:
-    zone_id: <External zone ID>
-    matching_target: IP
-    matching_target_type: SPECIFIC
-    ips: [<approved resolver IP>, ...]
-```
-
-**Part 2 — full enforcement (operator action in the UniFi UI):** To block direct egress on port 53 to non-approved resolvers and prevent client-side DNS bypass, configure either:
-
-- A **traffic rule** (UniFi UI: Settings → Security → Traffic Rules) that drops outbound TCP/UDP port 53 from client networks, OR
-- A **DNS-redirect** policy (UniFi UI: Settings → Security → DNS Filtering or Network → DNS) that intercepts all client DNS and forwards to the approved resolver.
-
-Neither is currently exposed through MCP tooling. Tracked separately for future MCP coverage.
-
-**Auditing this benchmark:** A programmatic audit can confirm Part 1 (the firewall ALLOW rule exists pointing at approved resolver IPs). Part 2 cannot be confirmed via MCP today and must be checked manually in the UniFi UI. Flag the benchmark as `partial-pass` if Part 1 is satisfied but Part 2 cannot be verified programmatically.
+**Audit note:** Score `pass` only when saved rules cover the intended client networks and unauthorized DNS destinations, UDP/TCP traffic checks succeed, direct approved DNS remains usable, and resolver-origin traffic is excluded from redirection. Score `partial-pass` for configuration-only evidence or the recipe's narrower test scope. Record IPv6 and encrypted-DNS coverage separately; this IPv4 recipe does not prove them. MCP can manage native NAT rules, but a controller read cannot replace a controllable client/resolver traffic test.
 
 
 ---

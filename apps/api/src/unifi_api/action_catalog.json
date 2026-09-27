@@ -7954,6 +7954,52 @@
       }
     },
     {
+      "name": "unifi_update_vpn_server_alternate_address",
+      "product": "network",
+      "category": "vpn_servers",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "vpn_manager",
+      "manager_method": "update_vpn_server_alternate_address",
+      "input_schema": {
+        "additionalProperties": false,
+        "description": "Complete tool schema used by both MCP registration and the API catalog.",
+        "properties": {
+          "server_id": {
+            "description": "VPN server networkconf _id from unifi_list_vpn_servers",
+            "title": "Server Id",
+            "type": "string"
+          },
+          "update_data": {
+            "additionalProperties": false,
+            "description": "Strict partial update; omitted fields are preserved, explicit null is invalid.",
+            "minProperties": 1,
+            "properties": {
+              "alternate_address": {
+                "description": "Hostname or IPv4 address, without port or URI",
+                "title": "Alternate Address",
+                "type": "string"
+              },
+              "alternate_address_enabled": {
+                "description": "Advertise the alternate address",
+                "title": "Alternate Address Enabled",
+                "type": "boolean"
+              }
+            },
+            "title": "VpnAlternateAddressUpdate",
+            "type": "object"
+          }
+        },
+        "required": [
+          "server_id",
+          "update_data"
+        ],
+        "title": "VpnAlternateAddressToolInput",
+        "type": "object"
+      }
+    },
+    {
       "name": "unifi_update_vpn_server_state",
       "product": "network",
       "category": "vpn_servers",

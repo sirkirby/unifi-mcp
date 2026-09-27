@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 206 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 207 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -57,7 +57,7 @@ Profiles can be created through these tools. New profiles are disabled by defaul
 - `unifi_toggle_nat_rule` — Set a manual rule's enabled state explicitly
 - `unifi_delete_nat_rule` — Delete a manual rule and verify its absence
 
-These tools require Network session credentials. NAT rule IDs cannot be used with port-forward or Integration API tools. Mutations require confirmation and support verified IPv4 DNAT, SNAT, and MASQUERADE fields; see the [NAT write guidance](../README.md#v2-nat-rules). A successful readback confirms stored configuration, not traffic enforcement.
+These tools require Network session credentials. NAT rule IDs cannot be used with port-forward or Integration API tools. Mutations require confirmation and support verified IPv4 DNAT, SNAT, and MASQUERADE fields; see the [NAT write guidance](../README.md#v2-nat-rules). A successful readback confirms stored configuration, not traffic enforcement. Use the [scoped DNS redirect recipe](../../../plugins/unifi-network/skills/firewall-auditor/references/dns-redirect.md) for packet verification.
 
 ## mDNS Settings (2 tools)
 
@@ -189,7 +189,7 @@ This tool is read-only. Controller secrets (such as `utm_token`) and unverified 
 - `unifi_update_switch_stp` — Update STP priority and version
 - `unifi_set_jumbo_frames` — Enable/disable jumbo frames
 
-## VPN (7 tools)
+## VPN (8 tools)
 
 - `unifi_list_vpn_clients` — List VPN clients (WireGuard, OpenVPN)
 - `unifi_get_vpn_client_details` — Get client details by ID
@@ -197,6 +197,7 @@ This tool is read-only. Controller secrets (such as `utm_token`) and unverified 
 - `unifi_delete_vpn_client` — Preview, then delete a VPN client
 - `unifi_list_vpn_servers` — List VPN servers
 - `unifi_get_vpn_server_details` — Get server details by ID
+- `unifi_update_vpn_server_alternate_address` — Preview, then update a WireGuard server’s advertised address with read-back verification
 - `unifi_update_vpn_server_state` — Preview, then enable/disable a VPN server with read-back verification
 
 ## Devices (10 tools)

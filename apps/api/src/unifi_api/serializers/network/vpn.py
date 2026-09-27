@@ -13,6 +13,7 @@ from unifi_api.serializers._base import RenderKind, Serializer, register_seriali
         "unifi_update_vpn_client_state": {"kind": RenderKind.DETAIL},
         "unifi_delete_vpn_client": {"kind": RenderKind.DETAIL},
         "unifi_update_vpn_server_state": {"kind": RenderKind.DETAIL},
+        "unifi_update_vpn_server_alternate_address": {"kind": RenderKind.DETAIL},
     },
 )
 class VpnMutationAckSerializer(Serializer):

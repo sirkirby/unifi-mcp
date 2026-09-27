@@ -22,6 +22,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
+from unifi_core.network.models.vpn import ALTERNATE_ADDRESS_KEYS, alternate_address_view
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -130,6 +131,7 @@ class VpnServer:
             enabled=bool(_get(obj, "enabled", False)),
             listen_port=_vpn_listen_port(obj),
             allowed_subnets=_vpn_allowed_subnets(obj),
+            **alternate_address_view({key: _get(obj, key) for key in ALTERNATE_ADDRESS_KEYS.values()}),
         )
 
     def to_dict(self) -> dict:

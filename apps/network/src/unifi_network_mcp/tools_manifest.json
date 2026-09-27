@@ -1,5 +1,5 @@
 {
-  "count": 206,
+  "count": 207,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -199,6 +199,7 @@
     "unifi_update_traffic_route": "unifi_network_mcp.tools.traffic_routes",
     "unifi_update_usergroup": "unifi_network_mcp.tools.usergroups",
     "unifi_update_vpn_client_state": "unifi_network_mcp.tools.vpn",
+    "unifi_update_vpn_server_alternate_address": "unifi_network_mcp.tools.vpn",
     "unifi_update_vpn_server_state": "unifi_network_mcp.tools.vpn",
     "unifi_update_wlan": "unifi_network_mcp.tools.network",
     "unifi_upgrade_device": "unifi_network_mcp.tools.devices"
@@ -20925,6 +20926,132 @@
         }
       },
       "title": "Update VPN Client State"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Update the advertised alternate hostname or IPv4 address for a WireGuard VPN server. Pass only the fields you want to change \u2014 current values are automatically preserved. Requires Network session authentication and confirmation; verifies persistence after applying. MCP previews read live state; API action previews show submitted arguments only.",
+      "name": "unifi_update_vpn_server_alternate_address",
+      "permission_action": "update",
+      "permission_category": "vpn_servers",
+      "schema": {
+        "input": {
+          "additionalProperties": false,
+          "description": "Complete tool schema used by both MCP registration and the API catalog.",
+          "properties": {
+            "confirm": {
+              "default": false,
+              "title": "Confirm",
+              "type": "boolean"
+            },
+            "server_id": {
+              "description": "VPN server networkconf _id from unifi_list_vpn_servers",
+              "title": "Server Id",
+              "type": "string"
+            },
+            "update_data": {
+              "additionalProperties": false,
+              "description": "Strict partial update; omitted fields are preserved, explicit null is invalid.",
+              "minProperties": 1,
+              "properties": {
+                "alternate_address": {
+                  "description": "Hostname or IPv4 address, without port or URI",
+                  "title": "Alternate Address",
+                  "type": "string"
+                },
+                "alternate_address_enabled": {
+                  "description": "Advertise the alternate address",
+                  "title": "Alternate Address Enabled",
+                  "type": "boolean"
+                }
+              },
+              "title": "VpnAlternateAddressUpdate",
+              "type": "object"
+            }
+          },
+          "required": [
+            "server_id",
+            "update_data"
+          ],
+          "title": "VpnAlternateAddressToolInput",
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Update VPN Server Alternate Address"
     },
     {
       "annotations": {

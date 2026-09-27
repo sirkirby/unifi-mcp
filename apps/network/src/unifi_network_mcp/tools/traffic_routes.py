@@ -9,16 +9,19 @@ import logging
 from typing import Annotated, Any, Dict, List, Optional
 
 from mcp.types import ToolAnnotations
-from pydantic import Field, ValidationError
+from pydantic import Field
 
 from unifi_core.confirmation import create_preview, toggle_preview, update_preview
 from unifi_core.exceptions import UniFiAuthError, UniFiNotFoundError
-from unifi_core.network.managers.traffic_route_manager import TrafficRoutePreflightError
+from unifi_core.network.managers.traffic_route_manager import (
+    TrafficRoutePreflightError,
+    internet_route_requires_target_validation,
+)
 from unifi_core.network.models.traffic_routes import (
-    TrafficRoute,
+    TrafficRouteValidationError,
     from_controller,
-    to_controller_create,
-    to_controller_update,
+    validate_create_payload,
+    validate_update_fields,
 )
 from unifi_network_mcp.runtime import server, traffic_route_manager
 
@@ -39,7 +42,7 @@ async def _validate_internet_route_target(target_devices: Any, network_id: Any) 
                 "Configure UNIFI_NETWORK_USERNAME and UNIFI_NETWORK_PASSWORD."
             ),
         }
-    except ValueError as exc:
+    except TrafficRouteValidationError as exc:
         return {"success": False, "error": str(exc)}
     except Exception as exc:
         logger.error("Unable to verify INTERNET Traffic Route target (%s)", type(exc).__name__)
@@ -78,63 +81,30 @@ async def create_traffic_route(
     confirm: Annotated[bool, Field(description="When true, creates; when false, previews")] = False,
 ) -> Dict[str, Any]:
     """Create a validated V2 Traffic Route with an explicit confirmation gate."""
-    target = matching_target.upper()
-    if not name or len(name) > 128:
-        return {"success": False, "error": "name is required and must be at most 128 characters."}
-    if target not in {"DOMAIN", "IP", "REGION", "INTERNET"}:
-        return {"success": False, "error": "matching_target must be DOMAIN, IP, REGION, or INTERNET."}
-    if not network_id:
-        return {
-            "success": False,
-            "error": "network_id is required; a Traffic Route must explicitly name its target network or VPN.",
-        }
-    if target == "DOMAIN" and not domains:
-        return {"success": False, "error": "DOMAIN Traffic Routes require a non-empty domains list."}
-    if target == "IP" and not (ip_addresses or ip_ranges):
-        return {"success": False, "error": "IP Traffic Routes require ip_addresses or ip_ranges."}
-    if target == "REGION" and not regions:
-        return {"success": False, "error": "REGION Traffic Routes require a non-empty regions list."}
-    for field, value in (
-        ("domains", domains),
-        ("ip_addresses", ip_addresses),
-        ("ip_ranges", ip_ranges),
-        ("regions", regions),
-        ("target_devices", target_devices),
-    ):
-        if value is not None and not isinstance(value, list):
-            return {"success": False, "error": f"{field} must be a list."}
-    if target_devices == []:
-        return {
-            "success": False,
-            "error": "target_devices must be omitted or contain at least one explicit target.",
-        }
-    if target == "INTERNET":
-        validation_error = await _validate_internet_route_target(target_devices, network_id)
+    payload = {
+        "description": name,
+        "matching_target": matching_target,
+        "network_id": network_id,
+        "domains": domains if domains is not None else [],
+        "ip_addresses": ip_addresses if ip_addresses is not None else [],
+        "ip_ranges": ip_ranges if ip_ranges is not None else [],
+        "regions": regions if regions is not None else [],
+        "kill_switch_enabled": kill_switch_enabled,
+        "enabled": enabled,
+        "next_hop": "",
+    }
+    if target_devices is not None:
+        payload["target_devices"] = target_devices
+    try:
+        payload = validate_create_payload(payload)
+    except TrafficRouteValidationError as exc:
+        return {"success": False, "error": str(exc)}
+    if target_devices is None and payload["matching_target"] in {"DOMAIN", "IP", "REGION"}:
+        payload["target_devices"] = [{"type": "ALL_CLIENTS"}]
+    if payload["matching_target"] == "INTERNET":
+        validation_error = await _validate_internet_route_target(payload.get("target_devices"), payload["network_id"])
         if validation_error:
             return validation_error
-    if domains and any(not isinstance(item, dict) or not item.get("domain") for item in domains):
-        return {"success": False, "error": "Each domains entry must contain a non-empty domain."}
-    if target_devices and any(not isinstance(item, dict) or not item.get("type") for item in target_devices):
-        return {"success": False, "error": "Each target_devices entry must contain type."}
-
-    normalized_domains = [
-        {"domain": item["domain"], "ports": item.get("ports", []), "port_ranges": item.get("port_ranges", [])}
-        for item in (domains or [])
-    ]
-    route = TrafficRoute(
-        name=name,
-        matching_target=target,
-        network_id=network_id,
-        domains=normalized_domains,
-        target_devices=target_devices if target_devices is not None else [{"type": "ALL_CLIENTS"}],
-        kill_switch_enabled=kill_switch_enabled,
-        enabled=enabled,
-        ip_addresses=ip_addresses or [],
-        ip_ranges=ip_ranges or [],
-        regions=regions or [],
-        next_hop="",
-    )
-    payload = to_controller_create(route)
     if not confirm:
         return create_preview("traffic_route", payload, name)
     try:
@@ -359,21 +329,16 @@ async def update_traffic_route(
             }
 
     try:
-        updates = to_controller_update(TrafficRoute.model_validate(updates).model_dump(exclude_none=True))
-    except ValidationError:
-        return {"success": False, "error": "One or more traffic route update fields are invalid."}
-
-    try:
         # Fetch current route so the preview can show what is being replaced.
         current = await traffic_route_manager.get_traffic_route_details(route_id)
+        updates = validate_update_fields(updates, current=current)
         route_name = current.get("description", route_id)
 
-        is_internet_route = current.get("matching_target") == "INTERNET"
-        is_being_enabled = updates.get("enabled") is True and not current.get("enabled", True)
-        if is_internet_route and ({"network_id", "target_devices"} & updates.keys() or is_being_enabled):
-            route_targets = updates.get("target_devices", current.get("target_devices"))
-            route_network_id = updates.get("network_id", current.get("network_id"))
-            validation_error = await _validate_internet_route_target(route_targets, route_network_id)
+        proposed = {**current, **updates}
+        if internet_route_requires_target_validation(proposed, current):
+            validation_error = await _validate_internet_route_target(
+                proposed.get("target_devices"), proposed.get("network_id")
+            )
             if validation_error:
                 return validation_error
 
@@ -398,6 +363,8 @@ async def update_traffic_route(
         }
     except UniFiNotFoundError:
         return {"success": False, "error": "Traffic route was not found."}
+    except (TrafficRouteValidationError, TrafficRoutePreflightError) as exc:
+        return {"success": False, "error": f"Failed to update traffic route: {exc}"}
     except Exception as e:
         logger.error("Traffic route update failed (%s)", type(e).__name__)
         return {

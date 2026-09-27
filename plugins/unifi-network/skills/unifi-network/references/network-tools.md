@@ -1,4 +1,4 @@
-# Network Server Tool Reference (206 tools)
+# Network Server Tool Reference (207 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -309,7 +309,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## VPN
 
 <!-- AUTO:tools:vpn -->
-7 tools.
+8 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -319,6 +319,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_list_vpn_servers` | Read | List all configured VPN servers (Wireguard, OpenVPN, L2TP, etc). |
 | `unifi_delete_vpn_client` | Mutate | Delete a VPN client configuration by ID. |
 | `unifi_update_vpn_client_state` | Mutate | Enable or disable a specific VPN client by ID. |
+| `unifi_update_vpn_server_alternate_address` | Mutate | Update the advertised alternate hostname or IPv4 address for a WireGuard VPN server. |
 | `unifi_update_vpn_server_state` | Mutate | Enable or disable a specific VPN server by ID. |
 <!-- /AUTO:tools:vpn -->
 

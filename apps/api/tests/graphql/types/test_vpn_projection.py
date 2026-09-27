@@ -50,14 +50,10 @@ def test_vpn_server_projection_drops_private_key() -> None:
         "enabled": True,
         "x_wireguard_private_key": "TEST_FAKE_PRIVATE_KEY_cccc=",
         "wireguard_public_key": "fake-public",
-        "vpn_client_configuration_remote_ip_override_enabled": True,
-        "vpn_client_configuration_remote_ip_override": "vpn.example.com",
     }
 
     projected = VpnServer.from_manager_output(raw).to_dict()
 
     assert "x_wireguard_private_key" not in projected
-    assert projected["alternate_address_enabled"] is None
-    assert projected["alternate_address"] is None
     blob = " ".join(str(v) for v in projected.values())
     assert "TEST_FAKE_PRIVATE_KEY" not in blob
