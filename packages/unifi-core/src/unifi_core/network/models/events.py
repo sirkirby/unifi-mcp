@@ -65,6 +65,39 @@ class EventLog(BaseModel):
     )
 
 
+class ThreatEventLog(EventLog):
+    """Extended event projection; legacy consumers retain the original seven fields."""
+
+    category: Optional[str] = Field(
+        default=None, description="V2 event category; null when absent.", json_schema_extra={"mutable": False}
+    )
+    subcategory: Optional[str] = Field(
+        default=None, description="V2 event subcategory; null when absent.", json_schema_extra={"mutable": False}
+    )
+    event: Optional[str] = Field(
+        default=None, description="V2 event code; null when absent.", json_schema_extra={"mutable": False}
+    )
+    src_ip: Optional[str] = Field(
+        default=None,
+        description=(
+            "V2 SRC_IP.id address; distinct from ip, which describes the associated MAC actor. Null if unknown."
+        ),
+        json_schema_extra={"mutable": False},
+    )
+    dst_ip: Optional[str] = Field(
+        default=None,
+        description=(
+            "V2 DST_IP.id address; distinct from ip, which describes the associated MAC actor. Null if unknown."
+        ),
+        json_schema_extra={"mutable": False},
+    )
+    initiator_id: Optional[str] = Field(
+        default=None,
+        description="V2 INITIATOR_ID.id Network alarm resource ID; not a device ID. Null if unknown.",
+        json_schema_extra={"mutable": False},
+    )
+
+
 MUTABLE_FIELDS: frozenset[str] = frozenset()
 READ_ONLY_FIELDS: frozenset[str] = frozenset(EventLog.model_fields.keys())
 
@@ -128,6 +161,12 @@ def _parameters(record: Any) -> dict[str, Any]:
         return {}
     params = record.get("parameters")
     return params if isinstance(params, dict) else {}
+
+
+def _role_id(parameters: dict[str, Any], role: str) -> Optional[str]:
+    value = parameters.get(role)
+    candidate = value.get("id") if isinstance(value, dict) else None
+    return candidate if isinstance(candidate, str) else None
 
 
 def _actors(record: Any) -> Iterator[dict[str, Any]]:
@@ -236,4 +275,21 @@ def event_log_from_controller(record: Any) -> EventLog:
         mac=_get(record, "user", "mac", "ap", "ap_mac", "device_mac") or _actor_mac(record),
         ip=_get(record, "ip", "src_ip") or _actor_ip(record),
         severity=_get(record, "severity", "level"),
+    )
+
+
+def threat_event_log_from_controller(record: Any) -> ThreatEventLog:
+    """Opt into threat roles without expanding the legacy projector's constructor contract."""
+    base = event_log_from_controller(record)
+    if not isinstance(record, dict):
+        return ThreatEventLog(**base.model_dump())
+    parameters = _parameters(record)
+    return ThreatEventLog(
+        **base.model_dump(),
+        category=record.get("category") if isinstance(record.get("category"), str) else None,
+        subcategory=record.get("subcategory") if isinstance(record.get("subcategory"), str) else None,
+        event=record.get("event") if isinstance(record.get("event"), str) else None,
+        src_ip=_role_id(parameters, "SRC_IP"),
+        dst_ip=_role_id(parameters, "DST_IP"),
+        initiator_id=_role_id(parameters, "INITIATOR_ID"),
     )

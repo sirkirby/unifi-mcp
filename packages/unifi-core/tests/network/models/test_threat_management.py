@@ -18,19 +18,13 @@ SECRET_TOKEN = "synthetic-utm-token-secret-999"
 
 
 def test_field_sets_and_read_only_contract():
-    assert MUTABLE_FIELDS == frozenset()
-    assert READ_ONLY_FIELDS == frozenset(
-        {
-            "ips_mode",
-            "enabled",
-            "enabled_categories",
-            "enabled_networks",
-            "traffic_identification_enabled",
-            "device_fingerprinting_enabled",
-        }
+    assert MUTABLE_FIELDS == frozenset(
+        {"ips_mode", "enabled_categories", "traffic_identification_enabled", "device_fingerprinting_enabled"}
     )
+    assert READ_ONLY_FIELDS == frozenset({"enabled", "enabled_networks", "advanced_filtering_preference"})
+    assert MUTABLE_FIELDS | READ_ONLY_FIELDS == set(ThreatManagementSettings.model_fields)
     for name, field in ThreatManagementSettings.model_fields.items():
-        assert field.json_schema_extra.get("mutable") is False
+        assert ((field.json_schema_extra or {}).get("mutable") is False) == (name in READ_ONLY_FIELDS)
 
 
 @pytest.mark.parametrize(
@@ -164,6 +158,7 @@ def test_utm_token_and_unallowlisted_keys_excluded_even_without_redaction():
     dumped = settings.model_dump()
 
     assert set(dumped.keys()) == {
+        "advanced_filtering_preference",
         "ips_mode",
         "enabled",
         "enabled_categories",

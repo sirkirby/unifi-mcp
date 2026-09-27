@@ -11,7 +11,9 @@ from pathlib import Path
 from unifi_core.network.models.events import (
     MUTABLE_FIELDS,
     EventLog,
+    ThreatEventLog,
     event_log_from_controller,
+    threat_event_log_from_controller,
 )
 
 # package-local fixture: models -> network (parents[1]) -> fixtures/
@@ -114,7 +116,7 @@ def test_every_fixture_record_yields_a_message():
 
 
 def test_legacy_flat_shape_still_maps():
-    event = event_log_from_controller(
+    event = threat_event_log_from_controller(
         {
             "_id": "legacy-1",
             "key": "EVT_WU_Disconnected",
@@ -129,6 +131,55 @@ def test_legacy_flat_shape_still_maps():
     assert event.mac == "aa:bb:cc:00:00:09"
     assert event.ip == "192.0.2.50"
     assert event.msg == "Client disconnected"
+    assert event.category is None
+    assert event.subcategory is None
+    assert event.event is None
+    assert event.src_ip is None
+    assert event.dst_ip is None
+    assert event.initiator_id is None
+
+
+def test_v2_threat_roles_add_fields_without_changing_reporting_actor():
+    record = {
+        "key": "THREAT_DETECTED",
+        "category": "security",
+        "subcategory": "ips",
+        "event": "intrusion",
+        "severity": "HIGH",
+        "parameters": {
+            "DEVICE": {"id": "aa:bb:cc:dd:ee:ff", "ip": "192.0.2.1"},
+            "SRC_IP": {"id": "198.51.100.10", "name": "source"},
+            "DST_IP": {"id": "203.0.113.20", "name": "destination"},
+            "INITIATOR_ID": {"id": "0123456789abcdef01234567"},
+        },
+    }
+    event = threat_event_log_from_controller(record)
+    assert event.category == "security"
+    assert event.subcategory == "ips"
+    assert event.event == "intrusion"
+    assert event.src_ip == "198.51.100.10"
+    assert event.dst_ip == "203.0.113.20"
+    assert event.initiator_id == "0123456789abcdef01234567"
+    assert event.mac == "aa:bb:cc:dd:ee:ff"
+    assert event.ip == "192.0.2.1"
+    assert event.severity == "HIGH"
+
+
+def test_v2_malformed_role_fields_are_unknown():
+    event = threat_event_log_from_controller(
+        {
+            "category": False,
+            "subcategory": 4,
+            "event": [],
+            "parameters": {"SRC_IP": {"id": 1}, "DST_IP": "bad", "INITIATOR_ID": {}},
+        }
+    )
+    assert event.category is None
+    assert event.subcategory is None
+    assert event.event is None
+    assert event.src_ip is None
+    assert event.dst_ip is None
+    assert event.initiator_id is None
 
 
 def test_legacy_keys_win_over_v2_parameters():
@@ -175,3 +226,13 @@ def test_eventlog_fields_marked_immutable():
     assert MUTABLE_FIELDS == frozenset()
     for field in EventLog.model_fields.values():
         assert (field.json_schema_extra or {}).get("mutable") is False
+    for name in ("category", "subcategory", "event", "src_ip", "dst_ip", "initiator_id"):
+        assert ThreatEventLog.model_fields[name].description
+    assert "MAC actor" in ThreatEventLog.model_fields["src_ip"].description
+    assert "alarm resource ID" in ThreatEventLog.model_fields["initiator_id"].description
+
+
+def test_legacy_projector_retains_published_api_constructor_contract():
+    record = {"id": "event", "category": "SECURITY", "parameters": {"SRC_IP": {"id": "192.0.2.1"}}}
+    assert set(event_log_from_controller(record).model_dump()) == {"id", "key", "msg", "time", "mac", "ip", "severity"}
+    assert threat_event_log_from_controller(record).src_ip == "192.0.2.1"
