@@ -156,6 +156,7 @@ async def test_optional_client_and_event_filters_preserve_omission() -> None:
         ("switch", "set_jumbo_frames", "update_device_config", {"enabled": True, "confirm": True}),
         ("stats", "get_client_dpi_traffic", "get_client_dpi_traffic", {}),
         ("stats", "get_client_wifi_details", "get_client_wifi_details", {}),
+        ("stats", "get_client_sessions", "get_client_sessions", {}),
     ],
 )
 async def test_mac_tool_failures_keep_private_values_out_of_diagnostics(

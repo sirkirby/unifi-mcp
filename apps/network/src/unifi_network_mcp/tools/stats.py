@@ -521,8 +521,8 @@ async def get_client_sessions(
             result["client_mac"] = mac_address
         return result
     except Exception as e:
-        logger.error("Error getting client sessions: %s", e, exc_info=True)
-        return {"success": False, "error": f"Failed to get client sessions: {e}"}
+        logger.error("Error getting client sessions: %s", type(e).__name__)
+        return {"success": False, "error": f"Failed to get client sessions: {type(e).__name__}"}
 
 
 @server.tool(
