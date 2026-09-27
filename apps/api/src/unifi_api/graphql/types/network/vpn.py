@@ -109,8 +109,6 @@ class VpnServer:
     enabled: bool
     listen_port: int | None
     allowed_subnets: list[str] | None
-    alternate_address_enabled: bool | None = None
-    alternate_address: str | None = None
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
