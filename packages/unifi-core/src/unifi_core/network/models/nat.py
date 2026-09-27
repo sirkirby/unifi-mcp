@@ -586,7 +586,10 @@ def normalize_nat_verified_write(fields: Dict[str, Any], *, create: bool = False
         if "address" in flt:
             try:
                 if "/" in flt["address"]:
-                    IPv4Network(flt["address"], strict=False)
+                    network = IPv4Network(flt["address"], strict=False)
+                    # Network 10.6 rejects /32 filters; a bare address matches the same host.
+                    if network.prefixlen == 32:
+                        flt["address"] = str(network.network_address)
                 else:
                     IPv4Address(flt["address"])
             except ValueError:

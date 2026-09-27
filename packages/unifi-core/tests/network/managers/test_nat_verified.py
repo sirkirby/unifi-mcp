@@ -402,3 +402,57 @@ async def test_legacy_mutation_errors_use_safe_infinitive(method, verb):
     assert f"Failed to {verb} NAT rule" in str(error.value)
     assert "private-controller-value" not in str(error.value)
     assert len([request for request in connection.requests if request.method == method]) == 1
+
+
+@pytest.mark.parametrize("side", ["source_filter", "destination_filter"])
+@pytest.mark.parametrize("create", [False, True])
+def test_host_cidr_filter_normalizes_without_changing_input(side, create):
+    submitted = _new_rule() if create else {}
+    submitted[side] = {"filter_type": "ADDRESS_AND_PORT", "address": "198.51.100.53/32"}
+    original = deepcopy(submitted)
+    normalized = normalize_nat_verified_write(submitted, create=create)
+    assert normalized[side]["address"] == "198.51.100.53"
+    assert submitted == original
+
+
+@pytest.mark.parametrize("address", ["198.51.100.53", "198.51.100.0/24", "0.0.0.0/0"])
+def test_other_ipv4_filter_forms_are_preserved(address):
+    fields = {"source_filter": {"filter_type": "ADDRESS_AND_PORT", "address": address}}
+    assert normalize_nat_verified_write(fields) == fields
+
+
+@pytest.mark.asyncio
+async def test_verified_create_sends_host_address_and_verifies_normalized_readback():
+    submitted = _new_rule()
+    submitted["source_filter"] = {"filter_type": "ADDRESS_AND_PORT", "address": "198.51.100.53/32"}
+    after = {
+        **submitted,
+        "source_filter": {"filter_type": "ADDRESS_AND_PORT", "address": "198.51.100.53"},
+        "_id": "nat-host",
+        "enabled": False,
+        "rule_index": 1,
+        "setting_preference": "manual",
+        "is_predefined": False,
+    }
+    manager, connection = _manager([], {"data": [after]}, [after])
+    result = await manager.create_nat_rule_verified(submitted)
+    assert result.success is True and result.mutation_applied is True
+    assert connection.requests[1].data["source_filter"]["address"] == "198.51.100.53"
+    assert "source_filter.address" in result.persisted_fields
+    assert submitted["source_filter"]["address"].endswith("/32")
+
+
+@pytest.mark.asyncio
+async def test_verified_update_normalizes_submitted_host_preserving_stored_fields():
+    stored = deepcopy(DNS_REDIRECT)
+    stored["source_filter"]["controller_only"] = "preserved"
+    after = deepcopy(stored)
+    after["destination_filter"]["address"] = "198.51.100.53"
+    manager, connection = _manager([stored], {}, [after])
+    result = await manager.update_nat_rule_verified(
+        stored["_id"], {"destination_filter": {"address": "198.51.100.53/32"}}
+    )
+    assert result.success is True and result.mutation_applied is True
+    assert connection.requests[1].data["destination_filter"]["address"] == "198.51.100.53"
+    assert connection.requests[1].data["source_filter"] == stored["source_filter"]
+    assert "destination_filter.address" in result.persisted_fields
