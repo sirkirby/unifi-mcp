@@ -18,7 +18,7 @@ dependencies = [
 network = ["aiounifi>=92"]
 protect = [
     # Camera/light public setters require a Protect API key; see the Protect README.
-    "uiprotect>=16.10.0,<17",
+    "uiprotect>=16.16.1,<17",
     # uiprotect permits older PyJWT releases; published Core wheels must enforce
     # the advisory-safe floor even when installed over an existing environment.
     "PyJWT>=2.13.0",
