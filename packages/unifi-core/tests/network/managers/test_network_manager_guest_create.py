@@ -393,3 +393,27 @@ async def test_non_guest_create_readback_call_is_unchanged():
     await mgr.create_network(requested)
 
     mgr.get_network_details.assert_awaited_once_with(NETWORK_ID)
+
+
+@pytest.mark.parametrize("zone_id", [" hotspot-zone", "hotspot-zone ", "\thotspot-zone\n"])
+async def test_guest_create_rejects_zone_id_whitespace_before_lookup_or_write(zone_id):
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    result = await mgr.create_network(_guest(firewall_zone_id=zone_id))
+
+    assert result.success is False
+    assert result.mutation_applied is False
+    assert "whitespace" in result.error
+    conn.request.assert_not_called()
+
+
+@pytest.mark.parametrize("zone_id", [" hotspot-zone", "hotspot-zone "])
+async def test_validate_helper_rejects_zone_id_whitespace_before_lookup(zone_id):
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+
+    with pytest.raises(ValueError, match="whitespace"):
+        await mgr.validate_firewall_zone_assignment({}, _guest(firewall_zone_id=zone_id))
+
+    conn.request.assert_not_called()

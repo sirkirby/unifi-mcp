@@ -713,6 +713,13 @@ class TestGuestCreateFields:
         with pytest.raises(ValueError, match=field):
             validate_guest_create_fields(_guest_create(**{field: value}))
 
+    @pytest.mark.parametrize("zone", [" hotspot-zone", "hotspot-zone ", "\thotspot-zone\n"])
+    def test_rejects_zone_id_with_surrounding_whitespace(self, zone: str) -> None:
+        with pytest.raises(ValueError, match="whitespace"):
+            validate_guest_create_fields(_guest_create(firewall_zone_id=zone))
+        with pytest.raises(ValueError, match="whitespace"):
+            validate_create(_guest_create(firewall_zone_id=zone))
+
     @pytest.mark.parametrize("zone", [None, "", 123])
     def test_rejects_missing_or_non_string_zone(self, zone: object) -> None:
         with pytest.raises(ValueError, match="Hotspot zone"):

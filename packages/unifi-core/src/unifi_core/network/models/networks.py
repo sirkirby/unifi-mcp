@@ -733,6 +733,13 @@ def validate_guest_create_fields(fields: Mapping[str, Any]) -> None:
     zone_id = fields.get("firewall_zone_id")
     if not isinstance(zone_id, str) or not zone_id.strip():
         raise ValueError(GUEST_HOTSPOT_ZONE_ERROR)
+    if zone_id != zone_id.strip():
+        # The zone lookup matches the stripped ID but the wire payload sends it
+        # verbatim, so surrounding whitespace would verify one ID and write another.
+        raise ValueError(
+            "Guest network firewall_zone_id must not contain leading or trailing whitespace. "
+            "No network mutation was attempted."
+        )
     if not _is_neutral(fields.get("network_isolation_enabled"), (None, False)):
         raise ValueError(
             "Guest networks require network_isolation_enabled to be omitted, null, or false: the Hotspot "
