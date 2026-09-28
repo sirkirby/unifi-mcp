@@ -214,6 +214,8 @@ async def get_threat_posture(period: str = "DAY") -> Dict[str, Any]:
             {"success": True, "site": system_manager._connection.site, "threat_posture": posture.model_dump()},
             redact_sensitive=should_redact_sensitive_fields(),
         )
+    except ValueError:
+        return {"success": False, "error": "Failed to get threat posture: period must be HOUR, DAY, WEEK, or MONTH"}
     except Exception as exc:
         logger.error("Failed to get threat posture: %s", type(exc).__name__)
         return {"success": False, "error": "Failed to get threat posture"}

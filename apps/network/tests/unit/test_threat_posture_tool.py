@@ -57,6 +57,22 @@ async def test_invalid_period_uses_core_validation_before_io(monkeypatch):
     connection.request = AsyncMock()
     monkeypatch.setattr(system, "system_manager", SystemManager(connection))
     result = await system.get_threat_posture("YEAR")
-    assert result == {"success": False, "error": "Failed to get threat posture"}
+    assert result == {
+        "success": False,
+        "error": "Failed to get threat posture: period must be HOUR, DAY, WEEK, or MONTH",
+    }
     connection.ensure_session_connected.assert_not_awaited()
     connection.request.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_controller_value_error_stays_private(monkeypatch, caplog):
+    from unifi_network_mcp.tools import system
+
+    connection = MagicMock()
+    connection.ensure_session_connected = AsyncMock(return_value=True)
+    connection.request = AsyncMock(side_effect=ValueError("controller-only-secret"))
+    monkeypatch.setattr(system, "system_manager", SystemManager(connection))
+    result = await system.get_threat_posture("DAY")
+    assert result == {"success": False, "error": "Failed to get threat posture"}
+    assert "controller-only-secret" not in caplog.text
