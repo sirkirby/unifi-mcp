@@ -43,6 +43,10 @@ class ThreatManagementSettings:
         default=None,
         description="Device fingerprinting enabled state (strict boolean, null if missing/malformed).",
     )
+    advanced_filtering_preference: str | None = strawberry.field(
+        default=None,
+        description="Advanced filtering preference; null when missing or malformed.",
+    )
 
     @classmethod
     def render_hint(cls, kind: str) -> dict:
@@ -50,9 +54,13 @@ class ThreatManagementSettings:
 
     @classmethod
     def from_manager_output(cls, obj: Any, *, redact_sensitive: bool = True) -> "ThreatManagementSettings":
+        preference = None
         if isinstance(obj, CoreThreatManagementSettings):
             core = obj
         elif isinstance(obj, dict):
+            raw_preference = obj.get("advanced_filtering_preference")
+            if isinstance(raw_preference, str):
+                preference = raw_preference
             if "ips" in obj or "dpi" in obj:
                 core = threat_management_from_controller(ips=obj.get("ips"), dpi=obj.get("dpi"))
             elif "traffic_identification_enabled" in obj or "device_fingerprinting_enabled" in obj:
@@ -68,6 +76,8 @@ class ThreatManagementSettings:
         else:
             core = CoreThreatManagementSettings()
         data = redact_sensitive_fields(core.model_dump(), redact_sensitive=redact_sensitive)
+        if preference is None:
+            preference = data.get("advanced_filtering_preference")
         return cls(
             ips_mode=data.get("ips_mode"),
             enabled=data.get("enabled"),
@@ -75,6 +85,7 @@ class ThreatManagementSettings:
             enabled_networks=data.get("enabled_networks"),
             traffic_identification_enabled=data.get("traffic_identification_enabled"),
             device_fingerprinting_enabled=data.get("device_fingerprinting_enabled"),
+            advanced_filtering_preference=preference,
         )
 
     def to_dict(self) -> dict:

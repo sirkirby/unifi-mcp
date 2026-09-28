@@ -92,6 +92,30 @@ def test_event_log_v2_address_role_id_is_not_a_mac() -> None:
     assert item["msg"] == "{MYSTERY_ROLE} did something to 198.51.100.7."
 
 
+def test_event_log_v2_roles_project_without_changing_associated_actor() -> None:
+    record = {
+        **_V2_RECORD,
+        "category": "security",
+        "subcategory": "ips",
+        "event": "intrusion",
+        "parameters": {
+            **_V2_RECORD["parameters"],
+            "SRC_IP": {"id": "203.0.113.12"},
+            "INITIATOR_ID": {"id": "0123456789abcdef01234567"},
+        },
+    }
+    item = EventLog.from_manager_output(record).to_dict()
+    assert item["category"] == "security"
+    assert item["subcategory"] == "ips"
+    assert item["event"] == "intrusion"
+    assert item["src_ip"] == "203.0.113.12"
+    assert item["dst_ip"] == "198.51.100.24"
+    assert item["initiator_id"] == "0123456789abcdef01234567"
+    assert item["mac"] == "aa:bb:cc:00:00:01"
+    assert item["ip"] == "192.0.2.11"
+    assert item["severity"] == "MEDIUM"
+
+
 def test_event_log_legacy_keys_win_over_v2_parameters() -> None:
     record = {
         "key": "EVT_WU_Connected",

@@ -1,5 +1,5 @@
 {
-  "count": 207,
+  "count": 209,
   "generated_by": "scripts/generate_tool_manifest.py",
   "module_map": {
     "unifi_adopt_device": "unifi_network_mcp.tools.devices",
@@ -102,6 +102,7 @@
     "unifi_get_switch_ports": "unifi_network_mcp.tools.switch",
     "unifi_get_system_info": "unifi_network_mcp.tools.system",
     "unifi_get_threat_management_settings": "unifi_network_mcp.tools.system",
+    "unifi_get_threat_posture": "unifi_network_mcp.tools.system",
     "unifi_get_top_clients": "unifi_network_mcp.tools.stats",
     "unifi_get_traffic_flow_statistics": "unifi_network_mcp.tools.traffic_flows",
     "unifi_get_traffic_flows": "unifi_network_mcp.tools.traffic_flows",
@@ -196,6 +197,7 @@
     "unifi_update_route": "unifi_network_mcp.tools.routing",
     "unifi_update_snmp_settings": "unifi_network_mcp.tools.system",
     "unifi_update_switch_stp": "unifi_network_mcp.tools.switch",
+    "unifi_update_threat_management_settings": "unifi_network_mcp.tools.system",
     "unifi_update_traffic_route": "unifi_network_mcp.tools.traffic_routes",
     "unifi_update_usergroup": "unifi_network_mcp.tools.usergroups",
     "unifi_update_vpn_client_state": "unifi_network_mcp.tools.vpn",
@@ -10700,6 +10702,95 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
+      "description": "Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH, including allowlisted gateway signature status. Requires Network session credentials. Counts and timestamps may be unknown (null); timestamps are milliseconds. Gateway device IDs are scoped to the legacy Network device family, not public Integration API device UUIDs.",
+      "name": "unifi_get_threat_posture",
+      "schema": {
+        "input": {
+          "properties": {
+            "period": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Get Threat Posture"
+    },
+    {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "auth_method": "local_only",
       "description": "Get a list of top clients by usage (sorted by total bytes)",
       "name": "unifi_get_top_clients",
       "schema": {
@@ -20570,6 +20661,138 @@
         }
       },
       "title": "Update Switch Stp"
+    },
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": false
+      },
+      "auth_method": "local_only",
+      "description": "Update site-wide IPS mode/category selection or traffic identification settings and verify persistence. Pass only the fields you want to change \u2014 current values are automatically preserved. Use separate calls for IPS and traffic identification fields. Category lists replace the full list and select manual filtering; codes are validated against the gateway catalog. Disabling IPS also disables filtering and clears categories; enabling requires protected networks and nonempty manual categories. Network scope is read-only. ipsInline can only be preserved if already in use. Changes may reduce inspection or disrupt traffic identification and require confirmation. MCP previews show live before/after state; API action previews show submitted arguments only.",
+      "name": "unifi_update_threat_management_settings",
+      "permission_action": "update",
+      "permission_category": "system",
+      "schema": {
+        "input": {
+          "additionalProperties": false,
+          "description": "Model-derived MCP and API action input contract.",
+          "properties": {
+            "confirm": {
+              "default": false,
+              "title": "Confirm",
+              "type": "boolean"
+            },
+            "update_data": {
+              "additionalProperties": false,
+              "description": "Strict partial update; one settings endpoint per request, never null.",
+              "properties": {
+                "device_fingerprinting_enabled": {
+                  "description": "Enable device fingerprinting when supported by this controller",
+                  "title": "Device Fingerprinting Enabled",
+                  "type": "boolean"
+                },
+                "enabled_categories": {
+                  "description": "Full category code list; selects manual mode; validated against gateway catalog",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Enabled Categories",
+                  "type": "array"
+                },
+                "ips_mode": {
+                  "description": "IDS detection: ids; prevention: ips or ipsInline; off: disabled",
+                  "title": "Ips Mode",
+                  "type": "string"
+                },
+                "traffic_identification_enabled": {
+                  "description": "Enable traffic identification; disabling can stop application-based rules matching",
+                  "title": "Traffic Identification Enabled",
+                  "type": "boolean"
+                }
+              },
+              "title": "ThreatManagementUpdate",
+              "type": "object"
+            }
+          },
+          "required": [
+            "update_data"
+          ],
+          "title": "ThreatManagementToolInput",
+          "type": "object"
+        },
+        "output": {
+          "additionalProperties": true,
+          "description": "Structured view of the existing UniFi MCP tool response contract.",
+          "properties": {
+            "data": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Successful result payload.",
+              "title": "Data"
+            },
+            "error": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Actionable error message for handled failures.",
+              "title": "Error"
+            },
+            "preview": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "Mutation preview payload returned before confirmation.",
+              "title": "Preview"
+            },
+            "requires_confirmation": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when a mutation preview requires caller confirmation.",
+              "title": "Requires Confirmation"
+            },
+            "success": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "description": "True when the tool call succeeded; false for handled errors.",
+              "title": "Success"
+            }
+          },
+          "title": "UniFiToolResponse",
+          "type": "object"
+        }
+      },
+      "title": "Update Threat Management Settings"
     },
     {
       "annotations": {

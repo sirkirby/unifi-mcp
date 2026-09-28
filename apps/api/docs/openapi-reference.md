@@ -1417,6 +1417,24 @@ LIST kind per Phase 4A — manager returns multi-element list of subsystems.
 **Returns:** `Detail_ThreatManagementSettingsModel_`
 
 
+## network/threat_posture
+
+### `GET /v1/sites/{site_id}/threat-posture` — Get Threat Posture
+
+
+Read CyberSecure posture. Gateway device IDs belong to the legacy Network device family.
+
+
+**Parameters:**
+
+- `site_id` (path) (required)
+- `period` (query)
+- `controller` (query)
+
+
+**Returns:** `Detail_ThreatPostureModel_`
+
+
 ## network/traffic-flows
 
 ### `GET /v1/sites/{site_id}/traffic-flow-statistics` — Get Traffic Flow Statistics

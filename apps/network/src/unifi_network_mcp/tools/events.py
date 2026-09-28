@@ -11,7 +11,7 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from unifi_core.confirmation import preview_response
-from unifi_core.network.models.events import event_log_from_controller
+from unifi_core.network.models.events import threat_event_log_from_controller
 from unifi_core.network.models.system import alarm_from_controller, event_types_from_controller
 from unifi_network_mcp.runtime import server
 
@@ -104,7 +104,7 @@ async def list_events(
             severities=severities,
         )
 
-        shaped = [event_log_from_controller(e).model_dump(exclude_none=True) for e in events]
+        shaped = [threat_event_log_from_controller(e).model_dump(exclude_none=True) for e in events]
         return {
             "success": True,
             "site": event_manager._connection.site,
@@ -200,7 +200,7 @@ async def unifi_recent_events(
     logger.info("unifi_recent_events called")
     mgr = _get_event_manager()
     events = mgr.get_recent_from_buffer(event_type=event_type, mac=mac_address, limit=limit)
-    shaped = [event_log_from_controller(e).model_dump(exclude_none=True) for e in events]
+    shaped = [threat_event_log_from_controller(e).model_dump(exclude_none=True) for e in events]
     return {"success": True, "events": shaped, "count": len(shaped), **_listener_state(mgr)}
 
 

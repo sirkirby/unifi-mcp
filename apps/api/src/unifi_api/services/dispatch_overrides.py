@@ -98,6 +98,7 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     "unifi_update_gateway_settings": ("gateway_settings_manager", "update_gateway_settings"),
     "unifi_update_snmp_settings": ("system_manager", "update_settings"),
     "unifi_update_mdns_settings": ("system_manager", "update_mdns_settings"),
+    "unifi_update_threat_management_settings": ("system_manager", "update_threat_management_settings"),
     # Auto-backup update pre-fetches get_autobackup_settings for the preview.
     "unifi_update_autobackup_settings": ("system_manager", "update_autobackup_settings"),
     # Firewall: tool layer pre-fetches list to find policy by id.
@@ -1015,6 +1016,12 @@ def _translate_mdns_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[
     from unifi_core.network.models.mdns import mdns_to_controller_update
 
     return (), {"update_data": mdns_to_controller_update(dict(args["update_data"]))}
+
+
+def _translate_threat_management_update(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    from unifi_core.network.models.threat_management import threat_management_to_controller_update
+
+    return (), {"update_data": threat_management_to_controller_update(args["update_data"])}
 
 
 def _translate_vpn_alternate_address(args: dict[str, Any]) -> tuple[tuple[Any, ...], dict[str, Any]]:
@@ -1972,6 +1979,7 @@ DISPATCH_ARG_TRANSLATORS: dict[str, ArgTranslatorSpec] = {
     ),
     "unifi_update_snmp_settings": _spec(_translate_snmp_update, "section", "settings_data"),
     "unifi_update_mdns_settings": _spec(_translate_mdns_update, "update_data"),
+    "unifi_update_threat_management_settings": _spec(_translate_threat_management_update, "update_data"),
     "unifi_update_vpn_server_alternate_address": _spec(_translate_vpn_alternate_address, "server_id", "update_data"),
     "unifi_update_switch_stp": _spec(_translate_switch_stp, "device_mac", "config_data"),
 }

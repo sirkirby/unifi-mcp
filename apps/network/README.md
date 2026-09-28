@@ -5,7 +5,7 @@
   <img src="../../assets/hero-network.svg" alt="UniFi Network MCP Server" width="720">
 </p>
 
-MCP server exposing 207 UniFi Network Controller tools for AI assistants and
+MCP server exposing 209 UniFi Network Controller tools for AI assistants and
 other MCP-capable clients. Query clients, devices, firewall rules, VLANs, VPNs,
 Traffic Flows, stats, and more with safe-by-default permissions and
 preview-before-confirm for all mutations.
@@ -308,7 +308,7 @@ Each device record now includes additional fields alongside the existing MAC, na
 
 - [Configuration](docs/configuration.md) — Full env var reference, YAML config, controller type detection
 - [Permissions](docs/permissions.md) — Permission system, category defaults, how to enable high-risk tools
-- [Tool Catalog](docs/tools.md) — All 207 tools organized by category
+- [Tool Catalog](docs/tools.md) — All 209 tools organized by category
 - [Transports](docs/transports.md) — stdio, Streamable HTTP, and SSE setup
 - [Troubleshooting and support bundles](docs/troubleshooting.md) — Reviewed support evidence, connection issues, SSL, missing tools
 

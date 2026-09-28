@@ -217,6 +217,9 @@ from unifi_api.graphql.types.network.system import (
 from unifi_api.graphql.types.network.threat_management import (
     ThreatManagementSettings as NetworkThreatManagementSettingsType,
 )
+from unifi_api.graphql.types.network.threat_posture import (
+    ThreatPosture as NetworkThreatPostureType,
+)
 from unifi_api.graphql.types.network.traffic_flow import (
     TrafficFlow as NetworkTrafficFlowType,
 )
@@ -565,6 +568,7 @@ def build_type_registry() -> TypeRegistry:
         NetworkThreatManagementSettingsType,
         "detail",
     )
+    reg.register_tool_type("unifi_get_threat_posture", NetworkThreatPostureType, "detail")
     reg.register_tool_type("unifi_get_mgmt_settings", NetworkMgmtSettingsType, "detail")
     reg.register_tool_type("unifi_get_event_types", NetworkEventTypesType, "detail")
     reg.register_tool_type(

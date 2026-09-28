@@ -8,7 +8,7 @@ import logging
 from typing import Annotated, Any, Dict, Optional
 
 from mcp.types import ToolAnnotations
-from pydantic import Field
+from pydantic import Field, WithJsonSchema
 
 from unifi_core.confirmation import create_preview, delete_preview, update_preview
 from unifi_core.network.models.mdns import mdns_to_controller_update, validate_mdns_service_selection
@@ -21,6 +21,12 @@ from unifi_core.network.models.system import (
     snmp_from_controller,
     snmp_to_controller_update,
     system_info_from_controller,
+)
+from unifi_core.network.models.threat_management import (
+    ThreatManagementToolInput,
+    ThreatManagementValidationError,
+    threat_management_input_schema,
+    threat_management_to_controller_update,
 )
 from unifi_core.redaction import redact_sensitive_fields
 from unifi_core.write_verification import format_tool_payload
@@ -114,6 +120,60 @@ async def update_mdns_settings(
 
 
 @server.tool(
+    name="unifi_update_threat_management_settings",
+    input_schema=threat_management_input_schema(ThreatManagementToolInput),
+    auth="local_only",
+    description=(
+        "Update site-wide IPS mode/category selection or traffic identification settings and verify persistence. "
+        "Pass only the fields you want to change — current values are automatically preserved. "
+        "Use separate calls for IPS and traffic identification fields. Category lists replace the full list and "
+        "select manual filtering; codes are validated against the gateway catalog. Disabling IPS also disables "
+        "filtering and clears categories; enabling requires protected networks and nonempty manual categories. "
+        "Network scope is read-only. ipsInline can only be preserved if already in use. Changes may reduce "
+        "inspection or disrupt traffic identification and require confirmation. MCP previews show live before/after "
+        "state; API action previews show submitted arguments only."
+    ),
+    permission_category="system",
+    permission_action="update",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False),
+)
+async def update_threat_management_settings(
+    update_data: Annotated[Dict[str, Any], WithJsonSchema(threat_management_input_schema())],
+    confirm: Annotated[bool, Field(description="Apply when true; return a live preview when false")] = False,
+) -> Dict[str, Any]:
+    """Delegate validated preview/apply operations to the shared manager."""
+    try:
+        updates = threat_management_to_controller_update(update_data)
+        if not confirm:
+            prepared = await system_manager.preview_threat_management_settings(updates)
+            result = update_preview(
+                resource_type="threat_management_settings",
+                resource_id=prepared["section"],
+                resource_name="Threat Management Settings",
+                current_state=prepared["current"],
+                updates=prepared["after"],
+                warnings=[
+                    "May reduce threat inspection or traffic identification while the gateway provisions changes."
+                ],
+            )
+        else:
+            result = format_tool_payload(
+                await system_manager.update_threat_management_settings(updates),
+                site=system_manager._connection.site,
+                success_message="Threat management settings updated and verified.",
+            )
+        return redact_sensitive_fields(result, redact_sensitive=should_redact_sensitive_fields())
+    except ThreatManagementValidationError as exc:
+        return {"success": False, "error": f"Failed to update threat management settings: {exc}"}
+    except Exception as exc:
+        logger.error("Failed to update threat management settings: %s", type(exc).__name__)
+        return {
+            "success": False,
+            "error": "Failed to update threat management settings; check Network session and controller compatibility",
+        }
+
+
+@server.tool(
     name="unifi_get_threat_management_settings",
     auth="local_only",
     description="Get site-wide threat management (IDS/IPS) and traffic identification settings. Requires Network session credentials.",
@@ -134,6 +194,29 @@ async def get_threat_management_settings() -> Dict[str, Any]:
     except Exception as exc:
         logger.error("Failed to get threat management settings: %s", type(exc).__name__)
         return {"success": False, "error": "Failed to get threat management settings"}
+
+
+@server.tool(
+    name="unifi_get_threat_posture",
+    auth="local_only",
+    description=(
+        "Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH, including allowlisted gateway signature status. "
+        "Requires Network session credentials. Counts and timestamps may be unknown (null); timestamps are milliseconds. "
+        "Gateway device IDs are scoped to the legacy Network device family, not public Integration API device UUIDs."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+)
+async def get_threat_posture(period: str = "DAY") -> Dict[str, Any]:
+    """Read site CyberSecure summary and gateway signature status."""
+    try:
+        posture = await system_manager.get_threat_posture(period=period)
+        return redact_sensitive_fields(
+            {"success": True, "site": system_manager._connection.site, "threat_posture": posture.model_dump()},
+            redact_sensitive=should_redact_sensitive_fields(),
+        )
+    except Exception as exc:
+        logger.error("Failed to get threat posture: %s", type(exc).__name__)
+        return {"success": False, "error": "Failed to get threat posture"}
 
 
 @server.tool(

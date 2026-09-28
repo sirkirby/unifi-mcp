@@ -95,6 +95,7 @@ from unifi_api.graphql.types.network.system import (
     TopClient,
 )
 from unifi_api.graphql.types.network.threat_management import ThreatManagementSettings
+from unifi_api.graphql.types.network.threat_posture import ThreatPosture
 from unifi_api.graphql.types.network.traffic_flow import (
     TrafficFlow,
     TrafficFlowPage,
@@ -1263,6 +1264,11 @@ async def _fetch_mdns_settings(ctx: GraphQLContext, controller: str, site: str) 
 async def _fetch_threat_management_settings(ctx: GraphQLContext, controller: str, site: str) -> Any:
     key = f"network/threat-management-settings/{controller}/{site}"
     return await _system_mgr_fetch(ctx, controller, site, key, "get_threat_management_settings")
+
+
+async def _fetch_threat_posture(ctx: GraphQLContext, controller: str, site: str, period: str) -> Any:
+    key = f"network/threat-posture/{controller}/{site}/{period}"
+    return await _system_mgr_fetch(ctx, controller, site, key, "get_threat_posture", period)
 
 
 async def _fetch_mgmt_settings(
@@ -3608,6 +3614,23 @@ class NetworkQuery:
         if raw is None:
             return None
         return ThreatManagementSettings.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
+
+    @strawberry.field(
+        permission_classes=[IsRead],
+        description="Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH using a Network session.",
+    )
+    async def threat_posture(
+        self,
+        info: Info,
+        controller: strawberry.ID,
+        site: str = "default",
+        period: str = "DAY",
+    ) -> ThreatPosture | None:
+        ctx: GraphQLContext = info.context
+        raw = await _fetch_threat_posture(ctx, controller, site, period)
+        if raw is None:
+            return None
+        return ThreatPosture.from_manager_output(raw, redact_sensitive=ctx.redact_sensitive_fields)
 
     @strawberry.field(
         permission_classes=[IsRead],

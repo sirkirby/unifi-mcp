@@ -24,7 +24,7 @@ from dataclasses import asdict
 from typing import Any
 
 import strawberry
-from unifi_core.network.models.events import event_log_from_controller
+from unifi_core.network.models.events import threat_event_log_from_controller
 
 
 @strawberry.type(description="A curated event-log entry.")
@@ -36,6 +36,12 @@ class EventLog:
     mac: str | None
     ip: str | None
     severity: str | None
+    category: str | None
+    subcategory: str | None
+    event: str | None
+    src_ip: str | None
+    dst_ip: str | None
+    initiator_id: str | None
     # Tracks whether the source record was a dict (legacy serializer
     # returned ``{"id": None}`` for non-dict inputs).
     _was_dict: strawberry.Private[bool] = True
@@ -60,9 +66,15 @@ class EventLog:
                 mac=None,
                 ip=None,
                 severity=None,
+                category=None,
+                subcategory=None,
+                event=None,
+                src_ip=None,
+                dst_ip=None,
+                initiator_id=None,
                 _was_dict=False,
             )
-        return cls(**event_log_from_controller(record).model_dump(), _was_dict=True)
+        return cls(**threat_event_log_from_controller(record).model_dump(), _was_dict=True)
 
     def to_dict(self) -> dict:
         if not self._was_dict:

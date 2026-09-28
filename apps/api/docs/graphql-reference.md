@@ -326,6 +326,9 @@ type BackupPage {
   nextCursor: String
 }
 
+"""A signed integer that can exceed GraphQL Int's 32-bit range."""
+scalar BigInt
+
 """A client currently blocked on the UniFi Network controller."""
 type BlockedClient {
   mac: ID
@@ -762,6 +765,12 @@ type EventLog {
   mac: String
   ip: String
   severity: String
+  category: String
+  subcategory: String
+  event: String
+  srcIp: String
+  dstIp: String
+  initiatorId: String
 }
 
 """Paginated page of event-log entries."""
@@ -903,6 +912,32 @@ type GatewaySettings {
   timeoutSettingPreference: String
   echoServer: String
   unbindWanMonitors: Boolean
+}
+
+"""Signature status from a legacy Network gateway device."""
+type GatewaySignature {
+  """
+  Legacy Network device ID, not an Integration API UUID; null if unknown.
+  """
+  deviceId: ID
+
+  """Gateway MAC address; null if unknown."""
+  macAddress: String
+
+  """Gateway display name; null if unknown."""
+  name: String
+
+  """Signature rule count; null if unknown."""
+  ruleCount: BigInt
+
+  """Signature update time in Unix milliseconds; null if unknown."""
+  updateTime: BigInt
+
+  """Controller signature type; null if unknown."""
+  signatureType: String
+
+  """Activation state; null if unknown."""
+  isActivating: Boolean
 }
 
 """Service health snapshot — smoke field for the GraphQL endpoint."""
@@ -1482,6 +1517,11 @@ type NetworkQuery {
   Get site-wide threat management (IDS/IPS) and traffic identification settings.
   """
   threatManagementSettings(controller: ID!, site: String! = "default"): ThreatManagementSettings
+
+  """
+  Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH using a Network session.
+  """
+  threatPosture(controller: ID!, site: String! = "default", period: String! = "DAY"): ThreatPosture
 
   """
   Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.
@@ -2125,6 +2165,47 @@ type ThreatManagementSettings {
   Device fingerprinting enabled state (strict boolean, null if missing/malformed).
   """
   deviceFingerprintingEnabled: Boolean
+
+  """Advanced filtering preference; null when missing or malformed."""
+  advancedFilteringPreference: String
+}
+
+"""
+CyberSecure summary and gateway signature status for a selected period.
+"""
+type ThreatPosture {
+  """HOUR, DAY, WEEK, or MONTH."""
+  period: String!
+
+  """Enterprise status; null if unknown."""
+  enterprise: Boolean
+
+  """Subscription status; null if unknown."""
+  hasSubscription: Boolean
+
+  """IPS enabled state; null if unknown."""
+  ipsEnabled: Boolean
+
+  """Activation state; null if unknown."""
+  isActivating: Boolean
+
+  """Scanned bytes during the period; null if unknown."""
+  scannedBytes: BigInt
+
+  """Signature capacity; null if unknown."""
+  signatureCapacity: BigInt
+
+  """Signature count; null if unknown."""
+  signatures: BigInt
+
+  """Threat count during the period; null if unknown."""
+  threats: BigInt
+
+  """Summary update time in Unix milliseconds; null if unknown."""
+  updatedTimestamp: BigInt
+
+  """Allowlisted per-gateway signature status."""
+  gatewaySignatures: [GatewaySignature!]!
 }
 
 """A top-traffic client entry."""
@@ -2565,6 +2646,7 @@ Read-only access to UniFi Network resources.
 - `switchPorts: SwitchPorts`  — Get the port-override wrapper for a switch (name/model + per-port overrides).
 - `systemInfo: SystemInfo`  — Get controller system info (build, uptime, hardware).
 - `threatManagementSettings: ThreatManagementSettings`  — Get site-wide threat management (IDS/IPS) and traffic identification settings.
+- `threatPosture: ThreatPosture`  — Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH using a Network session.
 - `topClients: [TopClient!]!`  — List top-traffic clients within a window.
 - `trafficFlowStatistics: TrafficFlowStatistics!`  — Aggregated Insights > Flows summary (risk/region counts + Top-Talkers).
 - `trafficFlows: TrafficFlowPage!`  — Query historical traffic flows (Insights > Flows), paginated.

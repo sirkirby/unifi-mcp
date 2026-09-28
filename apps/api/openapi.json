@@ -1901,6 +1901,31 @@
         "title": "Detail[ThreatManagementSettingsModel]",
         "type": "object"
       },
+      "Detail_ThreatPostureModel_": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ThreatPostureModel"
+          },
+          "render_hint": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Hint"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "Detail[ThreatPostureModel]",
+        "type": "object"
+      },
       "Detail_TrafficFlowStatisticsModel_": {
         "additionalProperties": true,
         "properties": {
@@ -3642,6 +3667,97 @@
           }
         },
         "title": "GatewaySettingsModel",
+        "type": "object"
+      },
+      "GatewaySignatureModel": {
+        "additionalProperties": true,
+        "properties": {
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Legacy Network device ID, not an Integration API UUID; null if unknown.",
+            "title": "Device Id"
+          },
+          "is_activating": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Activation state; null if unknown.",
+            "title": "Is Activating"
+          },
+          "mac_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gateway MAC address; null if unknown.",
+            "title": "Mac Address"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gateway display name; null if unknown.",
+            "title": "Name"
+          },
+          "rule_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signature rule count; null if unknown.",
+            "title": "Rule Count"
+          },
+          "signature_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Controller signature type; null if unknown.",
+            "title": "Signature Type"
+          },
+          "update_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signature update time in Unix milliseconds; null if unknown.",
+            "title": "Update Time"
+          }
+        },
+        "title": "GatewaySignatureModel",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -8109,6 +8225,18 @@
       "ThreatManagementSettingsModel": {
         "additionalProperties": true,
         "properties": {
+          "advanced_filtering_preference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Advanced filtering preference; null when missing or malformed.",
+            "title": "Advanced Filtering Preference"
+          },
           "device_fingerprinting_enabled": {
             "anyOf": [
               {
@@ -8189,6 +8317,134 @@
           }
         },
         "title": "ThreatManagementSettingsModel",
+        "type": "object"
+      },
+      "ThreatPostureModel": {
+        "additionalProperties": true,
+        "properties": {
+          "enterprise": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Enterprise status; null if unknown.",
+            "title": "Enterprise"
+          },
+          "gateway_signatures": {
+            "description": "Allowlisted per-gateway signature status.",
+            "items": {
+              "$ref": "#/components/schemas/GatewaySignatureModel"
+            },
+            "title": "Gateway Signatures",
+            "type": "array"
+          },
+          "has_subscription": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Subscription status; null if unknown.",
+            "title": "Has Subscription"
+          },
+          "ips_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "IPS enabled state; null if unknown.",
+            "title": "Ips Enabled"
+          },
+          "is_activating": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Activation state; null if unknown.",
+            "title": "Is Activating"
+          },
+          "period": {
+            "description": "HOUR, DAY, WEEK, or MONTH.",
+            "title": "Period",
+            "type": "string"
+          },
+          "scanned_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Scanned bytes during the period; null if unknown.",
+            "title": "Scanned Bytes"
+          },
+          "signature_capacity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signature capacity; null if unknown.",
+            "title": "Signature Capacity"
+          },
+          "signatures": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Signature count; null if unknown.",
+            "title": "Signatures"
+          },
+          "threats": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Threat count during the period; null if unknown.",
+            "title": "Threats"
+          },
+          "updated_timestamp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Summary update time in Unix milliseconds; null if unknown.",
+            "title": "Updated Timestamp"
+          }
+        },
+        "title": "ThreatPostureModel",
         "type": "object"
       },
       "TrafficFlowEndpointModel": {
@@ -20939,6 +21195,77 @@
         "summary": "Get Threat Management Settings",
         "tags": [
           "network/threat_management"
+        ]
+      }
+    },
+    "/v1/sites/{site_id}/threat-posture": {
+      "get": {
+        "description": "Read CyberSecure posture. Gateway device IDs belong to the legacy Network device family.",
+        "operationId": "get_threat_posture_v1_sites__site_id__threat_posture_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "site_id",
+            "required": true,
+            "schema": {
+              "title": "Site Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "DAY",
+              "title": "Period",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Controller UUID; omit to use default",
+            "in": "query",
+            "name": "controller",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Controller UUID; omit to use default",
+              "title": "Controller"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail_ThreatPostureModel_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Threat Posture",
+        "tags": [
+          "network/threat_posture"
         ]
       }
     },

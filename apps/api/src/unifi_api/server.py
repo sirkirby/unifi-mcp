@@ -163,6 +163,7 @@ from unifi_api.routes.resources.network import (
     system as net_system_routes,
 )
 from unifi_api.routes.resources.network import threat_management as net_threat_management_routes
+from unifi_api.routes.resources.network import threat_posture as net_threat_posture_routes
 from unifi_api.routes.resources.network import (
     traffic_flows as net_traffic_flows_routes,
 )
@@ -515,6 +516,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         net_mdns_routes,
         net_mgmt_routes,
         net_threat_management_routes,
+        net_threat_posture_routes,
         # Cluster 6: stats / events / system. The network events router owns
         # the bare /events path for both products via a capability-aware
         # dispatcher; it must be included before protect_events_routes so the

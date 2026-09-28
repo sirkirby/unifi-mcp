@@ -1,6 +1,6 @@
 # Tool Catalog
 
-The UniFi Network MCP server exposes 207 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
+The UniFi Network MCP server exposes 209 tools, all prefixed with `unifi_`. Read-only tools are always available. Mutating tools are controlled by the [permission system](permissions.md).
 
 Standard MCP clients should use `tools/list` for currently registered tools. For compact manifest-backed metadata in lazy workflows, call the `unifi_tool_index` compatibility meta-tool at runtime, or inspect `src/unifi_network_mcp/tools_manifest.json`. In `meta_only` mode, the index initially contains only meta-tools; executing a known domain tool lazily registers its module, so later index results can include those loaded tools.
 
@@ -300,3 +300,32 @@ This tool is read-only. Controller secrets (such as `utm_token`) and unverified 
 | `meta_only` | ~200 | Only meta-tools; use `unifi_execute` for everything |
 
 Set via `UNIFI_TOOL_REGISTRATION_MODE`. Lazy mode is recommended for LLM clients.
+
+### Threat Management updates
+
+`unifi_get_threat_posture` returns the controller's CyberSecure summary for `HOUR`,
+`DAY` (default), `WEEK`, or `MONTH`, plus gateway signature status. Missing values
+remain null. Signature and summary timestamps use Unix milliseconds. The typed
+settings read also exposes the controller's category selection preference.
+
+`unifi_update_threat_management_settings` accepts partial `update_data`:
+
+- IPS: `ips_mode` (`ids` detection, `ips` prevention, or `disabled`) and
+  `enabled_categories` (the complete replacement list of controller category codes).
+  `ipsInline` can only be preserved when the controller already uses it.
+- Traffic Identification: `traffic_identification_enabled` and
+  `device_fingerprinting_enabled` (strict booleans, only when supported).
+
+Use separate calls for IPS and Traffic Identification. Category updates select
+manual filtering and are validated against the gateway's current supported catalog.
+Disabling IPS also disables filtering and clears its category selection. Re-enabling
+manual inspection requires a nonempty category list and networks already configured
+for protection in UniFi. This tool does not change protected network membership.
+
+Always inspect the preview before confirming: changes can reduce inspection coverage
+or pause identification while the gateway provisions them. MCP previews show live
+before/after state; REST action previews show submitted arguments only. Confirmed
+writes report persistence separately from acceptance. `collateral_changed_fields`
+means the controller also changed a field that was meant to be preserved; inspect
+actual settings before another update. A failed verification does not roll back a
+write. This verifies configuration persistence, not detection of malicious traffic.

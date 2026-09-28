@@ -104,6 +104,7 @@ KNOWN_CONTROLLER_ISSUE_MARKERS = {
 
 
 RISKY_OPERATION_NAMES = {
+    "unifi_update_threat_management_settings",
     "access_lock_door",
     "access_reboot_device",
     "access_revoke_credential",

@@ -16,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 from strawberry.types.base import StrawberryList, StrawberryOptional
 from strawberry.types.private import StrawberryPrivate
 
+from unifi_api.graphql.scalars import BigInt
+
 _MODEL_CACHE: dict[type, type[BaseModel]] = {}
 
 
@@ -57,6 +59,9 @@ def _strawberry_type_to_pydantic(strawberry_type_obj: Any) -> Any:
 
     if strawberry_type_obj is strawberry.ID:
         return str
+
+    if strawberry_type_obj is BigInt:
+        return int
 
     if hasattr(strawberry_type_obj, "__strawberry_definition__"):
         return to_pydantic_model(strawberry_type_obj)

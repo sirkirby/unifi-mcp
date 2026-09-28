@@ -84,6 +84,7 @@ def test_api_type_projection_from_shaped_dict():
         "enabled_networks": ["n1"],
         "traffic_identification_enabled": False,
         "device_fingerprinting_enabled": True,
+        "advanced_filtering_preference": "balanced",
     }
     api_type = ApiThreatManagementSettings.from_manager_output(shaped_dict)
     data = api_type.to_dict()
@@ -93,6 +94,17 @@ def test_api_type_projection_from_shaped_dict():
     assert data["enabled_networks"] == ["n1"]
     assert data["traffic_identification_enabled"] is False
     assert data["device_fingerprinting_enabled"] is True
+    assert data["advanced_filtering_preference"] == "balanced"
+
+
+def test_advanced_filtering_preference_remains_nullable_for_malformed_values():
+    assert ApiThreatManagementSettings.from_manager_output({}).advanced_filtering_preference is None
+    assert (
+        ApiThreatManagementSettings.from_manager_output(
+            {"advanced_filtering_preference": True}
+        ).advanced_filtering_preference
+        is None
+    )
 
 
 def test_from_manager_output_flat_enabled_does_not_set_dpi():

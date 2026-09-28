@@ -1,4 +1,4 @@
-# Network Server Tool Reference (207 tools)
+# Network Server Tool Reference (209 tools)
 
 Complete reference for `unifi_*` tools. All read tools are always available. Mutating tools require permissions (see main skill for details). Permission variables use the server's config keys (`CLIENT_GROUPS`, `FIREWALL_POLICIES`, `OON_POLICIES`), not the `permission_category` shorthand in `tools_manifest.json` (`client_group`, `firewall`, `oon_policy`); a denied tool's error names the exact variable to set.
 
@@ -570,7 +570,7 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 ## System
 
 <!-- AUTO:tools:system,config -->
-14 tools.
+16 tools.
 
 | Tool | Type | Description |
 |------|------|-------------|
@@ -582,12 +582,14 @@ Manage the controller's native Dynamic DNS provider entries (Settings → Intern
 | `unifi_get_snmp_settings` | Read | Get current SNMP settings for the site: v1/v2c enabled state and community string, SNMPv3 enabled state and user name. |
 | `unifi_get_system_info` | Read | Returns controller version, uptime, hostname, memory/CPU usage, and update availability. |
 | `unifi_get_threat_management_settings` | Read | Get site-wide threat management (IDS/IPS) and traffic identification settings. |
+| `unifi_get_threat_posture` | Read | Get CyberSecure threat posture for HOUR, DAY, WEEK, or MONTH, including allowlisted gateway signature status. |
 | `unifi_list_backups` | Read | List available backups on the controller. |
 | `unifi_create_backup` | Mutate | Create a new backup of the controller configuration. |
 | `unifi_delete_backup` | Mutate | Delete a backup file from the controller. |
 | `unifi_update_autobackup_settings` | Mutate | Update auto-backup settings. |
 | `unifi_update_mdns_settings` | Mutate | Update site-wide mDNS service mode, predefined services, or custom services. |
 | `unifi_update_snmp_settings` | Mutate | Update SNMP settings for the site: v1/v2c (enabled, community) and SNMPv3 (enabled_v3, username, x_password). |
+| `unifi_update_threat_management_settings` | Mutate | Update site-wide IPS mode/category selection or traffic identification settings and verify persistence. |
 <!-- /AUTO:tools:system,config -->
 
 **Tips:**

@@ -5043,6 +5043,25 @@
       }
     },
     {
+      "name": "unifi_get_threat_posture",
+      "product": "network",
+      "category": "system",
+      "permission_action": "read",
+      "read_only_hint": true,
+      "auth_method": "local_only",
+      "manager_attr": "system_manager",
+      "manager_method": "get_threat_posture",
+      "input_schema": {
+        "properties": {
+          "period": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "unifi_get_top_clients",
       "product": "network",
       "category": "stats",
@@ -7829,6 +7848,58 @@
         ],
         "type": "object",
         "additionalProperties": false
+      }
+    },
+    {
+      "name": "unifi_update_threat_management_settings",
+      "product": "network",
+      "category": "system",
+      "permission_action": "update",
+      "read_only_hint": false,
+      "auth_method": "local_only",
+      "manager_attr": "system_manager",
+      "manager_method": "update_threat_management_settings",
+      "input_schema": {
+        "additionalProperties": false,
+        "description": "Model-derived MCP and API action input contract.",
+        "properties": {
+          "update_data": {
+            "additionalProperties": false,
+            "description": "Strict partial update; one settings endpoint per request, never null.",
+            "properties": {
+              "device_fingerprinting_enabled": {
+                "description": "Enable device fingerprinting when supported by this controller",
+                "title": "Device Fingerprinting Enabled",
+                "type": "boolean"
+              },
+              "enabled_categories": {
+                "description": "Full category code list; selects manual mode; validated against gateway catalog",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Enabled Categories",
+                "type": "array"
+              },
+              "ips_mode": {
+                "description": "IDS detection: ids; prevention: ips or ipsInline; off: disabled",
+                "title": "Ips Mode",
+                "type": "string"
+              },
+              "traffic_identification_enabled": {
+                "description": "Enable traffic identification; disabling can stop application-based rules matching",
+                "title": "Traffic Identification Enabled",
+                "type": "boolean"
+              }
+            },
+            "title": "ThreatManagementUpdate",
+            "type": "object"
+          }
+        },
+        "required": [
+          "update_data"
+        ],
+        "title": "ThreatManagementToolInput",
+        "type": "object"
       }
     },
     {
