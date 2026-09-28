@@ -87,6 +87,8 @@ DISPATCH_OVERRIDES: dict[str, tuple[str, str]] = {
     # is the online list.
     "unifi_list_clients": ("client_manager", "get_clients"),
     # Network/WLAN/AP-group mutations: preview pre-fetches for current config.
+    # Guest-create previews validate the zone before the mutation call.
+    "unifi_create_network": ("network_manager", "create_network"),
     "unifi_update_network": ("network_manager", "update_network"),
     "unifi_delete_network": ("network_manager", "delete_network"),
     "unifi_update_wlan": ("network_manager", "update_wlan"),

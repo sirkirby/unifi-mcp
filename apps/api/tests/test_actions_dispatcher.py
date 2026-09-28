@@ -4342,3 +4342,41 @@ def test_port_forward_action_destination_create_and_clear():
     assert update == {"rule_id": "pf-1", "updates": {"destination_ip": "any"}}
     _, unrelated = _translate_update_port_forward({"port_forward_id": "pf-1", "update_data": {"enabled": False}})
     assert unrelated["updates"] == {"enabled": False}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirm", [False, True])
+async def test_explicit_guest_create_keeps_public_purpose_for_core_validation(confirm):
+    from unifi_core.write_verification import verify_write
+
+    data = {
+        "name": "Guest",
+        "purpose": "guest",
+        "firewall_zone_id": "hotspot-zone",
+        "ip_subnet": "192.0.2.1/24",
+        "dhcpd_enabled": False,
+        "enabled": False,
+    }
+    manager = MagicMock()
+    verified = verify_write(operation="create", requested=data, after={**data, "_id": "new-network"})
+    manager.create_network = AsyncMock(return_value=verified)
+    factory = MagicMock()
+    factory.get_domain_manager = AsyncMock(return_value=manager)
+    result = await dispatch_action(
+        registry=PRODUCTION_REGISTRY,
+        factory=factory,
+        session=MagicMock(),
+        tool_name="unifi_create_network",
+        controller_id="cid",
+        controller_products=["network"],
+        site="default",
+        args={"network_data": dict(data)},
+        confirm=confirm,
+    )
+    if confirm:
+        manager.create_network.assert_awaited_once_with(network_data=data)
+        assert result.success is True
+    else:
+        assert isinstance(result, MutationPreview)
+        assert result.payload["preview"]["will_create"]["network_data"] == data
+        factory.get_domain_manager.assert_not_awaited()

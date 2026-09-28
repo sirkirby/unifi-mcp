@@ -592,8 +592,9 @@ async def delete_network(
 @server.tool(
     name="unifi_create_network",
     description=(
-        "Create a new network (LAN/VLAN) with schema validation. Guest-purpose creation is rejected because the "
-        "legacy API can silently place it in the Internal zone. VPN network entries may only specify the system-defined "
+        "Create a new network (LAN/VLAN) with schema validation. Guest creation requires an explicit, verified built-in "
+        "Hotspot firewall_zone_id and network isolation disabled. Guest previews validate the live zone; confirmed creates "
+        "verify both guest purpose and zone. Updating purpose to guest remains unsupported. VPN entries may only specify the system-defined "
         "Vpn firewall zone; custom zones are persisted without enforcement and therefore rejected. Confirmed creates are "
         "read back and report exact persisted, dropped, and coerced fields; a failed result may still identify a created resource for cleanup. "
         "Requires confirmation."
@@ -606,7 +607,7 @@ async def create_network(
     network_data: Annotated[
         Dict[str, Any],
         Field(
-            description="Network configuration dict. Required: name (str), purpose (str: 'corporate', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). 'guest' is rejected because the legacy API can silently place it in the Internal firewall zone; create Hotspot-zone networks in the UniFi UI. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled, firewall_zone_id (V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs; VPN entries may only specify the system-defined Vpn zone). See update_network for the full list of supported fields."
+            description="Network configuration dict. Required: name (str), purpose (str: 'corporate', 'guest', 'wan', 'vlan-only', 'vpn-client', 'vpn-server'). Guest creation requires firewall_zone_id for the built-in Hotspot zone and network_isolation_enabled=false or omitted; switch-routed and SD-WAN guest networks are unsupported. Required if purpose != 'vlan-only': ip_subnet (CIDR, e.g. '192.168.1.0/24'). Required if purpose == 'vlan-only': vlan (int 1-4094). Optional: vlan_enabled, vlan, dhcpd_enabled, dhcpd_start, dhcpd_stop, dhcpd_leasetime, domain_name, enabled, network_isolation_enabled, upnp_lan_enabled, firewall_zone_id (V2 firewall-zone ID from unifi_list_firewall_zones; do not pass Integration API UUIDs; VPN entries may only specify the system-defined Vpn zone). See update_network for the full list of supported fields."
         ),
     ],
     confirm: Annotated[
@@ -622,7 +623,7 @@ async def create_network(
 
     Required parameters in network_data:
     - name (string): Network name
-    - purpose (string): Network purpose/type ("corporate", "wan", "vlan-only", "vpn-client", "vpn-server"). "guest" is rejected because the legacy API cannot safely assign the Hotspot firewall zone.
+    - purpose (string): Network purpose/type ("corporate", "guest", "wan", "vlan-only", "vpn-client", "vpn-server"). Guest creation requires an explicit built-in Hotspot firewall_zone_id, verified against the controller.
 
     If purpose is not "vlan-only":
     - ip_subnet (string): IP subnet in CIDR notation (e.g., "192.168.1.0/24") is required
@@ -650,6 +651,8 @@ async def create_network(
     Important Constraints:
     - Network isolation (network_isolation_enabled) is ONLY supported on networks with purpose="corporate".
     - It cannot be enabled on "guest" networks.
+    - Guest creation supports gateway-routed networks with a verified built-in Hotspot zone.
+      Updating an existing network to purpose=guest, switch-routed guest networks and SD-WAN are unsupported.
     - VPN network entries can only use the system-defined Vpn firewall zone; custom zones are not enforced.
     - All DHCP fields use the `dhcpd_*` prefix (the UniFi API field names); the
       legacy `dhcp_enabled`/`dhcp_start`/`dhcp_stop` names are NOT accepted.
@@ -680,6 +683,14 @@ async def create_network(
     purpose = validated_data["purpose"]
 
     if not confirm:
+        if purpose == "guest":
+            try:
+                await network_manager.validate_firewall_zone_assignment({}, validated_data)
+            except ValueError as exc:
+                return {"success": False, "error": f"Failed to preview guest network: {exc}"}
+            except Exception as exc:
+                logger.error("Failed to preview guest network: %s", type(exc).__name__)
+                return {"success": False, "error": "Failed to preview guest network: check the controller connection"}
         warnings = ["Creating a network may temporarily disrupt connectivity"]
         if "firewall_zone_id" in validated_data and is_vpn_network(validated_data):
             warnings.append(VPN_FIREWALL_ZONE_WARNING)

@@ -151,7 +151,7 @@ This tool is read-only. Controller secrets (such as `utm_token`) and unverified 
 
 - `unifi_list_networks` — List all networks (LAN, WAN, VLAN)
 - `unifi_get_network_details` — Get network details by ID
-- `unifi_create_network` — Create a network (LAN/VLAN); unsafe legacy `guest` creation is rejected
+- `unifi_create_network` — Create a network (LAN/VLAN); guest creation requires a verified built-in Hotspot zone
 - `unifi_update_network` — Update network fields with exact post-write verification
 - `unifi_delete_network` — Delete a network after a live-state preview
 - `unifi_list_wlans` — List all wireless LANs
@@ -165,6 +165,19 @@ This tool is read-only. Controller secrets (such as `utm_token`) and unverified 
 - `unifi_create_ap_group` — Create an AP group
 - `unifi_update_ap_group` — Update AP-group fields
 - `unifi_delete_ap_group` — Delete an AP group
+
+### Guest networks
+
+Use `purpose="guest"` with the built-in Hotspot zone's `firewall_zone_id` from
+`unifi_list_firewall_zones`. Use legacy V2 zone IDs, not Integration API UUIDs.
+Guest previews verify the live zone; confirmed creates verify that both guest
+purpose and the requested zone persisted. Missing, unrecognized, or non-Hotspot
+zones fail before creation. Keep `network_isolation_enabled` false or omit it.
+
+This path supports gateway-routed networks. Converting an existing network's
+purpose to guest, switch-routed guest networks, and SD-WAN guest networks remain
+unsupported. A failed post-write result can still identify a created resource;
+inspect its `mutation_applied` state and resource ID before retrying or cleaning up.
 
 ## Switch Management (15 tools)
 
