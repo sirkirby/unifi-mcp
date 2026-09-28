@@ -8,9 +8,12 @@ from unifi_core.network.models.networks import (
     READ_ONLY_FIELDS,
     Network,
     from_controller,
+    is_hotspot_zone,
     to_controller_create,
     to_controller_update,
+    to_guest_create_wire,
     validate_create,
+    validate_guest_create_fields,
     validate_update,
     validate_wan_dns_state,
 )
@@ -596,3 +599,131 @@ class TestLanIpv6Fields:
 
     def test_absent_prefixid_stays_none(self) -> None:
         assert from_controller({"_id": "n"}).ipv6_pd_prefixid is None
+
+
+def _guest_create(**overrides: object) -> dict:
+    fields: dict = {
+        "name": "Visitors",
+        "purpose": "guest",
+        "firewall_zone_id": "hotspot-zone",
+        "vlan_enabled": True,
+        "vlan": 3900,
+        "ip_subnet": "192.0.2.1/29",
+        "dhcpd_enabled": False,
+        "network_isolation_enabled": False,
+    }
+    fields.update(overrides)
+    return fields
+
+
+class TestGuestCreate:
+    def test_create_accepts_explicit_guest_with_zone(self) -> None:
+        payload = validate_create(_guest_create())
+        assert payload["purpose"] == "guest"
+        assert payload["firewall_zone_id"] == "hotspot-zone"
+        assert payload["network_isolation_enabled"] is False
+
+    @pytest.mark.parametrize("zone", [None, "", "   "])
+    def test_create_rejects_guest_without_zone(self, zone: object) -> None:
+        fields = _guest_create()
+        if zone is None:
+            del fields["firewall_zone_id"]
+        else:
+            fields["firewall_zone_id"] = zone
+        with pytest.raises(ValueError, match="Internal firewall zone"):
+            validate_create(fields)
+
+    def test_create_reports_missing_hotspot_zone_before_other_requirements(self) -> None:
+        with pytest.raises(ValueError, match="Internal firewall zone"):
+            validate_create({"name": "Guest", "purpose": "guest"})
+
+    def test_create_rejects_guest_with_network_isolation(self) -> None:
+        with pytest.raises(ValueError, match="network_isolation_enabled"):
+            validate_create(_guest_create(network_isolation_enabled=True))
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("gateway_type", "switch"),
+            ("sdwan_underlay", True),
+            ("l3_interface_type", "vlan"),
+        ],
+    )
+    def test_create_rejects_switch_and_sdwan_fields(self, field: str, value: object) -> None:
+        with pytest.raises(ValueError, match="Unknown network field"):
+            validate_create(_guest_create(**{field: value}))
+
+    def test_update_still_rejects_guest_purpose(self) -> None:
+        with pytest.raises(ValueError, match="Hotspot zone"):
+            validate_update({"purpose": "guest"})
+        with pytest.raises(ValueError, match="Hotspot zone"):
+            validate_update({"purpose": "guest", "firewall_zone_id": "hotspot-zone"})
+
+    def test_corporate_create_is_unchanged(self) -> None:
+        payload = validate_create(_guest_create(purpose="corporate"))
+        assert payload["purpose"] == "corporate"
+
+
+class TestGuestCreateFields:
+    """Raw-dict checks shared by the model and direct manager callers."""
+
+    def test_accepts_supported_shape_with_neutral_values(self) -> None:
+        validate_guest_create_fields(
+            _guest_create(gateway_type="default", gateway_device="", sdwan_underlay=False, sdwan_remote_site_id="")
+        )
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("gateway_type", "switch"),
+            ("gateway_device", "aa:bb:cc:dd:ee:ff"),
+            ("l3_interface_type", "vlan"),
+            ("sdwan_underlay", True),
+            ("sdwan_remote_site_id", "remote-site"),
+        ],
+    )
+    def test_rejects_switch_l3_and_sdwan_inputs(self, field: str, value: object) -> None:
+        with pytest.raises(ValueError, match=field):
+            validate_guest_create_fields(_guest_create(**{field: value}))
+
+    def test_rejects_isolation(self) -> None:
+        with pytest.raises(ValueError, match="network_isolation_enabled"):
+            validate_guest_create_fields(_guest_create(network_isolation_enabled=True))
+
+    @pytest.mark.parametrize("zone", [None, "", 123])
+    def test_rejects_missing_or_non_string_zone(self, zone: object) -> None:
+        with pytest.raises(ValueError, match="Hotspot zone"):
+            validate_guest_create_fields(_guest_create(firewall_zone_id=zone))
+
+
+class TestHotspotZone:
+    def test_matches_canonical_zone_key(self) -> None:
+        assert is_hotspot_zone({"_id": "z", "zone_key": "hotspot", "name": "Guests"}) is True
+
+    @pytest.mark.parametrize(
+        "zone",
+        [
+            {"_id": "z", "name": "Hotspot", "zone_key": "internal"},
+            {"_id": "z", "name": "Hotspot", "default_zone": True},
+            {"_id": "z", "zone_key": "Hotspot "},
+            {"_id": "z", "zone_key": None},
+        ],
+    )
+    def test_rejects_name_only_or_non_canonical_keys(self, zone: dict) -> None:
+        assert is_hotspot_zone(zone) is False
+
+
+class TestGuestCreateWire:
+    def test_translates_to_ui_wire_purpose_without_mutating_input(self) -> None:
+        requested = _guest_create(networkgroup="LAN")
+        original = dict(requested)
+
+        wire = to_guest_create_wire(requested)
+
+        assert wire == {**original, "purpose": "corporate"}
+        assert requested == original
+        assert wire is not requested
+
+    def test_rejects_non_guest_input(self) -> None:
+        with pytest.raises(ValueError, match="guest"):
+            to_guest_create_wire(_guest_create(purpose="corporate"))

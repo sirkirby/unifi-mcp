@@ -19,15 +19,45 @@ from __future__ import annotations
 
 import re
 from ipaddress import ip_address, ip_interface
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from pydantic import BaseModel, Field, ValidationError
 
 UNSAFE_GUEST_PURPOSE_ERROR = (
-    "purpose='guest' is not supported by the legacy network write API on current UniFi Network versions. "
-    "The controller can silently create the network as purpose='corporate' in the Internal firewall zone. "
-    "Create or move the network to the Hotspot zone in the UniFi UI instead."
+    "Changing an existing network to purpose='guest' is not supported. The controller derives guest purpose "
+    "from the firewall zone and can silently keep the network as purpose='corporate' in the Internal firewall "
+    "zone. Create a new guest network with firewall_zone_id set to the built-in Hotspot zone, or move the "
+    "existing network to the Hotspot zone in the UniFi UI."
 )
+
+GUEST_HOTSPOT_ZONE_ERROR = (
+    "purpose='guest' requires firewall_zone_id set to the built-in Hotspot zone's V2 firewall-zone ID "
+    "(zone_key 'hotspot'). Without it the controller silently stores the network as purpose='corporate' "
+    "in the Internal firewall zone; no network mutation was attempted."
+)
+
+GUEST_HOTSPOT_ZONE_UNVERIFIED_ERROR = (
+    "The guest network's firewall_zone_id could not be verified as the built-in Hotspot zone, so "
+    "no network mutation was attempted. Without the Hotspot zone the controller silently stores "
+    "the network as purpose='corporate' in the Internal firewall zone."
+)
+
+# The controller's networkconf save hook derives guest purpose from the zone:
+# a Hotspot zone turns a corporate network into guest. The UI therefore sends
+# corporate plus the Hotspot zone, and guest creates use that same wire shape.
+GUEST_WIRE_PURPOSE = "corporate"
+HOTSPOT_ZONE_KEY = "hotspot"
+
+# The save hook skips Layer-3 (switch-routed) networks, which the controller
+# identifies by gateway_type='switch'; the UI also blocks Hotspot for SD-WAN
+# underlays and isolated networks. Values listed here are the neutral ones.
+_GUEST_UNSUPPORTED_FIELDS: Dict[str, tuple[Any, ...]] = {
+    "gateway_type": (None, "default"),
+    "gateway_device": (None, ""),
+    "l3_interface_type": (None,),
+    "sdwan_underlay": (None, False),
+    "sdwan_remote_site_id": (None, ""),
+}
 
 MDNS_ENABLED_DESCRIPTION = (
     "Whether mDNS is enabled for this network. Read-only and not authoritative: mDNS is "
@@ -225,7 +255,8 @@ class Network(BaseModel):
             "V2 firewall-zone ID this network belongs to. These IDs are scoped to the V2 "
             "firewall/network tool family — do not pass Integration API firewall-zone UUIDs. "
             "VPN network entries may only use the system-defined Vpn zone; custom-zone assignments "
-            "are rejected because UniFi does not enforce their policies on tunnel interfaces"
+            "are rejected because UniFi does not enforce their policies on tunnel interfaces. "
+            "Creating a purpose='guest' network requires the built-in Hotspot zone"
         ),
     )
     # --- WAN uplink (gateway interface; networkconf entries with purpose=wan) ---
@@ -624,10 +655,11 @@ def _validate_payload(fields: Dict[str, Any], *, operation: str) -> Network:
     if model.wan_networkgroup is not None and not re.fullmatch(r"WAN\d*", model.wan_networkgroup):
         raise ValueError("Invalid 'wan_networkgroup': expected WAN, WAN2, or another numbered WAN group.")
 
-    if model.purpose == "guest":
+    if model.purpose == "guest" and operation != "create":
         raise ValueError(UNSAFE_GUEST_PURPOSE_ERROR)
-    if model.purpose is not None and model.purpose not in _ALLOWED_PURPOSES:
-        raise ValueError(f"Invalid 'purpose': {model.purpose}. Must be one of {sorted(_ALLOWED_PURPOSES)}.")
+    allowed_purposes = _ALLOWED_PURPOSES | {"guest"} if operation == "create" else _ALLOWED_PURPOSES
+    if model.purpose is not None and model.purpose not in allowed_purposes:
+        raise ValueError(f"Invalid 'purpose': {model.purpose}. Must be one of {sorted(allowed_purposes)}.")
     if model.vlan is not None:
         try:
             vlan = int(model.vlan)
@@ -677,12 +709,56 @@ def validate_wan_dns_state(current: Dict[str, Any], updates: Dict[str, Any]) -> 
         raise ValueError("The effective 'wan_dns1' must be a valid IPv4 address when 'wan_dns_preference' is 'manual'.")
 
 
+def is_hotspot_zone(zone: Mapping[str, Any]) -> bool:
+    """Whether a V2 firewall-zone record is the built-in Hotspot zone.
+
+    Matches the canonical ``zone_key`` the controller checks, never the
+    user-editable zone name.
+    """
+    return zone.get("zone_key") == HOTSPOT_ZONE_KEY
+
+
+def validate_guest_create_fields(fields: Mapping[str, Any]) -> None:
+    """Reject guest-create inputs the controller cannot place in the Hotspot zone.
+
+    Works on raw dictionaries so direct manager callers get the same checks as
+    public model validation. Zone identity still needs a controller lookup.
+    """
+    zone_id = fields.get("firewall_zone_id")
+    if not isinstance(zone_id, str) or not zone_id.strip():
+        raise ValueError(GUEST_HOTSPOT_ZONE_ERROR)
+    if fields.get("network_isolation_enabled") is True:
+        raise ValueError(
+            "Guest networks cannot enable network_isolation_enabled: the Hotspot zone does not accept "
+            "isolated networks. No network mutation was attempted."
+        )
+    unsupported = sorted(name for name, neutral in _GUEST_UNSUPPORTED_FIELDS.items() if fields.get(name) not in neutral)
+    if unsupported:
+        raise ValueError(
+            "Guest networks must be gateway-routed LANs; switch-routed (Layer 3) and SD-WAN settings are "
+            f"not supported: {', '.join(unsupported)}. No network mutation was attempted."
+        )
+
+
+def to_guest_create_wire(fields: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return the controller create payload for a validated guest request.
+
+    The input is not mutated; every other field, including ones this model
+    does not know, is sent unchanged.
+    """
+    if fields.get("purpose") != "guest":
+        raise ValueError("to_guest_create_wire only translates purpose='guest' create requests.")
+    return {**fields, "purpose": GUEST_WIRE_PURPOSE}
+
+
 def validate_create(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Validate a public Network create dictionary and return controller fields."""
     model = _validate_payload(fields, operation="create")
     missing = [name for name in ("name", "purpose") if getattr(model, name) in (None, "")]
     if missing:
         raise ValueError(f"Missing required fields: {', '.join(missing)}")
+    if model.purpose == "guest":
+        validate_guest_create_fields(fields)
     if model.vlan_enabled and model.vlan is None:
         raise ValueError("'vlan' is required when vlan_enabled is true")
     if model.purpose == "vlan-only":

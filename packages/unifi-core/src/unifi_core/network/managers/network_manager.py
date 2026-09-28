@@ -10,7 +10,12 @@ from unifi_core.merge import deep_merge
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.models.networks import (
     DELETABLE_PURPOSES,
+    GUEST_HOTSPOT_ZONE_ERROR,
+    GUEST_HOTSPOT_ZONE_UNVERIFIED_ERROR,
     UNSAFE_GUEST_PURPOSE_ERROR,
+    is_hotspot_zone,
+    to_guest_create_wire,
+    validate_guest_create_fields,
     validate_wan_dns_state,
 )
 from unifi_core.network.models.vpn import is_vpn_network
@@ -173,7 +178,18 @@ class NetworkManager:
         existing_network: Dict[str, Any],
         update_data: Dict[str, Any],
     ) -> None:
-        """Reject VPN updates unless their effective zone is the built-in Vpn zone."""
+        """Reject zone assignments the controller would not apply as requested.
+
+        VPN networks must use the built-in Vpn zone. ``purpose='guest'`` is
+        only accepted for a create (empty ``existing_network``) whose zone a
+        fresh lookup proves is the built-in Hotspot zone.
+        """
+        if update_data.get("purpose") == "guest":
+            if existing_network:
+                raise ValueError(UNSAFE_GUEST_PURPOSE_ERROR)
+            await self._validate_guest_create_zone(update_data)
+            return
+
         zone_is_changing = "firewall_zone_id" in update_data
         purpose_is_changing = "purpose" in update_data and update_data.get("purpose") != existing_network.get("purpose")
         if not zone_is_changing and not purpose_is_changing:
@@ -201,6 +217,18 @@ class NetworkManager:
         if not is_builtin_vpn:
             raise ValueError(_VPN_FIREWALL_ZONE_ERROR)
 
+    async def _validate_guest_create_zone(self, network_data: Dict[str, Any]) -> None:
+        validate_guest_create_fields(network_data)
+        try:
+            zone = await self._get_firewall_zone_record(network_data["firewall_zone_id"])
+        except UniFiNotFoundError:
+            raise ValueError(GUEST_HOTSPOT_ZONE_ERROR) from None
+        except Exception as error:
+            logger.error("Failed to validate guest firewall-zone assignment (%s)", type(error).__name__)
+            raise ValueError(GUEST_HOTSPOT_ZONE_UNVERIFIED_ERROR) from None
+        if not is_hotspot_zone(zone):
+            raise ValueError(GUEST_HOTSPOT_ZONE_ERROR)
+
     async def create_network(self, network_data: Dict[str, Any]) -> WriteVerificationResult:
         """Create a network and verify its exact persisted field values."""
         try:
@@ -211,16 +239,17 @@ class NetworkManager:
                         f"Missing required field '{field}' for network creation",
                         operation="create",
                     )
-            if network_data.get("purpose") == "guest":
-                return failed_write(UNSAFE_GUEST_PURPOSE_ERROR, operation="create")
+            is_guest = network_data.get("purpose") == "guest"
             try:
                 validate_wan_dns_state({}, network_data)
-                if "firewall_zone_id" in network_data:
+                if is_guest or "firewall_zone_id" in network_data:
                     await self.validate_firewall_zone_assignment({}, network_data)
             except ValueError as error:
                 return failed_write(str(error), operation="create")
 
-            api_request = ApiRequest(method="post", path="/rest/networkconf", data=network_data)
+            # Verification below still compares the caller's guest request.
+            wire_data = to_guest_create_wire(network_data) if is_guest else network_data
+            api_request = ApiRequest(method="post", path="/rest/networkconf", data=wire_data)
             response = await self._connection.request(api_request)
             logger.info("Create command sent for network '%s'", network_data.get("name"))
             self._connection._invalidate_cache(f"{CACHE_PREFIX_NETWORKS}_{self._connection.site}")
