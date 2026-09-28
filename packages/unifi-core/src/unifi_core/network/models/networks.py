@@ -718,6 +718,12 @@ def is_hotspot_zone(zone: Mapping[str, Any]) -> bool:
     return zone.get("zone_key") == HOTSPOT_ZONE_KEY
 
 
+def _is_neutral(value: Any, neutral: tuple[Any, ...]) -> bool:
+    # Exact type match: direct callers can pass 0, 1 or "true", which plain
+    # equality would let through as False.
+    return any(type(value) is type(candidate) and value == candidate for candidate in neutral)
+
+
 def validate_guest_create_fields(fields: Mapping[str, Any]) -> None:
     """Reject guest-create inputs the controller cannot place in the Hotspot zone.
 
@@ -727,12 +733,14 @@ def validate_guest_create_fields(fields: Mapping[str, Any]) -> None:
     zone_id = fields.get("firewall_zone_id")
     if not isinstance(zone_id, str) or not zone_id.strip():
         raise ValueError(GUEST_HOTSPOT_ZONE_ERROR)
-    if fields.get("network_isolation_enabled") is True:
+    if not _is_neutral(fields.get("network_isolation_enabled"), (None, False)):
         raise ValueError(
-            "Guest networks cannot enable network_isolation_enabled: the Hotspot zone does not accept "
-            "isolated networks. No network mutation was attempted."
+            "Guest networks require network_isolation_enabled to be omitted, null, or false: the Hotspot "
+            "zone does not accept isolated networks. No network mutation was attempted."
         )
-    unsupported = sorted(name for name, neutral in _GUEST_UNSUPPORTED_FIELDS.items() if fields.get(name) not in neutral)
+    unsupported = sorted(
+        name for name, neutral in _GUEST_UNSUPPORTED_FIELDS.items() if not _is_neutral(fields.get(name), neutral)
+    )
     if unsupported:
         raise ValueError(
             "Guest networks must be gateway-routed LANs; switch-routed (Layer 3) and SD-WAN settings are "

@@ -253,6 +253,9 @@ async def test_guest_create_fails_closed_when_zone_lookup_fails(failure):
     ("field", "value"),
     [
         ("network_isolation_enabled", True),
+        ("network_isolation_enabled", 1),
+        ("network_isolation_enabled", "true"),
+        ("sdwan_underlay", 1),
         ("gateway_type", "switch"),
         ("gateway_device", "aa:bb:cc:dd:ee:ff"),
         ("l3_interface_type", "vlan"),
@@ -348,3 +351,45 @@ async def test_corporate_create_without_zone_skips_zone_lookup():
 
     assert result.success is True
     assert _methods(conn) == [("post", "/rest/networkconf"), ("get", "/rest/networkconf")]
+
+
+async def test_guest_create_readback_bypasses_cached_network_inventory():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    requested = _guest()
+    stale = {"_id": NETWORK_ID, **requested, "purpose": "corporate"}
+    stored = {"_id": NETWORK_ID, **requested}
+    conn.get_cached = MagicMock(return_value=[stale])
+    conn.request.side_effect = [_zones(HOTSPOT_ZONE), [stored], [stored]]
+
+    result = await mgr.create_network(requested)
+
+    assert result.success is True
+    conn.get_cached.assert_not_called()
+    assert _methods(conn)[-1] == ("get", "/rest/networkconf")
+
+
+async def test_guest_create_readback_requests_force_refresh():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    requested = _guest()
+    stored = {"_id": NETWORK_ID, **requested}
+    conn.request.side_effect = [_zones(HOTSPOT_ZONE), [stored]]
+    mgr.get_network_details = AsyncMock(return_value=stored)
+
+    await mgr.create_network(requested)
+
+    mgr.get_network_details.assert_awaited_once_with(NETWORK_ID, force_refresh=True)
+
+
+async def test_non_guest_create_readback_call_is_unchanged():
+    conn = _make_connection()
+    mgr = NetworkManager(conn)
+    requested = {"name": "LAN", "purpose": "corporate", "ip_subnet": "192.0.2.1/24"}
+    stored = {"_id": NETWORK_ID, **requested}
+    conn.request.side_effect = [[stored]]
+    mgr.get_network_details = AsyncMock(return_value=stored)
+
+    await mgr.create_network(requested)
+
+    mgr.get_network_details.assert_awaited_once_with(NETWORK_ID)

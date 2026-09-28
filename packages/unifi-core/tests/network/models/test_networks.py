@@ -686,9 +686,32 @@ class TestGuestCreateFields:
         with pytest.raises(ValueError, match=field):
             validate_guest_create_fields(_guest_create(**{field: value}))
 
-    def test_rejects_isolation(self) -> None:
+    @pytest.mark.parametrize("value", [True, 1, "true", "false", 0, "", [], {}])
+    def test_rejects_isolation_unless_absent_none_or_strict_false(self, value: object) -> None:
         with pytest.raises(ValueError, match="network_isolation_enabled"):
-            validate_guest_create_fields(_guest_create(network_isolation_enabled=True))
+            validate_guest_create_fields(_guest_create(network_isolation_enabled=value))
+
+    @pytest.mark.parametrize("value", [None, False])
+    def test_accepts_isolation_none_or_strict_false(self, value: object) -> None:
+        validate_guest_create_fields(_guest_create(network_isolation_enabled=value))
+
+    def test_accepts_absent_isolation(self) -> None:
+        fields = _guest_create()
+        del fields["network_isolation_enabled"]
+        validate_guest_create_fields(fields)
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("sdwan_underlay", 0),
+            ("sdwan_underlay", 1),
+            ("sdwan_underlay", "false"),
+            ("gateway_type", "DEFAULT"),
+        ],
+    )
+    def test_neutral_values_match_strictly(self, field: str, value: object) -> None:
+        with pytest.raises(ValueError, match=field):
+            validate_guest_create_fields(_guest_create(**{field: value}))
 
     @pytest.mark.parametrize("zone", [None, "", 123])
     def test_rejects_missing_or_non_string_zone(self, zone: object) -> None:

@@ -273,7 +273,13 @@ class NetworkManager:
                 )
 
             try:
-                refetched = await self.get_network_details(network_id)
+                # A guest create is only proven by the stored purpose and zone,
+                # so it must not be judged against cached inventory.
+                refetched = (
+                    await self.get_network_details(network_id, force_refresh=True)
+                    if is_guest
+                    else await self.get_network_details(network_id)
+                )
             except Exception as e:
                 logger.error("Created network %s could not be re-read: %s", network_id, e, exc_info=True)
                 return failed_write(
