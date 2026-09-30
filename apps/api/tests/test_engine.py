@@ -1,11 +1,30 @@
 """Plain async engine + session factory tests."""
 
+import sqlite3
 from pathlib import Path
 
 import pytest
 from sqlalchemy import text
 from unifi_api.db.engine import create_engine
 from unifi_api.db.session import get_sessionmaker
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("filename", ["state%20literal.db", "state%2Fliteral.db", "state?mode=ro.db"])
+@pytest.mark.parametrize("as_string", [False, True])
+async def test_engine_opens_the_literal_existing_database(tmp_path: Path, filename: str, as_string: bool) -> None:
+    db_path = tmp_path / filename
+    with sqlite3.connect(db_path) as connection:
+        connection.execute("CREATE TABLE marker (value TEXT)")
+        connection.execute("INSERT INTO marker VALUES ('existing database')")
+
+    engine = create_engine(str(db_path) if as_string else db_path)
+    try:
+        async with engine.connect() as connection:
+            assert (await connection.execute(text("SELECT value FROM marker"))).scalar_one() == "existing database"
+    finally:
+        await engine.dispose()
+    assert set(tmp_path.iterdir()) == {db_path}
 
 
 @pytest.mark.asyncio

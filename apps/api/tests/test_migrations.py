@@ -1,8 +1,11 @@
 """Alembic up/down smoke."""
 
 import os
+import sqlite3
 import subprocess
 from pathlib import Path
+
+import pytest
 
 
 def _run_alembic(*args: str, db_path: Path) -> subprocess.CompletedProcess:
@@ -18,10 +21,14 @@ def _run_alembic(*args: str, db_path: Path) -> subprocess.CompletedProcess:
     )
 
 
-def test_migration_up_creates_tables(tmp_path: Path) -> None:
-    db_path = tmp_path / "migrate.db"
+@pytest.mark.parametrize("filename", ["migrate.db", "migrate%20literal.db"])
+def test_migration_up_creates_tables(tmp_path: Path, filename: str) -> None:
+    db_path = tmp_path / filename
     result = _run_alembic("-x", f"db_path={db_path}", "upgrade", "head", db_path=db_path)
     assert result.returncode == 0, f"alembic upgrade failed: {result.stderr}"
+    assert db_path.is_file()
+    with sqlite3.connect(db_path) as connection:
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() is not None
 
     import asyncio
 
