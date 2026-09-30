@@ -32,7 +32,7 @@ dependencies = [
     "aiohttp==3.14.3",
     "fastapi>=0.141.1",
     "uvicorn[standard]>=0.54.0",
-    "sqlalchemy[asyncio]>=2.0.52",
+    "sqlalchemy[asyncio]>=2.1.1",
     "alembic>=1.19.2",
     "aiosqlite>=0.20.0",
     # Published wheels do not consume uv.lock; keep security floors exposed by
