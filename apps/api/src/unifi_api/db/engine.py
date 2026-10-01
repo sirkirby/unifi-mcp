@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 
@@ -20,7 +21,8 @@ def create_engine(db_path: Path | str) -> AsyncEngine:
     """
     db_path = Path(db_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    url = f"sqlite+aiosqlite:///{db_path}"
+    # Preserve literal filesystem characters instead of parsing them as URL escapes.
+    url = URL.create("sqlite+aiosqlite", database=str(db_path))
     return create_async_engine(
         url,
         connect_args={"check_same_thread": False},
