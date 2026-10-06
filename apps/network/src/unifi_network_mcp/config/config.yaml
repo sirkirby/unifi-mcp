@@ -19,6 +19,8 @@ server:
   # - lazy: Register meta-tools, load others on-demand - RECOMMENDED for LLMs
   # - meta_only: Register only meta-tools, manual discovery - Maximum context savings
   tool_registration_mode: ${oc.env:UNIFI_TOOL_REGISTRATION_MODE,lazy}
+  defer_controller_init: ${oc.env:UNIFI_DEFER_CONTROLLER_INIT,false}
+  meta_tools_enabled: ${oc.env:UNIFI_META_TOOLS_ENABLED,true}
 
   # Tool filtering (optional, for eager mode)
   # Use these to limit which tools are registered for automation/n8n workflows

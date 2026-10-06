@@ -72,6 +72,11 @@ async def register_tools_for_mode(
     if not include_meta_tools and mode != "eager":
         raise ValueError("meta-tools can be disabled only in eager registration mode")
 
+    enabled_categories = _parse_filter_list(config.server.get("enabled_categories")) if mode == "eager" else None
+    enabled_tools = _parse_filter_list(config.server.get("enabled_tools")) if mode == "eager" else None
+    if not include_meta_tools and not (enabled_categories or enabled_tools):
+        raise ValueError("disabling meta-tools requires enabled_categories or enabled_tools")
+
     # Late-import defaults from shared package if not provided
     if include_meta_tools and register_meta_tools is None:
         from unifi_mcp_shared.meta_tools import register_meta_tools
@@ -151,9 +156,6 @@ async def register_tools_for_mode(
     else:  # eager
         logger.info("Tool registration mode: eager")
 
-        enabled_categories = _parse_filter_list(config.server.get("enabled_categories"))
-        enabled_tools = _parse_filter_list(config.server.get("enabled_tools"))
-
         if enabled_categories:
             logger.info("   Filtering by categories: %s", enabled_categories)
         elif enabled_tools:
@@ -161,12 +163,14 @@ async def register_tools_for_mode(
         else:
             logger.info("   All tools registered (no filtering)")
 
-        auto_load_tools(
+        filtering = auto_load_tools(
             base_package=base_package,
             enabled_categories=enabled_categories,
             enabled_tools=enabled_tools,
             server=server,
         )
+        if filtering is not None:
+            await filtering
 
     # Log registered tools
     try:

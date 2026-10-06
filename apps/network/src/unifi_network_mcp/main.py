@@ -7,8 +7,6 @@ Responsibilities:
 • start FastMCP (stdio)
 """
 
-import os
-
 from unifi_mcp_shared.permissioned_tool import setup_permissioned_tool
 from unifi_network_mcp.bootstrap import (
     UNIFI_TOOL_REGISTRATION_MODE,
@@ -84,6 +82,7 @@ async def start_event_listener_if_enabled(*, config, connection_manager, event_m
 
 async def main_async():
     """Main asynchronous function to setup and run the server."""
+    from unifi_core.config_helpers import parse_config_bool
     from unifi_core.policy_gate import check_deprecated_env_vars, check_unknown_policy_env_vars
     from unifi_mcp_shared.bootstrap import assert_credentials_configured
     from unifi_mcp_shared.server_lifecycle import apply_log_level, install_asyncio_exception_handler
@@ -101,7 +100,7 @@ async def main_async():
         # connection manager already initializes on demand through
         # ensure_connected, so confined stdio deployments can defer controller
         # I/O until a tool call.
-        defer_controller_init = os.getenv("UNIFI_DEFER_CONTROLLER_INIT", "false").lower() in {"1", "true", "yes"}
+        defer_controller_init = parse_config_bool(config.server.get("defer_controller_init", False))
         if defer_controller_init:
             logger.info("Deferring controller initialization until the first tool call")
         else:
@@ -134,7 +133,7 @@ async def main_async():
             config=config,
             logger=logger,
             support_bundle_handler=support_bundle_service.generate,
-            include_meta_tools=os.getenv("UNIFI_META_TOOLS_ENABLED", "true").lower() in {"1", "true", "yes"},
+            include_meta_tools=parse_config_bool(config.server.get("meta_tools_enabled", True), default=True),
         )
 
         # ---- Start transports ----

@@ -1,6 +1,5 @@
 """Tests for prefix-independent eager tool filtering."""
 
-import asyncio
 import importlib
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -26,24 +25,45 @@ async def test_enabled_tools_preserves_every_prefix_specific_meta_tool(monkeypat
         f"{prefix}_delete_device",
     ]
     server = SimpleNamespace(
-        list_tools=AsyncMock(return_value=[SimpleNamespace(name=name) for name in names]),
+        list_tools=AsyncMock(),
         remove_tool=Mock(),
     )
+    registered = set(names)
+
+    async def list_tools():
+        return [SimpleNamespace(name=name) for name in registered]
+
+    server.list_tools.side_effect = list_tools
+    server.remove_tool.side_effect = registered.remove
     monkeypatch.setattr(tool_loader_module.importlib, "import_module", lambda _name: package)
     monkeypatch.setattr(tool_loader_module.pkgutil, "walk_packages", lambda *_args: [])
 
-    auto_load_tools(
+    filtering = auto_load_tools(
         base_package="example_tools",
         enabled_tools=[f"{prefix}_list_devices"],
         server=server,
     )
-    await _drain_filter_task(server)
+    assert filtering is not None
+    await filtering
 
     server.remove_tool.assert_called_once_with(f"{prefix}_delete_device")
 
 
-async def _drain_filter_task(server) -> None:
-    for _ in range(10):
-        if server.list_tools.await_count:
-            return
-        await asyncio.sleep(0)
+async def test_enabled_tools_removal_failure_aborts_filtering(monkeypatch):
+    package = ModuleType("example_tools")
+    package.__path__ = []
+    server = SimpleNamespace(
+        list_tools=AsyncMock(return_value=[SimpleNamespace(name="unifi_delete_device")]),
+        remove_tool=Mock(side_effect=RuntimeError("cannot remove")),
+    )
+    monkeypatch.setattr(tool_loader_module.importlib, "import_module", lambda _name: package)
+    monkeypatch.setattr(tool_loader_module.pkgutil, "walk_packages", lambda *_args: [])
+
+    filtering = auto_load_tools(
+        base_package="example_tools",
+        enabled_tools=["unifi_list_devices"],
+        server=server,
+    )
+    assert filtering is not None
+    with pytest.raises(RuntimeError, match="cannot remove"):
+        await filtering

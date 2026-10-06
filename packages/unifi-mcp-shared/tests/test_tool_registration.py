@@ -30,7 +30,7 @@ def _deps():
         "setup_lazy_loading": Mock(return_value="lazy-loader"),
         "register_meta_tools": Mock(),
         "register_load_tools": Mock(),
-        "auto_load_tools": Mock(),
+        "auto_load_tools": Mock(return_value=None),
     }
 
 
@@ -139,3 +139,39 @@ class TestRegisterToolsForMode:
 
         deps["register_meta_tools"].assert_not_called()
         deps["auto_load_tools"].assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_eager_mode_cannot_omit_meta_tools_without_an_allowlist(self):
+        deps = _deps()
+
+        with pytest.raises(ValueError, match="requires enabled_categories or enabled_tools"):
+            await register_tools_for_mode(
+                mode="eager",
+                server=_server(),
+                base_package="unifi_network_mcp.tools",
+                config=_config(),
+                logger=logging.getLogger("test"),
+                include_meta_tools=False,
+                **deps,
+            )
+
+        deps["register_meta_tools"].assert_not_called()
+        deps["auto_load_tools"].assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_eager_mode_awaits_enabled_tool_filtering(self):
+        server = _server()
+        deps = _deps()
+        filtering = AsyncMock()
+        deps["auto_load_tools"] = Mock(return_value=filtering())
+
+        await register_tools_for_mode(
+            mode="eager",
+            server=server,
+            base_package="unifi_network_mcp.tools",
+            config=_config(enabled_tools="unifi_get_system_info"),
+            logger=logging.getLogger("test"),
+            **deps,
+        )
+
+        filtering.assert_awaited_once()

@@ -68,7 +68,7 @@ The server auto-detects whether your controller uses UniFi OS proxy paths (`/pro
 | `UNIFI_AUTO_CONFIRM` | `false` | Skip preview-then-confirm for mutations (for automation) |
 | `UNIFI_TOOL_REGISTRATION_MODE` | `lazy` | Tool loading: `lazy`, `eager`, or `meta_only` |
 | `UNIFI_DEFER_CONTROLLER_INIT` | `false` | Defer the startup controller connection until the first tool call. The real-time event listener is not started in this mode. |
-| `UNIFI_META_TOOLS_ENABLED` | `true` | Eager mode only. Set to `false` to omit indirect meta-tools and expose only allowlisted direct tools. |
+| `UNIFI_META_TOOLS_ENABLED` | `true` | Eager mode only. Set to `false` to omit indirect meta-tools; `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` is then required. |
 | `UNIFI_ENABLED_CATEGORIES` | — | Comma-separated tool categories to load (eager mode only) |
 | `UNIFI_ENABLED_TOOLS` | — | Comma-separated tool names to register (eager mode only) |
 | `CONFIG_PATH` | — | Path to a custom config YAML file |
@@ -190,6 +190,8 @@ server:
   port: ${oc.env:UNIFI_MCP_PORT,3000}
   log_level: INFO
   tool_registration_mode: ${oc.env:UNIFI_TOOL_REGISTRATION_MODE,lazy}
+  defer_controller_init: ${oc.env:UNIFI_DEFER_CONTROLLER_INIT,false}
+  meta_tools_enabled: ${oc.env:UNIFI_META_TOOLS_ENABLED,true}
 
   http:
     enabled: ${oc.env:UNIFI_MCP_HTTP_ENABLED,false}
