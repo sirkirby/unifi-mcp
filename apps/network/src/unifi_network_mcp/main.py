@@ -7,6 +7,8 @@ Responsibilities:
 • start FastMCP (stdio)
 """
 
+import os
+
 from unifi_mcp_shared.permissioned_tool import setup_permissioned_tool
 from unifi_network_mcp.bootstrap import (
     UNIFI_TOOL_REGISTRATION_MODE,
@@ -95,18 +97,27 @@ async def main_async():
     assert_credentials_configured(config, plugin_name="unifi-network", env_prefix="NETWORK", logger=logger)
 
     try:
-        # Initialize the global Unifi connection
-        logger.info("Initializing global Unifi connection from main_async...")
-        if not await connection_manager.initialize():
-            logger.error("Failed to connect to Unifi Controller from main_async. Tool functionality may be impaired.")
+        # Local MCP clients commonly enforce a short startup timeout. The
+        # connection manager already initializes on demand through
+        # ensure_connected, so confined stdio deployments can defer controller
+        # I/O until a tool call.
+        defer_controller_init = os.getenv("UNIFI_DEFER_CONTROLLER_INIT", "false").lower() in {"1", "true", "yes"}
+        if defer_controller_init:
+            logger.info("Deferring controller initialization until the first tool call")
         else:
-            logger.info("Global Unifi connection initialized successfully from main_async.")
+            logger.info("Initializing global Unifi connection from main_async...")
+            if not await connection_manager.initialize():
+                logger.error(
+                    "Failed to connect to Unifi Controller from main_async. Tool functionality may be impaired."
+                )
+            else:
+                logger.info("Global Unifi connection initialized successfully from main_async.")
 
-        await start_event_listener_if_enabled(
-            config=config,
-            connection_manager=connection_manager,
-            event_manager=event_manager,
-        )
+            await start_event_listener_if_enabled(
+                config=config,
+                connection_manager=connection_manager,
+                event_manager=event_manager,
+            )
 
         # ---- Register tools ----
         await register_tools_for_mode(
@@ -123,6 +134,7 @@ async def main_async():
             config=config,
             logger=logger,
             support_bundle_handler=support_bundle_service.generate,
+            include_meta_tools=os.getenv("UNIFI_META_TOOLS_ENABLED", "true").lower() in {"1", "true", "yes"},
         )
 
         # ---- Start transports ----

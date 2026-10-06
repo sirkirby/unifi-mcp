@@ -121,3 +121,21 @@ class TestRegisterToolsForMode:
             server=server,
         )
         server.list_tools.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_eager_mode_can_omit_indirect_meta_tools(self):
+        server = _server()
+        deps = _deps()
+
+        await register_tools_for_mode(
+            mode="eager",
+            server=server,
+            base_package="unifi_network_mcp.tools",
+            config=_config(enabled_tools="unifi_get_system_info"),
+            logger=logging.getLogger("test"),
+            include_meta_tools=False,
+            **deps,
+        )
+
+        deps["register_meta_tools"].assert_not_called()
+        deps["auto_load_tools"].assert_called_once()
