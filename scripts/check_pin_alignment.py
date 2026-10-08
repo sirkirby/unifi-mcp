@@ -79,10 +79,11 @@ MCP_SECURITY_FLOORS: dict[str, str] = {
     "python-multipart": "0.0.31",
     "starlette": "1.3.1",
     "click": "8.3.3",
+    "multidict": "6.9.1",
 }
 
 SECURITY_FLOORS: dict[str, dict[str, str]] = {
-    "unifi-core": {"pyjwt": "2.15.0"},
+    "unifi-core": {"pyjwt": "2.15.0", "multidict": "6.9.1"},
     "unifi-mcp-shared": MCP_SECURITY_FLOORS,
     "unifi-network-mcp": MCP_SECURITY_FLOORS,
     "unifi-protect-mcp": MCP_SECURITY_FLOORS,
@@ -95,6 +96,8 @@ SECURITY_FLOORS: dict[str, dict[str, str]] = {
         "python-multipart": "0.0.31",
         "starlette": "1.3.1",
         "click": "8.3.3",
+        "multidict": "6.9.1",
+        "mako": "1.4.2",
     },
 }
 
@@ -117,6 +120,8 @@ VULNERABLE_BASELINES: dict[str, str] = {
     "python-multipart": "0.0.27",
     "starlette": "0.50.0",
     "click": "8.3.1",
+    "multidict": "6.7.0",
+    "mako": "1.3.12",
 }
 
 

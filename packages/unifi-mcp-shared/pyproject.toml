@@ -16,6 +16,7 @@ dependencies = [
     "anyio>=4.14.2",
     "starlette>=1.7.0",
     "click>=8.3.3",
+    "multidict>=6.9.1",
     "omegaconf>=2.3.0",
     "pyyaml>=6.0",
     "jsonschema>=4.0.0",

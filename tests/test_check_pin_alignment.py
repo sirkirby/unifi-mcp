@@ -84,6 +84,8 @@ def test_security_floor_check_accepts_explicit_safe_wheel_metadata(tmp_path: Pat
             "python-multipart>=0.0.31",
             "starlette>=1.3.1",
             "click>=8.3.3",
+            "multidict>=6.9.1",
+            "Mako>=1.4.2",
         ],
     )
 
@@ -117,7 +119,7 @@ def test_security_floor_check_rejects_missing_or_vulnerable_floor(tmp_path: Path
 
 def test_security_floor_check_honors_extra_markers_and_higher_floors(tmp_path: Path) -> None:
     module = _module()
-    wheel = _wheel_with_requirements(tmp_path, ['PyJWT>=2.16.0; extra == "protect"'])
+    wheel = _wheel_with_requirements(tmp_path, ['PyJWT>=2.16.0; extra == "protect"', "multidict>=6.10.0"])
 
     ok, _ = module.check_security_floors("unifi-core", wheel)
 
