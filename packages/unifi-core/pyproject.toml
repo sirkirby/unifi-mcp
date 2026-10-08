@@ -21,7 +21,7 @@ protect = [
     "uiprotect>=16.16.1,<17",
     # uiprotect permits older PyJWT releases; published Core wheels must enforce
     # the advisory-safe floor even when installed over an existing environment.
-    "PyJWT>=2.13.0",
+    "PyJWT>=2.15.0",
 ]
 access = ["py-unifi-access>=1.6.1"]
 
