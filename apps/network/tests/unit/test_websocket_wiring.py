@@ -105,14 +105,33 @@ def test_the_listener_is_not_started_when_the_websocket_is_disabled() -> None:
         started.assert_not_awaited()
 
 
-def test_deferred_startup_skips_controller_and_event_listener() -> None:
+def test_deferred_startup_starts_listener_after_first_connection() -> None:
+    connection_ready = asyncio.Event()
+
+    async def wait_until_connected() -> None:
+        await connection_ready.wait()
+
+    async def run_transports(**_kwargs) -> None:
+        network_main.connection_manager.initialize.assert_not_awaited()
+        started.assert_not_awaited()
+        connection_ready.set()
+        await asyncio.sleep(0)
+        started.assert_awaited_once()
+
+    transports = AsyncMock(side_effect=run_transports)
     with (
         patch.dict(config.server, {"defer_controller_init": True}, clear=False),
-        _startup(connected=True, websocket_enabled=True) as (started, _, ran),
+        patch.object(
+            network_main.connection_manager,
+            "wait_until_connected",
+            AsyncMock(side_effect=wait_until_connected),
+        ) as waited,
+        _startup(connected=True, websocket_enabled=True, transports=transports) as (started, _, ran),
     ):
         asyncio.run(network_main.main_async())
         network_main.connection_manager.initialize.assert_not_awaited()
-        started.assert_not_awaited()
+        waited.assert_awaited_once()
+        started.assert_awaited_once()
         assert ran.await_count == 1
 
 

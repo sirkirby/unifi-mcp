@@ -67,8 +67,8 @@ The server auto-detects whether your controller uses UniFi OS proxy paths (`/pro
 | `UNIFI_MCP_LOG_LEVEL` | `INFO` | Logging level |
 | `UNIFI_AUTO_CONFIRM` | `false` | Skip preview-then-confirm for mutations (for automation) |
 | `UNIFI_TOOL_REGISTRATION_MODE` | `lazy` | Tool loading: `lazy`, `eager`, or `meta_only` |
-| `UNIFI_DEFER_CONTROLLER_INIT` | `false` | Defer the startup controller connection until the first tool call. The real-time event listener is not started in this mode. |
-| `UNIFI_META_TOOLS_ENABLED` | `true` | Eager mode only. Set to `false` to omit indirect meta-tools; `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` is then required. |
+| `UNIFI_DEFER_CONTROLLER_INIT` | `false` | Defer the startup controller connection until the first tool call. The real-time event listener starts in the background after that connection succeeds. |
+| `UNIFI_META_TOOLS_ENABLED` | `true` | Eager mode only. Set to `false` to omit indirect meta-tools, including `unifi_get_support_bundle`; `UNIFI_ENABLED_CATEGORIES` or `UNIFI_ENABLED_TOOLS` is then required. |
 | `UNIFI_ENABLED_CATEGORIES` | — | Comma-separated tool categories to load (eager mode only) |
 | `UNIFI_ENABLED_TOOLS` | — | Comma-separated tool names to register (eager mode only) |
 | `CONFIG_PATH` | — | Path to a custom config YAML file |

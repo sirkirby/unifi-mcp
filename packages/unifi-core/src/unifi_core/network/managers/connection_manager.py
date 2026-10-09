@@ -361,6 +361,7 @@ class ConnectionManager:
         self._key_retry_until = 0.0
         self._integration_prefix: str | None = None
         self._initialize_lock = asyncio.Lock()
+        self._connected_event = asyncio.Event()
         self.controller: Optional[Controller] = None
         self._aiohttp_session: Optional[aiohttp.ClientSession] = None
         self._initialized = False
@@ -609,6 +610,7 @@ class ConnectionManager:
         return result
 
     async def _discard_connection(self) -> None:
+        self._connected_event.clear()
         if self._aiohttp_session and not self._aiohttp_session.closed:
             await self._aiohttp_session.close()
         self._aiohttp_session = None
@@ -622,20 +624,27 @@ class ConnectionManager:
         initialization, never as a retry of an operation that may have mutated.
         """
         if not self._key_inventory_enabled or not self.unifi_auth.has_api_key:
-            return await self._initialize_session()
+            connected = await self._initialize_session()
+            if connected:
+                self._connected_event.set()
+            return connected
         async with self._initialize_lock:
             if self.integration_inventory_only or (
                 self._initialized and self._aiohttp_session and not self._aiohttp_session.closed
             ):
+                self._connected_event.set()
                 return True
             if self.username and self.password and await self._initialize_session():
                 self._key_mode = False
+                self._connected_event.set()
                 return True
             if _time.monotonic() < self._key_retry_until:
                 return False
             async with self._connect_lock:
                 succeeded = await self._initialize_key()
                 self._key_retry_until = 0.0 if succeeded else _time.monotonic() + _RECONNECT_BLOCK_BASE_SECONDS
+                if succeeded:
+                    self._connected_event.set()
                 return succeeded
 
     @property
@@ -732,6 +741,7 @@ class ConnectionManager:
                 self._auth_generation += 1
                 self._last_connection_error = None
                 self._support_attempt = connection_attempt_succeeded()
+                self._connected_event.set()
                 return True
         except AuthenticationRateLimitError:
             self._last_connection_error = "API-key capability probe rate limited; retry later."
@@ -756,6 +766,7 @@ class ConnectionManager:
                 self._key_mode = True
                 self._initialized = True
                 self._last_connection_error = None
+                self._connected_event.set()
                 return True
             except AuthenticationRateLimitError:
                 self._last_connection_error = "API-key capability probe rate limited; retry later."
@@ -997,6 +1008,7 @@ class ConnectionManager:
                     self._clear_reconnect_block()
                     logger.info("Successfully connected to Unifi controller at %s for site '%s'", self.host, self.site)
                     self._invalidate_cache()
+                    self._connected_event.set()
                     return True
 
                 except (
@@ -1064,6 +1076,10 @@ class ConnectionManager:
             logger.debug("connectivity.config.session attribute not found – skipping additional session check.")
 
         return True
+
+    async def wait_until_connected(self) -> None:
+        """Wait until a controller authentication route initializes successfully."""
+        await self._connected_event.wait()
 
     async def ensure_session_connected(self) -> bool:
         """Ensure a session-authenticated controller is available.
@@ -1143,6 +1159,7 @@ class ConnectionManager:
             self._last_connection_error = None
             self._support_attempt = connection_attempt_succeeded()
             self._clear_reconnect_block()
+            self._connected_event.set()
             logger.info("Controller session re-authenticated successfully")
             return True
 

@@ -2,11 +2,24 @@
 loop uses after a 401 handshake: aiounifi reuses the login cookie captured at
 login and never re-logs-in on its own."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiounifi.errors import RequestError
 from unifi_core.network.managers.connection_manager import ConnectionManager
+
+
+@pytest.mark.asyncio
+async def test_successful_initialize_releases_connection_waiters():
+    manager = ConnectionManager("controller.invalid", "admin", "secret")
+    manager._initialize_session = AsyncMock(return_value=True)
+    waiter = asyncio.create_task(manager.wait_until_connected())
+    await asyncio.sleep(0)
+
+    assert not waiter.done()
+    assert await manager.initialize() is True
+    await asyncio.wait_for(waiter, timeout=1)
 
 
 @pytest.mark.asyncio
