@@ -1,0 +1,674 @@
+{
+  "description": "unifi_list_events (records under top-level 'events') and protect_list_events (records under 'data.events') response envelopes.",
+  "input": {
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z"
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "adapter": "tool_response",
+        "tool": "unifi_list_events",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "within_hours": 2,
+          "limit": 100,
+          "start": 0
+        },
+        "scope": {
+          "site": "default"
+        },
+        "payload": {
+          "success": true,
+          "site": "default",
+          "count": 2,
+          "filters": {
+            "within_hours": 2,
+            "limit": 100,
+            "start": 0,
+            "event_type": null,
+            "categories": null,
+            "severities": null
+          },
+          "events": [
+            {
+              "id": "evt-net-0101",
+              "key": "CLIENT_DISCONNECTED_WIRELESS_2",
+              "msg": "fixture-phone disconnected from fixture-ap-1.",
+              "time": 1786193400000,
+              "mac": "aa:bb:cc:00:20:01",
+              "severity": "LOW",
+              "category": "CLIENT_DEVICES"
+            },
+            {
+              "id": "evt-net-0100",
+              "key": "THREAT_DETECTED_KNOWN_SOURCE_CLIENT",
+              "msg": "A network intrusion attempt from fixture-laptop to 198.51.100.99 has been detected.",
+              "time": 1786190700000,
+              "mac": "aa:bb:cc:00:20:02",
+              "severity": "HIGH",
+              "category": "SECURITY",
+              "ip": "192.0.2.21",
+              "src_ip": "192.0.2.21",
+              "dst_ip": "198.51.100.99"
+            }
+          ]
+        }
+      },
+      {
+        "adapter": "tool_response",
+        "tool": "protect_list_events",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "start": "2026-08-08T12:00:00Z",
+          "end": "2026-08-08T13:00:00Z",
+          "limit": 100
+        },
+        "scope": {},
+        "payload": {
+          "success": true,
+          "data": {
+            "events": [
+              {
+                "id": "evt-protect-0101",
+                "type": "ring",
+                "start": "2026-08-08T12:52:00+00:00",
+                "score": 0,
+                "smart_detect_types": [],
+                "camera": "cam-fixture-000a",
+                "end": "2026-08-08T12:52:05+00:00"
+              },
+              {
+                "id": "evt-protect-0100",
+                "type": "smartDetectZone",
+                "start": "2026-08-08T12:06:30.125000+00:00",
+                "score": 80,
+                "smart_detect_types": [
+                  "vehicle"
+                ],
+                "camera": "cam-fixture-000b",
+                "end": "2026-08-08T12:06:41+00:00"
+              }
+            ],
+            "count": 2
+          }
+        }
+      },
+      {
+        "adapter": "tool_response",
+        "tool": "protect_list_smart_detections",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "start": "2026-08-08T12:00:00Z",
+          "end": "2026-08-08T13:00:00Z",
+          "limit": 30,
+          "detection_type": "vehicle"
+        },
+        "scope": {},
+        "payload": {
+          "success": true,
+          "data": {
+            "detections": [
+              {
+                "id": "evt-protect-0100",
+                "type": "smartDetectZone",
+                "start": "2026-08-08T12:06:30.125000+00:00",
+                "score": 80,
+                "smart_detect_types": [
+                  "vehicle"
+                ],
+                "camera": "cam-fixture-000b",
+                "end": "2026-08-08T12:06:41+00:00"
+              }
+            ],
+            "count": 1
+          }
+        },
+        "source_id": "protect.smart_detections"
+      }
+    ]
+  },
+  "expected": {
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z",
+      "start_inclusive": true,
+      "end_inclusive": false
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "source_id": "network.events",
+        "product": "network",
+        "api_family": "network_v2_controller",
+        "source_tool": "unifi_list_events",
+        "endpoint": null,
+        "scope": {
+          "controller_id": null,
+          "site": "default",
+          "location_id": null
+        },
+        "query": {
+          "categories": null,
+          "event_type": null,
+          "limit": 100,
+          "severities": null,
+          "start": 0,
+          "within_hours": 2
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "complete",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T11:05:00.000000Z",
+            "end": "2026-08-08T13:05:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": "2026-08-08T12:05:00.000000Z",
+          "observed_last_utc": "2026-08-08T12:50:00.000000Z",
+          "filters": {},
+          "pagination": {
+            "offset": 0,
+            "cap": 100,
+            "returned": 2,
+            "has_more": null,
+            "total_reported": null,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 2,
+            "accepted": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0
+          },
+          "complete": true,
+          "population_total": 2
+        }
+      },
+      {
+        "source_id": "protect.events",
+        "product": "protect",
+        "api_family": "protect_private",
+        "source_tool": "protect_list_events",
+        "endpoint": "/proxy/protect/api/events",
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {
+          "camera_id": null,
+          "end": "2026-08-08T13:00:00Z",
+          "event_type": null,
+          "limit": 100,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "complete",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": "2026-08-08T12:06:30.125000Z",
+          "observed_last_utc": "2026-08-08T12:52:00.000000Z",
+          "filters": {},
+          "pagination": {
+            "offset": null,
+            "cap": 100,
+            "returned": 2,
+            "has_more": null,
+            "total_reported": null,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 2,
+            "accepted": 2,
+            "in_window": 2,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0
+          },
+          "complete": true,
+          "population_total": 2
+        }
+      },
+      {
+        "source_id": "protect.smart_detections",
+        "product": "protect",
+        "api_family": "protect_private",
+        "source_tool": "protect_list_smart_detections",
+        "endpoint": "/proxy/protect/api/events",
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {
+          "camera_id": null,
+          "detection_type": "vehicle",
+          "end": "2026-08-08T13:00:00Z",
+          "limit": 30,
+          "min_confidence": null,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "complete",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": "2026-08-08T12:06:30.125000Z",
+          "observed_last_utc": "2026-08-08T12:06:30.125000Z",
+          "filters": {
+            "detection_type": "vehicle"
+          },
+          "pagination": {
+            "offset": null,
+            "cap": 30,
+            "returned": 1,
+            "has_more": null,
+            "total_reported": null,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 1,
+            "accepted": 1,
+            "in_window": 1,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0
+          },
+          "complete": true,
+          "population_total": 1
+        }
+      }
+    ],
+    "records": [
+      {
+        "evidence_id": "network.events:evt-net-0100",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0100",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190700000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:05:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "THREAT_DETECTED_KNOWN_SOURCE_CLIENT",
+        "summary": "A network intrusion attempt from fixture-laptop to 198.51.100.99 has been detected.",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:02",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "category": "SECURITY",
+          "severity": "HIGH"
+        }
+      },
+      {
+        "evidence_id": "protect.events:evt-protect-0100",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "protect.events",
+        "provenance": {
+          "product": "protect",
+          "api_family": "protect_private",
+          "source_tool": "protect_list_events",
+          "endpoint": "/proxy/protect/api/events",
+          "scope": {
+            "controller_id": null,
+            "site": null,
+            "location_id": null
+          },
+          "source_record_id": "evt-protect-0100",
+          "source_record_id_field": "id",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "start",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:06:30.125000+00:00",
+          "original_format": "iso8601",
+          "utc": "2026-08-08T12:06:30.125000Z",
+          "utc_offset": "+00:00",
+          "timezone_basis": "explicit_offset",
+          "precision": "microsecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "smartDetectZone",
+        "summary": "smartDetectZone: vehicle",
+        "entities": [
+          {
+            "kind": "camera",
+            "id_kind": "protect_camera_id",
+            "id": "cam-fixture-000b",
+            "role": "camera"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "end": "2026-08-08T12:06:41+00:00",
+          "score": 80,
+          "smart_detect_types": [
+            "vehicle"
+          ]
+        }
+      },
+      {
+        "evidence_id": "protect.smart_detections:evt-protect-0100",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "protect.smart_detections",
+        "provenance": {
+          "product": "protect",
+          "api_family": "protect_private",
+          "source_tool": "protect_list_smart_detections",
+          "endpoint": "/proxy/protect/api/events",
+          "scope": {
+            "controller_id": null,
+            "site": null,
+            "location_id": null
+          },
+          "source_record_id": "evt-protect-0100",
+          "source_record_id_field": "id",
+          "query": {
+            "camera_id": null,
+            "detection_type": "vehicle",
+            "end": "2026-08-08T13:00:00Z",
+            "limit": 30,
+            "min_confidence": null,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "start",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:06:30.125000+00:00",
+          "original_format": "iso8601",
+          "utc": "2026-08-08T12:06:30.125000Z",
+          "utc_offset": "+00:00",
+          "timezone_basis": "explicit_offset",
+          "precision": "microsecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "smartDetectZone",
+        "summary": "smartDetectZone: vehicle",
+        "entities": [
+          {
+            "kind": "camera",
+            "id_kind": "protect_camera_id",
+            "id": "cam-fixture-000b",
+            "role": "camera"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "end": "2026-08-08T12:06:41+00:00",
+          "score": 80,
+          "smart_detect_types": [
+            "vehicle"
+          ]
+        }
+      },
+      {
+        "evidence_id": "network.events:evt-net-0101",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0101",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786193400000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:50:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "CLIENT_DISCONNECTED_WIRELESS_2",
+        "summary": "fixture-phone disconnected from fixture-ap-1.",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:01",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "category": "CLIENT_DEVICES",
+          "severity": "LOW"
+        }
+      },
+      {
+        "evidence_id": "protect.events:evt-protect-0101",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "protect.events",
+        "provenance": {
+          "product": "protect",
+          "api_family": "protect_private",
+          "source_tool": "protect_list_events",
+          "endpoint": "/proxy/protect/api/events",
+          "scope": {
+            "controller_id": null,
+            "site": null,
+            "location_id": null
+          },
+          "source_record_id": "evt-protect-0101",
+          "source_record_id_field": "id",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "start",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:52:00+00:00",
+          "original_format": "iso8601",
+          "utc": "2026-08-08T12:52:00.000000Z",
+          "utc_offset": "+00:00",
+          "timezone_basis": "explicit_offset",
+          "precision": "second",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "ring",
+        "summary": "ring",
+        "entities": [
+          {
+            "kind": "camera",
+            "id_kind": "protect_camera_id",
+            "id": "cam-fixture-000a",
+            "role": "camera"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "end": "2026-08-08T12:52:05+00:00",
+          "score": 0,
+          "smart_detect_types": []
+        }
+      }
+    ],
+    "overall": "complete",
+    "coverage_complete": true
+  }
+}

@@ -1,0 +1,224 @@
+{
+  "description": "Both sources succeed with no events and complete coverage: the only shape that may support an all-clear.",
+  "input": {
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z"
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "adapter": "tool_response",
+        "tool": "unifi_list_events",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "within_hours": 2,
+          "limit": 100,
+          "start": 0
+        },
+        "scope": {
+          "site": "default"
+        },
+        "payload": {
+          "success": true,
+          "site": "default",
+          "count": 0,
+          "filters": {
+            "within_hours": 2,
+            "limit": 100,
+            "start": 0,
+            "event_type": null,
+            "categories": null,
+            "severities": null
+          },
+          "events": []
+        }
+      },
+      {
+        "adapter": "tool_response",
+        "tool": "protect_list_events",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "start": "2026-08-08T12:00:00Z",
+          "end": "2026-08-08T13:00:00Z",
+          "limit": 100
+        },
+        "scope": {},
+        "payload": {
+          "success": true,
+          "data": {
+            "events": [],
+            "count": 0
+          }
+        }
+      }
+    ]
+  },
+  "expected": {
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z",
+      "start_inclusive": true,
+      "end_inclusive": false
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "source_id": "network.events",
+        "product": "network",
+        "api_family": "network_v2_controller",
+        "source_tool": "unifi_list_events",
+        "endpoint": null,
+        "scope": {
+          "controller_id": null,
+          "site": "default",
+          "location_id": null
+        },
+        "query": {
+          "categories": null,
+          "event_type": null,
+          "limit": 100,
+          "severities": null,
+          "start": 0,
+          "within_hours": 2
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "empty",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T11:05:00.000000Z",
+            "end": "2026-08-08T13:05:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "filters": {},
+          "pagination": {
+            "offset": 0,
+            "cap": 100,
+            "returned": 0,
+            "has_more": null,
+            "total_reported": null,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 0,
+            "accepted": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0
+          },
+          "complete": true,
+          "population_total": 0
+        }
+      },
+      {
+        "source_id": "protect.events",
+        "product": "protect",
+        "api_family": "protect_private",
+        "source_tool": "protect_list_events",
+        "endpoint": "/proxy/protect/api/events",
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {
+          "camera_id": null,
+          "end": "2026-08-08T13:00:00Z",
+          "event_type": null,
+          "limit": 100,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "empty",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "filters": {},
+          "pagination": {
+            "offset": null,
+            "cap": 100,
+            "returned": 0,
+            "has_more": null,
+            "total_reported": null,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 0,
+            "accepted": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0
+          },
+          "complete": true,
+          "population_total": 0
+        }
+      }
+    ],
+    "records": [],
+    "overall": "empty",
+    "coverage_complete": true
+  }
+}
