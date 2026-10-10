@@ -12,6 +12,7 @@ none of them define their own evidence semantics.
 | Protect normalizers | `packages/unifi-core/src/unifi_core/protect/incident_evidence.py` |
 | JSON Schema artifact | `tests/fixtures/incident_evidence/incident-evidence.v1.schema.json` |
 | Golden corpus | `tests/fixtures/incident_evidence/cases/*.json` |
+| Invalid corpus | `tests/fixtures/incident_evidence/invalid/*.json` |
 | Legacy timeline projection | `unifi_core.event_timeline.normalized_event_from_record` |
 
 Normalizers are pure: no controller I/O, no app imports. Collection (calling
@@ -27,9 +28,14 @@ are derived and validated, never trusted from the producer.
 - **Provenance.** Each record names its product, API family, source tool,
   endpoint when known, controller/site/location scope, query parameters,
   collection time, and the source record ID exactly as returned (string or
-  integer) with the field it came from. Records without an ID get a
-  `content_hash` evidence ID instead of an invented one. Secret-named keys are
-  excluded from queries and attributes; tool error text is never copied.
+  integer) with the field it came from. Evidence IDs are typed
+  (`<source>:int:7` and `<source>:str:7` are different records). Records
+  without an ID get a `<source>:sha256:<hash>` evidence ID instead of an
+  invented one. Identical repeats collapse into one record; differing records
+  under one source ID are all kept as a conflict group
+  (`<source>:str:<id>#<hash>`) and block complete coverage. Results do not
+  depend on input order. Secret-named keys are excluded from queries, filters
+  and attributes; tool error text is never copied.
 - **Time.** Windows are half-open, `start <= t < end`, compared in UTC at the
   timestamp's stated precision. Each record keeps the original field, type and
   value, the format (epoch seconds or milliseconds by magnitude, or ISO 8601),
@@ -46,15 +52,26 @@ are derived and validated, never trusted from the producer.
   and nearby timestamps never create a mapping or an identity. Protect
   recognized-face and plate fields are not carried.
 - **Coverage.** Each source reports requested and queried windows, filters,
-  pagination (offset, cap, returned, `has_more`, reported total), truncation
-  (`not_truncated`, `truncated`, `unknown`) and counts of received, accepted,
-  in-window, out-of-window, untimed, malformed and duplicate records.
-  `population_total` is set only when coverage is complete; a short page proves
-  completeness only when the read was not interrupted.
+  pagination (offset, requested and effective cap, returned, `has_more`,
+  reported total, whether results were filtered after the cap, whether the read
+  was interrupted), truncation (`not_truncated`, `truncated`, `unknown`) and
+  counts of received, accepted, in-window, out-of-window, untimed, malformed,
+  duplicate, conflicting and boundary-uncertain records. The queried window
+  comes from bounds captured around the request, never from collection time.
+  Coverage is complete only when the queried window covers the requested one,
+  the tail is not truncated, the read started at offset 0 and was not
+  interrupted, and no record is malformed, untimed, conflicting, or out of
+  window but within known clock uncertainty of a boundary. A short list after
+  an offset, after post-cap filtering, or at a clamped cap never proves
+  completeness. `population_total` is set only when coverage is complete.
 - **Failure.** Sources end `complete`, `empty`, `partial` (with sorted
   reasons), or one of `unavailable`, `auth_failed`, `permission_denied`,
   `timeout`, `unsupported`, `parse_failed`, `not_attempted`. A response that
-  broke off keeps its records as `partial` with the failure attached.
+  broke off keeps its records as `partial` with the failure attached. A failed
+  source makes no window or pagination claim. `failure_from_exception` never
+  raises; unclassifiable errors are `unavailable`. The Network event manager
+  raises `UniFiMalformedResponseError` for an unreadable envelope instead of
+  returning an empty list, which classifies as `parse_failed`.
 - **Overall.** `failed` when no source returned data, `empty` only when every
   source is a complete empty success, `complete` when every source is complete
   or empty and no budget is exhausted, otherwise `partial`. Only
@@ -77,9 +94,63 @@ Adapters follow the current manifests, not assumed uniform arguments:
 | `protect_list_smart_detections` | `start`, `end`, `limit`, `detection_type`, `camera_id`, `min_confidence`, `compact`, `metadata_fields` | `data.detections` |
 
 The context helpers (`network_events_context`, `network_alarms_context`,
-`protect_events_context`) derive the queried window the tool actually used,
-including Protect's fallback to the last 24 hours for a missing or unparseable
-`start`/`end`.
+`protect_events_context`) take the tool arguments plus what the collector
+captured around the call:
+
+- Network events need `request_started_at` (taken just before the call) and
+  `collected_at` (when it returned). The manager reads its clock somewhere in
+  between, so only `[collected_at - within_hours, request_started_at]` is
+  certainly covered. `start` is an offset; any value but 0 leaves a prefix
+  uncollected. `api_path` (`v2` or `legacy`) selects the effective cap: the
+  legacy path clamps to 3000, and an unknown path assumes it.
+- Network alarms read one v2 page of at most 100, or every legacy alarm; the
+  window is the v2 30-day lookback when `api_path="v2"` and
+  `request_started_at` are given, otherwise caller-supplied or unknown.
+- Protect `start`/`end` that are omitted or unparseable reach the controller as
+  no bound, so the queried window is unknown. `compact` and `metadata_fields`
+  are recorded in the query because `metadata_fields` changes the request path.
+  Smart detections are filtered by confidence after the controller applies
+  `limit`; the effective threshold (`min_confidence`, or the server's
+  `smart_detection_min_confidence`, exposed on the Protect `EventManager`) is
+  recorded and a non-zero threshold marks the list post-filtered.
+
+## What the JSON Schema checks, and what consumers must check
+
+The schema artifact encodes every rule that one JSON object can express on its
+own: closed objects and enums, `overall`/`coverage_complete` agreement with
+source outcomes and budget exhaustion, success/partial/failure outcome
+shapes, failure kind per outcome, complete-coverage preconditions (covered
+window, not truncated, offset 0, not interrupted, zero malformed, untimed,
+conflicting and boundary-uncertain records), placed versus unplaced times, and
+mapping outcome shapes.
+
+JSON Schema cannot compare values across objects or recompute derived values,
+so a schema-valid document can still overstate evidence. Consumers that do not
+call `validate_incident_evidence` must also check:
+
+1. Every source's `requested_window` equals the set's `requested_window`.
+2. Each record's time status, UTC value, format, offset, precision and
+   boundary flag follow from its original timestamp, clock uncertainty and the
+   half-open requested window.
+3. Each record's mapping equals resolving its entities against `mappings` by
+   exact identity (MACs compared case- and separator-insensitively).
+4. Window coverage follows from comparing the queried and requested windows;
+   truncation follows from pagination (`has_more`, reported total versus
+   offset plus returned, effective cap, post-filtering, interruption).
+5. Source counts, conflict groups and observed first/last times match the
+   records that cite the source; `population_total` equals the in-window count.
+6. `partial_reasons` are exactly the reasons the coverage establishes.
+7. Records cite a listed source, carry that source's provenance, have unique
+   evidence IDs derived from the typed source record ID, and are in
+   deterministic order.
+8. A window longer than the window budget is reported exhausted, and budget
+   usage agrees with the exhausted list.
+9. No secret-named key appears in queries, filters or attributes.
+
+`tests/fixtures/incident_evidence/invalid/` holds evidence sets that must be
+rejected. Cases with `"rejected_by": "schema"` fail schema validation alone;
+cases with `"rejected_by": "semantic"` pass the schema and must fail the checks
+above.
 
 ## Changing the contract
 
@@ -103,7 +174,7 @@ Python package tests and the worker's Vitest suite already read shared fixtures
 from there. Each case holds the raw per-source payloads and call arguments
 (`input`) and the normalized evidence (`expected`). TypeScript consumers
 validate `expected` against the schema artifact and must reproduce it from
-`input` without importing Python.
+`input` without importing Python, and reject every case under `invalid/`.
 
 `unifi_core.event_timeline` keeps `NormalizedEvent`, `merge_timelines` and
 `filter_by_area` unchanged for existing callers. `normalized_event_from_record`
