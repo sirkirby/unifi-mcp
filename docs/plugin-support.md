@@ -82,10 +82,14 @@ No minimum client version has been established for any client.
   `uvx --python-preference system <package>==<version>`.
 - Python 3.13 or newer. `uv` prefers a system Python and can fall back to a
   Python it manages.
+- For the setup helpers (`check-prereqs`, `set-env`), with any client: a
+  Python 3.11 or newer on `PATH`, or `uv`, which then supplies a managed
+  Python (possibly downloading it on first use). No separate Python install is
+  needed when `uv` is installed.
 - Network access to PyPI the first time a version is launched.
 - A reachable UniFi controller for the product, with the credentials described
   in each plugin's setup skill (`unifi-network-setup`, `unifi-protect-setup`,
   `unifi-access-setup`).
 - Codex and OpenClaw: the setup skill registers the server with the client's
   own MCP command (`codex mcp add`, `openclaw mcp set`), so that client's CLI
-  must be on `PATH`. OpenClaw setup also needs `python3`.
+  must be on `PATH`.

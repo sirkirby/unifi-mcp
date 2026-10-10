@@ -387,6 +387,38 @@ def test_support_doc_states_python_floor_and_current_versions() -> None:
         assert label in doc
 
 
+def test_support_doc_states_setup_helper_runtime() -> None:
+    doc = (REPO_ROOT / SUPPORT_DOC).read_text(encoding="utf-8")
+    helpers = sorted((REPO_ROOT / "plugins").glob("*/scripts/*.sh")) + sorted(
+        (REPO_ROOT / "plugins").glob("*/scripts/*.ps1")
+    )
+    floors = {
+        match
+        for helper in helpers
+        for match in re.findall(r"sys\.version_info >= \((\d+), (\d+)\)", helper.read_text(encoding="utf-8"))
+    }
+
+    assert helpers, "no setup helpers found"
+    assert len(floors) == 1, f"setup helpers disagree on the Python floor: {floors}"
+    major, minor = floors.pop()
+    assert f"Python {major}.{minor} or newer on `PATH`, or `uv`" in doc
+    assert "needs `python3`" not in doc
+
+
+@pytest.mark.parametrize("name", _advertised_bundles())
+def test_setup_skill_names_the_scoped_claude_reconnect(name: str) -> None:
+    bundle = REPO_ROOT / "plugins" / name
+    servers = (_load(bundle / ".mcp.json").get("mcpServers") or {}) if (bundle / ".mcp.json").is_file() else {}
+    if not servers:
+        pytest.skip("bundle declares no MCP server")
+    skill = (bundle / "skills" / f"{name}-setup" / "SKILL.md").read_text(encoding="utf-8")
+
+    for server in servers:
+        # Claude Code registers plugin servers as plugin:<plugin>:<server>; a cached
+        # start failure is retried only by an explicit reconnect of that name.
+        assert f"/mcp reconnect plugin:{name}:{server}" in skill
+
+
 @pytest.mark.parametrize("name", _advertised_bundles())
 def test_bundle_skill_frontmatter_is_valid(name: str) -> None:
     errors: list[str] = []
