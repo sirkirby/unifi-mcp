@@ -325,7 +325,9 @@ def main():
                 read_config(staged, target)
                 client(["openclaw", "config", "validate", "--json"], environment)
             staged.chmod(0o600)
-            with staged.open("rb") as handle:
+            # Windows FlushFileBuffers (used by fsync) requires write access.
+            # Reopen without truncating the complete, validated staged file.
+            with staged.open("r+b") as handle:
                 os.fsync(handle.fileno())
             if (destination.read_bytes() if destination.exists() else None) != original:
                 refuse("Configuration changed during setup; rerun against the latest settings.")

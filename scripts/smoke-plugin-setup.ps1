@@ -87,7 +87,7 @@ function Invoke-DirectPipeline {
     param([string]$Workspace, [string]$ScriptPath, [string]$JsonPath)
     $start = New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName = Get-CurrentShellPath
-    $start.Arguments = '-NoLogo -NoProfile -NonInteractive -Command "Get-Content -LiteralPath $env:PS_SETUP_INPUT_PATH -Raw | & $env:PS_SETUP_SCRIPT_PATH -InputJson"'
+    $start.Arguments = '-NoLogo -NoProfile -NonInteractive -Command "Get-Content -LiteralPath $env:PS_SETUP_INPUT_PATH -Raw -Encoding UTF8 | & $env:PS_SETUP_SCRIPT_PATH -InputJson"'
     $start.WorkingDirectory = $Workspace
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
@@ -156,7 +156,7 @@ $networkDir = Join-Path $RepositoryRoot 'plugins/unifi-network/scripts'
 $protectDir = Join-Path $RepositoryRoot 'plugins/unifi-protect/scripts'
 $accessDir = Join-Path $RepositoryRoot 'plugins/unifi-access/scripts'
 $networkScript = Join-Path $networkDir 'set-env.ps1'
-$testRoot = Join-Path $RepositoryRoot ('.setup-powershell-smoke-' + [Guid]::NewGuid().ToString('N'))
+$testRoot = Join-Path $RepositoryRoot ('.setup-powershell-smoke space-' + [Guid]::NewGuid().ToString('N'))
 $priorHome = $env:HOME
 $priorUserProfile = $env:USERPROFILE
 $priorCodexHome = $env:CODEX_HOME
@@ -206,7 +206,8 @@ try {
     $inputJson = '{"UNIFI_NETWORK_HOST":"192.0.2.1","UNIFI_NETWORK_PASSWORD":"' + $secret + '"}'
     $result = Invoke-PluginScript $workspace $networkScript @('-InputJson') $inputJson
     Assert-Equal $result.ExitCode 0 'JSON stdin setup succeeds'
-    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+    # Helpers write UTF-8 without a BOM; Windows PowerShell defaults to ANSI.
+    $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-Equal $settings.env.UNIFI_NETWORK_PASSWORD $secret 'UTF-8 secret is written exactly'
     Assert-Equal $settings.env.EXISTING 'keep' 'unrelated env is preserved'
     Assert-Equal @($settings.permissions.allow).Count 1 'single-item array is preserved'
@@ -216,15 +217,17 @@ try {
     Assert-NoReplacementArtifacts $workspace 'successful merge leaves no replacement artifacts'
     $result = Invoke-PluginScript $workspace $networkScript @('UNIFI_NETWORK_HOST=192.0.2.9')
     Assert-Equal $result.ExitCode 0 'legacy non-secret KEY=VALUE succeeds'
-    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+    $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-Equal $settings.env.UNIFI_NETWORK_HOST '192.0.2.9' 'legacy non-secret value is forwarded'
     $pipelineJsonPath = Join-Path $workspace 'pipeline-input.json'
-    [IO.File]::WriteAllText($pipelineJsonPath, $inputJson)
+    $pipelineSecret = $secret + '-pipeline-' + [char]::ConvertFromUtf32(0x1F600) + ' "quoted" \ tail'
+    $pipelineJson = ConvertTo-Json -InputObject @{ UNIFI_NETWORK_PASSWORD = $pipelineSecret } -Compress
+    [IO.File]::WriteAllText($pipelineJsonPath, $pipelineJson)
     $result = Invoke-DirectPipeline $workspace $networkScript $pipelineJsonPath
     Assert-Equal $result.ExitCode 0 'direct PowerShell JSON pipeline succeeds'
-    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
-    Assert-Equal $settings.env.UNIFI_NETWORK_PASSWORD $secret 'direct pipeline preserves UTF-8 secret'
-    Assert-True ($result.Output -notlike "*$secret*") 'direct pipeline output omits secret'
+    $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-Equal $settings.env.UNIFI_NETWORK_PASSWORD $pipelineSecret 'direct pipeline preserves UTF-8 secret'
+    Assert-True ($result.Output -notlike "*$pipelineSecret*") 'direct pipeline output omits secret'
 
     Write-Host '== Prerequisites and missing runtime =='
     $result = Invoke-PluginScript $workspace (Join-Path $networkDir 'check-prereqs.ps1') @('-Target', 'claude')
@@ -252,7 +255,7 @@ try {
     Assert-Equal (Get-BytesBase64 $settingsPath) $before 'dry run preserves exact bytes'
     $result = Invoke-PluginScript $workspace $networkScript @('-InputJson') '{"UNIFI_NETWORK_PASSWORD":null}'
     Assert-Equal $result.ExitCode 0 'null patch succeeds'
-    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+    $settings = Get-Content -LiteralPath $settingsPath -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-True ($null -eq $settings.env.PSObject.Properties['UNIFI_NETWORK_PASSWORD']) 'null removes the selected key'
 
     Write-Host '== Positional credential refusal =='

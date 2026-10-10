@@ -46,10 +46,10 @@ def fake_client(name):
             if mode == "stub":
                 return  # An alias stub can exit zero without running Python.
             sys.exit(1)  # Simulate a Python version below 3.11.
-        os.execv(sys.executable, [sys.executable, *args])
+        forward_runtime(args)
     if name == "uv":
         assert args[:5] == ["run", "--no-project", "--python", ">=3.11", "python"]
-        os.execv(sys.executable, [sys.executable, *args[5:]])
+        forward_runtime(args[5:])
     if name == "uvx":
         return
     if name == "codex":
@@ -72,6 +72,16 @@ def fake_client(name):
             path.write_text(json.dumps(document), encoding="utf-8")
         elif args[:2] == ["config", "validate"]:
             assert isinstance(document["mcp"]["servers"], dict)
+
+
+def forward_runtime(args):
+    # Windows execv exits the launcher with zero and does not quote spaced args.
+    # Wait for the real interpreter and propagate its status and byte streams.
+    sys.exit(
+        subprocess.run(
+            [sys.executable, *args], stdin=sys.stdin.buffer, stdout=sys.stdout.buffer, stderr=sys.stderr.buffer
+        ).returncode
+    )
 
 
 def executable(directory, name, source):
@@ -138,9 +148,34 @@ class Fixtures:
 
     def run(self):
         self.check_script_parity()
+        self.check_runtime_forwarding()
         for product in ("network", "protect", "access"):
             for target in ("claude", "codex", "openclaw"):
                 self.scenario(product, target)
+
+    def check_runtime_forwarding(self):
+        marker = b"FAKE-runtime-input\x00\xce\xa9\xf0\x9f\x98\x80\r\n"
+        for name, prefix in (("python", []), ("uv", ["run", "--no-project", "--python", ">=3.11", "python"])):
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    "--fake-client",
+                    name,
+                    *prefix,
+                    "-c",
+                    "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read()); "
+                    "sys.stderr.buffer.write(sys.argv[1].encode('utf-8')); sys.exit(23)",
+                    'FAKE spaced "argument" \\ tail',
+                ],
+                env=dict(os.environ, FIXTURE_ARGV=str(self.root / "runtime-argv.jsonl"), FIXTURE_PYTHON_MODE="second"),
+                input=marker,
+                capture_output=True,
+                timeout=30,
+            )
+            self.check(result.returncode == 23, "fake runtime propagates failing child status")
+            self.check(result.stdout == marker, "fake runtime preserves stdin bytes")
+            self.check(result.stderr == b'FAKE spaced "argument" \\ tail', "fake runtime preserves quoted arguments")
 
     def scenario(self, product, target):
         workspace = self.root / (product + "-" + target)
@@ -237,6 +272,31 @@ class Fixtures:
 
         seed()
         before = path.read_bytes()
+        # Exercise the Windows write-access requirement for fsync on POSIX too.
+        sync_injection = workspace / "sync-injection"
+        sync_injection.mkdir()
+        (sync_injection / "sitecustomize.py").write_text(
+            "import os\nfrom pathlib import Path\n"
+            "real_fsync = os.fsync\n"
+            "def fsync(fd):\n"
+            " if os.name != 'nt':\n"
+            "  import fcntl\n"
+            "  if fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_ACCMODE == os.O_RDONLY:\n"
+            "   raise OSError('Fixture flush requires a writable descriptor')\n"
+            " if os.environ.get('FIXTURE_FSYNC_FAIL'): raise OSError('Fixture flush failure')\n"
+            " real_fsync(fd)\n"
+            " Path(os.environ['FIXTURE_FSYNC_PATH']).write_text('flushed')\n"
+            "os.fsync = fsync\n",
+            encoding="utf-8",
+        )
+        sync_marker = workspace / "flushed"
+        sync_environment = {"PYTHONPATH": str(sync_injection), "FIXTURE_FSYNC_PATH": str(sync_marker)}
+        invoke({base: secret}, extra=sync_environment)
+        self.check(sync_marker.read_text() == "flushed", "staged configuration flushed through writable descriptor")
+        self.check(get_env(load())[base] == secret, "durable save preserves stdin exactly")
+        seed()
+        invoke({base: secret}, 1, dict(sync_environment, FIXTURE_FSYNC_FAIL="1"))
+        self.check(path.read_bytes() == before, "failed flush preserves exact prior configuration")
         # No real uv invocation or download: PATH contains only fixture launchers.
         runtime_bin = workspace / "runtime-bin"
         runtime_bin.mkdir()
@@ -446,7 +506,7 @@ def main():
     parser.add_argument("--powershell")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[1]
-    with tempfile.TemporaryDirectory(prefix=".setup-fixtures-", dir=repo) as temporary:
+    with tempfile.TemporaryDirectory(prefix=".setup fixtures-", dir=repo) as temporary:
         fixtures = Fixtures(Path(temporary), args.shell, args.powershell)
         fixtures.run()
         print(f"Fixture assertions: {fixtures.passes} passed")
