@@ -299,10 +299,12 @@ Each plugin ships with agent skills that go beyond raw tool access — they teac
 | **Network Health Check** | unifi-network | Batch diagnostics across devices, health subsystems, and alarms with reference docs for interpreting results |
 | **Firewall Manager** | unifi-network | Natural language firewall management with policy templates, config snapshots, and change tracking |
 | **Firewall Auditor** | unifi-network | Security audit with 16 benchmarks, 100-point scoring, topology analysis, and trend tracking |
-| **Security Digest** | unifi-protect | Cross-product event intelligence — summarizes camera, door, and network events with severity classification and correlation rules |
+| **Security Digest** | unifi-protect | Protect event summary with explicit coverage limits; optional Access and Network reads add correlation hypotheses |
 | **UniFi Access** | unifi-access | Door control, credentials, visitors, access policies — with real-time event streaming and activity summaries |
 
-Skills include reference documentation (device states, alarm types, firewall schemas, event catalogs) and Python scripts for deterministic operations (auditing, config export/diff, template application).
+Skills include reference documentation for device states, alarm types, firewall schemas, and event fields. The agent gathers and interprets evidence; the firewall score CLI computes scores from supported findings. Firewall snapshots, diffs, and template application follow the skill instructions.
+
+Each non-setup skill declares required and optional servers and requires a Coverage and Limitations section in reports. Missing required dependencies stop the workflow; optional missing sources, failed reads, and result caps are disclosed. Cross-product repository workflows require a separately available relay for merged timelines; see [Cross-Product Capabilities](docs/cross-product.md).
 
 ## Architecture
 

@@ -5,6 +5,37 @@ description: How to manage UniFi network infrastructure — devices, clients, fi
 
 # UniFi Network MCP Server
 
+## Dependencies
+
+Requires: network
+Optional: none
+
+Verify required tools through MCP discovery before collecting data; discovery alone
+does not prove controller connectivity or authorization. If a required server/tool
+is missing or a required read fails, stop and report it unavailable. Optional sources
+may be skipped only when the report visibly names the missing source and resulting
+coverage limits. Use the product setup skill for connection help; never request secrets.
+
+## Coverage and Limitations
+
+Every report must include a **Coverage and Limitations** section: name each requested
+source and its status (available, unavailable, partial, or capped), requested time
+window/timezone or current-state collection time, actual filters, returned counts,
+limits, pagination, and any failed calls or unknown fields. Counts describe retrieved
+records, not totals unless completeness is established. A successful empty query is
+an observation; a failed or missing source is unavailable, never an empty result.
+If a limit is reached, label the source capped unless further bounded reads establish
+coverage. If completeness cannot be established, label it partial. Do not claim
+complete coverage, all-clear, or overall health from unavailable, partial, or capped
+data; say “No concerning activity found in the retrieved records” when appropriate.
+
+Separate **Observations** (cite source/tool, record ID and timestamp when available),
+**Hypotheses** (correlations and alternative explanations), and **Identity** (only
+explicit source-backed credential/account attribution, with its limits). Timing,
+similar names, proximity, or absence of a matching event alone proves neither
+identity nor cause. A credential event identifies the recorded account, not who
+physically used it. Missing mappings or clock uncertainty limit correlations.
+
 You have access to a UniFi Network MCP server that lets you query and manage a UniFi Network Controller. It provides 209 tools covering devices, clients, firewall, VPN, routing, WLANs, Traffic Flows, statistics, and more.
 
 ## Tool Discovery

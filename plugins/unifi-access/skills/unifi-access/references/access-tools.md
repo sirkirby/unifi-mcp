@@ -244,27 +244,27 @@ If mutations fail with auth errors, the user likely needs to set `UNIFI_ACCESS_U
 
 ### "Security audit — who has access?"
 ```
-access_batch(tools=[
+access_batch(operations=[
     {"tool": "access_list_users"},
     {"tool": "access_list_credentials"},
     {"tool": "access_list_policies"},
     {"tool": "access_list_doors"},
-    {"tool": "access_get_activity_summary", "args": {"days": 30}}
+    {"tool": "access_get_activity_summary", "arguments": {"days": 30}}
 ])
 ```
 
 ### "A door reader seems offline"
 1. `access_list_devices` → check device connection state
 2. `access_get_device(device_id="...")` → detailed status including IP/MAC
-3. Cross-reference with Network: `unifi_lookup_by_ip(ip="<reader IP>")` → check network connectivity
+3. Cross-reference with Network: `unifi_lookup_by_ip(ip_address="<reader IP>")` → check network connectivity
 4. If needed: `access_reboot_device(device_id="...", confirm=true)` → reboot (requires permission)
 
 ### "Lock everything down"
 1. `access_list_doors` → get all door IDs
 2. Lock each door via batch:
 ```
-access_batch(tools=[
-    {"tool": "access_lock_door", "args": {"door_id": "door-1-uuid", "confirm": true}},
-    {"tool": "access_lock_door", "args": {"door_id": "door-2-uuid", "confirm": true}}
+access_batch(operations=[
+    {"tool": "access_lock_door", "arguments": {"door_id": "door-1-uuid", "confirm": true}},
+    {"tool": "access_lock_door", "arguments": {"door_id": "door-2-uuid", "confirm": true}}
 ])
 ```

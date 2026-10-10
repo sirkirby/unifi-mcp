@@ -11,6 +11,24 @@ Use `access_get_support_bundle` to collect the smallest useful, sanitized suppor
 returns JSON only to the configured MCP client; this skill never posts, uploads, comments,
 or opens an issue for the user.
 
+## Dependencies
+
+Requires: access
+Optional: none
+
+If the required server or tool is unavailable, stop collection and use the manual
+bug-report fields below. Tool discovery does not prove controller reachability.
+
+## Coverage and Limitations
+
+Include a **Coverage and Limitations** section in the local explanation. Preserve
+per-probe statuses from the bundle, including unavailable, unsupported, partial,
+and capped results. Summary is local/cache-only: it cannot establish controller
+connectivity or overall product health. Connectivity is one bounded request, not
+an exhaustive audit. Report the probe, collection time and limitations; never
+turn a failed/missing probe into a successful empty result or an all-clear.
+Separate observed bundle fields from diagnostic hypotheses; identity is not assessed.
+
 ## Choose the Probe
 
 - Start with `summary`. It is local/cache-only and does not contact the controller.

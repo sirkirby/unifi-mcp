@@ -5,7 +5,38 @@ description: Manage UniFi firewall policies using natural language — create, m
 
 # Firewall Manager
 
-You manage firewall policies on a UniFi network. Translate the user's intent into the right MCP tool calls, always preview before executing, and snapshot state around every mutation so a rollback path always exists.
+## Dependencies
+
+Requires: network
+Optional: none
+
+Verify required tools through MCP discovery before collecting data; discovery alone
+does not prove controller connectivity or authorization. If a required server/tool
+is missing or a required read fails, stop and report it unavailable. Optional sources
+may be skipped only when the report visibly names the missing source and resulting
+coverage limits. Use the product setup skill for connection help; never request secrets.
+
+## Coverage and Limitations
+
+Every report must include a **Coverage and Limitations** section: name each requested
+source and its status (available, unavailable, partial, or capped), requested time
+window/timezone or current-state collection time, actual filters, returned counts,
+limits, pagination, and any failed calls or unknown fields. Counts describe retrieved
+records, not totals unless completeness is established. A successful empty query is
+an observation; a failed or missing source is unavailable, never an empty result.
+If a limit is reached, label the source capped unless further bounded reads establish
+coverage. If completeness cannot be established, label it partial. Do not claim
+complete coverage, all-clear, or overall health from unavailable, partial, or capped
+data; say “No concerning activity found in the retrieved records” when appropriate.
+
+Separate **Observations** (cite source/tool, record ID and timestamp when available),
+**Hypotheses** (correlations and alternative explanations), and **Identity** (only
+explicit source-backed credential/account attribution, with its limits). Timing,
+similar names, proximity, or absence of a matching event alone proves neither
+identity nor cause. A credential event identifies the recorded account, not who
+physically used it. Missing mappings or clock uncertainty limit correlations.
+
+You manage firewall policies on a UniFi network. Translate the user's intent into the right MCP tool calls, always preview before executing, and snapshot state around every mutation as a manual reconstruction reference.
 
 There are no helper scripts in this skill — only references and tools. You drive the workflow:
 
@@ -26,7 +57,7 @@ This skill requires the `unifi-network` MCP server. Verify with `unifi_tool_inde
 
 Before doing anything else:
 
-- Confirm `UNIFI_NETWORK_HOST` (or `UNIFI_HOST`) is set. If not: *"UNIFI_NETWORK_HOST is not configured. Please run the `unifi-network-setup` skill before using this skill."*
+- Discover tools and check required read responses; server credentials may be supplied outside the agent's environment. Stop if required reads fail.
 - Verify the server responds by calling `unifi_tool_index`.
 
 ---
@@ -101,7 +132,7 @@ For app-aware rules (TikTok, YouTube, Steam, BitTorrent, etc.), consult `referen
 - `unifi_update_firewall_policy` — partial update via fetch-merge-put. Pass only the fields you want to change in `update_data` (e.g., `{"enabled": true}`). This is the canonical way to enable/disable a policy because it preserves all other fields.
 - `unifi_toggle_firewall_policy` — convenience wrapper for flipping `enabled`. Prefer `unifi_update_firewall_policy` with `update_data={"enabled": …}` — it's the canonical fetch-merge-put path and produces the same result with no special casing.
 - `unifi_get_firewall_policy_ordering` — read the user-defined policy ordering for a source/destination zone pair. Use this when rule placement matters; do not infer editable order from `index`.
-- `unifi_reorder_firewall_policies` — reorder user-defined policies for a source/destination zone pair. Pass the complete `orderedFirewallPolicyIds` object from the read tool, with only the intended movement applied. Preview first, then confirm.
+- `unifi_reorder_firewall_policies` — reorder user-defined policies for a source/destination zone pair. Pass the complete `orderedFirewallPolicyIds` object from the read response as `ordered_firewall_policy_ids`, with only the intended movement applied. These IDs belong to the Integration API ordering family; do not substitute V2 policy IDs. Read the ordering tool schema before calling. Preview first, then confirm.
 
 Policy ordering uses UniFi's official integration API and requires an API key (`UNIFI_API_KEY` or `UNIFI_NETWORK_API_KEY`). Local username/password controller sessions can read policies and zones, but they cannot call the ordering endpoint.
 The ordering endpoint uses integration API zone UUIDs internally. The local MCP manager accepts the normal `unifi_list_firewall_zones` IDs and translates them by zone name before calling the ordering endpoint.
