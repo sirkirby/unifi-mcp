@@ -37,6 +37,49 @@ settings and never executes a provider. It also checks the inherited environment
 correct conflicting provider spellings in the client launcher before retrying.
 Raw credentials belong only in private stdin input, never command arguments.
 
+## Claude Code plugin options
+
+In Claude Code, each plugin keeps its settings as plugin options (`userConfig`)
+rather than environment settings:
+
+- Non-secret options, including `password_file`, `password_command`,
+  `api_key_file` and `api_key_command`, are saved in the user's
+  `~/.claude/settings.json` under `pluginConfigs`.
+- The `password` and `api_key` options are sensitive: Claude Code stores them in
+  the system keychain.
+- The options apply in every project. They reach only that plugin's MCP server,
+  not Bash commands, hooks or other servers.
+
+Setup saves the options with `claude plugin configure --values-stdin`. They can
+also be edited from `/plugin`, then the plugin, then Configure options.
+
+The plugin's `.mcp.json` maps each option onto its product-specific variable,
+for example `UNIFI_NETWORK_PASSWORD_FILE`. It always sets all three spellings
+of each secret, and an unset option arrives as an empty value, which counts as
+unset. So a product-level spelling can come only from the plugin's options:
+
+- A `UNIFI_<SERVER>_*` value inherited from the environment or from older
+  project settings cannot add a second spelling.
+- Shared `UNIFI_*` providers still apply when the product options are empty.
+- Setting a second source in the options dialog refuses startup, the same as two
+  environment spellings.
+
+The safety options always carry a value:
+
+| Options | Default |
+|---|---|
+| Create, update and delete gates (`UNIFI_POLICY_<SERVER>_<ACTION>`) | `false` |
+| Permission mode | `confirm` |
+| Auto-confirm | `false` |
+| Tool registration | `lazy` |
+
+Per-category policy overrides have no Claude Code option.
+
+Plugin versions before this change stored Claude Code settings in the project's
+`.claude/settings.local.json`, which plugin servers received only after a startup
+race. `set-env.sh --target claude --migrate` (or `set-env.ps1 -Target claude
+-Migrate`) moves them into the options.
+
 ## Startup failures
 
 Every failure refuses startup with exit code 6 and names the variable. Nothing

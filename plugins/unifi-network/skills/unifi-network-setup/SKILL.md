@@ -33,7 +33,7 @@ When the host exposes a plugin-root variable such as `CLAUDE_PLUGIN_ROOT`, using
 
 On Windows, use `../../scripts/set-env.ps1 -Target <claude|codex|openclaw>`
 for every target. Use the matching PowerShell prerequisite checker. Both helpers
-require uv/uvx; Codex and OpenClaw also require their client CLI. A working
+require uv/uvx and the selected client's CLI (`claude`, `codex` or `openclaw`). A working
 Python 3.11+ on PATH is used first; otherwise uv supplies managed Python
 (with a possible first-run download). No separate Python installation is needed.
 Do not substitute direct client registration commands, which can expose env
@@ -79,7 +79,10 @@ call or command argument. Ask for exactly one indirect provider per secret:
 `UNIFI_NETWORK_API_KEY_COMMAND=<absolute argv>`. A command provider can call a
 Keychain, `pass`, or 1Password helper; it is not run through a shell and must not
 prompt. If no indirect provider already exists, explain how to create one outside
-the chat transcript or use a client-native masked secret UI, then wait.
+the chat transcript or use a client-native masked secret UI, then wait. In Claude
+Code that UI is the plugin's options dialog (`/plugin`, then `unifi-network`, then
+Configure options): its password and API key fields are masked and stored in
+the system keychain.
 
 All three servers apply the same precedence: non-empty `UNIFI_<PRODUCT>_*`
 values override shared `UNIFI_*` values; empty values count as unset. This applies
@@ -123,7 +126,17 @@ Ask whether to enable write permissions:
 - Enable all write permissions except delete operations
 - Custom categories
 
-Before writing policy values, inspect a sanitized list of the selected client's
+For Claude Code, the plugin's options hold only the server-level gates. Offer:
+read-only (the default), allow updates, allow creates and updates, or allow
+creates, updates and deletes. Set `UNIFI_POLICY_NETWORK_CREATE`,
+`UNIFI_POLICY_NETWORK_UPDATE` and `UNIFI_POLICY_NETWORK_DELETE` to `true` or `false`,
+and keep `UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm` so every mutation is previewed
+first. Per-category overrides (`UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>`) are not
+available for Claude Code and setup refuses them. A user who wants only some
+categories writable can allow the action server-wide and decline the previews
+they do not want, or keep the action off.
+
+For Codex and OpenClaw, before writing policy values, inspect a sanitized list of the selected client's
 existing `unifi-network` MCP environment variable names.
 Remove every existing category-specific
 `UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>` entry by including null deletions
@@ -159,10 +172,11 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
   UNIFI_POLICY_NETWORK_DELETE=false
 ```
 
-Add optional values and policy variables to the same command, for example:
+Add optional values and policy variables to the same command. Per-category
+overrides apply to Codex and OpenClaw only, for example:
 
 ```bash
-bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
+bash <path-to-plugin>/scripts/set-env.sh --target <codex|openclaw> \
   UNIFI_NETWORK_HOST=<host> \
   UNIFI_NETWORK_USERNAME=<username> \
   'UNIFI_NETWORK_PASSWORD_COMMAND=<absolute-argv>' \
@@ -175,7 +189,10 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
 ```
 
 The script handles the client-specific write:
-- Claude: validates and atomically merges `.claude/settings.local.json`
+- Claude: validates every value, then saves the plugin's Claude Code options
+  with `claude plugin configure --values-stdin` (values on stdin): non-secret
+  options in user `settings.json` (`pluginConfigs`), a raw password or API key
+  in the system keychain. The options apply in every project
 - Codex: stages registration in a private `CODEX_HOME`, merges env without argv,
   validates with the client, then atomically replaces `config.toml`
 - OpenClaw: stages `mcp set` without credentials, merges env, validates offline,
@@ -208,6 +225,24 @@ versions in `config.toml`, and prints the pinned package on success. Confirm tha
 version matches the new installed plugin. Use ordinary setup first if there is
 no saved MCP entry; use the new plugin's scripts rather than an older cache path.
 
+### Claude Code projects set up by an earlier plugin version
+
+Earlier versions saved Claude Code settings in the project's
+`.claude/settings.local.json`. This version no longer reads them; setup, the
+prerequisite check and a session-start notice name the leftover variables. From
+that project, run:
+
+```bash
+bash <plugin-root>/scripts/set-env.sh --target claude --migrate
+```
+
+On Windows: `& <plugin-root>/scripts/set-env.ps1 -Target claude -Migrate`. It
+copies this plugin's settings into its options, then removes them from the
+project file. It prints only variable names: what it moved, what has no Claude
+Code option (per-category policy overrides) and the shared `UNIFI_*` settings it
+left for the other UniFi plugins. A missing provider file stops it with nothing
+changed. Then start a new session and check `/mcp`.
+
 ### Recovery
 
 On validation, dependency, registration, or write failure the previous file and
@@ -225,7 +260,7 @@ publication leaves either the old configuration or the complete new one.
 
 For Claude Code, tell the user:
 
-"Configuration saved to `.claude/settings.local.json`. Exit Claude Code and start a new session in this project, then run `/mcp` and check that `plugin:unifi-network:unifi-network` is connected. If it shows as failed, run `/mcp reconnect plugin:unifi-network:unifi-network`: after a failed start, Claude Code can skip the server for up to 15 minutes, and `/reload-plugins` does not retry it. `claude mcp list` does not apply project settings, so it reports this server as failed even when it connects in a session."
+"Saved as the unifi-network plugin's Claude Code options (a raw password or API key goes to the system keychain). Exit Claude Code and start a new session, then run `/mcp` and check that `plugin:unifi-network:unifi-network` is connected. If it shows as failed, run `/mcp reconnect plugin:unifi-network:unifi-network`: after a failed start, Claude Code can skip the server for up to 15 minutes, and `/reload-plugins` does not retry it. Review or change the options with `/plugin`, then `unifi-network`, then Configure options."
 
 For Codex, tell the user:
 
