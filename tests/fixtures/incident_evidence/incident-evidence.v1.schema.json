@@ -189,6 +189,112 @@
         {
           "if": {
             "properties": {
+              "truncation": {
+                "const": "not_truncated"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pagination": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "has_more": {
+                        "const": false
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "post_filtered": {
+                        "const": false
+                      },
+                      "total_reported": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                ],
+                "properties": {
+                  "interrupted": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "truncation": {
+                "const": "truncated"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pagination": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "has_more": {
+                        "const": true
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "post_filtered": {
+                        "const": false
+                      },
+                      "total_reported": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "else": {
+            "properties": {
+              "observed_first_utc": {
+                "type": "string"
+              },
+              "observed_last_utc": {
+                "type": "string"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "counts": {
+                "properties": {
+                  "in_window": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observed_first_utc": {
+                "type": "null"
+              },
+              "observed_last_utc": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
               "pagination": {
                 "properties": {
                   "has_more": {
@@ -276,6 +382,12 @@
                 "type": "null"
               }
             ]
+          },
+          "propertyNames": {
+            "not": {
+              "pattern": "pass|psk|secret|token|auth|cookie|key|community|pin|rtsp|crypt|configuration"
+            },
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
           },
           "title": "Filters",
           "type": "object"
@@ -455,6 +567,29 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "malformed",
+                  "ambiguous_timezone",
+                  "missing"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "timezone_basis": {
+                "type": "null"
+              },
+              "utc_offset": {
+                "type": "null"
+              }
+            }
+          }
         }
       ],
       "properties": {
@@ -609,12 +744,19 @@
               }
             ]
           },
+          "propertyNames": {
+            "not": {
+              "pattern": "pass|psk|secret|token|auth|cookie|key|community|pin|rtsp|crypt|configuration"
+            },
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
           "title": "Attributes",
           "type": "object"
         },
         "conflict_group": {
           "anyOf": [
             {
+              "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}\\|(?:int|str)\\|[A-Za-z0-9%._~-]+$",
               "type": "string"
             },
             {
@@ -644,6 +786,7 @@
           "title": "Event Type"
         },
         "evidence_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}\\|(?:(?:int|str)\\|[A-Za-z0-9%._~-]+(?:\\|version\\|[0-9a-f]{24})?|sha256\\|[0-9a-f]{24})$",
           "title": "Evidence Id",
           "type": "string"
         },
@@ -1094,6 +1237,12 @@
                 "type": "null"
               }
             ]
+          },
+          "propertyNames": {
+            "not": {
+              "pattern": "pass|psk|secret|token|auth|cookie|key|community|pin|rtsp|crypt|configuration"
+            },
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
           },
           "title": "Query",
           "type": "object"
@@ -1740,6 +1889,12 @@
                 "type": "null"
               }
             ]
+          },
+          "propertyNames": {
+            "not": {
+              "pattern": "pass|psk|secret|token|auth|cookie|key|community|pin|rtsp|crypt|configuration"
+            },
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
           },
           "title": "Query",
           "type": "object"

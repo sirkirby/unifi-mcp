@@ -22,7 +22,7 @@
     "mappings": null,
     "sources": [
       {
-        "adapter": "tool_response",
+        "adapter": "page",
         "tool": "unifi_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -37,22 +37,20 @@
           "site": "default"
         },
         "payload": {
-          "success": true,
-          "site": "default",
-          "count": 0,
-          "filters": {
-            "within_hours": 2,
-            "limit": 100,
-            "start": 0,
-            "event_type": null,
-            "categories": null,
-            "severities": null
-          },
-          "events": []
+          "rows": [],
+          "has_more": false,
+          "total_reported": null,
+          "offset": 0,
+          "cap": 100,
+          "api_path": "v2",
+          "submitted_window_ms": [
+            1786187099000,
+            1786194299000
+          ]
         }
       },
       {
-        "adapter": "tool_response",
+        "adapter": "page",
         "tool": "protect_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -62,11 +60,14 @@
         },
         "scope": {},
         "payload": {
-          "success": true,
-          "data": {
-            "events": [],
-            "count": 0
-          }
+          "rows": [],
+          "has_more": false,
+          "total_reported": null,
+          "cap": 100,
+          "submitted_window_ms": [
+            1786190400000,
+            1786194000000
+          ]
         }
       }
     ]
@@ -101,7 +102,7 @@
         "product": "network",
         "api_family": "network_v2_controller",
         "source_tool": "unifi_list_events",
-        "endpoint": null,
+        "endpoint": "/system-log/all",
         "scope": {
           "controller_id": null,
           "site": "default",
@@ -127,7 +128,7 @@
             "end_inclusive": false
           },
           "queried_window": {
-            "start": "2026-08-08T11:05:00.000000Z",
+            "start": "2026-08-08T11:04:59.000000Z",
             "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
@@ -141,7 +142,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 0,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -206,7 +207,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 0,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false

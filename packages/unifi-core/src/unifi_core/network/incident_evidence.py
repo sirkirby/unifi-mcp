@@ -37,6 +37,7 @@ from unifi_core.incident_evidence import (
     SourceEvidence,
     SourceFailure,
     TimeWindow,
+    apply_source_page,
     collect_source,
     format_utc,
     records_from_tool_response,
@@ -44,6 +45,7 @@ from unifi_core.incident_evidence import (
 )
 from unifi_core.mac import looks_like_mac
 from unifi_core.network.models.events import threat_event_log_from_controller
+from unifi_core.source_page import SourcePage
 
 LIST_EVENTS_TOOL = "unifi_list_events"
 LIST_ALARMS_TOOL = "unifi_list_alarms"
@@ -151,15 +153,20 @@ _EVENT_ENDPOINTS = {"v2": "/system-log/all", "legacy": "/stat/event"}
 _ALARM_ENDPOINTS = {"v2": "/system-log/critical", "legacy": "/stat/alarm"}
 
 
+def _floor_ms(value: datetime) -> datetime:
+    return value.replace(microsecond=value.microsecond - value.microsecond % 1000)
+
+
 def _guaranteed_window(span: timedelta, request_started_at: datetime, collected_at: datetime) -> TimeWindow | None:
     """The interval a relative lookback covered whenever the manager read its clock.
 
-    The manager takes "now" somewhere between ``request_started_at`` and
-    ``collected_at``; only the overlap of every possible window is certain.
+    The manager reads "now" somewhere between ``request_started_at`` and
+    ``collected_at`` and floors it to milliseconds before sending it; only
+    the overlap of every possible window is certain.
     """
     if request_started_at > collected_at:
         raise ValueError("request_started_at must not be after collected_at")
-    start, end = collected_at - span, request_started_at
+    start, end = collected_at - span, _floor_ms(request_started_at)
     return TimeWindow.from_datetimes(start, end) if start < end else None
 
 
@@ -175,6 +182,16 @@ def effective_alarms_cap(limit: int, api_path: ApiPath | None) -> int:
     return limit if api_path == "legacy" else min(limit, V2_ALARMS_PAGE_CAP)
 
 
+def _page_api_path(page: SourcePage | None, api_path: ApiPath | None) -> ApiPath | None:
+    if page is None or page.api_path is None:
+        return api_path
+    if api_path is not None and api_path != page.api_path:
+        raise ValueError("api_path disagrees with the page the manager returned")
+    if page.api_path not in ("v2", "legacy"):
+        raise ValueError("unknown Network api_path on the page")
+    return page.api_path  # type: ignore[return-value]
+
+
 def network_events_context(
     *,
     requested_window: TimeWindow,
@@ -187,6 +204,7 @@ def network_events_context(
     categories: Sequence[str] | None = None,
     severities: Sequence[str] | None = None,
     api_path: ApiPath | None = None,
+    page: SourcePage | None = None,
     source_id: str = "network.events",
     site: str | None = None,
     controller_id: str | None = None,
@@ -196,13 +214,19 @@ def network_events_context(
 ) -> SourceContext:
     """Describe one ``unifi_list_events`` call; arguments mirror the tool's.
 
+    Pass the ``page`` from ``EventManager.get_events_page``: it carries the
+    path that answered, the remote total, whether more rows exist, and on the
+    v2 path the exact millisecond bounds submitted. Without a page nothing
+    establishes that the read reached the end, so coverage is never complete.
+
     ``request_started_at`` is captured immediately before the call and
-    ``collected_at`` when it returned; the lookback is relative to the
-    manager's own clock reading between them. ``start`` is an offset, so any
-    value but 0 leaves the skipped prefix uncollected. ``api_path`` names the
-    path that answered when known; otherwise the smaller legacy cap applies.
+    ``collected_at`` when it returned. They bound the window only when the
+    page does not record submitted bounds (the legacy path asks the
+    controller for a relative lookback). ``start`` is an offset, so any value
+    but 0 leaves the skipped prefix uncollected.
     """
-    return SourceContext(
+    api_path = _page_api_path(page, api_path)
+    context = SourceContext(
         source_id=source_id,
         product=Product.NETWORK,
         api_family=ApiFamily.NETWORK_V2_CONTROLLER,
@@ -234,6 +258,7 @@ def network_events_context(
         cap=effective_events_cap(limit, api_path),
         clock_uncertainty_ms=clock_uncertainty_ms,
     )
+    return apply_source_page(context, page) if page is not None else context
 
 
 def network_alarms_context(
@@ -243,6 +268,7 @@ def network_alarms_context(
     include_archived: bool = False,
     limit: int = 100,
     api_path: ApiPath | None = None,
+    page: SourcePage | None = None,
     request_started_at: datetime | None = None,
     queried_window: TimeWindow | None = None,
     source_id: str = "network.alarms",
@@ -254,14 +280,16 @@ def network_alarms_context(
 ) -> SourceContext:
     """Describe one ``unifi_list_alarms`` call.
 
-    The tool takes no time range and does not say which path answered. With
-    ``api_path="v2"`` and ``request_started_at`` the fixed 30-day lookback is
-    used; otherwise the queried window is ``queried_window`` or unknown. The
-    v2 path reads one page of at most 100 alarms.
+    Pass the ``page`` from ``EventManager.get_alarms_page``: it carries the
+    remote total, continuation state and, on the v2 path, the exact 30-day
+    bounds submitted. The legacy path reads every alarm, so its window is
+    whatever the caller supplies as ``queried_window``. Without a page
+    coverage is never complete.
     """
+    api_path = _page_api_path(page, api_path)
     if queried_window is None and api_path == "v2" and request_started_at is not None:
         queried_window = _guaranteed_window(ALARM_V2_LOOKBACK, request_started_at, collected_at)
-    return SourceContext(
+    context = SourceContext(
         source_id=source_id,
         product=Product.NETWORK,
         api_family=ApiFamily.NETWORK_V2_CONTROLLER,
@@ -277,6 +305,7 @@ def network_alarms_context(
         cap=effective_alarms_cap(limit, api_path),
         clock_uncertainty_ms=clock_uncertainty_ms,
     )
+    return apply_source_page(context, page) if page is not None else context
 
 
 def normalize_network_records(
@@ -288,6 +317,13 @@ def normalize_network_records(
 ) -> SourceEvidence:
     """Normalize manager records or tool-projected records for one source."""
     return collect_source(context, records, extract_network_record, failure=failure, budget_exhausted=budget_exhausted)
+
+
+def normalize_network_page(
+    page: SourcePage, context: SourceContext, *, budget_exhausted: bool = False
+) -> SourceEvidence:
+    """Normalize a manager page; rows the manager could not read count as malformed."""
+    return normalize_network_records(page.rows, context, budget_exhausted=budget_exhausted)
 
 
 def normalize_network_tool_response(

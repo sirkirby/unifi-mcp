@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from unifi_core.incident_evidence import (
@@ -15,15 +17,18 @@ from unifi_core.incident_evidence import (
     SourceOutcome,
     TimestampFormat,
     TimeWindow,
+    Truncation,
 )
 from unifi_core.protect.incident_evidence import (
     LIST_EVENTS_TOOL,
     LIST_SMART_DETECTIONS_TOOL,
     TOOL_RECORD_PATHS,
+    normalize_protect_page,
     normalize_protect_records,
     normalize_protect_tool_response,
     protect_events_context,
 )
+from unifi_core.protect.managers.event_manager import EventManager
 from unifi_core.protect.models.events import from_controller, smart_detection_from_controller
 
 REPO = Path(__file__).resolve().parents[4]
@@ -112,7 +117,8 @@ def test_raw_nvr_rows_use_epoch_milliseconds() -> None:
 @pytest.mark.parametrize(
     ("tool", "project", "key", "outcome"),
     [
-        (LIST_EVENTS_TOOL, from_controller, "events", SourceOutcome.COMPLETE),
+        # Tool envelopes carry no continuation state, so they are never complete on their own.
+        (LIST_EVENTS_TOOL, from_controller, "events", SourceOutcome.PARTIAL),
         # Confidence filtering runs after the controller's limit, so a short list proves nothing.
         (LIST_SMART_DETECTIONS_TOOL, smart_detection_from_controller, "detections", SourceOutcome.PARTIAL),
     ],
@@ -198,7 +204,7 @@ def test_limit_reached_is_not_a_complete_listing() -> None:
 
 def test_window_after_requested_start_is_partial() -> None:
     source = normalize_protect_records([], _context(start="2026-08-08T12:30:00Z")).source
-    assert source.partial_reasons == (PartialReason.WINDOW_NOT_COVERED,)
+    assert PartialReason.WINDOW_NOT_COVERED in source.partial_reasons
 
 
 def test_camera_reference_objects_resolve_to_their_id() -> None:
@@ -209,3 +215,83 @@ def test_camera_reference_objects_resolve_to_their_id() -> None:
 def test_unknown_tool_is_rejected() -> None:
     with pytest.raises(ValueError):
         protect_events_context(requested_window=WINDOW, collected_at=COLLECTED, source_tool="unifi_protect_list_events")
+
+
+# --- pages from the real Protect EventManager ------------------------------------
+
+
+def _protect_manager(rows, *, min_confidence=50):
+    client = SimpleNamespace(api_request_list=AsyncMock(return_value=rows), get_events=AsyncMock(return_value=[]))
+    return EventManager(SimpleNamespace(client=client), {"smart_detection_min_confidence": min_confidence}), client
+
+
+@pytest.mark.asyncio
+async def test_short_unfiltered_page_proves_the_end_and_is_complete() -> None:
+    manager, client = _protect_manager([RAW_NVR_EVENT])
+    page = await manager.list_events_page(start=START, end=START + timedelta(hours=1), camera_id=CAMERA, limit=30)
+    params = client.api_request_list.call_args.kwargs["params"]
+    assert page.has_more is False and page.cap == 30
+    assert page.submitted_window_ms == (params["start"], params["end"])
+    source = normalize_protect_page(page, _context(camera_id=CAMERA, page=page)).source
+    assert source.outcome is SourceOutcome.COMPLETE
+
+
+@pytest.mark.asyncio
+async def test_full_page_is_not_proof_of_the_end() -> None:
+    manager, _ = _protect_manager([dict(RAW_NVR_EVENT, id=f"e{i}") for i in range(3)])
+    page = await manager.list_events_page(start=START, end=START + timedelta(hours=1), camera_id=CAMERA, limit=3)
+    assert page.has_more is None
+    source = normalize_protect_page(page, _context(camera_id=CAMERA, limit=3, page=page)).source
+    assert source.coverage.truncation is Truncation.UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_confidence_filter_after_a_full_raw_page_stays_partial() -> None:
+    raw = [dict(RAW_NVR_EVENT, id=f"e{i}", type="smartDetectZone", score=95 if i == 0 else 70) for i in range(17)]
+    manager, _ = _protect_manager(raw, min_confidence=75)
+    page = await manager.list_smart_detections_page(
+        start=START, end=START + timedelta(hours=1), camera_id=CAMERA, limit=17
+    )
+    assert len(page.rows) == 1 and page.post_filtered and page.has_more is None
+    context = _context(
+        source_tool=LIST_SMART_DETECTIONS_TOOL,
+        camera_id=CAMERA,
+        limit=17,
+        server_min_confidence=manager.smart_detection_min_confidence,
+        page=page,
+    )
+    source = normalize_protect_page(page, context).source
+    assert source.outcome is SourceOutcome.PARTIAL
+    assert PartialReason.POST_FILTERED in source.partial_reasons
+    assert context.filters["min_confidence_effective"] == 75
+
+
+@pytest.mark.asyncio
+async def test_confidence_filter_after_a_short_raw_page_is_complete_for_that_filter() -> None:
+    raw = [dict(RAW_NVR_EVENT, id=f"e{i}", type="smartDetectZone", score=95 if i == 0 else 70) for i in range(4)]
+    manager, _ = _protect_manager(raw, min_confidence=75)
+    page = await manager.list_smart_detections_page(
+        start=START, end=START + timedelta(hours=1), camera_id=CAMERA, limit=17
+    )
+    assert page.has_more is False and page.post_filtered
+    context = _context(source_tool=LIST_SMART_DETECTIONS_TOOL, camera_id=CAMERA, limit=17, page=page)
+    assert normalize_protect_page(page, context).source.outcome is SourceOutcome.COMPLETE
+
+
+@pytest.mark.asyncio
+async def test_omitted_bounds_submit_no_window() -> None:
+    manager, client = _protect_manager([])
+    page = await manager.list_events_page(camera_id=CAMERA)
+    assert page.submitted_window_ms is None
+    assert "start" not in client.api_request_list.call_args.kwargs["params"]
+    context = protect_events_context(requested_window=WINDOW, collected_at=COLLECTED, camera_id=CAMERA, page=page)
+    assert context.queried_window is None
+
+
+@pytest.mark.parametrize("field", ["recognized_person_name", "recognized_plate_text", "camera_name", "thumbnail_id"])
+def test_excluded_fields_do_not_change_identity_or_create_conflicts(field) -> None:
+    rows = [dict(RAW_NVR_EVENT, **{field: "fixture-a"}), dict(RAW_NVR_EVENT, **{field: "fixture-b"})]
+    source = normalize_protect_records(rows, _context())
+    assert len(source.records) == 1
+    assert source.source.coverage.counts.conflicting == 0
+    assert source.source.coverage.counts.duplicates_dropped == 1

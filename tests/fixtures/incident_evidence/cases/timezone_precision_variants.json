@@ -22,7 +22,7 @@
     "mappings": null,
     "sources": [
       {
-        "adapter": "records",
+        "adapter": "page",
         "tool": "unifi_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -36,45 +36,56 @@
         "scope": {
           "site": "default"
         },
-        "payload": [
-          {
-            "id": "evt-net-0901",
-            "key": "K",
-            "msg": "epoch seconds",
-            "time": 1786191000,
-            "mac": "aa:bb:cc:00:20:01"
-          },
-          {
-            "id": "evt-net-0902",
-            "key": "K",
-            "msg": "epoch milliseconds",
-            "time": 1786191000000,
-            "mac": "aa:bb:cc:00:20:01"
-          },
-          {
-            "id": "evt-net-0903",
-            "key": "K",
-            "msg": "fractional epoch seconds",
-            "time": 1786191000.5,
-            "mac": "aa:bb:cc:00:20:01"
-          },
-          {
-            "id": "evt-net-0904",
-            "key": "K",
-            "msg": "digit-string epoch milliseconds",
-            "time": "1786191060000",
-            "mac": "aa:bb:cc:00:20:01"
-          },
-          {
-            "_id": "evt-net-0905",
-            "key": "K",
-            "msg": "legacy ISO datetime only",
-            "datetime": "2026-08-08T12:12:00Z"
-          }
-        ]
+        "payload": {
+          "rows": [
+            {
+              "id": "evt-net-0901",
+              "key": "K",
+              "msg": "epoch seconds",
+              "time": 1786191000,
+              "mac": "aa:bb:cc:00:20:01"
+            },
+            {
+              "id": "evt-net-0902",
+              "key": "K",
+              "msg": "epoch milliseconds",
+              "time": 1786191000000,
+              "mac": "aa:bb:cc:00:20:01"
+            },
+            {
+              "id": "evt-net-0903",
+              "key": "K",
+              "msg": "fractional epoch seconds",
+              "time": 1786191000.5,
+              "mac": "aa:bb:cc:00:20:01"
+            },
+            {
+              "id": "evt-net-0904",
+              "key": "K",
+              "msg": "digit-string epoch milliseconds",
+              "time": "1786191060000",
+              "mac": "aa:bb:cc:00:20:01"
+            },
+            {
+              "_id": "evt-net-0905",
+              "key": "K",
+              "msg": "legacy ISO datetime only",
+              "datetime": "2026-08-08T12:12:00Z"
+            }
+          ],
+          "has_more": false,
+          "total_reported": null,
+          "offset": 0,
+          "cap": 100,
+          "api_path": "v2",
+          "submitted_window_ms": [
+            1786187099000,
+            1786194299000
+          ]
+        }
       },
       {
-        "adapter": "records",
+        "adapter": "page",
         "tool": "protect_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -83,34 +94,43 @@
           "limit": 100
         },
         "scope": {},
-        "payload": [
-          {
-            "id": "evt-protect-0901",
-            "type": "motion",
-            "camera": "cam-fixture-000a",
-            "start": "2026-08-08T17:40:00+05:30"
-          },
-          {
-            "id": "evt-protect-0902",
-            "type": "motion",
-            "camera": "cam-fixture-000a",
-            "start": "2026-08-08T08:10:00.123456-0400"
-          },
-          {
-            "id": "evt-protect-0903",
-            "type": "motion",
-            "camera": "cam-fixture-000a",
-            "start": 1786191000123
-          },
-          {
-            "id": "evt-protect-0904",
-            "type": "motion",
-            "camera": {
-              "id": "cam-fixture-000b"
+        "payload": {
+          "rows": [
+            {
+              "id": "evt-protect-0901",
+              "type": "motion",
+              "camera": "cam-fixture-000a",
+              "start": "2026-08-08T17:40:00+05:30"
             },
-            "start": "2026-08-08T12:13Z"
-          }
-        ]
+            {
+              "id": "evt-protect-0902",
+              "type": "motion",
+              "camera": "cam-fixture-000a",
+              "start": "2026-08-08T08:10:00.123456-0400"
+            },
+            {
+              "id": "evt-protect-0903",
+              "type": "motion",
+              "camera": "cam-fixture-000a",
+              "start": 1786191000123
+            },
+            {
+              "id": "evt-protect-0904",
+              "type": "motion",
+              "camera": {
+                "id": "cam-fixture-000b"
+              },
+              "start": "2026-08-08T12:13Z"
+            }
+          ],
+          "has_more": false,
+          "total_reported": null,
+          "cap": 100,
+          "submitted_window_ms": [
+            1786190400000,
+            1786194000000
+          ]
+        }
       }
     ]
   },
@@ -144,7 +164,7 @@
         "product": "network",
         "api_family": "network_v2_controller",
         "source_tool": "unifi_list_events",
-        "endpoint": null,
+        "endpoint": "/system-log/all",
         "scope": {
           "controller_id": null,
           "site": "default",
@@ -170,7 +190,7 @@
             "end_inclusive": false
           },
           "queried_window": {
-            "start": "2026-08-08T11:05:00.000000Z",
+            "start": "2026-08-08T11:04:59.000000Z",
             "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
@@ -184,7 +204,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 5,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -249,7 +269,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 4,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -273,14 +293,14 @@
     ],
     "records": [
       {
-        "evidence_id": "network.events:str:evt-net-0901",
+        "evidence_id": "network.events|str|evt-net-0901",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -332,14 +352,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0902",
+        "evidence_id": "network.events|str|evt-net-0902",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -391,7 +411,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0901",
+        "evidence_id": "protect.events|str|evt-protect-0901",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -451,7 +471,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0903",
+        "evidence_id": "protect.events|str|evt-protect-0903",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -511,7 +531,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0902",
+        "evidence_id": "protect.events|str|evt-protect-0902",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -571,14 +591,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0903",
+        "evidence_id": "network.events|str|evt-net-0903",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -630,14 +650,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0904",
+        "evidence_id": "network.events|str|evt-net-0904",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -689,14 +709,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0905",
+        "evidence_id": "network.events|str|evt-net-0905",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -741,7 +761,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0904",
+        "evidence_id": "protect.events|str|evt-protect-0904",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {

@@ -34,6 +34,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Any, Literal
+from urllib.parse import quote
 
 from pydantic import (
     BaseModel,
@@ -50,6 +51,7 @@ from pydantic import (
 from unifi_core.exceptions import UniFiMalformedResponseError, http_status
 from unifi_core.mac import canonical_mac
 from unifi_core.redaction import is_sensitive_key
+from unifi_core.source_page import SourcePage
 from unifi_core.support_bundle import ErrorCategory, classify_error
 
 INCIDENT_EVIDENCE_SCHEMA = "unifi-incident-evidence"
@@ -340,6 +342,10 @@ _EVENT_TIME_RULES = {
             _props(utc={"type": "null"}, precision={"type": "null"}, boundary_uncertain={"const": False}),
         ),
         _when(_props(status={"const": "missing"}), _props(original_type={"enum": ["absent", "null"]})),
+        _when(
+            _props(status={"enum": ["malformed", "ambiguous_timezone", "missing"]}),
+            _props(utc_offset={"type": "null"}, timezone_basis={"type": "null"}),
+        ),
     ]
 }
 _MAPPING_RULES = {
@@ -379,6 +385,35 @@ _COVERAGE_RULES = {
             _props(population_total={"type": "null"}),
         ),
         _when(_props(queried_window={"type": "null"}), _props(window_coverage={"const": "unknown"})),
+        # Only the source's own continuation flag or total proves the tail was read.
+        _when(
+            _props(truncation={"const": "not_truncated"}),
+            _props(
+                pagination={
+                    **_props(interrupted={"const": False}),
+                    "anyOf": [
+                        _props(has_more={"const": False}),
+                        _props(post_filtered={"const": False}, total_reported={"type": "integer"}),
+                    ],
+                }
+            ),
+        ),
+        _when(
+            _props(truncation={"const": "truncated"}),
+            _props(
+                pagination={
+                    "anyOf": [
+                        _props(has_more={"const": True}),
+                        _props(post_filtered={"const": False}, total_reported={"type": "integer"}),
+                    ]
+                }
+            ),
+        ),
+        _when(
+            _props(counts=_props(in_window=_ZERO)),
+            _props(observed_first_utc={"type": "null"}, observed_last_utc={"type": "null"}),
+            _props(observed_first_utc={"type": "string"}, observed_last_utc={"type": "string"}),
+        ),
         _when(_props(pagination=_props(has_more={"const": True})), _props(truncation={"const": "truncated"})),
         _when(
             _props(pagination=_props(interrupted={"const": True})),
@@ -772,10 +807,31 @@ def resolve_mapping(entities: Sequence[EntityRef], assertions: Sequence[MappingA
     )
 
 
+# Keys in queries, filters and attributes: lowercase snake case, and never a
+# name that could carry secret material. The deny pattern is a strict superset
+# of ``unifi_core.redaction.is_sensitive_key`` for this grammar, so the JSON
+# Schema (``propertyNames``) and Python enforce exactly the same rule.
+EVIDENCE_KEY_PATTERN = r"^[a-z][a-z0-9_]{0,63}$"
+EVIDENCE_KEY_DENY_PATTERN = r"pass|psk|secret|token|auth|cookie|key|community|pin|rtsp|crypt|configuration"
+_EVIDENCE_KEY_RE = re.compile(EVIDENCE_KEY_PATTERN)
+_EVIDENCE_KEY_DENY_RE = re.compile(EVIDENCE_KEY_DENY_PATTERN)
+_KEY_NAMES_SCHEMA = {"propertyNames": {"pattern": EVIDENCE_KEY_PATTERN, "not": {"pattern": EVIDENCE_KEY_DENY_PATTERN}}}
+
+
+def evidence_key_allowed(key: Any) -> bool:
+    """Whether ``key`` may name a query parameter, filter or attribute in evidence."""
+    return (
+        isinstance(key, str)
+        and _EVIDENCE_KEY_RE.fullmatch(key) is not None
+        and _EVIDENCE_KEY_DENY_RE.search(key) is None
+        and not is_sensitive_key(key)
+    )
+
+
 def _drop_secret_keys(values: Mapping[str, Any], allowed: Callable[[Any], Any]) -> dict[str, Any]:
     cleaned: dict[str, Any] = {}
-    for key in sorted(values):
-        if not isinstance(key, str) or is_sensitive_key(key):
+    for key in sorted(values, key=str):
+        if not evidence_key_allowed(key):
             continue
         value = allowed(values[key])
         if value is not _ABSENT:
@@ -807,20 +863,34 @@ def _attribute_value(value: Any) -> Any:
 
 
 def clean_query(query: Mapping[str, Any]) -> dict[str, Any]:
-    """Keep JSON-scalar query parameters; secret-named keys are excluded entirely."""
+    """Keep JSON-scalar query parameters under allowed key names; others are excluded entirely."""
     return _drop_secret_keys(query, _query_value)
 
 
 def clean_attributes(attributes: Mapping[str, Any]) -> dict[str, Any]:
-    """Keep scalar or string-list attributes; secret-named keys are excluded entirely."""
+    """Keep scalar or string-list attributes under allowed key names; others are excluded entirely."""
     return _drop_secret_keys(attributes, _attribute_value)
 
 
 def _no_secret_keys(values: Mapping[str, Any]) -> Mapping[str, Any]:
     for key in values:
-        if is_sensitive_key(key):
-            raise ValueError("secret-named keys are not allowed in evidence")
+        if not evidence_key_allowed(key):
+            raise ValueError("secret-named or non-snake-case keys are not allowed in evidence")
     return values
+
+
+# Evidence IDs are ``|``-separated, a character source IDs cannot contain, and
+# record IDs are percent-encoded, so no two identities can collide:
+#   <source_id>|int|<id>  or  <source_id>|str|<id>     a source record
+#   <base>|version|<digest>                             one of several differing versions
+#   <source_id>|sha256|<digest>                         a record without an ID
+_DIGEST_RE = r"[0-9a-f]{24}"
+_ENCODED_ID_RE = r"[A-Za-z0-9%._~-]+"
+EVIDENCE_ID_PATTERN = (
+    rf"^[a-z0-9][a-z0-9_.:-]{{0,127}}\|(?:(?:int|str)\|{_ENCODED_ID_RE}(?:\|version\|{_DIGEST_RE})?"
+    rf"|sha256\|{_DIGEST_RE})$"
+)
+CONFLICT_GROUP_PATTERN = rf"^[a-z0-9][a-z0-9_.:-]{{0,127}}\|(?:int|str)\|{_ENCODED_ID_RE}$"
 
 
 class Provenance(_ClosedModel):
@@ -831,7 +901,7 @@ class Provenance(_ClosedModel):
     scope: Scope
     source_record_id: StrictStr | StrictInt | None
     source_record_id_field: str | None
-    query: dict[str, QueryValue]
+    query: dict[str, QueryValue] = Field(json_schema_extra=_KEY_NAMES_SCHEMA)
     collected_at: str
 
     @field_validator("collected_at")
@@ -846,7 +916,7 @@ class Provenance(_ClosedModel):
 
 
 class EvidenceRecord(_ClosedModel):
-    evidence_id: str
+    evidence_id: str = Field(pattern=EVIDENCE_ID_PATTERN)
     evidence_id_basis: Literal["source_record_id", "content_hash"]
     source_id: str
     provenance: Provenance
@@ -855,10 +925,10 @@ class EvidenceRecord(_ClosedModel):
     summary: str | None
     entities: tuple[EntityRef, ...] = ()
     mapping: MappingOutcome = _NOT_EVALUATED
-    attributes: dict[str, AttributeValue] = Field(default_factory=dict)
+    attributes: dict[str, AttributeValue] = Field(default_factory=dict, json_schema_extra=_KEY_NAMES_SCHEMA)
     # Set when the source returned differing records under one source record
     # ID; every version is kept and the group blocks complete coverage.
-    conflict_group: str | None = None
+    conflict_group: str | None = Field(default=None, pattern=CONFLICT_GROUP_PATTERN)
 
     @field_validator("attributes")
     @classmethod
@@ -870,27 +940,79 @@ class EvidenceRecord(_ClosedModel):
         record_id = self.provenance.source_record_id
         if (record_id is not None) != (self.evidence_id_basis == "source_record_id"):
             raise ValueError("evidence IDs derive from the source record ID exactly when one was returned")
-        if record_id is not None:
-            base = record_identity(self.source_id, record_id)
-            expected = base if self.conflict_group is None else None
-            if self.conflict_group is not None and self.conflict_group != base:
-                raise ValueError("a conflict group is the base identity of its source record ID")
-            if expected is not None and self.evidence_id != expected:
-                raise ValueError("evidence_id must be derived from the typed source record ID")
-            if expected is None and not re.fullmatch(re.escape(base) + r"#[0-9a-f]{24}", self.evidence_id):
-                raise ValueError("conflicting versions are identified by base identity and content hash")
-        else:
+        digest = self.digest()
+        if record_id is None:
             if self.conflict_group is not None:
                 raise ValueError("content-hash records cannot conflict")
-            if not re.fullmatch(re.escape(self.source_id) + r":sha256:[0-9a-f]{24}", self.evidence_id):
-                raise ValueError("content-hash evidence IDs are source ID plus a sha256 prefix")
+            expected = content_identity(self.source_id, digest)
+        else:
+            base = record_identity(self.source_id, record_id)
+            if self.conflict_group is None:
+                expected = base
+            elif self.conflict_group != base:
+                raise ValueError("a conflict group is the base identity of its source record ID")
+            else:
+                expected = version_identity(base, digest)
+        if self.evidence_id != expected:
+            raise ValueError("evidence_id must follow from the typed source record ID or the evidence digest")
         return self
+
+    def digest(self) -> str:
+        """Hash of the record's own evidence content (see :func:`evidence_digest`)."""
+        return evidence_digest(
+            source_record_id=self.provenance.source_record_id,
+            source_record_id_field=self.provenance.source_record_id_field,
+            time=self.time,
+            event_type=self.event_type,
+            summary=self.summary,
+            entities=self.entities,
+            attributes=self.attributes,
+        )
 
 
 def record_identity(source_id: str, record_id: str | int) -> str:
-    """Typed identity: integer 7 and string "7" are different source records."""
+    """Typed, escaped identity: integer 7 and string "7" are different source records."""
     kind = "int" if isinstance(record_id, int) else "str"
-    return f"{source_id}:{kind}:{record_id}"
+    return f"{source_id}|{kind}|{quote(str(record_id), safe='')}"
+
+
+def version_identity(base: str, digest: str) -> str:
+    return f"{base}|version|{digest}"
+
+
+def content_identity(source_id: str, digest: str) -> str:
+    return f"{source_id}|sha256|{digest}"
+
+
+def evidence_digest(
+    *,
+    source_record_id: str | int | None,
+    source_record_id_field: str | None,
+    time: EventTime,
+    event_type: str | None,
+    summary: str | None,
+    entities: Sequence[EntityRef],
+    attributes: Mapping[str, Any],
+) -> str:
+    """Hash the sanitized evidence a record carries, never the raw payload.
+
+    Fields the normalizers exclude (secrets, buffer stamps, recognized identity,
+    display names) therefore cannot change identity or create conflicts. The
+    time contributes only what the source returned, not window-derived state.
+    """
+    payload = {
+        "source_record_id": None
+        if source_record_id is None
+        else ["int" if isinstance(source_record_id, int) else "str", source_record_id],
+        "source_record_id_field": source_record_id_field,
+        "time": [time.original_field, time.original_type.value, time.original_value],
+        "event_type": event_type,
+        "summary": summary,
+        "entities": [entity.model_dump(mode="json") for entity in entities],
+        "attributes": {key: list(value) if isinstance(value, tuple) else value for key, value in attributes.items()},
+    }
+    text = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:24]
 
 
 def record_sort_key(record: EvidenceRecord) -> tuple[Any, ...]:
@@ -1007,7 +1129,7 @@ class RecordCounts(_ClosedModel):
 
 
 def truncation_state(pagination: Pagination) -> Truncation:
-    """Decide whether the tail was cut off, from what the source reported, never from hope."""
+    """Decide whether the tail was cut off, from what the source reported, never from caps or hope."""
     if pagination.has_more is True:
         return Truncation.TRUNCATED
     if pagination.total_reported is not None and not pagination.post_filtered:
@@ -1020,8 +1142,8 @@ def truncation_state(pagination: Pagination) -> Truncation:
         return Truncation.UNKNOWN
     if pagination.has_more is False:
         return Truncation.NOT_TRUNCATED
-    if not pagination.post_filtered and pagination.cap is not None and pagination.returned < pagination.cap:
-        return Truncation.NOT_TRUNCATED
+    # A cap alone never proves the source ran out: only the source's own
+    # continuation flag or total does.
     return Truncation.UNKNOWN
 
 
@@ -1059,7 +1181,7 @@ class Coverage(_ClosedModel):
     window_coverage: WindowCoverage
     observed_first_utc: str | None
     observed_last_utc: str | None
-    filters: dict[str, QueryValue]
+    filters: dict[str, QueryValue] = Field(json_schema_extra=_KEY_NAMES_SCHEMA)
     pagination: Pagination
     truncation: Truncation
     counts: RecordCounts
@@ -1096,7 +1218,8 @@ class Coverage(_ClosedModel):
             raise ValueError("a retrieved count is a population total only when coverage is complete")
         if self.complete and self.population_total != self.counts.in_window:
             raise ValueError("population_total must equal the in-window record count")
-        if (self.observed_first_utc is None) != (self.counts.in_window == 0):
+        no_records = self.counts.in_window == 0
+        if (self.observed_first_utc is None) != no_records or (self.observed_last_utc is None) != no_records:
             raise ValueError("observed bounds are present exactly when in-window records exist")
         if self.observed_first_utc is not None and self.observed_first_utc > self.observed_last_utc:
             raise ValueError("observed bounds must be ordered")
@@ -1143,7 +1266,7 @@ class SourceResult(_ClosedModel):
     source_tool: str | None
     endpoint: str | None
     scope: Scope
-    query: dict[str, QueryValue]
+    query: dict[str, QueryValue] = Field(json_schema_extra=_KEY_NAMES_SCHEMA)
     collected_at: str
     outcome: SourceOutcome
     failure: SourceFailure | None
@@ -1424,6 +1547,32 @@ class SourceContext(_ClosedModel):
         return _check_utc(value)
 
 
+def window_from_epoch_ms(from_ms: int, to_ms: int) -> TimeWindow | None:
+    """The window a source was asked for in epoch milliseconds, or None if it is empty."""
+    if from_ms >= to_ms:
+        return None
+    return TimeWindow.from_datetimes(_EPOCH + timedelta(milliseconds=from_ms), _EPOCH + timedelta(milliseconds=to_ms))
+
+
+def apply_source_page(context: SourceContext, page: SourcePage) -> SourceContext:
+    """Carry what the manager observed about one read into the source context.
+
+    Pagination facts (offset, transmitted cap, continuation flag, remote
+    total, post-filtering) come from the page. When the page records the
+    absolute bounds it submitted, they replace any window derived from clocks.
+    """
+    updates: dict[str, Any] = {
+        "offset": page.offset if page.offset is not None else context.offset,
+        "cap": page.cap if page.cap is not None else context.cap,
+        "has_more": page.has_more,
+        "total_reported": page.total_reported,
+        "post_filtered": page.post_filtered or context.post_filtered,
+    }
+    if page.submitted_window_ms is not None:
+        updates["queried_window"] = window_from_epoch_ms(*page.submitted_window_ms)
+    return SourceContext.model_validate({**context.model_dump(), **updates})
+
+
 @dataclass(frozen=True)
 class ExtractedRecord:
     """Product-neutral fields a normalizer extracts from one raw record."""
@@ -1450,24 +1599,12 @@ class SourceEvidence:
     records: tuple[EvidenceRecord, ...]
 
 
-def _content_hash(raw: Mapping[str, Any]) -> str:
-    payload = json.dumps(raw, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=str)
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
-
-
 def _record_id(value: Any) -> str | int | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int) or (isinstance(value, str) and value):
         return value
     return None
-
-
-@dataclass(frozen=True)
-class _Version:
-    digest: str
-    extracted: ExtractedRecord
-    record_id: str | int | None
 
 
 def collect_source(
@@ -1480,18 +1617,19 @@ def collect_source(
 ) -> SourceEvidence:
     """Normalize one source's raw records into evidence with explicit coverage.
 
-    Identical repeats of a record collapse; differing records under one typed
-    source record ID are all kept as a conflict group, which blocks complete
-    coverage. The result does not depend on input order. ``failure`` marks a
-    call that broke off after returning ``raw_records`` (for example a timeout
-    on a later page); ``budget_exhausted`` marks a call the collector stopped
-    early. Either makes the source partial.
+    Records that carry the same evidence (see :func:`evidence_digest`) collapse;
+    records with differing evidence under one typed source record ID are all
+    kept as a conflict group, which blocks complete coverage. The result does
+    not depend on input order. ``failure`` marks a call that broke off after
+    returning ``raw_records`` (for example a timeout on a later page);
+    ``budget_exhausted`` marks a call the collector stopped early. Either
+    makes the source partial.
     """
     if not isinstance(raw_records, (list, tuple)):
         return source_failed(context, SourceFailure(kind=FailureKind.PARSE_FAILED))
 
     malformed = duplicates = 0
-    groups: dict[str, dict[str, _Version]] = {}
+    groups: dict[str, dict[str, EvidenceRecord]] = {}
     for raw in raw_records:
         if not isinstance(raw, Mapping):
             malformed += 1
@@ -1503,30 +1641,24 @@ def collect_source(
         if extracted is None:
             malformed += 1
             continue
-        digest = _content_hash(raw)
-        record_id = _record_id(extracted.record_id)
-        base = (
-            record_identity(context.source_id, record_id)
-            if record_id is not None
-            else f"{context.source_id}:sha256:{digest}"
-        )
+        record = _evidence_record(context, extracted)
+        digest = record.digest()
+        rid = record.provenance.source_record_id
+        base = record_identity(context.source_id, rid) if rid is not None else record.evidence_id
         versions = groups.setdefault(base, {})
         if digest in versions:
             duplicates += 1
             continue
-        versions[digest] = _Version(digest, extracted, record_id)
+        versions[digest] = record
 
     records: list[EvidenceRecord] = []
     for base, versions in groups.items():
-        conflict = len(versions) > 1
-        for digest, version in versions.items():
+        if len(versions) == 1:
+            records.extend(versions.values())
+            continue
+        for digest, record in versions.items():
             records.append(
-                _evidence_record(
-                    context,
-                    version,
-                    evidence_id=f"{base}#{digest}" if conflict else base,
-                    conflict_group=base if conflict else None,
-                )
+                record.model_copy(update={"evidence_id": version_identity(base, digest), "conflict_group": base})
             )
     records.sort(key=record_sort_key)
 
@@ -1552,10 +1684,31 @@ def collect_source(
     )
 
 
-def _evidence_record(
-    context: SourceContext, version: _Version, *, evidence_id: str, conflict_group: str | None
-) -> EvidenceRecord:
-    extracted, record_id = version.extracted, version.record_id
+def _evidence_record(context: SourceContext, extracted: ExtractedRecord) -> EvidenceRecord:
+    record_id = _record_id(extracted.record_id)
+    record_id_field = extracted.record_id_field if record_id is not None else None
+    time = parse_event_time(
+        extracted.time_field,
+        extracted.time_value,
+        window=context.requested_window,
+        clock_uncertainty_ms=context.clock_uncertainty_ms,
+    )
+    attributes = clean_attributes(extracted.attributes)
+    if record_id is not None:
+        evidence_id = record_identity(context.source_id, record_id)
+    else:
+        evidence_id = content_identity(
+            context.source_id,
+            evidence_digest(
+                source_record_id=None,
+                source_record_id_field=None,
+                time=time,
+                event_type=extracted.event_type,
+                summary=extracted.summary,
+                entities=extracted.entities,
+                attributes=attributes,
+            ),
+        )
     return EvidenceRecord(
         evidence_id=evidence_id,
         evidence_id_basis="source_record_id" if record_id is not None else "content_hash",
@@ -1567,21 +1720,15 @@ def _evidence_record(
             endpoint=context.endpoint,
             scope=context.scope,
             source_record_id=record_id,
-            source_record_id_field=extracted.record_id_field if record_id is not None else None,
+            source_record_id_field=record_id_field,
             query=context.query,
             collected_at=context.collected_at,
         ),
-        time=parse_event_time(
-            extracted.time_field,
-            extracted.time_value,
-            window=context.requested_window,
-            clock_uncertainty_ms=context.clock_uncertainty_ms,
-        ),
+        time=time,
         event_type=extracted.event_type,
         summary=extracted.summary,
         entities=extracted.entities,
-        attributes=clean_attributes(extracted.attributes),
-        conflict_group=conflict_group,
+        attributes=attributes,
     )
 
 

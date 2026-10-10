@@ -34,11 +34,13 @@ from unifi_core.incident_evidence import (
     SourceEvidence,
     SourceFailure,
     TimeWindow,
+    apply_source_page,
     collect_source,
     format_utc,
     records_from_tool_response,
     source_failed,
 )
+from unifi_core.source_page import SourcePage
 
 LIST_EVENTS_TOOL = "protect_list_events"
 LIST_SMART_DETECTIONS_TOOL = "protect_list_smart_detections"
@@ -122,6 +124,7 @@ def protect_events_context(
     detection_type: str | None = None,
     min_confidence: int | None = None,
     server_min_confidence: int = DEFAULT_SMART_DETECTION_MIN_CONFIDENCE,
+    page: SourcePage | None = None,
     source_id: str = "protect.events",
     controller_id: str | None = None,
     location_id: str | None = None,
@@ -133,8 +136,14 @@ def protect_events_context(
     omitted or unparseable reaches the controller as no bound at all, so the
     queried window is unknown rather than an assumed 24 hours.
 
+    Pass the ``page`` from ``EventManager.list_events_page`` or
+    ``list_smart_detections_page``: it records whether the unfiltered read
+    ran short of ``limit`` (the NVR reports no totals) and the millisecond
+    bounds actually submitted. Without a page coverage is never complete.
+
     Smart detections are filtered by confidence after the controller applies
-    ``limit``, so a short list never proves completeness. The effective
+    ``limit``, so only the page's unfiltered continuation state can prove
+    completeness. The effective
     threshold is ``min_confidence`` or, when omitted, the server's configured
     ``smart_detection_min_confidence`` passed as ``server_min_confidence``.
     """
@@ -164,7 +173,7 @@ def protect_events_context(
         if queried_start is not None and queried_end is not None and queried_start < queried_end
         else None
     )
-    return SourceContext(
+    context = SourceContext(
         source_id=source_id,
         product=Product.PROTECT,
         api_family=ApiFamily.PROTECT_PRIVATE,
@@ -181,6 +190,7 @@ def protect_events_context(
         post_filtered=post_filtered,
         clock_uncertainty_ms=clock_uncertainty_ms,
     )
+    return apply_source_page(context, page) if page is not None else context
 
 
 def normalize_protect_records(
@@ -192,6 +202,13 @@ def normalize_protect_records(
 ) -> SourceEvidence:
     """Normalize manager, raw NVR or tool-projected Protect events for one source."""
     return collect_source(context, records, extract_protect_event, failure=failure, budget_exhausted=budget_exhausted)
+
+
+def normalize_protect_page(
+    page: SourcePage, context: SourceContext, *, budget_exhausted: bool = False
+) -> SourceEvidence:
+    """Normalize a manager page from ``list_events_page`` or ``list_smart_detections_page``."""
+    return normalize_protect_records(page.rows, context, budget_exhausted=budget_exhausted)
 
 
 def normalize_protect_tool_response(

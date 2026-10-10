@@ -229,7 +229,7 @@
     ],
     "records": [
       {
-        "evidence_id": "network.events:str:evt-net-0301",
+        "evidence_id": "network.events|str|evt-net-0301",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {

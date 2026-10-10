@@ -27,11 +27,13 @@ from unifi_core.network.incident_evidence import (
     V2_ALARMS_PAGE_CAP,
     network_alarms_context,
     network_events_context,
+    normalize_network_page,
     normalize_network_records,
     normalize_network_tool_response,
 )
 from unifi_core.network.models.events import threat_event_log_from_controller
 from unifi_core.network.models.system import alarm_from_controller
+from unifi_core.source_page import SourcePage
 
 REPO = Path(__file__).resolve().parents[4]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "system_log_events_response.json").read_text())["data"]
@@ -64,7 +66,9 @@ def test_query_arguments_match_the_current_manifest() -> None:
 
 
 def test_v2_system_log_records_normalize_with_role_scoped_entities() -> None:
-    evidence = normalize_network_records(FIXTURE, _events_context())
+    # The page from the manager is what proves the read reached the end.
+    page = SourcePage(rows=FIXTURE, has_more=False, offset=0, cap=100, api_path="v2")
+    evidence = normalize_network_page(page, _events_context(page=page))
     assert evidence.source.outcome is SourceOutcome.COMPLETE
     assert [r.provenance.source_record_id for r in evidence.records] == ["evt-0001", "evt-0002", "evt-0003", "evt-0004"]
     first = evidence.records[0]
@@ -145,7 +149,7 @@ def test_request_that_started_before_the_requested_end_does_not_cover_it() -> No
     )
     source = normalize_network_records([], context).source
     assert source.coverage.queried_window.end == "2026-08-08T22:04:00.000000Z"
-    assert source.partial_reasons == (PartialReason.WINDOW_NOT_COVERED,)
+    assert PartialReason.WINDOW_NOT_COVERED in source.partial_reasons
 
 
 def test_request_start_after_completion_is_rejected() -> None:
@@ -156,8 +160,12 @@ def test_request_start_after_completion_is_rejected() -> None:
 def test_offset_page_is_never_complete() -> None:
     context = _events_context(limit=100, start=100)
     source = normalize_network_records([], context).source
-    assert source.partial_reasons == (PartialReason.PREFIX_NOT_COLLECTED,)
+    assert PartialReason.PREFIX_NOT_COLLECTED in source.partial_reasons
     assert source.coverage.population_total is None
+    # Even with proof that the read reached the end, the skipped prefix stays uncollected.
+    page = SourcePage(rows=[], has_more=False, offset=100, cap=100, api_path="v2")
+    proven = normalize_network_page(page, _events_context(limit=100, start=100, page=page)).source
+    assert proven.partial_reasons == (PartialReason.PREFIX_NOT_COLLECTED,)
 
 
 def test_offset_and_limit_drive_pagination_and_filters() -> None:
@@ -205,7 +213,7 @@ def test_alarms_without_a_known_lookback_are_never_complete() -> None:
     context = network_alarms_context(requested_window=WINDOW, collected_at=COLLECTED)
     evidence = normalize_network_tool_response({"success": True, "alarms": alarms}, context)
     assert evidence.source.outcome is SourceOutcome.PARTIAL
-    assert evidence.source.partial_reasons == (PartialReason.WINDOW_COVERAGE_UNKNOWN,)
+    assert PartialReason.WINDOW_COVERAGE_UNKNOWN in evidence.source.partial_reasons
     assert evidence.records[0].attributes["archived"] is False
 
 
@@ -236,4 +244,30 @@ def test_integer_record_ids_are_kept_as_integers() -> None:
     )
     assert evidence.source.coverage.counts.malformed_dropped == 0
     assert [r.provenance.source_record_id for r in evidence.records] == [7, "7"]
-    assert [r.evidence_id for r in evidence.records] == ["network.events:int:7", "network.events:str:7"]
+    assert [r.evidence_id for r in evidence.records] == ["network.events|int|7", "network.events|str|7"]
+
+
+def test_tool_responses_alone_never_prove_completeness() -> None:
+    # The tool envelope carries no continuation state, so a short list is not an all-clear.
+    projected = [threat_event_log_from_controller(e).model_dump(exclude_none=True) for e in FIXTURE]
+    source = normalize_network_tool_response({"success": True, "events": projected}, _events_context()).source
+    assert source.coverage.truncation is Truncation.UNKNOWN
+    assert source.outcome is SourceOutcome.PARTIAL
+
+
+def test_page_api_path_must_agree_with_the_declared_path() -> None:
+    page = SourcePage(rows=[], has_more=False, cap=100, api_path="legacy")
+    with pytest.raises(ValueError):
+        _events_context(api_path="v2", page=page)
+    assert _events_context(page=page).endpoint == "/stat/event"
+
+
+@pytest.mark.parametrize("field", ["api_key", "_buffered_at", "recognized_person_name", "password"])
+def test_excluded_fields_do_not_change_identity_or_create_conflicts(field) -> None:
+    base = {"id": "fixture-event", "key": "K", "time": 1786227600000}
+    evidence = normalize_network_records([dict(base, **{field: "a"}), dict(base, **{field: "b"})], _events_context())
+    assert len(evidence.records) == 1 and evidence.source.coverage.counts.conflicting == 0
+    no_id = {"key": "K", "time": 1786227600000}
+    first = normalize_network_records([dict(no_id, **{field: "a"})], _events_context()).records[0]
+    second = normalize_network_records([dict(no_id, **{field: "b"})], _events_context()).records[0]
+    assert first.evidence_id == second.evidence_id

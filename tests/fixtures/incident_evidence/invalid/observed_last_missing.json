@@ -1,6 +1,6 @@
 {
-  "description": "A full page (returned == cap) is labelled not_truncated with complete coverage.",
-  "rejected_by": "semantic",
+  "description": "In-window records exist but the observed end time is missing.",
+  "rejected_by": "schema",
   "derived_from": "network_protect_real_shapes",
   "evidence": {
     "schema": "unifi-incident-evidence",
@@ -32,7 +32,7 @@
         "product": "network",
         "api_family": "network_v2_controller",
         "source_tool": "unifi_list_events",
-        "endpoint": null,
+        "endpoint": "/system-log/all",
         "scope": {
           "controller_id": null,
           "site": "default",
@@ -58,21 +58,21 @@
             "end_inclusive": false
           },
           "queried_window": {
-            "start": "2026-08-08T11:05:00.000000Z",
+            "start": "2026-08-08T11:04:59.000000Z",
             "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
           },
           "window_coverage": "covered",
           "observed_first_utc": "2026-08-08T12:10:05.250000Z",
-          "observed_last_utc": "2026-08-08T12:45:00.000000Z",
+          "observed_last_utc": null,
           "filters": {},
           "pagination": {
             "offset": 0,
-            "requested_cap": 3,
-            "cap": 3,
+            "requested_cap": 100,
+            "cap": 100,
             "returned": 3,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -137,7 +137,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 2,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -161,14 +161,14 @@
     ],
     "records": [
       {
-        "evidence_id": "network.events:str:evt-net-0001",
+        "evidence_id": "network.events|str|evt-net-0001",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -231,7 +231,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0001",
+        "evidence_id": "protect.events|str|evt-protect-0001",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -295,14 +295,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0002",
+        "evidence_id": "network.events|str|evt-net-0002",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -359,7 +359,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0002",
+        "evidence_id": "protect.events|str|evt-protect-0002",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -420,14 +420,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0003",
+        "evidence_id": "network.events|str|evt-net-0003",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",

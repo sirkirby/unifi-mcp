@@ -22,7 +22,7 @@
     "mappings": null,
     "sources": [
       {
-        "adapter": "tool_response",
+        "adapter": "page",
         "tool": "unifi_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -37,18 +37,7 @@
           "site": "default"
         },
         "payload": {
-          "success": true,
-          "site": "default",
-          "count": 1,
-          "filters": {
-            "within_hours": 2,
-            "limit": 100,
-            "start": 0,
-            "event_type": null,
-            "categories": null,
-            "severities": null
-          },
-          "events": [
+          "rows": [
             {
               "id": "evt-net-0401",
               "key": "CLIENT_CONNECTED_WIRELESS_2",
@@ -56,6 +45,15 @@
               "time": 1786190460000,
               "mac": "aa:bb:cc:00:20:01"
             }
+          ],
+          "has_more": false,
+          "total_reported": null,
+          "offset": 0,
+          "cap": 100,
+          "api_path": "v2",
+          "submitted_window_ms": [
+            1786187099000,
+            1786194299000
           ]
         }
       },
@@ -159,7 +157,7 @@
         "product": "network",
         "api_family": "network_v2_controller",
         "source_tool": "unifi_list_events",
-        "endpoint": null,
+        "endpoint": "/system-log/all",
         "scope": {
           "controller_id": null,
           "site": "default",
@@ -185,7 +183,7 @@
             "end_inclusive": false
           },
           "queried_window": {
-            "start": "2026-08-08T11:05:00.000000Z",
+            "start": "2026-08-08T11:04:59.000000Z",
             "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
@@ -199,7 +197,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 1,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -223,14 +221,14 @@
     ],
     "records": [
       {
-        "evidence_id": "network.events:str:evt-net-0401",
+        "evidence_id": "network.events|str|evt-net-0401",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",

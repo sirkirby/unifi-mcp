@@ -1,5 +1,5 @@
 {
-  "description": "unifi_list_events (records under top-level 'events') and protect_list_events (records under 'data.events') response envelopes.",
+  "description": "unifi_list_events (records under top-level 'events') and protect_list_events (records under 'data.events') response envelopes. Tool envelopes carry no continuation state, so even short lists are never complete.",
   "input": {
     "requested_window": {
       "start": "2026-08-08T12:00:00.000000Z",
@@ -194,9 +194,11 @@
           "within_hours": 2
         },
         "collected_at": "2026-08-08T13:05:00.000000Z",
-        "outcome": "complete",
+        "outcome": "partial",
         "failure": null,
-        "partial_reasons": [],
+        "partial_reasons": [
+          "truncation_unknown"
+        ],
         "coverage": {
           "requested_window": {
             "start": "2026-08-08T12:00:00.000000Z",
@@ -224,7 +226,7 @@
             "post_filtered": false,
             "interrupted": false
           },
-          "truncation": "not_truncated",
+          "truncation": "unknown",
           "counts": {
             "received": 2,
             "accepted": 2,
@@ -236,8 +238,8 @@
             "conflicting": 0,
             "boundary_uncertain": 0
           },
-          "complete": true,
-          "population_total": 2
+          "complete": false,
+          "population_total": null
         }
       },
       {
@@ -259,9 +261,11 @@
           "start": "2026-08-08T12:00:00Z"
         },
         "collected_at": "2026-08-08T13:05:00.000000Z",
-        "outcome": "complete",
+        "outcome": "partial",
         "failure": null,
-        "partial_reasons": [],
+        "partial_reasons": [
+          "truncation_unknown"
+        ],
         "coverage": {
           "requested_window": {
             "start": "2026-08-08T12:00:00.000000Z",
@@ -289,7 +293,7 @@
             "post_filtered": false,
             "interrupted": false
           },
-          "truncation": "not_truncated",
+          "truncation": "unknown",
           "counts": {
             "received": 2,
             "accepted": 2,
@@ -301,8 +305,8 @@
             "conflicting": 0,
             "boundary_uncertain": 0
           },
-          "complete": true,
-          "population_total": 2
+          "complete": false,
+          "population_total": null
         }
       },
       {
@@ -380,7 +384,7 @@
     ],
     "records": [
       {
-        "evidence_id": "network.events:str:evt-net-0100",
+        "evidence_id": "network.events|str|evt-net-0100",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
@@ -442,7 +446,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0100",
+        "evidence_id": "protect.events|str|evt-protect-0100",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -506,7 +510,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.smart_detections:str:evt-protect-0100",
+        "evidence_id": "protect.smart_detections|str|evt-protect-0100",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.smart_detections",
         "provenance": {
@@ -571,7 +575,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0101",
+        "evidence_id": "network.events|str|evt-net-0101",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
@@ -633,7 +637,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0101",
+        "evidence_id": "protect.events|str|evt-protect-0101",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {

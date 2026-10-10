@@ -22,7 +22,7 @@
     "mappings": null,
     "sources": [
       {
-        "adapter": "records",
+        "adapter": "page",
         "tool": "unifi_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -36,51 +36,62 @@
         "scope": {
           "site": "default"
         },
-        "payload": [
-          {
-            "id": "evt-net-0701",
-            "key": "CLIENT_CONNECTED_WIRELESS_2",
-            "msg": "no time field"
-          },
-          {
-            "id": "evt-net-0702",
-            "key": "CLIENT_CONNECTED_WIRELESS_2",
-            "time": null
-          },
-          {
-            "id": "evt-net-0703",
-            "key": "CLIENT_CONNECTED_WIRELESS_2",
-            "time": "not-a-time"
-          },
-          {
-            "id": "evt-net-0704",
-            "key": "CLIENT_CONNECTED_WIRELESS_2",
-            "time": 0
-          },
-          {
-            "id": "evt-net-0705",
-            "key": "CLIENT_CONNECTED_WIRELESS_2",
-            "time": true
-          },
-          {
-            "id": "evt-net-0706",
-            "key": "CLIENT_CONNECTED_WIRELESS_2",
-            "time": {
-              "ms": 1
-            }
-          },
-          {
-            "id": "evt-net-0707",
-            "key": "CLIENT_CONNECTED_WIRELESS_2",
-            "time": 1786191600000
-          },
-          "not-an-object",
-          null,
-          {}
-        ]
+        "payload": {
+          "rows": [
+            {
+              "id": "evt-net-0701",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "msg": "no time field"
+            },
+            {
+              "id": "evt-net-0702",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "time": null
+            },
+            {
+              "id": "evt-net-0703",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "time": "not-a-time"
+            },
+            {
+              "id": "evt-net-0704",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "time": 0
+            },
+            {
+              "id": "evt-net-0705",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "time": true
+            },
+            {
+              "id": "evt-net-0706",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "time": {
+                "ms": 1
+              }
+            },
+            {
+              "id": "evt-net-0707",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "time": 1786191600000
+            },
+            "not-an-object",
+            null,
+            {}
+          ],
+          "has_more": false,
+          "total_reported": null,
+          "offset": 0,
+          "cap": 100,
+          "api_path": "v2",
+          "submitted_window_ms": [
+            1786187099000,
+            1786194299000
+          ]
+        }
       },
       {
-        "adapter": "tool_response",
+        "adapter": "page",
         "tool": "protect_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -90,36 +101,39 @@
         },
         "scope": {},
         "payload": {
-          "success": true,
-          "data": {
-            "events": [
-              {
-                "id": "evt-protect-0701",
-                "type": "motion",
-                "start": "2026-08-08T12:20:00",
-                "score": 80,
-                "smart_detect_types": [],
-                "camera": "cam-fixture-000a"
-              },
-              {
-                "id": "evt-protect-0702",
-                "type": "motion",
-                "start": "2026-13-45T12:20:00Z",
-                "score": 80,
-                "smart_detect_types": [],
-                "camera": "cam-fixture-000a"
-              },
-              {
-                "id": "evt-protect-0703",
-                "type": "motion",
-                "start": "",
-                "score": 80,
-                "smart_detect_types": [],
-                "camera": "cam-fixture-000a"
-              }
-            ],
-            "count": 3
-          }
+          "rows": [
+            {
+              "id": "evt-protect-0701",
+              "type": "motion",
+              "start": "2026-08-08T12:20:00",
+              "score": 80,
+              "smart_detect_types": [],
+              "camera": "cam-fixture-000a"
+            },
+            {
+              "id": "evt-protect-0702",
+              "type": "motion",
+              "start": "2026-13-45T12:20:00Z",
+              "score": 80,
+              "smart_detect_types": [],
+              "camera": "cam-fixture-000a"
+            },
+            {
+              "id": "evt-protect-0703",
+              "type": "motion",
+              "start": "",
+              "score": 80,
+              "smart_detect_types": [],
+              "camera": "cam-fixture-000a"
+            }
+          ],
+          "has_more": false,
+          "total_reported": null,
+          "cap": 100,
+          "submitted_window_ms": [
+            1786190400000,
+            1786194000000
+          ]
         }
       }
     ]
@@ -154,7 +168,7 @@
         "product": "network",
         "api_family": "network_v2_controller",
         "source_tool": "unifi_list_events",
-        "endpoint": null,
+        "endpoint": "/system-log/all",
         "scope": {
           "controller_id": null,
           "site": "default",
@@ -183,7 +197,7 @@
             "end_inclusive": false
           },
           "queried_window": {
-            "start": "2026-08-08T11:05:00.000000Z",
+            "start": "2026-08-08T11:04:59.000000Z",
             "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
@@ -197,7 +211,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 10,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -264,7 +278,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 3,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -288,14 +302,14 @@
     ],
     "records": [
       {
-        "evidence_id": "network.events:str:evt-net-0707",
+        "evidence_id": "network.events|str|evt-net-0707",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -340,14 +354,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0701",
+        "evidence_id": "network.events|str|evt-net-0701",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -392,14 +406,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0702",
+        "evidence_id": "network.events|str|evt-net-0702",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -444,14 +458,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0703",
+        "evidence_id": "network.events|str|evt-net-0703",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -496,14 +510,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0704",
+        "evidence_id": "network.events|str|evt-net-0704",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -548,14 +562,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0705",
+        "evidence_id": "network.events|str|evt-net-0705",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -600,14 +614,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0706",
+        "evidence_id": "network.events|str|evt-net-0706",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -652,7 +666,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0701",
+        "evidence_id": "protect.events|str|evt-protect-0701",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -713,7 +727,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0702",
+        "evidence_id": "protect.events|str|evt-protect-0702",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -774,7 +788,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0703",
+        "evidence_id": "protect.events|str|evt-protect-0703",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {

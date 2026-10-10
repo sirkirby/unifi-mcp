@@ -22,7 +22,7 @@
     "mappings": null,
     "sources": [
       {
-        "adapter": "records",
+        "adapter": "page",
         "tool": "unifi_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -36,80 +36,91 @@
         "scope": {
           "site": "default"
         },
-        "payload": [
-          {
-            "id": "evt-net-0001",
-            "key": "CLIENT_CONNECTED_WIRELESS_2",
-            "category": "CLIENT_DEVICES",
-            "subcategory": "CLIENT_CONNECTIVITY",
-            "event": "CLIENT_CONNECTED",
-            "severity": "LOW",
-            "timestamp": 1786191005250,
-            "message_raw": "{CLIENT} has connected to {AP}.",
-            "title_raw": "Fixture Event",
-            "parameters": {
-              "CLIENT": {
-                "id": "aa:bb:cc:00:20:01",
-                "name": "fixture-phone",
-                "hostname": "fixture-phone"
+        "payload": {
+          "rows": [
+            {
+              "id": "evt-net-0001",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "category": "CLIENT_DEVICES",
+              "subcategory": "CLIENT_CONNECTIVITY",
+              "event": "CLIENT_CONNECTED",
+              "severity": "LOW",
+              "timestamp": 1786191005250,
+              "message_raw": "{CLIENT} has connected to {AP}.",
+              "title_raw": "Fixture Event",
+              "parameters": {
+                "CLIENT": {
+                  "id": "aa:bb:cc:00:20:01",
+                  "name": "fixture-phone",
+                  "hostname": "fixture-phone"
+                },
+                "AP": {
+                  "id": "aa:bb:cc:00:10:01",
+                  "name": "fixture-ap-1"
+                }
               },
-              "AP": {
-                "id": "aa:bb:cc:00:10:01",
-                "name": "fixture-ap-1"
-              }
+              "type": "CLIENT_ACTIVITY"
             },
-            "type": "CLIENT_ACTIVITY"
-          },
-          {
-            "id": "evt-net-0002",
-            "key": "TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT",
-            "category": "SECURITY",
-            "subcategory": "CLIENT_CONNECTIVITY",
-            "event": "TRAFFIC_BLOCKED",
-            "severity": "MEDIUM",
-            "timestamp": 1786192200000,
-            "message_raw": "{SRC_CLIENT} was blocked from accessing {DST_IP} by the {TRIGGER} Firewall Policy.",
-            "title_raw": "Fixture Event",
-            "parameters": {
-              "SRC_CLIENT": {
-                "id": "aa:bb:cc:00:20:02",
-                "ip": "192.0.2.21",
-                "name": "fixture-laptop"
+            {
+              "id": "evt-net-0002",
+              "key": "TRAFFIC_BLOCKED_KNOWN_SOURCE_CLIENT",
+              "category": "SECURITY",
+              "subcategory": "CLIENT_CONNECTIVITY",
+              "event": "TRAFFIC_BLOCKED",
+              "severity": "MEDIUM",
+              "timestamp": 1786192200000,
+              "message_raw": "{SRC_CLIENT} was blocked from accessing {DST_IP} by the {TRIGGER} Firewall Policy.",
+              "title_raw": "Fixture Event",
+              "parameters": {
+                "SRC_CLIENT": {
+                  "id": "aa:bb:cc:00:20:02",
+                  "ip": "192.0.2.21",
+                  "name": "fixture-laptop"
+                },
+                "DST_IP": {
+                  "id": "198.51.100.24",
+                  "name": "198.51.100.24"
+                },
+                "TRIGGER": {
+                  "id": "trigger-fixture-1",
+                  "name": "fixture-policy"
+                }
               },
-              "DST_IP": {
-                "id": "198.51.100.24",
-                "name": "198.51.100.24"
+              "type": "CLIENT_ACTIVITY"
+            },
+            {
+              "id": "evt-net-0003",
+              "key": "DEVICE_DISCONNECTED_AP",
+              "category": "UNIFI_DEVICES",
+              "subcategory": "CLIENT_CONNECTIVITY",
+              "event": "DEVICE_DISCONNECTED",
+              "severity": "HIGH",
+              "timestamp": 1786193100000,
+              "message_raw": "{DEVICE} disconnected.",
+              "title_raw": "Fixture Event",
+              "parameters": {
+                "DEVICE": {
+                  "id": "aa:bb:cc:00:10:02",
+                  "name": "fixture-ap-2",
+                  "model": "U7PG2"
+                }
               },
-              "TRIGGER": {
-                "id": "trigger-fixture-1",
-                "name": "fixture-policy"
-              }
-            },
-            "type": "CLIENT_ACTIVITY"
-          },
-          {
-            "id": "evt-net-0003",
-            "key": "DEVICE_DISCONNECTED_AP",
-            "category": "UNIFI_DEVICES",
-            "subcategory": "CLIENT_CONNECTIVITY",
-            "event": "DEVICE_DISCONNECTED",
-            "severity": "HIGH",
-            "timestamp": 1786193100000,
-            "message_raw": "{DEVICE} disconnected.",
-            "title_raw": "Fixture Event",
-            "parameters": {
-              "DEVICE": {
-                "id": "aa:bb:cc:00:10:02",
-                "name": "fixture-ap-2",
-                "model": "U7PG2"
-              }
-            },
-            "type": "CLIENT_ACTIVITY"
-          }
-        ]
+              "type": "CLIENT_ACTIVITY"
+            }
+          ],
+          "has_more": false,
+          "total_reported": null,
+          "offset": 0,
+          "cap": 100,
+          "api_path": "v2",
+          "submitted_window_ms": [
+            1786187099000,
+            1786194299000
+          ]
+        }
       },
       {
-        "adapter": "records",
+        "adapter": "page",
         "tool": "protect_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -118,35 +129,44 @@
           "limit": 100
         },
         "scope": {},
-        "payload": [
-          {
-            "id": "evt-protect-0001",
-            "type": "smartDetectZone",
-            "camera_id": "cam-fixture-000a",
-            "camera_name": "fixture-camera-a",
-            "start": "2026-08-08T12:10:07.500000+00:00",
-            "end": "2026-08-08T12:10:19.000000+00:00",
-            "score": 91,
-            "smart_detect_types": [
-              "person"
-            ],
-            "recognized_person_name": "fixture-person-should-not-appear",
-            "thumbnail_id": "thumb-fixture-1",
-            "category": null,
-            "sub_category": null,
-            "is_favorite": false
-          },
-          {
-            "id": "evt-protect-0002",
-            "type": "motion",
-            "camera_id": "cam-fixture-000b",
-            "camera_name": "fixture-camera-b",
-            "start": "2026-08-08T12:40:00+00:00",
-            "end": null,
-            "score": 0,
-            "smart_detect_types": []
-          }
-        ]
+        "payload": {
+          "rows": [
+            {
+              "id": "evt-protect-0001",
+              "type": "smartDetectZone",
+              "camera_id": "cam-fixture-000a",
+              "camera_name": "fixture-camera-a",
+              "start": "2026-08-08T12:10:07.500000+00:00",
+              "end": "2026-08-08T12:10:19.000000+00:00",
+              "score": 91,
+              "smart_detect_types": [
+                "person"
+              ],
+              "recognized_person_name": "fixture-person-should-not-appear",
+              "thumbnail_id": "thumb-fixture-1",
+              "category": null,
+              "sub_category": null,
+              "is_favorite": false
+            },
+            {
+              "id": "evt-protect-0002",
+              "type": "motion",
+              "camera_id": "cam-fixture-000b",
+              "camera_name": "fixture-camera-b",
+              "start": "2026-08-08T12:40:00+00:00",
+              "end": null,
+              "score": 0,
+              "smart_detect_types": []
+            }
+          ],
+          "has_more": false,
+          "total_reported": null,
+          "cap": 100,
+          "submitted_window_ms": [
+            1786190400000,
+            1786194000000
+          ]
+        }
       }
     ]
   },
@@ -180,7 +200,7 @@
         "product": "network",
         "api_family": "network_v2_controller",
         "source_tool": "unifi_list_events",
-        "endpoint": null,
+        "endpoint": "/system-log/all",
         "scope": {
           "controller_id": null,
           "site": "default",
@@ -206,7 +226,7 @@
             "end_inclusive": false
           },
           "queried_window": {
-            "start": "2026-08-08T11:05:00.000000Z",
+            "start": "2026-08-08T11:04:59.000000Z",
             "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
@@ -220,7 +240,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 3,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -285,7 +305,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 2,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false
@@ -309,14 +329,14 @@
     ],
     "records": [
       {
-        "evidence_id": "network.events:str:evt-net-0001",
+        "evidence_id": "network.events|str|evt-net-0001",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -379,7 +399,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0001",
+        "evidence_id": "protect.events|str|evt-protect-0001",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -443,14 +463,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0002",
+        "evidence_id": "network.events|str|evt-net-0002",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -507,7 +527,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0002",
+        "evidence_id": "protect.events|str|evt-protect-0002",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -568,14 +588,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0003",
+        "evidence_id": "network.events|str|evt-net-0003",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
