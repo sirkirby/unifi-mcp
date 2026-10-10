@@ -78,6 +78,9 @@ configuration paths remain during migration.
 
 ## Native plugin marketplaces
 
+See the [plugin support matrix](plugin-support.md) for prerequisites, version
+boundaries and which client combinations have real install evidence.
+
 ### Claude Code
 
 In Claude Code:
