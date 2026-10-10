@@ -128,10 +128,11 @@ class SystemManager:
                 "average_load": cpu.average_load,
                 "temperature_c": cpu.temperature,
             },
+            # Protect reports memory in KiB; uiprotect preserves those raw values.
             "memory": {
-                "available_bytes": memory.available,
-                "free_bytes": memory.free,
-                "total_bytes": memory.total,
+                "available_bytes": memory.available * 1024 if memory.available is not None else None,
+                "free_bytes": memory.free * 1024 if memory.free is not None else None,
+                "total_bytes": memory.total * 1024 if memory.total is not None else None,
             },
             "storage": {
                 "available_bytes": storage.available,
