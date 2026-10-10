@@ -245,6 +245,27 @@ Tests use `pytest-asyncio` for async support and `aioresponses` for HTTP mocking
    `No version changes to commit`; do not require a nonexistent writeback. API-only and Worker-only
    batches do not trigger that workflow.
 
+### Plugin versions
+
+Plugin versions describe the shipped bundle independently of server package
+versions. Every change under `plugins/<name>/` requires a bump in all existing
+Claude/Codex manifests (at least one; identical when both exist), including docs,
+skills and setup scripts. This also covers unlisted cross-product. Use patch for
+fixes/docs and patch server moves, minor for new capabilities or minor server
+moves, and major for breaking setup/configuration or major server moves. Before
+1.0 use SemVer 0.x: breaking changes advance minor, additive changes advance patch.
+All four bundles start at 1.0.0 with independent versioning.
+
+Keep versions out of marketplace entries. The server pins in both MCP configs
+must agree and have release tags. `bump-plugin-versions.yml` automatically updates
+pins and bumps independent plugin versions when server releases move those pins;
+plugin-only changes need no package tag. `make check-plugin-versions` (also in
+`make pre-commit`) requires changed plugin versions to be valid, matching and
+strictly greater than at the merge base with `origin/main`. Missing base refs
+fail; fetch history and tags before running it. Version-only bumps are allowed.
+See [plugin support](docs/plugin-support.md) and the `monorepo-release-pipeline`
+skill for release and client-update procedures.
+
 ## Questions?
 
 Review the [support bundle guide](docs/support-bundles.md), then open an issue or

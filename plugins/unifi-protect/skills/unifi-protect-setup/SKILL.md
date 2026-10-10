@@ -31,7 +31,13 @@ On macOS and Linux, resolve setup scripts relative to this skill file:
 
 When the host exposes a plugin-root variable such as `CLAUDE_PLUGIN_ROOT`, using `$CLAUDE_PLUGIN_ROOT/scripts/...` is also valid. Do not assume the current shell directory is the plugin root.
 
-On Windows with Claude Code, use `../../scripts/set-env.ps1` for the final Claude settings write. On Windows with Codex, prefer the native PowerShell prereq script and call `codex mcp add` directly with the same env variables if Bash is unavailable. On Windows with OpenClaw, call `openclaw mcp set` directly with a JSON object containing `command`, `args`, and `env` if Bash is unavailable. Do not run the Bash prereq script on Windows unless the user explicitly asks to use a Bash environment.
+On Windows, use `../../scripts/set-env.ps1 -Target <claude|codex|openclaw>`
+for every target. Use the matching PowerShell prerequisite checker. Both helpers
+require uv/uvx; Codex and OpenClaw also require their client CLI. A working
+Python 3.11+ on PATH is used first; otherwise uv supplies managed Python
+(with a possible first-run download). No separate Python installation is needed.
+Do not substitute direct client registration commands, which can expose env
+values in process arguments.
 
 ## Step 0: Check Prerequisites
 
@@ -55,11 +61,13 @@ If the script exits non-zero, stop and report the error. Do not proceed to crede
 
 Ask: "What is your UniFi controller's IP address or hostname?" Example: `192.168.1.1`.
 
-If another UniFi MCP server is already configured, ask whether Protect is on the same controller. For Claude, existing values may be in `.claude/settings.local.json`. For Codex, existing values may be visible through `codex mcp list` and `codex mcp get <server>`. For OpenClaw, existing values may be visible through `openclaw mcp list` and `openclaw mcp show <server>`.
+If another UniFi MCP server is already configured, ask whether Protect is on the same controller. Inspect a sanitized summary of the existing host and variable names only. Do not print full settings or raw `mcp list/get/show` output: these can contain stored credentials.
 
 ## Step 2: Credentials
 
-If the user already configured shared `UNIFI_*` credentials for another UniFi server, mention they can reuse those credentials. Only set `UNIFI_PROTECT_*` values when Protect credentials differ.
+Shared credentials can be reused deliberately; prefer explicit product-scoped
+providers when configuring this plugin. Apply the precedence rules below before
+assuming an existing shared credential will be selected.
 
 Ask for the username, using a local admin account rather than a Ubiquiti SSO
 account. Never ask the user to send the password in chat, and never place it in a
@@ -70,13 +78,26 @@ Keychain, `pass`, or 1Password helper; it is not run through a shell and must no
 prompt. If no indirect provider already exists, explain how to create one outside
 the chat transcript or use a client-native masked secret UI, then wait.
 
-Set exactly one password spelling; the server refuses to start if two are set. On
-the Claude target `set-env.sh` only adds keys. Before changing the password
-provider, remove `UNIFI_PROTECT_PASSWORD`, `UNIFI_PROTECT_PASSWORD_FILE`, and
-`UNIFI_PROTECT_PASSWORD_COMMAND`. Before changing or skipping API-key setup,
-remove `UNIFI_PROTECT_API_KEY`, `UNIFI_PROTECT_API_KEY_FILE`, and
-`UNIFI_PROTECT_API_KEY_COMMAND`. Then add only the providers the user selected.
-The Codex and OpenClaw targets replace the whole server entry.
+All three servers apply the same precedence: non-empty `UNIFI_<PRODUCT>_*`
+values override shared `UNIFI_*` values; empty values count as unset. This applies
+to host, username and credentials even where bundled YAML defaults name different
+variables. Shared providers are fallback only. Multiple non-empty spellings
+(plain, `_FILE`, `_COMMAND`) at the selected level refuse startup.
+
+The setup helper switches providers atomically: selecting one spelling removes
+its saved siblings at the same level while preserving unrelated settings. To
+remove an authentication path, pipe a JSON patch setting all three saved
+spellings to `null` (for example `UNIFI_PROTECT_PASSWORD`,
+`UNIFI_PROTECT_PASSWORD_FILE`, `UNIFI_PROTECT_PASSWORD_COMMAND`). Remove or
+override shared fallback settings deliberately too; deleting product settings
+alone can reactivate shared credentials. Inherited environment providers must
+also be corrected in the launcher. Never delete a working provider in a separate
+preparatory write.
+
+Before changing or skipping API-key setup, remove obsolete
+`UNIFI_PROTECT_API_KEY`, `UNIFI_PROTECT_API_KEY_FILE`, and
+`UNIFI_PROTECT_API_KEY_COMMAND` spellings with null deletions in the same patch;
+keep only the selected replacement, or delete all three when deselecting it.
 
 > **AI-powered alarms need SuperAdmin.** The alarm-rule tools (`protect_alarm_list_rules` / `protect_alarm_get_rule`) surface AI-powered alarms from the UniFi-OS Alarm Manager only when the account is **SuperAdmin**; otherwise they return the classic automations view (with a `_meta` notice that AI alarms need SuperAdmin). A standard local admin runs every Protect tool fine. Mention SuperAdmin only if the user asks about AI alarms; don't require it for normal setup. On a combined UDM console, SuperAdmin also grants Network/UniFi-OS control — call that out so the user can decide.
 
@@ -98,10 +119,12 @@ Options:
 - Enable all device management
 - Custom categories
 
-Before writing policy values, inspect the selected client's existing
-`unifi-protect` MCP environment. Remove every existing category-specific
-`UNIFI_POLICY_PROTECT_<CATEGORY>_<ACTION>` entry, because those entries take
-precedence over server-level defaults. Do not remove unrelated variables. Set
+Before writing policy values, inspect a sanitized list of the selected client's
+existing `unifi-protect` MCP environment variable names.
+Remove every existing category-specific
+`UNIFI_POLICY_PROTECT_<CATEGORY>_<ACTION>` entry by including null deletions
+in the same JSON patch, because those entries take precedence over server-level
+defaults. Preserve unrelated variables. Set
 `UNIFI_PROTECT_TOOL_PERMISSION_MODE=confirm`, then add back only the
 category/action overrides the user selected.
 
@@ -142,19 +165,61 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
 ```
 
 The script handles the client-specific write:
-- Claude target: merges env vars into `.claude/settings.local.json`
-- Codex target: replaces the `unifi-protect` MCP server via `codex mcp add --env ... -- uvx ...`
-- OpenClaw target: replaces the `unifi-protect` MCP server via `openclaw mcp set ...`
+- Claude: validates and atomically merges `.claude/settings.local.json`
+- Codex: stages registration in a private `CODEX_HOME`, merges env without argv,
+  validates with the client, then atomically replaces `config.toml`
+- OpenClaw: stages `mcp set` without credentials, merges env, validates offline,
+  then atomically replaces `OPENCLAW_CONFIG_PATH` (or the default config)
+
+For raw values or null deletions, use JSON stdin: `set-env.sh --target <target>
+--input-json` or `set-env.ps1 -Target <target> -InputJson`. Have the user supply
+this JSON locally from a private file or a masked input UI; never put raw secrets
+in chat, a tool call, command arguments, or a shell history entry. Provider
+references in the examples are non-secret paths or helper argv, never embedded
+passwords or API keys. Setup checks that provider files are readable and non-empty
+and provider executables exist; it does not read secrets, execute providers, or
+contact the controller. Provider output and controller authentication are checked
+only when the server starts.
+
+### Codex upgrades
+
+Codex setup pins a separate MCP entry that takes precedence over the plugin's
+bundled server. After **every plugin upgrade**, resolve this newly installed
+skill's plugin root and refresh the pin before restarting Codex:
+
+```bash
+bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+```
+
+On Windows: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+This command needs no credential input and preserves the saved environment and
+provider references. It validates providers, records the plugin and package
+versions in `config.toml`, and prints the pinned package on success. Confirm that
+version matches the new installed plugin. Use ordinary setup first if there is
+no saved MCP entry; use the new plugin's scripts rather than an older cache path.
+
+### Recovery
+
+On validation, dependency, registration, or write failure the previous file and
+registration remain in place. Repair malformed configuration without discarding
+unrelated settings, install the reported dependency, or correct the provider,
+then rerun. `--dry-run` / `-DryRun` validates the patch without changing files and
+omits values. Automatic OpenClaw setup requires strict JSON; JSON5 configurations
+are refused unchanged and need the client editor. After a forced termination,
+remove adjacent `.setup-lock` and `.unifi-setup-*` staging directories only after
+confirming no setup process is running. Staging files are private and may contain
+credentials; delete them without displaying their contents. An interruption at
+publication leaves either the old configuration or the complete new one.
 
 ## Step 5: Final Message
 
 For Claude Code, tell the user:
 
-"Configuration saved to `.claude/settings.local.json`. Restart Claude Code or run `/reload-plugins`, then confirm the plugin is enabled with `/plugin`."
+"Configuration saved to `.claude/settings.local.json`. Exit Claude Code and start a new session in this project, then run `/mcp` and check that `plugin:unifi-protect:unifi-protect` is connected. If it shows as failed, run `/mcp reconnect plugin:unifi-protect:unifi-protect`: after a failed start, Claude Code can skip the server for up to 15 minutes, and `/reload-plugins` does not retry it. `claude mcp list` does not apply project settings, so it reports this server as failed even when it connects in a session."
 
 For Codex, tell the user:
 
-"Codex MCP server `unifi-protect` configured. Restart Codex so the updated MCP server is loaded."
+"Codex MCP server `unifi-protect` configured at the package version printed by setup. Restart Codex so the updated MCP server is loaded. After every plugin upgrade, re-run the new plugin’s setup with --target codex --refresh (PowerShell: -Target codex -Refresh)."
 
 For OpenClaw, tell the user:
 

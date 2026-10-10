@@ -23,6 +23,7 @@ from generate_support_skills import PRODUCTS as SKILL_PRODUCTS
 from generate_support_skills import render as render_support_skill
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from plugin_versions import MANIFESTS, Version
 from unifi_core.support_bundle import SupportBundle
 
 PRODUCTS = ("network", "protect", "access")
@@ -131,40 +132,61 @@ def validate_bundle(
 def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, list[str], str]:
     """Validate packaged skills/pins and use only the standard uvx launcher."""
     folder = root / "plugins" / f"unifi-{product}"
-    codex = json.loads((folder / ".codex-plugin/plugin.json").read_text())
-    claude = json.loads((folder / ".claude-plugin/plugin.json").read_text())
-    version = codex["version"]
-    require(isinstance(version, str) and re.fullmatch(r"\d+\.\d+\.\d+", version) is not None, "plugin_version")
-    require(claude["version"] == version, "plugin_version_alignment")
-    skill_root = (folder / codex["skills"]).resolve()
+    manifests = {
+        filename: json.loads((folder / filename).read_text()) for filename in MANIFESTS if (folder / filename).is_file()
+    }
+    require(bool(manifests), "plugin_manifest_required")
+    plugin_version = next(iter(manifests.values())).get("version")
+    for manifest in manifests.values():
+        try:
+            Version.parse(manifest.get("version"))
+        except ValueError:
+            raise SupportSmokeError("plugin_version") from None
+        require(manifest["version"] == plugin_version, "plugin_version_alignment")
+    codex = manifests.get(".codex-plugin/plugin.json")
+    claude = manifests.get(".claude-plugin/plugin.json")
+    skill_root = (folder / (codex["skills"] if codex is not None else "./skills/")).resolve()
     require(skill_root.is_relative_to(folder.resolve()), "plugin_skill_root")
     skill = (skill_root / f"unifi-{product}-support/SKILL.md").read_text()
     definition = next(item for item in SKILL_PRODUCTS if item.slug == product)
     require(skill == render_support_skill(definition), "plugin_support_skill")
-    require(codex["mcpServers"] == "./.mcp.json", "plugin_mcp_path")
+    if codex is not None:
+        require(codex["mcpServers"] == "./.mcp.codex.json", "plugin_mcp_path")
     name = f"unifi-{product}"
     mcp_manifest = json.loads((folder / ".mcp.json").read_text())
+    codex_mcp = json.loads((folder / ".mcp.codex.json").read_text())
     launcher = mcp_manifest["mcpServers"][name]
+    args = launcher.get("args", [])
+    pin = re.fullmatch(rf"unifi-{product}-mcp==(.+)", args[-1]) if args and isinstance(args[-1], str) else None
+    require(pin is not None, "plugin_package_pin")
+    version = pin[1]
+    try:
+        Version.parse(version)
+    except ValueError:
+        raise SupportSmokeError("plugin_package_version") from None
     expected_args = ["--python-preference", "system", f"unifi-{product}-mcp=={version}"]
-    for config in (launcher, claude["mcpServers"][name]):
+    launchers = [launcher, codex_mcp["mcpServers"][name]]
+    if claude is not None and "mcpServers" in claude:
+        launchers.append(claude["mcpServers"][name])
+    for config in launchers:
         require(config["command"] == "uvx" and config["args"] == expected_args, "plugin_launcher_alignment")
     # The repository artifacts are trusted, unlike --support-plugin-root. Allow
     # release-version changes only; reject extra servers, transports, hooks, and
     # every other host behavior that our manual stdio launch would not exercise.
     trusted_folder = Path(__file__).resolve().parents[1] / "plugins" / name
     expected_env = {}
-    for filename, supplied in (
-        (".codex-plugin/plugin.json", codex),
-        (".claude-plugin/plugin.json", claude),
-        (".mcp.json", mcp_manifest),
-    ):
+    for filename, supplied in {**manifests, ".mcp.codex.json": codex_mcp, ".mcp.json": mcp_manifest}.items():
         expected = json.loads((trusted_folder / filename).read_text())
         if "version" in expected:
-            expected["version"] = version
-        if filename != ".codex-plugin/plugin.json":
+            expected["version"] = plugin_version
+        if "mcpServers" in expected and isinstance(expected["mcpServers"], dict):
             expected["mcpServers"][name]["args"] = expected_args
-            expected_env = expected["mcpServers"][name]["env"]
-            require(supplied["mcpServers"][name].get("env") == expected_env, "plugin_env_alignment")
+            require(
+                supplied["mcpServers"][name].get("env") == expected["mcpServers"][name].get("env"),
+                "plugin_env_alignment",
+            )
+            if filename == ".mcp.json":
+                expected_env = expected["mcpServers"][name]["env"]
         require(supplied == expected, "plugin_manifest_alignment")
     # Resolve the checked-in plugin environment exactly as a host would.
     inherited = dict(env)

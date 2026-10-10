@@ -14,7 +14,7 @@ description: |
   (3) distinguish claude --plugin-dir from marketplace installs during local dev,
   (4) run check-prereqs.sh before plugin activation changes,
   (5) keep shell scripts Bash 3.2-compatible for macOS, and
-  (6) issue no-op patch releases when only plugin.json changes.
+  (6) bump independent plugin versions whenever shipped files change.
 managed_by: myco
 user-invocable: true
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
@@ -247,49 +247,37 @@ grep -n 'declare -A\|declare -a\|mapfile\|readarray' plugins/unifi-*/scripts/*.s
 
 Zero results is the goal.
 
-## Procedure 6: Plugin Version Sync — No-Op Patch Releases
+## Procedure 6: Independent Plugin Versions
 
-### The rule
+Each plugin has an independent semantic version describing everything it ships,
+separate from the server package pin. Set the same `version` in every existing
+Claude and Codex manifest; require at least one manifest. The unlisted
+`cross-product` bundle follows these rules with its Claude manifest only.
+Keep `version` out of marketplace entries.
 
-Plugin versions are **strictly slaved to the MCP package release tags**. The `plugin.json` version field must match the tagged MCP package version on PyPI.
+Bump every affected plugin in the same PR whenever any file under
+`plugins/<name>/` changes, including skills, setup scripts, MCP configs and docs.
+Use patch for plugin-only fixes or docs; minor for new skills/capabilities or a
+minor server pin move; major for breaking setup/configuration or a major server
+pin move. Patch server moves use patch. Before 1.0, breaking changes advance the
+minor and additive changes advance the patch (SemVer 0.x). All four plugins start
+at 1.0.0 when independent versioning is introduced.
 
-When **only** `plugin.json` changes (no Python code changes in `packages/`), issue a **no-op patch release**:
+`bump-plugin-versions.yml` automatically moves both client pins and bumps the
+plugin by the size of a released server change, preserving the independent
+plugin version line. It also updates an inline Claude pin when present and
+regenerates `apps/<product>/server.json` with the **server** version. Core, Shared
+and Relay triggers keep their existing behavior: coalesce any outstanding product
+tags, otherwise produce no writeback. Plugin-only changes need a manifest bump
+and merge; no Python package release is needed.
 
-1. Bump the version in the relevant `pyproject.toml` (patch increment only).
-2. The Python wheel is functionally identical to the prior release.
-3. Tag and publish via the normal pipeline (see `monorepo-release-pipeline`).
-4. Update the `plugin.json` version field to match the new tag.
-
-**Never skip the release.** Without a version bump, users with the old plugin version have no signal that a reconfiguration is available.
-
-### When this applies
-
-Issue a no-op patch release when changing:
-- Flag values in `plugin.json` (e.g., `UNIFI_MCP_HTTP_FORCE`)
-- Environment variable defaults or names in `plugin.json`
-- Plugin capability declarations in `plugin.json`
-
-It does **not** apply to `plugins/unifi-*/scripts/` changes — those are local setup helpers, not packaged artifacts.
-
-### Step-by-step
-
-```bash
-# 1. Make the plugin.json change across all affected plugins
-# 2. Bump pyproject.toml version (patch increment, e.g., 0.4.2 → 0.4.3)
-# 3. Commit both together
-git add plugins/unifi-network/plugin.json packages/unifi-mcp-network/pyproject.toml
-git commit -m "chore: bump plugin version to 0.4.3 (fix UNIFI_MCP_HTTP_FORCE)"
-# 4. Follow monorepo-release-pipeline for tag ordering and PyPI publish
-```
-
-Use the dependency-aware batching rules in `monorepo-release-pipeline`. A Shared release creates a
-wait boundary only when consumer metadata, code, or a release workflow requires that newly published
-version; consumers whose existing bounds remain compatible may publish in the same batch. Re-tagging
-an existing release is not an option because PyPI releases are immutable.
-
-### Why not re-use the current tag?
-
-A no-op patch release is cheap, auditable, and unambiguous. The wheel content is identical; what changes is the signal to plugin consumers that a manifest update has occurred. Re-using a tag would break reproducibility and violate PyPI immutability.
+Run `make check-plugin-versions` before committing. It uses
+`scripts/plugin_versions.py check --base origin/main`, also run by
+`make pre-commit`; PR CI uses the PR base SHA's merge base. Fetch base history and
+tags first. A missing base fails. Changed plugin versions must be valid SemVer,
+agree across existing manifests and exceed the merge-base version. Client pins
+must agree and name release tags; only the workflow's exact `--releasing` tag may
+stand in for a tag not yet discovered locally. Version-only bumps are allowed.
 
 ## Cross-Cutting Gotchas
 
@@ -302,6 +290,6 @@ A no-op patch release is cheap, auditable, and unambiguous. The wheel content is
 
 **Bash 3.2 failures are silent.** A script that fails due to `declare -A` on macOS may not error loudly — it silently omits the intended configuration. `/bin/bash` testing is non-negotiable.
 
-**No-op releases follow the full pipeline.** The tag ordering and PyPI sequencing constraints from `monorepo-release-pipeline` apply even when the Python wheel is unchanged. Don't shortcut the release process.
+**Plugin bumps accompany shipped changes.** Update existing Claude and Codex manifest versions together, including for script and skill changes; package pins move only with server releases.
 
 **macOS Python entitlement is a silent killer.** A server that starts cleanly and registers all tools but returns "Not connected to controller" on every call is the entitlement symptom — `check-prereqs.sh` catches this before user-facing failure.
