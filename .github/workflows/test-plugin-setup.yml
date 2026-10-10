@@ -9,6 +9,7 @@ on:
     paths:
       - "plugins/*/scripts/**"
       - "scripts/smoke-plugin-setup.*"
+      - "scripts/plugin_setup_fixtures.py"
       - ".github/workflows/test-plugin-setup.yml"
   pull_request:
     types: [opened, synchronize, reopened]
@@ -16,6 +17,7 @@ on:
     paths:
       - "plugins/*/scripts/**"
       - "scripts/smoke-plugin-setup.*"
+      - "scripts/plugin_setup_fixtures.py"
       - ".github/workflows/test-plugin-setup.yml"
 
 jobs:

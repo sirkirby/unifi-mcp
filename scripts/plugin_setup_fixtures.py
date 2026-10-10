@@ -90,15 +90,16 @@ class Fixtures:
         self.shell = shell
         self.powershell = powershell
         self.passes = 0
-        self.repo = Path(__file__).resolve().parents[3]
+        self.repo = Path(__file__).resolve().parents[1]
 
     def check(self, condition, label):
         if not condition:
             raise AssertionError(label)
         self.passes += 1
 
-    def run(self):
-        reference = Path(__file__).resolve().parent
+    def check_script_parity(self):
+        """Keep shipped setup implementations byte-identical across products."""
+        reference = self.repo / "plugins/unifi-network/scripts"
         for product in ("network", "protect", "access"):
             scripts = self.repo / f"plugins/unifi-{product}/scripts"
             for filename in (
@@ -107,12 +108,15 @@ class Fixtures:
                 "check-prereqs.sh",
                 "check-prereqs.ps1",
                 "setup_config.py",
-                "setup_fixtures.py",
             ):
                 self.check(
                     (scripts / filename).read_bytes() == (reference / filename).read_bytes(),
                     "cross-product script parity",
                 )
+
+    def run(self):
+        self.check_script_parity()
+        for product in ("network", "protect", "access"):
             for target in ("claude", "codex", "openclaw"):
                 self.scenario(product, target)
 
@@ -376,7 +380,7 @@ def main():
     parser.add_argument("--shell", default="/bin/bash")
     parser.add_argument("--powershell")
     args = parser.parse_args()
-    repo = Path(__file__).resolve().parents[3]
+    repo = Path(__file__).resolve().parents[1]
     with tempfile.TemporaryDirectory(prefix=".setup-fixtures-", dir=repo) as temporary:
         fixtures = Fixtures(Path(temporary), args.shell, args.powershell)
         fixtures.run()

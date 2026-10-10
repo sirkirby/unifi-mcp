@@ -3,4 +3,4 @@
 set -e
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 echo "Running plugin setup fixtures under Bash $BASH_VERSION"
-exec python3 "$repo_root/plugins/unifi-network/scripts/setup_fixtures.py" --shell "$BASH"
+exec python3 "$repo_root/scripts/plugin_setup_fixtures.py" --shell "$BASH"

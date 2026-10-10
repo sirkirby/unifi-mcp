@@ -117,7 +117,7 @@ function Invoke-PortableFixtures {
         if ($null -ne $command) { $python = $command.Source; break }
     }
     if ($null -eq $python) { return [pscustomobject]@{ ExitCode = 1; Output = 'Python 3.11+ unavailable' } }
-    $fixturePath = Join-Path $networkDir 'setup_fixtures.py'
+    $fixturePath = Join-Path $RepositoryRoot 'scripts/plugin_setup_fixtures.py'
     $start = New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName = $python
     $start.Arguments = '"' + $fixturePath + '" --powershell "' + (Get-CurrentShellPath) + '"'
