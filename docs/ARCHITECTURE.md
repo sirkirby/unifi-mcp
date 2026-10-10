@@ -34,6 +34,7 @@ Low-level UniFi controller connectivity. No MCP dependency.
 | `retry.py` | Retry logic with exponential backoff |
 | `exceptions.py` | Shared exception types |
 | `incident_evidence.py` | Versioned cross-product incident evidence contract ([details](incident-evidence.md)); Network and Protect normalizers live in `network/` and `protect/` |
+| `source_page.py` | One bounded manager read with its totals, continuation state and submitted bounds |
 | `event_timeline.py` | Legacy timeline shape used by the relay, with a projection from evidence records |
 
 Used by: `apps/network`, `apps/protect`, `apps/access`, `apps/api`.
