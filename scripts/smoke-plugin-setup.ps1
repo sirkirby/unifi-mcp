@@ -227,7 +227,6 @@ try {
     $fixtureArgv = Join-Path $testRoot 'argv.jsonl'
     [IO.File]::WriteAllText($fixtureArgv, '')
     $env:FIXTURE_ARGV = $fixtureArgv
-    $env:FIXTURE_SECRET = 'fixture-only'
     $env:FIXTURE_PLUGIN_ROOT = Join-Path $RepositoryRoot 'plugins/unifi-network'
     $env:PATH = $fakeBin + [IO.Path]::PathSeparator + $priorPath
 
@@ -361,7 +360,7 @@ try {
     $env:OPENCLAW_STATE_DIR = $priorOpenClawStateDir
     $env:OPENCLAW_CONFIG_PATH = $priorOpenClawConfigPath
     $env:PATH = $priorPath
-    Remove-Item Env:FIXTURE_ARGV, Env:FIXTURE_SECRET, Env:FIXTURE_PLUGIN_ROOT -ErrorAction SilentlyContinue
+    Remove-Item Env:FIXTURE_ARGV, Env:FIXTURE_PLUGIN_ROOT -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }
 

@@ -122,10 +122,12 @@ def fake_claude(args):
         return
     if args[3:] != ["--values-stdin"]:
         sys.exit(1)
-    values = json.loads(sys.stdin.read())
+    # Claude consumes UTF-8 bytes; Windows Python text stdin uses a locale code page.
+    values = json.loads(sys.stdin.buffer.read().decode("utf-8"))
     if os.environ.get("FIXTURE_FAIL") == "register":
-        print(os.environ["FIXTURE_SECRET"])
-        print(os.environ["FIXTURE_SECRET"], file=sys.stderr)
+        marker = Path(os.environ["FIXTURE_OUTPUT_MARKER_FILE"]).read_bytes()
+        sys.stdout.buffer.write(marker)
+        sys.stderr.buffer.write(marker)
         sys.exit(2)
     for key, value in values.items():
         entry = schema.get(key)
@@ -270,6 +272,8 @@ class Fixtures:
         config = workspace / "claude"
         config.mkdir()
         sample_value = 'FAKE-only "quotes" $dollar \\ slash spaces Ω 😀'
+        output_marker = workspace / "client-output-marker"
+        output_marker.write_bytes(sample_value.encode("utf-8"))
         environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
         environment.update(
             HOME=str(workspace),
@@ -277,8 +281,11 @@ class Fixtures:
             CLAUDE_CONFIG_DIR=str(config),
             PATH=str(bindir) + os.pathsep + os.environ["PATH"],
             FIXTURE_ARGV=str(workspace / "argv.jsonl"),
-            FIXTURE_SECRET=sample_value,
+            FIXTURE_OUTPUT_MARKER_FILE=str(output_marker),
             FIXTURE_PLUGIN_ROOT=str(plugin),
+            # Windows Python pipes use the locale code page, unlike Claude's UTF-8 stdin.
+            # Exercise that difference on every platform and Python resolution route.
+            PYTHONIOENCODING="cp1252",
         )
         base = f"UNIFI_{upper}_PASSWORD"
         settings_path, keychain_path = config / "settings.json", config / "fake-keychain.json"
@@ -349,6 +356,31 @@ class Fixtures:
         def migrate(expected=0, extra=None):
             return run(wrapper("set-env", "-Migrate" if self.powershell else "--migrate"), None, expected, extra)
 
+        seed()
+        # Model Claude's UTF-8 wire format independently of Python's text streams.
+        # CRLF JSON whitespace must not affect the value saved in the fake keychain.
+        wire = (
+            json.dumps({"password": sample_value}, ensure_ascii=False, indent=2).replace("\n", "\r\n").encode("utf-8")
+        )
+        command = [
+            sys.executable,
+            str(Path(__file__).resolve()),
+            "--fake-client",
+            "claude",
+            "plugin",
+            "configure",
+            plugin_id,
+            "--values-stdin",
+        ]
+        result = subprocess.run(command, input=wire, env=environment, capture_output=True, timeout=30)
+        self.check(result.returncode == 0, "fake Claude accepts UTF-8 JSON with legacy text streams")
+        self.check(options()["password"] == sample_value, "fake Claude decodes stdin as UTF-8 exactly")
+        result = subprocess.run(
+            command, input=wire, env=dict(environment, FIXTURE_FAIL="register"), capture_output=True, timeout=30
+        )
+        self.check(result.returncode == 2, "fake Claude fails the selected operation")
+        self.check(result.stdout == output_marker.read_bytes(), "fake Claude emits output marker on stdout")
+        self.check(result.stderr == output_marker.read_bytes(), "fake Claude emits output marker on stderr")
         seed()
         before = state()
         # Python resolution: a local interpreter first, managed Python through uv otherwise.
