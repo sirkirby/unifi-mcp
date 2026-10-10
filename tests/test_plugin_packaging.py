@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 import re
 import shutil
-import subprocess
 import tomllib
 from pathlib import Path
 
@@ -32,7 +31,7 @@ SUPPORT_DOC = Path("docs/plugin-support.md")
 PLUGIN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 KEBAB = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
-# Same pattern the release workflow uses to rewrite package pins.
+# Package pins track server versions independently of plugin versions.
 PACKAGE_PIN = re.compile(r"^(unifi-[a-z]+-mcp)==(.+)$")
 ENV_REFERENCE = re.compile(r"^\$\{[A-Z0-9_]+(?::-[^}]*)?\}$")
 AGENT_PLUGINS_SCHEMA = "https://agent-plugins.org/schemas/"
@@ -292,9 +291,6 @@ def packaging_errors(root: Path) -> list[str]:
         if plugin_dir.parent.resolve() not in advertised:
             check_claude_manifest(plugin_dir.parent, None, errors)
 
-    workflow = (root / BUMP_WORKFLOW).read_text(encoding="utf-8")
-    synced = set(re.findall(r'update_plugin_version "plugins/([a-z0-9-]+)"', workflow))
-
     for name in sorted(set(claude) | set(codex)):
         bundle = claude.get(name) or codex[name]
         claude_manifest = check_claude_manifest(bundle, name, errors)
@@ -313,8 +309,8 @@ def packaging_errors(root: Path) -> list[str]:
         versions = {"Claude manifest": (claude_manifest or {}).get("version")}
         if resolved is not None:
             versions["Codex manifest"] = resolved["identity"].get("version")
-        versions.update({f".mcp.json {server} pin": version for server, (_, version) in pins.items()})
-        versions.update({f"Codex MCP config {server} pin": version for server, (_, version) in portable_pins.items()})
+        if pins != portable_pins:
+            errors.append(f"{name}: mismatched client pins")
         inline = (claude_manifest or {}).get("mcpServers")
         claude_mcp = bundle / ".mcp.json"
         if isinstance(inline, dict) and claude_mcp.is_file():
@@ -326,15 +322,8 @@ def packaging_errors(root: Path) -> list[str]:
                 if actual != expected:
                     errors.append(f"{name}: inline Claude mcpServers.{server_name} differs from the MCP config file")
         if len(set(versions.values())) != 1:
-            errors.append(f"{name}: versions out of lockstep: {versions}")
+            errors.append(f"{name}: plugin manifests disagree: {versions}")
 
-        if pins:
-            if name not in synced:
-                errors.append(f"{name}: {BUMP_WORKFLOW} does not sync this bundle's versions")
-            if portable:
-                for required in ('"$plugin_dir/plugin.json"', '"$plugin_dir/mcp.json"'):
-                    if required not in workflow:
-                        errors.append(f"{name}: {BUMP_WORKFLOW} does not update portable {required}")
     return errors
 
 
@@ -458,7 +447,7 @@ def test_package_pin_drift_is_reported(tmp_path: Path) -> None:
 
     errors = packaging_errors(root)
 
-    assert any(f"{name}: versions out of lockstep" in error for error in errors)
+    assert any(f"{name}: mismatched client pins" in error for error in errors)
 
 
 def test_unknown_package_name_is_reported(tmp_path: Path) -> None:
@@ -499,18 +488,10 @@ def test_bundle_missing_from_one_marketplace_is_reported(tmp_path: Path) -> None
     assert f"{name}: advertised only in the Claude marketplace" in errors
 
 
-def test_bundle_not_synced_by_release_workflow_is_reported(tmp_path: Path) -> None:
-    root = _copy_packaging_tree(tmp_path)
-    name = _advertised_bundles()[0]
-    workflow = root / BUMP_WORKFLOW
-    workflow.write_text(
-        workflow.read_text(encoding="utf-8").replace(f'update_plugin_version "plugins/{name}"', "true"),
-        encoding="utf-8",
-    )
-
-    errors = packaging_errors(root)
-
-    assert any(f"{name}: {BUMP_WORKFLOW} does not sync" in error for error in errors)
+def test_release_workflow_delegates_to_version_module() -> None:
+    workflow = yaml.safe_load((REPO_ROOT / BUMP_WORKFLOW).read_text())
+    runs = [step.get("run", "") for job in workflow["jobs"].values() for step in job["steps"]]
+    assert any("python3 scripts/plugin_versions.py sync" in run for run in runs)
 
 
 def test_claude_author_string_is_reported(tmp_path: Path) -> None:
@@ -636,41 +617,14 @@ def test_codex_package_pin_drift_is_reported(tmp_path: Path) -> None:
     path = mcp_config_path(bundle, check_codex_manifest(bundle, name, []))
     _edit_json(path, lambda d: next(iter(d["mcpServers"].values())).update(args=[name + "-mcp==999.0.0"]))
 
-    assert any("versions out of lockstep" in error for error in packaging_errors(root))
+    assert any("mismatched client pins" in error for error in packaging_errors(root))
 
 
 @pytest.mark.parametrize("name", _advertised_bundles())
 @pytest.mark.parametrize("filename", [".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"])
-def test_every_client_package_pin_matches_plugin_version(name: str, filename: str) -> None:
+def test_every_client_package_pin_agrees(name: str, filename: str) -> None:
     bundle = REPO_ROOT / "plugins" / name
-    version = _load(bundle / ".codex-plugin/plugin.json")["version"]
+    expected = check_mcp_servers(bundle / ".mcp.json", REPO_ROOT, [], portable=False)
     pins = check_mcp_servers(bundle / filename, REPO_ROOT, [], portable=False, codex="codex" in filename)
 
-    assert pins == {name: (f"{name}-mcp", version)}
-
-
-@pytest.mark.parametrize("name", _advertised_bundles())
-def test_version_workflow_updates_every_client_pin(tmp_path: Path, name: str) -> None:
-    root = _copy_packaging_tree(tmp_path)
-    workflow = yaml.safe_load((root / BUMP_WORKFLOW).read_text())
-    run = next(
-        step["run"]
-        for job in workflow["jobs"].values()
-        for step in job["steps"]
-        if "update_plugin_version()" in step.get("run", "")
-    )
-    # Exercise the real workflow functions without tag discovery, commits or publication.
-    functions = run.split("NETWORK_VERSION=", 1)[0]
-    subprocess.run(
-        ["bash", "-c", functions + '\nupdate_plugin_version "$1" "$2"', "fixture", f"plugins/{name}", "999.0.0"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    bundle = root / "plugins" / name
-    for filename in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
-        assert _load(bundle / filename)["version"] == "999.0.0"
-    for filename in (".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"):
-        pins = check_mcp_servers(bundle / filename, root, [], portable=False, codex="codex" in filename)
-        assert pins == {name: (f"{name}-mcp", "999.0.0")}, filename
+    assert pins == expected

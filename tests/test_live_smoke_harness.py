@@ -1083,3 +1083,48 @@ def test_live_smoke_protect_api_key_preview_skip_when_missing():
         None,
         "requires UNIFI_PROTECT_API_KEY or UNIFI_API_KEY",
     )
+
+
+@pytest.mark.parametrize("product", ["network", "protect", "access"])
+@pytest.mark.parametrize("plugin_version", ["2.4.0", "2.4.0-rc.1+fixture"])
+def test_support_plugin_launches_server_pin_independently_of_plugin_version(tmp_path, product, plugin_version):
+    import shutil
+
+    import support_smoke
+
+    name = f"unifi-{product}"
+    target = tmp_path / "plugins" / name
+    shutil.copytree(Path(__file__).resolve().parents[1] / "plugins" / name, target)
+    for manifest in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+        path = target / manifest
+        data = json.loads(path.read_text())
+        data["version"] = plugin_version
+        path.write_text(json.dumps(data))
+    for config in (".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"):
+        path = target / config
+        data = json.loads(path.read_text())
+        data["mcpServers"][name]["args"][-1] = f"{name}-mcp==0.30.7"
+        path.write_text(json.dumps(data))
+
+    command, arguments, version = support_smoke.plugin_command(tmp_path, product, {})
+    assert command == "uvx"
+    assert arguments == ["--python-preference", "system", f"{name}-mcp==0.30.7"]
+    assert version == "0.30.7"
+
+
+@pytest.mark.parametrize("removed", [".claude-plugin/plugin.json", ".codex-plugin/plugin.json"])
+def test_support_plugin_validates_only_existing_manifests(tmp_path, removed):
+    import shutil
+
+    import support_smoke
+
+    target = tmp_path / "plugins/unifi-network"
+    shutil.copytree(Path(__file__).resolve().parents[1] / "plugins/unifi-network", target)
+    (target / removed).unlink()
+    command, arguments, version = support_smoke.plugin_command(tmp_path, "network", {})
+    assert command == "uvx"
+    assert arguments[-1] == f"unifi-network-mcp=={version}"
+    for manifest in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+        (target / manifest).unlink(missing_ok=True)
+    with pytest.raises(support_smoke.SupportSmokeError, match="plugin_manifest_required"):
+        support_smoke.plugin_command(tmp_path, "network", {})
