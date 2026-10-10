@@ -82,6 +82,8 @@ def _context(**overrides: Any) -> SourceContext:
         "requested_window": WINDOW,
         "queried_window": TimeWindow.from_datetimes(START - timedelta(hours=1), COLLECTED),
         "cap": 10,
+        # The source said it ran out; without this nothing proves completeness.
+        "has_more": False,
     }
     values.update(overrides)
     return SourceContext(**values)
@@ -146,7 +148,7 @@ def test_record_provenance_carries_scope_family_source_query_and_exact_record_id
     assert provenance.source_record_id_field == "id"
     assert provenance.query == {"limit": 10, "within_hours": 2}
     assert provenance.collected_at == "2026-08-08T13:05:00.000000Z"
-    assert record.evidence_id == "network.events:int:4711"
+    assert record.evidence_id == "network.events|int|4711"
 
 
 def test_secret_named_query_and_attribute_keys_are_excluded() -> None:
@@ -357,7 +359,7 @@ def test_mapping_not_evaluated_without_assertions_and_outcomes_are_validated() -
 
 
 def test_coverage_reports_requested_queried_filters_pagination_and_counts() -> None:
-    context = _context(filters={"event_type": "K"}, offset=20, cap=3)
+    context = _context(filters={"event_type": "K"}, offset=20, cap=3, has_more=None)
     raw = [
         {"id": "1", "time": _ms(START)},
         {"id": "1", "time": _ms(START)},
@@ -386,7 +388,8 @@ def test_coverage_reports_requested_queried_filters_pagination_and_counts() -> N
 @pytest.mark.parametrize(
     ("pagination", "expected"),
     [
-        (Pagination(cap=10, returned=3), Truncation.NOT_TRUNCATED),
+        # A short page against a cap is not proof the source ran out.
+        (Pagination(cap=10, returned=3), Truncation.UNKNOWN),
         (Pagination(cap=3, returned=3), Truncation.UNKNOWN),
         (Pagination(cap=None, returned=3), Truncation.UNKNOWN),
         (Pagination(cap=3, returned=3, has_more=False), Truncation.NOT_TRUNCATED),
@@ -404,7 +407,7 @@ def test_truncation_follows_only_from_reported_pagination(pagination, expected) 
 
 
 def test_cap_reached_count_is_not_a_population_total() -> None:
-    source = _collect([{"id": str(i), "time": _ms(START) + i} for i in range(10)]).source
+    source = _collect([{"id": str(i), "time": _ms(START) + i} for i in range(10)], has_more=None).source
     assert source.coverage.counts.in_window == 10
     assert source.coverage.population_total is None
     assert source.outcome is SourceOutcome.PARTIAL
@@ -615,11 +618,11 @@ def test_ordering_is_utc_then_product_source_and_record_id_with_untimed_last() -
     )
     evidence = assemble_incident_evidence(requested_window=WINDOW, budgets=BUDGETS, sources=[protect, network])
     assert [r.evidence_id for r in evidence.records] == [
-        "protect.events:str:p0",
-        "network.events:str:n1",
-        "network.events:str:n2",
-        "protect.events:str:p1",
-        "network.events:str:nx",
+        "protect.events|str|p0",
+        "network.events|str|n1",
+        "network.events|str|n2",
+        "protect.events|str|p1",
+        "network.events|str|nx",
     ]
     shuffled_sources = [protect, network]
     random.Random(7).shuffle(shuffled_sources)
@@ -631,7 +634,7 @@ def test_records_without_ids_get_stable_content_hash_ids() -> None:
     first = _collect([{"key": "K", "time": _ms(START)}]).records[0]
     second = _collect([{"time": _ms(START), "key": "K"}]).records[0]
     assert first.evidence_id == second.evidence_id
-    assert first.evidence_id.startswith("network.events:sha256:")
+    assert first.evidence_id.startswith("network.events|sha256|")
     assert first.evidence_id_basis == "content_hash"
     assert first.provenance.source_record_id is None
 

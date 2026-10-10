@@ -1,6 +1,6 @@
 {
-  "description": "A budget was exhausted, yet the set claims an empty, complete result.",
-  "rejected_by": "schema",
+  "description": "The source reported more matching rows than were read, yet the tail is labelled not_truncated.",
+  "rejected_by": "semantic",
   "derived_from": "healthy_empty",
   "evidence": {
     "schema": "unifi-incident-evidence",
@@ -20,12 +20,10 @@
       },
       "usage": {
         "events": 0,
-        "calls": 10,
+        "calls": 2,
         "elapsed_ms": 850
       },
-      "exhausted": [
-        "calls"
-      ]
+      "exhausted": []
     },
     "mappings": null,
     "sources": [
@@ -74,8 +72,8 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 0,
-            "has_more": false,
-            "total_reported": null,
+            "has_more": null,
+            "total_reported": 25,
             "post_filtered": false,
             "interrupted": false
           },

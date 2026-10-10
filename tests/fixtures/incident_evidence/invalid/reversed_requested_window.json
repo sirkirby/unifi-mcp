@@ -1,12 +1,12 @@
 {
-  "description": "A budget was exhausted, yet the set claims an empty, complete result.",
-  "rejected_by": "schema",
+  "description": "The requested window ends before it starts.",
+  "rejected_by": "semantic",
   "derived_from": "healthy_empty",
   "evidence": {
     "schema": "unifi-incident-evidence",
     "schema_version": 1,
     "requested_window": {
-      "start": "2026-08-08T12:00:00.000000Z",
+      "start": "2026-08-08T14:00:00.000000Z",
       "end": "2026-08-08T13:00:00.000000Z",
       "start_inclusive": true,
       "end_inclusive": false
@@ -20,12 +20,10 @@
       },
       "usage": {
         "events": 0,
-        "calls": 10,
+        "calls": 2,
         "elapsed_ms": 850
       },
-      "exhausted": [
-        "calls"
-      ]
+      "exhausted": []
     },
     "mappings": null,
     "sources": [

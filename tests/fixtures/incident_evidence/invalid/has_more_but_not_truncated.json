@@ -32,7 +32,7 @@
         "product": "network",
         "api_family": "network_v2_controller",
         "source_tool": "unifi_list_events",
-        "endpoint": null,
+        "endpoint": "/system-log/all",
         "scope": {
           "controller_id": null,
           "site": "default",
@@ -61,7 +61,7 @@
             "end_inclusive": false
           },
           "queried_window": {
-            "start": "2026-08-08T11:05:00.000000Z",
+            "start": "2026-08-08T11:04:59.000000Z",
             "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
@@ -166,14 +166,14 @@
     ],
     "records": [
       {
-        "evidence_id": "network.events:str:evt-net-0601",
+        "evidence_id": "network.events|str|evt-net-0601",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -225,14 +225,14 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "network.events:str:evt-net-0602",
+        "evidence_id": "network.events|str|evt-net-0602",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
           "product": "network",
           "api_family": "network_v2_controller",
           "source_tool": "unifi_list_events",
-          "endpoint": null,
+          "endpoint": "/system-log/all",
           "scope": {
             "controller_id": null,
             "site": "default",
@@ -284,7 +284,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0601",
+        "evidence_id": "protect.events|str|evt-protect-0601",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -345,7 +345,7 @@
         "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:str:evt-protect-0602",
+        "evidence_id": "protect.events|str|evt-protect-0602",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {

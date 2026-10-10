@@ -1,6 +1,6 @@
 {
-  "description": "A budget was exhausted, yet the set claims an empty, complete result.",
-  "rejected_by": "schema",
+  "description": "The queried window ends before the requested window, yet coverage says covered and the set is an all-clear.",
+  "rejected_by": "semantic",
   "derived_from": "healthy_empty",
   "evidence": {
     "schema": "unifi-incident-evidence",
@@ -20,12 +20,10 @@
       },
       "usage": {
         "events": 0,
-        "calls": 10,
+        "calls": 2,
         "elapsed_ms": 850
       },
-      "exhausted": [
-        "calls"
-      ]
+      "exhausted": []
     },
     "mappings": null,
     "sources": [
@@ -61,7 +59,7 @@
           },
           "queried_window": {
             "start": "2026-08-08T11:04:59.000000Z",
-            "end": "2026-08-08T13:04:59.000000Z",
+            "end": "2026-08-08T12:01:00.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
           },

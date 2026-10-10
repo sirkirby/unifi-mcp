@@ -42,7 +42,7 @@
         }
       },
       {
-        "adapter": "tool_response",
+        "adapter": "page",
         "tool": "protect_list_events",
         "collected_at": "2026-08-08T13:05:00.000000Z",
         "args": {
@@ -52,11 +52,14 @@
         },
         "scope": {},
         "payload": {
-          "success": true,
-          "data": {
-            "events": [],
-            "count": 0
-          }
+          "rows": [],
+          "has_more": false,
+          "total_reported": null,
+          "cap": 100,
+          "submitted_window_ms": [
+            1786190400000,
+            1786194000000
+          ]
         }
       }
     ]
@@ -194,7 +197,7 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 0,
-            "has_more": null,
+            "has_more": false,
             "total_reported": null,
             "post_filtered": false,
             "interrupted": false

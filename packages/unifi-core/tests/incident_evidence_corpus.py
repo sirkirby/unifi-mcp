@@ -3,7 +3,11 @@
 Each case under ``tests/fixtures/incident_evidence/cases/`` holds an ``input``
 (per-source raw payloads exactly as a tool or manager returns them, the tool
 arguments under ``args``, and what the collector captured around the call
-under ``capture``: request start time, answering API path, server defaults)
+under ``capture``: request start time, answering API path, server defaults).
+Sources with ``"adapter": "page"`` hold a manager ``SourcePage`` (rows,
+``has_more``, ``total_reported``, ``offset``, ``cap``, ``api_path``,
+``submitted_window_ms``, ``post_filtered``); only pages can prove a read
+reached the end.
 and the ``expected`` normalized evidence set. Other consumers, such as the
 worker, read the same files and must produce the same output. Cases under
 ``invalid/`` are evidence sets that consumers must reject.
@@ -38,6 +42,7 @@ from unifi_core.incident_evidence import (
 )
 from unifi_core.network import incident_evidence as network
 from unifi_core.protect import incident_evidence as protect
+from unifi_core.source_page import SourcePage
 
 CORPUS_DIR = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "incident_evidence"
 CASES_DIR = CORPUS_DIR / "cases"
@@ -53,6 +58,15 @@ def load_case(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
+def _page(spec: dict[str, Any]) -> SourcePage | None:
+    if spec["adapter"] != "page":
+        return None
+    payload = dict(spec["payload"])
+    if payload.get("submitted_window_ms") is not None:
+        payload["submitted_window_ms"] = tuple(payload["submitted_window_ms"])
+    return SourcePage(**payload)
+
+
 def _context(window: TimeWindow, spec: dict[str, Any]) -> SourceContext:
     tool = spec["tool"]
     collected_at = parse_utc(spec["collected_at"])
@@ -61,6 +75,9 @@ def _context(window: TimeWindow, spec: dict[str, Any]) -> SourceContext:
     if "source_id" in spec:
         scope["source_id"] = spec["source_id"]
     capture = dict(spec.get("capture", {}))
+    page = _page(spec)
+    if page is not None:
+        capture["page"] = page
     if "request_started_at" in capture:
         capture["request_started_at"] = parse_utc(capture["request_started_at"])
     if tool == network.LIST_EVENTS_TOOL:
@@ -107,6 +124,9 @@ def _source(window: TimeWindow, spec: dict[str, Any]) -> SourceEvidence:
         assert failure is None, "tool responses carry their own success flag"
         normalize = network.normalize_network_tool_response if is_network else protect.normalize_protect_tool_response
         return normalize(spec["payload"], context, budget_exhausted=budget_exhausted)
+    if adapter == "page":
+        normalize = network.normalize_network_page if is_network else protect.normalize_protect_page
+        return normalize(_page(spec), context, budget_exhausted=budget_exhausted)
     if adapter == "records":
         normalize = network.normalize_network_records if is_network else protect.normalize_protect_records
         return normalize(spec["payload"], context, failure=failure, budget_exhausted=budget_exhausted)

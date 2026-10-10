@@ -1,5 +1,5 @@
 {
-  "description": "A budget was exhausted, yet the set claims an empty, complete result.",
+  "description": "A post-filtered empty list claims an all-clear with no proof the unfiltered read reached the end.",
   "rejected_by": "schema",
   "derived_from": "healthy_empty",
   "evidence": {
@@ -20,12 +20,10 @@
       },
       "usage": {
         "events": 0,
-        "calls": 10,
+        "calls": 2,
         "elapsed_ms": 850
       },
-      "exhausted": [
-        "calls"
-      ]
+      "exhausted": []
     },
     "mappings": null,
     "sources": [
@@ -74,9 +72,9 @@
             "requested_cap": 100,
             "cap": 100,
             "returned": 0,
-            "has_more": false,
+            "has_more": null,
             "total_reported": null,
-            "post_filtered": false,
+            "post_filtered": true,
             "interrupted": false
           },
           "truncation": "not_truncated",
