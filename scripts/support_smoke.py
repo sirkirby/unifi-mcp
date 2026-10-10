@@ -141,12 +141,13 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
     skill = (skill_root / f"unifi-{product}-support/SKILL.md").read_text()
     definition = next(item for item in SKILL_PRODUCTS if item.slug == product)
     require(skill == render_support_skill(definition), "plugin_support_skill")
-    require(codex["mcpServers"] == "./.mcp.json", "plugin_mcp_path")
+    require(codex["mcpServers"] == "./.mcp.codex.json", "plugin_mcp_path")
     name = f"unifi-{product}"
     mcp_manifest = json.loads((folder / ".mcp.json").read_text())
+    codex_mcp = json.loads((folder / ".mcp.codex.json").read_text())
     launcher = mcp_manifest["mcpServers"][name]
     expected_args = ["--python-preference", "system", f"unifi-{product}-mcp=={version}"]
-    for config in (launcher, claude["mcpServers"][name]):
+    for config in (launcher, codex_mcp["mcpServers"][name], claude["mcpServers"][name]):
         require(config["command"] == "uvx" and config["args"] == expected_args, "plugin_launcher_alignment")
     # The repository artifacts are trusted, unlike --support-plugin-root. Allow
     # release-version changes only; reject extra servers, transports, hooks, and
@@ -156,6 +157,7 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
     for filename, supplied in (
         (".codex-plugin/plugin.json", codex),
         (".claude-plugin/plugin.json", claude),
+        (".mcp.codex.json", codex_mcp),
         (".mcp.json", mcp_manifest),
     ):
         expected = json.loads((trusted_folder / filename).read_text())
@@ -163,8 +165,12 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
             expected["version"] = version
         if filename != ".codex-plugin/plugin.json":
             expected["mcpServers"][name]["args"] = expected_args
-            expected_env = expected["mcpServers"][name]["env"]
-            require(supplied["mcpServers"][name].get("env") == expected_env, "plugin_env_alignment")
+            require(
+                supplied["mcpServers"][name].get("env") == expected["mcpServers"][name].get("env"),
+                "plugin_env_alignment",
+            )
+            if filename == ".mcp.json":
+                expected_env = expected["mcpServers"][name]["env"]
         require(supplied == expected, "plugin_manifest_alignment")
     # Resolve the checked-in plugin environment exactly as a host would.
     inherited = dict(env)
