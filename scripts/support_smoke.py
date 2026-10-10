@@ -190,7 +190,15 @@ def plugin_command(root: Path, product: str, env: dict[str, str]) -> tuple[str, 
         require(supplied == expected, "plugin_manifest_alignment")
     # Resolve the checked-in plugin environment exactly as a host would.
     inherited = dict(env)
+    options = (claude or {}).get("userConfig") or {}
     for key, expression in expected_env.items():
+        option = re.fullmatch(r"\$\{user_config\.([A-Za-z_][A-Za-z0-9_]*)\}", expression)
+        if option:
+            # Stand in for the saved Claude Code option: the same-named variable, else the option default.
+            declared = options.get(option[1])
+            default = declared.get("default", "") if isinstance(declared, dict) else ""
+            env[key] = inherited.get(key) or (str(default).lower() if isinstance(default, bool) else str(default))
+            continue
         match = re.fullmatch(r"\$\{([A-Z_]+):-([^}]*)\}", expression)
         require(match is not None, "plugin_env_expression")
         env[key] = inherited.get(match[1]) or match[2]
