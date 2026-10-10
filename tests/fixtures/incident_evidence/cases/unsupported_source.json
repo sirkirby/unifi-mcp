@@ -1,0 +1,276 @@
+{
+  "description": "Access has no normalizer and is reported unsupported; Network events succeed.",
+  "input": {
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z"
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "adapter": "tool_response",
+        "tool": "unifi_list_events",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "within_hours": 2,
+          "limit": 100,
+          "start": 0
+        },
+        "scope": {
+          "site": "default"
+        },
+        "payload": {
+          "success": true,
+          "site": "default",
+          "count": 1,
+          "filters": {
+            "within_hours": 2,
+            "limit": 100,
+            "start": 0,
+            "event_type": null,
+            "categories": null,
+            "severities": null
+          },
+          "events": [
+            {
+              "id": "evt-net-0401",
+              "key": "CLIENT_CONNECTED_WIRELESS_2",
+              "msg": "fixture-phone connected.",
+              "time": 1786190460000,
+              "mac": "aa:bb:cc:00:20:01"
+            }
+          ]
+        }
+      },
+      {
+        "adapter": "failed",
+        "tool": "access_list_events",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {},
+        "scope": {},
+        "payload": null,
+        "failure": {
+          "kind": "unsupported"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z",
+      "start_inclusive": true,
+      "end_inclusive": false
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "source_id": "access.events",
+        "product": "access",
+        "api_family": null,
+        "source_tool": "access_list_events",
+        "endpoint": null,
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {},
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "unsupported",
+        "failure": {
+          "kind": "unsupported",
+          "http_status": null
+        },
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": null,
+          "window_coverage": "unknown",
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "filters": {},
+          "pagination": {
+            "offset": null,
+            "cap": null,
+            "returned": 0,
+            "has_more": null,
+            "total_reported": null,
+            "interrupted": true
+          },
+          "truncation": "unknown",
+          "counts": {
+            "received": 0,
+            "accepted": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0
+          },
+          "complete": false,
+          "population_total": null
+        }
+      },
+      {
+        "source_id": "network.events",
+        "product": "network",
+        "api_family": "network_v2_controller",
+        "source_tool": "unifi_list_events",
+        "endpoint": null,
+        "scope": {
+          "controller_id": null,
+          "site": "default",
+          "location_id": null
+        },
+        "query": {
+          "categories": null,
+          "event_type": null,
+          "limit": 100,
+          "severities": null,
+          "start": 0,
+          "within_hours": 2
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "complete",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T11:05:00.000000Z",
+            "end": "2026-08-08T13:05:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": "2026-08-08T12:01:00.000000Z",
+          "observed_last_utc": "2026-08-08T12:01:00.000000Z",
+          "filters": {},
+          "pagination": {
+            "offset": 0,
+            "cap": 100,
+            "returned": 1,
+            "has_more": null,
+            "total_reported": null,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 1,
+            "accepted": 1,
+            "in_window": 1,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0
+          },
+          "complete": true,
+          "population_total": 1
+        }
+      }
+    ],
+    "records": [
+      {
+        "evidence_id": "network.events:evt-net-0401",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0401",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190460000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "summary": "fixture-phone connected.",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:01",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {}
+      }
+    ],
+    "overall": "partial",
+    "coverage_complete": false
+  }
+}

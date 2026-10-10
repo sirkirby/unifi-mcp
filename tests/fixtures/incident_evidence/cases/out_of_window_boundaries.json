@@ -1,0 +1,610 @@
+{
+  "description": "The window is half-open: an event exactly at start is in, exactly at end is out. Known clock uncertainty flags events near either boundary.",
+  "input": {
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z"
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "adapter": "records",
+        "tool": "unifi_list_events",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "within_hours": 2,
+          "limit": 100,
+          "start": 0
+        },
+        "scope": {
+          "site": "default",
+          "clock_uncertainty_ms": 2000
+        },
+        "payload": [
+          {
+            "id": "evt-net-0801",
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "msg": "just before start",
+            "time": 1786190399999,
+            "mac": "aa:bb:cc:00:20:01"
+          },
+          {
+            "id": "evt-net-0802",
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "msg": "exactly at start",
+            "time": 1786190400000,
+            "mac": "aa:bb:cc:00:20:01"
+          },
+          {
+            "id": "evt-net-0803",
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "msg": "just before end",
+            "time": 1786193999999,
+            "mac": "aa:bb:cc:00:20:01"
+          },
+          {
+            "id": "evt-net-0804",
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "msg": "exactly at end",
+            "time": 1786194000000,
+            "mac": "aa:bb:cc:00:20:01"
+          },
+          {
+            "id": "evt-net-0805",
+            "key": "CLIENT_CONNECTED_WIRELESS_2",
+            "msg": "well inside",
+            "time": 1786192200000,
+            "mac": "aa:bb:cc:00:20:01"
+          }
+        ]
+      },
+      {
+        "adapter": "tool_response",
+        "tool": "protect_list_events",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "start": "2026-08-08T12:00:00Z",
+          "end": "2026-08-08T13:00:00Z",
+          "limit": 100
+        },
+        "scope": {},
+        "payload": {
+          "success": true,
+          "data": {
+            "events": [
+              {
+                "id": "evt-protect-0801",
+                "type": "motion",
+                "start": "2026-08-08T11:58:00+00:00",
+                "score": 80,
+                "smart_detect_types": [],
+                "camera": "cam-fixture-000a",
+                "end": "2026-08-08T12:01:00+00:00"
+              }
+            ],
+            "count": 1
+          }
+        }
+      }
+    ]
+  },
+  "expected": {
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z",
+      "start_inclusive": true,
+      "end_inclusive": false
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "source_id": "network.events",
+        "product": "network",
+        "api_family": "network_v2_controller",
+        "source_tool": "unifi_list_events",
+        "endpoint": null,
+        "scope": {
+          "controller_id": null,
+          "site": "default",
+          "location_id": null
+        },
+        "query": {
+          "categories": null,
+          "event_type": null,
+          "limit": 100,
+          "severities": null,
+          "start": 0,
+          "within_hours": 2
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "complete",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T11:05:00.000000Z",
+            "end": "2026-08-08T13:05:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": "2026-08-08T12:00:00.000000Z",
+          "observed_last_utc": "2026-08-08T12:59:59.999000Z",
+          "filters": {},
+          "pagination": {
+            "offset": 0,
+            "cap": 100,
+            "returned": 5,
+            "has_more": null,
+            "total_reported": null,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 5,
+            "accepted": 5,
+            "in_window": 3,
+            "out_of_window": 2,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0
+          },
+          "complete": true,
+          "population_total": 3
+        }
+      },
+      {
+        "source_id": "protect.events",
+        "product": "protect",
+        "api_family": "protect_private",
+        "source_tool": "protect_list_events",
+        "endpoint": "/proxy/protect/api/events",
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {
+          "camera_id": null,
+          "end": "2026-08-08T13:00:00Z",
+          "event_type": null,
+          "limit": 100,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "empty",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "filters": {},
+          "pagination": {
+            "offset": null,
+            "cap": 100,
+            "returned": 1,
+            "has_more": null,
+            "total_reported": null,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 1,
+            "accepted": 1,
+            "in_window": 0,
+            "out_of_window": 1,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0
+          },
+          "complete": true,
+          "population_total": 0
+        }
+      }
+    ],
+    "records": [
+      {
+        "evidence_id": "protect.events:evt-protect-0801",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "protect.events",
+        "provenance": {
+          "product": "protect",
+          "api_family": "protect_private",
+          "source_tool": "protect_list_events",
+          "endpoint": "/proxy/protect/api/events",
+          "scope": {
+            "controller_id": null,
+            "site": null,
+            "location_id": null
+          },
+          "source_record_id": "evt-protect-0801",
+          "source_record_id_field": "id",
+          "query": {
+            "camera_id": null,
+            "end": "2026-08-08T13:00:00Z",
+            "event_type": null,
+            "limit": 100,
+            "start": "2026-08-08T12:00:00Z"
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "out_of_window",
+          "original_field": "start",
+          "original_type": "string",
+          "original_value": "2026-08-08T11:58:00+00:00",
+          "original_format": "iso8601",
+          "utc": "2026-08-08T11:58:00.000000Z",
+          "utc_offset": "+00:00",
+          "timezone_basis": "explicit_offset",
+          "precision": "second",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "motion",
+        "summary": "motion",
+        "entities": [
+          {
+            "kind": "camera",
+            "id_kind": "protect_camera_id",
+            "id": "cam-fixture-000a",
+            "role": "camera"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "end": "2026-08-08T12:01:00+00:00",
+          "score": 80,
+          "smart_detect_types": []
+        }
+      },
+      {
+        "evidence_id": "network.events:evt-net-0801",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0801",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "out_of_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190399999,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T11:59:59.999000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": 2000,
+          "boundary_uncertain": true
+        },
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "summary": "just before start",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:01",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {}
+      },
+      {
+        "evidence_id": "network.events:evt-net-0802",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0802",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190400000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": 2000,
+          "boundary_uncertain": true
+        },
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "summary": "exactly at start",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:01",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {}
+      },
+      {
+        "evidence_id": "network.events:evt-net-0805",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0805",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786192200000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:30:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": 2000,
+          "boundary_uncertain": false
+        },
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "summary": "well inside",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:01",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {}
+      },
+      {
+        "evidence_id": "network.events:evt-net-0803",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0803",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786193999999,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:59:59.999000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": 2000,
+          "boundary_uncertain": true
+        },
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "summary": "just before end",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:01",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {}
+      },
+      {
+        "evidence_id": "network.events:evt-net-0804",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.events",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_events",
+          "endpoint": null,
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "evt-net-0804",
+          "source_record_id_field": "id",
+          "query": {
+            "categories": null,
+            "event_type": null,
+            "limit": 100,
+            "severities": null,
+            "start": 0,
+            "within_hours": 2
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "out_of_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786194000000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T13:00:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": 2000,
+          "boundary_uncertain": true
+        },
+        "event_type": "CLIENT_CONNECTED_WIRELESS_2",
+        "summary": "exactly at end",
+        "entities": [
+          {
+            "kind": "network_station",
+            "id_kind": "mac",
+            "id": "aa:bb:cc:00:20:01",
+            "role": "mac"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {}
+      }
+    ],
+    "overall": "complete",
+    "coverage_complete": true
+  }
+}
