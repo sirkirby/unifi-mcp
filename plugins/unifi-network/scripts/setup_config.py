@@ -216,9 +216,9 @@ def main():
         if (
             not isinstance(plugin_version, str)
             or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", plugin_version)
-            or pin != name + "-mcp==" + plugin_version
+            or not re.fullmatch(re.escape(name) + r"-mcp==[0-9]+\.[0-9]+\.[0-9]+", pin or "")
         ):
-            refuse("The installed plugin version and package pin are missing or inconsistent; reinstall the plugin.")
+            refuse("The installed plugin version or package pin is missing or malformed; reinstall the plugin.")
     if not shutil.which("uvx"):
         refuse("uvx is required; install uv from https://astral.sh/uv/install.sh and rerun.")
     if target != "claude" and not shutil.which(target):

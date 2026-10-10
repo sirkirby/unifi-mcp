@@ -481,7 +481,7 @@ class Fixtures:
         if target == "codex":
             manifest = cached.parent / ".codex-plugin/plugin.json"
             manifest.parent.mkdir(exist_ok=True)
-            manifest.write_text(json.dumps({"version": "9.8.7"}), encoding="utf-8")
+            manifest.write_text(json.dumps({"version": "1.2.3"}), encoding="utf-8")
             mcp = cached.parent / ".mcp.codex.json"
             mcp.write_text(
                 json.dumps({"mcpServers": {f"unifi-{product}": {"args": [f"unifi-{product}-mcp==9.8.7"]}}}),
@@ -495,7 +495,10 @@ class Fixtures:
             entry = load()["mcp_servers"][f"unifi-{product}"]
             self.check(entry["args"][-1] == f"unifi-{product}-mcp==9.8.7", "Codex refresh replaces stale package pin")
             self.check(b"9.8.7" in result.stdout, "Codex success prints pinned package version")
-            self.check("plugin 9.8.7" in path.read_text(), "Codex records pinned plugin version")
+            self.check(
+                "plugin 1.2.3; package unifi-" + product + "-mcp==9.8.7" in path.read_text(),
+                "Codex records independent plugin and package versions",
+            )
             before_refresh = path.read_bytes()
             failed = subprocess.run(
                 refresh, cwd=workspace, env=dict(environment, FIXTURE_FAIL="validate"), capture_output=True, timeout=30
