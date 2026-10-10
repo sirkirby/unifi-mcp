@@ -124,6 +124,11 @@ def structure_errors(text: str) -> list[str]:
     for section in ("Dependencies", "Coverage and Limitations"):
         if not re.search(rf"^## {section}$", text, re.MULTILINE):
             errors.append(f"missing {section} section")
+    # Keep server requirements in one place rather than competing legacy sections.
+    for match in re.finditer(
+        r"^#{1,6} (Requirements|Prerequisites|Required MCP Servers?)\s*$", text, re.MULTILINE | re.IGNORECASE
+    ):
+        errors.append(f"legacy dependency section: {match[1]}")
     return errors
 
 
@@ -185,3 +190,9 @@ def test_incomplete_report_examples_are_present(scenario: str) -> None:
 def test_documented_timeline_signature() -> None:
     text = (ROOT / "docs/cross-product.md").read_text()
     assert not reference_errors(text, catalog())
+
+
+@pytest.mark.parametrize("heading", ["Requirements", "Prerequisites", "Required MCP Server"])
+def test_legacy_requirement_section_is_rejected(heading: str) -> None:
+    text = skills()[0].read_text() + f"\n## {heading}\n\n- Network only; relay is optional.\n"
+    assert f"legacy dependency section: {heading}" in structure_errors(text)

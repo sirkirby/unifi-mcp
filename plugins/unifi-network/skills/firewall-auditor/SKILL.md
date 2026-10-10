@@ -14,7 +14,8 @@ Verify required tools through MCP discovery before collecting data; discovery al
 does not prove controller connectivity or authorization. If a required server/tool
 is missing or a required read fails, stop and report it unavailable. Optional sources
 may be skipped only when the report visibly names the missing source and resulting
-coverage limits. Use the product setup skill for connection help; never request secrets.
+coverage limits. Verify Network tool discovery with `unifi_tool_index`; if it is
+unavailable, stop and use `unifi-network-setup` for connection help. Never request secrets.
 
 ## Coverage and Limitations
 
@@ -44,12 +45,6 @@ The work is split between you and one tiny CLI:
 - **`scripts/unifi-firewall-score`** turns those findings into the canonical score. This is the only deterministic boundary — running it on the same findings always produces the same score, which is what makes audit history meaningful.
 
 There is no Python script doing the audit for you. There is no HTTP sidecar. You drive the audit; the CLI does the math.
-
----
-
-## Required MCP Server
-
-This skill requires the `unifi-network` MCP server. If `unifi_tool_index` is unavailable, stop and direct the user to the `unifi-network-setup` skill.
 
 ---
 

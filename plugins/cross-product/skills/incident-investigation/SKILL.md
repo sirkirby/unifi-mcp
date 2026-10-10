@@ -55,12 +55,6 @@ Given an incident (e.g., "switch went offline", "AP stopped responding"), you:
    - Other devices on the same network segment affected?
 4. Present a timeline of what happened with your assessment
 
-## Requirements
-
-- Network server must be connected (this is the primary data source)
-- Protect server adds camera correlation (optional but valuable)
-- Access server adds physical access context (optional)
-
 ## Example Prompts
 
 - "A switch went offline at 2 AM — what happened?"

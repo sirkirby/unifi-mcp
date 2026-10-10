@@ -14,7 +14,8 @@ Verify required tools through MCP discovery before collecting data; discovery al
 does not prove controller connectivity or authorization. If a required server/tool
 is missing or a required read fails, stop and report it unavailable. Optional sources
 may be skipped only when the report visibly names the missing source and resulting
-coverage limits. Use the product setup skill for connection help; never request secrets.
+coverage limits. Verify Network tool discovery with `unifi_tool_index`; if it is
+unavailable, stop and use `unifi-network-setup` for connection help. Never request secrets.
 
 ## Coverage and Limitations
 
@@ -44,12 +45,6 @@ There are no helper scripts in this skill — only references and tools. You dri
 - `references/firewall-schema.md` is the V2 schema reference.
 - `references/policy-templates.yaml` is a small library of common-scenario payloads you read directly.
 - `references/dpi-categories.md` maps app names to DPI category groups.
-
----
-
-## Required MCP Server
-
-This skill requires the `unifi-network` MCP server. Verify with `unifi_tool_index`. If it's unavailable, direct the user to the `unifi-network-setup` skill.
 
 ---
 

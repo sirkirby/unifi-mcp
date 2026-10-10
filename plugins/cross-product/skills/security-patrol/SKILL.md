@@ -56,12 +56,6 @@ Given an area (e.g., "front entrance", "server room", "main door") and a time wi
    - Device/camera outages that coincide
 3. Present a clear narrative: what happened, in what order, and what's notable
 
-## Requirements
-
-- At least one product must be available; at least two are needed for multi-product correlation
-- Relay mode required for full cross-product timeline
-- Local mode requires separate product reads and must state that no merged timeline is available
-
 ## Example Prompts
 
 - "Show me everything that happened at the front entrance in the last hour"

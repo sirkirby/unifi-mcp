@@ -53,11 +53,6 @@ Given a time window (e.g., "today", "this week"), you:
    - List devices observed during each recorded access window; ownership is unknown
 3. Present separate Observations, Hypotheses, Identity, and Coverage and Limitations sections. Attribute badge events only to their recorded account; do not infer actual visitor identity, visit duration without exit evidence, or device ownership from timing.
 
-## Requirements
-
-- Access server must be connected (primary data source for visitor logs)
-- Network server adds contemporaneous device observations (ownership unknown)
-
 ## Example Prompts
 
 - "Who visited today and what devices did they bring?"
