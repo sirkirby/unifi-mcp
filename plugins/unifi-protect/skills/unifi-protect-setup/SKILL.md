@@ -215,7 +215,7 @@ publication leaves either the old configuration or the complete new one.
 
 For Claude Code, tell the user:
 
-"Configuration saved to `.claude/settings.local.json`. Restart Claude Code or run `/reload-plugins`, then confirm the plugin is enabled with `/plugin`."
+"Configuration saved to `.claude/settings.local.json`. Exit Claude Code and start a new session in this project, then run `/mcp` and check that `plugin:unifi-protect:unifi-protect` is connected. If it shows as failed, run `/mcp reconnect plugin:unifi-protect:unifi-protect`: after a failed start, Claude Code can skip the server for up to 15 minutes, and `/reload-plugins` does not retry it. `claude mcp list` does not apply project settings, so it reports this server as failed even when it connects in a session."
 
 For Codex, tell the user:
 
