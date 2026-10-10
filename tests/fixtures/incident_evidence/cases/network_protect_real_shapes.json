@@ -30,6 +30,9 @@
           "limit": 100,
           "start": 0
         },
+        "capture": {
+          "request_started_at": "2026-08-08T13:04:59.000000Z"
+        },
         "scope": {
           "site": "default"
         },
@@ -204,7 +207,7 @@
           },
           "queried_window": {
             "start": "2026-08-08T11:05:00.000000Z",
-            "end": "2026-08-08T13:05:00.000000Z",
+            "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
           },
@@ -214,10 +217,12 @@
           "filters": {},
           "pagination": {
             "offset": 0,
+            "requested_cap": 100,
             "cap": 100,
             "returned": 3,
             "has_more": null,
             "total_reported": null,
+            "post_filtered": false,
             "interrupted": false
           },
           "truncation": "not_truncated",
@@ -228,7 +233,9 @@
             "out_of_window": 0,
             "untimed": 0,
             "malformed_dropped": 0,
-            "duplicates_dropped": 0
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
           },
           "complete": true,
           "population_total": 3
@@ -275,10 +282,12 @@
           "filters": {},
           "pagination": {
             "offset": null,
+            "requested_cap": 100,
             "cap": 100,
             "returned": 2,
             "has_more": null,
             "total_reported": null,
+            "post_filtered": false,
             "interrupted": false
           },
           "truncation": "not_truncated",
@@ -289,7 +298,9 @@
             "out_of_window": 0,
             "untimed": 0,
             "malformed_dropped": 0,
-            "duplicates_dropped": 0
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
           },
           "complete": true,
           "population_total": 2
@@ -298,7 +309,7 @@
     ],
     "records": [
       {
-        "evidence_id": "network.events:evt-net-0001",
+        "evidence_id": "network.events:str:evt-net-0001",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
@@ -364,10 +375,11 @@
           "event": "CLIENT_CONNECTED",
           "severity": "LOW",
           "subcategory": "CLIENT_CONNECTIVITY"
-        }
+        },
+        "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:evt-protect-0001",
+        "evidence_id": "protect.events:str:evt-protect-0001",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -427,10 +439,11 @@
           "smart_detect_types": [
             "person"
           ]
-        }
+        },
+        "conflict_group": null
       },
       {
-        "evidence_id": "network.events:evt-net-0002",
+        "evidence_id": "network.events:str:evt-net-0002",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
@@ -490,10 +503,11 @@
           "event": "TRAFFIC_BLOCKED",
           "severity": "MEDIUM",
           "subcategory": "CLIENT_CONNECTIVITY"
-        }
+        },
+        "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:evt-protect-0002",
+        "evidence_id": "protect.events:str:evt-protect-0002",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -550,10 +564,11 @@
         "attributes": {
           "score": 0,
           "smart_detect_types": []
-        }
+        },
+        "conflict_group": null
       },
       {
-        "evidence_id": "network.events:evt-net-0003",
+        "evidence_id": "network.events:str:evt-net-0003",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
@@ -613,7 +628,8 @@
           "event": "DEVICE_DISCONNECTED",
           "severity": "HIGH",
           "subcategory": "CLIENT_CONNECTIVITY"
-        }
+        },
+        "conflict_group": null
       }
     ],
     "overall": "complete",

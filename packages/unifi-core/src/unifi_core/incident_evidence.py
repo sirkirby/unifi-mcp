@@ -47,7 +47,7 @@ from pydantic import (
     model_validator,
 )
 
-from unifi_core.exceptions import http_status
+from unifi_core.exceptions import UniFiMalformedResponseError, http_status
 from unifi_core.mac import canonical_mac
 from unifi_core.redaction import is_sensitive_key
 from unifi_core.support_bundle import ErrorCategory, classify_error
@@ -208,6 +208,10 @@ _FAILURE_OUTCOME_BY_KIND = {
 
 
 class PartialReason(str, Enum):
+    BOUNDARY_UNCERTAIN = "boundary_uncertain"
+    CONFLICTING_RECORDS = "conflicting_records"
+    POST_FILTERED = "post_filtered"
+    PREFIX_NOT_COLLECTED = "prefix_not_collected"
     TRUNCATED = "truncated"
     TRUNCATION_UNKNOWN = "truncation_unknown"
     WINDOW_NOT_COVERED = "window_not_covered"
@@ -258,7 +262,7 @@ def format_utc(value: datetime) -> str:
     """Return the contract's fixed-width UTC form; lexical order is time order."""
     if value.tzinfo is None:
         raise ValueError("timestamps must be timezone-aware")
-    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return value.astimezone(timezone.utc).replace(tzinfo=None).isoformat(timespec="microseconds") + "Z"
 
 
 def parse_utc(value: str) -> datetime:
@@ -308,7 +312,181 @@ class TimeWindow(_ClosedModel):
         return self.start <= other.start and self.end >= other.end
 
 
+# JSON Schema rules mirroring the validators below, so schema-only consumers
+# reject the same outcome and completeness contradictions. Checks that compare
+# values across objects (time placement, counts, ordering, mapping
+# recomputation) cannot be expressed here; see docs/incident-evidence.md.
+def _when(condition: dict[str, Any], then: dict[str, Any], otherwise: dict[str, Any] | None = None) -> dict[str, Any]:
+    rule: dict[str, Any] = {"if": condition, "then": then}
+    if otherwise is not None:
+        rule["else"] = otherwise
+    return rule
+
+
+def _props(**properties: Any) -> dict[str, Any]:
+    return {"properties": properties}
+
+
+_PLACED = ["in_window", "out_of_window"]
+_SUCCESS = ["complete", "empty"]
+_DATA = ["complete", "empty", "partial"]
+_FAILED = ["unavailable", "auth_failed", "permission_denied", "timeout", "unsupported", "parse_failed", "not_attempted"]
+
+_EVENT_TIME_RULES = {
+    "allOf": [
+        _when(
+            _props(status={"enum": _PLACED}),
+            _props(utc={"type": "string"}, precision={"type": "string"}),
+            _props(utc={"type": "null"}, precision={"type": "null"}, boundary_uncertain={"const": False}),
+        ),
+        _when(_props(status={"const": "missing"}), _props(original_type={"enum": ["absent", "null"]})),
+    ]
+}
+_MAPPING_RULES = {
+    "allOf": [
+        _when(
+            _props(status={"const": "verified"}),
+            _props(
+                targets={"minItems": 1, "maxItems": 1},
+                matched_on={"minItems": 1},
+                confidence={"const": "exact_identifier"},
+            ),
+        ),
+        _when(_props(status={"const": "ambiguous"}), _props(targets={"minItems": 2}, confidence={"type": "null"})),
+        _when(
+            _props(status={"enum": ["missing", "not_evaluated"]}),
+            _props(
+                targets={"maxItems": 0},
+                matched_on={"maxItems": 0},
+                sources={"maxItems": 0},
+                confidence={"type": "null"},
+            ),
+        ),
+    ]
+}
+_ZERO = {"const": 0}
+_COVERAGE_RULES = {
+    "allOf": [
+        _when(
+            _props(complete={"const": True}),
+            _props(
+                truncation={"const": "not_truncated"},
+                window_coverage={"const": "covered"},
+                population_total={"type": "integer"},
+                pagination=_props(offset={"enum": [None, 0]}, interrupted={"const": False}),
+                counts=_props(malformed_dropped=_ZERO, untimed=_ZERO, conflicting=_ZERO, boundary_uncertain=_ZERO),
+            ),
+            _props(population_total={"type": "null"}),
+        ),
+        _when(_props(queried_window={"type": "null"}), _props(window_coverage={"const": "unknown"})),
+        _when(_props(pagination=_props(has_more={"const": True})), _props(truncation={"const": "truncated"})),
+        _when(
+            _props(pagination=_props(interrupted={"const": True})),
+            _props(truncation={"enum": ["truncated", "unknown"]}),
+        ),
+    ]
+}
+_FAILURE_KINDS_BY_OUTCOME = {
+    "unavailable": ["unavailable", "partial_response"],
+    "auth_failed": ["auth_failed"],
+    "permission_denied": ["permission_denied"],
+    "timeout": ["timeout"],
+    "unsupported": ["unsupported"],
+    "parse_failed": ["parse_failed"],
+    "not_attempted": ["budget_exhausted"],
+}
+_SOURCE_RULES = {
+    "allOf": [
+        _when(
+            _props(outcome={"enum": _SUCCESS}),
+            _props(
+                failure={"type": "null"}, partial_reasons={"maxItems": 0}, coverage=_props(complete={"const": True})
+            ),
+        ),
+        _when(_props(outcome={"const": "empty"}), _props(coverage=_props(counts=_props(in_window=_ZERO)))),
+        _when(
+            _props(outcome={"const": "complete"}),
+            _props(coverage=_props(counts=_props(in_window={"type": "integer", "minimum": 1}))),
+        ),
+        _when(
+            _props(outcome={"const": "partial"}),
+            _props(partial_reasons={"minItems": 1}, coverage=_props(complete={"const": False})),
+        ),
+        _when(
+            {"required": ["failure"], **_props(outcome={"const": "partial"}, failure={"type": "object"})},
+            _props(partial_reasons={"contains": {"const": "partial_response"}}),
+        ),
+        _when(
+            _props(outcome={"enum": _FAILED}),
+            _props(
+                failure={"type": "object"},
+                partial_reasons={"maxItems": 0},
+                coverage=_props(
+                    complete={"const": False},
+                    window_coverage={"const": "unknown"},
+                    truncation={"const": "unknown"},
+                    queried_window={"type": "null"},
+                    counts=_props(received=_ZERO),
+                    pagination=_props(
+                        interrupted={"const": True}, has_more={"type": "null"}, total_reported={"type": "null"}
+                    ),
+                ),
+            ),
+        ),
+        *(
+            _when(_props(outcome={"const": outcome}), _props(failure=_props(kind={"enum": kinds})))
+            for outcome, kinds in _FAILURE_KINDS_BY_OUTCOME.items()
+        ),
+    ]
+}
+_NOT_IN_WINDOW = {"not": _props(time=_props(status={"const": "in_window"}))}
+_EVIDENCE_RULES = {
+    "allOf": [
+        _when(_props(coverage_complete={"const": True}), _props(overall={"enum": _SUCCESS})),
+        _when(_props(overall={"enum": _SUCCESS}), _props(coverage_complete={"const": True})),
+        _when(
+            _props(overall={"const": "empty"}),
+            _props(
+                sources={"items": _props(outcome={"const": "empty"})},
+                budgets=_props(exhausted={"maxItems": 0}),
+                records={"items": _NOT_IN_WINDOW},
+            ),
+        ),
+        _when(
+            _props(overall={"const": "complete"}),
+            _props(
+                sources={
+                    "items": _props(outcome={"enum": _SUCCESS}),
+                    "contains": _props(outcome={"const": "complete"}),
+                },
+                budgets=_props(exhausted={"maxItems": 0}),
+            ),
+        ),
+        _when(
+            _props(overall={"const": "failed"}),
+            _props(sources={"items": _props(outcome={"enum": _FAILED})}, records={"maxItems": 0}),
+        ),
+        _when(
+            _props(overall={"const": "partial"}),
+            {
+                **_props(sources={"contains": _props(outcome={"enum": _DATA})}),
+                "anyOf": [
+                    _props(sources={"contains": _props(outcome={"not": {"enum": _SUCCESS}})}),
+                    _props(budgets=_props(exhausted={"minItems": 1})),
+                ],
+            },
+        ),
+        _when(
+            {"required": ["mappings"], **_props(mappings={"type": "null"})},
+            _props(records={"items": _props(mapping=_props(status={"const": "not_evaluated"}))}),
+        ),
+    ]
+}
+
+
 class EventTime(_ClosedModel):
+    model_config = ConfigDict(json_schema_extra=_EVENT_TIME_RULES)
+
     status: TimeStatus
     original_field: str | None
     original_type: OriginalType
@@ -387,10 +565,17 @@ def _parse_iso(text: str) -> _ParsedTime | TimeStatus:
     match = _ISO_RE.match(text)
     if not match:
         return TimeStatus.MALFORMED
+    frac = match.group("frac")
+    # The calendar date and clock time must be valid before the timezone is judged.
+    try:
+        naive = datetime.fromisoformat(
+            f"{match.group('date')}T{match.group('hm')}:{match.group('sec') or '00'}.{(frac or '').ljust(6, '0')}"
+        )
+    except ValueError:
+        return TimeStatus.MALFORMED
     tz = match.group("tz")
     if tz is None:
         return TimeStatus.AMBIGUOUS_TIMEZONE
-    frac = match.group("frac")
     if match.group("sec") is None:
         precision = TimePrecision.MINUTE
     elif frac is None:
@@ -400,20 +585,18 @@ def _parse_iso(text: str) -> _ParsedTime | TimeStatus:
     else:
         precision = TimePrecision.MICROSECOND
     if tz in ("Z", "z"):
-        offset = "+00:00"
+        sign, hours, minutes = 1, 0, 0
     else:
         digits = tz[1:].replace(":", "")
-        offset = f"{tz[0]}{digits[:2]}:{digits[2:]}"
-    normalized = (
-        f"{match.group('date')}T{match.group('hm')}:{match.group('sec') or '00'}.{(frac or '').ljust(6, '0')}{offset}"
-    )
+        sign, hours, minutes = (1 if tz[0] == "+" else -1), int(digits[:2]), int(digits[2:])
+        if hours > 23 or minutes > 59:
+            return TimeStatus.MALFORMED
+    offset = f"{'+' if sign > 0 else '-'}{hours:02d}:{minutes:02d}"
     try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError:
+        utc = naive.replace(tzinfo=timezone(sign * timedelta(hours=hours, minutes=minutes))).astimezone(timezone.utc)
+    except OverflowError:
         return TimeStatus.MALFORMED
-    return _ParsedTime(
-        parsed.astimezone(timezone.utc), TimestampFormat.ISO8601, TimezoneBasis.EXPLICIT_OFFSET, offset, precision
-    )
+    return _ParsedTime(utc, TimestampFormat.ISO8601, TimezoneBasis.EXPLICIT_OFFSET, offset, precision)
 
 
 _ABSENT: Any = object()
@@ -529,6 +712,8 @@ class MappingAssertion(_ClosedModel):
 
 
 class MappingOutcome(_ClosedModel):
+    model_config = ConfigDict(json_schema_extra=_MAPPING_RULES)
+
     status: MappingStatus
     targets: tuple[EntityRef, ...] = ()
     matched_on: tuple[EntityRef, ...] = ()
@@ -671,6 +856,9 @@ class EvidenceRecord(_ClosedModel):
     entities: tuple[EntityRef, ...] = ()
     mapping: MappingOutcome = _NOT_EVALUATED
     attributes: dict[str, AttributeValue] = Field(default_factory=dict)
+    # Set when the source returned differing records under one source record
+    # ID; every version is kept and the group blocks complete coverage.
+    conflict_group: str | None = None
 
     @field_validator("attributes")
     @classmethod
@@ -679,10 +867,30 @@ class EvidenceRecord(_ClosedModel):
 
     @model_validator(mode="after")
     def _identity(self) -> EvidenceRecord:
-        has_id = self.provenance.source_record_id is not None
-        if has_id != (self.evidence_id_basis == "source_record_id"):
+        record_id = self.provenance.source_record_id
+        if (record_id is not None) != (self.evidence_id_basis == "source_record_id"):
             raise ValueError("evidence IDs derive from the source record ID exactly when one was returned")
+        if record_id is not None:
+            base = record_identity(self.source_id, record_id)
+            expected = base if self.conflict_group is None else None
+            if self.conflict_group is not None and self.conflict_group != base:
+                raise ValueError("a conflict group is the base identity of its source record ID")
+            if expected is not None and self.evidence_id != expected:
+                raise ValueError("evidence_id must be derived from the typed source record ID")
+            if expected is None and not re.fullmatch(re.escape(base) + r"#[0-9a-f]{24}", self.evidence_id):
+                raise ValueError("conflicting versions are identified by base identity and content hash")
+        else:
+            if self.conflict_group is not None:
+                raise ValueError("content-hash records cannot conflict")
+            if not re.fullmatch(re.escape(self.source_id) + r":sha256:[0-9a-f]{24}", self.evidence_id):
+                raise ValueError("content-hash evidence IDs are source ID plus a sha256 prefix")
         return self
+
+
+def record_identity(source_id: str, record_id: str | int) -> str:
+    """Typed identity: integer 7 and string "7" are different source records."""
+    kind = "int" if isinstance(record_id, int) else "str"
+    return f"{source_id}:{kind}:{record_id}"
 
 
 def record_sort_key(record: EvidenceRecord) -> tuple[Any, ...]:
@@ -710,12 +918,30 @@ class SourceFailure(_ClosedModel):
     http_status: int | None = Field(default=None, ge=100, le=599)
 
 
+def _valid_status(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and 100 <= value <= 599 else None
+
+
 def failure_from_exception(exc: BaseException) -> SourceFailure:
-    """Classify a collection exception without reading its message into evidence."""
-    category, status, _ = classify_error(exc)
-    status = status or http_status(exc)
+    """Classify a collection exception without reading its message into evidence.
+
+    Never raises: an exception whose rendering or attributes fail to classify
+    is reported as ``unavailable``.
+    """
+    try:
+        category, status, _ = classify_error(exc)
+    except Exception:
+        category, status = ErrorCategory.UNKNOWN, None
+    status = _valid_status(status)
+    if status is None:
+        try:
+            status = _valid_status(http_status(exc))
+        except Exception:
+            status = None
     if status in _UNSUPPORTED_STATUSES:
         return SourceFailure(kind=FailureKind.UNSUPPORTED, http_status=status)
+    if isinstance(exc, UniFiMalformedResponseError):
+        return SourceFailure(kind=FailureKind.PARSE_FAILED, http_status=status)
     kind = {
         ErrorCategory.AUTHENTICATION: FailureKind.AUTH_FAILED,
         ErrorCategory.PERMISSION: FailureKind.PERMISSION_DENIED,
@@ -730,13 +956,28 @@ def failure_from_exception(exc: BaseException) -> SourceFailure:
 
 
 class Pagination(_ClosedModel):
+    # Records skipped before this read; anything but 0 means the prefix was not collected.
     offset: int | None = Field(default=None, ge=0)
+    # The limit the caller asked for, and the cap the source actually applied.
+    requested_cap: int | None = Field(default=None, ge=0)
     cap: int | None = Field(default=None, ge=0)
     returned: int = Field(ge=0)
     has_more: bool | None = None
     total_reported: int | None = Field(default=None, ge=0)
+    # Records were filtered after the source applied its cap, so a short list proves nothing.
+    post_filtered: bool = False
     # The read broke off or never ran, so a short page proves nothing.
     interrupted: bool = False
+
+    @model_validator(mode="after")
+    def _caps(self) -> Pagination:
+        if self.cap is not None and self.requested_cap is not None and self.cap > self.requested_cap:
+            raise ValueError("the effective cap cannot exceed the requested cap")
+        return self
+
+    @property
+    def prefix_collected(self) -> bool:
+        return not self.offset
 
 
 class RecordCounts(_ClosedModel):
@@ -747,6 +988,10 @@ class RecordCounts(_ClosedModel):
     untimed: int = Field(ge=0)
     malformed_dropped: int = Field(ge=0)
     duplicates_dropped: int = Field(ge=0)
+    # Accepted records that are differing versions of one source record ID.
+    conflicting: int = Field(default=0, ge=0)
+    # Out-of-window records within known clock uncertainty of a window boundary.
+    boundary_uncertain: int = Field(default=0, ge=0)
 
     @model_validator(mode="after")
     def _balanced(self) -> RecordCounts:
@@ -754,26 +999,61 @@ class RecordCounts(_ClosedModel):
             raise ValueError("received records must equal accepted + malformed + duplicate records")
         if self.accepted != self.in_window + self.out_of_window + self.untimed:
             raise ValueError("accepted records must equal in-window + out-of-window + untimed records")
+        if self.conflicting > self.accepted or self.conflicting == 1:
+            raise ValueError("conflicting records come in groups of accepted records")
+        if self.boundary_uncertain > self.out_of_window:
+            raise ValueError("only out-of-window records count as boundary-uncertain")
         return self
 
 
 def truncation_state(pagination: Pagination) -> Truncation:
-    """Decide truncation from what the source reported, never from hope."""
+    """Decide whether the tail was cut off, from what the source reported, never from hope."""
     if pagination.has_more is True:
         return Truncation.TRUNCATED
-    if pagination.total_reported is not None:
+    if pagination.total_reported is not None and not pagination.post_filtered:
         seen = (pagination.offset or 0) + pagination.returned
-        return Truncation.TRUNCATED if pagination.total_reported > seen else Truncation.NOT_TRUNCATED
+        if pagination.total_reported > seen:
+            return Truncation.TRUNCATED
+        if not pagination.interrupted:
+            return Truncation.NOT_TRUNCATED
     if pagination.interrupted:
         return Truncation.UNKNOWN
     if pagination.has_more is False:
         return Truncation.NOT_TRUNCATED
-    if pagination.cap is not None and pagination.returned < pagination.cap:
+    if not pagination.post_filtered and pagination.cap is not None and pagination.returned < pagination.cap:
         return Truncation.NOT_TRUNCATED
     return Truncation.UNKNOWN
 
 
+def coverage_is_complete(
+    *,
+    window_coverage: WindowCoverage,
+    truncation: Truncation,
+    pagination: Pagination,
+    counts: RecordCounts,
+) -> bool:
+    """The single rule for when a source's retrieved records are the whole population."""
+    return (
+        window_coverage is WindowCoverage.COVERED
+        and truncation is Truncation.NOT_TRUNCATED
+        and pagination.prefix_collected
+        and not pagination.interrupted
+        and counts.malformed_dropped == 0
+        and counts.untimed == 0
+        and counts.conflicting == 0
+        and counts.boundary_uncertain == 0
+    )
+
+
+def _window_coverage(queried: TimeWindow | None, requested: TimeWindow) -> WindowCoverage:
+    if queried is None:
+        return WindowCoverage.UNKNOWN
+    return WindowCoverage.COVERED if queried.covers(requested) else WindowCoverage.NOT_COVERED
+
+
 class Coverage(_ClosedModel):
+    model_config = ConfigDict(json_schema_extra=_COVERAGE_RULES)
+
     requested_window: TimeWindow
     queried_window: TimeWindow | None
     window_coverage: WindowCoverage
@@ -791,38 +1071,72 @@ class Coverage(_ClosedModel):
     def _utc(cls, value: str | None) -> str | None:
         return _check_utc(value)
 
+    @field_validator("filters")
+    @classmethod
+    def _filters(cls, value: dict[str, Any]) -> dict[str, Any]:
+        return dict(_no_secret_keys(value))
+
     @model_validator(mode="after")
     def _consistent(self) -> Coverage:
-        expected_window = (
-            WindowCoverage.UNKNOWN
-            if self.queried_window is None
-            else WindowCoverage.COVERED
-            if self.queried_window.covers(self.requested_window)
-            else WindowCoverage.NOT_COVERED
-        )
-        if self.window_coverage is not expected_window:
+        if self.window_coverage is not _window_coverage(self.queried_window, self.requested_window):
             raise ValueError("window coverage must follow from the requested and queried windows")
         if self.truncation is not truncation_state(self.pagination):
             raise ValueError("truncation must follow from the reported pagination")
         if self.pagination.returned != self.counts.received:
             raise ValueError("pagination.returned must equal the received record count")
-        if self.complete and not (
-            self.window_coverage is WindowCoverage.COVERED
-            and self.truncation is Truncation.NOT_TRUNCATED
-            and self.counts.malformed_dropped == 0
-            and self.counts.untimed == 0
-        ):
-            raise ValueError("coverage is complete only when untruncated, window-covering and fully parsed")
+        expected = coverage_is_complete(
+            window_coverage=self.window_coverage,
+            truncation=self.truncation,
+            pagination=self.pagination,
+            counts=self.counts,
+        )
+        if self.complete != expected:
+            raise ValueError("coverage.complete must follow from the window, pagination and counts")
         if (self.population_total is not None) != self.complete:
             raise ValueError("a retrieved count is a population total only when coverage is complete")
         if self.complete and self.population_total != self.counts.in_window:
             raise ValueError("population_total must equal the in-window record count")
         if (self.observed_first_utc is None) != (self.counts.in_window == 0):
             raise ValueError("observed bounds are present exactly when in-window records exist")
+        if self.observed_first_utc is not None and self.observed_first_utc > self.observed_last_utc:
+            raise ValueError("observed bounds must be ordered")
         return self
 
 
+def coverage_reasons(coverage: Coverage, *, broke_off: bool, budget_exhausted: bool) -> set[PartialReason]:
+    """Every reason a source's coverage falls short of the whole population."""
+    reasons: set[PartialReason] = set()
+    if broke_off:
+        reasons.add(PartialReason.PARTIAL_RESPONSE)
+    if budget_exhausted:
+        reasons.add(PartialReason.BUDGET_EXHAUSTED)
+    if coverage.truncation is Truncation.TRUNCATED:
+        reasons.add(PartialReason.TRUNCATED)
+    elif coverage.truncation is Truncation.UNKNOWN:
+        reasons.add(PartialReason.TRUNCATION_UNKNOWN)
+        if coverage.pagination.post_filtered:
+            reasons.add(PartialReason.POST_FILTERED)
+    if not coverage.pagination.prefix_collected:
+        reasons.add(PartialReason.PREFIX_NOT_COLLECTED)
+    if coverage.window_coverage is WindowCoverage.NOT_COVERED:
+        reasons.add(PartialReason.WINDOW_NOT_COVERED)
+    elif coverage.window_coverage is WindowCoverage.UNKNOWN:
+        reasons.add(PartialReason.WINDOW_COVERAGE_UNKNOWN)
+    counts = coverage.counts
+    if counts.malformed_dropped:
+        reasons.add(PartialReason.MALFORMED_RECORDS)
+    if counts.untimed:
+        reasons.add(PartialReason.UNTIMED_RECORDS)
+    if counts.conflicting:
+        reasons.add(PartialReason.CONFLICTING_RECORDS)
+    if counts.boundary_uncertain:
+        reasons.add(PartialReason.BOUNDARY_UNCERTAIN)
+    return reasons
+
+
 class SourceResult(_ClosedModel):
+    model_config = ConfigDict(json_schema_extra=_SOURCE_RULES)
+
     source_id: str
     product: Product
     api_family: ApiFamily | None
@@ -868,16 +1182,27 @@ class SourceResult(_ClosedModel):
                 raise ValueError("a partial source states why and has incomplete coverage")
             if (self.failure is not None) != (PartialReason.PARTIAL_RESPONSE in self.partial_reasons):
                 raise ValueError("a partial source carries a failure exactly when its response broke off")
+            budget = PartialReason.BUDGET_EXHAUSTED in self.partial_reasons
+            if (budget or self.failure is not None) != self.coverage.pagination.interrupted:
+                raise ValueError("a read is interrupted exactly when it broke off or a budget stopped it")
+            derived = coverage_reasons(self.coverage, broke_off=self.failure is not None, budget_exhausted=budget)
+            if set(self.partial_reasons) != derived:
+                raise ValueError("partial_reasons must be exactly the reasons the coverage establishes")
         else:
             if self.failure is None or _FAILURE_OUTCOME_BY_KIND[self.failure.kind] is not self.outcome:
                 raise ValueError("a failed source carries the failure that matches its outcome")
             if counts.received or self.partial_reasons or self.coverage.complete:
                 raise ValueError("a failed source carries no records and no coverage claim")
+            pagination = self.coverage.pagination
             if (
                 self.coverage.window_coverage is not WindowCoverage.UNKNOWN
                 or self.coverage.truncation is not Truncation.UNKNOWN
+                or self.coverage.queried_window is not None
+                or not pagination.interrupted
+                or pagination.has_more is not None
+                or pagination.total_reported is not None
             ):
-                raise ValueError("a failed source observed no window and cannot rule out truncation")
+                raise ValueError("a failed source observed no window and makes no pagination claim")
         return self
 
 
@@ -945,7 +1270,13 @@ class IncidentEvidence(_ClosedModel):
     overall: OverallStatus
     coverage_complete: bool
 
-    model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always", populate_by_name=True)
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        revalidate_instances="always",
+        populate_by_name=True,
+        json_schema_extra=_EVIDENCE_RULES,
+    )
 
     @model_validator(mode="after")
     def _consistent(self) -> IncidentEvidence:
@@ -953,16 +1284,20 @@ class IncidentEvidence(_ClosedModel):
         if source_ids != sorted(set(source_ids)):
             raise ValueError("sources must be sorted by unique source_id")
         by_id = {source.source_id: source for source in self.sources}
+        for source in self.sources:
+            if source.coverage.requested_window != self.requested_window:
+                raise ValueError("every source must be collected against the evidence set's requested window")
         per_source: dict[str, list[EvidenceRecord]] = {sid: [] for sid in source_ids}
         for record in self.records:
-            if record.source_id not in by_id:
+            source = by_id.get(record.source_id)
+            if source is None:
                 raise ValueError("every record must cite a listed source")
+            _check_record_against_source(record, source, self.requested_window)
+            if record.mapping != resolve_mapping(record.entities, self.mappings):
+                raise ValueError("each mapping outcome must equal resolving its entities against the assertions")
             per_source[record.source_id].append(record)
         for sid, records in per_source.items():
-            counts = by_id[sid].coverage.counts
-            in_window = sum(1 for r in records if r.time.status is TimeStatus.IN_WINDOW)
-            if len(records) != counts.accepted or in_window != counts.in_window:
-                raise ValueError("record counts must match each source's coverage counts")
+            _check_source_counts(by_id[sid].coverage, records)
         ids = [record.evidence_id for record in self.records]
         if len(ids) != len(set(ids)):
             raise ValueError("evidence IDs must be unique")
@@ -977,9 +1312,71 @@ class IncidentEvidence(_ClosedModel):
             raise ValueError(f"overall status must be {expected.value} for these sources and budgets")
         if self.coverage_complete != (expected in (OverallStatus.COMPLETE, OverallStatus.EMPTY)):
             raise ValueError("coverage_complete is true only for complete or empty evidence")
-        if self.mappings is None and any(r.mapping.status is not MappingStatus.NOT_EVALUATED for r in self.records):
-            raise ValueError("mapping outcomes require the mapping assertions they were resolved against")
         return self
+
+
+def _reparsed_time(time: EventTime, window: TimeWindow) -> EventTime:
+    """Recompute a record's time state from the original value it carries."""
+    if time.original_type is OriginalType.ABSENT:
+        value: Any = _ABSENT
+    elif time.original_type is OriginalType.OBJECT:
+        value = {}
+    elif time.original_type is OriginalType.ARRAY:
+        value = []
+    elif time.original_type is OriginalType.FLOAT and time.original_value is None:
+        value = math.nan
+    else:
+        value = time.original_value
+    return parse_event_time(time.original_field, value, window=window, clock_uncertainty_ms=time.clock_uncertainty_ms)
+
+
+def _check_record_against_source(record: EvidenceRecord, source: SourceResult, window: TimeWindow) -> None:
+    provenance = record.provenance
+    if (
+        provenance.product is not source.product
+        or provenance.api_family is not source.api_family
+        or provenance.source_tool != source.source_tool
+        or provenance.endpoint != source.endpoint
+        or provenance.scope != source.scope
+        or provenance.query != source.query
+        or provenance.collected_at != source.collected_at
+    ):
+        raise ValueError("record provenance must match the source that produced it")
+    if record.time != _reparsed_time(record.time, window):
+        raise ValueError("a record's time state must follow from its original timestamp and the requested window")
+
+
+def _check_source_counts(coverage: Coverage, records: Sequence[EvidenceRecord]) -> None:
+    counts = coverage.counts
+    statuses = [record.time.status for record in records]
+    placed = sorted(r.time.utc for r in records if r.time.status is TimeStatus.IN_WINDOW)
+    groups: dict[str, int] = {}
+    for record in records:
+        if record.conflict_group is not None:
+            groups[record.conflict_group] = groups.get(record.conflict_group, 0) + 1
+    observed = (
+        len(records),
+        statuses.count(TimeStatus.IN_WINDOW),
+        statuses.count(TimeStatus.OUT_OF_WINDOW),
+        len(records) - statuses.count(TimeStatus.IN_WINDOW) - statuses.count(TimeStatus.OUT_OF_WINDOW),
+        sum(groups.values()),
+        sum(1 for r in records if r.time.status is TimeStatus.OUT_OF_WINDOW and r.time.boundary_uncertain),
+    )
+    claimed = (
+        counts.accepted,
+        counts.in_window,
+        counts.out_of_window,
+        counts.untimed,
+        counts.conflicting,
+        counts.boundary_uncertain,
+    )
+    if observed != claimed:
+        raise ValueError("record counts must match each source's coverage counts")
+    if any(size < 2 for size in groups.values()):
+        raise ValueError("a conflict group holds at least two differing versions")
+    first, last = (placed[0], placed[-1]) if placed else (None, None)
+    if (coverage.observed_first_utc, coverage.observed_last_utc) != (first, last):
+        raise ValueError("observed bounds must be the earliest and latest in-window record times")
 
 
 # ---------------------------------------------------------------------------
@@ -1002,15 +1399,24 @@ class SourceContext(_ClosedModel):
     requested_window: TimeWindow
     queried_window: TimeWindow | None = None
     offset: int | None = Field(default=None, ge=0)
+    # The limit the caller asked for, and the cap the source actually applied.
+    requested_cap: int | None = Field(default=None, ge=0)
     cap: int | None = Field(default=None, ge=0)
     has_more: bool | None = None
     total_reported: int | None = Field(default=None, ge=0)
+    post_filtered: bool = False
     clock_uncertainty_ms: int | None = Field(default=None, ge=0)
 
     @field_validator("query", "filters", mode="before")
     @classmethod
     def _clean(cls, value: Any) -> Any:
         return clean_query(value) if isinstance(value, Mapping) else value
+
+    @model_validator(mode="after")
+    def _caps(self) -> SourceContext:
+        if self.cap is not None and self.requested_cap is not None and self.cap > self.requested_cap:
+            raise ValueError("the effective cap cannot exceed the requested cap")
+        return self
 
     @field_validator("collected_at")
     @classmethod
@@ -1057,6 +1463,13 @@ def _record_id(value: Any) -> str | int | None:
     return None
 
 
+@dataclass(frozen=True)
+class _Version:
+    digest: str
+    extracted: ExtractedRecord
+    record_id: str | int | None
+
+
 def collect_source(
     context: SourceContext,
     raw_records: Any,
@@ -1067,16 +1480,18 @@ def collect_source(
 ) -> SourceEvidence:
     """Normalize one source's raw records into evidence with explicit coverage.
 
-    ``failure`` marks a call that broke off after returning ``raw_records``
-    (for example a timeout on a later page); ``budget_exhausted`` marks a call
-    the collector stopped early. Either makes the source partial.
+    Identical repeats of a record collapse; differing records under one typed
+    source record ID are all kept as a conflict group, which blocks complete
+    coverage. The result does not depend on input order. ``failure`` marks a
+    call that broke off after returning ``raw_records`` (for example a timeout
+    on a later page); ``budget_exhausted`` marks a call the collector stopped
+    early. Either makes the source partial.
     """
     if not isinstance(raw_records, (list, tuple)):
         return source_failed(context, SourceFailure(kind=FailureKind.PARSE_FAILED))
 
-    records: list[EvidenceRecord] = []
-    seen: set[str] = set()
-    malformed = duplicates = in_window = out_of_window = untimed = 0
+    malformed = duplicates = 0
+    groups: dict[str, dict[str, _Version]] = {}
     for raw in raw_records:
         if not isinstance(raw, Mapping):
             malformed += 1
@@ -1088,66 +1503,85 @@ def collect_source(
         if extracted is None:
             malformed += 1
             continue
+        digest = _content_hash(raw)
         record_id = _record_id(extracted.record_id)
-        if record_id is not None:
-            evidence_id = f"{context.source_id}:{record_id}"
-        else:
-            evidence_id = f"{context.source_id}:sha256:{_content_hash(raw)}"
-        if evidence_id in seen:
+        base = (
+            record_identity(context.source_id, record_id)
+            if record_id is not None
+            else f"{context.source_id}:sha256:{digest}"
+        )
+        versions = groups.setdefault(base, {})
+        if digest in versions:
             duplicates += 1
             continue
-        seen.add(evidence_id)
-        event_time = parse_event_time(
+        versions[digest] = _Version(digest, extracted, record_id)
+
+    records: list[EvidenceRecord] = []
+    for base, versions in groups.items():
+        conflict = len(versions) > 1
+        for digest, version in versions.items():
+            records.append(
+                _evidence_record(
+                    context,
+                    version,
+                    evidence_id=f"{base}#{digest}" if conflict else base,
+                    conflict_group=base if conflict else None,
+                )
+            )
+    records.sort(key=record_sort_key)
+
+    statuses = [record.time.status for record in records]
+    counts = RecordCounts(
+        received=len(raw_records),
+        accepted=len(records),
+        in_window=statuses.count(TimeStatus.IN_WINDOW),
+        out_of_window=statuses.count(TimeStatus.OUT_OF_WINDOW),
+        untimed=len(records) - statuses.count(TimeStatus.IN_WINDOW) - statuses.count(TimeStatus.OUT_OF_WINDOW),
+        malformed_dropped=malformed,
+        duplicates_dropped=duplicates,
+        conflicting=sum(1 for record in records if record.conflict_group is not None),
+        boundary_uncertain=sum(
+            1 for r in records if r.time.status is TimeStatus.OUT_OF_WINDOW and r.time.boundary_uncertain
+        ),
+    )
+    if failure is not None and not records and not malformed:
+        return source_failed(context, failure)
+    return SourceEvidence(
+        source=_source_result(context, counts, records, failure=failure, budget_exhausted=budget_exhausted),
+        records=tuple(records),
+    )
+
+
+def _evidence_record(
+    context: SourceContext, version: _Version, *, evidence_id: str, conflict_group: str | None
+) -> EvidenceRecord:
+    extracted, record_id = version.extracted, version.record_id
+    return EvidenceRecord(
+        evidence_id=evidence_id,
+        evidence_id_basis="source_record_id" if record_id is not None else "content_hash",
+        source_id=context.source_id,
+        provenance=Provenance(
+            product=context.product,
+            api_family=context.api_family,
+            source_tool=context.source_tool,
+            endpoint=context.endpoint,
+            scope=context.scope,
+            source_record_id=record_id,
+            source_record_id_field=extracted.record_id_field if record_id is not None else None,
+            query=context.query,
+            collected_at=context.collected_at,
+        ),
+        time=parse_event_time(
             extracted.time_field,
             extracted.time_value,
             window=context.requested_window,
             clock_uncertainty_ms=context.clock_uncertainty_ms,
-        )
-        if event_time.status is TimeStatus.IN_WINDOW:
-            in_window += 1
-        elif event_time.status is TimeStatus.OUT_OF_WINDOW:
-            out_of_window += 1
-        else:
-            untimed += 1
-        records.append(
-            EvidenceRecord(
-                evidence_id=evidence_id,
-                evidence_id_basis="source_record_id" if record_id is not None else "content_hash",
-                source_id=context.source_id,
-                provenance=Provenance(
-                    product=context.product,
-                    api_family=context.api_family,
-                    source_tool=context.source_tool,
-                    endpoint=context.endpoint,
-                    scope=context.scope,
-                    source_record_id=record_id,
-                    source_record_id_field=extracted.record_id_field if record_id is not None else None,
-                    query=context.query,
-                    collected_at=context.collected_at,
-                ),
-                time=event_time,
-                event_type=extracted.event_type,
-                summary=extracted.summary,
-                entities=extracted.entities,
-                attributes=clean_attributes(extracted.attributes),
-            )
-        )
-
-    counts = RecordCounts(
-        received=len(raw_records),
-        accepted=len(records),
-        in_window=in_window,
-        out_of_window=out_of_window,
-        untimed=untimed,
-        malformed_dropped=malformed,
-        duplicates_dropped=duplicates,
-    )
-    if failure is not None and not records and not malformed:
-        return source_failed(context, failure)
-    records.sort(key=record_sort_key)
-    return SourceEvidence(
-        source=_source_result(context, counts, records, failure=failure, budget_exhausted=budget_exhausted),
-        records=tuple(records),
+        ),
+        event_type=extracted.event_type,
+        summary=extracted.summary,
+        entities=extracted.entities,
+        attributes=clean_attributes(extracted.attributes),
+        conflict_group=conflict_group,
     )
 
 
@@ -1161,29 +1595,20 @@ def _coverage(
 ) -> Coverage:
     pagination = Pagination(
         offset=context.offset,
+        requested_cap=context.requested_cap,
         cap=context.cap,
         returned=counts.received,
-        has_more=context.has_more,
-        total_reported=context.total_reported,
+        # An unanswered call makes no claim about what lies beyond it.
+        has_more=context.has_more if responded else None,
+        total_reported=context.total_reported if responded else None,
+        post_filtered=context.post_filtered,
         interrupted=interrupted,
     )
     truncation = truncation_state(pagination)
     # A source that never answered observed no window at all.
     queried = context.queried_window if responded else None
-    window = (
-        WindowCoverage.UNKNOWN
-        if queried is None
-        else WindowCoverage.COVERED
-        if queried.covers(context.requested_window)
-        else WindowCoverage.NOT_COVERED
-    )
-    complete = (
-        not interrupted
-        and window is WindowCoverage.COVERED
-        and truncation is Truncation.NOT_TRUNCATED
-        and counts.malformed_dropped == 0
-        and counts.untimed == 0
-    )
+    window = _window_coverage(queried, context.requested_window)
+    complete = coverage_is_complete(window_coverage=window, truncation=truncation, pagination=pagination, counts=counts)
     placed = [r.time.utc for r in records if r.time.status is TimeStatus.IN_WINDOW]
     return Coverage(
         requested_window=context.requested_window,
@@ -1209,28 +1634,12 @@ def _source_result(
     budget_exhausted: bool,
 ) -> SourceResult:
     coverage = _coverage(context, counts, records, interrupted=failure is not None or budget_exhausted)
-    reasons: set[PartialReason] = set()
-    if failure is not None:
-        reasons.add(PartialReason.PARTIAL_RESPONSE)
-    if budget_exhausted:
-        reasons.add(PartialReason.BUDGET_EXHAUSTED)
-    if coverage.truncation is Truncation.TRUNCATED:
-        reasons.add(PartialReason.TRUNCATED)
-    elif coverage.truncation is Truncation.UNKNOWN:
-        reasons.add(PartialReason.TRUNCATION_UNKNOWN)
-    if coverage.window_coverage is WindowCoverage.NOT_COVERED:
-        reasons.add(PartialReason.WINDOW_NOT_COVERED)
-    elif coverage.window_coverage is WindowCoverage.UNKNOWN:
-        reasons.add(PartialReason.WINDOW_COVERAGE_UNKNOWN)
-    if counts.malformed_dropped:
-        reasons.add(PartialReason.MALFORMED_RECORDS)
-    if counts.untimed:
-        reasons.add(PartialReason.UNTIMED_RECORDS)
     if coverage.complete:
         outcome = SourceOutcome.EMPTY if counts.in_window == 0 else SourceOutcome.COMPLETE
-        reasons.clear()
+        reasons: set[PartialReason] = set()
     else:
         outcome = SourceOutcome.PARTIAL
+        reasons = coverage_reasons(coverage, broke_off=failure is not None, budget_exhausted=budget_exhausted)
     return SourceResult(
         source_id=context.source_id,
         product=context.product,
@@ -1248,7 +1657,11 @@ def _source_result(
 
 
 def source_failed(context: SourceContext, failure: SourceFailure) -> SourceEvidence:
-    """Record a source that produced no records; never an empty success."""
+    """Record a source that produced no records; never an empty success.
+
+    Pagination claims and the queried window describe a response, so an
+    unanswered call discards them.
+    """
     counts = RecordCounts(
         received=0, accepted=0, in_window=0, out_of_window=0, untimed=0, malformed_dropped=0, duplicates_dropped=0
     )

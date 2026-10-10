@@ -12,16 +12,17 @@ actually returns today:
   whose records live under the top-level ``events`` / ``alarms`` keys, not
   under ``data``.
 
-Both tools take a relative ``within_hours`` lookback (alarms take none), so
-the queried window ends at collection time; ``start`` is a pagination offset,
-not a time.
+``unifi_list_events`` takes a relative ``within_hours`` lookback read from
+the manager's clock during the call, so the certain queried window ends when
+the request started; ``start`` is a pagination offset, not a time.
+``unifi_list_alarms`` takes no time range.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from unifi_core.incident_evidence import (
     ABSENT,
@@ -72,6 +73,7 @@ _LEGACY_KINDS: tuple[tuple[str, EntityKind], ...] = (
     ("gw", EntityKind.NETWORK_DEVICE),
 )
 _TIME_FIELDS = ("time", "timestamp", "ts", "datetime")
+_PROJECTION_SKIP = frozenset({*_TIME_FIELDS, "_id", "id"})
 # The alarm v2 path looks back this far (EventManager._get_alarms_v2).
 ALARM_V2_LOOKBACK = timedelta(days=30)
 
@@ -105,9 +107,9 @@ def _entities(raw: Mapping[str, Any]) -> tuple[EntityRef, ...]:
 
 def extract_network_record(raw: Mapping[str, Any]) -> ExtractedRecord | None:
     """Extract contract fields from one Network event or alarm record."""
-    # Time is parsed by the contract; the projection model would reject the
-    # malformed values that must stay visible as explicit time states.
-    projected = threat_event_log_from_controller({k: v for k, v in raw.items() if k not in _TIME_FIELDS})
+    # IDs and times are read by the contract as returned; the projection model
+    # would reject integer IDs and the malformed times that must stay visible.
+    projected = threat_event_log_from_controller({k: v for k, v in raw.items() if k not in _PROJECTION_SKIP})
     record_id_field = next((key for key in ("_id", "id") if raw.get(key) is not None), None)
     time_field = next((key for key in _TIME_FIELDS if key in raw and raw[key] is not None), None)
     if time_field is None:
@@ -140,9 +142,43 @@ def _scope(site: str | None, controller_id: str | None, location_id: str | None)
     return Scope(site=site, controller_id=controller_id, location_id=location_id)
 
 
+ApiPath = Literal["v2", "legacy"]
+
+# Hard caps the manager applies regardless of the requested limit.
+LEGACY_EVENTS_CAP = 3000  # EventManager._get_events_legacy: ``_limit`` is clamped
+V2_ALARMS_PAGE_CAP = 100  # EventManager._get_alarms_v2: one page of at most 100
+_EVENT_ENDPOINTS = {"v2": "/system-log/all", "legacy": "/stat/event"}
+_ALARM_ENDPOINTS = {"v2": "/system-log/critical", "legacy": "/stat/alarm"}
+
+
+def _guaranteed_window(span: timedelta, request_started_at: datetime, collected_at: datetime) -> TimeWindow | None:
+    """The interval a relative lookback covered whenever the manager read its clock.
+
+    The manager takes "now" somewhere between ``request_started_at`` and
+    ``collected_at``; only the overlap of every possible window is certain.
+    """
+    if request_started_at > collected_at:
+        raise ValueError("request_started_at must not be after collected_at")
+    start, end = collected_at - span, request_started_at
+    return TimeWindow.from_datetimes(start, end) if start < end else None
+
+
+def effective_events_cap(limit: int, api_path: ApiPath | None) -> int:
+    """The most records ``get_events`` can return; unknown paths assume the smaller cap."""
+    limit = max(limit, 0)
+    return limit if api_path == "v2" else min(limit, LEGACY_EVENTS_CAP)
+
+
+def effective_alarms_cap(limit: int, api_path: ApiPath | None) -> int:
+    """The most records ``get_alarms`` can return; unknown paths assume the smaller cap."""
+    limit = max(limit, 0)
+    return limit if api_path == "legacy" else min(limit, V2_ALARMS_PAGE_CAP)
+
+
 def network_events_context(
     *,
     requested_window: TimeWindow,
+    request_started_at: datetime,
     collected_at: datetime,
     within_hours: int = 24,
     limit: int = 100,
@@ -150,6 +186,7 @@ def network_events_context(
     event_type: str | None = None,
     categories: Sequence[str] | None = None,
     severities: Sequence[str] | None = None,
+    api_path: ApiPath | None = None,
     source_id: str = "network.events",
     site: str | None = None,
     controller_id: str | None = None,
@@ -157,13 +194,20 @@ def network_events_context(
     endpoint: str | None = None,
     clock_uncertainty_ms: int | None = None,
 ) -> SourceContext:
-    """Describe one ``unifi_list_events`` call; arguments mirror the tool's."""
+    """Describe one ``unifi_list_events`` call; arguments mirror the tool's.
+
+    ``request_started_at`` is captured immediately before the call and
+    ``collected_at`` when it returned; the lookback is relative to the
+    manager's own clock reading between them. ``start`` is an offset, so any
+    value but 0 leaves the skipped prefix uncollected. ``api_path`` names the
+    path that answered when known; otherwise the smaller legacy cap applies.
+    """
     return SourceContext(
         source_id=source_id,
         product=Product.NETWORK,
         api_family=ApiFamily.NETWORK_V2_CONTROLLER,
         source_tool=LIST_EVENTS_TOOL,
-        endpoint=endpoint,
+        endpoint=endpoint or (_EVENT_ENDPOINTS[api_path] if api_path else None),
         scope=_scope(site, controller_id, location_id),
         query={
             "within_hours": within_hours,
@@ -184,9 +228,10 @@ def network_events_context(
         },
         collected_at=format_utc(collected_at),
         requested_window=requested_window,
-        queried_window=TimeWindow.from_datetimes(collected_at - timedelta(hours=within_hours), collected_at),
+        queried_window=_guaranteed_window(timedelta(hours=within_hours), request_started_at, collected_at),
         offset=start,
-        cap=limit,
+        requested_cap=max(limit, 0),
+        cap=effective_events_cap(limit, api_path),
         clock_uncertainty_ms=clock_uncertainty_ms,
     )
 
@@ -197,6 +242,8 @@ def network_alarms_context(
     collected_at: datetime,
     include_archived: bool = False,
     limit: int = 100,
+    api_path: ApiPath | None = None,
+    request_started_at: datetime | None = None,
     queried_window: TimeWindow | None = None,
     source_id: str = "network.alarms",
     site: str | None = None,
@@ -207,23 +254,27 @@ def network_alarms_context(
 ) -> SourceContext:
     """Describe one ``unifi_list_alarms`` call.
 
-    The tool takes no time range and does not say whether the v2 path (a
-    fixed 30-day lookback) or the legacy path (no stated range) answered, so
-    the queried window is unknown unless the caller knows it.
+    The tool takes no time range and does not say which path answered. With
+    ``api_path="v2"`` and ``request_started_at`` the fixed 30-day lookback is
+    used; otherwise the queried window is ``queried_window`` or unknown. The
+    v2 path reads one page of at most 100 alarms.
     """
+    if queried_window is None and api_path == "v2" and request_started_at is not None:
+        queried_window = _guaranteed_window(ALARM_V2_LOOKBACK, request_started_at, collected_at)
     return SourceContext(
         source_id=source_id,
         product=Product.NETWORK,
         api_family=ApiFamily.NETWORK_V2_CONTROLLER,
         source_tool=LIST_ALARMS_TOOL,
-        endpoint=endpoint,
+        endpoint=endpoint or (_ALARM_ENDPOINTS[api_path] if api_path else None),
         scope=_scope(site, controller_id, location_id),
         query={"include_archived": include_archived, "limit": limit},
         filters={"include_archived": include_archived},
         collected_at=format_utc(collected_at),
         requested_window=requested_window,
         queried_window=queried_window,
-        cap=limit,
+        requested_cap=max(limit, 0),
+        cap=effective_alarms_cap(limit, api_path),
         clock_uncertainty_ms=clock_uncertainty_ms,
     )
 

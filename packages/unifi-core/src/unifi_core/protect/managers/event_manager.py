@@ -629,6 +629,11 @@ class EventManager:
         """Current number of events in the buffer."""
         return len(self._buffer)
 
+    @property
+    def smart_detection_min_confidence(self) -> int:
+        """Confidence threshold smart-detection listings apply when the caller gives none."""
+        return self._min_confidence
+
     def add_subscriber(self, cb: Callable[[dict], None]) -> Callable[[], None]:
         """Register *cb* to receive every buffered event. Returns unsub."""
         self._subscribers.append(cb)

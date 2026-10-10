@@ -34,7 +34,7 @@ def test_timed_records_project_to_normalized_events() -> None:
     assert event.product == "protect"
     assert event.event_type == "motion"
     assert event.location_id == "loc-fixture-1"
-    assert event.normalized_fields == {"evidence_id": "protect.events:p1", "time_status": "in_window"}
+    assert event.normalized_fields == {"evidence_id": "protect.events:str:p1", "time_status": "in_window"}
     assert merge_timelines([[event]]) == [event]
 
 

@@ -1,9 +1,12 @@
 """Drive the shared incident-evidence golden corpus through the Core normalizers.
 
 Each case under ``tests/fixtures/incident_evidence/cases/`` holds an ``input``
-(per-source raw payloads exactly as a tool or manager returns them, plus the
-call arguments) and the ``expected`` normalized evidence set. Other consumers,
-such as the worker, read the same files and must produce the same output.
+(per-source raw payloads exactly as a tool or manager returns them, the tool
+arguments under ``args``, and what the collector captured around the call
+under ``capture``: request start time, answering API path, server defaults)
+and the ``expected`` normalized evidence set. Other consumers, such as the
+worker, read the same files and must produce the same output. Cases under
+``invalid/`` are evidence sets that consumers must reject.
 
 Regenerate expected outputs and the schema artifact after an intentional
 contract change, then review the diff:
@@ -57,13 +60,20 @@ def _context(window: TimeWindow, spec: dict[str, Any]) -> SourceContext:
     scope = dict(spec.get("scope", {}))
     if "source_id" in spec:
         scope["source_id"] = spec["source_id"]
+    capture = dict(spec.get("capture", {}))
+    if "request_started_at" in capture:
+        capture["request_started_at"] = parse_utc(capture["request_started_at"])
     if tool == network.LIST_EVENTS_TOOL:
-        context = network.network_events_context(requested_window=window, collected_at=collected_at, **args, **scope)
+        context = network.network_events_context(
+            requested_window=window, collected_at=collected_at, **capture, **args, **scope
+        )
     elif tool == network.LIST_ALARMS_TOOL:
-        context = network.network_alarms_context(requested_window=window, collected_at=collected_at, **args, **scope)
+        context = network.network_alarms_context(
+            requested_window=window, collected_at=collected_at, **capture, **args, **scope
+        )
     elif tool in protect.TOOL_RECORD_PATHS:
         context = protect.protect_events_context(
-            requested_window=window, collected_at=collected_at, source_tool=tool, **args, **scope
+            requested_window=window, collected_at=collected_at, source_tool=tool, **capture, **args, **scope
         )
     elif tool == "access_list_events":
         context = SourceContext(

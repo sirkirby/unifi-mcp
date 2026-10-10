@@ -2046,6 +2046,7 @@ protect = [
 [package.dev-dependencies]
 dev = [
     { name = "aioresponses" },
+    { name = "jsonschema" },
     { name = "omegaconf" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -2067,6 +2068,7 @@ provides-extras = ["access", "network", "protect"]
 [package.metadata.requires-dev]
 dev = [
     { name = "aioresponses", specifier = ">=0.7.9" },
+    { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "omegaconf", specifier = ">=2.3.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=0.21.0" },

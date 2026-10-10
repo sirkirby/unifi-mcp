@@ -30,6 +30,9 @@
           "limit": 100,
           "start": 0
         },
+        "capture": {
+          "request_started_at": "2026-08-08T13:04:59.000000Z"
+        },
         "scope": {
           "site": "default"
         },
@@ -125,7 +128,7 @@
           },
           "queried_window": {
             "start": "2026-08-08T11:05:00.000000Z",
-            "end": "2026-08-08T13:05:00.000000Z",
+            "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
           },
@@ -135,10 +138,12 @@
           "filters": {},
           "pagination": {
             "offset": 0,
+            "requested_cap": 100,
             "cap": 100,
             "returned": 0,
             "has_more": null,
             "total_reported": null,
+            "post_filtered": false,
             "interrupted": false
           },
           "truncation": "not_truncated",
@@ -149,7 +154,9 @@
             "out_of_window": 0,
             "untimed": 0,
             "malformed_dropped": 0,
-            "duplicates_dropped": 0
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
           },
           "complete": true,
           "population_total": 0
@@ -196,10 +203,12 @@
           "filters": {},
           "pagination": {
             "offset": null,
+            "requested_cap": 100,
             "cap": 100,
             "returned": 0,
             "has_more": null,
             "total_reported": null,
+            "post_filtered": false,
             "interrupted": false
           },
           "truncation": "not_truncated",
@@ -210,7 +219,9 @@
             "out_of_window": 0,
             "untimed": 0,
             "malformed_dropped": 0,
-            "duplicates_dropped": 0
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
           },
           "complete": true,
           "population_total": 0

@@ -17,8 +17,8 @@ are deliberately not carried: incident evidence never asserts identity.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
 from typing import Any
 
 from unifi_core.incident_evidence import (
@@ -49,8 +49,8 @@ TOOL_RECORD_PATHS: dict[str, tuple[str, ...]] = {
     LIST_EVENTS_TOOL: ("data", "events"),
     LIST_SMART_DETECTIONS_TOOL: ("data", "detections"),
 }
-# Both tools default to the last 24 hours when start/end are omitted.
-DEFAULT_LOOKBACK = timedelta(hours=24)
+# EventManager's smart_detection_min_confidence when the server is not configured otherwise.
+DEFAULT_SMART_DETECTION_MIN_CONFIDENCE = 50
 
 
 def _camera_id(raw: Mapping[str, Any]) -> str | None:
@@ -97,7 +97,7 @@ def extract_protect_event(raw: Mapping[str, Any]) -> ExtractedRecord | None:
 
 
 def _tool_datetime(value: str | None) -> datetime | None:
-    """Mirror the Protect tools' argument parsing: naive is UTC, invalid is ignored."""
+    """Parse a tool time argument as the Protect tools do: naive is UTC, invalid is dropped."""
     if not value:
         return None
     try:
@@ -116,9 +116,12 @@ def protect_events_context(
     limit: int = 30,
     event_type: str | None = None,
     camera_id: str | None = None,
+    compact: bool | None = None,
+    metadata_fields: Sequence[str] | None = None,
     source_tool: str = LIST_EVENTS_TOOL,
     detection_type: str | None = None,
     min_confidence: int | None = None,
+    server_min_confidence: int = DEFAULT_SMART_DETECTION_MIN_CONFIDENCE,
     source_id: str = "protect.events",
     controller_id: str | None = None,
     location_id: str | None = None,
@@ -126,25 +129,41 @@ def protect_events_context(
 ) -> SourceContext:
     """Describe one ``protect_list_events`` or ``protect_list_smart_detections`` call.
 
-    ``start``/``end`` are the ISO strings passed to the tool. The queried
-    window reproduces what the tool actually asked for, including its silent
-    fallback to the last 24 hours when an argument is missing or unparseable.
+    ``start``/``end`` are the ISO strings passed to the tool. A bound that is
+    omitted or unparseable reaches the controller as no bound at all, so the
+    queried window is unknown rather than an assumed 24 hours.
+
+    Smart detections are filtered by confidence after the controller applies
+    ``limit``, so a short list never proves completeness. The effective
+    threshold is ``min_confidence`` or, when omitted, the server's configured
+    ``smart_detection_min_confidence`` passed as ``server_min_confidence``.
     """
     if source_tool not in TOOL_RECORD_PATHS:
         raise ValueError(f"no Protect record path is known for tool {source_tool!r}")
     query: dict[str, Any] = {"start": start, "end": end, "limit": limit, "camera_id": camera_id}
+    if compact is not None:
+        query["compact"] = compact
+    if metadata_fields is not None:
+        # Selects the raw endpoint instead of the SDK path, so it is part of the query.
+        query["metadata_fields"] = list(metadata_fields)
     filters: dict[str, Any] = {"camera_id": camera_id}
+    post_filtered = False
     if source_tool == LIST_EVENTS_TOOL:
         query["event_type"] = event_type
         filters["event_type"] = event_type
     else:
+        effective = min_confidence if min_confidence is not None else server_min_confidence
         query["detection_type"] = detection_type
         query["min_confidence"] = min_confidence
         filters["detection_type"] = detection_type
-        filters["min_confidence"] = min_confidence
-    queried_end = _tool_datetime(end) or collected_at
-    queried_start = _tool_datetime(start) or collected_at - DEFAULT_LOOKBACK
-    queried = TimeWindow.from_datetimes(queried_start, queried_end) if queried_start < queried_end else None
+        filters["min_confidence_effective"] = effective
+        post_filtered = effective > 0
+    queried_start, queried_end = _tool_datetime(start), _tool_datetime(end)
+    queried = (
+        TimeWindow.from_datetimes(queried_start, queried_end)
+        if queried_start is not None and queried_end is not None and queried_start < queried_end
+        else None
+    )
     return SourceContext(
         source_id=source_id,
         product=Product.PROTECT,
@@ -157,7 +176,9 @@ def protect_events_context(
         collected_at=format_utc(collected_at),
         requested_window=requested_window,
         queried_window=queried,
-        cap=limit,
+        requested_cap=max(limit, 0),
+        cap=max(limit, 0),
+        post_filtered=post_filtered,
         clock_uncertainty_ms=clock_uncertainty_ms,
     )
 
