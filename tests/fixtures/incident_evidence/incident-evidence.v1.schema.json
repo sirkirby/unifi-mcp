@@ -111,6 +111,125 @@
     },
     "Coverage": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "population_total": {
+                "type": "null"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "counts": {
+                "properties": {
+                  "boundary_uncertain": {
+                    "const": 0
+                  },
+                  "conflicting": {
+                    "const": 0
+                  },
+                  "malformed_dropped": {
+                    "const": 0
+                  },
+                  "untimed": {
+                    "const": 0
+                  }
+                }
+              },
+              "pagination": {
+                "properties": {
+                  "interrupted": {
+                    "const": false
+                  },
+                  "offset": {
+                    "enum": [
+                      null,
+                      0
+                    ]
+                  }
+                }
+              },
+              "population_total": {
+                "type": "integer"
+              },
+              "truncation": {
+                "const": "not_truncated"
+              },
+              "window_coverage": {
+                "const": "covered"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "queried_window": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "window_coverage": {
+                "const": "unknown"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pagination": {
+                "properties": {
+                  "has_more": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "truncation": {
+                "const": "truncated"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pagination": {
+                "properties": {
+                  "interrupted": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "truncation": {
+                "enum": [
+                  "truncated",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "complete": {
           "title": "Complete",
@@ -282,6 +401,62 @@
     },
     "EventTime": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "boundary_uncertain": {
+                "const": false
+              },
+              "precision": {
+                "type": "null"
+              },
+              "utc": {
+                "type": "null"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "in_window",
+                  "out_of_window"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "precision": {
+                "type": "string"
+              },
+              "utc": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "missing"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "original_type": {
+                "enum": [
+                  "absent",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "boundary_uncertain": {
           "default": false,
@@ -437,6 +612,18 @@
           "title": "Attributes",
           "type": "object"
         },
+        "conflict_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conflict Group"
+        },
         "entities": {
           "default": [],
           "items": {
@@ -560,6 +747,78 @@
     },
     "MappingOutcome": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "verified"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "confidence": {
+                "const": "exact_identifier"
+              },
+              "matched_on": {
+                "minItems": 1
+              },
+              "targets": {
+                "maxItems": 1,
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ambiguous"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "confidence": {
+                "type": "null"
+              },
+              "targets": {
+                "minItems": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "missing",
+                  "not_evaluated"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "confidence": {
+                "type": "null"
+              },
+              "matched_on": {
+                "maxItems": 0
+              },
+              "sources": {
+                "maxItems": 0
+              },
+              "targets": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "confidence": {
           "anyOf": [
@@ -696,6 +955,24 @@
           "default": null,
           "title": "Offset"
         },
+        "post_filtered": {
+          "default": false,
+          "title": "Post Filtered",
+          "type": "boolean"
+        },
+        "requested_cap": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requested Cap"
+        },
         "returned": {
           "minimum": 0,
           "title": "Returned",
@@ -723,6 +1000,10 @@
     },
     "PartialReason": {
       "enum": [
+        "boundary_uncertain",
+        "conflicting_records",
+        "post_filtered",
+        "prefix_not_collected",
         "truncated",
         "truncation_unknown",
         "window_not_covered",
@@ -879,6 +1160,18 @@
           "title": "Accepted",
           "type": "integer"
         },
+        "boundary_uncertain": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Boundary Uncertain",
+          "type": "integer"
+        },
+        "conflicting": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Conflicting",
+          "type": "integer"
+        },
         "duplicates_dropped": {
           "minimum": 0,
           "title": "Duplicates Dropped",
@@ -1011,6 +1304,351 @@
     },
     "SourceResult": {
       "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "complete",
+                  "empty"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                }
+              },
+              "failure": {
+                "type": "null"
+              },
+              "partial_reasons": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "empty"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "counts": {
+                    "properties": {
+                      "in_window": {
+                        "const": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "complete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "counts": {
+                    "properties": {
+                      "in_window": {
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "partial"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "complete": {
+                    "const": false
+                  }
+                }
+              },
+              "partial_reasons": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "failure": {
+                "type": "object"
+              },
+              "outcome": {
+                "const": "partial"
+              }
+            },
+            "required": [
+              "failure"
+            ]
+          },
+          "then": {
+            "properties": {
+              "partial_reasons": {
+                "contains": {
+                  "const": "partial_response"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "unavailable",
+                  "auth_failed",
+                  "permission_denied",
+                  "timeout",
+                  "unsupported",
+                  "parse_failed",
+                  "not_attempted"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "complete": {
+                    "const": false
+                  },
+                  "counts": {
+                    "properties": {
+                      "received": {
+                        "const": 0
+                      }
+                    }
+                  },
+                  "pagination": {
+                    "properties": {
+                      "has_more": {
+                        "type": "null"
+                      },
+                      "interrupted": {
+                        "const": true
+                      },
+                      "total_reported": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "queried_window": {
+                    "type": "null"
+                  },
+                  "truncation": {
+                    "const": "unknown"
+                  },
+                  "window_coverage": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "failure": {
+                "type": "object"
+              },
+              "partial_reasons": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "unavailable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "unavailable",
+                      "partial_response"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "auth_failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "auth_failed"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "permission_denied"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "permission_denied"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "timeout"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "timeout"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "unsupported"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "unsupported"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "parse_failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "parse_failed"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "not_attempted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "budget_exhausted"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
       "properties": {
         "api_family": {
           "anyOf": [
@@ -1234,6 +1872,248 @@
   },
   "$id": "urn:unifi-mcp:unifi-incident-evidence:v1",
   "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "coverage_complete": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "overall": {
+            "enum": [
+              "complete",
+              "empty"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "enum": [
+              "complete",
+              "empty"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "coverage_complete": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "const": "empty"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "budgets": {
+            "properties": {
+              "exhausted": {
+                "maxItems": 0
+              }
+            }
+          },
+          "records": {
+            "items": {
+              "not": {
+                "properties": {
+                  "time": {
+                    "properties": {
+                      "status": {
+                        "const": "in_window"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "sources": {
+            "items": {
+              "properties": {
+                "outcome": {
+                  "const": "empty"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "const": "complete"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "budgets": {
+            "properties": {
+              "exhausted": {
+                "maxItems": 0
+              }
+            }
+          },
+          "sources": {
+            "contains": {
+              "properties": {
+                "outcome": {
+                  "const": "complete"
+                }
+              }
+            },
+            "items": {
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "complete",
+                    "empty"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "records": {
+            "maxItems": 0
+          },
+          "sources": {
+            "items": {
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "unavailable",
+                    "auth_failed",
+                    "permission_denied",
+                    "timeout",
+                    "unsupported",
+                    "parse_failed",
+                    "not_attempted"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "const": "partial"
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "sources": {
+                "contains": {
+                  "properties": {
+                    "outcome": {
+                      "not": {
+                        "enum": [
+                          "complete",
+                          "empty"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "budgets": {
+                "properties": {
+                  "exhausted": {
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "sources": {
+            "contains": {
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "complete",
+                    "empty",
+                    "partial"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mappings": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "mappings"
+        ]
+      },
+      "then": {
+        "properties": {
+          "records": {
+            "items": {
+              "properties": {
+                "mapping": {
+                  "properties": {
+                    "status": {
+                      "const": "not_evaluated"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "description": "A bounded, cited evidence set. ``coverage_complete`` gates any all-clear.",
   "properties": {
     "budgets": {

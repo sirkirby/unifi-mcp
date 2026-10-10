@@ -1,5 +1,5 @@
 {
-  "description": "Repeated source IDs are dropped and counted; records without an ID get a content-hash evidence ID; simultaneous events order by product, source and source record ID.",
+  "description": "Identical repeats of a record collapse and are counted; records without an ID get a content-hash evidence ID; simultaneous events order by product, source and source record ID.",
   "input": {
     "requested_window": {
       "start": "2026-08-08T12:00:00.000000Z",
@@ -30,6 +30,9 @@
           "limit": 100,
           "start": 0
         },
+        "capture": {
+          "request_started_at": "2026-08-08T13:04:59.000000Z"
+        },
         "scope": {
           "site": "default"
         },
@@ -51,7 +54,7 @@
           {
             "id": "evt-net-1001",
             "key": "K",
-            "msg": "duplicate of lower id",
+            "msg": "same instant, lower id",
             "time": 1786191600000,
             "mac": "aa:bb:cc:00:20:01"
           },
@@ -163,7 +166,7 @@
           },
           "queried_window": {
             "start": "2026-08-08T11:05:00.000000Z",
-            "end": "2026-08-08T13:05:00.000000Z",
+            "end": "2026-08-08T13:04:59.000000Z",
             "start_inclusive": true,
             "end_inclusive": false
           },
@@ -173,10 +176,12 @@
           "filters": {},
           "pagination": {
             "offset": 0,
+            "requested_cap": 100,
             "cap": 100,
             "returned": 5,
             "has_more": null,
             "total_reported": null,
+            "post_filtered": false,
             "interrupted": false
           },
           "truncation": "not_truncated",
@@ -187,7 +192,9 @@
             "out_of_window": 0,
             "untimed": 0,
             "malformed_dropped": 0,
-            "duplicates_dropped": 2
+            "duplicates_dropped": 2,
+            "conflicting": 0,
+            "boundary_uncertain": 0
           },
           "complete": true,
           "population_total": 3
@@ -234,10 +241,12 @@
           "filters": {},
           "pagination": {
             "offset": null,
+            "requested_cap": 100,
             "cap": 100,
             "returned": 2,
             "has_more": null,
             "total_reported": null,
+            "post_filtered": false,
             "interrupted": false
           },
           "truncation": "not_truncated",
@@ -248,7 +257,9 @@
             "out_of_window": 0,
             "untimed": 0,
             "malformed_dropped": 0,
-            "duplicates_dropped": 1
+            "duplicates_dropped": 1,
+            "conflicting": 0,
+            "boundary_uncertain": 0
           },
           "complete": true,
           "population_total": 1
@@ -312,10 +323,11 @@
           "sources": [],
           "confidence": null
         },
-        "attributes": {}
+        "attributes": {},
+        "conflict_group": null
       },
       {
-        "evidence_id": "network.events:evt-net-1001",
+        "evidence_id": "network.events:str:evt-net-1001",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
@@ -370,10 +382,11 @@
           "sources": [],
           "confidence": null
         },
-        "attributes": {}
+        "attributes": {},
+        "conflict_group": null
       },
       {
-        "evidence_id": "network.events:evt-net-1002",
+        "evidence_id": "network.events:str:evt-net-1002",
         "evidence_id_basis": "source_record_id",
         "source_id": "network.events",
         "provenance": {
@@ -428,10 +441,11 @@
           "sources": [],
           "confidence": null
         },
-        "attributes": {}
+        "attributes": {},
+        "conflict_group": null
       },
       {
-        "evidence_id": "protect.events:evt-protect-1001",
+        "evidence_id": "protect.events:str:evt-protect-1001",
         "evidence_id_basis": "source_record_id",
         "source_id": "protect.events",
         "provenance": {
@@ -488,7 +502,8 @@
         "attributes": {
           "score": 80,
           "smart_detect_types": []
-        }
+        },
+        "conflict_group": null
       }
     ],
     "overall": "complete",

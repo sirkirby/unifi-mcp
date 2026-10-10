@@ -1,0 +1,389 @@
+{
+  "description": "protect_list_events without start/end sends no bound, so its window is unknown; smart detections with min_confidence=0 are not post-filtered and can be complete.",
+  "input": {
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z"
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "adapter": "tool_response",
+        "tool": "protect_list_events",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "limit": 30,
+          "camera_id": "cam-fixture-000a"
+        },
+        "scope": {},
+        "payload": {
+          "success": true,
+          "data": {
+            "events": [
+              {
+                "id": "evt-protect-1401",
+                "type": "motion",
+                "start": "2026-08-08T12:30:00+00:00",
+                "score": 80,
+                "smart_detect_types": [],
+                "camera": "cam-fixture-000a"
+              }
+            ],
+            "count": 1
+          }
+        }
+      },
+      {
+        "adapter": "tool_response",
+        "tool": "protect_list_smart_detections",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "start": "2026-08-08T12:00:00Z",
+          "end": "2026-08-08T13:00:00Z",
+          "limit": 30,
+          "min_confidence": 0
+        },
+        "scope": {},
+        "payload": {
+          "success": true,
+          "data": {
+            "detections": [],
+            "count": 0
+          }
+        },
+        "source_id": "protect.smart_detections"
+      },
+      {
+        "adapter": "tool_response",
+        "tool": "protect_list_smart_detections",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "start": "2026-08-08T12:00:00Z",
+          "end": "2026-08-08T13:00:00Z",
+          "limit": 30
+        },
+        "scope": {},
+        "payload": {
+          "success": true,
+          "data": {
+            "detections": [],
+            "count": 0
+          }
+        },
+        "capture": {
+          "server_min_confidence": 50
+        },
+        "source_id": "protect.smart_detections_default"
+      }
+    ]
+  },
+  "expected": {
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z",
+      "start_inclusive": true,
+      "end_inclusive": false
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "source_id": "protect.events",
+        "product": "protect",
+        "api_family": "protect_private",
+        "source_tool": "protect_list_events",
+        "endpoint": "/proxy/protect/api/events",
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {
+          "camera_id": "cam-fixture-000a",
+          "end": null,
+          "event_type": null,
+          "limit": 30,
+          "start": null
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "partial",
+        "failure": null,
+        "partial_reasons": [
+          "window_coverage_unknown"
+        ],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": null,
+          "window_coverage": "unknown",
+          "observed_first_utc": "2026-08-08T12:30:00.000000Z",
+          "observed_last_utc": "2026-08-08T12:30:00.000000Z",
+          "filters": {
+            "camera_id": "cam-fixture-000a"
+          },
+          "pagination": {
+            "offset": null,
+            "requested_cap": 30,
+            "cap": 30,
+            "returned": 1,
+            "has_more": null,
+            "total_reported": null,
+            "post_filtered": false,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 1,
+            "accepted": 1,
+            "in_window": 1,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
+          },
+          "complete": false,
+          "population_total": null
+        }
+      },
+      {
+        "source_id": "protect.smart_detections",
+        "product": "protect",
+        "api_family": "protect_private",
+        "source_tool": "protect_list_smart_detections",
+        "endpoint": "/proxy/protect/api/events",
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {
+          "camera_id": null,
+          "detection_type": null,
+          "end": "2026-08-08T13:00:00Z",
+          "limit": 30,
+          "min_confidence": 0,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "empty",
+        "failure": null,
+        "partial_reasons": [],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "filters": {
+            "min_confidence_effective": 0
+          },
+          "pagination": {
+            "offset": null,
+            "requested_cap": 30,
+            "cap": 30,
+            "returned": 0,
+            "has_more": null,
+            "total_reported": null,
+            "post_filtered": false,
+            "interrupted": false
+          },
+          "truncation": "not_truncated",
+          "counts": {
+            "received": 0,
+            "accepted": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
+          },
+          "complete": true,
+          "population_total": 0
+        }
+      },
+      {
+        "source_id": "protect.smart_detections_default",
+        "product": "protect",
+        "api_family": "protect_private",
+        "source_tool": "protect_list_smart_detections",
+        "endpoint": "/proxy/protect/api/events",
+        "scope": {
+          "controller_id": null,
+          "site": null,
+          "location_id": null
+        },
+        "query": {
+          "camera_id": null,
+          "detection_type": null,
+          "end": "2026-08-08T13:00:00Z",
+          "limit": 30,
+          "min_confidence": null,
+          "start": "2026-08-08T12:00:00Z"
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "partial",
+        "failure": null,
+        "partial_reasons": [
+          "post_filtered",
+          "truncation_unknown"
+        ],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": null,
+          "observed_last_utc": null,
+          "filters": {
+            "min_confidence_effective": 50
+          },
+          "pagination": {
+            "offset": null,
+            "requested_cap": 30,
+            "cap": 30,
+            "returned": 0,
+            "has_more": null,
+            "total_reported": null,
+            "post_filtered": true,
+            "interrupted": false
+          },
+          "truncation": "unknown",
+          "counts": {
+            "received": 0,
+            "accepted": 0,
+            "in_window": 0,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
+          },
+          "complete": false,
+          "population_total": null
+        }
+      }
+    ],
+    "records": [
+      {
+        "evidence_id": "protect.events:str:evt-protect-1401",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "protect.events",
+        "provenance": {
+          "product": "protect",
+          "api_family": "protect_private",
+          "source_tool": "protect_list_events",
+          "endpoint": "/proxy/protect/api/events",
+          "scope": {
+            "controller_id": null,
+            "site": null,
+            "location_id": null
+          },
+          "source_record_id": "evt-protect-1401",
+          "source_record_id_field": "id",
+          "query": {
+            "camera_id": "cam-fixture-000a",
+            "end": null,
+            "event_type": null,
+            "limit": 30,
+            "start": null
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "start",
+          "original_type": "string",
+          "original_value": "2026-08-08T12:30:00+00:00",
+          "original_format": "iso8601",
+          "utc": "2026-08-08T12:30:00.000000Z",
+          "utc_offset": "+00:00",
+          "timezone_basis": "explicit_offset",
+          "precision": "second",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "motion",
+        "summary": "motion",
+        "entities": [
+          {
+            "kind": "camera",
+            "id_kind": "protect_camera_id",
+            "id": "cam-fixture-000a",
+            "role": "camera"
+          }
+        ],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "score": 80,
+          "smart_detect_types": []
+        },
+        "conflict_group": null
+      }
+    ],
+    "overall": "partial",
+    "coverage_complete": false
+  }
+}

@@ -1,0 +1,5847 @@
+{
+  "description": "unifi_list_alarms asks for 200 but the v2 path reads one page of 100; a full page cannot prove completeness.",
+  "input": {
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z"
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "adapter": "tool_response",
+        "tool": "unifi_list_alarms",
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "args": {
+          "include_archived": false,
+          "limit": 200
+        },
+        "capture": {
+          "api_path": "v2",
+          "request_started_at": "2026-08-08T13:04:59.000000Z"
+        },
+        "scope": {
+          "site": "default"
+        },
+        "payload": {
+          "success": true,
+          "site": "default",
+          "count": 100,
+          "include_archived": false,
+          "alarms": [
+            {
+              "id": "alarm-000",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190400000
+            },
+            {
+              "id": "alarm-001",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190401000
+            },
+            {
+              "id": "alarm-002",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190402000
+            },
+            {
+              "id": "alarm-003",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190403000
+            },
+            {
+              "id": "alarm-004",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190404000
+            },
+            {
+              "id": "alarm-005",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190405000
+            },
+            {
+              "id": "alarm-006",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190406000
+            },
+            {
+              "id": "alarm-007",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190407000
+            },
+            {
+              "id": "alarm-008",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190408000
+            },
+            {
+              "id": "alarm-009",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190409000
+            },
+            {
+              "id": "alarm-010",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190410000
+            },
+            {
+              "id": "alarm-011",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190411000
+            },
+            {
+              "id": "alarm-012",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190412000
+            },
+            {
+              "id": "alarm-013",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190413000
+            },
+            {
+              "id": "alarm-014",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190414000
+            },
+            {
+              "id": "alarm-015",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190415000
+            },
+            {
+              "id": "alarm-016",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190416000
+            },
+            {
+              "id": "alarm-017",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190417000
+            },
+            {
+              "id": "alarm-018",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190418000
+            },
+            {
+              "id": "alarm-019",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190419000
+            },
+            {
+              "id": "alarm-020",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190420000
+            },
+            {
+              "id": "alarm-021",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190421000
+            },
+            {
+              "id": "alarm-022",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190422000
+            },
+            {
+              "id": "alarm-023",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190423000
+            },
+            {
+              "id": "alarm-024",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190424000
+            },
+            {
+              "id": "alarm-025",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190425000
+            },
+            {
+              "id": "alarm-026",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190426000
+            },
+            {
+              "id": "alarm-027",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190427000
+            },
+            {
+              "id": "alarm-028",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190428000
+            },
+            {
+              "id": "alarm-029",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190429000
+            },
+            {
+              "id": "alarm-030",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190430000
+            },
+            {
+              "id": "alarm-031",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190431000
+            },
+            {
+              "id": "alarm-032",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190432000
+            },
+            {
+              "id": "alarm-033",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190433000
+            },
+            {
+              "id": "alarm-034",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190434000
+            },
+            {
+              "id": "alarm-035",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190435000
+            },
+            {
+              "id": "alarm-036",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190436000
+            },
+            {
+              "id": "alarm-037",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190437000
+            },
+            {
+              "id": "alarm-038",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190438000
+            },
+            {
+              "id": "alarm-039",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190439000
+            },
+            {
+              "id": "alarm-040",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190440000
+            },
+            {
+              "id": "alarm-041",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190441000
+            },
+            {
+              "id": "alarm-042",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190442000
+            },
+            {
+              "id": "alarm-043",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190443000
+            },
+            {
+              "id": "alarm-044",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190444000
+            },
+            {
+              "id": "alarm-045",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190445000
+            },
+            {
+              "id": "alarm-046",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190446000
+            },
+            {
+              "id": "alarm-047",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190447000
+            },
+            {
+              "id": "alarm-048",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190448000
+            },
+            {
+              "id": "alarm-049",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190449000
+            },
+            {
+              "id": "alarm-050",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190450000
+            },
+            {
+              "id": "alarm-051",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190451000
+            },
+            {
+              "id": "alarm-052",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190452000
+            },
+            {
+              "id": "alarm-053",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190453000
+            },
+            {
+              "id": "alarm-054",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190454000
+            },
+            {
+              "id": "alarm-055",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190455000
+            },
+            {
+              "id": "alarm-056",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190456000
+            },
+            {
+              "id": "alarm-057",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190457000
+            },
+            {
+              "id": "alarm-058",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190458000
+            },
+            {
+              "id": "alarm-059",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190459000
+            },
+            {
+              "id": "alarm-060",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190460000
+            },
+            {
+              "id": "alarm-061",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190461000
+            },
+            {
+              "id": "alarm-062",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190462000
+            },
+            {
+              "id": "alarm-063",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190463000
+            },
+            {
+              "id": "alarm-064",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190464000
+            },
+            {
+              "id": "alarm-065",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190465000
+            },
+            {
+              "id": "alarm-066",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190466000
+            },
+            {
+              "id": "alarm-067",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190467000
+            },
+            {
+              "id": "alarm-068",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190468000
+            },
+            {
+              "id": "alarm-069",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190469000
+            },
+            {
+              "id": "alarm-070",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190470000
+            },
+            {
+              "id": "alarm-071",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190471000
+            },
+            {
+              "id": "alarm-072",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190472000
+            },
+            {
+              "id": "alarm-073",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190473000
+            },
+            {
+              "id": "alarm-074",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190474000
+            },
+            {
+              "id": "alarm-075",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190475000
+            },
+            {
+              "id": "alarm-076",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190476000
+            },
+            {
+              "id": "alarm-077",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190477000
+            },
+            {
+              "id": "alarm-078",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190478000
+            },
+            {
+              "id": "alarm-079",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190479000
+            },
+            {
+              "id": "alarm-080",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190480000
+            },
+            {
+              "id": "alarm-081",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190481000
+            },
+            {
+              "id": "alarm-082",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190482000
+            },
+            {
+              "id": "alarm-083",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190483000
+            },
+            {
+              "id": "alarm-084",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190484000
+            },
+            {
+              "id": "alarm-085",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190485000
+            },
+            {
+              "id": "alarm-086",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190486000
+            },
+            {
+              "id": "alarm-087",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190487000
+            },
+            {
+              "id": "alarm-088",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190488000
+            },
+            {
+              "id": "alarm-089",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190489000
+            },
+            {
+              "id": "alarm-090",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190490000
+            },
+            {
+              "id": "alarm-091",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190491000
+            },
+            {
+              "id": "alarm-092",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190492000
+            },
+            {
+              "id": "alarm-093",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190493000
+            },
+            {
+              "id": "alarm-094",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190494000
+            },
+            {
+              "id": "alarm-095",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190495000
+            },
+            {
+              "id": "alarm-096",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190496000
+            },
+            {
+              "id": "alarm-097",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190497000
+            },
+            {
+              "id": "alarm-098",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190498000
+            },
+            {
+              "id": "alarm-099",
+              "key": "K",
+              "msg": null,
+              "archived": false,
+              "time": 1786190499000
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "expected": {
+    "schema": "unifi-incident-evidence",
+    "schema_version": 1,
+    "requested_window": {
+      "start": "2026-08-08T12:00:00.000000Z",
+      "end": "2026-08-08T13:00:00.000000Z",
+      "start_inclusive": true,
+      "end_inclusive": false
+    },
+    "budgets": {
+      "limits": {
+        "window_seconds": 7200,
+        "events": 500,
+        "calls": 10,
+        "elapsed_ms": 60000
+      },
+      "usage": {
+        "events": 0,
+        "calls": 2,
+        "elapsed_ms": 850
+      },
+      "exhausted": []
+    },
+    "mappings": null,
+    "sources": [
+      {
+        "source_id": "network.alarms",
+        "product": "network",
+        "api_family": "network_v2_controller",
+        "source_tool": "unifi_list_alarms",
+        "endpoint": "/system-log/critical",
+        "scope": {
+          "controller_id": null,
+          "site": "default",
+          "location_id": null
+        },
+        "query": {
+          "include_archived": false,
+          "limit": 200
+        },
+        "collected_at": "2026-08-08T13:05:00.000000Z",
+        "outcome": "partial",
+        "failure": null,
+        "partial_reasons": [
+          "truncation_unknown"
+        ],
+        "coverage": {
+          "requested_window": {
+            "start": "2026-08-08T12:00:00.000000Z",
+            "end": "2026-08-08T13:00:00.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "queried_window": {
+            "start": "2026-07-09T13:05:00.000000Z",
+            "end": "2026-08-08T13:04:59.000000Z",
+            "start_inclusive": true,
+            "end_inclusive": false
+          },
+          "window_coverage": "covered",
+          "observed_first_utc": "2026-08-08T12:00:00.000000Z",
+          "observed_last_utc": "2026-08-08T12:01:39.000000Z",
+          "filters": {
+            "include_archived": false
+          },
+          "pagination": {
+            "offset": null,
+            "requested_cap": 200,
+            "cap": 100,
+            "returned": 100,
+            "has_more": null,
+            "total_reported": null,
+            "post_filtered": false,
+            "interrupted": false
+          },
+          "truncation": "unknown",
+          "counts": {
+            "received": 100,
+            "accepted": 100,
+            "in_window": 100,
+            "out_of_window": 0,
+            "untimed": 0,
+            "malformed_dropped": 0,
+            "duplicates_dropped": 0,
+            "conflicting": 0,
+            "boundary_uncertain": 0
+          },
+          "complete": false,
+          "population_total": null
+        }
+      }
+    ],
+    "records": [
+      {
+        "evidence_id": "network.alarms:str:alarm-000",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-000",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190400000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-001",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-001",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190401000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:01.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-002",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-002",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190402000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:02.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-003",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-003",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190403000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:03.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-004",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-004",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190404000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:04.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-005",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-005",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190405000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:05.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-006",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-006",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190406000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:06.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-007",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-007",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190407000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:07.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-008",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-008",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190408000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:08.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-009",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-009",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190409000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:09.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-010",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-010",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190410000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:10.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-011",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-011",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190411000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:11.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-012",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-012",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190412000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:12.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-013",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-013",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190413000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:13.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-014",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-014",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190414000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:14.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-015",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-015",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190415000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:15.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-016",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-016",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190416000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:16.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-017",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-017",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190417000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:17.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-018",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-018",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190418000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:18.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-019",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-019",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190419000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:19.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-020",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-020",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190420000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:20.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-021",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-021",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190421000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:21.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-022",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-022",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190422000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:22.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-023",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-023",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190423000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:23.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-024",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-024",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190424000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:24.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-025",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-025",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190425000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:25.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-026",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-026",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190426000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:26.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-027",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-027",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190427000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:27.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-028",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-028",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190428000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:28.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-029",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-029",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190429000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:29.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-030",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-030",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190430000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:30.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-031",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-031",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190431000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:31.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-032",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-032",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190432000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:32.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-033",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-033",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190433000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:33.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-034",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-034",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190434000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:34.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-035",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-035",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190435000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:35.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-036",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-036",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190436000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:36.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-037",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-037",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190437000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:37.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-038",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-038",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190438000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:38.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-039",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-039",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190439000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:39.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-040",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-040",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190440000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:40.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-041",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-041",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190441000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:41.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-042",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-042",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190442000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:42.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-043",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-043",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190443000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:43.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-044",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-044",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190444000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:44.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-045",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-045",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190445000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:45.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-046",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-046",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190446000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:46.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-047",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-047",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190447000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:47.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-048",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-048",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190448000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:48.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-049",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-049",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190449000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:49.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-050",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-050",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190450000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:50.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-051",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-051",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190451000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:51.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-052",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-052",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190452000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:52.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-053",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-053",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190453000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:53.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-054",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-054",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190454000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:54.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-055",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-055",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190455000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:55.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-056",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-056",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190456000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:56.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-057",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-057",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190457000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:57.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-058",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-058",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190458000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:58.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-059",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-059",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190459000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:00:59.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-060",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-060",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190460000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:00.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-061",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-061",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190461000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:01.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-062",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-062",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190462000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:02.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-063",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-063",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190463000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:03.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-064",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-064",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190464000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:04.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-065",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-065",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190465000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:05.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-066",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-066",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190466000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:06.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-067",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-067",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190467000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:07.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-068",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-068",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190468000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:08.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-069",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-069",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190469000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:09.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-070",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-070",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190470000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:10.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-071",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-071",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190471000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:11.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-072",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-072",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190472000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:12.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-073",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-073",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190473000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:13.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-074",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-074",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190474000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:14.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-075",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-075",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190475000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:15.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-076",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-076",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190476000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:16.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-077",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-077",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190477000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:17.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-078",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-078",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190478000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:18.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-079",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-079",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190479000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:19.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-080",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-080",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190480000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:20.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-081",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-081",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190481000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:21.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-082",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-082",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190482000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:22.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-083",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-083",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190483000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:23.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-084",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-084",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190484000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:24.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-085",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-085",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190485000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:25.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-086",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-086",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190486000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:26.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-087",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-087",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190487000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:27.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-088",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-088",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190488000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:28.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-089",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-089",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190489000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:29.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-090",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-090",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190490000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:30.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-091",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-091",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190491000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:31.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-092",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-092",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190492000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:32.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-093",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-093",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190493000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:33.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-094",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-094",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190494000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:34.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-095",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-095",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190495000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:35.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-096",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-096",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190496000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:36.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-097",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-097",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190497000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:37.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-098",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-098",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190498000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:38.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      },
+      {
+        "evidence_id": "network.alarms:str:alarm-099",
+        "evidence_id_basis": "source_record_id",
+        "source_id": "network.alarms",
+        "provenance": {
+          "product": "network",
+          "api_family": "network_v2_controller",
+          "source_tool": "unifi_list_alarms",
+          "endpoint": "/system-log/critical",
+          "scope": {
+            "controller_id": null,
+            "site": "default",
+            "location_id": null
+          },
+          "source_record_id": "alarm-099",
+          "source_record_id_field": "id",
+          "query": {
+            "include_archived": false,
+            "limit": 200
+          },
+          "collected_at": "2026-08-08T13:05:00.000000Z"
+        },
+        "time": {
+          "status": "in_window",
+          "original_field": "time",
+          "original_type": "integer",
+          "original_value": 1786190499000,
+          "original_format": "epoch_milliseconds",
+          "utc": "2026-08-08T12:01:39.000000Z",
+          "utc_offset": null,
+          "timezone_basis": "epoch_utc",
+          "precision": "millisecond",
+          "clock_uncertainty_ms": null,
+          "boundary_uncertain": false
+        },
+        "event_type": "K",
+        "summary": null,
+        "entities": [],
+        "mapping": {
+          "status": "not_evaluated",
+          "targets": [],
+          "matched_on": [],
+          "sources": [],
+          "confidence": null
+        },
+        "attributes": {
+          "archived": false
+        },
+        "conflict_group": null
+      }
+    ],
+    "overall": "partial",
+    "coverage_complete": false
+  }
+}

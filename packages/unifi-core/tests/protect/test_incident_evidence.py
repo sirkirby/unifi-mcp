@@ -110,31 +110,83 @@ def test_raw_nvr_rows_use_epoch_milliseconds() -> None:
 
 
 @pytest.mark.parametrize(
-    ("tool", "project", "key"),
+    ("tool", "project", "key", "outcome"),
     [
-        (LIST_EVENTS_TOOL, from_controller, "events"),
-        (LIST_SMART_DETECTIONS_TOOL, smart_detection_from_controller, "detections"),
+        (LIST_EVENTS_TOOL, from_controller, "events", SourceOutcome.COMPLETE),
+        # Confidence filtering runs after the controller's limit, so a short list proves nothing.
+        (LIST_SMART_DETECTIONS_TOOL, smart_detection_from_controller, "detections", SourceOutcome.PARTIAL),
     ],
 )
-def test_tool_projection_envelopes_normalize(tool, project, key) -> None:
+def test_tool_projection_envelopes_normalize(tool, project, key, outcome) -> None:
     projected = [project(MANAGER_EVENT).model_dump(exclude_none=True)]
     response = {"success": True, "data": {key: projected, "count": 1}}
     evidence = normalize_protect_tool_response(response, _context(source_tool=tool))
     assert TOOL_RECORD_PATHS[tool] == ("data", key)
-    assert evidence.source.outcome is SourceOutcome.COMPLETE
+    assert evidence.source.outcome is outcome
     record = evidence.records[0]
     assert record.entities[0].id == CAMERA
     assert record.time.utc == "2026-08-08T12:10:07.500000Z"
 
 
-def test_default_and_unparseable_arguments_reproduce_the_tool_fallback_window() -> None:
-    defaults = protect_events_context(requested_window=WINDOW, collected_at=COLLECTED)
-    assert defaults.queried_window == TimeWindow.from_datetimes(COLLECTED - timedelta(hours=24), COLLECTED)
-    garbage = protect_events_context(requested_window=WINDOW, collected_at=COLLECTED, start="last tuesday")
-    assert garbage.queried_window == defaults.queried_window
-    assert garbage.query["start"] == "last tuesday"
-    naive = protect_events_context(requested_window=WINDOW, collected_at=COLLECTED, start="2026-08-08T12:00:00")
-    assert naive.queried_window.start == "2026-08-08T12:00:00.000000Z"
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        (None, None),
+        ("2026-08-08T12:00:00Z", None),
+        (None, "2026-08-08T13:00:00Z"),
+        ("last tuesday", "2026-08-08T13:00:00Z"),
+        ("2026-08-08T13:00:00Z", "2026-08-08T12:00:00Z"),
+    ],
+)
+def test_omitted_or_unparseable_bounds_leave_the_queried_window_unknown(start, end) -> None:
+    # The manager sends no bound for an omitted or unparseable argument, so no
+    # 24-hour default is assumed.
+    context = protect_events_context(requested_window=WINDOW, collected_at=COLLECTED, start=start, end=end)
+    assert context.queried_window is None
+    assert context.query["start"] == start
+    source = normalize_protect_records([], context).source
+    assert source.outcome is SourceOutcome.PARTIAL
+    assert PartialReason.WINDOW_COVERAGE_UNKNOWN in source.partial_reasons
+
+
+def test_naive_bounds_are_read_as_utc_like_the_tool() -> None:
+    naive = _context(start="2026-08-08T12:00:00", end="2026-08-08T13:00:00")
+    assert naive.queried_window == WINDOW
+
+
+def test_metadata_fields_and_compact_are_part_of_the_recorded_query() -> None:
+    context = _context(metadata_fields=["linesStatus"], compact=True)
+    record = normalize_protect_records([RAW_NVR_EVENT], context).records[0]
+    assert record.provenance.query["metadata_fields"] == ("linesStatus",)
+    assert record.provenance.query["compact"] is True
+    assert set(context.query) <= _manifest_properties(LIST_EVENTS_TOOL)
+
+
+@pytest.mark.parametrize(("requested", "effective"), [(None, 50), (80, 80), (0, 0)])
+def test_smart_detection_filters_record_the_effective_confidence(requested, effective) -> None:
+    context = _context(source_tool=LIST_SMART_DETECTIONS_TOOL, min_confidence=requested)
+    assert context.query["min_confidence"] == requested
+    assert context.filters["min_confidence_effective"] == effective
+    assert context.post_filtered is (effective > 0)
+
+
+def test_server_configured_confidence_default_is_used() -> None:
+    context = _context(source_tool=LIST_SMART_DETECTIONS_TOOL, server_min_confidence=70)
+    assert context.filters["min_confidence_effective"] == 70
+
+
+def test_confidence_filtered_short_list_is_partial() -> None:
+    # 30 fetched, confidence filtering left one: a short list after a post-filter.
+    source = normalize_protect_records([RAW_NVR_EVENT], _context(source_tool=LIST_SMART_DETECTIONS_TOOL)).source
+    assert source.outcome is SourceOutcome.PARTIAL
+    assert set(source.partial_reasons) == {PartialReason.POST_FILTERED, PartialReason.TRUNCATION_UNKNOWN}
+
+
+def test_manager_exposes_its_confidence_default() -> None:
+    from unifi_core.protect.managers.event_manager import EventManager
+
+    assert EventManager(None).smart_detection_min_confidence == 50
+    assert EventManager(None, {"smart_detection_min_confidence": 65}).smart_detection_min_confidence == 65
 
 
 def test_limit_reached_is_not_a_complete_listing() -> None:

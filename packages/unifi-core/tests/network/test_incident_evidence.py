@@ -6,6 +6,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 from unifi_core.incident_evidence import (
     ApiFamily,
     EntityKind,
@@ -15,12 +16,15 @@ from unifi_core.incident_evidence import (
     SourceOutcome,
     TimeStatus,
     TimeWindow,
+    Truncation,
     WindowCoverage,
 )
 from unifi_core.network.incident_evidence import (
+    LEGACY_EVENTS_CAP,
     LIST_ALARMS_TOOL,
     LIST_EVENTS_TOOL,
     TOOL_RECORD_PATHS,
+    V2_ALARMS_PAGE_CAP,
     network_alarms_context,
     network_events_context,
     normalize_network_records,
@@ -36,6 +40,7 @@ UTC = timezone.utc
 # The fixture's events fall between 2026-08-08T21:38:16Z and 21:38:21Z.
 WINDOW = TimeWindow.from_datetimes(datetime(2026, 8, 8, 21, 0, tzinfo=UTC), datetime(2026, 8, 8, 22, 0, tzinfo=UTC))
 COLLECTED = datetime(2026, 8, 8, 22, 5, tzinfo=UTC)
+REQUEST_STARTED = COLLECTED - timedelta(minutes=1)
 
 
 def _manifest_properties(tool: str) -> set[str]:
@@ -44,7 +49,10 @@ def _manifest_properties(tool: str) -> set[str]:
 
 
 def _events_context(**kwargs):
-    return network_events_context(requested_window=WINDOW, collected_at=COLLECTED, within_hours=2, **kwargs)
+    kwargs.setdefault("within_hours", 2)
+    return network_events_context(
+        requested_window=WINDOW, request_started_at=REQUEST_STARTED, collected_at=COLLECTED, **kwargs
+    )
 
 
 def test_query_arguments_match_the_current_manifest() -> None:
@@ -116,13 +124,40 @@ def test_legacy_stat_event_records_use_flat_mac_keys() -> None:
     ]
 
 
-def test_relative_lookback_defines_the_queried_window() -> None:
+def test_queried_window_comes_from_the_captured_request_bounds() -> None:
+    # The manager reads its clock between request start and completion, so only
+    # [completion - lookback, request start] is certainly covered.
     covering = _events_context()
-    assert covering.queried_window == TimeWindow.from_datetimes(COLLECTED - timedelta(hours=2), COLLECTED)
-    short = network_events_context(requested_window=WINDOW, collected_at=COLLECTED, within_hours=1)
+    assert covering.queried_window == TimeWindow.from_datetimes(COLLECTED - timedelta(hours=2), REQUEST_STARTED)
+    short = _events_context(within_hours=1)
     source = normalize_network_records([], short).source
     assert source.coverage.window_coverage is WindowCoverage.NOT_COVERED
     assert source.outcome is SourceOutcome.PARTIAL
+
+
+def test_request_that_started_before_the_requested_end_does_not_cover_it() -> None:
+    window = TimeWindow.from_datetimes(COLLECTED - timedelta(hours=1), COLLECTED)
+    context = network_events_context(
+        requested_window=window,
+        request_started_at=COLLECTED - timedelta(minutes=1),
+        collected_at=COLLECTED,
+        within_hours=2,
+    )
+    source = normalize_network_records([], context).source
+    assert source.coverage.queried_window.end == "2026-08-08T22:04:00.000000Z"
+    assert source.partial_reasons == (PartialReason.WINDOW_NOT_COVERED,)
+
+
+def test_request_start_after_completion_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        network_events_context(requested_window=WINDOW, request_started_at=COLLECTED, collected_at=REQUEST_STARTED)
+
+
+def test_offset_page_is_never_complete() -> None:
+    context = _events_context(limit=100, start=100)
+    source = normalize_network_records([], context).source
+    assert source.partial_reasons == (PartialReason.PREFIX_NOT_COLLECTED,)
+    assert source.coverage.population_total is None
 
 
 def test_offset_and_limit_drive_pagination_and_filters() -> None:
@@ -131,6 +166,38 @@ def test_offset_and_limit_drive_pagination_and_filters() -> None:
     assert context.filters == {"categories": ("SECURITY",), "event_type": "CLIENT_CONNECTED_WIRELESS_2"}
     source = normalize_network_records(FIXTURE[:2], context).source
     assert PartialReason.TRUNCATION_UNKNOWN in source.partial_reasons
+    assert PartialReason.PREFIX_NOT_COLLECTED in source.partial_reasons
+
+
+@pytest.mark.parametrize(
+    ("api_path", "cap", "endpoint"),
+    [("legacy", LEGACY_EVENTS_CAP, "/stat/event"), (None, LEGACY_EVENTS_CAP, None), ("v2", 5000, "/system-log/all")],
+)
+def test_events_cap_is_the_effective_cap(api_path, cap, endpoint) -> None:
+    context = _events_context(limit=5000, api_path=api_path)
+    assert context.requested_cap == 5000 and context.cap == cap and context.endpoint == endpoint
+
+
+def test_legacy_clamped_full_page_is_not_complete() -> None:
+    rows = [{"_id": f"legacy-{i}", "key": "K", "time": 1786227600000 + i} for i in range(LEGACY_EVENTS_CAP)]
+    source = normalize_network_records(rows, _events_context(limit=5000, api_path="legacy")).source
+    assert source.coverage.truncation is Truncation.UNKNOWN
+    assert source.outcome is SourceOutcome.PARTIAL
+
+
+@pytest.mark.parametrize(("api_path", "cap"), [("v2", V2_ALARMS_PAGE_CAP), (None, V2_ALARMS_PAGE_CAP), ("legacy", 200)])
+def test_alarm_cap_is_the_effective_cap(api_path, cap) -> None:
+    context = network_alarms_context(requested_window=WINDOW, collected_at=COLLECTED, limit=200, api_path=api_path)
+    assert context.cap == cap
+
+
+def test_v2_alarm_window_uses_the_captured_bounds() -> None:
+    context = network_alarms_context(
+        requested_window=WINDOW, collected_at=COLLECTED, api_path="v2", request_started_at=REQUEST_STARTED
+    )
+    assert context.queried_window == TimeWindow.from_datetimes(COLLECTED - timedelta(days=30), REQUEST_STARTED)
+    rows = [{"id": f"alarm-{i}", "key": "K", "timestamp": 1786227600000} for i in range(V2_ALARMS_PAGE_CAP)]
+    assert normalize_network_records(rows, context).source.coverage.truncation is Truncation.UNKNOWN
 
 
 def test_alarms_without_a_known_lookback_are_never_complete() -> None:
@@ -160,3 +227,13 @@ def test_malformed_time_is_kept_as_an_explicit_state() -> None:
     evidence = normalize_network_records([{"id": "x", "key": "K", "time": "soon"}], _events_context())
     assert evidence.records[0].time.status is TimeStatus.MALFORMED
     assert evidence.records[0].time.original_value == "soon"
+
+
+def test_integer_record_ids_are_kept_as_integers() -> None:
+    evidence = normalize_network_records(
+        [{"id": 7, "key": "K", "time": 1786227600000}, {"id": "7", "key": "K", "time": 1786227601000}],
+        _events_context(),
+    )
+    assert evidence.source.coverage.counts.malformed_dropped == 0
+    assert [r.provenance.source_record_id for r in evidence.records] == [7, "7"]
+    assert [r.evidence_id for r in evidence.records] == ["network.events:int:7", "network.events:str:7"]

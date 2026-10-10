@@ -146,7 +146,7 @@ def test_record_provenance_carries_scope_family_source_query_and_exact_record_id
     assert provenance.source_record_id_field == "id"
     assert provenance.query == {"limit": 10, "within_hours": 2}
     assert provenance.collected_at == "2026-08-08T13:05:00.000000Z"
-    assert record.evidence_id == "network.events:4711"
+    assert record.evidence_id == "network.events:int:4711"
 
 
 def test_secret_named_query_and_attribute_keys_are_excluded() -> None:
@@ -377,6 +377,7 @@ def test_coverage_reports_requested_queried_filters_pagination_and_counts() -> N
     assert coverage.population_total is None
     assert source.partial_reasons == (
         PartialReason.MALFORMED_RECORDS,
+        PartialReason.PREFIX_NOT_COLLECTED,
         PartialReason.TRUNCATION_UNKNOWN,
         PartialReason.UNTIMED_RECORDS,
     )
@@ -391,8 +392,11 @@ def test_coverage_reports_requested_queried_filters_pagination_and_counts() -> N
         (Pagination(cap=3, returned=3, has_more=False), Truncation.NOT_TRUNCATED),
         (Pagination(cap=10, returned=3, has_more=True), Truncation.TRUNCATED),
         (Pagination(offset=10, cap=10, returned=5, total_reported=40), Truncation.TRUNCATED),
-        (Pagination(offset=35, cap=10, returned=5, total_reported=40), Truncation.NOT_TRUNCATED),
         (Pagination(cap=10, returned=3, interrupted=True), Truncation.UNKNOWN),
+        (Pagination(cap=10, returned=1, total_reported=1, interrupted=True), Truncation.UNKNOWN),
+        (Pagination(cap=30, returned=1, post_filtered=True), Truncation.UNKNOWN),
+        (Pagination(cap=30, returned=1, post_filtered=True, has_more=False), Truncation.NOT_TRUNCATED),
+        (Pagination(cap=30, returned=1, post_filtered=True, total_reported=1), Truncation.UNKNOWN),
     ],
 )
 def test_truncation_follows_only_from_reported_pagination(pagination, expected) -> None:
@@ -611,11 +615,11 @@ def test_ordering_is_utc_then_product_source_and_record_id_with_untimed_last() -
     )
     evidence = assemble_incident_evidence(requested_window=WINDOW, budgets=BUDGETS, sources=[protect, network])
     assert [r.evidence_id for r in evidence.records] == [
-        "protect.events:p0",
-        "network.events:n1",
-        "network.events:n2",
-        "protect.events:p1",
-        "network.events:nx",
+        "protect.events:str:p0",
+        "network.events:str:n1",
+        "network.events:str:n2",
+        "protect.events:str:p1",
+        "network.events:str:nx",
     ]
     shuffled_sources = [protect, network]
     random.Random(7).shuffle(shuffled_sources)
