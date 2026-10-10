@@ -14,6 +14,7 @@ import aiohttp
 from aiounifi.models.api import ApiRequest, ApiRequestV2
 from aiounifi.models.message import MessageKey
 
+from unifi_core.exceptions import UniFiMalformedResponseError
 from unifi_core.mac import mac_equal
 from unifi_core.network.managers.connection_manager import ConnectionManager, response_status
 
@@ -25,6 +26,33 @@ _V2_UNSUPPORTED_STATUSES = frozenset({404, 405, 501})
 _V2_PROBE_BACKOFF_BASE = 30.0
 _V2_PROBE_BACKOFF_MAX = 300.0
 _V2_PROBE_MAX_FAILURES = 32
+
+
+def _v2_page(response: Any, endpoint: str) -> tuple[List[Any], Any]:
+    """Return a v2 system-log page and its total page count, or raise on an unreadable shape.
+
+    A valid empty collection is an envelope with an empty list; anything else
+    the code cannot read is a malformed response, never "no events".
+    """
+    envelope: Any = response
+    if isinstance(response, list) and response and isinstance(response[0], dict) and "data" in response[0]:
+        envelope = response[0]
+    if isinstance(envelope, list):
+        return envelope, None
+    if isinstance(envelope, dict):
+        key = "data" if "data" in envelope else "logs" if "logs" in envelope else None
+        if key is not None and isinstance(envelope[key], list):
+            return envelope[key], envelope.get("total_page_count", envelope.get("totalPageCount"))
+    raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
+
+
+def _legacy_rows(response: Any, endpoint: str) -> List[Any]:
+    """Return legacy ``data`` rows, or raise when the envelope carries none."""
+    if isinstance(response, list):
+        return response
+    if isinstance(response, dict) and isinstance(response.get("data"), list):
+        return response["data"]
+    raise UniFiMalformedResponseError(f"Unexpected response shape from {endpoint}")
 
 
 def _positive_config_int(value: Any, env_var: str) -> int:
@@ -651,22 +679,8 @@ class EventManager:
                     data=payload.copy(),
                 )
                 response = await self._connection.request(api_request)
-
-                envelope: Any = response
-                if isinstance(response, list) and response and isinstance(response[0], dict) and "data" in response[0]:
-                    envelope = response[0]
-
-                if isinstance(envelope, dict):
-                    page = envelope.get("data", envelope.get("logs", []))
-                    total_pages = envelope.get("total_page_count", envelope.get("totalPageCount"))
-                elif isinstance(envelope, list):
-                    page = envelope
-                    total_pages = None
-                else:
-                    page = []
-                    total_pages = None
-
-                if not isinstance(page, list) or not page:
+                page, total_pages = _v2_page(response, "/system-log/all")
+                if not page:
                     break
                 events.extend(event for event in page if isinstance(event, dict))
                 page_number += 1
@@ -700,12 +714,10 @@ class EventManager:
 
             api_request = ApiRequest(method="post", path="/stat/event", data=payload)
             response = await self._connection.request(api_request)
-
-            if isinstance(response, list):
-                return response
-            if isinstance(response, dict):
-                return response.get("data", [])
-            return []
+            return _legacy_rows(response, "/stat/event")
+        except UniFiMalformedResponseError:
+            logger.error("Error getting events (legacy): malformed response")
+            raise
         except Exception as e:
             logger.error("Error getting events (legacy): %s", e)
             raise self._explain_legacy_failure("/stat/event", e) from e
@@ -752,13 +764,8 @@ class EventManager:
             response = await self._connection.request(api_request)
 
             # V2 response comes as [{"data": [...], "total_element_count": N}] or {"data": [...]}
-            if isinstance(response, list) and response and isinstance(response[0], dict) and "data" in response[0]:
-                return response[0]["data"][:limit]
-            if isinstance(response, dict):
-                return response.get("data", response.get("logs", []))[:limit]
-            if isinstance(response, list):
-                return response[:limit]
-            return []
+            page, _ = _v2_page(response, "/system-log/critical")
+            return page[:limit]
         except Exception as e:
             logger.error("Error getting alarms (v2): %s", e)
             raise
@@ -773,14 +780,10 @@ class EventManager:
             api_request = ApiRequest(method="get", path=path)
             response = await self._connection.request(api_request)
 
-            alarms = (
-                response
-                if isinstance(response, list)
-                else response.get("data", [])
-                if isinstance(response, dict)
-                else []
-            )
-            return alarms[:limit]
+            return _legacy_rows(response, "/stat/alarm")[:limit]
+        except UniFiMalformedResponseError:
+            logger.error("Error getting alarms (legacy): malformed response")
+            raise
         except Exception as e:
             logger.error("Error getting alarms (legacy): %s", e)
             raise self._explain_legacy_failure("/stat/alarm", e) from e
