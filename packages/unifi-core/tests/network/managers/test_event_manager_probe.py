@@ -147,5 +147,5 @@ async def test_unsupported_probe_leaves_no_probe_failure_diagnostic(manager, con
     await manager._ensure_api_version()
 
     assert manager._v2_probe_error is None
-    error = RuntimeError("legacy 404")
-    assert manager._explain_legacy_failure("/stat/event", error) is error
+    translated = manager._legacy_failure("/stat/event", RuntimeError("legacy 404 fixture-controller-text"))
+    assert str(translated) == "/stat/event failed (RuntimeError)."
