@@ -9,19 +9,22 @@
         "unifi-protect-mcp==0.8.17"
       ],
       "env": {
-        "UNIFI_HOST": "${UNIFI_PROTECT_HOST:-}",
-        "UNIFI_USERNAME": "${UNIFI_PROTECT_USERNAME:-}",
-        "UNIFI_PASSWORD": "${UNIFI_PROTECT_PASSWORD:-}",
-        "UNIFI_PORT": "${UNIFI_PROTECT_PORT:-443}",
-        "UNIFI_VERIFY_SSL": "${UNIFI_PROTECT_VERIFY_SSL:-false}",
-        "UNIFI_PROTECT_HOST": "${UNIFI_PROTECT_HOST:-}",
-        "UNIFI_PROTECT_USERNAME": "${UNIFI_PROTECT_USERNAME:-}",
-        "UNIFI_PROTECT_PASSWORD": "${UNIFI_PROTECT_PASSWORD:-}",
-        "UNIFI_PROTECT_PASSWORD_FILE": "${UNIFI_PROTECT_PASSWORD_FILE:-}",
-        "UNIFI_PROTECT_PASSWORD_COMMAND": "${UNIFI_PROTECT_PASSWORD_COMMAND:-}",
-        "UNIFI_PROTECT_PORT": "${UNIFI_PROTECT_PORT:-443}",
-        "UNIFI_PROTECT_VERIFY_SSL": "${UNIFI_PROTECT_VERIFY_SSL:-false}",
-        "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}"
+        "UNIFI_PROTECT_HOST": "${user_config.host}",
+        "UNIFI_PROTECT_USERNAME": "${user_config.username}",
+        "UNIFI_PROTECT_PASSWORD_FILE": "${user_config.password_file}",
+        "UNIFI_PROTECT_PASSWORD_COMMAND": "${user_config.password_command}",
+        "UNIFI_PROTECT_PASSWORD": "${user_config.password}",
+        "UNIFI_PROTECT_API_KEY_FILE": "${user_config.api_key_file}",
+        "UNIFI_PROTECT_API_KEY_COMMAND": "${user_config.api_key_command}",
+        "UNIFI_PROTECT_API_KEY": "${user_config.api_key}",
+        "UNIFI_PROTECT_PORT": "${user_config.port}",
+        "UNIFI_PROTECT_VERIFY_SSL": "${user_config.verify_ssl}",
+        "UNIFI_POLICY_PROTECT_CREATE": "${user_config.policy_create}",
+        "UNIFI_POLICY_PROTECT_UPDATE": "${user_config.policy_update}",
+        "UNIFI_POLICY_PROTECT_DELETE": "${user_config.policy_delete}",
+        "UNIFI_PROTECT_TOOL_PERMISSION_MODE": "${user_config.permission_mode}",
+        "UNIFI_AUTO_CONFIRM": "${user_config.auto_confirm}",
+        "UNIFI_TOOL_REGISTRATION_MODE": "${user_config.registration_mode}"
       }
     }
   }
