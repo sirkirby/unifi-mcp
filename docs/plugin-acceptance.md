@@ -19,6 +19,10 @@ response's top-level key names and counts only.
   package pins in `plugins/unifi-*/.mcp.json` (Claude Code) and
   `plugins/unifi-*/.mcp.codex.json` (Codex).
 - **Candidate:** the branch or commit under test. Record its commit and pins.
+- **Claude Code configuration model:** record whether each ref declares
+  `userConfig` in `plugins/unifi-*/.claude-plugin/plugin.json`. Refs with
+  `userConfig` keep Claude Code settings as plugin options; earlier refs write
+  `UNIFI_*` variables into the project's `.claude/settings.local.json`.
 - If a bundle's files change but its version does not, expect clients that
   compare versions to skip the upgrade, and record what each client installs.
 
@@ -37,8 +41,10 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
   `$ACC/claude-home/Library/Preferences/` too). Do not set `CLAUDE_CONFIG_DIR`.
   Unset inherited `CLAUDE*` variables when launching from inside another Claude
   session. Plugins synced from claude.ai still load in the isolated profile;
-  ignore them. Never store a `sensitive` plugin option from this profile: it
-  would be written to the shared keychain.
+  ignore them. Never store a `sensitive` plugin option (`password`, `api_key`)
+  from this profile: it would be written to the shared keychain. Configure the
+  password and API key only through `_FILE` or `_COMMAND` provider references,
+  which are saved as ordinary options.
 - **Codex:** run every `codex` command with `CODEX_HOME=$ACC/codex-home`, and
   symlink (never copy) `~/.codex/auth.json` into it.
 - **Ambient credentials:** unset every inherited `UNIFI_*` variable before each
@@ -58,6 +64,14 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
   In the default lazy registration mode the only route to a controller read is
   `*_execute`, which is not read-only, so select eager registration through the
   setup skill's optional settings.
+- **Claude Code plugin options:** with a `userConfig` ref, `set-env.sh --target
+  claude` accepts only the variables the plugin maps to options, so pass the
+  product-scoped forms: `UNIFI_POLICY_<PRODUCT>_CREATE`, `_UPDATE` and `_DELETE`
+  as `false`, `UNIFI_<PRODUCT>_TOOL_PERMISSION_MODE=confirm`,
+  `UNIFI_AUTO_CONFIRM=false` and `UNIFI_TOOL_REGISTRATION_MODE=eager`. Shared
+  `UNIFI_POLICY_*` forms and per-category overrides are refused by design. The
+  gates already default to `false` and the permission mode to `confirm`; set
+  them explicitly anyway so the record shows them.
 
 ## Pin a marketplace ref
 
@@ -79,16 +93,29 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    Before setup, start one session and confirm the unconfigured server exits
    with "No controller host configured — refusing to start." and no
    credential or registration-mode errors. The handshake and tool calls are
-   only required after configuration.
+   only required after configuration. With a `userConfig` ref, also record that
+   `claude plugin install` reports the plugin's options as not yet set, and that
+   a fresh project shows no session-start notice from the plugin.
 3. **Configure** with that version's documented setup script for the client
-   target (`scripts/set-env.sh --target claude|codex`).
+   target (`scripts/set-env.sh --target claude|codex`). With a `userConfig` ref,
+   Claude Code setup saves plugin options through `claude plugin configure`:
+   confirm it created no `.claude/settings.local.json` in the scratch project
+   and added no `env` to `$ACC/claude-home/.claude/settings.json`, and record
+   only the option key names listed under `pluginConfigs` there.
 4. **Handshake.** In a session, call the product's `*_tool_index` tool and
    confirm the server's tools are listed. Record the server version: the
    package pin from `claude mcp list` or `codex mcp list`, and for Codex the
-   `serverInfo` version visible with `RUST_LOG=rmcp=info`.
+   `serverInfo` version visible with `RUST_LOG=rmcp=info`. With Claude Code
+   plugin options, `claude mcp list` must also report the server as connected.
 5. **Harmless read.** In a session, have the model call
    `unifi_get_system_info`, `protect_get_system_info` or
-   `access_get_system_info`, and confirm `success: true`.
+   `access_get_system_info`, and confirm `success: true`. For Claude Code with
+   plugin options, repeat steps 4 and 5 in at least five consecutive fresh
+   sessions for one bundle. In one of them, confirm the server's environment
+   shape with `ps -E -ww` (record each `UNIFI_*` name as set or empty, never a
+   value): the unset password and API-key spellings are empty. In another, have
+   the model run `env | grep -c '^UNIFI_'` through the Bash tool, in the
+   configured project and in an unrelated one; both must print `0`.
 6. **Upgrade.** Claude Code: move the marketplace to the candidate, then
    `claude plugin marketplace update <marketplace>` and
    `claude plugin update <plugin>@<marketplace>`. Codex: it refuses to re-add a
@@ -102,16 +129,42 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    Confirm the new plugin version is installed, the saved environment is
    unchanged, the running server is the candidate's package version (for Codex,
    from `serverInfo`), and repeat steps 4 and 5.
+
+   **Claude Code, from project settings to plugin options.** When the prior ref
+   configured Claude Code through `.claude/settings.local.json` and the
+   candidate declares `userConfig`:
+   1. Start the first session after the update. Record the plugin's
+      session-start notice: a `hook_response` event whose `systemMessage` names
+      `set-env.sh --target claude --migrate`. Also record that the server
+      starts unconfigured, and that `ps -E -ww` shows the product-scoped
+      variables empty although the project file still holds them.
+   2. Run the new plugin's `scripts/check-prereqs.sh --target claude` from the
+      scratch project. Record that it names the leftover variables (names only).
+   3. Run the new plugin's `scripts/set-env.sh --target claude --migrate`
+      (PowerShell: `scripts/set-env.ps1 -Target claude -Migrate`). Record the
+      variable names it reports as migrated, not migrated and left as shared
+      settings. Confirm the project file now holds only the shared settings and
+      unrelated keys, and that a second `--migrate` refuses with nothing to
+      migrate.
+   4. Repeat steps 4 and 5 in fresh sessions. Confirm the notice no longer
+      appears.
 7. **Failure recovery.** Run the candidate's setup with an invalid provider
    path, a missing provider command and an invalid key. Each must exit non-zero
    with a fixed message, leave the configuration byte-identical and leave no
-   lock or staging directory; then repeat step 5.
+   lock or staging directory; then repeat step 5. With Claude Code plugin
+   options, also try a per-category override such as
+   `UNIFI_POLICY_<PRODUCT>_<CATEGORY>_UPDATE=true`, which must be refused. The
+   configuration is `$ACC/claude-home/.claude/settings.json`, together with the
+   inputs `claude plugin configure <plugin>@<marketplace> --json` prints; both
+   must be unchanged.
 
 Codex reads `plugins/unifi-*/.mcp.codex.json` through its manifest's
 `mcpServers` path. Codex does not expand `${VAR:-default}` in an MCP `env`
-block, so that file must contain no interpolation templates; Claude Code keeps
-`.mcp.json`. If either file changes, check the running server's environment
-with `ps -E -ww` against what the client was given.
+block, so that file must contain no interpolation templates. Claude Code reads
+`.mcp.json`, which maps each server variable to a plugin option with
+`${user_config.KEY}` when the ref declares `userConfig`. If either file changes,
+check the running server's environment with `ps -E -ww` against what the client
+was given.
 
 ## Running sessions
 
@@ -124,9 +177,13 @@ with `ps -E -ww` against what the client was given.
   `/mcp reconnect plugin:<plugin>:<server>`; `/reload-plugins` does not retry,
   and `-p` sessions cannot reconnect. In the isolated profile only, remove that
   server's entry from `$ACC/claude-home/.claude/mcp-needs-auth-cache.json`
-  before retrying, and record that you did. `claude mcp list` ignores
-  environment from project settings, reports such a server as failed and writes
-  a failure entry itself, so do not run it between setup and a session.
+  before retrying, and record that you did. Saving plugin options changes the
+  expanded configuration, so a session after setup is not skipped by a failure
+  cached before setup. `claude mcp list` ignores environment from project
+  settings, so with a ref that configures Claude Code through
+  `.claude/settings.local.json` it reports the server as failed and writes a
+  failure entry itself; do not run it between that kind of setup and a session.
+  With plugin options it applies the same configuration as a session.
 - **Codex:** `codex exec -m <model> -s read-only --json "<prompt>" </dev/null`.
   Without stdin closed it waits for input. MCP servers finish starting after the
   first step's tools are built, so have the model run `sleep 20` before its MCP
