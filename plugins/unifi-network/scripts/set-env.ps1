@@ -7,6 +7,7 @@ param(
     [switch]$InputJson,
     [switch]$DryRun,
     [switch]$Refresh,
+    [switch]$Migrate,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$KeyValuePairs,
     [Parameter(ValueFromPipeline = $true)]
@@ -73,6 +74,7 @@ function Invoke-SetupHelper {
     $start.FileName = $runtime.FileName
     $start.Arguments = $runtime.Prefix + '"' + $helper + '" --target ' + $Target
     if ($Refresh) { $start.Arguments += ' --refresh' }
+    if ($Migrate) { $start.Arguments += ' --migrate' }
     if ($DryRun) { $start.Arguments += ' --dry-run' }
     Set-BatchLauncher $start
     $start.UseShellExecute = $false
@@ -106,6 +108,13 @@ try {
     if ($Refresh) {
         if ($Target -ne 'codex' -or $InputJson -or ($KeyValuePairs -and $KeyValuePairs.Count -gt 0)) {
             throw 'Refresh requires Codex and no environment input.'
+        }
+        Invoke-SetupHelper -Json '{}'
+        exit 0
+    }
+    if ($Migrate) {
+        if ($Target -ne 'claude' -or $InputJson -or ($KeyValuePairs -and $KeyValuePairs.Count -gt 0)) {
+            throw 'Migrate requires Claude and no environment input.'
         }
         Invoke-SetupHelper -Json '{}'
         exit 0
