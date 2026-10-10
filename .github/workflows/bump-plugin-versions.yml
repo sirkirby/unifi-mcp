@@ -121,6 +121,7 @@ jobs:
           update_json_version "$plugin_dir/.codex-plugin/plugin.json" "$version"
           update_mcp_package_pin "$plugin_dir/.claude-plugin/plugin.json" "$version"
           update_mcp_package_pin "$plugin_dir/.mcp.json" "$version"
+          update_mcp_package_pin "$plugin_dir/.mcp.codex.json" "$version"
         }
 
         NETWORK_VERSION=$(get_version "network")
