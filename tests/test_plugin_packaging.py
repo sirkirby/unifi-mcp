@@ -202,7 +202,7 @@ def check_codex_manifest(bundle: Path, expected_name: str, errors: list[str]) ->
 def mcp_config_path(bundle: Path, resolved: dict | None) -> Path:
     if resolved is not None and resolved["layout"] == "portable":
         return bundle / "mcp.json"
-    return bundle / ".mcp.json"
+    return bundle / (resolved["identity"].get("mcpServers", "./.mcp.json") if resolved else ".mcp.json")
 
 
 def app_package_names(root: Path) -> dict[str, set[str]]:
@@ -214,7 +214,9 @@ def app_package_names(root: Path) -> dict[str, set[str]]:
     return packages
 
 
-def check_mcp_servers(path: Path, root: Path, errors: list[str], *, portable: bool) -> dict[str, tuple[str, str]]:
+def check_mcp_servers(
+    path: Path, root: Path, errors: list[str], *, portable: bool, codex: bool = False
+) -> dict[str, tuple[str, str]]:
     """Validate stdio launch definitions and return ``{server: (package, version)}``."""
     where = str(path.relative_to(root))
     if not path.is_file():
@@ -246,7 +248,9 @@ def check_mcp_servers(path: Path, root: Path, errors: list[str], *, portable: bo
         elif package not in packages[package]:
             errors.append(f"{server_where}: {package!r} declares no console script of the same name for uvx")
         for key, value in (server.get("env") or {}).items():
-            if not ENV_REFERENCE.match(str(value)):
+            if codex and "${" in str(value):
+                errors.append(f"{server_where}: Codex env {key} must not contain interpolation templates")
+            elif not codex and not ENV_REFERENCE.match(str(value)):
                 errors.append(f"{server_where}: env {key} must be a ${{VAR}} reference, not a literal")
         pins[server_name] = (package, version)
     return pins
@@ -297,9 +301,8 @@ def packaging_errors(root: Path) -> list[str]:
         portable = resolved is not None and resolved["layout"] == "portable"
         # Claude always reads .mcp.json; a portable Codex package reads root mcp.json instead.
         pins = check_mcp_servers(bundle / ".mcp.json", root, errors, portable=False)
-        portable_pins = {}
-        if portable:
-            portable_pins = check_mcp_servers(bundle / "mcp.json", root, errors, portable=True)
+        codex_path = mcp_config_path(bundle, resolved)
+        portable_pins = check_mcp_servers(codex_path, root, errors, portable=portable, codex=True)
         skills = check_skills(bundle, root, errors)
         if not skills:
             errors.append(f"{name}: bundle ships no skills")
@@ -310,7 +313,7 @@ def packaging_errors(root: Path) -> list[str]:
         if resolved is not None:
             versions["Codex manifest"] = resolved["identity"].get("version")
         versions.update({f".mcp.json {server} pin": version for server, (_, version) in pins.items()})
-        versions.update({f"mcp.json {server} pin": version for server, (_, version) in portable_pins.items()})
+        versions.update({f"Codex MCP config {server} pin": version for server, (_, version) in portable_pins.items()})
         inline = (claude_manifest or {}).get("mcpServers")
         claude_mcp = bundle / ".mcp.json"
         if isinstance(inline, dict) and claude_mcp.is_file():
@@ -497,7 +500,7 @@ def test_legacy_codex_manifest_is_used_without_portable_root(tmp_path: Path) -> 
     assert resolved is not None
     assert resolved["layout"] == "legacy"
     assert resolved["openai_source"] == root / "plugins" / name / ".codex-plugin" / "plugin.json"
-    assert mcp_config_path(root / "plugins" / name, resolved).name == ".mcp.json"
+    assert mcp_config_path(root / "plugins" / name, resolved).name == ".mcp.codex.json"
 
 
 def test_legacy_manifest_with_missing_skills_path_is_reported(tmp_path: Path) -> None:
@@ -572,3 +575,32 @@ def test_bundle_without_any_codex_manifest_is_reported(tmp_path: Path) -> None:
     errors = packaging_errors(root)
 
     assert f"{name}: no portable plugin.json or .codex-plugin/plugin.json for Codex" in errors
+
+
+@pytest.mark.parametrize("name", _advertised_bundles())
+def test_codex_launch_avoids_literal_credential_templates(name: str) -> None:
+    bundle = REPO_ROOT / "plugins" / name
+    resolved = check_codex_manifest(bundle, name, [])
+    config = _load(mcp_config_path(bundle, resolved))
+    for server in config["mcpServers"].values():
+        assert not server.get("env"), "Let the server use its defaults until setup supplies an environment"
+        assert "${" not in json.dumps(server)
+
+
+def test_codex_template_regression_is_reported(tmp_path: Path) -> None:
+    root = _copy_packaging_tree(tmp_path)
+    name = _advertised_bundles()[0]
+    bundle = root / "plugins" / name
+    _edit_json(bundle / ".codex-plugin/plugin.json", lambda d: d.update(mcpServers="./.mcp.json"))
+
+    assert any("Codex env" in error for error in packaging_errors(root))
+
+
+def test_codex_package_pin_drift_is_reported(tmp_path: Path) -> None:
+    root = _copy_packaging_tree(tmp_path)
+    name = _advertised_bundles()[0]
+    bundle = root / "plugins" / name
+    path = mcp_config_path(bundle, check_codex_manifest(bundle, name, []))
+    _edit_json(path, lambda d: next(iter(d["mcpServers"].values())).update(args=[name + "-mcp==999.0.0"]))
+
+    assert any("versions out of lockstep" in error for error in packaging_errors(root))

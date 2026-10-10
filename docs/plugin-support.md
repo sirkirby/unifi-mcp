@@ -14,8 +14,31 @@ verified. For install steps, see the [agent install guide](agent-install.md).
 
 Each listed plugin's version equals the exact PyPI package version it launches,
 for example plugin `0.37.0` runs `uvx unifi-network-mcp==0.37.0`. The release
-workflow updates both together. Upgrading the plugin is how you upgrade the
-server.
+workflow updates the plugin and server pins together. Claude loads its bundled
+server on upgrade. **Codex setup creates a separate, version-pinned MCP entry
+that takes precedence over the bundle. After every plugin upgrade, re-run setup
+from the newly installed plugin before restarting Codex.** Setup records the pin
+in a comment in `config.toml` and prints the package version on success. Preserve
+the saved environment with this non-secret command:
+
+```bash
+bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+```
+
+On PowerShell use `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+Resolve `<new-plugin-root>` from the current installed plugin, not an older cache
+path. Refresh preserves saved settings and provider references, validates them,
+and atomically updates the pin; it does not collect credentials or contact a
+controller. Run ordinary setup first if there is no saved MCP entry.
+
+Codex uses `.mcp.codex.json`, which omits shell-style environment templates:
+Codex 0.162.0 passes those templates literally. A clean bundle can therefore
+initialize before credentials are configured. Its optional `env_vars` forwards
+registration and safety controls from the launcher; application defaults apply
+otherwise. Claude continues using `.mcp.json` and its existing interpolation.
+Codex 0.162.0 ignores plugin-scoped environment settings, and a same-named
+`[mcp_servers]` entry requires its own transport rather than merging the bundle's
+command. Plugin-scoped settings can control tool policy, not supply setup env.
 
 The `cross-product` skills can be installed as standalone skills (see the
 [install guide](agent-install.md#standalone-skills-through-npm)), but their

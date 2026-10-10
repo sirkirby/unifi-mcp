@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "unifi-access": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--python-preference",
+        "system",
+        "unifi-access-mcp==0.6.12"
+      ],
+      "env_vars": [
+        "UNIFI_TOOL_REGISTRATION_MODE",
+        "UNIFI_POLICY_CREATE",
+        "UNIFI_POLICY_UPDATE",
+        "UNIFI_POLICY_DELETE",
+        "UNIFI_TOOL_PERMISSION_MODE",
+        "UNIFI_AUTO_CONFIRM"
+      ]
+    }
+  }
+}

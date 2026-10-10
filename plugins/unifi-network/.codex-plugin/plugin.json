@@ -17,7 +17,7 @@
     "mcp"
   ],
   "skills": "./skills/",
-  "mcpServers": "./.mcp.json",
+  "mcpServers": "./.mcp.codex.json",
   "interface": {
     "displayName": "UniFi Network",
     "shortDescription": "Manage UniFi Network devices, clients, firewall, VPN, and WiFi",
