@@ -191,7 +191,7 @@ def main():
     parser.add_argument("--pairs", action="store_true")
     args = parser.parse_args()
     if sys.version_info < (3, 11):
-        refuse("Python 3.11+ is required; install it and rerun.")
+        refuse("No usable setup interpreter; install uv (which supplies Python) and rerun.")
     root = Path(__file__).resolve().parent.parent
     name = root.name if root.name in ("unifi-network", "unifi-protect", "unifi-access") else root.parent.name
     if name not in ("unifi-network", "unifi-protect", "unifi-access"):
@@ -220,7 +220,7 @@ def main():
     env_map(previous_env)
     if args.check:
         merge_env(previous_env, {}, product)
-        print("Prerequisites passed: uvx, Python 3.11+, client and configuration shape checked.")
+        print("Prerequisites passed: uvx, setup runtime, client and configuration shape checked.")
         return
     raw_input = sys.stdin.buffer.read().decode("utf-8-sig")
     if args.pairs:

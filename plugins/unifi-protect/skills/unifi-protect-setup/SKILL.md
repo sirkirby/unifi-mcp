@@ -33,7 +33,9 @@ When the host exposes a plugin-root variable such as `CLAUDE_PLUGIN_ROOT`, using
 
 On Windows, use `../../scripts/set-env.ps1 -Target <claude|codex|openclaw>`
 for every target. Use the matching PowerShell prerequisite checker. Both helpers
-require Python 3.11+ and uvx; Codex and OpenClaw also require their client CLI.
+require uv/uvx; Codex and OpenClaw also require their client CLI. A working
+Python 3.11+ on PATH is used first; otherwise uv supplies managed Python
+(with a possible first-run download). No separate Python installation is needed.
 Do not substitute direct client registration commands, which can expose env
 values in process arguments.
 

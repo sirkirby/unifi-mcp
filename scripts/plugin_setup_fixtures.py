@@ -40,6 +40,16 @@ def fake_client(name):
         print(os.environ["FIXTURE_SECRET"])
         print(os.environ["FIXTURE_SECRET"], file=sys.stderr)
         sys.exit(2)
+    if name in ("python3", "python"):
+        mode = os.environ["FIXTURE_PYTHON_MODE"]
+        if name == "python3":
+            if mode == "stub":
+                return  # An alias stub can exit zero without running Python.
+            sys.exit(1)  # Simulate a Python version below 3.11.
+        os.execv(sys.executable, [sys.executable, *args])
+    if name == "uv":
+        assert args[:5] == ["run", "--no-project", "--python", ">=3.11", "python"]
+        os.execv(sys.executable, [sys.executable, *args[5:]])
     if name == "uvx":
         return
     if name == "codex":
@@ -84,6 +94,18 @@ def executable(directory, name, source):
         path.chmod(0o755)
 
 
+def client_executable(directory, name):
+    executable(
+        directory,
+        name,
+        "import runpy,sys\nsys.argv=["
+        + repr(str(Path(__file__).resolve()))
+        + ", '--fake-client', "
+        + repr(name)
+        + "]+sys.argv[1:]\nrunpy.run_path(sys.argv[0],run_name='__main__')\n",
+    )
+
+
 class Fixtures:
     def __init__(self, root, shell, powershell):
         self.root = root
@@ -126,15 +148,7 @@ class Fixtures:
         bindir = workspace / "bin"
         bindir.mkdir()
         for name in ("uvx", "codex", "openclaw"):
-            executable(
-                bindir,
-                name,
-                "import runpy,sys\nsys.argv=["
-                + repr(str(Path(__file__).resolve()))
-                + ", '--fake-client', "
-                + repr(name)
-                + "]+sys.argv[1:]\nrunpy.run_path(sys.argv[0],run_name='__main__')\n",
-            )
+            client_executable(bindir, name)
         executable(bindir, "fixture-provider", "pass\n")
         environment = {k: v for k, v in os.environ.items() if not k.startswith("UNIFI_")}
         environment.update(
@@ -223,6 +237,57 @@ class Fixtures:
 
         seed()
         before = path.read_bytes()
+        # No real uv invocation or download: PATH contains only fixture launchers.
+        runtime_bin = workspace / "runtime-bin"
+        runtime_bin.mkdir()
+        for name in ("uv", "uvx", "codex", "openclaw"):
+            client_executable(runtime_bin, name)
+        if os.name != "nt":
+            (runtime_bin / "dirname").symlink_to(shutil.which("dirname"))
+        runtime_environment = {"PATH": str(runtime_bin)}
+        prerequisite = [
+            self.powershell or self.shell,
+            *(
+                ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]
+                if self.powershell
+                else []
+            ),
+            str(scripts / ("check-prereqs.ps1" if self.powershell else "check-prereqs.sh")),
+            "-Target" if self.powershell else "--target",
+            target,
+        ]
+        for mode in ("old", "missing", "stub", "second"):
+            for name in ("python3", "python"):
+                candidate = runtime_bin / (name + (".cmd" if os.name == "nt" else ""))
+                candidate.unlink(missing_ok=True)
+            if mode != "missing":
+                client_executable(runtime_bin, "python3")
+            if mode == "second":
+                client_executable(runtime_bin, "python")
+            runtime_environment["FIXTURE_PYTHON_MODE"] = mode
+            argv_path = workspace / "argv.jsonl"
+            argv_path.unlink(missing_ok=True)
+            invoke({base: secret}, extra=runtime_environment)
+            self.check(get_env(load())[base] == secret, mode + " Python resolution preserves stdin exactly")
+            checked = subprocess.run(
+                prerequisite,
+                cwd=workspace,
+                env=dict(environment, **runtime_environment),
+                capture_output=True,
+                timeout=30,
+            )
+            self.check(checked.returncode == 0, mode + " Python prerequisite resolution")
+            self.check(
+                secret.encode() not in checked.stdout + checked.stderr, "runtime prerequisite output omits secrets"
+            )
+            calls = [json.loads(line) for line in argv_path.read_text(encoding="utf-8").splitlines()]
+            managed = [call for call in calls if call[0] == "uv"]
+            self.check(
+                not managed if mode == "second" else len(managed) == 2,
+                "local Python preference and managed Python fallback",
+            )
+            self.check(secret not in argv_path.read_text(encoding="utf-8"), "runtime argv omits secrets")
+            seed()
         invoke(b"{ malformed JSON patch", 1)
         self.check(path.read_bytes() == before, "malformed stdin JSON preserves prior configuration")
         for malformed in (

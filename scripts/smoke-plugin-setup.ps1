@@ -114,7 +114,11 @@ function Invoke-PortableFixtures {
     $python = $null
     foreach ($name in @('python3', 'python')) {
         $command = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($null -ne $command) { $python = $command.Source; break }
+        if ($null -eq $command -or $command.Source -match '[\\/]WindowsApps[\\/]python[^\\/]*\.exe$') { continue }
+        try {
+            $probe = & $command.Source -c "import sys; print('unifi-setup-python-ok') if sys.version_info >= (3, 11) else sys.exit(1)" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $probe -ceq 'unifi-setup-python-ok') { $python = $command.Source; break }
+        } catch { }
     }
     if ($null -eq $python) { return [pscustomobject]@{ ExitCode = 1; Output = 'Python 3.11+ unavailable' } }
     $fixturePath = Join-Path $RepositoryRoot 'scripts/plugin_setup_fixtures.py'
@@ -238,8 +242,8 @@ try {
     Assert-True ($result.ExitCode -ne 0) 'OpenClaw prerequisite wrapper checks selected target'
     $before = Get-BytesBase64 $settingsPath
     $result = Invoke-PluginScript $workspace $networkScript @('-InputJson') '{"UNIFI_NETWORK_HOST":"192.0.2.2"}' -NoPython
-    Assert-True ($result.ExitCode -ne 0) 'missing Python fails closed'
-    Assert-Equal (Get-BytesBase64 $settingsPath) $before 'missing Python preserves exact bytes'
+    Assert-True ($result.ExitCode -ne 0) 'missing Python and uv fail closed'
+    Assert-Equal (Get-BytesBase64 $settingsPath) $before 'missing Python and uv preserve exact bytes'
 
     Write-Host '== Dry run and delete =='
     $before = Get-BytesBase64 $settingsPath
