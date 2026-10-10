@@ -16,6 +16,29 @@ way, as do the shared `UNIFI_PASSWORD_*` and `UNIFI_API_KEY_*` forms. Set exactl
 one spelling per precedence level; two is refused as ambiguous rather than
 resolved by a rule nobody remembers.
 
+## Shared and product-specific precedence
+
+All three servers resolve non-empty product-specific values before shared values:
+`UNIFI_NETWORK_*`, `UNIFI_PROTECT_*`, or `UNIFI_ACCESS_*` > `UNIFI_*`. Empty
+variables count as unset. This applies to host, username, password, API key and
+other connection settings. The shared bootstrap overlays this rule after loading
+the bundled YAML, so the YAML variable names alone do not define precedence.
+
+For each secret, the first level with a non-empty spelling is selected. Exactly
+one of its plain, `_FILE`, or `_COMMAND` spellings may be set; ambiguity or a
+failing provider at that level refuses startup rather than falling back. Lower
+levels are ignored once a level is selected. Removing a product-specific provider
+can therefore reactivate a shared provider.
+
+Plugin setup switches saved spellings at the same level in one transaction.
+Selecting `_FILE`, for example, removes the saved plain and `_COMMAND` siblings.
+A JSON stdin patch can delete keys with `null`; the helper preserves unrelated
+settings and never executes a provider. It also checks the inherited environment:
+correct conflicting provider spellings in the client launcher before retrying.
+Raw credentials belong only in private stdin input, never command arguments.
+
+## Startup failures
+
 Every failure refuses startup with exit code 6 and names the variable. Nothing
 the file or the helper produces is ever logged.
 
@@ -158,3 +181,20 @@ UNIFI_NETWORK_PASSWORD_FILE=/run/secrets/unifi_password
 ```
 
 A secret file readable by group or others gets a warning; `chmod 600` it.
+
+## Codex plugin upgrades
+
+Codex setup saves provider references in a separate, version-pinned MCP entry.
+That entry takes precedence over the plugin's bundled server. After upgrading a
+plugin, use the newly installed plugin's scripts to update the package pin while
+preserving all saved provider references:
+
+```bash
+bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+```
+
+PowerShell: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+No credential input is needed. The helper validates provider availability without
+reading secrets or contacting the controller, records the pinned plugin/package
+versions in a `config.toml` comment, and prints the package version on success.
+Restart Codex afterwards. If there is no saved environment, run ordinary setup.
