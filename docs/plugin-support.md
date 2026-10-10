@@ -13,8 +13,8 @@ verified. For install steps, see the [agent install guide](agent-install.md).
 | `cross-product` | Not listed | Not listed | None (skills only) |
 
 Each listed plugin's version equals the exact PyPI package version it launches,
-for example plugin `0.37.0` runs `uvx unifi-network-mcp==0.37.0`. The release
-workflow updates the plugin and server pins together. Claude loads its bundled
+for example plugin `0.37.0` runs `uvx unifi-network-mcp==0.37.0`. Release updates
+must keep manifests and both client MCP configuration pins together. Claude loads its bundled
 server on upgrade. **Codex setup creates a separate, version-pinned MCP entry
 that takes precedence over the bundle. After every plugin upgrade, re-run setup
 from the newly installed plugin before restarting Codex.** Setup records the pin
@@ -32,8 +32,10 @@ and atomically updates the pin; it does not collect credentials or contact a
 controller. Run ordinary setup first if there is no saved MCP entry.
 
 Codex uses `.mcp.codex.json`, which omits shell-style environment templates:
-Codex 0.162.0 passes those templates literally. A clean bundle can therefore
-initialize before credentials are configured. Its optional `env_vars` forwards
+Codex 0.162.0 passes those templates literally. The Codex config therefore leaves
+credential settings unset until setup supplies them. Published servers still
+refuse startup until a controller host is configured; run setup before expecting
+an MCP handshake. Optional `env_vars` forwarding carries
 registration and safety controls from the launcher; application defaults apply
 otherwise. Claude continues using `.mcp.json` and its existing interpolation.
 Codex 0.162.0 ignores plugin-scoped environment settings, and a same-named
