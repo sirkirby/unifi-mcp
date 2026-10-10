@@ -5,6 +5,38 @@ description: Audit UniFi firewall policies for conflicts, redundancies, security
 
 # Firewall Policy Auditor
 
+## Dependencies
+
+Requires: network
+Optional: none
+
+Verify required tools through MCP discovery before collecting data; discovery alone
+does not prove controller connectivity or authorization. If a required server/tool
+is missing or a required read fails, stop and report it unavailable. Optional sources
+may be skipped only when the report visibly names the missing source and resulting
+coverage limits. Verify Network tool discovery with `unifi_tool_index`; if it is
+unavailable, stop and use `unifi-network-setup` for connection help. Never request secrets.
+
+## Coverage and Limitations
+
+Every report must include a **Coverage and Limitations** section: name each requested
+source and its status (available, unavailable, partial, or capped), requested time
+window/timezone or current-state collection time, actual filters, returned counts,
+limits, pagination, and any failed calls or unknown fields. Counts describe retrieved
+records, not totals unless completeness is established. A successful empty query is
+an observation; a failed or missing source is unavailable, never an empty result.
+If a limit is reached, label the source capped unless further bounded reads establish
+coverage. If completeness cannot be established, label it partial. Do not claim
+complete coverage, all-clear, or overall health from unavailable, partial, or capped
+data; say “No concerning activity found in the retrieved records” when appropriate.
+
+Separate **Observations** (cite source/tool, record ID and timestamp when available),
+**Hypotheses** (correlations and alternative explanations), and **Identity** (only
+explicit source-backed credential/account attribution, with its limits). Timing,
+similar names, proximity, or absence of a matching event alone proves neither
+identity nor cause. A credential event identifies the recorded account, not who
+physically used it. Missing mappings or clock uncertainty limit correlations.
+
 You audit the firewall configuration on a UniFi network. Your job is to dispatch the right MCP tool calls, evaluate the results against a documented rubric, score the audit deterministically, and present prioritised findings.
 
 The work is split between you and one tiny CLI:
@@ -13,12 +45,6 @@ The work is split between you and one tiny CLI:
 - **`scripts/unifi-firewall-score`** turns those findings into the canonical score. This is the only deterministic boundary — running it on the same findings always produces the same score, which is what makes audit history meaningful.
 
 There is no Python script doing the audit for you. There is no HTTP sidecar. You drive the audit; the CLI does the math.
-
----
-
-## Required MCP Server
-
-This skill requires the `unifi-network` MCP server. If `unifi_tool_index` is unavailable, stop and direct the user to the `unifi-network-setup` skill.
 
 ---
 
@@ -36,7 +62,7 @@ Dispatch these tool calls in **a single batch** (multiple tool uses in one assis
 - `unifi_list_devices`
 - `unifi_get_dpi_stats` *(optional but useful for HYG-05 / EGR-03 context)*
 
-If a tool returns `success=false`, stop the audit and surface the error. Do not partial-report.
+If a required tool returns `success=false`, stop scoring and report the unavailable source in Coverage and Limitations. Optional DPI failure limits only the affected benchmarks. Do not turn missing evidence into a passing benchmark.
 
 For richer per-policy detail (needed by HYG-02 conflict detection and HYG-05 shadowing), follow up with `unifi_get_firewall_policy_details` for each policy returned by `unifi_list_firewall_policies`. Batch these calls in parallel as well.
 
@@ -56,7 +82,7 @@ Record the detected engine and state it in the report header, so a reader knows 
 
 **Never score segmentation from an engine you did not read.** If the site is legacy, evaluate SEG-01 through SEG-04 against the legacy rules, not against the empty zone-based result. Reporting "no VLAN segmentation enforced" because the zone-based endpoints were empty is a false critical — it is the specific failure this step exists to prevent.
 
-If the engine is **indeterminate** (all three empty), do not emit segmentation criticals. Emit a single `info` finding stating that no firewall configuration could be retrieved and that segmentation could not be assessed, and continue with the non-segmentation benchmarks. An audit that cannot see the rules must say so rather than score them as absent.
+If the engine is **indeterminate** (all three empty), do not emit segmentation criticals. Emit a single `info` finding stating that no firewall configuration could be retrieved and that segmentation could not be assessed, and continue with the non-segmentation benchmarks as partial coverage. Withhold the overall score/status and history entry when any benchmark cannot be assessed; report only supported findings. An audit that cannot see the rules must say so rather than score them as absent.
 
 ### 2. Evaluate the 16 benchmarks
 
@@ -111,6 +137,9 @@ The CLI returns:
 ```
 
 Do not compute the score yourself. The CLI is stable across versions; your arithmetic is not.
+
+Only score and append history when every scored benchmark has sufficient evidence.
+A partial audit must not receive a healthy overall score.
 
 ### 4. Append to history
 

@@ -6,6 +6,21 @@ of events across the Protect, Access, and Network MCP servers.
 Each rule defines the event sources, the time window within which events must co-occur, the logic
 to evaluate, the resulting severity, and the recommended response.
 
+## Evidence Preconditions
+
+These are review heuristics, not implemented inference or proof of wrongdoing.
+Apply a rule only with verified source mappings and adequate coverage of its
+entire window. Missing, partial or capped sources cannot support absence-based
+rules. Otherwise report the rule unevaluated with the missing evidence. Mapping
+fields in the pseudocode are conceptual inputs, not guaranteed tool fields;
+request a user-verified mapping rather than inventing one from names or timing.
+A 30-day “new device” claim requires that lookback; otherwise say “not previously
+seen in the retrieved records.” Event codes vary: inspect actual records using
+`unifi_get_event_types` for Network. Consult event-types.md for returned fields.
+Keep all rule results under Hypotheses and cite the underlying Observations.
+Credential/account attribution does not prove the person's physical identity,
+and a nearby network connection does not establish device ownership.
+
 ---
 
 ## Rule Index
@@ -45,9 +60,8 @@ THEN CORR-01
 
 ### Meaning
 
-A person was detected at or near a controlled entry without any corresponding access event. This
-indicates either an unauthorized access attempt, tailgating behind an authorized user, or an open
-door not captured by Access sensors.
+A person was detected at or near a controlled entry without any corresponding access event. Possible explanations include incomplete logs, an alternate entry path, an open
+door, or an access anomaly; the retrieved events do not establish which occurred.
 
 ### Response
 
@@ -59,7 +73,7 @@ door not captured by Access sensors.
 ### Notes
 
 - Requires camera-to-door mapping configuration (camera `associated_door_id` metadata)
-- Low-confidence person detections (`score < 0.70`) should use `motion` event as fallback
+- Low-confidence person detections (`score < 70` on the 0–100 scale) should use `motion` event as fallback
 - Suppress during known propped-door windows if Access is reporting `DOOR_HELD_OPEN`
 
 ---
@@ -233,7 +247,7 @@ a correlation rule.
 
 ### Response
 
-- Log in the digest as an after-hours access event with the credential holder's name and door
+- Log in the digest as an after-hours access event with the recorded credential account and door, without asserting who used it
 - No immediate action required for a single occurrence
 - Review if the same credential is used more than 3 times in a single after-hours period
 
