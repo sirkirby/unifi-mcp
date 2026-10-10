@@ -31,7 +31,13 @@ On macOS and Linux, resolve setup scripts relative to this skill file:
 
 When the host exposes a plugin-root variable such as `CLAUDE_PLUGIN_ROOT`, using `$CLAUDE_PLUGIN_ROOT/scripts/...` is also valid. Do not assume the current shell directory is the plugin root.
 
-On Windows with Claude Code, use `../../scripts/set-env.ps1` for the final Claude settings write. On Windows with Codex, prefer the native PowerShell prereq script and call `codex mcp add` directly with the same env variables if Bash is unavailable. On Windows with OpenClaw, call `openclaw mcp set` directly with a JSON object containing `command`, `args`, and `env` if Bash is unavailable. Do not run the Bash prereq script on Windows unless the user explicitly asks to use a Bash environment.
+On Windows, use `../../scripts/set-env.ps1 -Target <claude|codex|openclaw>`
+for every target. Use the matching PowerShell prerequisite checker. Both helpers
+require uv/uvx; Codex and OpenClaw also require their client CLI. A working
+Python 3.11+ on PATH is used first; otherwise uv supplies managed Python
+(with a possible first-run download). No separate Python installation is needed.
+Do not substitute direct client registration commands, which can expose env
+values in process arguments.
 
 ## Step 0: Check Prerequisites
 
@@ -75,15 +81,26 @@ Keychain, `pass`, or 1Password helper; it is not run through a shell and must no
 prompt. If no indirect provider already exists, explain how to create one outside
 the chat transcript or use a client-native masked secret UI, then wait.
 
-Set exactly one spelling per secret; the server refuses to start if two are set.
-On the Claude target `set-env.sh` only adds keys. Before changing or deselecting
-an authentication path, remove all of that path's existing product-scoped
-spellings: `UNIFI_NETWORK_PASSWORD`, `UNIFI_NETWORK_PASSWORD_FILE`, and
-`UNIFI_NETWORK_PASSWORD_COMMAND` for session authentication; and
+All three servers apply the same precedence: non-empty `UNIFI_<PRODUCT>_*`
+values override shared `UNIFI_*` values; empty values count as unset. This applies
+to host, username and credentials even where bundled YAML defaults name different
+variables. Shared providers are fallback only. Multiple non-empty spellings
+(plain, `_FILE`, `_COMMAND`) at the selected level refuse startup.
+
+The setup helper switches providers atomically: selecting one spelling removes
+its saved siblings at the same level while preserving unrelated settings. To
+remove an authentication path, pipe a JSON patch setting all three saved
+spellings to `null` (for example `UNIFI_NETWORK_PASSWORD`,
+`UNIFI_NETWORK_PASSWORD_FILE`, `UNIFI_NETWORK_PASSWORD_COMMAND`). Remove or
+override shared fallback settings deliberately too; deleting product settings
+alone can reactivate shared credentials. Inherited environment providers must
+also be corrected in the launcher. Never delete a working provider in a separate
+preparatory write.
+
+Before changing or skipping API-key setup, remove obsolete
 `UNIFI_NETWORK_API_KEY`, `UNIFI_NETWORK_API_KEY_FILE`, and
-`UNIFI_NETWORK_API_KEY_COMMAND` for API-key authentication. Then add only the
-provider the user selected. The Codex and OpenClaw targets replace the whole
-server entry.
+`UNIFI_NETWORK_API_KEY_COMMAND` spellings with null deletions in the same patch;
+keep only the selected replacement, or delete all three when deselecting it.
 
 ### Optional API Key
 
@@ -106,10 +123,12 @@ Ask whether to enable write permissions:
 - Enable all write permissions except delete operations
 - Custom categories
 
-Before writing policy values, inspect the selected client's existing
-`unifi-network` MCP environment. Remove every existing category-specific
-`UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>` entry, because those entries take
-precedence over server-level defaults. Do not remove unrelated variables. Set
+Before writing policy values, inspect a sanitized list of the selected client's
+existing `unifi-network` MCP environment variable names.
+Remove every existing category-specific
+`UNIFI_POLICY_NETWORK_<CATEGORY>_<ACTION>` entry by including null deletions
+in the same JSON patch, because those entries take precedence over server-level
+defaults. Preserve unrelated variables. Set
 `UNIFI_NETWORK_TOOL_PERMISSION_MODE=confirm`, then add back only the
 category/action overrides the user selected.
 
@@ -156,9 +175,34 @@ bash <path-to-plugin>/scripts/set-env.sh --target <claude|codex|openclaw> \
 ```
 
 The script handles the client-specific write:
-- Claude target: merges env vars into `.claude/settings.local.json`
-- Codex target: replaces the `unifi-network` MCP server via `codex mcp add --env ... -- uvx ...`
-- OpenClaw target: replaces the `unifi-network` MCP server via `openclaw mcp set ...`
+- Claude: validates and atomically merges `.claude/settings.local.json`
+- Codex: stages registration in a private `CODEX_HOME`, merges env without argv,
+  validates with the client, then atomically replaces `config.toml`
+- OpenClaw: stages `mcp set` without credentials, merges env, validates offline,
+  then atomically replaces `OPENCLAW_CONFIG_PATH` (or the default config)
+
+For raw values or null deletions, use JSON stdin: `set-env.sh --target <target>
+--input-json` or `set-env.ps1 -Target <target> -InputJson`. Have the user supply
+this JSON locally from a private file or a masked input UI; never put raw secrets
+in chat, a tool call, command arguments, or a shell history entry. Provider
+references in the examples are non-secret paths or helper argv, never embedded
+passwords or API keys. Setup checks that provider files are readable and non-empty
+and provider executables exist; it does not read secrets, execute providers, or
+contact the controller. Provider output and controller authentication are checked
+only when the server starts.
+
+### Recovery
+
+On validation, dependency, registration, or write failure the previous file and
+registration remain in place. Repair malformed configuration without discarding
+unrelated settings, install the reported dependency, or correct the provider,
+then rerun. `--dry-run` / `-DryRun` validates the patch without changing files and
+omits values. Automatic OpenClaw setup requires strict JSON; JSON5 configurations
+are refused unchanged and need the client editor. After a forced termination,
+remove adjacent `.setup-lock` and `.unifi-setup-*` staging directories only after
+confirming no setup process is running. Staging files are private and may contain
+credentials; delete them without displaying their contents. An interruption at
+publication leaves either the old configuration or the complete new one.
 
 ## Step 6: Final Message
 

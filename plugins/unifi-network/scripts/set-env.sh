@@ -1,345 +1,44 @@
 #!/bin/bash
-# Configure UniFi MCP client environment.
-# Usage:
-#   set-env.sh [--target claude|codex|openclaw] [--dry-run] KEY1=VALUE1 KEY2=VALUE2 ...
-#
-# Claude target: merges environment variables into .claude/settings.local.json.
-# Codex target: registers/replaces the MCP server with `codex mcp add --env`.
-# OpenClaw target: registers/replaces the MCP server with `openclaw mcp set`.
-#
-# Bash 3.2 compatible for stock macOS.
-
+# Bash 3.2-compatible setup. Pipe a JSON env patch with --input-json for secrets.
+# Legacy KEY=VALUE arguments accept non-secret settings and provider references.
 set -e
-
-TARGET="claude"
-DRY_RUN="false"
-
+set +x
+target=claude
+flags=()
+input_json=false
 while [ $# -gt 0 ]; do
   case "$1" in
-    --target)
-      if [ $# -lt 2 ]; then
-        echo "ERROR: --target requires claude, codex, or openclaw" >&2
-        exit 1
-      fi
-      TARGET="$2"
-      shift 2
-      ;;
-    --target=*)
-      TARGET="${1#--target=}"
-      shift
-      ;;
-    --dry-run)
-      DRY_RUN="true"
-      shift
-      ;;
-    --)
-      shift
-      break
-      ;;
-    -*)
-      echo "ERROR: Unknown option '$1'" >&2
-      exit 1
-      ;;
-    *)
-      break
-      ;;
+    --target) [ $# -ge 2 ] || { echo 'ERROR: target is required.' >&2; exit 1; }; target=$2; shift 2 ;;
+    --target=*) target=${1#*=}; shift ;;
+    --dry-run) flags+=(--dry-run); shift ;;
+    --input-json) input_json=true; shift ;;
+    --) shift; break ;;
+    -*) echo 'ERROR: unsupported setup option.' >&2; exit 1 ;;
+    *) break ;;
   esac
 done
-
-if [ $# -eq 0 ]; then
-  echo "Usage: set-env.sh [--target claude|codex|openclaw] [--dry-run] KEY1=VALUE1 KEY2=VALUE2 ..." >&2
-  exit 1
+# Prefer a working local interpreter; uv supplies managed Python when needed.
+runner=()
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 &&
+     probe=$("$candidate" -c 'import sys; print("unifi-setup-python-ok") if sys.version_info >= (3, 11) else sys.exit(1)' </dev/null 2>/dev/null) &&
+     [ "$probe" = unifi-setup-python-ok ]; then
+    runner=("$candidate")
+    break
+  fi
+done
+if [ ${#runner[@]} -eq 0 ]; then
+  if ! command -v uv >/dev/null 2>&1; then
+    echo 'ERROR: No usable setup runtime. Install uv (which supplies Python) and rerun; existing configuration is unchanged.' >&2
+    exit 1
+  fi
+  runner=(uv run --no-project --python '>=3.11' python)
 fi
-
-case "$TARGET" in
-  claude|codex|openclaw) ;;
-  *)
-    echo "ERROR: Unsupported target '$TARGET'. Expected claude, codex, or openclaw." >&2
-    exit 1
-    ;;
-esac
-
-for arg in "$@"; do
-  if [[ "$arg" != *"="* ]]; then
-    echo "ERROR: Invalid argument '$arg'. Expected KEY=VALUE format." >&2
-    exit 1
-  fi
-done
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PLUGIN_NAME="$(basename "$PLUGIN_ROOT")"
-
-# Codex installs marketplace plugins as <plugin>/<version>/scripts, while the
-# source-tree, Claude, and OpenClaw layouts use <plugin>/scripts. Resolve the
-# semantic plugin name from the parent directory only for a known UniFi plugin.
-case "$PLUGIN_NAME" in
-  unifi-network|unifi-protect|unifi-access) ;;
-  *)
-    plugin_parent_name="$(basename "$(dirname "$PLUGIN_ROOT")")"
-    case "$plugin_parent_name" in
-      unifi-network|unifi-protect|unifi-access) PLUGIN_NAME="$plugin_parent_name" ;;
-    esac
-    ;;
-esac
-
-detect_package_pin() {
-  for manifest in "$PLUGIN_ROOT/.claude-plugin/plugin.json" "$PLUGIN_ROOT/.mcp.json"; do
-    if [ -f "$manifest" ]; then
-      pin=$(grep -Eo 'unifi-[a-z]+-mcp==[0-9][^"]*' "$manifest" | head -1 || true)
-      if [ -n "$pin" ]; then
-        echo "$pin"
-        return
-      fi
-    fi
-  done
-
-  case "$PLUGIN_NAME" in
-    unifi-network) echo "unifi-network-mcp@latest" ;;
-    unifi-protect) echo "unifi-protect-mcp@latest" ;;
-    unifi-access) echo "unifi-access-mcp@latest" ;;
-    *)
-      echo "ERROR: Could not infer MCP package for $PLUGIN_NAME" >&2
-      exit 1
-      ;;
-  esac
-}
-
-mask_value() {
-  key="$1"
-  value="$2"
-  if [ ${#value} -gt 4 ] && [[ ! "$key" =~ _(HOST|PORT|SITE)$ ]] && [ "$value" != "true" ] && [ "$value" != "false" ]; then
-    echo "${value:0:2}***${value: -2}"
-  else
-    echo "$value"
-  fi
-}
-
-print_values() {
-  for arg in "$@"; do
-    key="${arg%%=*}"
-    value="${arg#*=}"
-    display="$(mask_value "$key" "$value")"
-    echo "  $key = $display"
-  done
-}
-
-write_claude_settings() {
-  SETTINGS_FILE=".claude/settings.local.json"
-
-  if [ "$DRY_RUN" = "true" ]; then
-    echo "Would merge these values into $SETTINGS_FILE:"
-    print_values "$@"
-    return
-  fi
-
-  mkdir -p "$(dirname "$SETTINGS_FILE")"
-
-  if [ -f "$SETTINGS_FILE" ] && command -v python3 >/dev/null 2>&1; then
-    if ! python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$SETTINGS_FILE" 2>/dev/null; then
-      echo "ERROR: $SETTINGS_FILE is not valid JSON. Fix or move it aside, then re-run." >&2
-      exit 1
-    fi
-  fi
-
-  tmp_file="${SETTINGS_FILE}.tmp.$$"
-
-  # Preferred path: merge with python3, which understands JSON string
-  # boundaries. The previous sed-based approach corrupted any existing string
-  # value that happened to contain ",}" (e.g. a regex permission like
-  # `Bash(grep -inE "x{2,}")`) by rewriting the trailing-comma cleanup inside
-  # the string.
-  if command -v python3 >/dev/null 2>&1; then
-    if ! python3 - "$SETTINGS_FILE" "$tmp_file" "$@" <<'PY'
-import json
-import sys
-
-settings_file, tmp_file = sys.argv[1], sys.argv[2]
-pairs = sys.argv[3:]
-
-try:
-    with open(settings_file) as handle:
-        data = json.load(handle)
-except FileNotFoundError:
-    data = {}
-
-if not isinstance(data, dict):
-    sys.stderr.write("ERROR: %s does not contain a JSON object.\n" % settings_file)
-    sys.exit(1)
-
-env = data.setdefault("env", {})
-if not isinstance(env, dict):
-    sys.stderr.write("ERROR: \"env\" in %s is not a JSON object.\n" % settings_file)
-    sys.exit(1)
-
-for pair in pairs:
-    key, sep, value = pair.partition("=")
-    if not sep:
-        sys.stderr.write("ERROR: invalid KEY=VALUE argument: %s\n" % pair)
-        sys.exit(1)
-    env[key] = value
-
-with open(tmp_file, "w") as handle:
-    json.dump(data, handle, indent=2)
-    handle.write("\n")
-PY
-    then
-      echo "ERROR: failed to merge values into $SETTINGS_FILE." >&2
-      echo "       Original $SETTINGS_FILE was not modified." >&2
-      rm -f "$tmp_file"
-      exit 1
-    fi
-
-    mv "$tmp_file" "$SETTINGS_FILE"
-    print_values "$@"
-    echo ""
-    echo "Saved to $SETTINGS_FILE"
-    return
-  fi
-
-  # Fallback path (python3 unavailable): best-effort sed-based merge. Note this
-  # cannot safely handle string values containing ",}" and will be rejected by
-  # the validation below in that case.
-  if [ -f "$SETTINGS_FILE" ]; then
-    existing=$(cat "$SETTINGS_FILE")
-  else
-    existing='{ "env": {} }'
-  fi
-
-  if ! echo "$existing" | grep -q '"env"'; then
-    existing=$(echo "$existing" | sed 's/}[[:space:]]*$/,\n  "env": {}\n}/')
-  fi
-
-  for arg in "$@"; do
-    key="${arg%%=*}"
-    value="${arg#*=}"
-    escaped_value=$(printf '%s' "$value" | sed 's/\\/\\\\/g; s/"/\\"/g; s/&/\\&/g')
-
-    if echo "$existing" | grep -q "\"$key\""; then
-      existing=$(echo "$existing" | sed "s|\"$key\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"$key\": \"$escaped_value\"|")
-    else
-      existing=$(echo "$existing" | sed "s|\"env\"[[:space:]]*:[[:space:]]*{|\"env\": {\n    \"$key\": \"$escaped_value\",|")
-    fi
-  done
-
-  existing=$(echo "$existing" | sed 's/,[[:space:]]*}/\n  }/g')
-
-  echo "$existing" > "$tmp_file"
-
-  mv "$tmp_file" "$SETTINGS_FILE"
-  print_values "$@"
-  echo ""
-  echo "Saved to $SETTINGS_FILE"
-}
-
-write_codex_config() {
-  package_pin="$(detect_package_pin)"
-
-  if ! command -v codex >/dev/null 2>&1; then
-    echo "ERROR: codex CLI not found on PATH. Install or open Codex, then re-run setup." >&2
-    exit 1
-  fi
-
-  if ! command -v uvx >/dev/null 2>&1; then
-    echo "ERROR: uvx not found on PATH. Install uv, then re-run setup." >&2
-    exit 1
-  fi
-
-  cmd=(mcp add "$PLUGIN_NAME")
-  for arg in "$@"; do
-    cmd+=(--env "$arg")
-  done
-  cmd+=(-- uvx --python-preference system "$package_pin")
-
-  if [ "$DRY_RUN" = "true" ]; then
-    echo "Would replace Codex MCP server '$PLUGIN_NAME' with:"
-    printf '  codex mcp add %q' "$PLUGIN_NAME"
-    for arg in "$@"; do
-      key="${arg%%=*}"
-      value="${arg#*=}"
-      display="$(mask_value "$key" "$value")"
-      printf ' --env %q' "$key=$display"
-    done
-    printf ' -- uvx --python-preference system %q' "$package_pin"
-    echo ""
-    echo ""
-    echo "Environment values:"
-    print_values "$@"
-    return
-  fi
-
-  codex mcp remove "$PLUGIN_NAME" >/dev/null 2>&1 || true
-  codex "${cmd[@]}"
-  echo ""
-  echo "Configured Codex MCP server '$PLUGIN_NAME' with $package_pin."
-  echo "Restart Codex so the updated MCP server configuration is loaded."
-}
-
-build_openclaw_json() {
-  package_pin="$1"
-  shift
-
-  python3 - "$package_pin" "$@" <<'PY'
-import json
-import sys
-
-package_pin = sys.argv[1]
-env = {}
-for item in sys.argv[2:]:
-    key, value = item.split("=", 1)
-    env[key] = value
-
-print(
-    json.dumps(
-        {
-            "command": "uvx",
-            "args": ["--python-preference", "system", package_pin],
-            "env": env,
-        },
-        separators=(",", ":"),
-    )
-)
-PY
-}
-
-write_openclaw_config() {
-  package_pin="$(detect_package_pin)"
-
-  if [ "$DRY_RUN" = "true" ]; then
-    echo "Would replace OpenClaw MCP server '$PLUGIN_NAME' with:"
-    printf '  openclaw mcp set %q ' "$PLUGIN_NAME"
-    printf "'{\"command\":\"uvx\",\"args\":[\"--python-preference\",\"system\",\"%s\"],\"env\":{...}}'" "$package_pin"
-    echo ""
-    echo ""
-    echo "Environment values:"
-    print_values "$@"
-    return
-  fi
-
-  if ! command -v openclaw >/dev/null 2>&1; then
-    echo "ERROR: openclaw CLI not found on PATH. Install OpenClaw, then re-run setup." >&2
-    exit 1
-  fi
-
-  if ! command -v uvx >/dev/null 2>&1; then
-    echo "ERROR: uvx not found on PATH. Install uv, then re-run setup." >&2
-    exit 1
-  fi
-
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "ERROR: python3 not found on PATH. It is required to build the OpenClaw MCP JSON config safely." >&2
-    exit 1
-  fi
-
-  mcp_json="$(build_openclaw_json "$package_pin" "$@")"
-  openclaw mcp set "$PLUGIN_NAME" "$mcp_json"
-  echo ""
-  echo "Configured OpenClaw MCP server '$PLUGIN_NAME' with $package_pin."
-  echo "Restart the OpenClaw Gateway so the updated MCP server configuration is loaded."
-}
-
-case "$TARGET" in
-  claude) write_claude_settings "$@" ;;
-  codex) write_codex_config "$@" ;;
-  openclaw) write_openclaw_config "$@" ;;
-esac
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+if [ "$input_json" = true ]; then
+  [ $# -eq 0 ] || { echo 'ERROR: JSON input cannot be combined with positional values.' >&2; exit 1; }
+  exec "${runner[@]}" "$script_dir/setup_config.py" --target "$target" "${flags[@]}"
+fi
+[ $# -gt 0 ] || { echo 'ERROR: supply --input-json or non-secret KEY=VALUE settings.' >&2; exit 1; }
+# printf is a shell builtin: values never enter a child process argument list.
+printf '%s\0' "$@" | "${runner[@]}" "$script_dir/setup_config.py" --target "$target" --pairs "${flags[@]}"
