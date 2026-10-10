@@ -190,6 +190,23 @@ and provider executables exist; it does not read secrets, execute providers, or
 contact the controller. Provider output and controller authentication are checked
 only when the server starts.
 
+### Codex upgrades
+
+Codex setup pins a separate MCP entry that takes precedence over the plugin's
+bundled server. After **every plugin upgrade**, resolve this newly installed
+skill's plugin root and refresh the pin before restarting Codex:
+
+```bash
+bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+```
+
+On Windows: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+This command needs no credential input and preserves the saved environment and
+provider references. It validates providers, records the plugin and package
+versions in `config.toml`, and prints the pinned package on success. Confirm that
+version matches the new installed plugin. Use ordinary setup first if there is
+no saved MCP entry; use the new plugin's scripts rather than an older cache path.
+
 ### Recovery
 
 On validation, dependency, registration, or write failure the previous file and
@@ -211,7 +228,7 @@ For Claude Code, tell the user:
 
 For Codex, tell the user:
 
-"Codex MCP server `unifi-access` configured. Restart Codex so the updated MCP server is loaded."
+"Codex MCP server `unifi-access` configured at the package version printed by setup. Restart Codex so the updated MCP server is loaded. After every plugin upgrade, re-run the new plugin’s setup with --target codex --refresh (PowerShell: -Target codex -Refresh)."
 
 For OpenClaw, tell the user:
 

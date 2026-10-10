@@ -168,8 +168,11 @@ def read_config(path, target):
     return raw, data, servers
 
 
-def package_pin(root, name):
-    for filename in (root / ".claude-plugin/plugin.json", root / ".mcp.json"):
+def package_pin(root, name, *, codex=False):
+    files = (root / ".claude-plugin/plugin.json", root / ".mcp.json")
+    if codex:
+        files = (root / ".mcp.codex.json", *files)
+    for filename in files:
         if filename.exists():
             match = re.search(
                 r"unifi-(?:network|protect|access)-mcp==[0-9][A-Za-z0-9.+-]*", filename.read_text(encoding="utf-8")
@@ -189,6 +192,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--pairs", action="store_true")
+    parser.add_argument("--refresh", action="store_true", help="Re-pin Codex using the saved environment")
     args = parser.parse_args()
     if sys.version_info < (3, 11):
         refuse("No usable setup interpreter; install uv (which supplies Python) and rerun.")
@@ -198,6 +202,23 @@ def main():
         refuse("Cannot identify the plugin; rerun from a complete plugin installation.")
     product = name.removeprefix("unifi-").upper()
     target = args.target
+    if args.refresh and (target != "codex" or args.pairs or args.check):
+        refuse("Refresh is only supported for an existing Codex registration, without environment arguments.")
+    pin = package_pin(root, name, codex=True) if target == "codex" else None
+    plugin_version = None
+    if target == "codex" and not args.check:
+        manifest = root / ".codex-plugin/plugin.json"
+        # Legacy installations can use the Claude manifest as their identity.
+        if not manifest.is_file():
+            manifest = root / ".claude-plugin/plugin.json"
+        if manifest.is_file():
+            plugin_version = json_object(manifest.read_text(encoding="utf-8")).get("version")
+        if (
+            not isinstance(plugin_version, str)
+            or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", plugin_version)
+            or pin != name + "-mcp==" + plugin_version
+        ):
+            refuse("The installed plugin version and package pin are missing or inconsistent; reinstall the plugin.")
     if not shutil.which("uvx"):
         refuse("uvx is required; install uv from https://astral.sh/uv/install.sh and rerun.")
     if target != "claude" and not shutil.which(target):
@@ -222,7 +243,9 @@ def main():
         merge_env(previous_env, {}, product)
         print("Prerequisites passed: uvx, setup runtime, client and configuration shape checked.")
         return
-    raw_input = sys.stdin.buffer.read().decode("utf-8-sig")
+    if args.refresh and (name not in servers or not previous_env):
+        refuse("No saved Codex environment to refresh; run ordinary setup from the installed plugin first.")
+    raw_input = "{}" if args.refresh else sys.stdin.buffer.read().decode("utf-8-sig")
     if args.pairs:
         patch = {}
         for pair in raw_input.rstrip("\0").split("\0"):
@@ -239,7 +262,7 @@ def main():
             patch[key] = value
     else:
         patch = json_object(raw_input)
-    if not patch:
+    if not patch and not args.refresh:
         refuse("Supply at least one environment setting or null deletion.")
     merged = merge_env(previous_env, patch, product)
     if args.dry_run:
@@ -285,7 +308,7 @@ def main():
                         "uvx",
                         "--python-preference",
                         "system",
-                        package_pin(root, name),
+                        pin,
                     ],
                     environment,
                 )
@@ -293,9 +316,21 @@ def main():
                 entry = dict(prior)
                 for key in ("url", "bearer_token_env_var", "http_headers", "env_http_headers"):
                     entry.pop(key, None)
-                entry.update(command="uvx", args=["--python-preference", "system", package_pin(root, name)], env=merged)
+                entry.update(command="uvx", args=["--python-preference", "system", pin], env=merged)
+                # Replace our previous annotation rather than accumulating stale versions.
+                annotation = "# unifi-plugin-setup: " + name + " "
+                staged.write_text(
+                    "\n".join(
+                        line
+                        for line in staged.read_text(encoding="utf-8").splitlines()
+                        if not line.startswith(annotation)
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
                 with staged.open("a", encoding="utf-8") as handle:
-                    handle.write("\n[mcp_servers." + json.dumps(name) + "]\n")
+                    handle.write("\n" + annotation + "plugin " + plugin_version + "; package " + pin + "\n")
+                    handle.write("[mcp_servers." + json.dumps(name) + "]\n")
                     for key, value in entry.items():
                         handle.write(json.dumps(key) + " = " + toml_value(value) + "\n")
                 _, final_data, final_servers = read_config(staged, target)
@@ -334,6 +369,12 @@ def main():
             os.replace(staged, destination)
     finally:
         lock.rmdir()
+    if target == "codex":
+        print("Codex pinned package: " + pin + " (plugin " + plugin_version + ").")
+        print(
+            "After every plugin upgrade, rerun the new plugin's set-env.sh --target codex --refresh "
+            "or set-env.ps1 -Target codex -Refresh, then restart Codex."
+        )
     print("Configuration saved atomically. Restart the selected client to load it. Values are omitted.")
 
 

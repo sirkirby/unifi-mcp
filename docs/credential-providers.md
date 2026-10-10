@@ -181,3 +181,20 @@ UNIFI_NETWORK_PASSWORD_FILE=/run/secrets/unifi_password
 ```
 
 A secret file readable by group or others gets a warning; `chmod 600` it.
+
+## Codex plugin upgrades
+
+Codex setup saves provider references in a separate, version-pinned MCP entry.
+That entry takes precedence over the plugin's bundled server. After upgrading a
+plugin, use the newly installed plugin's scripts to update the package pin while
+preserving all saved provider references:
+
+```bash
+bash <new-plugin-root>/scripts/set-env.sh --target codex --refresh
+```
+
+PowerShell: `& <new-plugin-root>/scripts/set-env.ps1 -Target codex -Refresh`.
+No credential input is needed. The helper validates provider availability without
+reading secrets or contacting the controller, records the pinned plugin/package
+versions in a `config.toml` comment, and prints the package version on success.
+Restart Codex afterwards. If there is no saved environment, run ordinary setup.

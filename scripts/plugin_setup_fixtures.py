@@ -433,9 +433,13 @@ class Fixtures:
             registry = data["mcp_servers"] if target == "codex" else data["mcp"]["servers"]
             original_registry = fixture["mcp_servers"] if target == "codex" else fixture["mcp"]["servers"]
             self.check(registry["unrelated"] == original_registry["unrelated"], "unrelated registration preserved")
+        baseline_output = invoke({base: "FAKE-baseline-output"})
         for small in ("x", "true", "1234"):
             result = invoke({base: small})
-            self.check(small.encode() not in result.stdout + result.stderr, "short/boolean-like credentials omitted")
+            self.check(
+                (result.stdout, result.stderr) == (baseline_output.stdout, baseline_output.stderr),
+                "output is invariant even for short/boolean-like credentials",
+            )
         # Provider switching clears only siblings at the chosen precedence tier.
         filename = str(workspace / "credential-Ω")
         Path(filename).write_text("FAKE-file-provider", encoding="utf-8")
@@ -461,12 +465,44 @@ class Fixtures:
             for source in scripts.iterdir():
                 if source.is_file():
                     shutil.copy2(source, cached / source.name)
+            for directory in (".codex-plugin", ".claude-plugin"):
+                shutil.copytree(scripts.parent / directory, cached.parent / directory)
+            for filename in (".mcp.json", ".mcp.codex.json"):
+                source = scripts.parent / filename
+                if source.exists():
+                    shutil.copy2(source, cached.parent / filename)
             suffix = "set-env.ps1" if self.powershell else "set-env.sh"
             command[command.index(str(scripts / suffix))] = str(cached / suffix)
             invoke({f"UNIFI_{product.upper()}_HOST": "192.0.2.99"})
             self.check(
                 get_env(load())[f"UNIFI_{product.upper()}_HOST"] == "192.0.2.99",
                 "versioned plugin cache uses semantic server name",
+            )
+        if target == "codex":
+            manifest = cached.parent / ".codex-plugin/plugin.json"
+            manifest.parent.mkdir(exist_ok=True)
+            manifest.write_text(json.dumps({"version": "9.8.7"}), encoding="utf-8")
+            mcp = cached.parent / ".mcp.codex.json"
+            mcp.write_text(
+                json.dumps({"mcpServers": {f"unifi-{product}": {"args": [f"unifi-{product}-mcp==9.8.7"]}}}),
+                encoding="utf-8",
+            )
+            refresh = command[:-1] + (["-Refresh"] if self.powershell else ["--refresh"])
+            saved_env = get_env(load())
+            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+            self.check(result.returncode == 0, "Codex refresh succeeds without credential input")
+            self.check(get_env(load()) == saved_env, "Codex refresh preserves saved environment exactly")
+            entry = load()["mcp_servers"][f"unifi-{product}"]
+            self.check(entry["args"][-1] == f"unifi-{product}-mcp==9.8.7", "Codex refresh replaces stale package pin")
+            self.check(b"9.8.7" in result.stdout, "Codex success prints pinned package version")
+            self.check("plugin 9.8.7" in path.read_text(), "Codex records pinned plugin version")
+            before_refresh = path.read_bytes()
+            failed = subprocess.run(
+                refresh, cwd=workspace, env=dict(environment, FIXTURE_FAIL="validate"), capture_output=True, timeout=30
+            )
+            self.check(
+                failed.returncode != 0 and path.read_bytes() == before_refresh,
+                "failed Codex refresh preserves complete registration",
             )
         # Inject at the actual replace boundary through Python's test import hook.
         injection = workspace / "injection"

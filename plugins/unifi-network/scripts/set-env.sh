@@ -6,10 +6,12 @@ set +x
 target=claude
 flags=()
 input_json=false
+refresh=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --target) [ $# -ge 2 ] || { echo 'ERROR: target is required.' >&2; exit 1; }; target=$2; shift 2 ;;
     --target=*) target=${1#*=}; shift ;;
+    --refresh) refresh=true; flags+=(--refresh); shift ;;
     --dry-run) flags+=(--dry-run); shift ;;
     --input-json) input_json=true; shift ;;
     --) shift; break ;;
@@ -35,6 +37,12 @@ if [ ${#runner[@]} -eq 0 ]; then
   runner=(uv run --no-project --python '>=3.11' python)
 fi
 script_dir="$(cd "$(dirname "$0")" && pwd)"
+if [ "$refresh" = true ]; then
+  [ "$target" = codex ] && [ "$input_json" = false ] && [ $# -eq 0 ] || {
+    echo 'ERROR: --refresh requires --target codex and no environment arguments.' >&2; exit 1;
+  }
+  exec "${runner[@]}" "$script_dir/setup_config.py" --target "$target" "${flags[@]}" </dev/null
+fi
 if [ "$input_json" = true ]; then
   [ $# -eq 0 ] || { echo 'ERROR: JSON input cannot be combined with positional values.' >&2; exit 1; }
   exec "${runner[@]}" "$script_dir/setup_config.py" --target "$target" "${flags[@]}"

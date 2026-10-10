@@ -6,6 +6,7 @@ param(
     [string]$Target = 'claude',
     [switch]$InputJson,
     [switch]$DryRun,
+    [switch]$Refresh,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$KeyValuePairs,
     [Parameter(ValueFromPipeline = $true)]
@@ -71,6 +72,7 @@ function Invoke-SetupHelper {
     $start = New-Object System.Diagnostics.ProcessStartInfo
     $start.FileName = $runtime.FileName
     $start.Arguments = $runtime.Prefix + '"' + $helper + '" --target ' + $Target
+    if ($Refresh) { $start.Arguments += ' --refresh' }
     if ($DryRun) { $start.Arguments += ' --dry-run' }
     Set-BatchLauncher $start
     $start.UseShellExecute = $false
@@ -101,6 +103,13 @@ function Invoke-SetupHelper {
 }
 
 try {
+    if ($Refresh) {
+        if ($Target -ne 'codex' -or $InputJson -or ($KeyValuePairs -and $KeyValuePairs.Count -gt 0)) {
+            throw 'Refresh requires Codex and no environment input.'
+        }
+        Invoke-SetupHelper -Json '{}'
+        exit 0
+    }
     if ($InputJson) {
         if ($KeyValuePairs -and $KeyValuePairs.Count -gt 0) {
             throw 'Use either JSON stdin or KEY=VALUE arguments.'
