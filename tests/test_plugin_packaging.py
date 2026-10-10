@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -299,7 +300,7 @@ def packaging_errors(root: Path) -> list[str]:
         claude_manifest = check_claude_manifest(bundle, name, errors)
         resolved = check_codex_manifest(bundle, name, errors)
         portable = resolved is not None and resolved["layout"] == "portable"
-        # Claude always reads .mcp.json; a portable Codex package reads root mcp.json instead.
+        # Validate Claude and Codex launch files independently.
         pins = check_mcp_servers(bundle / ".mcp.json", root, errors, portable=False)
         codex_path = mcp_config_path(bundle, resolved)
         portable_pins = check_mcp_servers(codex_path, root, errors, portable=portable, codex=True)
@@ -604,3 +605,40 @@ def test_codex_package_pin_drift_is_reported(tmp_path: Path) -> None:
     _edit_json(path, lambda d: next(iter(d["mcpServers"].values())).update(args=[name + "-mcp==999.0.0"]))
 
     assert any("versions out of lockstep" in error for error in packaging_errors(root))
+
+
+@pytest.mark.parametrize("name", _advertised_bundles())
+@pytest.mark.parametrize("filename", [".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"])
+def test_every_client_package_pin_matches_plugin_version(name: str, filename: str) -> None:
+    bundle = REPO_ROOT / "plugins" / name
+    version = _load(bundle / ".codex-plugin/plugin.json")["version"]
+    pins = check_mcp_servers(bundle / filename, REPO_ROOT, [], portable=False, codex="codex" in filename)
+
+    assert pins == {name: (f"{name}-mcp", version)}
+
+
+@pytest.mark.parametrize("name", _advertised_bundles())
+def test_version_workflow_updates_every_client_pin(tmp_path: Path, name: str) -> None:
+    root = _copy_packaging_tree(tmp_path)
+    workflow = yaml.safe_load((root / BUMP_WORKFLOW).read_text())
+    run = next(
+        step["run"]
+        for job in workflow["jobs"].values()
+        for step in job["steps"]
+        if "update_plugin_version()" in step.get("run", "")
+    )
+    # Exercise the real workflow functions without tag discovery, commits or publication.
+    functions = run.split("NETWORK_VERSION=", 1)[0]
+    subprocess.run(
+        ["bash", "-c", functions + '\nupdate_plugin_version "$1" "$2"', "fixture", f"plugins/{name}", "999.0.0"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    bundle = root / "plugins" / name
+    for filename in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json"):
+        assert _load(bundle / filename)["version"] == "999.0.0"
+    for filename in (".mcp.json", ".mcp.codex.json", ".claude-plugin/plugin.json"):
+        pins = check_mcp_servers(bundle / filename, root, [], portable=False, codex="codex" in filename)
+        assert pins == {name: (f"{name}-mcp", "999.0.0")}, filename
