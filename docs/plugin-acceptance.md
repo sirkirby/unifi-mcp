@@ -16,7 +16,8 @@ response's top-level key names and counts only.
 
 - **Prior version:** the commit of an earlier plugin-version sync. Record the
   plugin versions in `plugins/unifi-*/.claude-plugin/plugin.json` and the
-  package pins in `plugins/unifi-*/.mcp.json`.
+  package pins in `plugins/unifi-*/.mcp.json` (Claude Code) and
+  `plugins/unifi-*/.mcp.codex.json` (Codex).
 - **Candidate:** the branch or commit under test. Record its commit and pins.
 - If a bundle's files change but its version does not, expect clients that
   compare versions to skip the upgrade, and record what each client installs.
@@ -73,6 +74,10 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
 2. **Discovery.** `claude plugin list` and `claude plugin details <plugin>`, or
    `codex plugin list`, show the plugin installed and enabled with its skills
    and MCP server. Ask an in-session prompt to list the plugin's skills.
+   Before setup, start one session and confirm the unconfigured server exits
+   with "No controller host configured — refusing to start." and no
+   credential or registration-mode errors. The handshake and tool calls are
+   only required after configuration.
 3. **Configure** with that version's documented setup script for the client
    target (`scripts/set-env.sh --target claude|codex`).
 4. **Handshake.** In a session, call the product's `*_tool_index` tool and
@@ -87,17 +92,24 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    `claude plugin update <plugin>@<marketplace>`. Codex: it refuses to re-add a
    marketplace from a different ref, so `codex plugin marketplace remove`, add
    it at the candidate ref, then `codex plugin add <plugin>@<marketplace>` again.
-   Confirm the new plugin version is installed, the configuration file is
-   unchanged, the running server is the candidate's package version, and
-   repeat steps 4 and 5.
+   Codex setup writes a user MCP registration that shadows the plugin's server
+   and pins its package, so after the upgrade run the new plugin's
+   `scripts/set-env.sh --target codex --refresh` (PowerShell:
+   `scripts/set-env.ps1 -Target codex -Refresh`). It reuses the saved
+   environment without asking for credentials and prints the new pin.
+   Confirm the new plugin version is installed, the saved environment is
+   unchanged, the running server is the candidate's package version (for Codex,
+   from `serverInfo`), and repeat steps 4 and 5.
 7. **Failure recovery.** Run the candidate's setup with an invalid provider
    path, a missing provider command and an invalid key. Each must exit non-zero
    with a fixed message, leave the configuration byte-identical and leave no
    lock or staging directory; then repeat step 5.
 
-Also record whether Codex expands `${VAR:-default}` in a plugin's `.mcp.json`
-`env` block: with no setup registration shadowing the plugin's server, read the
-running server's environment with `ps -E -ww` and compare it with the template.
+Codex reads `plugins/unifi-*/.mcp.codex.json` through its manifest's
+`mcpServers` path. Codex does not expand `${VAR:-default}` in an MCP `env`
+block, so that file must contain no interpolation templates; Claude Code keeps
+`.mcp.json`. If either file changes, check the running server's environment
+with `ps -E -ww` against what the client was given.
 
 ## Running sessions
 
