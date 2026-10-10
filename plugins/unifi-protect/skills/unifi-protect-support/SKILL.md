@@ -11,6 +11,24 @@ Use `protect_get_support_bundle` to collect the smallest useful, sanitized suppo
 returns JSON only to the configured MCP client; this skill never posts, uploads, comments,
 or opens an issue for the user.
 
+## Dependencies
+
+Requires: protect
+Optional: none
+
+If the required server or tool is unavailable, stop collection and use the manual
+bug-report fields below. Tool discovery does not prove controller reachability.
+
+## Coverage and Limitations
+
+Include a **Coverage and Limitations** section in the local explanation. Preserve
+per-probe statuses from the bundle, including unavailable, unsupported, partial,
+and capped results. Summary is local/cache-only: it cannot establish controller
+connectivity or overall product health. Connectivity is one bounded request, not
+an exhaustive audit. Report the probe, collection time and limitations; never
+turn a failed/missing probe into a successful empty result or an all-clear.
+Separate observed bundle fields from diagnostic hypotheses; identity is not assessed.
+
 ## Choose the Probe
 
 - Start with `summary`. It is local/cache-only and does not contact the controller.
@@ -18,7 +36,7 @@ or opens an issue for the user.
   that it makes one bounded read-only request through the existing authenticated session,
   then ask for explicit confirmation before calling it.
 
-For a suspected Protect sensor serialization mismatch, use `summary` for environment evidence. `protect_get_support_bundle(probe="resource_shape", resource="sensors")` currently returns `unsupported` because no verified safe sensor-shape source is available. Do not request or call this probe in the current release. Do not claim UP-AirQuality or issue #523 coverage.
+For a suspected Protect sensor serialization mismatch, use `summary` for environment evidence. `protect_get_support_bundle(probe="resource_shape", resource="sensors")` currently returns `unsupported` because no verified safe sensor-shape source is available. Do not request or call this probe in the current release. Do not claim UP-AirQuality sensor-shape coverage.
 
 If the user asks "show me what will be collected first," explain the selected probe and
 the included/excluded data classes before invoking the tool.
