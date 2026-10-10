@@ -197,9 +197,9 @@ class Fixtures:
             PATH=str(bindir) + os.pathsep + os.environ["PATH"],
             FIXTURE_ARGV=str(workspace / "argv.jsonl"),
         )
-        secret = 'FAKE-only "quotes" $dollar \\ slash spaces Ω 😀'
+        sample_value = 'FAKE-only "quotes" $dollar \\ slash spaces Ω 😀'
         output_marker = workspace / "client-output-marker"
-        output_marker.write_bytes(secret.encode("utf-8"))
+        output_marker.write_bytes(sample_value.encode("utf-8"))
         environment["FIXTURE_OUTPUT_MARKER_FILE"] = str(output_marker)
         # Prove that both failing client operations emit the full UTF-8 marker,
         # even on Windows where text stdout can use a legacy code page.
@@ -286,10 +286,10 @@ class Fixtures:
                 timeout=30,
             )
             self.check(result.returncode == expected if expected == 0 else result.returncode != 0, "setup exit status")
-            self.check(secret.encode() not in result.stdout + result.stderr, "no secret in stdout/stderr")
+            self.check(sample_value.encode() not in result.stdout + result.stderr, "no secret in stdout/stderr")
             argv_path = workspace / "argv.jsonl"
             if argv_path.exists():
-                self.check(secret not in argv_path.read_text(encoding="utf-8"), "no secret in client argv")
+                self.check(sample_value not in argv_path.read_text(encoding="utf-8"), "no secret in client argv")
             return result
 
         seed()
@@ -313,11 +313,11 @@ class Fixtures:
         )
         sync_marker = workspace / "flushed"
         sync_environment = {"PYTHONPATH": str(sync_injection), "FIXTURE_FSYNC_PATH": str(sync_marker)}
-        invoke({base: secret}, extra=sync_environment)
+        invoke({base: sample_value}, extra=sync_environment)
         self.check(sync_marker.read_text() == "flushed", "staged configuration flushed through writable descriptor")
-        self.check(get_env(load())[base] == secret, "durable save preserves stdin exactly")
+        self.check(get_env(load())[base] == sample_value, "durable save preserves stdin exactly")
         seed()
-        invoke({base: secret}, 1, dict(sync_environment, FIXTURE_FSYNC_FAIL="1"))
+        invoke({base: sample_value}, 1, dict(sync_environment, FIXTURE_FSYNC_FAIL="1"))
         self.check(path.read_bytes() == before, "failed flush preserves exact prior configuration")
         # No real uv invocation or download: PATH contains only fixture launchers.
         runtime_bin = workspace / "runtime-bin"
@@ -349,8 +349,8 @@ class Fixtures:
             runtime_environment["FIXTURE_PYTHON_MODE"] = mode
             argv_path = workspace / "argv.jsonl"
             argv_path.unlink(missing_ok=True)
-            invoke({base: secret}, extra=runtime_environment)
-            self.check(get_env(load())[base] == secret, mode + " Python resolution preserves stdin exactly")
+            invoke({base: sample_value}, extra=runtime_environment)
+            self.check(get_env(load())[base] == sample_value, mode + " Python resolution preserves stdin exactly")
             checked = subprocess.run(
                 prerequisite,
                 cwd=workspace,
@@ -360,7 +360,8 @@ class Fixtures:
             )
             self.check(checked.returncode == 0, mode + " Python prerequisite resolution")
             self.check(
-                secret.encode() not in checked.stdout + checked.stderr, "runtime prerequisite output omits secrets"
+                sample_value.encode() not in checked.stdout + checked.stderr,
+                "runtime prerequisite output omits secrets",
             )
             calls = [json.loads(line) for line in argv_path.read_text(encoding="utf-8").splitlines()]
             managed = [call for call in calls if call[0] == "uv"]
@@ -368,7 +369,7 @@ class Fixtures:
                 not managed if mode == "second" else len(managed) == 2,
                 "local Python preference and managed Python fallback",
             )
-            self.check(secret not in argv_path.read_text(encoding="utf-8"), "runtime argv omits secrets")
+            self.check(sample_value not in argv_path.read_text(encoding="utf-8"), "runtime argv omits secrets")
             seed()
         invoke(b"{ malformed JSON patch", 1)
         self.check(path.read_bytes() == before, "malformed stdin JSON preserves prior configuration")
@@ -376,18 +377,18 @@ class Fixtures:
             (b"{ broken FAKE-only", b"[]", b'{"env":[]}') if target == "claude" else (b"{ broken FAKE-only",)
         ):
             path.write_bytes(malformed)
-            invoke({base: secret}, 1)
+            invoke({base: sample_value}, 1)
             self.check(path.read_bytes() == malformed, "invalid existing document preserved")
         seed()
         for patch in (
-            {"bad-key": secret},
-            {base + "_VAULT": secret},
+            {"bad-key": sample_value},
+            {base + "_VAULT": sample_value},
             {base + "_FILE": "relative"},
             {base + "_COMMAND": "./relative"},
             {base + "_COMMAND": "nonexistent-fixture-provider-command"},
             {base + "_FILE": str(workspace / "missing-credential")},
-            {base: secret, base + "_FILE": str(workspace / "credential")},
-            {base: [secret]},
+            {base: sample_value, base + "_FILE": str(workspace / "credential")},
+            {base: [sample_value]},
         ):
             invoke(patch, 1)
             self.check(path.read_bytes() == before, "invalid key/provider/type preserved prior configuration")
@@ -404,24 +405,24 @@ class Fixtures:
                 if candidate:
                     (isolated / name).symlink_to(candidate)
             isolated_path = str(isolated)
-        invoke({base: secret}, 1, {"PATH": isolated_path})
+        invoke({base: sample_value}, 1, {"PATH": isolated_path})
         self.check(path.read_bytes() == before, "missing dependency preserves configuration")
         if not self.powershell and os.name != "nt":
             (isolated / "python3").unlink()
-            invoke({base: secret}, 1, {"PATH": isolated_path})
+            invoke({base: sample_value}, 1, {"PATH": isolated_path})
             self.check(path.read_bytes() == before, "missing Python preserves configuration")
             (isolated / "python3").symlink_to(sys.executable)
         if target != "claude":
             executable(isolated, "uvx", "pass\n")
-            invoke({base: secret}, 1, {"PATH": isolated_path})
+            invoke({base: sample_value}, 1, {"PATH": isolated_path})
             self.check(path.read_bytes() == before, "missing client preserves registration")
-            invoke({base: secret}, 1, {"FIXTURE_FAIL": "register"})
+            invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "register"})
             self.check(path.read_bytes() == before, "failed client registration preserves exact registry bytes")
-            invoke({base: secret}, 1, {"FIXTURE_FAIL": "validate"})
+            invoke({base: sample_value}, 1, {"FIXTURE_FAIL": "validate"})
             self.check(path.read_bytes() == before, "failed client validation preserves exact registry bytes")
-        invoke({base: secret})
+        invoke({base: sample_value})
         data = load()
-        self.check(get_env(data)[base] == secret, "special characters round-trip")
+        self.check(get_env(data)[base] == sample_value, "special characters round-trip")
         self.check(get_env(data)["KEEP"] == "old", "unrelated environment preserved")
         if target == "claude":
             self.check(
@@ -482,7 +483,7 @@ class Fixtures:
         marker = workspace / "ready"
         before = path.read_bytes()
         invoke(
-            {base: secret},
+            {base: sample_value},
             1,
             {"PYTHONPATH": str(injection), "FIXTURE_REPLACE_FAIL": "1", "FIXTURE_READY": str(marker)},
         )
@@ -495,7 +496,7 @@ class Fixtures:
             cwd=workspace,
             env=dict(environment, PYTHONPATH=str(injection), FIXTURE_READY=str(marker)),
         )
-        process.stdin.write(json.dumps({base: secret}).encode())
+        process.stdin.write(json.dumps({base: sample_value}).encode())
         process.stdin.close()
         process.stdin = None
         try:
@@ -514,7 +515,7 @@ class Fixtures:
             stdout, stderr = process.communicate(timeout=20)
             self.check(process.returncode != 0, "interrupted setup exits nonzero")
             self.check(path.read_bytes() == before, "interrupted write leaves exact prior config and registration")
-            self.check(secret.encode() not in stdout + stderr, "interrupted output omits secret")
+            self.check(sample_value.encode() not in stdout + stderr, "interrupted output omits secret")
         finally:
             if process.poll() is None:
                 process.kill()
