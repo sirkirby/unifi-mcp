@@ -14,8 +14,11 @@ real client installs or launches a bundle.
 from __future__ import annotations
 
 import json
+import logging
+import os
 import re
 import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -33,7 +36,19 @@ KEBAB = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 # Package pins track server versions independently of plugin versions.
 PACKAGE_PIN = re.compile(r"^(unifi-[a-z]+-mcp)==(.+)$")
-ENV_REFERENCE = re.compile(r"^\$\{[A-Z0-9_]+(?::-[^}]*)?\}$")
+USER_CONFIG_REFERENCE = re.compile(r"^\$\{user_config\.([A-Za-z_][A-Za-z0-9_]*)\}$")
+# Variables the servers resolve with resolve_env, where an empty value counts as unset.
+EMPTY_IS_UNSET = re.compile(
+    r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:HOST|USERNAME|(?:PASSWORD|API_KEY)(?:_FILE|_COMMAND)?)$"
+)
+RAW_SECRET = re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_(?:PASSWORD|API_KEY)$")
+# Claude option defaults must match today's closed, preview-first behaviour.
+SAFE_DEFAULTS = (
+    (re.compile(r"^UNIFI_POLICY_(?:NETWORK|PROTECT|ACCESS)_(?:CREATE|UPDATE|DELETE)$"), False),
+    (re.compile(r"^UNIFI_(?:NETWORK|PROTECT|ACCESS)_TOOL_PERMISSION_MODE$"), "confirm"),
+    (re.compile(r"^UNIFI_AUTO_CONFIRM$"), False),
+    (re.compile(r"^UNIFI_TOOL_REGISTRATION_MODE$"), "lazy"),
+)
 AGENT_PLUGINS_SCHEMA = "https://agent-plugins.org/schemas/"
 CODEX_INSTALL_POLICIES = {"AVAILABLE", "INSTALLED_BY_DEFAULT", "NOT_AVAILABLE"}
 CODEX_INTERFACE_FIELDS = ("displayName", "shortDescription", "longDescription", "developerName", "category")
@@ -250,10 +265,49 @@ def check_mcp_servers(
         for key, value in (server.get("env") or {}).items():
             if codex and "${" in str(value):
                 errors.append(f"{server_where}: Codex env {key} must not contain interpolation templates")
-            elif not codex and not ENV_REFERENCE.match(str(value)):
-                errors.append(f"{server_where}: env {key} must be a ${{VAR}} reference, not a literal")
+            elif not codex and not USER_CONFIG_REFERENCE.match(str(value)):
+                errors.append(f"{server_where}: env {key} must be a ${{user_config.KEY}} reference, not a literal")
         pins[server_name] = (package, version)
     return pins
+
+
+def check_claude_user_config(bundle: Path, manifest: dict, errors: list[str]) -> None:
+    """Every Claude option variable is declared, safe by default and conflict-free."""
+    where = f"{bundle.name}/.claude-plugin/plugin.json"
+    schema = manifest.get("userConfig")
+    servers = _load(bundle / ".mcp.json").get("mcpServers") or {}
+    if not servers:
+        return
+    if not isinstance(schema, dict):
+        errors.append(f"{where}: an MCP bundle must declare userConfig for its Claude options")
+        return
+    referenced: set[str] = set()
+    for server_name, server in servers.items():
+        env = server.get("env") or {}
+        for variable, template in env.items():
+            match = USER_CONFIG_REFERENCE.match(str(template))
+            if not match:
+                continue
+            option = schema.get(match[1])
+            referenced.add(match[1])
+            label = f"{where}: option {match[1]!r} for {variable}"
+            if not isinstance(option, dict):
+                errors.append(f"{label} is not declared")
+                continue
+            sensitive = option.get("sensitive") is True
+            if sensitive != bool(RAW_SECRET.match(variable)):
+                errors.append(f"{label} must be sensitive exactly when it holds a raw secret")
+            if "default" not in option and not EMPTY_IS_UNSET.match(variable):
+                errors.append(f"{label} needs a default: the server does not treat an empty value as unset")
+            for pattern, safe in SAFE_DEFAULTS:
+                if pattern.match(variable) and option.get("default") != safe:
+                    errors.append(f"{label} must default to {safe!r}")
+        for base in (v for v in env if RAW_SECRET.match(v)):
+            for suffix in ("_FILE", "_COMMAND"):
+                if base + suffix not in env:
+                    errors.append(f"{where}: {server_name} maps {base} but not {base + suffix}")
+    for option in sorted(set(schema) - referenced):
+        errors.append(f"{where}: option {option!r} is declared but no MCP server uses it")
 
 
 def check_skills(bundle: Path, root: Path, errors: list[str]) -> list[str]:
@@ -294,6 +348,8 @@ def packaging_errors(root: Path) -> list[str]:
     for name in sorted(set(claude) | set(codex)):
         bundle = claude.get(name) or codex[name]
         claude_manifest = check_claude_manifest(bundle, name, errors)
+        if claude_manifest is not None and (bundle / ".mcp.json").is_file():
+            check_claude_user_config(bundle, claude_manifest, errors)
         resolved = check_codex_manifest(bundle, name, errors)
         portable = resolved is not None and resolved["layout"] == "portable"
         # Validate Claude and Codex launch files independently.
@@ -475,7 +531,7 @@ def test_literal_env_value_is_reported(tmp_path: Path) -> None:
 
     errors = packaging_errors(root)
 
-    assert any("env UNIFI_HOST must be a ${VAR} reference" in error for error in errors)
+    assert any("env UNIFI_HOST must be a ${user_config.KEY} reference" in error for error in errors)
 
 
 def test_bundle_missing_from_one_marketplace_is_reported(tmp_path: Path) -> None:
@@ -628,3 +684,120 @@ def test_every_client_package_pin_agrees(name: str, filename: str) -> None:
     pins = check_mcp_servers(bundle / filename, REPO_ROOT, [], portable=False, codex="codex" in filename)
 
     assert pins == expected
+
+
+def _claude_manifest(root: Path, name: str) -> Path:
+    return root / "plugins" / name / ".claude-plugin" / "plugin.json"
+
+
+def _mcp_bundles() -> list[str]:
+    return [name for name in _advertised_bundles() if (REPO_ROOT / "plugins" / name / ".mcp.json").is_file()]
+
+
+@pytest.mark.parametrize("name", _mcp_bundles())
+def test_unsafe_claude_option_default_is_reported(tmp_path: Path, name: str) -> None:
+    root = _copy_packaging_tree(tmp_path)
+    _edit_json(_claude_manifest(root, name), lambda d: d["userConfig"]["policy_delete"].update(default=True))
+
+    errors = packaging_errors(root)
+
+    assert any("'policy_delete'" in error and "must default to False" in error for error in errors)
+
+
+def test_claude_option_errors_are_reported(tmp_path: Path) -> None:
+    root = _copy_packaging_tree(tmp_path)
+    name = _mcp_bundles()[0]
+
+    def mutate(data: dict) -> None:
+        options = data["userConfig"]
+        options["permission_mode"].pop("default")
+        options["password_file"]["sensitive"] = True
+        options.pop("host")
+        options["unused"] = {"type": "string", "title": "Unused", "description": "Unused"}
+
+    _edit_json(_claude_manifest(root, name), mutate)
+
+    errors = packaging_errors(root)
+
+    assert any("'permission_mode'" in error and "needs a default" in error for error in errors)
+    assert any("'password_file'" in error and "must be sensitive exactly" in error for error in errors)
+    assert any("'host'" in error and "is not declared" in error for error in errors)
+    assert any("'unused' is declared but no MCP server uses it" in error for error in errors)
+
+
+@pytest.mark.skipif(shutil.which("claude") is None, reason="claude CLI not installed")
+@pytest.mark.parametrize("name", _advertised_bundles())
+def test_claude_plugin_validate_passes(tmp_path: Path, name: str) -> None:
+    # A private HOME keeps the check away from the developer's Claude settings.
+    result = subprocess.run(
+        ["claude", "plugin", "validate", str(REPO_ROOT / "plugins" / name)],
+        env={"HOME": str(tmp_path), "PATH": os.environ["PATH"]},
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0 and "Validation passed" in result.stdout, result.stdout + result.stderr
+    assert "warning" not in result.stdout.lower(), result.stdout
+
+
+def _claude_server_env(name: str, values: dict[str, str]) -> dict[str, str]:
+    """The env Claude hands the server: saved values, else defaults, else empty."""
+    options = _load(_claude_manifest(REPO_ROOT, name))["userConfig"]
+    server = next(iter(_load(REPO_ROOT / "plugins" / name / ".mcp.json")["mcpServers"].values()))
+    env = {}
+    for variable, template in server["env"].items():
+        option = USER_CONFIG_REFERENCE.match(template)[1]
+        default = options[option].get("default", "")
+        value = values.get(option, default)
+        env[variable] = str(value).lower() if isinstance(value, bool) else str(value)
+    return env
+
+
+@pytest.mark.parametrize("name", _mcp_bundles())
+def test_claude_options_resolve_like_unset_variables(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    bootstrap = pytest.importorskip("unifi_mcp_shared.bootstrap")
+    policy_gate = pytest.importorskip("unifi_core.policy_gate")
+    product = name.removeprefix("unifi-").upper()
+    password = tmp_path / "password"
+    password.write_text("FAKE-file-password\n", encoding="utf-8")
+    shared = tmp_path / "shared"
+    shared.write_text("FAKE-shared-password", encoding="utf-8")
+    # Project settings from an earlier plugin version, inherited by the server process.
+    inherited = {
+        f"UNIFI_{product}_HOST": "192.0.2.50",
+        f"UNIFI_{product}_PASSWORD_COMMAND": "/bin/false",
+        "UNIFI_PASSWORD_FILE": str(shared),
+    }
+    for key in [k for k in os.environ if k.startswith("UNIFI_")]:
+        monkeypatch.delenv(key)
+    logger = logging.getLogger("test")
+
+    def resolve(values: dict[str, str]) -> None:
+        for key in [k for k in os.environ if k.startswith("UNIFI_")]:
+            monkeypatch.delenv(key)
+        for key, value in {**inherited, **_claude_server_env(name, values)}.items():
+            monkeypatch.setenv(key, value)
+
+    resolve({"host": "192.0.2.10", "password_file": str(password)})
+    assert bootstrap.resolve_env("host", env_prefix=product, logger=logger) == "192.0.2.10"
+    # The option's empty siblings mask the inherited command: no ambiguity at the product level.
+    assert bootstrap.resolve_env("password", env_prefix=product, logger=logger) == "FAKE-file-password"
+    assert bootstrap.resolve_env("api_key", env_prefix=product, logger=logger) is None
+    checker = policy_gate.PolicyGateChecker(product)
+    assert not any(checker.check("any_category", action) for action in ("create", "update", "delete"))
+    assert policy_gate.resolve_permission_mode(product) == "confirm"
+    assert bootstrap.validate_registration_mode(logger) == "lazy"
+
+    resolve({})
+    # Unset options behave as unset variables: the shared level still applies.
+    assert bootstrap.resolve_env("host", env_prefix=product, logger=logger) is None
+    assert bootstrap.resolve_env("password", env_prefix=product, logger=logger) == "FAKE-shared-password"
+
+    resolve({"policy_update": True, "permission_mode": "bypass", "registration_mode": "eager"})
+    assert checker.check("any_category", "update") and not checker.check("any_category", "delete")
+    assert policy_gate.resolve_permission_mode(product) == "bypass"
+    assert bootstrap.validate_registration_mode(logger) == "eager"

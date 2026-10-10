@@ -9,23 +9,22 @@
         "unifi-access-mcp==0.6.12"
       ],
       "env": {
-        "UNIFI_HOST": "${UNIFI_ACCESS_HOST:-}",
-        "UNIFI_USERNAME": "${UNIFI_ACCESS_USERNAME:-}",
-        "UNIFI_PASSWORD": "${UNIFI_ACCESS_PASSWORD:-}",
-        "UNIFI_PORT": "${UNIFI_ACCESS_PORT:-443}",
-        "UNIFI_VERIFY_SSL": "${UNIFI_ACCESS_VERIFY_SSL:-false}",
-        "UNIFI_ACCESS_HOST": "${UNIFI_ACCESS_HOST:-}",
-        "UNIFI_ACCESS_USERNAME": "${UNIFI_ACCESS_USERNAME:-}",
-        "UNIFI_ACCESS_PASSWORD": "${UNIFI_ACCESS_PASSWORD:-}",
-        "UNIFI_ACCESS_PASSWORD_FILE": "${UNIFI_ACCESS_PASSWORD_FILE:-}",
-        "UNIFI_ACCESS_PASSWORD_COMMAND": "${UNIFI_ACCESS_PASSWORD_COMMAND:-}",
-        "UNIFI_ACCESS_API_KEY": "${UNIFI_ACCESS_API_KEY:-}",
-        "UNIFI_ACCESS_API_KEY_FILE": "${UNIFI_ACCESS_API_KEY_FILE:-}",
-        "UNIFI_ACCESS_API_KEY_COMMAND": "${UNIFI_ACCESS_API_KEY_COMMAND:-}",
-        "UNIFI_ACCESS_PORT": "${UNIFI_ACCESS_PORT:-443}",
-        "UNIFI_ACCESS_API_PORT": "${UNIFI_ACCESS_API_PORT:-12445}",
-        "UNIFI_ACCESS_VERIFY_SSL": "${UNIFI_ACCESS_VERIFY_SSL:-false}",
-        "UNIFI_TOOL_REGISTRATION_MODE": "${UNIFI_TOOL_REGISTRATION_MODE:-lazy}"
+        "UNIFI_ACCESS_HOST": "${user_config.host}",
+        "UNIFI_ACCESS_USERNAME": "${user_config.username}",
+        "UNIFI_ACCESS_PASSWORD_FILE": "${user_config.password_file}",
+        "UNIFI_ACCESS_PASSWORD_COMMAND": "${user_config.password_command}",
+        "UNIFI_ACCESS_PASSWORD": "${user_config.password}",
+        "UNIFI_ACCESS_API_KEY_FILE": "${user_config.api_key_file}",
+        "UNIFI_ACCESS_API_KEY_COMMAND": "${user_config.api_key_command}",
+        "UNIFI_ACCESS_API_KEY": "${user_config.api_key}",
+        "UNIFI_ACCESS_PORT": "${user_config.port}",
+        "UNIFI_ACCESS_VERIFY_SSL": "${user_config.verify_ssl}",
+        "UNIFI_POLICY_ACCESS_CREATE": "${user_config.policy_create}",
+        "UNIFI_POLICY_ACCESS_UPDATE": "${user_config.policy_update}",
+        "UNIFI_POLICY_ACCESS_DELETE": "${user_config.policy_delete}",
+        "UNIFI_ACCESS_TOOL_PERMISSION_MODE": "${user_config.permission_mode}",
+        "UNIFI_AUTO_CONFIRM": "${user_config.auto_confirm}",
+        "UNIFI_TOOL_REGISTRATION_MODE": "${user_config.registration_mode}"
       }
     }
   }
