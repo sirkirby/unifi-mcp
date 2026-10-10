@@ -37,8 +37,9 @@ def fake_client(name):
         failure == "validate" and args[:2] in (["mcp", "get"], ["config", "validate"])
     ):
         # Simulate an ill-behaved CLI: its diagnostics must never reach the user.
-        print(os.environ["FIXTURE_SECRET"])
-        print(os.environ["FIXTURE_SECRET"], file=sys.stderr)
+        marker = Path(os.environ["FIXTURE_OUTPUT_MARKER_FILE"]).read_bytes()
+        sys.stdout.buffer.write(marker)
+        sys.stderr.buffer.write(marker)
         sys.exit(2)
     if name in ("python3", "python"):
         mode = os.environ["FIXTURE_PYTHON_MODE"]
@@ -197,7 +198,28 @@ class Fixtures:
             FIXTURE_ARGV=str(workspace / "argv.jsonl"),
         )
         secret = 'FAKE-only "quotes" $dollar \\ slash spaces Ω 😀'
-        environment["FIXTURE_SECRET"] = secret
+        output_marker = workspace / "client-output-marker"
+        output_marker.write_bytes(secret.encode("utf-8"))
+        environment["FIXTURE_OUTPUT_MARKER_FILE"] = str(output_marker)
+        # Prove that both failing client operations emit the full UTF-8 marker,
+        # even on Windows where text stdout can use a legacy code page.
+        for operation in ("register", "validate"):
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).resolve()),
+                    "--fake-client",
+                    "codex",
+                    "mcp",
+                    "add" if operation == "register" else "get",
+                ],
+                env=dict(environment, FIXTURE_FAIL=operation),
+                capture_output=True,
+                timeout=30,
+            )
+            self.check(result.returncode == 2, "fake client fails the selected operation")
+            self.check(result.stdout == output_marker.read_bytes(), "fake client emits output marker on stdout")
+            self.check(result.stderr == output_marker.read_bytes(), "fake client emits output marker on stderr")
         base = f"UNIFI_{product.upper()}_PASSWORD"
         scripts = self.repo / f"plugins/unifi-{product}/scripts"
         if self.powershell:
