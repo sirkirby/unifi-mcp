@@ -31,12 +31,14 @@ command must print the same output at the end.
 Create a scratch directory `ACC` that is deleted afterwards and never committed.
 
 - **Claude Code:** run every `claude` command with `HOME=$ACC/claude-home`.
-  Create `$ACC/claude-home/Library/Preferences`, then symlink `~/Library/Keychains`
-  to `$ACC/claude-home/Library/Keychains` and
-  `~/Library/Preferences/com.apple.security.plist` into the new `Preferences`
-  directory so the existing sign-in is reused. Do not set `CLAUDE_CONFIG_DIR`.
+  Create `$ACC/claude-home/Library`, then symlink `~/Library/Keychains` to
+  `$ACC/claude-home/Library/Keychains` so the existing sign-in is reused (if
+  `~/Library/Preferences/com.apple.security.plist` exists, symlink it into
+  `$ACC/claude-home/Library/Preferences/` too). Do not set `CLAUDE_CONFIG_DIR`.
   Unset inherited `CLAUDE*` variables when launching from inside another Claude
-  session.
+  session. Plugins synced from claude.ai still load in the isolated profile;
+  ignore them. Never store a `sensitive` plugin option from this profile: it
+  would be written to the shared keychain.
 - **Codex:** run every `codex` command with `CODEX_HOME=$ACC/codex-home`, and
   symlink (never copy) `~/.codex/auth.json` into it.
 - **Ambient credentials:** unset every inherited `UNIFI_*` variable before each
@@ -115,16 +117,25 @@ with `ps -E -ww` against what the client was given.
 
 - **Claude Code:** `claude -p --model sonnet --allowedTools "<exact tool names>"
   --output-format stream-json --verbose`, from the scratch project. Plugin tools
-  are named `mcp__plugin_<plugin>_<server>__<tool>`. A connection failure is
-  cached for about 15 minutes, so a session started soon after a failed start
-  (including one before setup) skips the server; remove that server's entry
-  from `$ACC/claude-home/.claude/mcp-needs-auth-cache.json` before retrying.
-  `claude mcp list` does not apply environment from project settings, so it can
-  report a failure for a server that connects in a session.
+  are named `mcp__plugin_<plugin>_<server>__<tool>`. A failed server start is
+  cached for about 15 minutes, keyed by the server name and its expanded
+  configuration, so a later session with the same configuration skips the
+  server ("recent failure cached"). Users recover with an interactive
+  `/mcp reconnect plugin:<plugin>:<server>`; `/reload-plugins` does not retry,
+  and `-p` sessions cannot reconnect. In the isolated profile only, remove that
+  server's entry from `$ACC/claude-home/.claude/mcp-needs-auth-cache.json`
+  before retrying, and record that you did. `claude mcp list` ignores
+  environment from project settings, reports such a server as failed and writes
+  a failure entry itself, so do not run it between setup and a session.
 - **Codex:** `codex exec -m <model> -s read-only --json "<prompt>" </dev/null`.
   Without stdin closed it waits for input. MCP servers finish starting after the
   first step's tools are built, so have the model run `sleep 20` before its MCP
   calls.
+- Space sessions that log in to a controller about 20 seconds apart;
+  back-to-back logins can hit the controller's authentication rate limit, and
+  such a run does not count as a pass or a failure of the plugin.
+- Codex `codex plugin marketplace upgrade` refreshes a marketplace at the same
+  ref; a different ref still needs remove and re-add.
 - Read results from the transcript, not the model's summary. Reduce each tool
   result to its top-level keys and counts before recording it.
 
