@@ -18,6 +18,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 
@@ -154,7 +155,9 @@ def toml_value(value):
     if isinstance(value, list):
         return "[" + ", ".join(toml_value(v) for v in value) + "]"
     if isinstance(value, dict):
-        return "{ " + ", ".join(json.dumps(k) + " = " + toml_value(v) for k, v in value.items()) + " }"
+        return (
+            "{ " + ", ".join(json.dumps(k, ensure_ascii=False) + " = " + toml_value(v) for k, v in value.items()) + " }"
+        )
     refuse("Unsupported existing server value; use the client configuration editor and rerun.")
 
 
@@ -162,21 +165,66 @@ KEY_PART = r"(?:\"(?:[^\"\\]|\\.)*\"|'[^']*'|[A-Za-z0-9_-]+)"
 
 
 def table_path(line):
-    """The key path of a TOML table header line, or None for any other line."""
-    match = re.fullmatch(r"\s*\[\s*(" + KEY_PART + r"(?:\s*\.\s*" + KEY_PART + r")*)\s*\]\s*(?:#.*)?", line)
-    if not match:
+    """Decode a table or array-table path using TOML's quoted-key rules."""
+    match = re.fullmatch(r"\s*(\[\[?)\s*(" + KEY_PART + r"(?:\s*\.\s*" + KEY_PART + r")*)\s*(\]\]?)\s*(?:#.*)?", line)
+    if not match or len(match[1]) != len(match[3]):
         return None
-    return [
-        json.loads(part) if part[0] == '"' else part[1:-1] if part[0] == "'" else part
-        for part in re.findall(KEY_PART, match[1])
-    ]
+    return [next(iter(tomllib.loads(part + " = 0"))) for part in re.findall(KEY_PART, match[2])]
+
+
+def toml_lines(text):
+    """Yield physical lines with headers only outside strings and containers.
+
+    The complete document is parsed by tomllib before editing and again before
+    publication; this lexer only identifies safe table boundaries in that text.
+    """
+    quote, depth = None, 0
+    for line in text.split("\n"):
+        line = line.removesuffix("\r")
+        standalone = quote is None and depth == 0
+        yield line, table_path(line) if standalone else None, standalone
+        index = 0
+        while index < len(line):
+            char = line[index]
+            if quote:
+                if quote[0] == '"' and char == "\\":
+                    index += 2
+                    continue
+                if line.startswith(quote, index):
+                    index += len(quote)
+                    if len(quote) == 3:
+                        # Four/five closing quotes include literal quote content.
+                        while index < len(line) and line[index] == quote[0]:
+                            index += 1
+                    quote = None
+                    continue
+            elif char == "#":
+                break
+            elif char in "\"'":
+                quote = char * 3 if line.startswith(char * 3, index) else char
+                index += len(quote)
+                continue
+            elif char in "[{":
+                depth += 1
+            elif char in "]}":
+                depth -= 1
+            index += 1
+    if quote is not None or depth:
+        raise ValueError("Unsupported TOML lexical layout")
+
+
+def codex_entry_lines(name, entry):
+    return (
+        ["[mcp_servers." + json.dumps(name) + "]"]
+        + [json.dumps(key, ensure_ascii=False) + " = " + toml_value(value) for key, value in entry.items()]
+        + [""]
+    )
 
 
 def replace_codex_entry(text, name, entry):
     """Swap one server's tables in the config text; comments and layout elsewhere stay as written."""
     eol = "\r\n" if "\r\n" in text else "\n"
-    block = ["[mcp_servers." + json.dumps(name) + "]"]
-    block += [json.dumps(key) + " = " + toml_value(value) for key, value in entry.items()] + [""]
+    block = codex_entry_lines(name, entry)
     # Older setup versions left a pin note above the entry; the pin lives in its args.
     note = "# unifi-plugin-setup: " + name + " "
     lines, trailing, placed, skipping = [], [], False, False
@@ -188,18 +236,17 @@ def replace_codex_entry(text, name, entry):
         lines.extend(line for line in trailing if not line.startswith(note))
         trailing.clear()
 
-    for line in text.splitlines():
-        path = table_path(line)
-        if path is not None or line.lstrip().startswith("[["):
+    for line, path, standalone in toml_lines(text):
+        if path is not None:
             flush()
             skipping = path is not None and path[:2] == ["mcp_servers", name]
             if skipping and not placed:
                 lines.extend(block)
                 placed = True
         if not skipping:
-            if not line.startswith(note):
+            if not (standalone and line.startswith(note)):
                 lines.append(line)
-        elif not line.strip() or line.lstrip().startswith("#"):
+        elif standalone and (not line.strip() or line.lstrip().startswith("#")):
             trailing.append(line)
         else:
             trailing.clear()
@@ -214,8 +261,6 @@ def replace_codex_entry(text, name, entry):
 def read_config(path, target):
     raw = path.read_bytes() if path.exists() else None
     if target == "codex":
-        import tomllib
-
         data = tomllib.loads(raw.decode("utf-8")) if raw is not None else {}
         servers = data.get("mcp_servers", {})
     else:
@@ -740,16 +785,27 @@ def main():
                         return False
                     return final_servers.get(name) == entry and final_data == expected_data
 
-                # The editor already chose the original newline style. Text-mode
-                # writes on Windows would translate CRLF into CRCRLF.
-                staged.write_bytes(replace_codex_entry((original or b"").decode("utf-8"), name, entry).encode("utf-8"))
-                if not staged_matches():
+                try:
+                    edited = replace_codex_entry((original or b"").decode("utf-8"), name, entry)
+                except Exception:
+                    # A scanner limitation must not prevent the supported CLI
+                    # rewrite path. Never expose its potentially sensitive error.
+                    edited = None
+                if edited is not None:
+                    # The editor chose the newline style; Windows text writes
+                    # would translate CRLF into CRCRLF.
+                    staged.write_bytes(edited.encode("utf-8"))
+                if edited is None or not staged_matches():
                     # An unusual layout (inline or dotted mcp_servers keys): let Codex rewrite the file.
                     staged.write_bytes(original or b"")
                     client(add, environment)
                     client(["codex", "mcp", "remove", name], environment)
+                    # Codex removed every table for this server. Append a fresh
+                    # entry without consulting the scanner that just failed.
+                    rewritten_text = staged.read_bytes().decode("utf-8")
+                    eol = "\r\n" if "\r\n" in rewritten_text else "\n"
                     staged.write_bytes(
-                        replace_codex_entry(staged.read_bytes().decode("utf-8"), name, entry).encode("utf-8")
+                        (rewritten_text.rstrip() + eol * 2 + eol.join(codex_entry_lines(name, entry))).encode("utf-8")
                     )
                     rewritten = True
                     if not staged_matches():

@@ -32,15 +32,17 @@ def report_failure(error):
 
 def toml_literal(value):
     if isinstance(value, dict):
-        return "{" + ",".join(json.dumps(k) + "=" + toml_literal(v) for k, v in value.items()) + "}"
+        return "{" + ",".join(json.dumps(k, ensure_ascii=False) + "=" + toml_literal(v) for k, v in value.items()) + "}"
     return json.dumps(value, ensure_ascii=False)
 
 
 def write_toml(path, document):
-    lines = [json.dumps(k) + "=" + toml_literal(v) for k, v in document.items() if k != "mcp_servers"]
+    lines = [
+        json.dumps(k, ensure_ascii=False) + "=" + toml_literal(v) for k, v in document.items() if k != "mcp_servers"
+    ]
     for name, entry in document.get("mcp_servers", {}).items():
-        lines.append("[mcp_servers." + json.dumps(name) + "]")
-        lines.extend(json.dumps(k) + "=" + toml_literal(v) for k, v in entry.items())
+        lines.append("[mcp_servers." + json.dumps(name, ensure_ascii=False) + "]")
+        lines.extend(json.dumps(k, ensure_ascii=False) + "=" + toml_literal(v) for k, v in entry.items())
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -1152,6 +1154,67 @@ class Fixtures:
                 "Codex setup replaces only this server's pin",
             )
             self.check(text.index("# note for the entry") < text.index(f'[mcp_servers."{name}"]'), "entry stays put")
+
+            lexical_cases = {
+                "multiline basic": 'developer_instructions = """\nSample:\n'
+                f'[mcp_servers.{name}]\ncommand = "old"\n'
+                f'# unifi-plugin-setup: {name} example inside a string\n"""\n',
+                "multiline literal": "developer_instructions = '''\nSample:\n"
+                f"[[mcp_servers.{name}.example]]\ncommand = \"old\"\n'''\n",
+                "arrays and comments": 'custom = [\n"""\n[mcp_servers.fake]\n""", # """ ignored\n'
+                "['''\n[[mcp_servers.fake]]\n'''],\n]\n",
+                "array tables": '[[custom]]\nlabel = "a"\n[[custom]]\nlabel = "b"\n',
+                "escaped delimiters": 'developer_instructions = """\n'
+                + r'\""" still inside the string'
+                + '\n[mcp_servers.fake]\n"""\n',
+                "closing quote runs": 'developer_instructions = """two trailing quotes"""""\n',
+                "unicode line separators": 'developer_instructions = "first\u2028second"\n',
+                "unicode keys": '[profiles."\\U0001F600"]\nmodel = "fixture"\n',
+            }
+            server_text = (
+                f'[mcp_servers."{name}"]\ncommand = "uvx"\nargs = ["previous"]\n'
+                'env = { KEEP = "old" }\n'
+                'note = """\n# string content\n[mcp_servers.fake]\n"""\n'
+            )
+            for label, prefix in lexical_cases.items():
+                source = prefix + server_text
+                if label == "unicode keys":
+                    source = source.replace(f'"{name}"', '"' + name[:-1] + f'\\U{ord(name[-1]):08X}"')
+                expected = tomllib.loads(source)
+                expected["mcp_servers"][name]["args"] = ["--python-preference", "system", f"{name}-mcp==9.8.7"]
+                for eol in ("\n", "\r\n"):
+                    path.write_bytes(source.replace("\n", eol).encode("utf-8"))
+                    result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+                    self.check(result.returncode == 0, "Codex refresh handles " + label)
+                    self.check(load() == expected, "Codex preserves all TOML values for " + label)
+                    self.check(b"dropped the comments" not in result.stdout, "lexical layout needs no rewrite " + label)
+                    self.check(
+                        path.read_bytes().startswith(prefix.replace("\n", eol).encode("utf-8")),
+                        "Codex preserves unrelated TOML text for " + label,
+                    )
+
+            scanner_injection = workspace / "scanner-injection"
+            scanner_injection.mkdir()
+            (scanner_injection / "sitecustomize.py").write_text(
+                "import sys\n"
+                "def boundary(frame, event, arg):\n"
+                " if event == 'call' and frame.f_code.co_name == 'table_path':\n"
+                "  raise ValueError('FAKE scanner failure')\n"
+                "sys.setprofile(boundary)\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                refresh,
+                cwd=workspace,
+                env=dict(environment, PYTHONPATH=str(scanner_injection)),
+                capture_output=True,
+                timeout=30,
+            )
+            self.check(
+                result.returncode == 0 and b"dropped the comments" in result.stdout,
+                "scanner exceptions use the validated Codex rewrite fallback",
+            )
+            self.check(load() == expected, "scanner exception fallback preserves all settings")
 
             # A layout setup cannot edit in place is rewritten by Codex, with a notice.
             path.write_text(
