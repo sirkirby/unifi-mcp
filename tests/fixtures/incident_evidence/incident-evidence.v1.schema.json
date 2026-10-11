@@ -1,0 +1,2340 @@
+{
+  "$defs": {
+    "ApiFamily": {
+      "description": "API surfaces with disjoint ID and auth models (see AGENTS.md).",
+      "enum": [
+        "network_v2_controller",
+        "network_integration",
+        "alarm_manager_v2",
+        "protect_private",
+        "protect_public"
+      ],
+      "title": "ApiFamily",
+      "type": "string"
+    },
+    "BudgetKind": {
+      "enum": [
+        "window",
+        "events",
+        "calls",
+        "elapsed"
+      ],
+      "title": "BudgetKind",
+      "type": "string"
+    },
+    "BudgetLimits": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "minimum": 0,
+          "title": "Calls",
+          "type": "integer"
+        },
+        "elapsed_ms": {
+          "minimum": 0,
+          "title": "Elapsed Ms",
+          "type": "integer"
+        },
+        "events": {
+          "minimum": 0,
+          "title": "Events",
+          "type": "integer"
+        },
+        "window_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Window Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "window_seconds",
+        "events",
+        "calls",
+        "elapsed_ms"
+      ],
+      "title": "BudgetLimits",
+      "type": "object"
+    },
+    "BudgetUsage": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Calls",
+          "type": "integer"
+        },
+        "elapsed_ms": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Elapsed Ms",
+          "type": "integer"
+        },
+        "events": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Events",
+          "type": "integer"
+        }
+      },
+      "title": "BudgetUsage",
+      "type": "object"
+    },
+    "Budgets": {
+      "additionalProperties": false,
+      "properties": {
+        "exhausted": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BudgetKind"
+          },
+          "title": "Exhausted",
+          "type": "array"
+        },
+        "limits": {
+          "$ref": "#/$defs/BudgetLimits"
+        },
+        "usage": {
+          "$ref": "#/$defs/BudgetUsage",
+          "default": {
+            "calls": 0,
+            "elapsed_ms": 0,
+            "events": 0
+          }
+        }
+      },
+      "required": [
+        "limits"
+      ],
+      "title": "Budgets",
+      "type": "object"
+    },
+    "Coverage": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "population_total": {
+                "type": "null"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "counts": {
+                "properties": {
+                  "boundary_uncertain": {
+                    "const": 0
+                  },
+                  "conflicting": {
+                    "const": 0
+                  },
+                  "malformed_dropped": {
+                    "const": 0
+                  },
+                  "untimed": {
+                    "const": 0
+                  }
+                }
+              },
+              "pagination": {
+                "properties": {
+                  "interrupted": {
+                    "const": false
+                  },
+                  "offset": {
+                    "enum": [
+                      null,
+                      0
+                    ]
+                  }
+                }
+              },
+              "population_total": {
+                "type": "integer"
+              },
+              "truncation": {
+                "const": "not_truncated"
+              },
+              "window_coverage": {
+                "const": "covered"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "queried_window": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "window_coverage": {
+                "const": "unknown"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "truncation": {
+                "const": "not_truncated"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pagination": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "has_more": {
+                        "const": false
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "post_filtered": {
+                        "const": false
+                      },
+                      "total_reported": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                ],
+                "properties": {
+                  "interrupted": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "truncation": {
+                "const": "truncated"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "pagination": {
+                "anyOf": [
+                  {
+                    "properties": {
+                      "has_more": {
+                        "const": true
+                      }
+                    }
+                  },
+                  {
+                    "properties": {
+                      "post_filtered": {
+                        "const": false
+                      },
+                      "total_reported": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "else": {
+            "properties": {
+              "observed_first_utc": {
+                "type": "string"
+              },
+              "observed_last_utc": {
+                "type": "string"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "counts": {
+                "properties": {
+                  "in_window": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observed_first_utc": {
+                "type": "null"
+              },
+              "observed_last_utc": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pagination": {
+                "properties": {
+                  "has_more": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "truncation": {
+                "const": "truncated"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "pagination": {
+                "properties": {
+                  "interrupted": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "truncation": {
+                "enum": [
+                  "truncated",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "complete": {
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "counts": {
+          "$ref": "#/$defs/RecordCounts"
+        },
+        "filters": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "not": {
+              "pattern": "pass|psk|secret|token|auth|cookie|key|community|pin|rtsp|crypt|configuration"
+            },
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Filters",
+          "type": "object"
+        },
+        "observed_first_utc": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed First Utc"
+        },
+        "observed_last_utc": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed Last Utc"
+        },
+        "pagination": {
+          "$ref": "#/$defs/Pagination"
+        },
+        "population_total": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Population Total"
+        },
+        "queried_window": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeWindow"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requested_window": {
+          "$ref": "#/$defs/TimeWindow"
+        },
+        "truncation": {
+          "$ref": "#/$defs/Truncation"
+        },
+        "window_coverage": {
+          "$ref": "#/$defs/WindowCoverage"
+        }
+      },
+      "required": [
+        "requested_window",
+        "queried_window",
+        "window_coverage",
+        "observed_first_utc",
+        "observed_last_utc",
+        "filters",
+        "pagination",
+        "truncation",
+        "counts",
+        "complete",
+        "population_total"
+      ],
+      "title": "Coverage",
+      "type": "object"
+    },
+    "EntityKind": {
+      "enum": [
+        "network_client",
+        "network_device",
+        "network_station",
+        "camera",
+        "location"
+      ],
+      "title": "EntityKind",
+      "type": "string"
+    },
+    "EntityRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "id_kind": {
+          "$ref": "#/$defs/IdKind"
+        },
+        "kind": {
+          "$ref": "#/$defs/EntityKind"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        }
+      },
+      "required": [
+        "kind",
+        "id_kind",
+        "id"
+      ],
+      "title": "EntityRef",
+      "type": "object"
+    },
+    "EventTime": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "boundary_uncertain": {
+                "const": false
+              },
+              "precision": {
+                "type": "null"
+              },
+              "utc": {
+                "type": "null"
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "in_window",
+                  "out_of_window"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "precision": {
+                "type": "string"
+              },
+              "utc": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "missing"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "original_type": {
+                "enum": [
+                  "absent",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "malformed",
+                  "ambiguous_timezone",
+                  "missing"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "timezone_basis": {
+                "type": "null"
+              },
+              "utc_offset": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "boundary_uncertain": {
+          "default": false,
+          "title": "Boundary Uncertain",
+          "type": "boolean"
+        },
+        "clock_uncertainty_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clock Uncertainty Ms"
+        },
+        "original_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Original Field"
+        },
+        "original_format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimestampFormat"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "original_type": {
+          "$ref": "#/$defs/OriginalType"
+        },
+        "original_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Original Value"
+        },
+        "precision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimePrecision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/TimeStatus"
+        },
+        "timezone_basis": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimezoneBasis"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "utc": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Utc"
+        },
+        "utc_offset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Utc Offset"
+        }
+      },
+      "required": [
+        "status",
+        "original_field",
+        "original_type",
+        "original_value",
+        "original_format",
+        "utc",
+        "utc_offset",
+        "timezone_basis",
+        "precision"
+      ],
+      "title": "EventTime",
+      "type": "object"
+    },
+    "EvidenceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "not": {
+              "pattern": "pass|psk|secret|token|auth|cookie|key|community|pin|rtsp|crypt|configuration"
+            },
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "conflict_group": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}\\|(?:int|str)\\|[A-Za-z0-9%._~-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conflict Group"
+        },
+        "entities": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EntityRef"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "event_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Event Type"
+        },
+        "evidence_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}\\|(?:(?:int|str)\\|[A-Za-z0-9%._~-]+(?:\\|version\\|[0-9a-f]{24})?|sha256\\|[0-9a-f]{24})$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "evidence_id_basis": {
+          "enum": [
+            "source_record_id",
+            "content_hash"
+          ],
+          "title": "Evidence Id Basis",
+          "type": "string"
+        },
+        "mapping": {
+          "$ref": "#/$defs/MappingOutcome",
+          "default": {
+            "confidence": null,
+            "matched_on": [],
+            "sources": [],
+            "status": "not_evaluated",
+            "targets": []
+          }
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Summary"
+        },
+        "time": {
+          "$ref": "#/$defs/EventTime"
+        }
+      },
+      "required": [
+        "evidence_id",
+        "evidence_id_basis",
+        "source_id",
+        "provenance",
+        "time",
+        "event_type",
+        "summary"
+      ],
+      "title": "EvidenceRecord",
+      "type": "object"
+    },
+    "FailureKind": {
+      "enum": [
+        "unavailable",
+        "auth_failed",
+        "permission_denied",
+        "timeout",
+        "unsupported",
+        "parse_failed",
+        "partial_response",
+        "budget_exhausted"
+      ],
+      "title": "FailureKind",
+      "type": "string"
+    },
+    "IdKind": {
+      "enum": [
+        "mac",
+        "protect_camera_id",
+        "network_device_id",
+        "location_id"
+      ],
+      "title": "IdKind",
+      "type": "string"
+    },
+    "MappingAssertion": {
+      "additionalProperties": false,
+      "description": "An explicit, exact-identifier association supplied to the investigation.",
+      "properties": {
+        "entity": {
+          "$ref": "#/$defs/EntityRef"
+        },
+        "source": {
+          "$ref": "#/$defs/MappingSource"
+        },
+        "target": {
+          "$ref": "#/$defs/EntityRef"
+        }
+      },
+      "required": [
+        "entity",
+        "target",
+        "source"
+      ],
+      "title": "MappingAssertion",
+      "type": "object"
+    },
+    "MappingOutcome": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "verified"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "confidence": {
+                "const": "exact_identifier"
+              },
+              "matched_on": {
+                "minItems": 1
+              },
+              "targets": {
+                "maxItems": 1,
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ambiguous"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "confidence": {
+                "type": "null"
+              },
+              "targets": {
+                "minItems": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "missing",
+                  "not_evaluated"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "confidence": {
+                "type": "null"
+              },
+              "matched_on": {
+                "maxItems": 0
+              },
+              "sources": {
+                "maxItems": 0
+              },
+              "targets": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "confidence": {
+          "anyOf": [
+            {
+              "const": "exact_identifier",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "matched_on": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EntityRef"
+          },
+          "title": "Matched On",
+          "type": "array"
+        },
+        "sources": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MappingSource"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/MappingStatus"
+        },
+        "targets": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EntityRef"
+          },
+          "title": "Targets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "MappingOutcome",
+      "type": "object"
+    },
+    "MappingSource": {
+      "enum": [
+        "operator_input",
+        "product_inventory"
+      ],
+      "title": "MappingSource",
+      "type": "string"
+    },
+    "MappingStatus": {
+      "enum": [
+        "verified",
+        "ambiguous",
+        "missing",
+        "not_evaluated"
+      ],
+      "title": "MappingStatus",
+      "type": "string"
+    },
+    "OriginalType": {
+      "enum": [
+        "absent",
+        "null",
+        "string",
+        "integer",
+        "float",
+        "boolean",
+        "object",
+        "array"
+      ],
+      "title": "OriginalType",
+      "type": "string"
+    },
+    "OverallStatus": {
+      "enum": [
+        "complete",
+        "empty",
+        "partial",
+        "failed"
+      ],
+      "title": "OverallStatus",
+      "type": "string"
+    },
+    "Pagination": {
+      "additionalProperties": false,
+      "properties": {
+        "cap": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap"
+        },
+        "has_more": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has More"
+        },
+        "interrupted": {
+          "default": false,
+          "title": "Interrupted",
+          "type": "boolean"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offset"
+        },
+        "post_filtered": {
+          "default": false,
+          "title": "Post Filtered",
+          "type": "boolean"
+        },
+        "requested_cap": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requested Cap"
+        },
+        "returned": {
+          "minimum": 0,
+          "title": "Returned",
+          "type": "integer"
+        },
+        "total_reported": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Reported"
+        }
+      },
+      "required": [
+        "returned"
+      ],
+      "title": "Pagination",
+      "type": "object"
+    },
+    "PartialReason": {
+      "enum": [
+        "boundary_uncertain",
+        "conflicting_records",
+        "post_filtered",
+        "prefix_not_collected",
+        "truncated",
+        "truncation_unknown",
+        "window_not_covered",
+        "window_coverage_unknown",
+        "malformed_records",
+        "untimed_records",
+        "partial_response",
+        "budget_exhausted"
+      ],
+      "title": "PartialReason",
+      "type": "string"
+    },
+    "Product": {
+      "enum": [
+        "network",
+        "protect",
+        "access"
+      ],
+      "title": "Product",
+      "type": "string"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "api_family": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApiFamily"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collected_at": {
+          "title": "Collected At",
+          "type": "string"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Endpoint"
+        },
+        "product": {
+          "$ref": "#/$defs/Product"
+        },
+        "query": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "not": {
+              "pattern": "pass|psk|secret|token|auth|cookie|key|community|pin|rtsp|crypt|configuration"
+            },
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Query",
+          "type": "object"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "source_record_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Record Id"
+        },
+        "source_record_id_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Record Id Field"
+        },
+        "source_tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Tool"
+        }
+      },
+      "required": [
+        "product",
+        "api_family",
+        "source_tool",
+        "endpoint",
+        "scope",
+        "source_record_id",
+        "source_record_id_field",
+        "query",
+        "collected_at"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "RecordCounts": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "minimum": 0,
+          "title": "Accepted",
+          "type": "integer"
+        },
+        "boundary_uncertain": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Boundary Uncertain",
+          "type": "integer"
+        },
+        "conflicting": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Conflicting",
+          "type": "integer"
+        },
+        "duplicates_dropped": {
+          "minimum": 0,
+          "title": "Duplicates Dropped",
+          "type": "integer"
+        },
+        "in_window": {
+          "minimum": 0,
+          "title": "In Window",
+          "type": "integer"
+        },
+        "malformed_dropped": {
+          "minimum": 0,
+          "title": "Malformed Dropped",
+          "type": "integer"
+        },
+        "out_of_window": {
+          "minimum": 0,
+          "title": "Out Of Window",
+          "type": "integer"
+        },
+        "received": {
+          "minimum": 0,
+          "title": "Received",
+          "type": "integer"
+        },
+        "untimed": {
+          "minimum": 0,
+          "title": "Untimed",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "received",
+        "accepted",
+        "in_window",
+        "out_of_window",
+        "untimed",
+        "malformed_dropped",
+        "duplicates_dropped"
+      ],
+      "title": "RecordCounts",
+      "type": "object"
+    },
+    "Scope": {
+      "additionalProperties": false,
+      "properties": {
+        "controller_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Controller Id"
+        },
+        "location_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location Id"
+        },
+        "site": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Site"
+        }
+      },
+      "title": "Scope",
+      "type": "object"
+    },
+    "SourceFailure": {
+      "additionalProperties": false,
+      "description": "Why a source failed; exception text is never carried.",
+      "properties": {
+        "http_status": {
+          "anyOf": [
+            {
+              "maximum": 599,
+              "minimum": 100,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Status"
+        },
+        "kind": {
+          "$ref": "#/$defs/FailureKind"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SourceFailure",
+      "type": "object"
+    },
+    "SourceOutcome": {
+      "enum": [
+        "complete",
+        "empty",
+        "partial",
+        "unavailable",
+        "auth_failed",
+        "permission_denied",
+        "timeout",
+        "unsupported",
+        "parse_failed",
+        "not_attempted"
+      ],
+      "title": "SourceOutcome",
+      "type": "string"
+    },
+    "SourceResult": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "complete",
+                  "empty"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "complete": {
+                    "const": true
+                  }
+                }
+              },
+              "failure": {
+                "type": "null"
+              },
+              "partial_reasons": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "empty"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "counts": {
+                    "properties": {
+                      "in_window": {
+                        "const": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "complete"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "counts": {
+                    "properties": {
+                      "in_window": {
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "partial"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "complete": {
+                    "const": false
+                  }
+                }
+              },
+              "partial_reasons": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "failure": {
+                "type": "object"
+              },
+              "outcome": {
+                "const": "partial"
+              }
+            },
+            "required": [
+              "failure"
+            ]
+          },
+          "then": {
+            "properties": {
+              "partial_reasons": {
+                "contains": {
+                  "const": "partial_response"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": [
+                  "unavailable",
+                  "auth_failed",
+                  "permission_denied",
+                  "timeout",
+                  "unsupported",
+                  "parse_failed",
+                  "not_attempted"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "coverage": {
+                "properties": {
+                  "complete": {
+                    "const": false
+                  },
+                  "counts": {
+                    "properties": {
+                      "received": {
+                        "const": 0
+                      }
+                    }
+                  },
+                  "pagination": {
+                    "properties": {
+                      "has_more": {
+                        "type": "null"
+                      },
+                      "interrupted": {
+                        "const": true
+                      },
+                      "total_reported": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "queried_window": {
+                    "type": "null"
+                  },
+                  "truncation": {
+                    "const": "unknown"
+                  },
+                  "window_coverage": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "failure": {
+                "type": "object"
+              },
+              "partial_reasons": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "unavailable"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "unavailable",
+                      "partial_response"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "auth_failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "auth_failed"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "permission_denied"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "permission_denied"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "timeout"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "timeout"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "unsupported"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "unsupported"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "parse_failed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "parse_failed"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "not_attempted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "failure": {
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "budget_exhausted"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "api_family": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApiFamily"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "collected_at": {
+          "title": "Collected At",
+          "type": "string"
+        },
+        "coverage": {
+          "$ref": "#/$defs/Coverage"
+        },
+        "endpoint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Endpoint"
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceFailure"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome": {
+          "$ref": "#/$defs/SourceOutcome"
+        },
+        "partial_reasons": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PartialReason"
+          },
+          "title": "Partial Reasons",
+          "type": "array"
+        },
+        "product": {
+          "$ref": "#/$defs/Product"
+        },
+        "query": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "propertyNames": {
+            "not": {
+              "pattern": "pass|psk|secret|token|auth|cookie|key|community|pin|rtsp|crypt|configuration"
+            },
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "title": "Query",
+          "type": "object"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Tool"
+        }
+      },
+      "required": [
+        "source_id",
+        "product",
+        "api_family",
+        "source_tool",
+        "endpoint",
+        "scope",
+        "query",
+        "collected_at",
+        "outcome",
+        "failure",
+        "coverage"
+      ],
+      "title": "SourceResult",
+      "type": "object"
+    },
+    "TimePrecision": {
+      "enum": [
+        "second",
+        "millisecond",
+        "microsecond",
+        "minute"
+      ],
+      "title": "TimePrecision",
+      "type": "string"
+    },
+    "TimeStatus": {
+      "enum": [
+        "in_window",
+        "out_of_window",
+        "missing",
+        "malformed",
+        "ambiguous_timezone"
+      ],
+      "title": "TimeStatus",
+      "type": "string"
+    },
+    "TimeWindow": {
+      "additionalProperties": false,
+      "description": "Half-open UTC interval ``[start, end)``; the boundary flags are fixed.",
+      "properties": {
+        "end": {
+          "title": "End",
+          "type": "string"
+        },
+        "end_inclusive": {
+          "const": false,
+          "default": false,
+          "title": "End Inclusive",
+          "type": "boolean"
+        },
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "start_inclusive": {
+          "const": true,
+          "default": true,
+          "title": "Start Inclusive",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "TimeWindow",
+      "type": "object"
+    },
+    "TimestampFormat": {
+      "enum": [
+        "epoch_seconds",
+        "epoch_milliseconds",
+        "iso8601",
+        "unrecognized"
+      ],
+      "title": "TimestampFormat",
+      "type": "string"
+    },
+    "TimezoneBasis": {
+      "enum": [
+        "epoch_utc",
+        "explicit_offset",
+        "none"
+      ],
+      "title": "TimezoneBasis",
+      "type": "string"
+    },
+    "Truncation": {
+      "enum": [
+        "not_truncated",
+        "truncated",
+        "unknown"
+      ],
+      "title": "Truncation",
+      "type": "string"
+    },
+    "WindowCoverage": {
+      "enum": [
+        "covered",
+        "not_covered",
+        "unknown"
+      ],
+      "title": "WindowCoverage",
+      "type": "string"
+    }
+  },
+  "$id": "urn:unifi-mcp:unifi-incident-evidence:v1",
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "coverage_complete": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "overall": {
+            "enum": [
+              "complete",
+              "empty"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "enum": [
+              "complete",
+              "empty"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "coverage_complete": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "const": "empty"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "budgets": {
+            "properties": {
+              "exhausted": {
+                "maxItems": 0
+              }
+            }
+          },
+          "records": {
+            "items": {
+              "not": {
+                "properties": {
+                  "time": {
+                    "properties": {
+                      "status": {
+                        "const": "in_window"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "sources": {
+            "items": {
+              "properties": {
+                "outcome": {
+                  "const": "empty"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "const": "complete"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "budgets": {
+            "properties": {
+              "exhausted": {
+                "maxItems": 0
+              }
+            }
+          },
+          "sources": {
+            "contains": {
+              "properties": {
+                "outcome": {
+                  "const": "complete"
+                }
+              }
+            },
+            "items": {
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "complete",
+                    "empty"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "const": "failed"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "records": {
+            "maxItems": 0
+          },
+          "sources": {
+            "items": {
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "unavailable",
+                    "auth_failed",
+                    "permission_denied",
+                    "timeout",
+                    "unsupported",
+                    "parse_failed",
+                    "not_attempted"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "overall": {
+            "const": "partial"
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "sources": {
+                "contains": {
+                  "properties": {
+                    "outcome": {
+                      "not": {
+                        "enum": [
+                          "complete",
+                          "empty"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "budgets": {
+                "properties": {
+                  "exhausted": {
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "sources": {
+            "contains": {
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "complete",
+                    "empty",
+                    "partial"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mappings": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "mappings"
+        ]
+      },
+      "then": {
+        "properties": {
+          "records": {
+            "items": {
+              "properties": {
+                "mapping": {
+                  "properties": {
+                    "status": {
+                      "const": "not_evaluated"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "description": "A bounded, cited evidence set. ``coverage_complete`` gates any all-clear.",
+  "properties": {
+    "budgets": {
+      "$ref": "#/$defs/Budgets"
+    },
+    "coverage_complete": {
+      "title": "Coverage Complete",
+      "type": "boolean"
+    },
+    "mappings": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/MappingAssertion"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mappings"
+    },
+    "overall": {
+      "$ref": "#/$defs/OverallStatus"
+    },
+    "records": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/EvidenceRecord"
+      },
+      "title": "Records",
+      "type": "array"
+    },
+    "requested_window": {
+      "$ref": "#/$defs/TimeWindow"
+    },
+    "schema": {
+      "const": "unifi-incident-evidence",
+      "default": "unifi-incident-evidence",
+      "title": "Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourceResult"
+      },
+      "minItems": 1,
+      "title": "Sources",
+      "type": "array"
+    }
+  },
+  "required": [
+    "requested_window",
+    "budgets",
+    "sources",
+    "overall",
+    "coverage_complete"
+  ],
+  "title": "IncidentEvidence",
+  "type": "object"
+}
