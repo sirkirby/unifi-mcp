@@ -17,11 +17,13 @@ into a ``unifi-incident-evidence-view`` that a client can read whole:
   identifiers are never cut, so a record whose citation cannot fit is
   skipped and counted as ``too_large`` instead.
 - The view stays within :data:`VIEW_TOKEN_BUDGET` estimated tokens as an MCP
-  tool result, whatever the document holds. Records are taken in selection
-  order (in-window records earliest first, then untimed, then out-of-window
-  records; ties by evidence ID) until ``max_records_returned`` or the budget
-  is reached; a record that cannot fit even as the view's first is counted
-  as ``too_large``.
+  tool result, whatever the document holds. A string costs one token per
+  byte it is sent in, so no text costs fewer than it really uses;
+  :data:`VIEW_BYTE_LIMIT` caps the bytes sent as a backstop. Records are
+  taken in selection order (in-window records earliest first, then untimed,
+  then out-of-window records; ties by evidence ID) until
+  ``max_records_returned`` or the budget is reached; a record that cannot
+  fit even as the view's first is counted as ``too_large``.
   ``record_selection`` counts what was collected, returned and omitted per
   placement; omission is a presentation limit, never missing coverage.
   ``next_cursor`` names the last record the view examined: passing it back as
@@ -83,14 +85,21 @@ MAX_RECORDS_RETURNED = 50
 #: result, ``{"success": true, "data": <view>}``: well under the roughly 25,000
 #: tokens MCP clients accept in one result.
 VIEW_TOKEN_BUDGET = 20_000
+#: Most UTF-8 bytes (:func:`serialized_bytes`) a view takes as that MCP tool
+#: result: four per budget token. Tokenizers average about four bytes a token
+#: over ordinary text, and a view the estimate fits holds far fewer, since
+#: every string byte is a token of its own. Only an estimate that undercounts
+#: could pass it; such a view is refused rather than sent.
+VIEW_BYTE_LIMIT = 4 * VIEW_TOKEN_BUDGET
 #: Most estimated tokens one record citation takes. A record over it is never
 #: returned: its identifiers cannot be cut without breaking the citation.
 RECORD_TOKEN_LIMIT = 2_500
 #: Longest evidence ID a returned record, and so a cursor, carries.
 MAX_CITED_EVIDENCE_ID_LENGTH = 256
 #: Estimated tokens kept of each source label: ``source_tool`` and the scope's
-#: ``controller_id``, ``site`` and ``location_id``. A label request validation
-#: accepts (at most 128 characters, none escaped in JSON) is never cut.
+#: ``controller_id``, ``site`` and ``location_id``. An ASCII label request
+#: validation accepts (at most 128 characters, none escaped in JSON) is never
+#: cut; one with multi-byte characters is cut past 128 bytes.
 SOURCE_LABEL_TOKEN_LIMIT = 128
 #: Estimated tokens kept of each free-text field of a record citation; longer
 #: text is cut to a prefix. A citation repeats its source's ``source_tool``.
@@ -114,33 +123,55 @@ MAX_CURSOR_LENGTH = 2 + 27 + 1 + MAX_CITED_EVIDENCE_ID_LENGTH
 # --- estimated tokens ------------------------------------------------------------------------
 
 # Every value is costed as an MCP server sends it: JSON indented by two spaces,
-# non-ASCII text unescaped, control characters escaped. The estimate never
-# undercounts the conservative reading the size tests use, in which every
-# whitespace run and punctuation character is a token, letters count one per
-# four and digits one per three. The worker ports this function exactly.
-_TEXT_PARTS = re.compile(r"[A-Za-z]+|[0-9]+| +|[\s\S]")
+# non-ASCII text unescaped, quotes, backslashes and control characters escaped.
+# A string value costs one token per byte it takes there. A byte-level
+# tokenizer never needs more, so no text costs fewer estimated tokens than it
+# really uses, however degenerate: long whitespace runs, repeated punctuation,
+# letters in no word, multi-byte and emoji characters. Field names are the
+# view's own schema names and the snake_case filter names a source records;
+# they cost one token per four letters and per three digits, as words do, and
+# every other character its bytes. The worker ports these functions exactly.
+
+# What JSON escapes: \b \t \n \f \r, quotes and backslashes in two bytes,
+# other control characters and lone surrogates in six.
+_ESCAPED = re.compile(r'["\\\x00-\x1f\ud800-\udfff]')
+_SHORT_ESCAPES = frozenset('"\\\b\t\n\f\r')
+_NAME_PARTS = re.compile(r"[A-Za-z]+|[0-9]+|[\s\S]")
+
+
+def _sent_bytes(text: str) -> int:
+    """UTF-8 bytes ``text`` takes inside a JSON string as sent."""
+    total = len(text.encode("utf-8", "surrogatepass"))
+    for character in _ESCAPED.findall(text):
+        if character in _SHORT_ESCAPES:
+            total += 1
+        else:
+            # A control character (one byte) or lone surrogate (three) sent as \uXXXX.
+            total += 5 if character < " " else 3
+    return total
 
 
 def _text_tokens(text: str) -> int:
+    """Estimated tokens of a string value's text: one per byte as sent, as no token is shorter."""
+    return _sent_bytes(text)
+
+
+def _name_tokens(name: str) -> int:
     total = 0
-    for part in _TEXT_PARTS.findall(text):
+    for part in _NAME_PARTS.findall(name):
         first = part[0]
         if "A" <= first <= "Z" or "a" <= first <= "z":
             total += -(-len(part) // 4)
         elif "0" <= first <= "9":
             total += -(-len(part) // 3)
-        elif first in '"\\':
-            total += 2
-        elif ord(first) < 0x20:
-            total += 4
         else:
-            total += 1
+            total += _sent_bytes(part)
     return total
 
 
 def _integer_tokens(value: int) -> int:
-    # A sign and a float's ".0" are allowed for.
-    return -(-len(str(abs(value))) // 3) + 3
+    # One per digit; a sign and a float's ".0" are allowed for.
+    return len(str(abs(value))) + 3
 
 
 def estimated_tokens(value: Any) -> int:
@@ -156,10 +187,38 @@ def estimated_tokens(value: Any) -> int:
     if isinstance(value, str):
         return _text_tokens(value) + 2
     if isinstance(value, dict):
-        return 3 + sum(6 + _text_tokens(key) + estimated_tokens(item) for key, item in value.items())
+        return 3 + sum(6 + _name_tokens(key) + estimated_tokens(item) for key, item in value.items())
     if isinstance(value, (list, tuple)):
         return 3 + sum(2 + estimated_tokens(item) for item in value)
     raise TypeError(f"not a JSON value: {type(value).__name__}")
+
+
+def serialized_bytes(value: Any, depth: int = 0) -> int:
+    """UTF-8 bytes of a JSON-ready value as an MCP server sends it, at ``depth`` levels of indentation.
+
+    Exact, except that a float is counted at its longest form: 24 bytes, or
+    an integral float's digits, sign and ".0".
+    """
+    if value is None:
+        return 4
+    if isinstance(value, bool):
+        return 4 if value else 5
+    if isinstance(value, int):
+        return len(str(value))
+    if isinstance(value, float):
+        return _integer_tokens(int(value)) if value.is_integer() else 24
+    if isinstance(value, str):
+        return _sent_bytes(value) + 2
+    # Each member or item on its own line, indented one level deeper, then
+    # the closing bracket on a line of its own.
+    inner, outer = 1 + 2 * (depth + 1), 1 + 2 * depth
+    if isinstance(value, dict):
+        members = [inner + _sent_bytes(key) + 4 + serialized_bytes(item, depth + 1) for key, item in value.items()]
+    elif isinstance(value, (list, tuple)):
+        members = [inner + serialized_bytes(item, depth + 1) for item in value]
+    else:
+        raise TypeError(f"not a JSON value: {type(value).__name__}")
+    return 2 + sum(members) + len(members) - 1 + outer if members else 2
 
 
 # {"success": true, "data": <view>}, less the view itself.
@@ -170,8 +229,8 @@ def _cut(text: str, limit: int) -> str:
     """The longest prefix of ``text`` whose estimated tokens are at most ``limit``."""
     if _text_tokens(text) <= limit:
         return text
-    # Every character costs at least a quarter token, so no longer prefix fits.
-    low, high = 0, min(len(text), 4 * limit + 4)
+    # Every character costs at least a token, so no longer prefix fits.
+    low, high = 0, min(len(text), limit)
     while low < high:
         middle = (low + high + 1) // 2
         if _text_tokens(text[:middle]) <= limit:
@@ -366,6 +425,9 @@ class RecordSelection(_ClosedModel):
 class EvidenceViewTooLarge(ValueError):
     """A document's sources and mapping assertions alone exceed the view's output budget.
 
+    Also raised for a view over :data:`VIEW_BYTE_LIMIT`, which only an
+    estimate that undercounts could produce.
+
     The message states only counts and how to narrow the request, never
     document content.
     """
@@ -448,8 +510,8 @@ def _view_record(record: EvidenceRecord) -> dict[str, Any] | None:
     if len(record.evidence_id) > MAX_CITED_EVIDENCE_ID_LENGTH:
         return None
     identifiers = [entity.id for entity in record.entities] + [target.id for target in record.mapping.targets]
-    # Every character costs at least a quarter token.
-    if sum(len(identifier) for identifier in identifiers) > 4 * RECORD_TOKEN_LIMIT:
+    # Every character costs at least a token.
+    if sum(len(identifier) for identifier in identifiers) > RECORD_TOKEN_LIMIT:
         return None
     time = record.time
     truncated: dict[str, int] = {}
@@ -512,7 +574,8 @@ def client_view(
     Returned records keep the document's order.
 
     Raises :class:`EvidenceViewTooLarge` when the document's sources and
-    mapping assertions alone, labels cut, exceed the budget.
+    mapping assertions alone, labels cut, exceed the budget, or when the view
+    would exceed :data:`VIEW_BYTE_LIMIT` as sent.
     """
     evidence = validate_incident_evidence(evidence)
     records = evidence.records
@@ -592,7 +655,7 @@ def client_view(
     view_records = tuple(ViewRecord.model_validate(kept[i]) for i in sorted(kept))
     omitted = [records[i] for i in pending if i not in kept]
     before = [records[i] for i in order if after is not None and _key(records[i]) <= after]
-    return IncidentEvidenceView(
+    view = IncidentEvidenceView(
         requested_window=evidence.requested_window,
         overall=evidence.overall,
         coverage_complete=evidence.coverage_complete,
@@ -613,6 +676,13 @@ def client_view(
             next_cursor=_cursor(max(record.selection_key for record in view_records)) if limited_by else None,
         ),
     )
+    if serialized_bytes({"success": True, "data": view_to_json(view)}) > VIEW_BYTE_LIMIT:
+        raise EvidenceViewTooLarge(
+            f"the evidence view would exceed its {VIEW_BYTE_LIMIT}-byte output limit (sources: {len(sources)}, "
+            f"records: {len(view_records)}); request fewer records with max_records_returned, or use detail=full "
+            "for the whole document"
+        )
+    return view
 
 
 def view_to_json(view: IncidentEvidenceView) -> dict[str, Any]:

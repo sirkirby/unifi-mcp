@@ -2,7 +2,8 @@
 
 Adversarial documents are collected through the SDK decoders at every input
 bound the requests accept, and every page of every view, resumed from its
-cursor until nothing is left, is measured with the size tests' estimate.
+cursor until nothing is left, is measured as an MCP server sends it: its
+bytes, and the most tokens a byte-level tokenizer can need for them.
 """
 
 from __future__ import annotations
@@ -10,10 +11,13 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
 from typing import Any
 
+import pydantic_core
 import pytest
 from pydantic import ValidationError
+from unifi_core import incident_evidence_view
 from unifi_core.incident_collection import (
     LABEL_RULE,
     MAX_LABEL_LENGTH,
@@ -28,11 +32,13 @@ from unifi_core.incident_evidence_view import (
     RECORD_TOKEN_LIMIT,
     SOURCE_LABEL_TOKEN_LIMIT,
     TEXT_TOKEN_LIMITS,
+    VIEW_BYTE_LIMIT,
     VIEW_TOKEN_BUDGET,
     EvidencePresentation,
     EvidenceViewTooLarge,
     client_view,
     estimated_tokens,
+    serialized_bytes,
     view_to_json,
 )
 from unifi_core.network.incident_collection import collect_network_incident_evidence
@@ -41,6 +47,7 @@ from unifi_core.protect.models.incident_evidence import ProtectIncidentRequest
 
 from . import test_incident_evidence_golden as golden
 from .incident_evidence_adversarial import (
+    START_MS,
     WINDOW,
     document_as_received,
     largest_location_document,
@@ -54,7 +61,7 @@ from .incident_evidence_adversarial import (
     worst_mappings,
 )
 from .incident_evidence_corpus import CORPUS_DIR, UPDATE_ENV
-from .incident_evidence_tokens import tokens_as_sent
+from .incident_evidence_tokens import bytes_as_sent, tokens_as_sent
 from .incident_evidence_worst_case import NOW as WORST_CASE_NOW
 from .incident_evidence_worst_case import WINDOW as WORST_CASE_WINDOW
 from .incident_evidence_worst_case import _network_row
@@ -80,14 +87,20 @@ def _pages(evidence: IncidentEvidence, limit: int, most: int | None = None) -> l
     return pages
 
 
+def _assert_fits(page: dict[str, Any]) -> None:
+    """A view as sent is within the budget by both oracles, and the estimate never undercounts them."""
+    result = {"success": True, "data": page}
+    assert tokens_as_sent(page) <= estimated_tokens(result) <= VIEW_TOKEN_BUDGET
+    assert bytes_as_sent(page) <= serialized_bytes(result) <= VIEW_BYTE_LIMIT
+
+
 def _assert_bounded(evidence: IncidentEvidence, limit: int) -> None:
     # One-record pages are sampled; larger pages are read to the end.
     pages = _pages(evidence, limit, most=12 if limit == 1 else None)
     seen: list[str] = []
     skipped = 0
     for page in pages:
-        sent = tokens_as_sent(page)
-        assert sent <= estimated_tokens({"success": True, "data": page}) <= VIEW_TOKEN_BUDGET, sent
+        _assert_fits(page)
         assert all(estimated_tokens(record) <= RECORD_TOKEN_LIMIT for record in page["records"])
         seen += [record["evidence_id"] for record in page["records"]]
         skipped += page["record_selection"]["too_large"]
@@ -132,8 +145,42 @@ async def test_single_product_documents_fit_the_budget(seed: int) -> None:
             _assert_bounded(evidence, limit)
 
 
+@pytest.mark.asyncio
+async def test_the_costliest_labels_a_request_accepts_are_cut_and_marked_within_the_budget() -> None:
+    """A four-byte character costs four tokens, so a 128-character label of them is cut to 128 bytes."""
+    evidence = await largest_location_document(random.Random(3), records=40, label_character="\U0001f600")
+    for limit in LIMITS:
+        _assert_bounded(evidence, limit)
+    sources = view_to_json(client_view(evidence))["sources"]
+    assert all(source["truncated"]["location_id"] == MAX_LABEL_LENGTH for source in sources)
+    assert {source["scope"]["location_id"] for source in sources} == {"\U0001f600" * (SOURCE_LABEL_TOKEN_LIMIT // 4)}
+
+
+# Degenerate text: a tokenizer needs a token for every 128 bytes of it at the
+# least, and a byte-level one at most a token per byte.
+_DEGENERATE = {
+    "spaces": "A" + " " * 4_000_000 + "B",
+    "tabs": "\t" * 50_000,
+    "repeated_punctuation": "!" * 100_000,
+    "mixed_punctuation": "~-.|" * 25_000,
+    "letters_in_no_word": "qxzjvkwQXZJVKW" * 7_000,
+    "no_break_spaces": "\u00a0" * 50_000,
+    "ideographic_spaces": "\u3000" * 50_000,
+    "cjk": "\u4e2d\u6587" * 25_000,
+    "emoji": "\U0001f600\U0001f9ea" * 12_500,
+    "astral_cjk": "\U00020000" * 25_000,
+}
+
+
+@pytest.mark.parametrize("value", list(_DEGENERATE.values()), ids=list(_DEGENERATE))
+def test_a_string_costs_a_token_for_every_byte_it_is_sent_in(value: str) -> None:
+    assert estimated_tokens(value) == len(pydantic_core.to_json(value)) == serialized_bytes(value)
+    assert tokens_as_sent(value) <= estimated_tokens({"success": True, "data": value})
+
+
 @pytest.mark.parametrize("seed", range(20))
-def test_the_estimate_never_undercounts_the_size_tests(seed: int) -> None:
+def test_the_estimate_never_undercounts_either_oracle(seed: int) -> None:
+    """Seeded JSON values whose text has long whitespace and punctuation runs, multi-byte and emoji characters."""
     rng = random.Random(seed)
 
     def value(depth: int) -> Any:
@@ -141,7 +188,7 @@ def test_the_estimate_never_undercounts_the_size_tests(seed: int) -> None:
         if depth > 3 or roll < 0.4:
             return rng.choice(
                 [None, True, False, rng.randrange(-(10**12), 10**12), rng.random() * 10 ** rng.randrange(-5, 15), 3.0]
-                + [text(rng, rng.randrange(0, 200)) for _ in range(4)]
+                + [text(rng, rng.randrange(0, rng.choice((200, 5_000)))) for _ in range(4)]
             )
         if roll < 0.7:
             return [value(depth + 1) for _ in range(rng.randrange(0, 5))]
@@ -149,7 +196,9 @@ def test_the_estimate_never_undercounts_the_size_tests(seed: int) -> None:
 
     for _ in range(50):
         payload = value(0)
-        assert tokens_as_sent(payload) <= estimated_tokens({"success": True, "data": payload})
+        result = {"success": True, "data": payload}
+        assert tokens_as_sent(payload) <= estimated_tokens(result)
+        assert bytes_as_sent(payload) <= serialized_bytes(result)
 
 
 # --- free text and identifiers --------------------------------------------------------------
@@ -173,13 +222,61 @@ async def test_long_free_text_is_cut_to_a_prefix_and_marked() -> None:
     assert tokens_as_sent(view_to_json(view)) < 3_000
 
 
+_SPACES = "A" + " " * 4_000_000 + "B"
+
+
+async def _spaced_document(product: str) -> IncidentEvidence:
+    """One record whose summary is four million spaces between two letters, collected through the SDK decoders."""
+    if product == "network":
+        return await collect_network_incident_evidence(
+            paging_event_manager([dict(_network_row(1), message_raw=_SPACES)]),
+            NetworkIncidentRequest(**WORST_CASE_WINDOW),
+            site="default",
+            clock=lambda: 0.0,
+            now=lambda: WORST_CASE_NOW,
+        )
+    row = {"id": "p0001", "type": "motion", "camera": worst_cameras(1)[0], "start": START_MS, "end": None}
+    rows = [{**row, "score": 50.0, "smartDetectTypes": [_SPACES]}]
+    return await protect_document(random.Random(0), records_per_camera=1, cameras=worst_cameras(1), rows=rows)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["network", "protect"])
+async def test_a_long_whitespace_run_is_cut_and_marked_like_any_long_text(product: str) -> None:
+    """Four million spaces cost four million tokens: cut to a prefix and marked, in a record or a label."""
+    evidence = document_as_received(await _spaced_document(product), labels={"site": " " * 4_000_000})
+    (record,) = evidence.records
+    view = view_to_json(client_view(evidence))
+    (shown,) = view["records"]
+    assert shown["truncated"] == {"summary": len(record.summary)} and len(record.summary) > 4_000_000
+    assert shown["summary"] == record.summary[: TEXT_TOKEN_LIMITS["summary"]]
+    for source in view["sources"]:
+        assert source["truncated"] == {"site": 4_000_000}
+        assert source["scope"]["site"] == " " * SOURCE_LABEL_TOKEN_LIMIT
+    _assert_fits(view)
+    assert bytes_as_sent(view) < 10_000
+
+
+@pytest.mark.asyncio
+async def test_the_byte_limit_refuses_a_view_an_undercounting_estimate_would_send(monkeypatch) -> None:
+    """The backstop: costing a whitespace run as one token, as the estimate once did, cannot send it."""
+    monkeypatch.setattr(incident_evidence_view, "_text_tokens", lambda text: len(re.findall(r" +|[\s\S]", text)))
+    evidence = await _spaced_document("network")
+    with pytest.raises(EvidenceViewTooLarge) as caught:
+        client_view(evidence)
+    assert str(caught.value) == (
+        f"the evidence view would exceed its {VIEW_BYTE_LIMIT}-byte output limit (sources: 1, records: 1); "
+        "request fewer records with max_records_returned, or use detail=full for the whole document"
+    )
+
+
 @pytest.mark.asyncio
 async def test_identifiers_are_never_cut_and_an_uncitable_record_is_counted() -> None:
     rng = random.Random(2)
     cameras = worst_cameras(1)
     rows = protect_rows(rng, 30, cameras, shared_time=True)
-    rows[3]["camera"] = "-" * 3_000  # a token per character: over the record limit
-    rows[4]["camera"] = "c" * 2_000  # four characters per token: cited in full
+    rows[3]["camera"] = "-" * 3_000  # a token per byte: over the record limit
+    rows[4]["camera"] = "c" * 1_500  # within it: cited in full
     rows[7]["id"] = "p" + "%" * 100  # percent-encoded to 301 characters
     evidence = await protect_document(rng, records_per_camera=30, cameras=cameras, rows=rows)
     long_entities = {r.evidence_id for r in evidence.records if any(len(e.id) > 2_000 for e in r.entities)}
@@ -191,7 +288,7 @@ async def test_identifiers_are_never_cut_and_an_uncitable_record_is_counted() ->
     by_id = {record.evidence_id: record for record in evidence.records}
     for record in shown:
         assert record["entity_ids"] == [entity.id for entity in by_id[record["evidence_id"]].entities]
-    assert ["c" * 2_000] in [record["entity_ids"] for record in shown]
+    assert ["c" * 1_500] in [record["entity_ids"] for record in shown]
     assert sum(page["record_selection"]["too_large"] for page in pages) == len(long_entities | long_ids)
 
 
@@ -216,10 +313,12 @@ async def _crowded_document(assertions: int) -> IncidentEvidence:
 
 
 async def _one_record_document() -> IncidentEvidence:
+    # Both clocks are frozen, so the committed refusal fixture's elapsed usage is reproducible.
     return await collect_network_incident_evidence(
         paging_event_manager([_network_row(1)]),
         NetworkIncidentRequest(**WORST_CASE_WINDOW),
         site="default",
+        clock=lambda: 0.0,
         now=lambda: WORST_CASE_NOW,
     )
 
@@ -255,7 +354,7 @@ async def test_labels_beyond_request_validation_are_cut_and_marked() -> None:
 @pytest.mark.asyncio
 async def test_a_citation_that_cannot_fit_beside_the_sources_is_counted_too_large() -> None:
     """The first citation has no exemption: with the budget nearly spent by sources and assertions, none fits."""
-    evidence = await _crowded_document(16)
+    evidence = await _crowded_document(6)
     view = client_view(evidence, max_records_returned=MAX_RECORDS_RETURNED)
     selection = view.record_selection
     assert not view.records and selection.too_large == len(evidence.records) == selection.omitted.total
@@ -316,7 +415,7 @@ async def test_any_document_has_a_view_within_the_budget_or_a_bounded_refusal() 
             continue
         outcomes["view"] += 1
         for page in pages:
-            assert tokens_as_sent(page) <= estimated_tokens({"success": True, "data": page}) <= VIEW_TOKEN_BUDGET
+            _assert_fits(page)
             outcomes["cut"] += any(source["truncated"] for source in page["sources"])
             outcomes["too_large"] += page["record_selection"]["too_large"]
     assert all(outcomes.values()), outcomes
@@ -403,7 +502,7 @@ async def _bound_cases() -> dict[str, tuple[IncidentEvidence, tuple[int, ...]]]:
     protect = await protect_document(rng, records_per_camera=5, cameras=worst_cameras(2), rows=rows)
     largest = await largest_location_document(random.Random(12), records=10, text_length=600)
     # Too little of the budget is left for the first citations examined.
-    crowded = await _crowded_document(12)
+    crowded = await _crowded_document(4)
     refused = document_as_received(await _one_record_document(), assertion_ids=["fixture-" + "~" * 8_000] * 3)
     return {
         "long_text_and_identifiers": (combine_incident_evidence([network, protect]), (3, MAX_RECORDS_RETURNED)),

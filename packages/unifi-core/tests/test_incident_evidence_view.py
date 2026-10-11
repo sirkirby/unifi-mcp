@@ -215,20 +215,18 @@ def test_view_is_deterministic_and_never_changes_the_document() -> None:
 
 # --- size ---------------------------------------------------------------------------------
 
-DEFAULT_VIEW_TOKEN_LIMIT = 16_000
-
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("build", [network_worst_case, protect_worst_case], ids=["network", "protect"])
 async def test_default_view_of_the_largest_default_budget_document_fits_a_client(build) -> None:
     evidence = await build()
     assert len(evidence.records) >= 990, "the worst case must fill the default events budget"
-    full = tokens_as_sent(evidence_to_json(evidence))
-    default = tokens_as_sent(EvidencePresentation().render(evidence))
-    largest = tokens_as_sent(EvidencePresentation(max_records_returned=MAX_RECORDS_RETURNED).render(evidence))
-    assert full > 200_000
-    assert default <= DEFAULT_VIEW_TOKEN_LIMIT, default
-    assert largest <= VIEW_TOKEN_BUDGET, largest
+    assert tokens_as_sent(evidence_to_json(evidence)) > 200_000
+    default = EvidencePresentation().render(evidence)
+    largest = EvidencePresentation(max_records_returned=MAX_RECORDS_RETURNED).render(evidence)
+    assert tokens_as_sent(default) <= VIEW_TOKEN_BUDGET and tokens_as_sent(largest) <= VIEW_TOKEN_BUDGET
+    # Beside every camera's source and twenty assertions, a page still holds most of the default records.
+    assert len(default["records"]) >= 20
 
 
 # --- presentation arguments -----------------------------------------------------------------

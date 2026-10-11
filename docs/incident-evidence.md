@@ -156,19 +156,39 @@ calls.
 **Size.** A view takes at most 20,000 estimated tokens as an MCP tool result
 (`{"success": true, "data": <view>}`), well under the roughly 25,000 tokens
 clients accept. `estimated_tokens` costs the JSON an MCP server sends (indented
-by two spaces, non-ASCII text unescaped): every whitespace run and punctuation
-character is a token, letters count one token per four and digits one per
-three, a quote or backslash two and a control character four. The bound
-holds for any valid document, not only for what valid requests collect:
+by two spaces, non-ASCII text unescaped, quotes, backslashes and control
+characters escaped):
+- Every string value costs one token per UTF-8 byte it is sent in. No token
+  of a byte-level tokenizer is shorter than a byte, so no text costs fewer
+  estimated tokens than it really uses, however degenerate: a long
+  whitespace run, repeated punctuation, letters in no word, multi-byte or
+  emoji characters. Ordinary text costs about four times what it uses.
+- Field names (the view's own and the snake_case filter names a source
+  records), numbers and `true`, `false` and `null` cost what they are:
+  letters in a name one token per four, digits in a name one per three, a
+  number one per digit plus three, every other character its bytes. JSON's
+  indentation, quotes, colons and commas cost six tokens per member and
+  two per item.
+
+The view's serialized UTF-8 size is also capped at 80,000 bytes, four per
+budget token (`serialized_bytes`, `VIEW_BYTE_LIMIT`). Tokenizers average about
+four bytes a token over ordinary text, and a view the estimate fits is far
+smaller, since every string byte is a token of its own; only an estimate that
+undercounted some text could pass the cap. It is a backstop, not the bound:
+such a view is refused, with an error naming the limit and how to read less
+(`max_records_returned`, or `detail=full`), rather than sent. The cap bounds
+bytes, not tokens; the estimate bounds tokens. The token bound holds for any
+valid document, not only for what valid requests collect:
 - Overall status, coverage, failures, outcomes, reasons and assertions are
   never dropped or cut. A failure is a kind and an HTTP status, never
   controller or exception text.
 - A source's labels (`source_tool` and the scope's `controller_id`, `site`
-  and `location_id`) are cut to their first 128 estimated tokens, and the
-  source's `truncated` names each cut label with its full length in
-  characters (`{}` when nothing was cut). A label the request rules accept is
-  never cut; only a document from elsewhere, such as an older relay's, can
-  carry a longer one.
+  and `location_id`) are cut to their first 128 estimated tokens (128 bytes),
+  and the source's `truncated` names each cut label with its full length in
+  characters (`{}` when nothing was cut). An ASCII label the request rules
+  accept is never cut; one with multi-byte characters is cut past 128 bytes
+  (a label of 128 emoji to its first 32), and a document from elsewhere, such
+  as an older relay's, can carry a longer one.
 - Request validation bounds the rest (at most 5 cameras, 20 assertions, and
   a bounded label and identifier length and character set), so only
   records are fitted to what remains.
@@ -178,8 +198,9 @@ holds for any valid document, not only for what valid requests collect:
   (`detail=full` still returns the document). Valid requests never reach it.
 
 **Free text and identifiers.** `summary` is cut to its first 200 estimated
-tokens, `event_type` and a string `time.original_value` to 40, and
-`source_tool` to 128, as in its source. The cut
+tokens (200 bytes), `event_type` and a string `time.original_value` to 40, and
+`source_tool` to 128, as in its source. Long whitespace runs and other
+degenerate text are cut like any long text. The cut
 text is a prefix of the original, and the record's `truncated` names each cut
 field with its full length in characters; it is `{}` when nothing was cut.
 Identifiers (`evidence_id`, `source_record_id`, `entity_ids`, `target_ids`)
@@ -211,9 +232,12 @@ defaults to 25 and is at most 50; narrowing the window or filtering to exact
 device MACs or cameras also reduces what is omitted.
 
 Every view of every golden case, and every page of adversarial documents
-collected through the SDK decoders at each input bound (costly characters in
-every controller string, maximal labels and assertions, records sharing a
-timestamp, oversized identifiers), stays within the budget and states the same
+collected through the SDK decoders at each input bound (escaped,
+whitespace, punctuation, multi-byte and emoji characters, often in long
+runs, in every controller string; maximal labels and assertions; records
+sharing a timestamp; oversized identifiers), stays within the budget and the
+byte cap, measured on the bytes an MCP server sends rather than by the
+estimate itself, and states the same
 overall status, budgets, mappings, outcomes, failures, reasons and coverage as
 its document. So does every view of those documents with labels, assertions
 and sources beyond request validation added, or it is refused

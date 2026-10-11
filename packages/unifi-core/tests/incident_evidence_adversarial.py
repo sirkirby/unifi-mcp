@@ -2,10 +2,11 @@
 
 Collected by the real collectors through the SDKs' own decoders, with only
 the HTTP exchange replaced. Every string a controller returns is drawn from
-the characters that cost the most estimated tokens (quotes, backslashes,
-control characters, astral and other non-ASCII characters, digit and letter
-runs), and every string a caller supplies is as long and as costly as
-request validation allows. A seeded generator keeps every run reproducible.
+the characters JSON escapes or a tokenizer treats apart (quotes,
+backslashes, control characters, whitespace, punctuation, letters, digits
+and two- to four-byte characters), often in long runs, and every string a
+caller supplies is as long as request validation allows. A seeded generator
+keeps every run reproducible.
 """
 
 from __future__ import annotations
@@ -58,17 +59,32 @@ def _frozen() -> float:
     return 0.0
 
 
-# Controller text: every character class the estimate distinguishes.
-_TEXT = ('"', "\\", "\x01", "\n", "\t", "\U0001f600", "é", " ", " ", "a", "7", "~", "%", "|")
+# Controller text: every character class JSON or a tokenizer treats apart,
+# often repeated in long runs: escaped characters, whitespace (ASCII,
+# no-break and ideographic), punctuation, letters, digits, and two-, three-
+# and four-byte characters.
+_TEXT = (
+    '"', "\\", "\x01", "\n", "\t", "\U0001f600", "\U00020000", "é", "\u4e2d", " ", " ", "\u00a0", "\u3000",
+    "a", "7", "~", "%", "|",
+)  # fmt: skip
+_RUNS = (1,) * 12 + (16, 300)
 
 
 def text(rng: random.Random, length: int, alphabet: tuple[str, ...] = _TEXT) -> str:
-    return "".join(rng.choice(alphabet) for _ in range(length))
+    """``length`` characters from ``alphabet``, some repeated in runs."""
+    characters: list[str] = []
+    while len(characters) < length:
+        characters += rng.choice(alphabet) * rng.choice(_RUNS)
+    return "".join(characters[:length])
 
 
-def worst_label(length: int = MAX_LABEL_LENGTH, prefix: str = "") -> str:
-    """A caller label as costly as validation allows: every character is a token of its own."""
-    return prefix + "~" * (length - len(prefix))
+def worst_label(length: int = MAX_LABEL_LENGTH, prefix: str = "", character: str = "~") -> str:
+    """A caller label as long as validation allows.
+
+    A ``~`` is a token of its own, so the default label is never cut; a
+    four-byte ``character`` makes it as costly as validation allows.
+    """
+    return prefix + character * (length - len(prefix))
 
 
 def worst_macs(count: int = MAX_FILTER_IDS) -> list[str]:
@@ -81,7 +97,7 @@ def worst_cameras(count: int = MAX_CAMERA_IDS) -> list[str]:
     return [f"{index}{'-' * 63}" for index in range(count)]
 
 
-def worst_mappings(device: str, cameras: list[str]) -> list[dict]:
+def worst_mappings(device: str, cameras: list[str], label_character: str = "~") -> list[dict]:
     """The most assertions a request accepts, every identifier as long and costly as allowed.
 
     The device maps to every target, so a record naming it is ambiguous between them all.
@@ -89,7 +105,8 @@ def worst_mappings(device: str, cameras: list[str]) -> list[dict]:
     targets = [{"kind": "camera", "id_kind": "protect_camera_id", "id": camera} for camera in cameras]
     while len(targets) < MAX_MAPPINGS:
         prefix = f"{len(targets):02d}"
-        targets.append({"kind": "location", "id_kind": "location_id", "id": worst_label(MAX_MAPPING_ID_LENGTH, prefix)})
+        target_id = worst_label(MAX_MAPPING_ID_LENGTH, prefix, label_character)
+        targets.append({"kind": "location", "id_kind": "location_id", "id": target_id})
     entity = {"kind": "network_station", "id_kind": "mac", "id": device}
     return [{"entity": entity, "target": target, "source": "product_inventory"} for target in targets]
 
@@ -214,26 +231,32 @@ def unsupported_access_document(*, location_id: str | None, mappings: list[dict]
 
 
 async def largest_location_document(
-    rng: random.Random, *, records: int, shared_time: bool = False, text_length: int = 20_000
+    rng: random.Random,
+    *,
+    records: int,
+    shared_time: bool = False,
+    text_length: int = 20_000,
+    label_character: str = "~",
 ) -> IncidentEvidence:
     """Everything one location can return in one combined document.
 
     Network with the most device MACs, Protect with the most cameras, the
-    unsupported Access source, the costliest labels and the most assertions,
-    every one mapped from the device. This is the relay's largest timeline,
+    unsupported Access source, the longest labels and the most assertions,
+    every one mapped from the device. Labels and assertion identifiers repeat
+    ``label_character``: a ``~`` is a token, a four-byte character four. This is the relay's largest timeline,
     and the worker reads at most as many sources per call.
     """
-    location_id = worst_label()
+    location_id = worst_label(character=label_character)
     macs = worst_macs()
     cameras = worst_cameras()
-    mappings = worst_mappings(macs[0], cameras)
+    mappings = worst_mappings(macs[0], cameras, label_character)
     network = await network_document(
         rng,
         records=records,
         shared_time=shared_time,
         text_length=text_length,
         location_id=location_id,
-        site=worst_label(),
+        site=worst_label(character=label_character),
         mappings=mappings,
         device_macs=macs,
     )
