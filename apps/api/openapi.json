@@ -16414,25 +16414,25 @@
             }
           },
           {
-            "description": "Most controller page reads (1-100)",
+            "description": "Most HTTP requests to the controller, retries and the API probe included (1-100)",
             "in": "query",
             "name": "max_calls",
             "required": false,
             "schema": {
               "default": 20,
-              "description": "Most controller page reads (1-100)",
+              "description": "Most HTTP requests to the controller, retries and the API probe included (1-100)",
               "title": "Max Calls",
               "type": "integer"
             }
           },
           {
-            "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+            "description": "Most wall time, connecting included; a read still running is cancelled (1-120000)",
             "in": "query",
             "name": "max_elapsed_ms",
             "required": false,
             "schema": {
               "default": 30000,
-              "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+              "description": "Most wall time, connecting included; a read still running is cancelled (1-120000)",
               "title": "Max Elapsed Ms",
               "type": "integer"
             }
@@ -16602,25 +16602,25 @@
             }
           },
           {
-            "description": "Most NVR page reads across cameras (1-100)",
+            "description": "Most HTTP requests to the NVR across cameras, retries included (1-100)",
             "in": "query",
             "name": "max_calls",
             "required": false,
             "schema": {
               "default": 20,
-              "description": "Most NVR page reads across cameras (1-100)",
+              "description": "Most HTTP requests to the NVR across cameras, retries included (1-100)",
               "title": "Max Calls",
               "type": "integer"
             }
           },
           {
-            "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+            "description": "Most wall time, connecting included; a read still running is cancelled (1-120000)",
             "in": "query",
             "name": "max_elapsed_ms",
             "required": false,
             "schema": {
               "default": 30000,
-              "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+              "description": "Most wall time, connecting included; a read still running is cancelled (1-120000)",
               "title": "Max Elapsed Ms",
               "type": "integer"
             }

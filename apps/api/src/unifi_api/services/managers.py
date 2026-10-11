@@ -535,6 +535,31 @@ class ManagerFactory:
             )
         return instance
 
+    async def get_event_reader(
+        self,
+        session: AsyncSession,
+        controller_id: str,
+        product: str,
+        *,
+        site: str | None = None,
+    ) -> Any:
+        """An event manager for one bounded, one-shot read, never starting a listener.
+
+        Reuses the cached event manager when a route already built one (its
+        listener is already owned by the factory). Otherwise builds an uncached
+        instance on the cached connection: bounded evidence collection must not
+        leave a background websocket listener behind.
+        """
+        site_scope = self._site_scope(product, site)
+        cached = self._domain_cache.get((controller_id, product, "event_manager", site_scope))
+        if cached is not None:
+            return cached
+        builder = self._builders_for(product).get("event_manager")
+        if builder is None:
+            raise UnknownManager(f"product '{product}' has no domain manager named 'event_manager'")
+        cm = await self.get_connection_manager(session, controller_id, product, site=site_scope)
+        return builder(cm)
+
     async def probe_controller(self, controller_id: str) -> dict:
         """Live connectivity probe across all products the controller advertises.
 

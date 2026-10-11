@@ -10,7 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from strawberry.fastapi import GraphQLRouter
@@ -262,6 +265,16 @@ class _UnifiGraphQLRouter(GraphQLRouter):
         return data
 
 
+async def _request_validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """FastAPI's 422 body without the rejected input it would otherwise echo.
+
+    Keeps each error's type, location and message, the parts that say what
+    to fix, and drops ``input``, ``ctx`` and ``url``.
+    """
+    detail = [{key: error[key] for key in ("type", "loc", "msg") if key in error} for error in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(detail)})
+
+
 def create_app(config: ApiConfig) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -386,6 +399,7 @@ def create_app(config: ApiConfig) -> FastAPI:
         docs_url="/v1/docs",
         lifespan=lifespan,
     )
+    app.add_exception_handler(RequestValidationError, _request_validation_error)
 
     # Auth doesn't use FastAPI's HTTPBearer dependency (the middleware reads
     # the header directly to keep the audit-on-failure path simple), so the

@@ -58,3 +58,17 @@ def test_format_unknown_internal() -> None:
     err.original_error = RuntimeError("unexpected")
     formatted = format_graphql_error(err)
     assert formatted["extensions"]["code"] == "INTERNAL"
+
+
+def test_argument_coercion_errors_are_bad_requests_without_the_rejected_value() -> None:
+    coercion = GraphQLError("Int cannot represent non-integer value: 'operator-value'")
+    variable = GraphQLError(
+        "Variable '$maxCalls' got invalid value 'operator-value'; "
+        "Int cannot represent non-integer value: 'operator-value'",
+        original_error=GraphQLError("Int cannot represent non-integer value: 'operator-value'"),
+    )
+    for error in (coercion, variable):
+        formatted = format_graphql_error(error)
+        assert formatted["extensions"]["code"] == "BAD_REQUEST"
+        assert "operator-value" not in formatted["message"]
+    assert format_graphql_error(variable)["message"] == "Variable '$maxCalls' has an invalid value."

@@ -32,6 +32,12 @@ from typing import Any
 import strawberry
 from strawberry.types import Info
 from unifi_core.exceptions import UniFiNotFoundError
+from unifi_core.incident_collection import (
+    DEFAULT_CALLS,
+    DEFAULT_ELAPSED_MS,
+    DEFAULT_EVENTS,
+    DEFAULT_WINDOW_SECONDS,
+)
 
 from unifi_api.graphql.context import GraphQLContext
 from unifi_api.graphql.permissions import IsRead
@@ -72,14 +78,8 @@ from unifi_api.graphql.types.protect.system import (
     ProtectSystemInfo,
     ViewerList,
 )
-from unifi_api.services.incident_evidence import (
-    DEFAULT_CALLS,
-    DEFAULT_ELAPSED_MS,
-    DEFAULT_EVENTS,
-    DEFAULT_WINDOW_SECONDS,
-    IncidentRequestError,
-    collect_protect_evidence,
-)
+from unifi_api.services.controllers import get_controller
+from unifi_api.services.incident_evidence import collect_protect_evidence, protect_request
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -988,28 +988,27 @@ class ProtectQuery:
         mappings: strawberry.scalars.JSON | None = None,  # type: ignore[name-defined]
     ) -> IncidentEvidence:
         ctx: GraphQLContext = info.context
+        # Validated before any controller I/O: invalid input never acquires a manager.
+        incident = protect_request(
+            start=start,
+            end=end,
+            camera_ids=camera_ids,
+            location_id=location_id,
+            max_window_seconds=max_window_seconds,
+            max_events=max_events,
+            max_calls=max_calls,
+            max_elapsed_ms=max_elapsed_ms,
+            mappings=mappings,
+        )
         async with ctx.sessionmaker() as session:
-            events = await ctx.manager_factory.get_domain_manager(
-                session,
-                controller,
-                "protect",
-                "event_manager",
-            )
+            await get_controller(session, controller)  # NOT_FOUND before collecting, from the database only
+
+            async def acquire() -> Any:
+                return await ctx.manager_factory.get_event_reader(session, controller, "protect")
+
             try:
-                evidence = await collect_protect_evidence(
-                    events,
-                    start=start,
-                    end=end,
-                    camera_ids=camera_ids,
-                    location_id=location_id,
-                    max_window_seconds=max_window_seconds,
-                    max_events=max_events,
-                    max_calls=max_calls,
-                    max_elapsed_ms=max_elapsed_ms,
-                    mappings=mappings,
-                )
-            except IncidentRequestError:
-                raise
+                # Acquisition happens inside the first bounded read; its failures are source failures.
+                evidence = await collect_protect_evidence(acquire, incident)
             except Exception as exc:
                 raise RuntimeError(f"Failed to collect incident evidence ({type(exc).__name__})") from None
         return IncidentEvidence.from_manager_output(evidence)
