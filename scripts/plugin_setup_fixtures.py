@@ -754,6 +754,34 @@ class Fixtures:
         self.check(
             b"legacy-user" not in result.stdout and sample_value.encode() not in result.stdout, "values are omitted"
         )
+        # A leftover deprecated UNIFI_AUTO_CONFIRM is named, called deprecated and kept, never valued.
+        for value, effect in (("on", b"turns on bypass"), ("garbage-marker", b"no effect")):
+            leftover = json.dumps({"env": {f"UNIFI_{upper}_PORT": "8443", "UNIFI_AUTO_CONFIRM": value}})
+            for label, action in (
+                ("setup", lambda: invoke({f"UNIFI_{upper}_PORT": "8444"})),
+                ("check", lambda: run(wrapper("check-prereqs"))),
+                ("migration", migrate),
+            ):
+                legacy_path.write_text(leftover, encoding="utf-8")
+                result = action()
+                output = result.stdout + result.stderr
+                self.check(
+                    b"UNIFI_AUTO_CONFIRM is deprecated" in result.stdout and effect in result.stdout,
+                    f"{label} names the deprecated auto-confirm and what it does ({value})",
+                )
+                self.check(
+                    effect == b"no effect" or b"UNIFI_TOOL_PERMISSION_MODE=bypass" in result.stdout,
+                    f"{label} says what to set instead of a truthy auto-confirm",
+                )
+                self.check(
+                    b"UNIFI_AUTO_CONFIRM=" not in output
+                    and (value != "garbage-marker" or value.encode() not in output),
+                    f"{label} omits the auto-confirm value",
+                )
+            self.check(
+                json.loads(legacy_path.read_text(encoding="utf-8"))["env"] == {"UNIFI_AUTO_CONFIRM": value},
+                "migration keeps the deprecated auto-confirm with the shared keys",
+            )
         print(f"  [OK] {product}/claude: options, failures, provider switching, migration, interruption, argv privacy")
 
     def scenario(self, product, target):
@@ -1017,6 +1045,27 @@ class Fixtures:
         )
         invoke({base + "_COMMAND": None})
         self.check(base + "_COMMAND" not in get_env(load()), "null provider deletion")
+        # A deprecated UNIFI_AUTO_CONFIRM stays in the registration but is always named, never valued.
+        for value, effect in (("yes", b"turns on bypass"), ("garbage-marker", b"no effect")):
+            result = invoke({"UNIFI_AUTO_CONFIRM": value})
+            self.check(get_env(load())["UNIFI_AUTO_CONFIRM"] == value, "auto-confirm is kept, not dropped")
+            self.check(
+                b"UNIFI_AUTO_CONFIRM is deprecated" in result.stdout and effect in result.stdout,
+                f"setup names the deprecated auto-confirm and what it does ({value})",
+            )
+            self.check(
+                (effect == b"no effect" or b"UNIFI_TOOL_PERMISSION_MODE=bypass" in result.stdout)
+                and b"UNIFI_AUTO_CONFIRM=" not in result.stdout + result.stderr
+                and (value != "garbage-marker" or value.encode() not in result.stdout + result.stderr),
+                "setup says what to set instead and omits the auto-confirm value",
+            )
+        quiet = invoke({base: sample_value})
+        self.check(
+            b"UNIFI_AUTO_CONFIRM" in quiet.stdout, "an unrelated setup still names a carried-forward auto-confirm"
+        )
+        result = invoke({"UNIFI_AUTO_CONFIRM": None})
+        self.check("UNIFI_AUTO_CONFIRM" not in get_env(load()), "null deletion removes auto-confirm")
+        self.check(b"UNIFI_AUTO_CONFIRM" not in result.stdout, "a removed auto-confirm is no longer named")
         if target == "codex":
             # Installed Codex plugins include a version directory in their path.
             cached = workspace / "cache" / f"unifi-{product}" / "9.8.7" / "scripts"
@@ -1054,6 +1103,25 @@ class Fixtures:
             entry = load()["mcp_servers"][f"unifi-{product}"]
             self.check(entry["args"][-1] == f"unifi-{product}-mcp==9.8.7", "Codex refresh replaces stale package pin")
             self.check(b"9.8.7" in result.stdout, "Codex success prints pinned package version")
+            self.check(b"UNIFI_AUTO_CONFIRM" not in result.stdout, "refresh stays quiet without an auto-confirm")
+            invoke({"UNIFI_AUTO_CONFIRM": "garbage-marker"})
+            carried = get_env(load())
+            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+            self.check(result.returncode == 0 and get_env(load()) == carried, "refresh keeps a carried auto-confirm")
+            self.check(
+                b"UNIFI_AUTO_CONFIRM is deprecated" in result.stdout
+                and b"no effect" in result.stdout
+                and b"garbage-marker" not in result.stdout + result.stderr,
+                "refresh names a carried-forward auto-confirm without its value",
+            )
+            invoke({"UNIFI_AUTO_CONFIRM": "true"})
+            result = subprocess.run(refresh, cwd=workspace, env=environment, capture_output=True, timeout=30)
+            self.check(
+                b"turns on bypass" in result.stdout and b"UNIFI_TOOL_PERMISSION_MODE=bypass" in result.stdout,
+                "refresh says a truthy carried-forward auto-confirm enables bypass",
+            )
+            invoke({"UNIFI_AUTO_CONFIRM": None})
+            self.check(get_env(load()) == saved_env, "removing auto-confirm restores the saved environment")
             self.check("unifi-plugin-setup" not in path.read_text(), "Codex setup keeps no pin note in config.toml")
             before_refresh = path.read_bytes()
             failed = subprocess.run(

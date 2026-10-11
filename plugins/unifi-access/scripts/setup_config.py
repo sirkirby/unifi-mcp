@@ -409,6 +409,24 @@ def claude_values(variables, mapping, schema):
     return values
 
 
+def auto_confirm_notice(env, product, deprecated_client=False):
+    """Name a UNIFI_AUTO_CONFIRM carried in *env*, never its value."""
+    value = env.get("UNIFI_AUTO_CONFIRM", "").strip()
+    if not value:
+        return None
+    lead = "Notice: UNIFI_AUTO_CONFIRM is deprecated and is still set"
+    lead += " in .claude/settings.local.json. " if deprecated_client else ". "
+    if value.lower() in ("true", "1", "yes", "on"):
+        return (
+            lead + "Its current value turns on bypass: mutations run without confirmation unless a permission mode "
+            f"is set. Set UNIFI_TOOL_PERMISSION_MODE=bypass (or UNIFI_{product}_TOOL_PERMISSION_MODE=bypass for "
+            "this server only) instead, then remove UNIFI_AUTO_CONFIRM. Values are omitted."
+        )
+    return (
+        lead + "Its current value does not enable bypass, so it has no effect and can be removed. Values are omitted."
+    )
+
+
 def other_prefixes(product):
     others = tuple(f"UNIFI_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS") if p != product)
     return others + tuple(f"UNIFI_POLICY_{p}_" for p in ("NETWORK", "PROTECT", "ACCESS") if p != product)
@@ -540,10 +558,13 @@ def claude_main(args, root, name, product):
             "no longer reads (" + ", ".join(sorted(owned)) + "). Move them into the plugin's options with "
             "set-env.sh --target claude --migrate (PowerShell: set-env.ps1 -Target claude -Migrate)."
         )
+    auto_notice = auto_confirm_notice(shared, product, deprecated_client=True) if legacy_data else None
     if args.check:
         merge_env(saved, {}, product, inherited)
         if notice:
             print(notice)
+        if auto_notice:
+            print(auto_notice)
         print("Prerequisites passed: uvx, setup runtime, Claude Code plugin options and configuration checked.")
         return
     if args.migrate:
@@ -593,6 +614,8 @@ def claude_main(args, root, name, product):
     changes = {option: value for option, value in wanted.items() if value != KEYCHAIN and value != before[option]}
     if args.dry_run:
         print("Validation passed; dry run made no changes. Values are omitted.")
+        if auto_notice:
+            print(auto_notice)
         return
     remaining = None
     if args.migrate:
@@ -648,6 +671,8 @@ def claude_main(args, root, name, product):
                 print("Other product settings also remain: " + ", ".join(others_left) + ".")
     elif notice:
         print(notice)
+    if auto_notice:
+        print(auto_notice)
     print(
         "Claude Code plugin options saved for " + plugin_id + ". Start a new Claude Code session; if the server "
         "is not connected, run /mcp reconnect plugin:" + name + ":" + name + ". Values are omitted."
@@ -743,8 +768,11 @@ def main():
     if not patch and not args.refresh:
         refuse("Supply at least one environment setting or null deletion.")
     merged = merge_env(previous_env, patch, product)
+    auto_notice = auto_confirm_notice(merged, product)
     if args.dry_run:
         print("Validation passed; dry run made no changes. Values are omitted.")
+        if auto_notice:
+            print(auto_notice)
         return
     destination.parent.mkdir(parents=True, exist_ok=True)
     # Cooperating setup calls serialize; a killed process leaves a harmless lock.
@@ -860,6 +888,8 @@ def main():
             "After every plugin upgrade, rerun the new plugin's set-env.sh --target codex --refresh "
             "or set-env.ps1 -Target codex -Refresh, then restart Codex."
         )
+    if auto_notice:
+        print(auto_notice)
     print("Configuration saved atomically. Restart the selected client to load it. Values are omitted.")
 
 
