@@ -8,24 +8,15 @@ Provides:
 from __future__ import annotations
 
 import logging
-import re
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from uiprotect.data import Event, EventType, ModelType, SmartDetectObjectType, WSAction, WSSubscriptionMessage
-from uiprotect.exceptions import BadRequest, NotAuthorized, NvrError, UnifiProtectError
 
-from unifi_core.exceptions import (
-    UniFiAuthError,
-    UniFiConnectionError,
-    UniFiMalformedResponseError,
-    UniFiNotFoundError,
-    UniFiOperationError,
-    UniFiPermissionError,
-    UniFiRateLimitError,
-)
+from unifi_core.exceptions import UniFiMalformedResponseError, UniFiNotFoundError
+from unifi_core.protect.errors import safe_protect_error
 from unifi_core.protect.models.detection_search import from_controller as detection_search_from_controller
 from unifi_core.protect.models.events import smart_detection_from_controller
 from unifi_core.request_budget import RequestBudgetSpent, charged_request_middleware
@@ -84,45 +75,6 @@ def _page(
         submitted_window_ms=submitted,
         post_filtered=post_filtered,
     )
-
-
-# uiprotect folds the HTTP status into its message: "... - Status: 403 - Reason: ...".
-_NVR_STATUS = re.compile(r"\bStatus: (\d{3})\b")
-
-
-def _nvr_status(error: BaseException) -> int | None:
-    match = _NVR_STATUS.search(str(error))
-    return int(match.group(1)) if match else None
-
-
-def _safe_events_error(error: BaseException) -> Exception:
-    """A fixed-text error for a failed raw events read; NVR text never leaves the manager.
-
-    Keeps what callers classify on: the error class and the HTTP status.
-    """
-    cause = error.__cause__
-    if isinstance(error, TimeoutError) or isinstance(cause, TimeoutError):
-        translated: Exception = TimeoutError("Protect events read timed out")
-        translated.status = None  # type: ignore[attr-defined]
-        return translated
-    if isinstance(error, NvrError) and isinstance(cause, ValueError):
-        return UniFiMalformedResponseError("Unexpected response shape from events")
-    status = _nvr_status(error) if isinstance(error, UnifiProtectError) else None
-    # NotAuthorized covers 401 and 403 (and subclasses PermissionError), so the status decides.
-    if isinstance(error, NotAuthorized):
-        cls: type[Exception] = UniFiPermissionError if status == 403 else UniFiAuthError
-    elif status == 429:
-        cls = UniFiRateLimitError
-    elif isinstance(error, BadRequest):
-        cls = UniFiOperationError
-    elif isinstance(error, (NvrError, OSError)):
-        cls = UniFiConnectionError
-    else:
-        cls = UniFiOperationError
-    detail = f"{type(error).__name__}, HTTP {status}" if status is not None else type(error).__name__
-    translated = cls(f"Protect events read failed ({detail}).")
-    translated.status = status  # type: ignore[attr-defined]
-    return translated
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
@@ -875,7 +827,7 @@ class EventManager:
             raise
         except Exception as exc:
             logger.error("[event-mgr] Raw events read failed: %s", type(exc).__name__)
-            raise _safe_events_error(exc) from None
+            raise safe_protect_error("Protect events read", exc) from None
         if not isinstance(rows, list):
             raise UniFiMalformedResponseError("Unexpected response shape from events")
         return SourcePage(

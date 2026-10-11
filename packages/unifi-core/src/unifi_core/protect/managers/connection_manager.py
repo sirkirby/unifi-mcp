@@ -18,8 +18,11 @@ from uiprotect import ProtectApiClient
 from uiprotect.data import WSSubscriptionMessage
 
 from unifi_core.auth import AuthenticationStatus, AuthMethod
+from unifi_core.connection_failure import ControllerConnectionFailed, connection_failure
 from unifi_core.exceptions import UniFiConnectionError
+from unifi_core.protect.errors import nvr_status
 from unifi_core.protect.managers.id_portability import IdPortabilityReport, compare_id_portability
+from unifi_core.request_budget import RequestBudgetSpent, charged_session_middleware
 from unifi_core.retry import RetryPolicy, retry_with_backoff
 from unifi_core.support_bundle import (
     ConnectivityProbe,
@@ -88,6 +91,7 @@ class ProtectConnectionManager:
         self._client: ProtectApiClient | None = None
         self._ws_unsub: Callable[[], None] | None = None
         self._initialized = False
+        self._initialization_failure: ControllerConnectionFailed | None = None
         self._support_attempt = SafeConnectionAttempt().model_dump(mode="json")
         self._bootstrap_refresh_seconds = bootstrap_refresh_seconds
         self._refresh_task: asyncio.Task[None] | None = None
@@ -115,14 +119,28 @@ class ProtectConnectionManager:
         )
 
         async def _connect() -> None:
-            client = ProtectApiClient(
-                host=self.host,
-                port=self.port,
-                username=self.username,
-                password=self.password,
-                api_key=self._api_key,
-                verify_ssl=self.verify_ssl,
+            # The sessions uiprotect would create, plus a middleware that charges every
+            # non-login request (the bootstrap, its retries) to a bounded read that is
+            # acquiring this connection; a no-op otherwise. The client closes them.
+            session = aiohttp.ClientSession(
+                cookie_jar=aiohttp.CookieJar(unsafe=True), middlewares=(charged_session_middleware,)
             )
+            public_session = aiohttp.ClientSession(middlewares=(charged_session_middleware,))
+            try:
+                client = ProtectApiClient(
+                    host=self.host,
+                    port=self.port,
+                    username=self.username,
+                    password=self.password,
+                    api_key=self._api_key,
+                    verify_ssl=self.verify_ssl,
+                    session=session,
+                    public_api_session=public_session,
+                )
+            except BaseException:
+                await session.close()
+                await public_session.close()
+                raise
             # update() authenticates + fetches the full bootstrap (NVR, cameras, etc.)
             try:
                 await client.update()
@@ -137,6 +155,7 @@ class ProtectConnectionManager:
         try:
             await retry_with_backoff(_connect, policy=policy)
             self._initialized = True
+            self._initialization_failure = None
             self._support_attempt = connection_attempt_succeeded()
             self._start_bootstrap_refresh()
             logger.info(
@@ -145,17 +164,29 @@ class ProtectConnectionManager:
                 self.port,
             )
             return True
+        except RequestBudgetSpent:
+            # A bounded read could not pay for the next request: not a controller fault.
+            self._initialized = False
+            raise
         except Exception as exc:
             self._support_attempt = connection_attempt_failed(exc)
+            # The exception can quote NVR responses: log and keep its class and status only.
+            self._initialization_failure = connection_failure(
+                "Connecting to UniFi Protect failed.", exc, status=nvr_status(exc)
+            )
             logger.error(
-                "[protect-cm] Failed to connect to UniFi Protect at %s:%s: %s",
+                "[protect-cm] Failed to connect to UniFi Protect at %s:%s (%s)",
                 self.host,
                 self.port,
-                exc,
-                exc_info=True,
+                type(exc).__name__,
             )
             self._initialized = False
             return False
+
+    @property
+    def initialization_failure(self) -> ControllerConnectionFailed | None:
+        """Why the last initialization failed, as a fixed-text error keeping its category and status."""
+        return self._initialization_failure
 
     @staticmethod
     async def _dispose_client(client: ProtectApiClient) -> None:

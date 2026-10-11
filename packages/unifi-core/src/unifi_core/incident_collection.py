@@ -32,7 +32,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, TypeVar
+from typing import Any, TypeVar, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
@@ -154,19 +154,79 @@ class IncidentCollectionRequest(BaseModel):
         return self.max_window_seconds < self.window.duration_seconds
 
 
-def describe_validation_error(error: ValidationError) -> str:
-    """Field and reason for each problem, without the rejected input values."""
+def _model_in(annotation: Any) -> type[BaseModel] | None:
+    """The pydantic model an annotation holds (directly, optionally, or in a tuple/list)."""
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return annotation
+    for argument in get_args(annotation):
+        found = _model_in(argument)
+        if found is not None:
+            return found
+    return None
+
+
+def _declared_location(location: tuple[Any, ...], model: type[BaseModel] | None) -> str:
+    """The location up to its first part that is neither a declared field nor an index.
+
+    An undeclared key (an extra mapping field, say) is caller input, so it is
+    never echoed.
+    """
+    parts: list[str] = []
+    current = model
+    for part in location:
+        if isinstance(part, int):
+            parts.append(str(part))
+            continue
+        if current is None or not isinstance(part, str) or part not in current.model_fields:
+            break
+        parts.append(part)
+        current = _model_in(current.model_fields[part].annotation)
+    return ".".join(parts) or "request"
+
+
+def describe_validation_error(error: ValidationError, model: type[BaseModel] | None = None) -> str:
+    """Field and reason for each problem, without rejected values or undeclared keys.
+
+    ``model`` is the model validated; locations are reported only through its
+    declared fields and list indexes. Without it, only the location's leading
+    indexes and identifiers before an ``extra_forbidden`` key are kept.
+    """
     problems = []
-    for item in error.errors(include_input=False, include_url=False):
-        location = ".".join(str(part) for part in item.get("loc", ())) or "request"
+    for item in error.errors(include_input=False, include_url=False, include_context=False):
+        location = tuple(item.get("loc", ()))
+        if model is None and item.get("type") == "extra_forbidden":
+            location = location[:-1]
+        reported = _declared_location(location, model) if model is not None else ".".join(map(str, location))
         message = str(item.get("msg", "invalid value")).removeprefix("Value error, ")
-        problems.append(f"{location}: {message}")
+        problems.append(f"{reported or 'request'}: {message}")
     return "; ".join(problems) or "invalid request"
 
 
 # ---------------------------------------------------------------------------
 # Budgets
 # ---------------------------------------------------------------------------
+
+
+class _ReadCharge:
+    """The request charge installed for one read; inert once the read is over."""
+
+    def __init__(self, meter: BudgetMeter) -> None:
+        self._meter = meter
+        self._attempts = 0
+        self._open = True
+
+    def __call__(self) -> None:
+        if not self._open:
+            return
+        self._attempts += 1
+        if self._attempts == 1:
+            return
+        if self._meter.calls >= self._meter.limits.calls:
+            raise RequestBudgetSpent("call budget spent")
+        self._meter.calls += 1
+
+    def close(self) -> None:
+        self._open = False
 
 
 class BudgetMeter:
@@ -206,27 +266,17 @@ class BudgetMeter:
     def exhaust(self, kind: BudgetKind) -> None:
         self._exhausted.add(kind)
 
-    def read_charge(self) -> Callable[[], None]:
+    def read_charge(self) -> _ReadCharge:
         """Charge one read: one call now, and one more for each request after its first.
 
         A read is charged its first call even if it sends nothing (a fake
         reader, or an acquisition that failed), so a read can never be free.
         Later requests are refused with ``RequestBudgetSpent`` once the call
-        budget is spent.
+        budget is spent. Close the charge when the read ends: a background
+        task started during the read inherits it and must not keep charging.
         """
         self.calls += 1
-        attempts = 0
-
-        def charge() -> None:
-            nonlocal attempts
-            attempts += 1
-            if attempts == 1:
-                return
-            if self.calls >= self.limits.calls:
-                raise RequestBudgetSpent("call budget spent")
-            self.calls += 1
-
-        return charge
+        return _ReadCharge(self)
 
     def stop(self) -> None:
         """Freeze elapsed usage at the end of reading."""
@@ -401,8 +451,9 @@ async def read_source_pages(
             limit = _aligned_limit(offset, limit)
         requested += limit
         deadline = asyncio.timeout(meter.remaining_seconds())
+        charge = meter.read_charge()
         try:
-            with charging_requests(meter.read_charge()):
+            with charging_requests(charge):
                 async with deadline:
                     page = await read(offset, limit)
         except RequestBudgetSpent:
@@ -419,6 +470,8 @@ async def read_source_pages(
         except Exception as exc:  # noqa: BLE001 - classified into evidence, never re-raised
             failure = failure_from_exception(exc)
             break
+        finally:
+            charge.close()
         # Every row the request returned is charged, whatever the caller keeps.
         meter.events += len(page.rows)
         pages.append(page)
