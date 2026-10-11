@@ -346,11 +346,13 @@ export const DEFAULT_MAX_RECORDS_RETURNED = 25;
 export const MAX_RECORDS_RETURNED = 50;
 /** Core's `VIEW_TOKEN_BUDGET`: most estimated tokens a view takes as an MCP tool result. */
 export const VIEW_TOKEN_BUDGET = 20_000;
+/** Core's `VIEW_BYTE_LIMIT`: most UTF-8 bytes a view takes as that result; only an undercounting estimate could pass it. */
+export const VIEW_BYTE_LIMIT = 4 * VIEW_TOKEN_BUDGET;
 /** Core's `RECORD_TOKEN_LIMIT`: a citation over it is never returned, since identifiers are never cut. */
 export const RECORD_TOKEN_LIMIT = 2_500;
 const MAX_CITED_EVIDENCE_ID_LENGTH = 256;
 export const MAX_CURSOR_LENGTH = 2 + 27 + 1 + MAX_CITED_EVIDENCE_ID_LENGTH;
-/** Core's `SOURCE_LABEL_TOKEN_LIMIT`: a source's tool and scope labels are cut to it; a valid request label never is. */
+/** Core's `SOURCE_LABEL_TOKEN_LIMIT`: a source's tool and scope labels are cut to it; a valid ASCII request label never is. */
 const SOURCE_LABEL_TOKEN_LIMIT = 128;
 const textTokenLimits = { event_type: 40, original_value: 40, source_tool: SOURCE_LABEL_TOKEN_LIMIT, summary: 200 } as const;
 const evidenceIdPattern = new RegExp(String.raw`^[a-z0-9][a-z0-9_.:-]{0,127}\|(?:(?:int|str)\|[A-Za-z0-9%._~-]+` +
@@ -359,25 +361,41 @@ const cursorPattern = /^(?:[02]\|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z|1\|
 const viewSourceFields = ["source_id", "product", "source_tool", "scope", "outcome", "failure", "partial_reasons", "coverage"];
 const scopeFields = ["controller_id", "site", "location_id"];
 
-/** Core's `EvidenceViewTooLarge`: a document's sources and mapping assertions alone exceed the view's budget. */
+/** Core's `EvidenceViewTooLarge`: sources and mapping assertions alone exceed the view's budget, or a view its byte cap. */
 export class EvidenceViewTooLargeError extends Error {}
 
-// Core's `estimated_tokens`, exactly: JSON indented by two spaces as an MCP server sends it.
-const textParts = /[A-Za-z]+|[0-9]+| +|[\s\S]/gu;
-function textTokens(text: string): number {
+// Core's `estimated_tokens` and `serialized_bytes`, exactly: JSON indented by two spaces as an MCP server sends it.
+// A string value costs one token per UTF-8 byte it is sent in; field names cost as words.
+const shortEscapes = new Set([0x22, 0x5c, 0x08, 0x09, 0x0a, 0x0c, 0x0d]);
+/** UTF-8 bytes `text` takes inside a JSON string as sent: control characters and lone surrogates as `\uXXXX`. */
+function sentBytes(text: string): number {
   let total = 0;
-  for (const [part] of text.matchAll(textParts)) {
-    const first = part.codePointAt(0)!;
-    if ((first >= 65 && first <= 90) || (first >= 97 && first <= 122)) total += Math.ceil(part.length / 4);
-    else if (first >= 48 && first <= 57) total += Math.ceil(part.length / 3);
-    else if (part === '"' || part === "\\") total += 2;
-    else if (first < 0x20) total += 4;
-    else total += 1;
+  for (const character of text) {
+    const point = character.codePointAt(0)!;
+    if (shortEscapes.has(point)) total += 2;
+    else if (point < 0x20) total += 6;
+    else if (point < 0x80) total += 1;
+    else if (point < 0x800) total += 2;
+    else if (point >= 0xd800 && point <= 0xdfff) total += 6;
+    else total += point < 0x10000 ? 3 : 4;
   }
   return total;
 }
-// A sign and a float's ".0" are allowed for.
-const integerTokens = (value: number): number => Math.ceil(BigInt(value < 0 ? -value : value).toString().length / 3) + 3;
+/** A string value's text: one token per byte as sent, as no token is shorter. */
+const textTokens = sentBytes;
+const nameParts = /[A-Za-z]+|[0-9]+|[\s\S]/gu;
+function nameTokens(name: string): number {
+  let total = 0;
+  for (const [part] of name.matchAll(nameParts)) {
+    const first = part.codePointAt(0)!;
+    if ((first >= 65 && first <= 90) || (first >= 97 && first <= 122)) total += Math.ceil(part.length / 4);
+    else if (first >= 48 && first <= 57) total += Math.ceil(part.length / 3);
+    else total += sentBytes(part);
+  }
+  return total;
+}
+// One per digit; a sign and a float's ".0" are allowed for.
+const integerTokens = (value: number): number => BigInt(value < 0 ? -value : value).toString().length + 3;
 /** Upper bound on the tokens a JSON value takes as indented JSON (Core's `estimated_tokens`). */
 export function estimatedTokens(value: unknown): number {
   if (value === null) return 1;
@@ -387,17 +405,33 @@ export function estimatedTokens(value: unknown): number {
   if (Array.isArray(value)) return 3 + value.reduce((sum: number, item) => sum + 2 + estimatedTokens(item), 0);
   if (typeof value === "object") {
     return 3 + Object.entries(value as Record<string, unknown>)
-      .reduce((sum, [key, item]) => sum + 6 + textTokens(key) + estimatedTokens(item), 0);
+      .reduce((sum, [key, item]) => sum + 6 + nameTokens(key) + estimatedTokens(item), 0);
   }
   throw new Error("not a JSON value");
+}
+/** UTF-8 bytes of a JSON value as sent, a number at its longest form (Core's `serialized_bytes`). */
+export function serializedBytes(value: unknown, depth = 0): number {
+  if (value === null) return 4;
+  if (typeof value === "boolean") return value ? 4 : 5;
+  if (typeof value === "number") return Number.isInteger(value) ? integerTokens(value) : 24;
+  if (typeof value === "string") return sentBytes(value) + 2;
+  // Each member or item on its own line, indented one level deeper, then the closing bracket on its own line.
+  const inner = 1 + 2 * (depth + 1), outer = 1 + 2 * depth;
+  let members: number[];
+  if (Array.isArray(value)) members = value.map((item) => inner + serializedBytes(item, depth + 1));
+  else if (typeof value === "object") {
+    members = Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => inner + sentBytes(key) + 4 + serializedBytes(item, depth + 1));
+  } else throw new Error("not a JSON value");
+  return members.length ? 2 + members.reduce((sum, size) => sum + size, 0) + members.length - 1 + outer : 2;
 }
 const envelopeTokens = estimatedTokens({ success: true, data: null }) - estimatedTokens(null);
 /** The longest prefix of `text`, in code points, whose estimated tokens are at most `limit`. */
 function cut(text: string, limit: number): string {
   if (textTokens(text) <= limit) return text;
   const points = Array.from(text);
-  // Every character costs at least a quarter token, so no longer prefix fits.
-  let low = 0, high = Math.min(points.length, 4 * limit + 4);
+  // Every character costs at least a token, so no longer prefix fits.
+  let low = 0, high = Math.min(points.length, limit);
   while (low < high) {
     const middle = Math.floor((low + high + 1) / 2);
     if (textTokens(points.slice(0, middle).join("")) <= limit) low = middle;
@@ -442,7 +476,8 @@ function viewSource(source: EvidenceDocument): EvidenceDocument {
 function citation(record: EvidenceDocument): EvidenceDocument | null {
   if (record.evidence_id.length > MAX_CITED_EVIDENCE_ID_LENGTH) return null;
   const identifiers = [...record.entities, ...record.mapping.targets].map((entity: EvidenceDocument) => entity.id as string);
-  if (identifiers.reduce((sum, identifier) => sum + Array.from(identifier).length, 0) > 4 * RECORD_TOKEN_LIMIT) return null;
+  // Every character costs at least a token.
+  if (identifiers.reduce((sum, identifier) => sum + Array.from(identifier).length, 0) > RECORD_TOKEN_LIMIT) return null;
   const truncated: Record<string, number> = {};
   const text = (field: keyof typeof textTokenLimits, value: unknown): unknown => {
     if (typeof value !== "string") return value;
@@ -470,7 +505,8 @@ function citation(record: EvidenceDocument): EvidenceDocument | null {
 /**
  * Core's bounded client view (`unifi_core.incident_evidence_view.client_view`) of a validated document:
  * coverage unchanged, record citations fitted to `VIEW_TOKEN_BUDGET` and `maxRecords`, resumed after a cursor.
- * Throws `EvidenceViewTooLargeError` when the sources and mapping assertions alone, labels cut, exceed the budget.
+ * Throws `EvidenceViewTooLargeError` when the sources and mapping assertions alone, labels cut, exceed the budget,
+ * or when the view would exceed `VIEW_BYTE_LIMIT` as sent.
  */
 export async function incidentEvidenceView(
   value: unknown, maxRecords = DEFAULT_MAX_RECORDS_RETURNED, resumeAfter: string | null = null,
@@ -524,7 +560,7 @@ export async function incidentEvidenceView(
   const keptIndexes = [...kept.keys()].sort((a, b) => a - b);
   const returned = keptIndexes.map((index) => records[index]);
   const last = keptIndexes.map((index) => recordKey(records[index])).sort(compareKeys).at(-1);
-  return {
+  const view = {
     schema: "unifi-incident-evidence-view", schema_version: 1, evidence_schema_version: 1,
     requested_window: doc.requested_window, overall: doc.overall, coverage_complete: doc.coverage_complete,
     budgets: doc.budgets, mappings: doc.mappings, sources,
@@ -540,6 +576,13 @@ export async function incidentEvidenceView(
       next_cursor: limitedBy && last ? last.join("|") : null,
     },
   };
+  if (serializedBytes({ success: true, data: view }) > VIEW_BYTE_LIMIT) {
+    throw new EvidenceViewTooLargeError(
+      `the evidence view would exceed its ${VIEW_BYTE_LIMIT}-byte output limit (sources: ${sources.length}, ` +
+      `records: ${keptIndexes.length}); request fewer records with max_records_returned, or use detail=full ` +
+      "for the whole document");
+  }
+  return view;
 }
 
 const evidenceTools = { network: "unifi_get_incident_evidence", protect: "protect_get_incident_evidence" } as const;

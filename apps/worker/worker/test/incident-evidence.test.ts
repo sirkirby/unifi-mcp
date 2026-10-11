@@ -7,7 +7,7 @@ import schema from "../../../../tests/fixtures/incident_evidence/incident-eviden
 import viewSchema from "../../../../tests/fixtures/incident_evidence/incident-evidence-view.v1.schema.json";
 import {
   canonicalIncidentEvidence, collectIncidentEvidence, combineIncidentEvidence, estimatedTokens, EvidenceViewTooLargeError,
-  incidentEvidenceView, MAX_TIMELINE_SOURCES, validateIncidentEvidence, VIEW_TOKEN_BUDGET,
+  incidentEvidenceView, MAX_TIMELINE_SOURCES, serializedBytes, validateIncidentEvidence, VIEW_BYTE_LIMIT, VIEW_TOKEN_BUDGET,
 } from "../src/incident-evidence";
 import { validateEvidenceSchema } from "../src/incident-evidence-schema.js";
 import type { EvidenceTarget } from "../src/types";
@@ -23,6 +23,13 @@ const schemaCheck = new Ajv({ strict: false }).compile(schema);
 const viewSchemaCheck = new Ajv({ strict: false }).compile(viewSchema);
 
 function fixtureEvidence(name: string): any { return read("cases", name).expected; }
+/** A view as an MCP server sends it fits the token budget and byte cap, and `serializedBytes` never undercounts it. */
+function expectFits(view: unknown): void {
+  const result = { success: true, data: view };
+  expect(estimatedTokens(result)).toBeLessThanOrEqual(VIEW_TOKEN_BUDGET);
+  expect(Buffer.byteLength(JSON.stringify(result, null, 2))).toBeLessThanOrEqual(serializedBytes(result));
+  expect(serializedBytes(result)).toBeLessThanOrEqual(VIEW_BYTE_LIMIT);
+}
 function expectedCanonical(value: any): string {
   if (Array.isArray(value)) return `[${value.map(expectedCanonical).join(",")}]`;
   if (value && typeof value === "object") return `{${Object.keys(value).sort().map((key) =>
@@ -79,7 +86,7 @@ describe("incident evidence corpus", () => {
       const actual = await incidentEvidenceView(fixture.evidence, limit, cursor);
       expect(expectedCanonical(actual)).toBe(expectedCanonical(expected));
       expect(viewSchemaCheck(actual)).toBe(true);
-      expect(estimatedTokens({ success: true, data: actual })).toBeLessThanOrEqual(VIEW_TOKEN_BUDGET);
+      expectFits(actual);
       limits.add(String(actual.record_selection.limited_by));
     }
     expect(limits.size).toBeGreaterThan(1);
@@ -97,8 +104,15 @@ describe("incident evidence corpus", () => {
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
     const pick = <T,>(values: readonly T[]): T => values[Math.floor(random() * values.length)];
-    const alphabet = ['"', "\\", "\u0001", "\n", "\t", "\u{1f600}", "\u00e9", " ", " ", "a", "7", "~", "%", "|"];
-    const text = (length: number): string => Array.from({ length }, () => pick(alphabet)).join("");
+    // Core's alphabet, often repeated in long runs: escaped, whitespace, punctuation and two- to four-byte characters.
+    const alphabet = ['"', "\\", "\u0001", "\n", "\t", "\u{1f600}", "\u{20000}", "\u00e9", "\u4e2d", " ", " ", "\u00a0",
+      "\u3000", "a", "7", "~", "%", "|"];
+    const runs = [...Array(12).fill(1), 16, 300];
+    const text = (length: number): string => {
+      const characters: string[] = [];
+      while (characters.length < length) characters.push(...Array(pick(runs)).fill(pick(alphabet)));
+      return characters.slice(0, length).join("");
+    };
     const outcomes = { view: 0, cut: 0, refused: 0 };
     for (let draw = 0; draw < 40; draw++) {
       const evidence = structuredClone(base);
@@ -133,7 +147,7 @@ describe("incident evidence corpus", () => {
       }
       outcomes.view += 1;
       expect(viewSchemaCheck(view)).toBe(true);
-      expect(estimatedTokens({ success: true, data: view })).toBeLessThanOrEqual(VIEW_TOKEN_BUDGET);
+      expectFits(view);
       expect([view.overall, view.coverage_complete]).toEqual([evidence.overall, evidence.coverage_complete]);
       view.sources.forEach((shown: any, index: number) => {
         const source = evidence.sources[index];
@@ -148,6 +162,18 @@ describe("incident evidence corpus", () => {
       outcomes.cut += Number(view.sources.some((source: any) => Object.keys(source.truncated).length));
     }
     expect(Object.values(outcomes).every(Boolean)).toBe(true);
+  });
+  it("costs every string a token per byte it is sent in, however degenerate", () => {
+    const degenerate = ["A" + " ".repeat(4_000_000) + "B", "\t".repeat(50_000), "!".repeat(100_000), "~-.|".repeat(25_000),
+      "qxzjvkwQXZJVKW".repeat(7_000), "\u00a0".repeat(50_000), "\u3000".repeat(50_000), "\u4e2d\u6587".repeat(25_000),
+      "\u{1f600}\u{1f9ea}".repeat(12_500), "\u{20000}".repeat(25_000), "\u0001\"\\".repeat(10_000)];
+    for (const value of degenerate) {
+      const sent = Buffer.byteLength(JSON.stringify(value));
+      expect([estimatedTokens(value), serializedBytes(value)]).toEqual([sent, sent]);
+    }
+    const nested = { success: true, data: { records: [{ summary: degenerate[0], ids: ["a", 7, -12, 1.5, null, false] }], empty: {} } };
+    // Exact but for numbers, counted at their longest form: 7 and -12 as digits plus three, 1.5 as 24 bytes.
+    expect(serializedBytes(nested) - Buffer.byteLength(JSON.stringify(nested, null, 2))).toBe(3 + 2 + 21);
   });
   it("refuses a cursor that no view returned", async () => {
     await expect(incidentEvidenceView(fixtureEvidence("healthy_empty.json"), 2, "0|not-a-time|network.events|int|7"))
@@ -349,6 +375,26 @@ describe("location evidence collection", () => {
     expect(source.scope.site).toBe("-".repeat(128));
     expect(source.outcome).toBe("empty");
     expect(estimatedTokens(result)).toBeLessThanOrEqual(VIEW_TOKEN_BUDGET);
+  });
+  it("cuts and marks four million spaces in a relay's summary and site, keeping its view within budget", async () => {
+    const spaces = "A" + " ".repeat(4_000_000) + "B";
+    const network = structuredClone(fixtureEvidence("network_protect_real_shapes.json"));
+    network.sources = network.sources.filter((source: any) => source.product === "network");
+    network.records = network.records.filter((record: any) => record.provenance.product === "network");
+    network.records[0].summary = spaces;
+    for (const item of [network.sources[0], ...network.records.map((record: any) => record.provenance)]) {
+      item.scope.location_id = "fixture-1";
+      item.scope.site = " ".repeat(4_000_000);
+    }
+    const result: any = await collectIncidentEvidence({ ...request, detail: "view", products: ["network"] }, targets,
+      async () => ({ success: true, data: network }));
+    expect(result.success).toBe(true);
+    const [source] = result.data.sources;
+    expect([source.truncated, source.scope.site]).toEqual([{ site: 4_000_000 }, " ".repeat(128)]);
+    const record = result.data.records.find((shown: any) => shown.evidence_id === network.records[0].evidence_id);
+    expect([record.truncated, record.summary]).toEqual([{ summary: spaces.length }, spaces.slice(0, 200)]);
+    expectFits(result.data);
+    expect(Buffer.byteLength(JSON.stringify(result, null, 2))).toBeLessThan(10_000);
   });
   it("refuses a view its sources alone would overfill, and still returns detail=full", async () => {
     const network = productDocument("network");

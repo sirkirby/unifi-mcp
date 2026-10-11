@@ -19,6 +19,8 @@ from unifi_core.incident_evidence import (
     validate_incident_evidence,
 )
 from unifi_core.incident_evidence_view import (
+    TEXT_TOKEN_LIMITS,
+    VIEW_BYTE_LIMIT,
     VIEW_TOKEN_BUDGET,
     IncidentEvidenceView,
     client_view,
@@ -295,6 +297,25 @@ async def test_a_product_documents_oversized_site_is_cut_and_marked_in_the_view(
     (source,) = result["data"]["sources"]
     assert source["truncated"] == {"site": 30_000} and source["scope"]["site"] == "-" * 128
     assert estimated_tokens(result) <= VIEW_TOKEN_BUDGET
+
+
+async def test_a_product_documents_long_whitespace_runs_are_cut_and_marked_in_the_view():
+    """Four million spaces cost a token each, in a record's summary or a source's site."""
+    spaces = "A" + " " * 4_000_000 + "B"
+    network = product_documents(read())["network"]
+    network["records"][0]["summary"] = spaces
+    for item in [network["sources"][0]] + [record["provenance"] for record in network["records"]]:
+        item["scope"]["site"] = " " * 4_000_000
+    request = {key: value for key, value in arguments(read()).items() if key != "detail"}
+    result = await handle_location_timeline({**request, "products": ["network"]}, _network_answer(network))
+    assert result["success"] is True
+    (source,) = result["data"]["sources"]
+    assert source["truncated"] == {"site": 4_000_000} and source["scope"]["site"] == " " * 128
+    (record,) = [r for r in result["data"]["records"] if r["evidence_id"] == network["records"][0]["evidence_id"]]
+    assert record["truncated"] == {"summary": len(spaces)}
+    assert record["summary"] == spaces[: TEXT_TOKEN_LIMITS["summary"]]
+    assert estimated_tokens(result) <= VIEW_TOKEN_BUDGET
+    assert len(json.dumps(result, ensure_ascii=False, indent=2).encode()) < min(10_000, VIEW_BYTE_LIMIT)
 
 
 async def test_evidence_too_broad_for_its_view_is_refused_and_still_returned_in_full():
