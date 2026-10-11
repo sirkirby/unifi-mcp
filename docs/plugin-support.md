@@ -83,9 +83,11 @@ the plugin is enabled, and setup saves them with `claude plugin configure`.
   `set-env.sh --target claude --migrate` moves them into the options.
 
 The `cross-product` skills can be installed as standalone skills (see the
-[install guide](agent-install.md#standalone-skills-through-npm)), but their
-`unifi_location_timeline` tool is provided only through the
-[relay](../packages/unifi-mcp-relay/). Local stdio servers do not expose it.
+[install guide](agent-install.md#standalone-skills-through-npm)). Incident
+Investigation uses the incident evidence tools of the local Network and Protect
+servers and needs no relay. Security Patrol and Visitor Audit use
+`unifi_location_timeline`, which is provided only through the
+[relay](../packages/unifi-mcp-relay/); local stdio servers do not expose it.
 
 ## Client matrix
 
