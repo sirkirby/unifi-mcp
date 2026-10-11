@@ -153,7 +153,7 @@ templates:
     notes: >
       This template creates the allow rule for corporate traffic only.
       A separate routing policy or static route is required to direct matched
-      traffic through the VPN interface. Use unifi_list_static_routes to
+      traffic through the VPN interface. Use unifi_list_routes to
       review existing routing configuration.
 
   - name: camera-isolation
