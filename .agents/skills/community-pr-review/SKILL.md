@@ -142,11 +142,14 @@ If the PR introduces lint errors, request fixes via fork-edit (trusted contribut
 review comment (first-time contributors).
 
 **Cross-package import check:** When a PR adds a new cross-package import (e.g., `unifi-network`
-importing from `unifi-core`), verify the dependency is declared in `pyproject.toml`. PRs that add
-cross-package imports without updating `pyproject.toml` silently skip the `check-pin-alignment` CI
-gate, which enforces version floor consistency across packages. If the import is new and no
-`pyproject.toml` change is present, flag it as a potential blocker and request an explicit floor
-bump to the imported package's minimum version.
+importing from `unifi-core`), verify the dependency is declared in `pyproject.toml`. The
+`check-pin-alignment` CI gate runs on source changes and fails when a module imports a symbol, or
+reaches a module or class attribute, that the declared floor version of `unifi-core` or
+`unifi-mcp-shared` does not provide. Network and API manager calls are also checked against the
+floor. It cannot see other calls on instances (for example a new method on a Protect or Access
+manager), imports inside function bodies, or imports guarded by `try/except ImportError`. If the PR
+uses newer upstream API in those ways and no `pyproject.toml` change is present, flag it as a
+potential blocker and request an explicit floor bump to the imported package's minimum version.
 
 #### 1B: F-String Logger — Hard Blocker
 
@@ -774,7 +777,7 @@ When automating GitHub Copilot code review on unifi-mcp PRs, calibrate methodolo
 | PR type (Gate 0) | Routing gate | PR description + linked issue | Applying feature-addition checklist to a governance/refactor PR |
 | Design fit (Gate 0) | Feature PR primary | Scope, duplication, project intent | Mechanical gates pass but tool is out of scope |
 | Ruff lint (Gate 1A) | Hard block | Output of `make lint` | Lint violations not run or not fixed |
-| Cross-package imports (Gate 1A) | Potential block | PR diff + pyproject.toml | New import without floor bump skips check-pin-alignment CI |
+| Cross-package imports (Gate 1A) | Potential block | PR diff + pyproject.toml | New upstream method call on a Protect/Access/Relay instance, or guarded/function-local import, without floor bump is invisible to check-pin-alignment CI |
 | F-string loggers (Gate 1B) | Hard block | `*_manager.py` | Manager layer even when tool layer is clean; full-payload calls promoted to INFO |
 | No-issue-refs in test strings (Gate 1B) | Hard block | Test docstrings and comment strings in PR diff | `#NNN` literals in pytest docstrings/parameterize IDs invisible to logger scanner |
 | Pydantic model wiring (Gate 2) | Critical (silent) | `unifi-core/models/<domain>.py` + tool `to_controller_update` call | Domain model exists but tool bypasses it with raw dict |
