@@ -761,6 +761,8 @@ def test_claude_options_resolve_like_unset_variables(
 ) -> None:
     bootstrap = pytest.importorskip("unifi_mcp_shared.bootstrap")
     policy_gate = pytest.importorskip("unifi_core.policy_gate")
+    # Resolve as a fresh process would: no .env provenance left by another test's server start.
+    monkeypatch.setattr(bootstrap, "_TRUSTED_VARS", None)
     product = name.removeprefix("unifi-").upper()
     password = tmp_path / "password"
     password.write_text("FAKE-file-password\n", encoding="utf-8")
