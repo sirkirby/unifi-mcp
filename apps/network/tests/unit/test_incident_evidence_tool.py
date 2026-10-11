@@ -21,12 +21,12 @@ class EventPages:
     def __init__(self, rows=(), error=None):
         self.rows, self.error, self.calls = list(rows), error, []
 
-    async def get_events_page(self, within=24, limit=100, start=0, **_):
-        self.calls.append((within, limit, start))
+    async def read_events_page(self, *, within, limit, offset=0):
+        self.calls.append((within, limit, offset))
         if self.error:
             raise self.error
-        rows = self.rows[start : start + limit]
-        return SourcePage(rows=rows, total_reported=len(self.rows), offset=start, cap=limit, api_path="v2")
+        rows = self.rows[offset : offset + limit]
+        return SourcePage(rows=rows, total_reported=len(self.rows), offset=offset, cap=limit, api_path="v2")
 
 
 @pytest.fixture

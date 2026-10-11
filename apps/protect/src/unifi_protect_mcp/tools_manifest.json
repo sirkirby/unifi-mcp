@@ -2560,11 +2560,11 @@
               "type": "array"
             },
             "max_calls": {
-              "description": "Most NVR page reads across cameras (1-100)",
+              "description": "Most HTTP requests to the NVR across cameras, retries included (1-100)",
               "type": "integer"
             },
             "max_elapsed_ms": {
-              "description": "Most wall time for reads; a read still running is cancelled (1-120000)",
+              "description": "Most wall time, connecting included; a read still running is cancelled (1-120000)",
               "type": "integer"
             },
             "max_events": {

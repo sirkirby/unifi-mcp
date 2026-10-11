@@ -51,9 +51,11 @@ async def get_incident_evidence(
         int, Field(description="Longest window to read; a longer window is not read (1-2592000)")
     ] = DEFAULT_WINDOW_SECONDS,
     max_events: Annotated[int, Field(description="Most event rows to read across cameras (1-10000)")] = DEFAULT_EVENTS,
-    max_calls: Annotated[int, Field(description="Most NVR page reads across cameras (1-100)")] = DEFAULT_CALLS,
+    max_calls: Annotated[
+        int, Field(description="Most HTTP requests to the NVR across cameras, retries included (1-100)")
+    ] = DEFAULT_CALLS,
     max_elapsed_ms: Annotated[
-        int, Field(description="Most wall time for reads; a read still running is cancelled (1-120000)")
+        int, Field(description="Most wall time, connecting included; a read still running is cancelled (1-120000)")
     ] = DEFAULT_ELAPSED_MS,
     mappings: Annotated[
         Optional[List[Dict[str, Any]]],
