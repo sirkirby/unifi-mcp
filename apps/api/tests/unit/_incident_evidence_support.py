@@ -27,6 +27,7 @@ CORPUS_DIR = Path(__file__).resolve().parents[4] / "tests" / "fixtures" / "incid
 SCHEMA_PATH = CORPUS_DIR / "incident-evidence.v1.schema.json"
 RESPONSES = json.loads((CORPUS_DIR / "collection" / "controller_responses.json").read_text())
 SCHEMA = json.loads(SCHEMA_PATH.read_text())
+VIEW_SCHEMA = json.loads((CORPUS_DIR / "incident-evidence-view.v1.schema.json").read_text())
 NOW = parse_utc(RESPONSES["now"])
 REQUEST = RESPONSES["request"]
 PRIVATE = "fixture-private-controller-text"

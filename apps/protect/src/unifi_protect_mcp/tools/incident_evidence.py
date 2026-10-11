@@ -5,7 +5,7 @@ startup (``LAZY_DIRECT_TOOLS``) so read-only clients can call it directly.
 """
 
 import logging
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from mcp.types import ToolAnnotations
 from pydantic import Field, ValidationError
@@ -17,7 +17,11 @@ from unifi_core.incident_collection import (
     DEFAULT_WINDOW_SECONDS,
     describe_validation_error,
 )
-from unifi_core.incident_evidence import evidence_to_json
+from unifi_core.incident_evidence_view import (
+    DEFAULT_MAX_RECORDS_RETURNED,
+    MAX_RECORDS_RETURNED,
+    EvidencePresentation,
+)
 from unifi_core.protect.incident_collection import collect_protect_incident_evidence
 from unifi_core.protect.models.incident_evidence import ProtectIncidentRequest
 from unifi_protect_mcp.runtime import event_manager, server
@@ -31,10 +35,12 @@ _OPERATION = "Failed to collect incident evidence"
     name="protect_get_incident_evidence",
     annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
     description=(
-        "Collects bounded, read-only Protect event evidence for one incident window and returns a "
-        "versioned unifi-incident-evidence document: cited records plus per-source coverage, failures "
-        "and budget usage. Each camera ID is its own source. Stops at the first spent budget and says "
-        "so; check coverage_complete before treating an empty result as an all-clear."
+        "Collects bounded, read-only Protect event evidence for one incident window. Returns a "
+        "unifi-incident-evidence-view by default: every source's coverage, failures and budget usage "
+        "plus a bounded list of record citations, with omitted records counted; detail='full' returns "
+        "the whole unifi-incident-evidence document. Each camera ID is its own source. Stops at the "
+        "first spent budget and says so; check coverage_complete before treating an empty result as "
+        "an all-clear."
     ),
 )
 async def get_incident_evidence(
@@ -42,7 +48,7 @@ async def get_incident_evidence(
     end: Annotated[str, Field(description="Window end, ISO 8601 with a UTC offset (exclusive)")],
     camera_ids: Annotated[
         Optional[List[str]],
-        Field(description="Exact Protect camera IDs, each read as its own source; omit for every camera"),
+        Field(description="Exact Protect camera IDs (at most 5), each read as its own source; omit for every camera"),
     ] = None,
     location_id: Annotated[
         Optional[str], Field(description="Your label for the investigated location, recorded in source scope")
@@ -62,7 +68,20 @@ async def get_incident_evidence(
         Field(
             description=(
                 "Explicit exact-identifier assertions, each {entity, target, source} where entity and target "
-                "are {kind, id_kind, id} and source is operator_input or product_inventory"
+                "are {kind, id_kind, id} and source is operator_input or product_inventory (at most 20)"
+            )
+        ),
+    ] = None,
+    detail: Annotated[
+        Literal["view", "full"],
+        Field(description="view: coverage plus bounded record citations; full: the whole evidence document"),
+    ] = "view",
+    max_records_returned: Annotated[
+        Optional[int],
+        Field(
+            description=(
+                f"Most record citations in the view (default {DEFAULT_MAX_RECORDS_RETURNED}, "
+                f"1-{MAX_RECORDS_RETURNED}); omitted records stay in coverage. View only"
             )
         ),
     ] = None,
@@ -83,8 +102,12 @@ async def get_incident_evidence(
     except ValidationError as exc:
         return {"success": False, "error": f"{_OPERATION}: {describe_validation_error(exc, ProtectIncidentRequest)}"}
     try:
+        presentation = EvidencePresentation(detail=detail, max_records_returned=max_records_returned)
+    except ValidationError as exc:
+        return {"success": False, "error": f"{_OPERATION}: {describe_validation_error(exc, EvidencePresentation)}"}
+    try:
         evidence = await collect_protect_incident_evidence(event_manager, request)
-        return {"success": True, "data": evidence_to_json(evidence)}
+        return {"success": True, "data": presentation.render(evidence)}
     except Exception as exc:
         logger.error("Error collecting Protect incident evidence: %s", type(exc).__name__)
         return {"success": False, "error": f"{_OPERATION}: {type(exc).__name__}"}

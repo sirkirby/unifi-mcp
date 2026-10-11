@@ -112,7 +112,12 @@ from unifi_api.graphql.types.network.voucher import Voucher
 from unifi_api.graphql.types.network.vpn import VpnClient, VpnServer
 from unifi_api.graphql.types.network.wlan import Wlan
 from unifi_api.services.controllers import get_controller
-from unifi_api.services.incident_evidence import collect_network_evidence, network_request, require_product
+from unifi_api.services.incident_evidence import (
+    collect_network_evidence,
+    network_request,
+    presentation,
+    require_product,
+)
 
 # ---------------------------------------------------------------------------
 # Fetch helpers — each goes through ctx.cache.get_or_fetch so concurrent
@@ -3644,8 +3649,9 @@ class NetworkQuery:
     @strawberry.field(
         permission_classes=[IsRead],
         description=(
-            "Collect bounded, read-only Network event evidence for one incident window as a versioned "
-            "unifi-incident-evidence document. Stops at the first spent budget and says so; check "
+            "Collect bounded, read-only Network event evidence for one incident window as a "
+            "unifi-incident-evidence-view (coverage plus bounded record citations), or with detail full the "
+            "whole unifi-incident-evidence document. Stops at the first spent budget and says so; check "
             "coverage_complete before treating an empty result as an all-clear. Not cached."
         ),
     )
@@ -3663,6 +3669,8 @@ class NetworkQuery:
         max_calls: int = DEFAULT_CALLS,
         max_elapsed_ms: int = DEFAULT_ELAPSED_MS,
         mappings: strawberry.scalars.JSON | None = None,  # type: ignore[name-defined]
+        detail: str = "view",
+        max_records_returned: int | None = None,
     ) -> IncidentEvidence:
         ctx: GraphQLContext = info.context
         # Validated before any controller I/O: invalid input never acquires a manager.
@@ -3677,6 +3685,7 @@ class NetworkQuery:
             max_elapsed_ms=max_elapsed_ms,
             mappings=mappings,
         )
+        view = presentation(detail=detail, max_records_returned=max_records_returned)
         async with ctx.sessionmaker() as session:
             # From the database only, before collecting: NOT_FOUND, then CAPABILITY_MISMATCH (REST: 404, 409).
             require_product(await get_controller(session, controller), "network")
@@ -3689,7 +3698,7 @@ class NetworkQuery:
                 evidence = await collect_network_evidence(acquire, incident, site=site)
             except Exception as exc:
                 raise RuntimeError(f"Failed to collect incident evidence ({type(exc).__name__})") from None
-        return IncidentEvidence.from_manager_output(evidence)
+        return IncidentEvidence.from_manager_output(evidence, presentation=view)
 
     @strawberry.field(
         permission_classes=[IsRead],

@@ -948,11 +948,11 @@ type HealthSnapshot {
 }
 
 """
-Bounded, read-only incident evidence: a versioned unifi-incident-evidence document with cited records plus per-source coverage, failures and budget usage.
+Bounded, read-only incident evidence: a unifi-incident-evidence-view (every source's coverage, failures and budget usage plus bounded record citations) or, with detail full, the whole unifi-incident-evidence document.
 """
 type IncidentEvidence {
   """
-  The unifi-incident-evidence document. Check coverage_complete before treating an empty result as an all-clear.
+  The unifi-incident-evidence-view, or the unifi-incident-evidence document with detail full. Check coverage_complete before treating an empty result as an all-clear.
   """
   document: JSON!
 }
@@ -1534,9 +1534,9 @@ type NetworkQuery {
   threatPosture(controller: ID!, site: String! = "default", period: String! = "DAY"): ThreatPosture
 
   """
-  Collect bounded, read-only Network event evidence for one incident window as a versioned unifi-incident-evidence document. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
+  Collect bounded, read-only Network event evidence for one incident window as a unifi-incident-evidence-view (coverage plus bounded record citations), or with detail full the whole unifi-incident-evidence document. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
   """
-  incidentEvidence(controller: ID!, start: String!, end: String!, site: String! = "default", deviceMacs: [String!] = null, locationId: String = null, maxWindowSeconds: Int! = 86400, maxEvents: Int! = 1000, maxCalls: Int! = 20, maxElapsedMs: Int! = 30000, mappings: JSON = null): IncidentEvidence!
+  incidentEvidence(controller: ID!, start: String!, end: String!, site: String! = "default", deviceMacs: [String!] = null, locationId: String = null, maxWindowSeconds: Int! = 86400, maxEvents: Int! = 1000, maxCalls: Int! = 20, maxElapsedMs: Int! = 30000, mappings: JSON = null, detail: String! = "view", maxRecordsReturned: Int = null): IncidentEvidence!
 
   """
   Get device management (mgmt) settings: device SSH, debug tools, automatic upgrades.
@@ -1783,9 +1783,9 @@ type ProtectHealth {
 """Read-only access to UniFi Protect resources."""
 type ProtectQuery {
   """
-  Collect bounded, read-only Protect event evidence for one incident window as a versioned unifi-incident-evidence document. Each camera ID is its own source. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
+  Collect bounded, read-only Protect event evidence for one incident window as a unifi-incident-evidence-view (coverage plus bounded record citations), or with detail full the whole unifi-incident-evidence document. Each camera ID is its own source. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
   """
-  incidentEvidence(controller: ID!, start: String!, end: String!, cameraIds: [String!] = null, locationId: String = null, maxWindowSeconds: Int! = 86400, maxEvents: Int! = 1000, maxCalls: Int! = 20, maxElapsedMs: Int! = 30000, mappings: JSON = null): IncidentEvidence!
+  incidentEvidence(controller: ID!, start: String!, end: String!, cameraIds: [String!] = null, locationId: String = null, maxWindowSeconds: Int! = 86400, maxEvents: Int! = 1000, maxCalls: Int! = 20, maxElapsedMs: Int! = 30000, mappings: JSON = null, detail: String! = "view", maxRecordsReturned: Int = null): IncidentEvidence!
 
   """List cameras on the Protect controller (paginated)."""
   cameras(controller: ID!, limit: Int! = 50, cursor: String = null): CameraPage!
@@ -2632,7 +2632,7 @@ Read-only access to UniFi Network resources.
 - `firewallZones: [FirewallZone!]!`  — List firewall zones (typically a small flat list — no pagination).
 - `gatewaySettings: GatewaySettings`  — Get gateway (USG) security / NAT / connection-tracking settings.
 - `gatewayStats: [StatPoint!]!`  — Gateway stats timeseries.
-- `incidentEvidence: IncidentEvidence!`  — Collect bounded, read-only Network event evidence for one incident window as a versioned unifi-incident-evidence document. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
+- `incidentEvidence: IncidentEvidence!`  — Collect bounded, read-only Network event evidence for one incident window as a unifi-incident-evidence-view (coverage plus bounded record citations), or with detail full the whole unifi-incident-evidence document. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
 - `ipsEvents: EventLogPage!`  — List recent IPS/IDS events (paginated).
 - `legacyFirewallRules: [LegacyFirewallRule!]!`  — List legacy (pre-zone-based) firewall rules. Sites still running the legacy engine return no zone-based policies or zones, so an empty firewallPolicies result does not mean no firewall rules are configured — check here as well.
 - `lldpNeighbors: LldpNeighbors`  — Get LLDP neighbors reported by a switch.
@@ -2708,7 +2708,7 @@ Read-only access to UniFi Protect resources.
 - `events: EventPage!`  — List Protect events (paginated, most recent first).
 - `firmwareStatus: FirmwareStatus`  — Get firmware status for the NVR plus its devices.
 - `health: ProtectHealth`  — Get the NVR health snapshot (cpu / memory / storage).
-- `incidentEvidence: IncidentEvidence!`  — Collect bounded, read-only Protect event evidence for one incident window as a versioned unifi-incident-evidence document. Each camera ID is its own source. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
+- `incidentEvidence: IncidentEvidence!`  — Collect bounded, read-only Protect event evidence for one incident window as a unifi-incident-evidence-view (coverage plus bounded record citations), or with detail full the whole unifi-incident-evidence document. Each camera ID is its own source. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear. Not cached.
 - `knownFaces: KnownFacePage!`  — List assigned Protect Known Faces / named face recognition groups.
 - `knownLicensePlates: KnownLicensePlatePage!`  — List UniFi Protect license-plate identities (vehicle recognition groups). Each entry's id is the value to use in a `license_plate_known` alarm-rule condition.
 - `lights: LightPage!`  — List Protect lights (PIR-triggered floodlights).

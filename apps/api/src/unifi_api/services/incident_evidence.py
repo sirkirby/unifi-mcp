@@ -18,6 +18,7 @@ from typing import Any
 from pydantic import ValidationError
 from unifi_core.incident_collection import describe_validation_error
 from unifi_core.incident_evidence import IncidentEvidence
+from unifi_core.incident_evidence_view import EvidencePresentation
 from unifi_core.network.incident_collection import collect_network_incident_evidence
 from unifi_core.network.models.incident_evidence import NetworkIncidentRequest
 from unifi_core.protect.incident_collection import collect_protect_incident_evidence
@@ -29,6 +30,7 @@ __all__ = [
     "collect_network_evidence",
     "collect_protect_evidence",
     "network_request",
+    "presentation",
     "protect_request",
     "require_product",
 ]
@@ -67,7 +69,8 @@ def _parse_mappings(mappings: Any) -> Any:
 def _build_request(model: type, arguments: dict[str, Any]) -> Any:
     # Omitted budgets take the Core defaults, so every adapter shares them.
     values = {key: value for key, value in arguments.items() if value is not None}
-    values["mappings"] = _parse_mappings(values.get("mappings"))
+    if "mappings" in model.model_fields:
+        values["mappings"] = _parse_mappings(values.get("mappings"))
     try:
         return model(**values)
     except ValidationError as exc:
@@ -82,6 +85,11 @@ def network_request(**arguments: Any) -> NetworkIncidentRequest:
 def protect_request(**arguments: Any) -> ProtectIncidentRequest:
     """Validate Protect incident arguments; raises ``IncidentRequestError``."""
     return _build_request(ProtectIncidentRequest, arguments)
+
+
+def presentation(*, detail: Any = None, max_records_returned: Any = None) -> EvidencePresentation:
+    """Validate how the evidence is returned (the bounded view by default); raises ``IncidentRequestError``."""
+    return _build_request(EvidencePresentation, {"detail": detail, "max_records_returned": max_records_returned})
 
 
 async def collect_network_evidence(acquire: Acquire, request: NetworkIncidentRequest, *, site: str) -> IncidentEvidence:

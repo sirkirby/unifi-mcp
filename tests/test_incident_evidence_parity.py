@@ -1,9 +1,10 @@
-"""The MCP tools and the API routes return the same incident evidence for the same bounded input.
+"""The MCP tools, REST routes and GraphQL return the same incident evidence for the same bounded input.
 
-Both adapters run against the same mocked controller answers, decoded by the
+Every adapter runs against the same mocked controller answers, decoded by the
 product SDKs (aiounifi for Network, uiprotect for Protect), with the same
-frozen clocks. After removing each transport's envelope the documents must
-be equal, contract-valid, and carry the scenario's per-source status.
+frozen clocks. After removing each transport's envelope the payloads must be
+equal and valid, for both the default client view and ``detail="full"``, and
+carry the scenario's per-source status.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from unifi_api.db.models import ApiKey, Base, Controller
 from unifi_api.server import create_app
 from unifi_core import incident_collection
 from unifi_core.incident_evidence import parse_utc, validate_incident_evidence
+from unifi_core.incident_evidence_view import IncidentEvidenceView, client_view, view_to_json
 from unifi_core.network.managers.connection_manager import ConnectionManager
 from unifi_core.network.managers.event_manager import EventManager as NetworkEventManager
 from unifi_core.protect.managers.event_manager import EventManager as ProtectEventManager
@@ -37,6 +39,7 @@ from unifi_core.protect.managers.event_manager import EventManager as ProtectEve
 CORPUS = Path(__file__).parent / "fixtures" / "incident_evidence"
 RESPONSES = json.loads((CORPUS / "collection" / "controller_responses.json").read_text())
 SCHEMA = json.loads((CORPUS / "incident-evidence.v1.schema.json").read_text())
+VIEW_SCHEMA = json.loads((CORPUS / "incident-evidence-view.v1.schema.json").read_text())
 NOW = parse_utc(RESPONSES["now"])
 PRIVATE = "fixture-private-controller-text"
 NVR_URL = "https://controller.invalid/proxy/protect/api/events"
@@ -137,7 +140,7 @@ def frozen_clocks(monkeypatch):
 # --- the two adapters -------------------------------------------------------------------------
 
 
-async def via_mcp(product: str, manager: Any, monkeypatch) -> dict[str, Any]:
+async def via_mcp(product: str, manager: Any, monkeypatch, presentation: dict[str, Any]) -> dict[str, Any]:
     if product == "network":
         from unifi_network_mcp import runtime
         from unifi_network_mcp.tools import incident_evidence
@@ -148,7 +151,7 @@ async def via_mcp(product: str, manager: Any, monkeypatch) -> dict[str, Any]:
         from unifi_protect_mcp.tools import incident_evidence
 
         monkeypatch.setattr(incident_evidence, "event_manager", manager)
-    response = await incident_evidence.get_incident_evidence(**INPUTS[product])
+    response = await incident_evidence.get_incident_evidence(**INPUTS[product], **presentation)
     assert response["success"] is True, response
     assert set(response) == {"success", "data"}
     return response["data"]
@@ -167,6 +170,7 @@ async def _api_app(tmp_path: Path, product: str, monkeypatch):
         await conn.run_sync(Base.metadata.create_all)
     material = generate_key()
     stamp = datetime.now(timezone.utc)
+    controller_id = str(uuid.uuid4())
     async with app.state.sessionmaker() as session:
         session.add(
             ApiKey(
@@ -180,7 +184,7 @@ async def _api_app(tmp_path: Path, product: str, monkeypatch):
         )
         session.add(
             Controller(
-                id=str(uuid.uuid4()),
+                id=controller_id,
                 name="fixture-controller",
                 base_url="https://controller.invalid",
                 product_kinds=product,
@@ -192,7 +196,7 @@ async def _api_app(tmp_path: Path, product: str, monkeypatch):
             )
         )
         await session.commit()
-    return app, material.plaintext
+    return app, material.plaintext, controller_id
 
 
 def _query(arguments: dict[str, Any]) -> list[tuple[str, Any]]:
@@ -207,14 +211,16 @@ def _query(arguments: dict[str, Any]) -> list[tuple[str, Any]]:
     return params
 
 
-async def via_api(product: str, manager: Any, tmp_path: Path, monkeypatch) -> dict[str, Any]:
-    app, key = await _api_app(tmp_path, product, monkeypatch)
+async def via_rest(
+    product: str, manager: Any, tmp_path: Path, monkeypatch, presentation: dict[str, Any]
+) -> dict[str, Any]:
+    app, key, _ = await _api_app(tmp_path, product, monkeypatch)
     factory = app.state.manager_factory
     factory.get_event_reader = AsyncMock(return_value=manager)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get(
             f"/v1/sites/default/incident-evidence/{product}",
-            params=_query(INPUTS[product]),
+            params=_query({**INPUTS[product], **presentation}),
             headers={"Authorization": f"Bearer {key}"},
         )
     assert response.status_code == 200, response.text
@@ -223,20 +229,87 @@ async def via_api(product: str, manager: Any, tmp_path: Path, monkeypatch) -> di
     return body["data"]
 
 
+_GRAPHQL_TYPES = {
+    "start": "String!",
+    "end": "String!",
+    "device_macs": "[String!]",
+    "camera_ids": "[String!]",
+    "location_id": "String",
+    "max_window_seconds": "Int",
+    "max_events": "Int",
+    "max_calls": "Int",
+    "max_elapsed_ms": "Int",
+    "mappings": "JSON",
+    "detail": "String",
+    "max_records_returned": "Int",
+}
+
+
+def _camel(name: str) -> str:
+    head, *rest = name.split("_")
+    return head + "".join(part.title() for part in rest)
+
+
+async def via_graphql(
+    product: str, manager: Any, tmp_path: Path, monkeypatch, presentation: dict[str, Any]
+) -> dict[str, Any]:
+    app, key, controller_id = await _api_app(tmp_path, product, monkeypatch)
+    app.state.manager_factory.get_event_reader = AsyncMock(return_value=manager)
+    arguments = {**INPUTS[product], **presentation}
+    declared = ", ".join(f"${_camel(name)}: {_GRAPHQL_TYPES[name]}" for name in arguments)
+    passed = ", ".join(f"{_camel(name)}: ${_camel(name)}" for name in arguments)
+    query = (
+        f"query Evidence($controller: ID!, {declared}) {{ {product} {{ "
+        f"incidentEvidence(controller: $controller, {passed}) {{ document }} }} }}"
+    )
+    variables = {"controller": controller_id, **{_camel(name): value for name, value in arguments.items()}}
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/v1/graphql",
+            json={"query": query, "variables": variables},
+            headers={"Authorization": f"Bearer {key}"},
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "errors" not in body, body
+    return body["data"][product]["incidentEvidence"]["document"]
+
+
 CASES = [(product, scenario) for product in ("network", "protect") for scenario in sorted(RESPONSES[product])]
+PRESENTATIONS = {"view": {}, "view-1": {"max_records_returned": 1}, "full": {"detail": "full"}}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("presentation", sorted(PRESENTATIONS))
+@pytest.mark.parametrize(("product", "scenario"), CASES, ids=[f"{p}-{s}" for p, s in CASES])
+async def test_mcp_rest_and_graphql_return_the_same_evidence(
+    product, scenario, presentation, frozen_clocks, monkeypatch, tmp_path
+):
+    build = network_manager if product == "network" else protect_manager
+    arguments = PRESENTATIONS[presentation]
+    from_mcp = await via_mcp(product, build(scenario), monkeypatch, arguments)
+    from_rest = await via_rest(product, build(scenario), tmp_path / "rest", monkeypatch, arguments)
+    from_graphql = await via_graphql(product, build(scenario), tmp_path / "graphql", monkeypatch, arguments)
+
+    assert from_mcp == from_rest == from_graphql
+    assert PRIVATE not in json.dumps(from_rest)
+    if presentation == "full":
+        jsonschema.validate(from_rest, SCHEMA)
+        evidence = validate_incident_evidence(from_rest)
+        (source,) = evidence.sources
+        assert evidence.mappings is not None or product == "protect"
+    else:
+        jsonschema.validate(from_rest, VIEW_SCHEMA)
+        view = IncidentEvidenceView.model_validate(from_rest)
+        (source,) = view.sources
+        assert view.record_selection.max_records_returned == arguments.get("max_records_returned", 25)
+    assert source.outcome.value == RESPONSES[product][scenario]["outcome"]
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("product", "scenario"), CASES, ids=[f"{p}-{s}" for p, s in CASES])
-async def test_mcp_and_api_return_the_same_evidence(product, scenario, frozen_clocks, monkeypatch, tmp_path):
+async def test_the_view_is_the_projection_of_the_full_document(product, scenario, frozen_clocks, monkeypatch):
     build = network_manager if product == "network" else protect_manager
-    from_mcp = await via_mcp(product, build(scenario), monkeypatch)
-    from_api = await via_api(product, build(scenario), tmp_path, monkeypatch)
-
-    assert from_mcp == from_api
-    jsonschema.validate(from_api, SCHEMA)
-    evidence = validate_incident_evidence(from_api)
-    (source,) = evidence.sources
-    assert source.outcome.value == RESPONSES[product][scenario]["outcome"]
-    assert PRIVATE not in json.dumps(from_api)
-    assert evidence.mappings is not None or product == "protect"
+    full = await via_mcp(product, build(scenario), monkeypatch, {"detail": "full"})
+    view = await via_mcp(product, build(scenario), monkeypatch, {})
+    assert view == view_to_json(client_view(validate_incident_evidence(full)))

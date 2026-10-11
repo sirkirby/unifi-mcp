@@ -16316,7 +16316,7 @@
     },
     "/v1/sites/{site_id}/incident-evidence/network": {
       "get": {
-        "description": "Collect bounded, read-only Network event evidence for one incident window. Returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
+        "description": "Collect bounded, read-only Network event evidence for one incident window. Returns a unifi-incident-evidence-view by default: every source's coverage, failures and budget usage plus bounded record citations, with omitted records counted; detail=full returns the whole unifi-incident-evidence document. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
         "operationId": "get_network_incident_evidence_v1_sites__site_id__incident_evidence_network_get",
         "parameters": [
           {
@@ -16438,7 +16438,7 @@
             }
           },
           {
-            "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+            "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory (at most 20)",
             "in": "query",
             "name": "mappings",
             "required": false,
@@ -16451,8 +16451,38 @@
                   "type": "null"
                 }
               ],
-              "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+              "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory (at most 20)",
               "title": "Mappings"
+            }
+          },
+          {
+            "description": "view: coverage plus bounded record citations; full: the whole evidence document",
+            "in": "query",
+            "name": "detail",
+            "required": false,
+            "schema": {
+              "default": "view",
+              "description": "view: coverage plus bounded record citations; full: the whole evidence document",
+              "title": "Detail",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Most record citations in the view (default 25, 1-50); omitted records stay in coverage. View only",
+            "in": "query",
+            "name": "max_records_returned",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Most record citations in the view (default 25, 1-50); omitted records stay in coverage. View only",
+              "title": "Max Records Returned"
             }
           },
           {
@@ -16504,7 +16534,7 @@
     },
     "/v1/sites/{site_id}/incident-evidence/protect": {
       "get": {
-        "description": "Collect bounded, read-only Protect event evidence for one incident window. Returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. Each camera ID is its own source. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
+        "description": "Collect bounded, read-only Protect event evidence for one incident window. Returns a unifi-incident-evidence-view by default: every source's coverage, failures and budget usage plus bounded record citations, with omitted records counted; detail=full returns the whole unifi-incident-evidence document. Each camera ID is its own source. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
         "operationId": "get_protect_incident_evidence_v1_sites__site_id__incident_evidence_protect_get",
         "parameters": [
           {
@@ -16539,7 +16569,7 @@
             }
           },
           {
-            "description": "Exact Protect camera IDs, each read as its own source; omit for every camera",
+            "description": "Exact Protect camera IDs (at most 5), each read as its own source; omit for every camera",
             "in": "query",
             "name": "camera_ids",
             "required": false,
@@ -16555,7 +16585,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Exact Protect camera IDs, each read as its own source; omit for every camera",
+              "description": "Exact Protect camera IDs (at most 5), each read as its own source; omit for every camera",
               "title": "Camera Ids"
             }
           },
@@ -16626,7 +16656,7 @@
             }
           },
           {
-            "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+            "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory (at most 20)",
             "in": "query",
             "name": "mappings",
             "required": false,
@@ -16639,8 +16669,38 @@
                   "type": "null"
                 }
               ],
-              "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+              "description": "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory (at most 20)",
               "title": "Mappings"
+            }
+          },
+          {
+            "description": "view: coverage plus bounded record citations; full: the whole evidence document",
+            "in": "query",
+            "name": "detail",
+            "required": false,
+            "schema": {
+              "default": "view",
+              "description": "view: coverage plus bounded record citations; full: the whole evidence document",
+              "title": "Detail",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Most record citations in the view (default 25, 1-50); omitted records stay in coverage. View only",
+            "in": "query",
+            "name": "max_records_returned",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Most record citations in the view (default 25, 1-50); omitted records stay in coverage. View only",
+              "title": "Max Records Returned"
             }
           },
           {

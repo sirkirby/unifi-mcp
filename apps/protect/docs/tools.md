@@ -46,7 +46,7 @@ In lazy mode, an additional meta-tool is available:
 
 ## Incident Evidence (1 tool)
 
-- `protect_get_incident_evidence` -- Bounded, read-only event evidence for one incident window as a versioned `unifi-incident-evidence` document; each camera ID is its own source (see [incident evidence](../../../docs/incident-evidence.md)). Listed directly in lazy mode so read-only clients can call it.
+- `protect_get_incident_evidence` -- Bounded, read-only event evidence for one incident window as a bounded `unifi-incident-evidence-view` by default, or the whole `unifi-incident-evidence` document with `detail="full"`; each camera ID (at most 5) is its own source (see [incident evidence](../../../docs/incident-evidence.md)). Listed directly in lazy mode so read-only clients can call it.
 
 ## Recordings (4 tools)
 

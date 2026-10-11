@@ -11,11 +11,13 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from tests.routes.resources.test_network_misc import _bootstrap, _stub_connection
 from tests.unit._incident_evidence_support import (
+    CORPUS_DIR,
     NOW,
     PRIVATE,
     REQUEST,
     RESPONSES,
     SCHEMA,
+    VIEW_SCHEMA,
     FrozenDatetime,
     network_pages,
     network_scenario,
@@ -26,7 +28,8 @@ from tests.unit._incident_evidence_support import (
 )
 from unifi_api.db.models import ApiKey
 from unifi_api.graphql.types.incident_evidence import IncidentEvidence
-from unifi_core.incident_evidence import validate_incident_evidence
+from unifi_core.incident_evidence import evidence_to_json, validate_incident_evidence
+from unifi_core.incident_evidence_view import EvidencePresentation, IncidentEvidenceView, client_view, view_to_json
 
 NETWORK_PATH = "/v1/sites/default/incident-evidence/network"
 PROTECT_PATH = "/v1/sites/default/incident-evidence/protect"
@@ -84,8 +87,13 @@ async def make_harness(tmp_path, monkeypatch, products="network,protect", scopes
 
 
 def check_document(document: dict) -> None:
-    jsonschema.validate(document, SCHEMA)
-    validate_incident_evidence(document)
+    """The default bounded view, or the full contract document when detail=full was asked for."""
+    if document["schema"] == "unifi-incident-evidence-view":
+        jsonschema.validate(document, VIEW_SCHEMA)
+        IncidentEvidenceView.model_validate(document)
+    else:
+        jsonschema.validate(document, SCHEMA)
+        validate_incident_evidence(document)
 
 
 def without_wall_time(document: dict) -> dict:
@@ -162,11 +170,48 @@ async def test_protect_graphql_returns_the_same_document_as_rest(tmp_path, monke
     check_document(document)
 
 
-def test_the_type_projection_is_the_document_unchanged() -> None:
-    document = {"schema": "unifi-incident-evidence", "records": []}
-    with patch("unifi_api.graphql.types.incident_evidence.evidence_to_json", return_value=document):
-        projected = IncidentEvidence.from_manager_output(object())
-    assert projected.to_dict() is document
+def test_the_type_projection_renders_through_the_core_presentation() -> None:
+    case = CORPUS_DIR / "cases" / "network_protect_real_shapes.json"
+    evidence = validate_incident_evidence(json.loads(case.read_text())["expected"])
+    assert IncidentEvidence.from_manager_output(evidence).to_dict() == view_to_json(client_view(evidence))
+    full = IncidentEvidence.from_manager_output(evidence, presentation=EvidencePresentation(detail="full"))
+    assert full.to_dict() == evidence_to_json(evidence)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("path", "build"), [(NETWORK_PATH, "network"), (PROTECT_PATH, "protect")])
+async def test_detail_full_returns_the_contract_document_and_the_view_counts_omissions(
+    tmp_path, monkeypatch, clock, path, build
+) -> None:
+    harness = await make_harness(tmp_path, monkeypatch)
+    scenario = network_scenario if build == "network" else protect_scenario
+    full = (await harness.rest(path, lambda: scenario("events"), detail="full")).json()["data"]
+    view = (await harness.rest(path, lambda: scenario("events"), max_records_returned=1)).json()["data"]
+    assert full["schema"] == "unifi-incident-evidence" and view["schema"] == "unifi-incident-evidence-view"
+    check_document(full)
+    check_document(view)
+    assert len(view["records"]) == 1
+    assert view["record_selection"]["collected"]["total"] == len(full["records"])
+    assert view["record_selection"]["omitted"]["total"] == len(full["records"]) - 1
+    for key in ("overall", "coverage_complete", "mappings", "requested_window"):
+        assert view[key] == full[key]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product", ["network", "protect"])
+async def test_graphql_detail_full_returns_the_contract_document(tmp_path, monkeypatch, clock, product) -> None:
+    harness = await make_harness(tmp_path, monkeypatch)
+    scenario = network_scenario if product == "network" else protect_scenario
+    rest = await harness.rest(
+        NETWORK_PATH if product == "network" else PROTECT_PATH, lambda: scenario("events"), detail="full"
+    )
+    harness.build = lambda: scenario("events")
+    arguments = gql_args(harness.cid, locationId='"fixture-location-a"', detail='"full"')
+    gql = await harness.graphql(f"{{ {product} {{ incidentEvidence({arguments}) {{ document }} }} }}")
+    assert gql.status_code == 200 and "errors" not in gql.json(), gql.text
+    document = gql.json()["data"][product]["incidentEvidence"]["document"]
+    assert document["schema"] == "unifi-incident-evidence"
+    assert without_wall_time(document) == without_wall_time(rest.json()["data"])
 
 
 @pytest.mark.asyncio
@@ -216,6 +261,10 @@ async def test_protect_camera_ids_are_each_their_own_source(tmp_path, monkeypatc
         {"mappings": SENTINEL},
         {"mappings": json.dumps({"key": SENTINEL})},
         {"mappings": json.dumps([{"entity": SENTINEL}])},
+        {"detail": SENTINEL},
+        {"max_records_returned": 0},
+        {"max_records_returned": 51},
+        {"detail": "full", "max_records_returned": 5},
     ],
 )
 async def test_invalid_input_is_a_422_that_never_echoes_it(tmp_path, monkeypatch, clock, path, overrides) -> None:
@@ -237,6 +286,12 @@ async def test_graphql_rejects_invalid_input_without_echoing_it(tmp_path, monkey
     )
     errors = response.json()["errors"]
     assert errors[0]["extensions"]["code"] == "BAD_REQUEST"
+    assert SENTINEL not in response.text
+    response = await harness.graphql(
+        f"{{ {product} {{ incidentEvidence({gql_args(harness.cid, detail=chr(34) + SENTINEL + chr(34))}) "
+        "{ document } } }"
+    )
+    assert response.json()["errors"][0]["extensions"]["code"] == "BAD_REQUEST"
     assert SENTINEL not in response.text
 
 

@@ -1,7 +1,7 @@
-"""Versioned unifi-incident-evidence document for Network and Protect.
+"""Incident evidence for Network and Protect: the bounded client view or the full document.
 
-The payload is the whole document as JSON, not a field-by-field mirror: the
-JSON Schema artifact for the document is the contract, and a Strawberry mirror
+The payload is the whole view or document as JSON, not a field-by-field
+mirror: the JSON Schema artifacts are the contract, and a Strawberry mirror
 would be a second copy to drift. The contract denies secret-like keys by
 construction, so no egress redaction applies.
 """
@@ -11,20 +11,21 @@ from __future__ import annotations
 from typing import Any
 
 import strawberry
-from unifi_core.incident_evidence import evidence_to_json
+from unifi_core.incident_evidence_view import EvidencePresentation
 
 
 @strawberry.type(
     description=(
-        "Bounded, read-only incident evidence: a versioned unifi-incident-evidence document with cited "
-        "records plus per-source coverage, failures and budget usage."
+        "Bounded, read-only incident evidence: a unifi-incident-evidence-view (every source's coverage, "
+        "failures and budget usage plus bounded record citations) or, with detail full, the whole "
+        "unifi-incident-evidence document."
     )
 )
 class IncidentEvidence:
     document: strawberry.scalars.JSON = strawberry.field(  # type: ignore[name-defined]
         description=(
-            "The unifi-incident-evidence document. Check coverage_complete before treating an empty "
-            "result as an all-clear."
+            "The unifi-incident-evidence-view, or the unifi-incident-evidence document with detail full. "
+            "Check coverage_complete before treating an empty result as an all-clear."
         )
     )
 
@@ -33,8 +34,10 @@ class IncidentEvidence:
         return {"kind": kind}
 
     @classmethod
-    def from_manager_output(cls, obj: Any, *, redact_sensitive: bool = True) -> "IncidentEvidence":
-        return cls(document=evidence_to_json(obj))
+    def from_manager_output(
+        cls, obj: Any, *, redact_sensitive: bool = True, presentation: EvidencePresentation | None = None
+    ) -> "IncidentEvidence":
+        return cls(document=(presentation or EvidencePresentation()).render(obj))
 
     def to_dict(self) -> dict:
         return self.document

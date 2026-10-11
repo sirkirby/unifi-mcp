@@ -12,12 +12,18 @@ from unifi_core.incident_collection import (
     DEFAULT_EVENTS,
     DEFAULT_WINDOW_SECONDS,
 )
+from unifi_core.incident_evidence_view import DEFAULT_MAX_RECORDS_RETURNED, MAX_RECORDS_RETURNED
 
 from unifi_api.auth.middleware import require_scope
 from unifi_api.auth.scopes import Scope
 from unifi_api.graphql.types.incident_evidence import IncidentEvidence
 from unifi_api.routes.resources._common import require_capability, resolve_controller
-from unifi_api.services.incident_evidence import IncidentRequestError, collect_network_evidence, network_request
+from unifi_api.services.incident_evidence import (
+    IncidentRequestError,
+    collect_network_evidence,
+    network_request,
+    presentation,
+)
 from unifi_api.services.pydantic_models import Detail
 
 logger = logging.getLogger(__name__)
@@ -31,8 +37,10 @@ router = APIRouter()
     dependencies=[Depends(require_scope(Scope.READ))],
     tags=["network/incident_evidence"],
     description=(
-        "Collect bounded, read-only Network event evidence for one incident window. Returns a versioned "
-        "unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. "
+        "Collect bounded, read-only Network event evidence for one incident window. Returns a "
+        "unifi-incident-evidence-view by default: every source's coverage, failures and budget usage plus "
+        "bounded record citations, with omitted records counted; detail=full returns the whole "
+        "unifi-incident-evidence document. "
         "The read stops at the first spent budget and says so; check coverage_complete before treating an "
         "empty result as an all-clear."
     ),
@@ -65,7 +73,18 @@ async def get_network_incident_evidence(
         None,
         description=(
             "JSON-encoded array of explicit exact-identifier assertions, each {entity, target, source} where "
-            "entity and target are {kind, id_kind, id} and source is operator_input or product_inventory"
+            "entity and target are {kind, id_kind, id} and source is operator_input or product_inventory "
+            "(at most 20)"
+        ),
+    ),
+    detail: str = Query(
+        "view", description="view: coverage plus bounded record citations; full: the whole evidence document"
+    ),
+    max_records_returned: int | None = Query(
+        None,
+        description=(
+            f"Most record citations in the view (default {DEFAULT_MAX_RECORDS_RETURNED}, "
+            f"1-{MAX_RECORDS_RETURNED}); omitted records stay in coverage. View only"
         ),
     ),
     controller=Depends(resolve_controller),
@@ -84,6 +103,7 @@ async def get_network_incident_evidence(
             max_elapsed_ms=max_elapsed_ms,
             mappings=mappings,
         )
+        view = presentation(detail=detail, max_records_returned=max_records_returned)
     except IncidentRequestError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
     factory = request.app.state.manager_factory
@@ -100,5 +120,5 @@ async def get_network_incident_evidence(
             raise HTTPException(
                 status_code=502, detail=f"Failed to collect incident evidence ({type(exc).__name__})."
             ) from None
-    data = IncidentEvidence.from_manager_output(evidence).to_dict()
+    data = IncidentEvidence.from_manager_output(evidence, presentation=view).to_dict()
     return {"data": data, "render_hint": IncidentEvidence.render_hint("detail")}

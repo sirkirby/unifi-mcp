@@ -8,10 +8,12 @@ import jsonschema
 import pytest
 
 from unifi_core.incident_evidence import validate_incident_evidence
+from unifi_core.incident_evidence_view import IncidentEvidenceView, client_view, view_to_json
 from unifi_core.source_page import SourcePage
 
 ROOT = Path(__file__).resolve().parents[4]
 SCHEMA = json.loads((ROOT / "tests/fixtures/incident_evidence/incident-evidence.v1.schema.json").read_text())
+VIEW_SCHEMA = json.loads((ROOT / "tests/fixtures/incident_evidence/incident-evidence-view.v1.schema.json").read_text())
 WINDOW = {"start": "2026-08-08T12:00:00Z", "end": "2026-08-08T13:00:00Z"}
 CAMERA = "cam-fixture-000a"
 
@@ -74,16 +76,24 @@ def test_direct_tool_modules_hold_nothing_but_direct_tools():
 async def test_each_camera_is_a_source_in_a_contract_valid_document(tool):
     module, pages = tool
     pages.rows = [{"id": "evt-1", "type": "motion", "camera": CAMERA, "start": 1786191000000}]
-    result = await module.get_incident_evidence(**WINDOW, camera_ids=["cam-fixture-000b", CAMERA])
+    result = await module.get_incident_evidence(**WINDOW, camera_ids=["cam-fixture-000b", CAMERA], detail="full")
     assert result["success"] is True
     document = result["data"]
     jsonschema.validate(document, SCHEMA)
     validate_incident_evidence(document)
+    view = (await module.get_incident_evidence(**WINDOW, camera_ids=["cam-fixture-000b", CAMERA]))["data"]
+    jsonschema.validate(view, VIEW_SCHEMA)
+    expected = view_to_json(client_view(validate_incident_evidence(document)))
+    # Two real reads differ only in measured wall time.
+    for payload in (view, expected):
+        payload["budgets"]["usage"]["elapsed_ms"] = 0
+    assert view == expected
+    assert IncidentEvidenceView.model_validate(view).sources[0].coverage.filters == {"camera_id": CAMERA}
     assert [(s["source_id"], s["coverage"]["filters"]) for s in document["sources"]] == [
         ("protect.events.camera.01", {"camera_id": CAMERA}),
         ("protect.events.camera.02", {"camera_id": "cam-fixture-000b"}),
     ]
-    assert [call[0] for call in pages.calls] == [CAMERA, "cam-fixture-000b"]
+    assert [call[0] for call in pages.calls] == [CAMERA, "cam-fixture-000b"] * 2
 
 
 @pytest.mark.asyncio
@@ -103,6 +113,9 @@ async def test_source_failures_stay_inside_a_successful_response(tool):
         ({"start": "2026-08-08T12:00:00", "end": WINDOW["end"]}, "explicit UTC offset"),
         ({**WINDOW, "camera_ids": ["Front Door"]}, "camera_ids"),
         ({**WINDOW, "max_calls": 1000}, "max_calls"),
+        ({**WINDOW, "camera_ids": [f"cam-fixture-{i:04d}" for i in range(6)]}, "camera_ids"),
+        ({**WINDOW, "detail": "Front Door"}, "detail"),
+        ({**WINDOW, "max_records_returned": 0}, "max_records_returned"),
     ],
 )
 async def test_invalid_arguments_fail_before_any_read_without_echoing_input(tool, arguments, message):

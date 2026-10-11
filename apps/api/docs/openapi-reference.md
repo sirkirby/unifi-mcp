@@ -721,7 +721,7 @@ Returns the user-defined firewall policy ordering for a source/destination zone 
 ### `GET /v1/sites/{site_id}/incident-evidence/network` — Get Network Incident Evidence
 
 
-Collect bounded, read-only Network event evidence for one incident window. Returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.
+Collect bounded, read-only Network event evidence for one incident window. Returns a unifi-incident-evidence-view by default: every source's coverage, failures and budget usage plus bounded record citations, with omitted records counted; detail=full returns the whole unifi-incident-evidence document. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.
 
 
 **Parameters:**
@@ -736,6 +736,8 @@ Collect bounded, read-only Network event evidence for one incident window. Retur
 - `max_calls` (query)
 - `max_elapsed_ms` (query)
 - `mappings` (query)
+- `detail` (query)
+- `max_records_returned` (query)
 - `controller` (query)
 
 
@@ -1863,7 +1865,7 @@ raises 404 via UniFiNotFoundError if the camera is unknown.
 ### `GET /v1/sites/{site_id}/incident-evidence/protect` — Get Protect Incident Evidence
 
 
-Collect bounded, read-only Protect event evidence for one incident window. Returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. Each camera ID is its own source. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.
+Collect bounded, read-only Protect event evidence for one incident window. Returns a unifi-incident-evidence-view by default: every source's coverage, failures and budget usage plus bounded record citations, with omitted records counted; detail=full returns the whole unifi-incident-evidence document. Each camera ID is its own source. The read stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.
 
 
 **Parameters:**
@@ -1878,6 +1880,8 @@ Collect bounded, read-only Protect event evidence for one incident window. Retur
 - `max_calls` (query)
 - `max_elapsed_ms` (query)
 - `mappings` (query)
+- `detail` (query)
+- `max_records_returned` (query)
 - `controller` (query)
 
 

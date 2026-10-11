@@ -8378,11 +8378,15 @@
         "readOnlyHint": true
       },
       "auth_method": "local_only",
-      "description": "Collects bounded, read-only Network event evidence for one incident window and returns a versioned unifi-incident-evidence document: cited records plus per-source coverage, failures and budget usage. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
+      "description": "Collects bounded, read-only Network event evidence for one incident window. Returns a unifi-incident-evidence-view by default: every source's coverage, failures and budget usage plus a bounded list of record citations, with omitted records counted; detail='full' returns the whole unifi-incident-evidence document. Stops at the first spent budget and says so; check coverage_complete before treating an empty result as an all-clear.",
       "name": "unifi_get_incident_evidence",
       "schema": {
         "input": {
           "properties": {
+            "detail": {
+              "description": "view: coverage plus bounded record citations; full: the whole evidence document",
+              "type": "string"
+            },
             "device_macs": {
               "description": "Exact device MAC addresses; keeps only events naming one. Never device names",
               "type": "array"
@@ -8396,7 +8400,7 @@
               "type": "string"
             },
             "mappings": {
-              "description": "Explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory",
+              "description": "Explicit exact-identifier assertions, each {entity, target, source} where entity and target are {kind, id_kind, id} and source is operator_input or product_inventory (at most 20)",
               "type": "array"
             },
             "max_calls": {
@@ -8409,6 +8413,10 @@
             },
             "max_events": {
               "description": "Most event rows to read, including rows outside the window (1-10000)",
+              "type": "integer"
+            },
+            "max_records_returned": {
+              "description": "Most record citations in the view (default 25, 1-50); omitted records stay in coverage. View only",
               "type": "integer"
             },
             "max_window_seconds": {

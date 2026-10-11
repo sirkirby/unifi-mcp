@@ -253,7 +253,7 @@ inspect its `mutation_applied` state and resource ID before retrying or cleaning
 
 ## Incident Evidence (1 tool)
 
-- `unifi_get_incident_evidence` — Bounded, read-only event evidence for one incident window as a versioned `unifi-incident-evidence` document with per-source coverage and budget usage (see [incident evidence](../../../docs/incident-evidence.md)). Listed directly in lazy mode so read-only clients can call it.
+- `unifi_get_incident_evidence` — Bounded, read-only event evidence for one incident window with per-source coverage and budget usage: a bounded `unifi-incident-evidence-view` by default, or the whole `unifi-incident-evidence` document with `detail="full"` (see [incident evidence](../../../docs/incident-evidence.md)). Listed directly in lazy mode so read-only clients can call it.
 
 ## Routing (5 tools)
 

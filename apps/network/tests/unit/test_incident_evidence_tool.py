@@ -9,10 +9,12 @@ import jsonschema
 import pytest
 
 from unifi_core.incident_evidence import validate_incident_evidence
+from unifi_core.incident_evidence_view import IncidentEvidenceView, client_view, view_to_json
 from unifi_core.source_page import SourcePage
 
 ROOT = Path(__file__).resolve().parents[4]
 SCHEMA = json.loads((ROOT / "tests/fixtures/incident_evidence/incident-evidence.v1.schema.json").read_text())
+VIEW_SCHEMA = json.loads((ROOT / "tests/fixtures/incident_evidence/incident-evidence-view.v1.schema.json").read_text())
 WINDOW = {"start": "2026-08-08T12:00:00Z", "end": "2026-08-08T13:00:00Z"}
 DEVICE = "02:00:00:00:00:0a"
 
@@ -80,7 +82,7 @@ async def test_returns_a_contract_valid_document_scoped_to_the_site(tool):
             "parameters": {"DEVICE": {"id": DEVICE}},
         }
     ]
-    result = await module.get_incident_evidence(**WINDOW, location_id="fixture-location-a", max_calls=3)
+    result = await module.get_incident_evidence(**WINDOW, location_id="fixture-location-a", max_calls=3, detail="full")
     assert result["success"] is True
     document = result["data"]
     jsonschema.validate(document, SCHEMA)
@@ -89,6 +91,26 @@ async def test_returns_a_contract_valid_document_scoped_to_the_site(tool):
     assert source["scope"] == {"controller_id": None, "site": "default", "location_id": "fixture-location-a"}
     assert document["budgets"]["limits"]["calls"] == 3
     assert [record["provenance"]["source_record_id"] for record in document["records"]] == ["evt-1"]
+
+
+@pytest.mark.asyncio
+async def test_returns_the_bounded_view_of_the_same_document_by_default(tool):
+    module, pages = tool
+    pages.rows = [{"id": f"evt-{i}", "key": "DEVICE_DISCONNECTED_AP", "timestamp": 1786191000000 + i} for i in range(3)]
+    full = await module.get_incident_evidence(**WINDOW, detail="full")
+    result = await module.get_incident_evidence(**WINDOW, max_records_returned=2)
+    assert result["success"] is True
+    view = result["data"]
+    jsonschema.validate(view, VIEW_SCHEMA)
+    IncidentEvidenceView.model_validate(view)
+    expected = view_to_json(client_view(validate_incident_evidence(full["data"]), max_records_returned=2))
+    # Two real reads differ only in measured wall time.
+    for payload in (view, expected):
+        payload["budgets"]["usage"]["elapsed_ms"] = 0
+    assert view == expected
+    assert view["record_selection"]["omitted"]["in_window"] == 1
+    default = await module.get_incident_evidence(**WINDOW)
+    assert default["data"]["record_selection"]["max_records_returned"] == 25
 
 
 @pytest.mark.asyncio
@@ -123,6 +145,9 @@ async def test_source_failures_stay_inside_a_successful_response(tool):
             },
             "mappings.0.entity: Extra inputs are not permitted",
         ),
+        ({**WINDOW, "detail": "fixture-ap-1"}, "detail"),
+        ({**WINDOW, "max_records_returned": 51}, "max_records_returned"),
+        ({**WINDOW, "detail": "full", "max_records_returned": 5}, "applies only to detail=view"),
     ],
 )
 async def test_invalid_arguments_fail_before_any_read_without_echoing_input(tool, arguments, message):
