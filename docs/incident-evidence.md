@@ -163,6 +163,11 @@ runs out is cancelled. The first spent budget stops collection.
 | `calls` | every HTTP request a read sends: the page request, the Network API-version probe, every retry (uiprotect's status and reconnect retries, the retry after a re-login, aiohttp's own), and every request a cold connection sends while being acquired inside the read (Network controller detection and sites checks, the Protect bootstrap, their retries). Logins are not charged. A request the budget cannot pay for is refused before it is sent, so a connection that cannot fit the budget fails closed with `calls` exhausted | reading stops |
 | `elapsed` | wall time across reads, including connecting and, in the API, acquiring the manager | the running read is cancelled; usage is reported at the limit |
 
+A read's charge applies only in its own task. Persistent background tasks
+(the Protect bootstrap refresh, the Network websocket, API event listeners)
+start with no charge, and any task a read happens to start inherits a charge
+it cannot use, so a read never throttles them and they never draw on it.
+
 A spent budget appears three ways: its kind in `budgets.exhausted`; the source
 it stopped is `partial` with `budget_exhausted` among its `partial_reasons`
 and `pagination.interrupted: true` (or `not_attempted` if it returned
