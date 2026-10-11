@@ -97,7 +97,7 @@ Each cell is labelled:
 
 The repository checks manifests, paths, version pins and skill metadata
 automatically (`tests/test_plugin_packaging.py`). Those checks do not count as
-`tested`.
+`tested`. To produce `tested` evidence, follow the [plugin acceptance procedure](plugin-acceptance.md).
 
 | | Claude Code | Codex | OpenClaw |
 |---|---|---|---|
