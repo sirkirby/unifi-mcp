@@ -21,7 +21,7 @@ class EventPages:
     def __init__(self, rows=(), error=None):
         self.rows, self.error, self.calls = list(rows), error, []
 
-    async def read_events_page(self, *, within, limit, offset=0):
+    async def read_events_page(self, *, within, limit, offset=0, window_ms=None):
         self.calls.append((within, limit, offset))
         if self.error:
             raise self.error
