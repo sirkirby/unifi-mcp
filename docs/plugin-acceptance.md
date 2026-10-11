@@ -46,7 +46,13 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
   password and API key only through `_FILE` or `_COMMAND` provider references,
   which are saved as ordinary options.
 - **Codex:** run every `codex` command with `CODEX_HOME=$ACC/codex-home`, and
-  symlink (never copy) `~/.codex/auth.json` into it.
+  symlink (never copy) `~/.codex/auth.json` into it. Codex setup reads
+  `CODEX_HOME` too: without it, setup falls back to `~/.codex/config.toml`.
+- **Clean-environment wrappers:** a wrapper that clears the environment (`env -i`,
+  or unsetting variables) must set `HOME`, `CLAUDE_CONFIG_DIR` where used, and
+  `CODEX_HOME` after the clearing, and the same wrapper must launch setup and
+  `--refresh` as well as the client. Check the wrapper by running setup with
+  `--dry-run` first and confirming the configuration hash is unchanged.
 - **Ambient credentials:** unset every inherited `UNIFI_*` variable before each
   client or setup command, so only the setup under test can configure a server.
 - **Scratch project:** run sessions from a project directory under `ACC` that
@@ -59,16 +65,20 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
   setup script supports it.
 - **Safety gates:** configure `UNIFI_POLICY_CREATE`, `UNIFI_POLICY_UPDATE` and
   `UNIFI_POLICY_DELETE` (and the product-scoped forms) as `false`,
-  `UNIFI_TOOL_PERMISSION_MODE=confirm` and `UNIFI_AUTO_CONFIRM=false`. Allow the
+  `UNIFI_TOOL_PERMISSION_MODE=confirm`. Leave `UNIFI_AUTO_CONFIRM` unset: it is
+  deprecated, and any value makes the server log a deprecation notice. Allow the
   client to call only tools whose manifest annotation is `readOnlyHint: true`.
-  In the default lazy registration mode the only route to a controller read is
-  `*_execute`, which is not read-only, so select eager registration through the
-  setup skill's optional settings.
+  In the default lazy registration mode a candidate lists its incident evidence
+  tools directly, and they are read-only. Other controller reads, such as the
+  harmless read in step 5, go through `*_execute`, which is not read-only, so
+  select eager registration through the setup skill's optional settings for
+  those steps.
 - **Claude Code plugin options:** with a `userConfig` ref, `set-env.sh --target
   claude` accepts only the variables the plugin maps to options, so pass the
   product-scoped forms: `UNIFI_POLICY_<PRODUCT>_CREATE`, `_UPDATE` and `_DELETE`
-  as `false`, `UNIFI_<PRODUCT>_TOOL_PERMISSION_MODE=confirm`,
-  `UNIFI_AUTO_CONFIRM=false` and `UNIFI_TOOL_REGISTRATION_MODE=eager`. Shared
+  as `false`, `UNIFI_<PRODUCT>_TOOL_PERMISSION_MODE=confirm` and
+  `UNIFI_TOOL_REGISTRATION_MODE=eager`; `UNIFI_AUTO_CONFIRM` has no option and
+  is refused. Shared
   `UNIFI_POLICY_*` forms and per-category overrides are refused by design. The
   gates already default to `false` and the permission mode to `confirm`; set
   them explicitly anyway so the record shows them.
@@ -113,7 +123,8 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
    plugin options, repeat steps 4 and 5 in at least five consecutive fresh
    sessions for one bundle. In one of them, confirm the server's environment
    shape with `ps -E -ww` (record each `UNIFI_*` name as set or empty, never a
-   value): the unset password and API-key spellings are empty. In another, have
+   value; on macOS it shows other processes' environments only with `-ax` or
+   `-p <pid>`): the unset password and API-key spellings are empty. In another, have
    the model run `env | grep -c '^UNIFI_'` through the Bash tool, in the
    configured project and in an unrelated one; both must print `0`.
 6. **Upgrade.** Claude Code: move the marketplace to the candidate, then
@@ -142,8 +153,9 @@ Create a scratch directory `ACC` that is deleted afterwards and never committed.
       scratch project. Record that it names the leftover variables (names only).
    3. Run the new plugin's `scripts/set-env.sh --target claude --migrate`
       (PowerShell: `scripts/set-env.ps1 -Target claude -Migrate`). Record the
-      variable names it reports as migrated, not migrated and left as shared
-      settings. Confirm the project file now holds only the shared settings and
+      variable names it reports as migrated, not migrated and kept as shared
+      settings. Confirm the project file now holds only the shared settings
+      (until the last UniFi plugin has migrated, which removes them) and
       unrelated keys, and that a second `--migrate` refuses with nothing to
       migrate.
    4. Repeat steps 4 and 5 in fresh sessions. Confirm the notice no longer
@@ -183,7 +195,12 @@ was given.
   settings, so with a ref that configures Claude Code through
   `.claude/settings.local.json` it reports the server as failed and writes a
   failure entry itself; do not run it between that kind of setup and a session.
-  With plugin options it applies the same configuration as a session.
+  With plugin options it applies the same configuration as a session. Claude
+  blocks a standalone `sleep` in Bash, and it auto-allows read-only `jq` and
+  Read on its own saved tool results even when `--allowedTools` omits them; plan
+  for both when reading large results. Interactive Claude defaults to the auto
+  permission mode: launch the interactive reconnect test with `--permission-mode
+  default` so every tool call prompts as it would for a user.
 - **Codex:** `codex exec -m <model> -s read-only --json "<prompt>" </dev/null`.
   Without stdin closed it waits for input. MCP servers finish starting after the
   first step's tools are built, so have the model run `sleep 20` before its MCP
@@ -195,6 +212,33 @@ was given.
   ref; a different ref still needs remove and re-add.
 - Read results from the transcript, not the model's summary. Reduce each tool
   result to its top-level keys and counts before recording it.
+
+## Test unreleased candidates
+
+A candidate's server packages are not on PyPI, and its plugin pins name releases
+that do not exist yet. Test them without publishing anything:
+
+1. From a clean clone at the candidate commit, build wheels with
+   `uv build --package <package> --wheel --out-dir $ACC/wheels` for each package
+   the servers need (the shared and core libraries, the product servers, and the
+   relay when the relay is under test). Record each wheel's `sha256`.
+2. Point `uv` at them with `UV_FIND_LINKS=$ACC/wheels`. Wheels built from a
+   development checkout carry a `.devN` version, which does not satisfy the
+   candidate's own floors (a floor such as `unifi-core>=0.4.69` excludes
+   `0.4.69.devN`). Write an override file with one exact requirement per built
+   wheel (`unifi-core==<built version>`, and so on) and set `UV_OVERRIDE` to it.
+3. On the loopback marketplace mirror only, add one commit that changes nothing
+   but the package pins in each plugin's `plugin.json`, `.mcp.json` and
+   `.mcp.codex.json` to the built versions, and install from that commit. Never
+   push it, and do not run `make check-plugin-versions` on it: the pins have no
+   release tag by design. Codex setup accepts `.devN` and local (`+g<sha>`)
+   versions, so it needs no hand-written registration.
+4. Export `UV_FIND_LINKS` and `UV_OVERRIDE` in the environment that launches the
+   client, so the client's server processes inherit them. Prove the servers ran
+   the candidate: each server's own interpreter reports the package under the
+   `uv` cache inside `ACC`, the installed files match the wheel hashes, `serverInfo`
+   or `claude mcp list` reports the built version, and nothing is an editable or
+   workspace install.
 
 ## What counts as a pass
 
