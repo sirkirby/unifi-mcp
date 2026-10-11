@@ -385,16 +385,16 @@ def _combined_budgets(documents: list[IncidentEvidence], window: TimeWindow) -> 
         calls=sum(doc.budgets.usage.calls for doc in documents),
         elapsed_ms=sum(doc.budgets.usage.elapsed_ms for doc in documents),
     )
-    reported = {kind for doc in documents for kind in doc.budgets.exhausted}
-    exhausted: set[BudgetKind] = set()
-    if limits.window_seconds < window.duration_seconds:
-        exhausted.add(BudgetKind.WINDOW)
+    # A budget that stopped any one collection stopped the combined one, however
+    # much of the summed limit the others left unused. ``window`` follows too:
+    # the smallest window limit is below the duration exactly when one set's was.
+    exhausted = {kind for doc in documents for kind in doc.budgets.exhausted}
     for kind, used, limit in (
         (BudgetKind.EVENTS, usage.events, limits.events),
         (BudgetKind.CALLS, usage.calls, limits.calls),
         (BudgetKind.ELAPSED, usage.elapsed_ms, limits.elapsed_ms),
     ):
-        if used > limit or (kind in reported and used >= limit):
+        if used > limit:
             exhausted.add(kind)
     return Budgets(limits=limits, usage=usage, exhausted=tuple(sorted(exhausted, key=lambda kind: kind.value)))
 
@@ -410,9 +410,9 @@ def combine_incident_evidence(documents: Iterable[IncidentEvidence | Mapping[str
     set carried assertions).
 
     Budgets add up: limits and usage are summed, except ``window_seconds``,
-    which is the smallest limit. A budget kind stays exhausted when the
-    combined usage reached the combined limit; whatever a budget stopped
-    stays visible on the source it stopped.
+    which is the smallest limit. ``exhausted`` is the union of every set's
+    exhausted kinds, so combining never hides exhaustion, even when the
+    summed usage is below the summed limit.
     """
     # The same set passed twice is one collection, not two budgets' worth.
     unique = {canonical_json(document): document for document in documents}

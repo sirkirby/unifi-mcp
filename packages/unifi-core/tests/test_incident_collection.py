@@ -397,18 +397,31 @@ async def test_combine_resolves_every_record_against_the_union_of_assertions() -
 
 
 @pytest.mark.asyncio
-async def test_combined_budgets_add_up_and_keep_a_budget_spent_in_total() -> None:
+async def test_combined_budgets_add_up_and_never_hide_an_exhausted_budget() -> None:
     network, protect, _ = await _documents()
-    combined = combine_incident_evidence([network, protect])
-    assert combined.budgets.limits.events == 150 + 1_000
-    assert combined.budgets.usage.events == network.budgets.usage.events + protect.budgets.usage.events
-    # The Network collection spent its own events budget; summed with Protect's unused share it is not spent.
-    assert BudgetKind.EVENTS not in combined.budgets.exhausted
-    assert "budget_exhausted" in [r.value for r in combined.sources[0].partial_reasons]
-    tight = await collect_network_incident_evidence(
-        NetworkLog(250), NetworkIncidentRequest(**WINDOW, max_events=10, max_window_seconds=600), now=_fixed_now
+    assert network.budgets.exhausted == (BudgetKind.EVENTS,) and protect.budgets.exhausted == ()
+    for combined in (combine_incident_evidence([network, protect]), combine_incident_evidence([protect, network])):
+        assert_contract_valid(combined)
+        assert combined.budgets.limits.events == 150 + 1_000
+        assert combined.budgets.usage.events == network.budgets.usage.events + protect.budgets.usage.events
+        # Protect's unused share does not undo the Network collection running out of events.
+        assert combined.budgets.usage.events < combined.budgets.limits.events
+        assert combined.budgets.exhausted == (BudgetKind.EVENTS,)
+        assert combined.overall is OverallStatus.PARTIAL and combined.coverage_complete is False
+
+
+@pytest.mark.asyncio
+async def test_combined_exhaustion_is_the_union_of_every_set() -> None:
+    _, protect, _ = await _documents()
+    calls = await collect_network_incident_evidence(
+        NetworkLog(250), NetworkIncidentRequest(**WINDOW, max_calls=1), now=_fixed_now
     )
-    assert BudgetKind.WINDOW in combine_incident_evidence([tight, protect]).budgets.exhausted
+    window = await collect_protect_incident_evidence(
+        ProtectLog(3), ProtectIncidentRequest(**WINDOW, max_window_seconds=600), now=_fixed_now
+    )
+    combined = combine_incident_evidence([protect, window, calls])
+    assert_contract_valid(combined)
+    assert combined.budgets.exhausted == (BudgetKind.CALLS, BudgetKind.WINDOW)
 
 
 @pytest.mark.asyncio
